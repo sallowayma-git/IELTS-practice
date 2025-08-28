@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>P3 – Pacific Navigation and Voyaging</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); padding-bottom: 82px; }
+  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  .shell { display:flex; height:100vh; width:100%; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  h2,h3,h4 { margin:0 0 10px; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  input.blank { border:none; border-bottom:1px solid #9ca3af; padding:2px 4px; font-size:1em; background:transparent; }
+  input.blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button:hover { border-color:#fff; }
+  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
+  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
+  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
+  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
+  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #selbar { z-index: 6000 !important; }
+  .matching-options { border: 1px solid #ccc; padding: 12px; margin-top: 1em; border-radius: 8px; background: #f9fafb;}
+  .matching-options p { margin: 0; padding: 4px 0; }
+</style>
+</head>
+<body>
+
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q27-nav" onclick="scrollToElement('q27-anchor')">27</div>
+    <div class="q-item" id="q28-nav" onclick="scrollToElement('q28-anchor')">28</div>
+    <div class="q-item" id="q29-nav" onclick="scrollToElement('q29-anchor')">29</div>
+    <div class="q-item" id="q30-nav" onclick="scrollToElement('q30-anchor')">30</div>
+    <div class="q-item" id="q31-nav" onclick="scrollToElement('q31-anchor')">31</div>
+    <div class="q-item" id="q32-nav" onclick="scrollToElement('q32-anchor')">32</div>
+    <div class="q-item" id="q33-nav" onclick="scrollToElement('q33-anchor')">33</div>
+    <div class="q-item" id="q34-nav" onclick="scrollToElement('q34-anchor')">34</div>
+    <div class="q-item" id="q35-nav" onclick="scrollToElement('q35-anchor')">35</div>
+    <div class="q-item" id="q36-nav" onclick="scrollToElement('q36-anchor')">36</div>
+    <div class="q-item" id="q37-nav" onclick="scrollToElement('q37-anchor')">37</div>
+    <div class="q-item" id="q38-nav" onclick="scrollToElement('q38-anchor')">38</div>
+    <div class="q-item" id="q39-nav" onclick="scrollToElement('q39-anchor')">39</div>
+    <div class="q-item" id="q40-nav" onclick="scrollToElement('q40-anchor')">40</div>
+  </div>
+</div>
+
+<div class="shell">
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 3 <span id="timer">00:00</span></h2>
+    <p>You should spend about 20 minutes on Questions 27-40, which are based on Reading Passage 3 below.</p>
+    
+    <h3>Pacific Navigation and Voyaging</h3>
+    <p><em>How people migrated to the Pacific islands</em></p>
+    
+    <p>The many tiny islands of the Pacific Ocean had no human population until ancestors of today's islanders sailed from Southeast Asia in ocean-going canoes approximately 2,000 years ago. At the present time, the debate continues about exactly how they migrated such vast distances across the ocean, without any of the modern technologies we take for granted.</p>
+    
+    <p>Although the romantic vision of some early twentieth-century writers of fleets of heroic navigators simultaneously setting sail had come to be considered by later investigators to be exaggerated, no considered assessment of Pacific voyaging was forthcoming until 1956 when the American historian Andrew Sharp published his research. Sharp challenged the 'heroic vision' by asserting that the expertise of the navigators was limited, and that the settlement of the islands was not systematic, being more dependent on good fortune by drifting canoes. Sharp's theory was widely challenged, and deservedly so. If nothing else, however, it did spark renewed interest in the topic and precipitated valuable new research.</p>
+    
+    <p>Since the 1960s a wealth of investigations has been conducted, and most of them, thankfully, have been of the ‘non-armchair' variety. While it would be wrong to denigrate all 'armchair' research that based on an examination of available published materials — it has turned out that so little progress had been made in the area of Pacific voyaging because most writers relied on the same old sources — travelers' journals or missionary narratives compiled by unskilled observers. After Sharp, this began to change, and researchers conducted most of their investigations not in libraries, but in the field.</p>
+    
+    <p>In 1965, David Lewis, a physician and experienced yachtsman, set to work using his own unique philosophy: he took the yacht he had owned for many years and navigated through the islands in order to contact those men who still find their way at sea using traditional methods. He then accompanied these men, in their traditional canoes, on test voyages from which all modern instruments were banished from sight, though Lewis secretly used them to confirm the navigator's calculations. His most famous such voyage was a return trip of around 1,000 nautical miles between two islands in mid-ocean. Far from drifting, as proposed by Sharp, Lewis found that ancient navigators would have known which course to steer by memorizing which stars rose and set in certain positions along the horizon, and this gave them fixed directions by which to steer their boats.</p>
+    
+    <p>The geographer Edwin Doran followed a quite different approach. He was interested in obtaining exact data on canoe sailing performance, and to that end employed the latest electronic instrumentation. Doran traveled on board traditional sailing canoes in some of the most remote parts of the Pacific, all the while using his instruments to record canoe speeds in different wind strengths — from gales to calms — and the angle canoes could sail relative to the wind. In the process, he provided the first really precise attributes of traditional sailing canoes.</p>
+
+    <p>A further contribution was made by Steven Horvath. As a physiologist, Horvath's interest was not in navigation techniques or in canoes, but in the physical capabilities of the men themselves. By adapting standard physiological techniques, Horvath was able to calculate the energy expenditure required to paddle canoes of this sort at times when there was no wind to fill the sails, or when the wind was contrary. He concluded that paddles, or perhaps long oars, could indeed have propelled for long distances what were primarily sailing vessels.</p>
+
+    <p>Finally, a team led by P. Wall Garrard conducted important research, in this case by making investigations while remaining safely in the laboratory. Wall Garrard's unusual method was to use the findings of linguists who had studied the languages of the Pacific islands, many of which are remarkably similar although the islands where they are spoken are sometimes thousands of kilometres apart. Clever adaptation of computer simulation techniques pioneered in other disciplines allowed him to produce convincing models suggesting the migrations were indeed systematic, but not simultaneous. Wall Garrard proposed the migrations should be seen not as a single journey made by a massed fleet of canoes, but as a series of ever more ambitious voyages, each pushing further into the unknown ocean.</p>
+
+    <p>What do we learn about Pacific navigation and voyaging from this research? Quite correctly, none of the researchers tried to use their findings to prove one theory or another; experiments such as these cannot categorically confirm or negate a hypothesis. The strength of this research lay in the range of methodologies employed. When we splice together these findings we can propose that traditional navigators used a variety of canoe types, sources of information and navigation techniques, and it was this adaptability which was their greatest accomplishment. These navigators observed the conditions prevailing at sea at the time a voyage was made and altered their techniques accordingly. Furthermore, the canoes of the navigators were not drifting helplessly at sea but were most likely part of a systematic migration; as such, the Pacific peoples were able to view the ocean as an avenue, not a barrier, to communication before any other race on Earth. Finally, one unexpected but most welcome consequence of this research has been a renaissance in the practice of traditional voyaging. In some groups of islands in the Pacific today, young people are resurrecting the skills of their ancestors, when a few decades ago it seemed they would be lost forever.</p>
+
+    <p>&nbsp;</p>
+  </section>
+  <div id="divider" title="Drag to resize"></div>
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <h4>Questions 27–31</h4>
+      <p>Do the following statements agree with the claims of the writer in Reading Passage 3?</p>
+      <p>In boxes 27–31 on your answer sheet, write</p>
+      <ul>
+        <li><strong>YES</strong> if the statement agrees with the claims of the writer</li>
+        <li><strong>NO</strong> if the statement contradicts the claims of the writer</li>
+        <li><strong>NOT GIVEN</strong> if it is impossible to say what the writer thinks about this</li>
+      </ul>
+      
+      <a id="q27-anchor"></a>
+      <div id="q27-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>27 The Pacific islands were uninhabited when migrants arrived by sea from Southeast Asia.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label><input name="q27" type="radio" value="YES"> YES</label> <label><input name="q27" type="radio" value="NO"> NO</label> <label><input name="q27" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q28-anchor"></a>
+      <div id="q28-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>28 Andrew Sharp was the first person to write about the migrants to the islands.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label><input name="q28" type="radio" value="YES"> YES</label> <label><input name="q28" type="radio" value="NO"> NO</label> <label><input name="q28" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q29-anchor"></a>
+      <div id="q29-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>29 Andrew Sharp believed migratory voyages were based more on luck than on skill.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label><input name="q29" type="radio" value="YES"> YES</label> <label><input name="q29" type="radio" value="NO"> NO</label> <label><input name="q29" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q30-anchor"></a>
+      <div id="q30-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>30 Despite being controversial, Andrew Sharp's research had positive results.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label><input name="q30" type="radio" value="YES"> YES</label> <label><input name="q30" type="radio" value="NO"> NO</label> <label><input name="q30" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q31-anchor"></a>
+      <div id="q31-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>31 Edwin Doran disagreed with the findings of Lewis's research.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label><input name="q31" type="radio" value="YES"> YES</label> <label><input name="q31" type="radio" value="NO"> NO</label> <label><input name="q31" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+    </div>
+    
+    <div class="group">
+        <h4>Questions 32–36</h4>
+        <p>Choose the correct letter, A, B, C or D.</p>
+        
+        <a id="q32-anchor"></a>
+        <div id="q32-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+          <p>32 David Lewis's research was different because</p>
+          <div>
+            <label style="display:block; margin:4px 0;"><input name="q32" type="radio" value="A"> A he observed traditional navigators at work</label>
+            <label style="display:block; margin:4px 0;"><input name="q32" type="radio" value="B"> B he conducted test voyages using his own yacht</label>
+            <label style="display:block; margin:4px 0;"><input name="q32" type="radio" value="C"> C he carried no modern instruments on test voyages</label>
+            <label style="display:block; margin:4px 0;"><input name="q32" type="radio" value="D"> D he spoke the same language as the islanders he sailed with</label>
+          </div>
+        </div>
+
+        <a id="q33-anchor"></a>
+        <div id="q33-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+          <p>33 What did David Lewis's research discover about traditional navigators?</p>
+          <div>
+            <label style="display:block; margin:4px 0;"><input name="q33" type="radio" value="A"> A They used the sun and moon to find their position</label>
+            <label style="display:block; margin:4px 0;"><input name="q33" type="radio" value="B"> B They could not sail further than about 1,000 nautical miles</label>
+            <label style="display:block; margin:4px 0;"><input name="q33" type="radio" value="C"> C They knew which direction they were sailing in</label>
+            <label style="display:block; margin:4px 0;"><input name="q33" type="radio" value="D"> D They were able to drift for long distances</label>
+          </div>
+        </div>
+
+        <a id="q34-anchor"></a>
+        <div id="q34-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+          <p>34 What are we told about Edwin Doran's research?</p>
+          <div>
+            <label style="display:block; margin:4px 0;"><input name="q34" type="radio" value="A"> A Data were collected after the canoes had returned to land</label>
+            <label style="display:block; margin:4px 0;"><input name="q34" type="radio" value="B"> B Canoe characteristics were recorded using modern instruments</label>
+            <label style="display:block; margin:4px 0;"><input name="q34" type="radio" value="C"> C Research was conducted in the most densely populated regions</label>
+            <label style="display:block; margin:4px 0;"><input name="q34" type="radio" value="D"> D Navigators were not allowed to see the instruments Doran used</label>
+          </div>
+        </div>
+
+        <a id="q35-anchor"></a>
+        <div id="q35-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+          <p>35 Which of the following did Steven Horvath discover during his research?</p>
+          <div>
+            <label style="display:block; margin:4px 0;"><input name="q35" type="radio" value="A"> A Canoe design was less important than human strength</label>
+            <label style="display:block; margin:4px 0;"><input name="q35" type="radio" value="B"> B New research methods had to be developed for use in canoes</label>
+            <label style="display:block; margin:4px 0;"><input name="q35" type="radio" value="C"> C Navigators became very tired on the longest voyages</label>
+            <label style="display:block; margin:4px 0;"><input name="q35" type="radio" value="D"> D Human energy may have been used to assist sailing canoes</label>
+          </div>
+        </div>
+
+        <a id="q36-anchor"></a>
+        <div id="q36-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+          <p>36 What is the writer's opinion of Wall Garrard's research?</p>
+          <div>
+            <label style="display:block; margin:4px 0;"><input name="q36" type="radio" value="A"> A He is disappointed it was conducted in the laboratory</label>
+            <label style="display:block; margin:4px 0;"><input name="q36" type="radio" value="B"> B He is impressed by the originality of the techniques used</label>
+            <label style="display:block; margin:4px 0;"><input name="q36" type="radio" value="C"> C He is surprised it was used to help linguists with their research</label>
+            <label style="display:block; margin:4px 0;"><input name="q36" type="radio" value="D"> D He is concerned that the islands studied are long distances apart</label>
+          </div>
+        </div>
+    </div>
+    
+    <div class="group">
+        <h4>Questions 37–40</h4>
+        <p>Complete each sentence with the correct ending, A–F, below.</p>
+
+        <a id="q37-anchor"></a><p>37 One limitation in the information produced by all of this research is that it <input name="q37" type="text" class="blank" maxlength="1" style="width: 30px; text-align: center;"></p>
+        <a id="q38-anchor"></a><p>38 The best thing about this type of research <input name="q38" type="text" class="blank" maxlength="1" style="width: 30px; text-align: center;"></p>
+        <a id="q39-anchor"></a><p>39 The most important achievement of traditional navigators <input name="q39" type="text" class="blank" maxlength="1" style="width: 30px; text-align: center;"></p>
+        <a id="q40-anchor"></a><p>40 The migration of people from Asia to the Pacific <input name="q40" type="text" class="blank" maxlength="1" style="width: 30px; text-align: center;"></p>
+        
+        <div class="matching-options">
+            <p><strong>A</strong> &nbsp; was the variety of experimental techniques used</p>
+            <p><strong>B</strong> &nbsp; was not of interest to young islanders today</p>
+            <p><strong>C</strong> &nbsp; was not conclusive evidence in support of a single theory</p>
+            <p><strong>D</strong> &nbsp; was being able to change their practices when necessary</p>
+            <p><strong>E</strong> &nbsp; was the first time humans intentionally crossed an ocean</p>
+            <p><strong>F</strong> &nbsp; was the speed with which it was conducted</p>
+        </div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
+</div>
+
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+
+<script>
+// Timer
+let _t=0; const _timerEl=document.getElementById('timer');
+setInterval(function(){ 
+  _t++; 
+  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
+  var s=String(_t%60).padStart(2,'0'); 
+  _timerEl.textContent=m+':'+s; 
+},1000);
+// Drag divider
+var divider = document.getElementById('divider');
+var left = document.getElementById('left');
+var right = document.getElementById('right');
+var dragging=false;
+function startDrag(e){ 
+  dragging=true; 
+  document.body.style.cursor='ew-resize'; 
+  if(e.preventDefault) e.preventDefault(); 
+}
+function endDrag(){ 
+  dragging=false; 
+  document.body.style.cursor=''; 
+}
+function onMove(clientX){
+  var container = document.querySelector('.shell').getBoundingClientRect();
+  var x = clientX - container.left;
+  x = Math.max(280, Math.min(container.width-320, x));
+  left.style.flex = '0 0 ' + x + 'px';
+  right.style.flex = '1 1 auto';
+}
+divider.addEventListener('mousedown', function(e){ startDrag(e); });
+window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+window.addEventListener('mouseup', endDrag);
+divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
+window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+window.addEventListener('touchend', endDrag);
+// Highlight toolbar
+var selbar = document.getElementById('selbar');
+var btnHL = document.getElementById('btnHL');
+var btnUH = document.getElementById('btnUH');
+var btnNote = document.getElementById('btnNote');
+var lastRange=null;
+var currentHlNode=null;
+var keepToolbar=false;
+function positionSelbarForRect(rect){
+  selbar.style.display='flex';
+  requestAnimationFrame(function(){
+    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+function updateSelbar(){
+  var sel=window.getSelection();
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
+    selbar.style.display='none'; 
+    currentHlNode=null; 
+    return; 
+  }
+  var range = sel.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode=null;
+  positionSelbarForRect(range.getBoundingClientRect());
+}
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', function(){ 
+  var sel=window.getSelection(); 
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
+    if(!keepToolbar && !currentHlNode){ 
+      selbar.style.display='none'; 
+    } 
+  } 
+});
+document.addEventListener('scroll', function(){ 
+  if(selbar.style.display==='flex') updateSelbar(); 
+});
+document.addEventListener('mousedown', function(e){
+  var t = e.target;
+  if(t.classList && t.classList.contains('hl')){
+    keepToolbar = true;
+  } else {
+    keepToolbar = false;
+  }
+}, true);
+document.addEventListener('click', function(e){
+  var target = e.target;
+  if(target.classList && target.classList.contains('hl')){
+    currentHlNode = target;
+    lastRange = null;
+    positionSelbarForRect(target.getBoundingClientRect());
+    var sel=window.getSelection();
+    if(sel) sel.removeAllRanges();
+    setTimeout(function(){ keepToolbar=false; }, 0);
+  }
+}, true);
+function doHighlight(){
+  if(currentHlNode) return;
+  if(!lastRange || lastRange.collapsed) return;
+  var span=document.createElement('span'); span.className='hl';
+  try { lastRange.surroundContents(span); }
+  catch(e){
+    var wrap=document.createElement('span'); wrap.className='hl';
+    wrap.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrap);
+  }
+  selbar.style.display='none';
+  showToast('Highlighted');
+}
+function removeHighlight(){
+  if(currentHlNode){
+    var p = currentHlNode.parentNode;
+    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
+    p.removeChild(currentHlNode); p.normalize();
+    currentHlNode = null;
+    selbar.style.display='none';
+    showToast('Highlight removed');
+    return;
+  }
+  if(!lastRange) return;
+  var selRect = lastRange.getBoundingClientRect();
+  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  var toRemove=[];
+  while(walker.nextNode()){
+    var n=walker.currentNode;
+    if(n.classList && n.classList.contains('hl')) {
+      var r = n.getBoundingClientRect();
+      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+    }
+  }
+  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
+  selbar.style.display='none';
+  showToast('Highlight removed');
+}
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+// Notes
+var notes = document.getElementById('notes');
+var noteArea = document.getElementById('noteArea');
+var btnCopy=document.getElementById('btnCopy');
+var btnClose=document.getElementById('btnClose');
+function toggleNotes(){ 
+  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+}
+window.toggleNotes = toggleNotes;
+btnClose.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async function(){ 
+  await navigator.clipboard.writeText(noteArea.value||''); 
+  showToast('Copied'); 
+});
+btnNote.addEventListener('click', function(){
+  var text = '';
+  if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
+  else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
+  toggleNotes();
+  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
+  selbar.style.display='none';
+});
+// Toast
+var toastEl=document.getElementById('toast');
+function showToast(msg){
+  toastEl.textContent=msg; 
+  toastEl.style.display='block';
+  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+}
+// Answer key and grading
+var answers = {
+  q27: "YES", q28: "NO", q29: "YES", q30: "YES", q31: "NOT GIVEN",
+  q32: "A", q33: "C", q34: "B", q35: "D", q36: "B",
+  q37: "C", q38: "A", q39: "D", q40: "E"
+};
+function grade(){
+  var total=0, correct=0, lines=[];
+  function push(q, ok, user){
+    total++; if(ok) correct++;
+    lines.push(q.toUpperCase()+": "+(user||'None')+" "+(ok?'✅':'❌'));
+  }
+  // 27–40
+  for(var n=27;n<=40;n++){
+      var qName = 'q' + n;
+      var radios = document.querySelectorAll('input[name="'+qName+'"]');
+      var textInput = document.querySelector('input[name="'+qName+'"].blank');
+      var val = '';
+      var isCorrect = false;
+
+      if(radios.length > 0) { // Radio button questions
+          var sel = document.querySelector('input[name="'+qName+'"]:checked');
+          val = sel ? sel.value : '';
+          isCorrect = val === answers[qName];
+      } else if (textInput) { // Text input questions
+          val = textInput.value.trim().toUpperCase();
+          isCorrect = val === answers[qName];
+      }
+      push(qName, isCorrect, val);
+  }
+  
+  var acc = (total? Math.round(100*correct/total):0);
+  var html = '<p><strong>Score:</strong> '+correct+'/'+total+' <span class="badge">Accuracy '+acc+'%</span></p>';
+  html += '<pre>'+lines.join('\n')+'</pre>';
+  document.getElementById('results').innerHTML = html;
+  
+  var ahtml = '<ol start="27">';
+  for(var i=27; i<=40; i++){
+    ahtml += '<li>' + answers['q'+i] + '</li>';
+  }
+  ahtml += '</ol>';
+  document.getElementById('answerContent').innerHTML = ahtml;
+  document.querySelector('#answerBox .badge').textContent='tap to view';
+}
+function resetForm(){
+  document.querySelectorAll('input[type="radio"]').forEach(el=>el.checked=false);
+  document.querySelectorAll('input[type="text"]').forEach(el=>el.value="");
+  document.getElementById('results').innerHTML='';
+  document.getElementById('answerContent').innerHTML='';
+  document.querySelector('#answerBox .badge').textContent = 'hidden';
+  document.querySelectorAll('.q-item').forEach(item => item.classList.remove('answered'));
+}
+function scrollToElement(id){
+  var el = document.getElementById(id);
+  if(el){ 
+    el.scrollIntoView({behavior:'smooth', block:'center'}); 
+  }
+  var navs = document.querySelectorAll('.practice-nav .q-item');
+  navs.forEach(n => n.classList.remove('active'));
+  var btn = document.getElementById(id.replace('-anchor','-nav'));
+  if(btn){ 
+    btn.classList.add('active'); 
+    setTimeout(() => btn.classList.remove('active'), 800); 
+  }
+}
+(function(){
+  function mark(qn){
+    var nav = document.getElementById('q'+qn+'-nav');
+    if(!nav) return;
+    
+    var answered = false;
+    var radios = document.querySelectorAll(`input[name="q${qn}"]`);
+    var text = document.querySelector(`input[name="q${qn}"].blank`);
+    
+    if (radios.length > 0) {
+      radios.forEach(function(r){ if(r.checked) answered=true; });
+    }
+    if (text) {
+      answered = answered || (text.value && text.value.trim().length > 0);
+    }
+
+    if(answered) nav.classList.add('answered'); else nav.classList.remove('answered');
+  }
+  for(var q=27;q<=40;q++){
+    (function(n){
+      document.querySelectorAll(`input[name="q${n}"]`).forEach(function(r){ r.addEventListener('change', function(){ mark(n); }); });
+      var text = document.querySelector(`input[name="q${n}"].blank`);
+      if(text){ text.addEventListener('input', function(){ mark(n); }); }
+    })(q);
+  }
+})();
+</script>
+
+<!-- 练习页面数据传输增强脚本 -->
+<script>
+if (!window.practicePageEnhancer) {
+    const script = document.createElement('script');
+    script.src = '../../js/practice-page-enhancer.js';
+    script.onload = function() { console.log('练习页面增强脚本已加载'); };
+    script.onerror = function() { console.error('练习页面增强脚本加载失败'); loadInlineEnhancer(); };
+    document.head.appendChild(script);
+}
+function loadInlineEnhancer() {
+    if (window.practicePageEnhancer) return;
+    window.practicePageEnhancer = {
+        initialize: function() {
+            this.setupCommunication();
+            this.setupAnswerListeners();
+            this.interceptSubmit();
+        },
+        setupCommunication: function() {
+            this.parentWindow = window.opener || window.parent;
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'INIT_SESSION') {
+                    this.sessionId = event.data.data.sessionId;
+                    this.sendMessage('SESSION_READY', { pageType: this.detectPageType(), url: window.location.href });
+                }
+            });
+        },
+        detectPageType: function() {
+            const title = document.title || '';
+            if (title.includes('P1')) return 'P1';
+            if (title.includes('P2')) return 'P2';
+            if (title.includes('P3')) return 'P3';
+            return 'unknown';
+        },
+        setupAnswerListeners: function() {
+            this.answers = {};
+            this.startTime = Date.now();
+            document.addEventListener('change', (e) => {
+                if (e.target.name) {
+                    this.answers[e.target.name] = e.target.value;
+                }
+            });
+             document.addEventListener('input', (e) => {
+                if (e.target.name && e.target.classList.contains('blank')) {
+                    this.answers[e.target.name] = e.target.value;
+                }
+            });
+        },
+        interceptSubmit: function() {
+            if (typeof window.grade === 'function') {
+                const originalGrade = window.grade;
+                window.grade = () => {
+                    const result = originalGrade();
+                    setTimeout(() => this.handleSubmit(), 200);
+                    return result;
+                };
+            }
+        },
+        handleSubmit: function() {
+            const results = {
+                sessionId: this.sessionId,
+                startTime: this.startTime,
+                endTime: Date.now(),
+                duration: Math.round((Date.now() - this.startTime) / 1000),
+                answers: this.answers,
+                scoreInfo: this.extractScore(),
+                pageType: this.detectPageType(),
+                url: window.location.href
+            };
+            this.sendMessage('PRACTICE_COMPLETE', results);
+        },
+        extractScore: function() {
+            const resultsEl = document.getElementById('results');
+            if (!resultsEl) return null;
+            const text = resultsEl.textContent || '';
+            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+            if (scoreMatch) {
+                const correct = parseInt(scoreMatch[1]);
+                const total = parseInt(scoreMatch[2]);
+                return { correct: correct, total: total, accuracy: total > 0 ? correct / total : 0, percentage: Math.round((correct / total) * 100), source: 'inline_extraction' };
+            }
+            return null;
+        },
+        sendMessage: function(type, data) {
+            if (this.parentWindow) {
+                this.parentWindow.postMessage({ type: type, data: data, source: 'practice_page' }, '*');
+            }
+        }
+    };
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => { window.practicePageEnhancer.initialize(); });
+    } else {
+        window.practicePageEnhancer.initialize();
+    }
+}
+</script>
+
+</body>
+</html>

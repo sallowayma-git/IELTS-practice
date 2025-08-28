@@ -1,0 +1,727 @@
+以下是基于您提供的设计框架，替换为“商务名片的重要性”内容的完整HTML代码，保留了所有交互功能：
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>The Importance of Business Cards</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
+  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  .shell { display:flex; height:100vh; width:100%; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  h2,h3,h4 { margin:0 0 10px; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  table { border-collapse: collapse; width:100%; }
+  th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
+  th:first-child, td:first-child { width:92px; }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button:hover { border-color:#fff; }
+  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+  .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:54px; padding:8px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .droplabel { color:#64748b; }
+  .cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:grid; gap:8px; }
+  .pool-slot { min-height:40px; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); }
+  .card:active { cursor:grabbing; }
+  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
+  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
+  .ghost { opacity: .5; }
+  .over { outline:2px dashed #3b82f6; }
+  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
+  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
+  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+  body { padding-bottom: 82px; }
+  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
+  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
+  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #selbar { z-index: 6000 !important; }
+  .blank {
+    border: none;
+    border-bottom: 1px solid #cbd5e1;
+    padding: 2px 4px;
+    margin: 0 4px;
+    width: 100px;
+    font-size: 14px;
+  }
+  .blank:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+</style>
+</head>
+<body>
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q1-nav" onclick="scrollToElement('q1-anchor')">1</div>
+    <div class="q-item" id="q2-nav" onclick="scrollToElement('q2-anchor')">2</div>
+    <div class="q-item" id="q3-nav" onclick="scrollToElement('q3-anchor')">3</div>
+    <div class="q-item" id="q4-nav" onclick="scrollToElement('q4-anchor')">4</div>
+    <div class="q-item" id="q5-nav" onclick="scrollToElement('q5-anchor')">5</div>
+    <div class="q-item" id="q6-nav" onclick="scrollToElement('q6-anchor')">6</div>
+    <div class="q-item" id="q7-nav" onclick="scrollToElement('q7-anchor')">7</div>
+    <div class="q-item" id="q8-nav" onclick="scrollToElement('q8-anchor')">8</div>
+    <div class="q-item" id="q9-nav" onclick="scrollToElement('q9-anchor')">9</div>
+    <div class="q-item" id="q10-nav" onclick="scrollToElement('q10-anchor')">10</div>
+    <div class="q-item" id="q11-nav" onclick="scrollToElement('q11-anchor')">11</div>
+    <div class="q-item" id="q12-nav" onclick="scrollToElement('q12-anchor')">12</div>
+    <div class="q-item" id="q13-nav" onclick="scrollToElement('q13-anchor')">13</div>
+  </div>
+</div>
+<div class="shell">
+<section class="pane" id="left">
+  <h2>READING PASSAGE 1 <span id="timer">00:00</span></h2>
+  <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>
+  <h3>The Importance of Business Cards</h3>
+  
+  <p>The exchange of business cards is as close to a universal ritual as you can find in the business world.</p>
+  
+  <p>The ritual may be universal, but the details of business cards and how they are swapped vary across countries. Americans throw their cards casually across a table; the Japanese make the exchange of cards a formal ceremony. While there are cards that are discreet and understated, others are crammed full of details and titles. Some businesspeople hand out 24-carat gold cards, and there are kindergarten children who have cards with not only their own contact details, but also with the job descriptions of their parents and even grandparents. This practice has become so common in parts of New York, for example, that the use of such cards is now prohibited by some of these institutions.</p>
+  
+  <p>Cards have been around a long time in one form or another. The Chinese invented calling cards in the 15th century to give people notice that they intended to pay them a visit, but these were for social purposes only. Then, in the 17th century, European businesspeople invented a new type of card to act as miniature advertisements, signalling the advent of the business card. In today’s world, business cards can cause people to have strong emotional reactions. According to one experienced company director, very few things can provoke more heated discussion at a board meeting than the composition of the company’s business cards.</p>
+  
+  <p>Lots of companies try to promote themselves by altering the form of the card. Employees at one famous toy company give out little plastic figures with their contact details stamped on them. One fast-food company has business cards which are shaped like a portion of French fries. A Canadian divorce lawyer once gave out cards that could be torn in two – one half for each of the spouses. For many business commentators, such gimmicky business cards prove that the use of a physical business card is nearly at an end. After all, why bother exchanging bits of thick paper at all when you can simply swap electronic versions by smartphone?</p>
+  
+  <p>However, one can just as well argue the opposite: that business cards are here to stay, and, in a business world full of meetings and correspondence, it is more important than ever that your card is unique. Attempts to reinvent business cards for the digital age have not been successful. Even at the latest technology conferences, people still greet each other by handing out little rectangles made from paper rather than using a digital alternative.</p>
+  
+  <p>To understand business cards, it is necessary to understand how business works. That business cards are thriving in a digital age is a forceful reminder that there is much about business that is timeless. According to Kate Jones, a business lecturer, there is one eternal and inescapable issue. Her 2006 study of more than 200 business executives in North America found that trust was the key element for running a successful business. It is vital to be able to look someone in the eye and decide what sort of person they are. In this way, you can transform acquaintanceships into relationships. A good proportion of business life will always be about building social connections – having dinner or playing sport with clients and colleagues – and while computers can deal with administrative tasks, it is still human beings that have to focus on the emotional.</p>
+  
+  <p>The rapid advance of globalisation means that this relationship-building process is becoming ever more demanding. Managers have to put more effort in when dealing with international counterparts, especially when there is not a common language, which is so often the case these days. A recent UK survey showed that chief executives of global organisations now routinely spend three out of every four weeks on international travel. It is in these situations that business cards are doubly useful, as they are a quick way of establishing connections. Cards can also remind you that you have actually met someone in a face-to-face meeting rather than just searched for them on the Internet. Looking through piles of different cards can enhance your memory in ways that simply looking through uniform electronic lists would never do.</p>
+  
+  <p>Janet McIntyre is a leading expert on business cards in today’s world. She maintains that as companies become more complex, cards are essential in determining the exact status of every contact you meet in multinational corporations. Janet also explains how exchanging business cards can be an effective way of initiating a conversation, because it gives people a ritual to follow when they first meet a new business contact.</p>
+  
+  <p>The business world is obsessed with the idea of creating and inventing new things that will change the way we do everything, and this does lead to progress. But there are lots of things that do not need to be changed and, in Janet McIntyre’s view, tradition also has an equally valuable role to play. Therefore the practice of exchanging business cards is likely to continue in the business world.</p>
+  
+  <p>&nbsp;</p> <!-- 额外添加的空白行 -->
+</section>
+<div id="divider" title="Drag to resize"></div>
+<section class="pane" id="right">
+  <h3>Questions</h3>
+  
+  <div class="group">
+    <h4>Questions 1–5</h4>
+    <p>Do the following statements agree with the information given in Reading Passage 1?</p>
+    <p>In boxes 1–5 on your answer sheet, write:</p>
+    <ul>
+      <li>TRUE if the statement agrees with the information</li>
+      <li>FALSE if the statement contradicts the information</li>
+      <li>NOT GIVEN if there is no information on this</li>
+    </ul>
+    
+    <a id="q1-anchor"></a>
+    <div id="q1-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>1 Children’s business cards have been banned in some kindergartens.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q1" type="radio" value="TRUE"> TRUE</label>
+        <label style="margin:0;"><input name="q1" type="radio" value="FALSE"> FALSE</label>
+        <label style="margin:0;"><input name="q1" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+    
+    <a id="q2-anchor"></a>
+    <div id="q2-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>2 It was the Chinese who first began the practice of using business cards.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q2" type="radio" value="TRUE"> TRUE</label>
+        <label style="margin:0;"><input name="q2" type="radio" value="FALSE"> FALSE</label>
+        <label style="margin:0;"><input name="q2" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+    
+    <a id="q3-anchor"></a>
+    <div id="q3-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>3 Designing business cards can be a controversial process for some companies.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q3" type="radio" value="TRUE"> TRUE</label>
+        <label style="margin:0;"><input name="q3" type="radio" value="FALSE"> FALSE</label>
+        <label style="margin:0;"><input name="q3" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+    
+    <a id="q4-anchor"></a>
+    <div id="q4-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>4 A famous toy company has boosted its sales by using one type of unusual business card.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q4" type="radio" value="TRUE"> TRUE</label>
+        <label style="margin:0;"><input name="q4" type="radio" value="FALSE"> FALSE</label>
+        <label style="margin:0;"><input name="q4" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+    
+    <a id="q5-anchor"></a>
+    <div id="q5-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>5 Some business commentators predict a decline in the use of paper business cards.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q5" type="radio" value="TRUE"> TRUE</label>
+        <label style="margin:0;"><input name="q5" type="radio" value="FALSE"> FALSE</label>
+        <label style="margin:0;"><input name="q5" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+  </div>
+  
+  <div class="group">
+    <h4>Questions 6–13</h4>
+    <p>Complete the notes below. Choose ONE WORD ONLY from the passage for each answer.</p>
+    <p>Write your answers in boxes 6–13 on your answer sheet.</p>
+    
+    <p><strong>How business works</strong></p>
+    
+    <p>Kate Jones’s research</p>
+    <p>The most important aspect of business is having <input class="blank" maxlength="40" name="q6" placeholder="6"/> in others.</p>
+    <p><input class="blank" maxlength="40" name="q7" placeholder="7"/> do not have the ability to establish the good relationships essential to business.</p>
+    
+    <p><strong>Business and globalisation</strong></p>
+    <p>Managers must work harder when they don’t share the same <input class="blank" maxlength="40" name="q8" placeholder="8"/> with their contacts.</p>
+    <p>A UK survey indicates that <input class="blank" maxlength="40" name="q9" placeholder="9"/> takes up the largest part of business leaders’ time.</p>
+    <p>A business person’s <input class="blank" maxlength="40" name="q10" placeholder="10"/> of a meeting can be improved by looking at business cards.</p>
+    
+    <p><strong>Janet McIntyre</strong></p>
+    <p>Business cards clearly show the <input class="blank" maxlength="40" name="q11" placeholder="11"/> of each person in a large company.</p>
+    <p>The ritual of swapping business cards is a good way of starting a <input class="blank" maxlength="40" name="q12" placeholder="12"/> at the beginning of a business relationship.</p>
+    <p>Janet feels that in the business world, <input class="blank" maxlength="40" name="q13" placeholder="13"/> is just as important as innovation.</p>
+  </div>
+  
+  <div style="display:flex;gap:8px;margin-bottom:10px;">
+    <button class="primary" onclick="grade()">Submit</button>
+    <button onclick="resetForm()">Reset</button>
+    <button onclick="toggleNotes()">Notes</button>
+  </div>
+  <div id="results"></div>
+  <details class="answerbox" id="answerBox">
+    <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+    <div id="answerContent"></div>
+  </details>
+</section>
+</div>
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+<script>
+// Timer
+let _t=0; const _timerEl=document.getElementById('timer');
+setInterval(function(){ 
+  _t++; 
+  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
+  var s=String(_t%60).padStart(2,'0'); 
+  _timerEl.textContent=m+':'+s; 
+},1000);
+// Drag divider
+var divider = document.getElementById('divider');
+var left = document.getElementById('left');
+var right = document.getElementById('right');
+var dragging=false;
+function startDrag(e){ 
+  dragging=true; 
+  document.body.style.cursor='ew-resize'; 
+  if(e.preventDefault) e.preventDefault(); 
+}
+function endDrag(){ 
+  dragging=false; 
+  document.body.style.cursor=''; 
+}
+function onMove(clientX){
+  var container = document.querySelector('.shell').getBoundingClientRect();
+  var x = clientX - container.left;
+  x = Math.max(280, Math.min(container.width-320, x));
+  left.style.flex = '0 0 ' + x + 'px';
+  right.style.flex = '1 1 auto';
+}
+divider.addEventListener('mousedown', function(e){ startDrag(e); });
+window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+window.addEventListener('mouseup', endDrag);
+divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
+window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+window.addEventListener('touchend', endDrag);
+// Highlight toolbar
+var selbar = document.getElementById('selbar');
+var btnHL = document.getElementById('btnHL');
+var btnUH = document.getElementById('btnUH');
+var btnNote = document.getElementById('btnNote');
+var lastRange=null;
+var currentHlNode=null;
+var keepToolbar=false;
+function positionSelbarForRect(rect){
+  selbar.style.display='flex';
+  requestAnimationFrame(function(){
+    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+function updateSelbar(){
+  var sel=window.getSelection();
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
+    selbar.style.display='none'; 
+    currentHlNode=null; 
+    return; 
+  }
+  var range = sel.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode=null;
+  positionSelbarForRect(range.getBoundingClientRect());
+}
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', function(){ 
+  var sel=window.getSelection(); 
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
+    if(!keepToolbar && !currentHlNode){ 
+      selbar.style.display='none'; 
+    } 
+  } 
+});
+document.addEventListener('scroll', function(){ 
+  if(selbar.style.display==='flex') updateSelbar(); 
+});
+document.addEventListener('mousedown', function(e){
+  var t = e.target;
+  if(t.classList && t.classList.contains('hl')){
+    keepToolbar = true;
+  } else {
+    keepToolbar = false;
+  }
+}, true);
+document.addEventListener('click', function(e){
+  var target = e.target;
+  if(target.classList && target.classList.contains('hl')){
+    currentHlNode = target;
+    lastRange = null;
+    positionSelbarForRect(target.getBoundingClientRect());
+    var sel=window.getSelection();
+    if(sel) sel.removeAllRanges();
+    setTimeout(function(){ keepToolbar=false; }, 0);
+  }
+}, true);
+
+// 修复的高亮功能，支持跨段落和多行
+function doHighlight(){
+  if(currentHlNode) return;
+  if(!lastRange || lastRange.collapsed) return;
+  
+  // 检查选择是否跨多个节点
+  const startNode = lastRange.startContainer;
+  const endNode = lastRange.endContainer;
+  
+  // 如果是简单选择（同一节点内）
+  if (startNode === endNode) {
+    try {
+      const span = document.createElement('span');
+      span.className = 'hl';
+      lastRange.surroundContents(span);
+      selbar.style.display = 'none';
+      showToast('Highlighted');
+      return;
+    } catch (e) {
+      // 处理边界情况
+    }
+  }
+  
+  // 处理复杂选择（跨多个节点）
+  const fragment = lastRange.cloneContents();
+  const div = document.createElement('div');
+  div.appendChild(fragment);
+  
+  // 递归处理所有文本节点并添加高亮
+  function processNode(node, parentHighlight) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      if (node.textContent.trim().length > 0) {
+        const span = document.createElement('span');
+        span.className = 'hl';
+        span.textContent = node.textContent;
+        return span;
+      }
+      return node;
+    }
+    
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      // 对于块级元素，创建新的块级高亮容器
+      const isBlock = window.getComputedStyle(node).display.includes('block') || 
+                     ['P', 'H1', 'H2', 'H3', 'H4', 'DIV'].includes(node.tagName);
+      
+      const wrapper = isBlock ? document.createElement(node.tagName.toLowerCase()) : document.createElement('span');
+      wrapper.className = isBlock ? node.className + ' hl' : 'hl';
+      
+      // 复制其他属性
+      Array.from(node.attributes).forEach(attr => {
+        wrapper.setAttribute(attr.name, attr.value);
+      });
+      
+      // 处理子节点
+      while (node.firstChild) {
+        const processedChild = processNode(node.firstChild, wrapper);
+        wrapper.appendChild(processedChild);
+      }
+      
+      return wrapper;
+    }
+    
+    return node;
+  }
+  
+  // 处理所有内容
+  const highlightedContent = processNode(div, null);
+  
+  // 清除原有内容并插入高亮内容
+  lastRange.deleteContents();
+  lastRange.insertNode(highlightedContent);
+  
+  selbar.style.display = 'none';
+  showToast('Highlighted');
+}
+
+function removeHighlight(){
+  if(currentHlNode){
+    var p = currentHlNode.parentNode;
+    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
+    p.removeChild(currentHlNode); p.normalize();
+    currentHlNode = null;
+    selbar.style.display='none';
+    showToast('Highlight removed');
+    return;
+  }
+  if(!lastRange) return;
+  var selRect = lastRange.getBoundingClientRect();
+  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  var toRemove=[];
+  while(walker.nextNode()){
+    var n=walker.currentNode;
+    if(n.classList && n.classList.contains('hl')) {
+      var r = n.getBoundingClientRect();
+      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+    }
+  }
+  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
+  selbar.style.display='none';
+  showToast('Highlight removed');
+}
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+// Notes
+var notes = document.getElementById('notes');
+var noteArea = document.getElementById('noteArea');
+var btnCopy=document.getElementById('btnCopy');
+var btnClose=document.getElementById('btnClose');
+function toggleNotes(){ 
+  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+}
+window.toggleNotes = toggleNotes;
+btnClose.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async function(){ 
+  await navigator.clipboard.writeText(noteArea.value||''); 
+  showToast('Copied'); 
+});
+btnNote.addEventListener('click', function(){
+  var text = '';
+  if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
+  else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
+  toggleNotes();
+  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
+  selbar.style.display='none';
+});
+// Toast
+var toastEl=document.getElementById('toast');
+function showToast(msg){
+  toastEl.textContent=msg; 
+  toastEl.style.display='block';
+  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+}
+// Answer key and grading
+var answers = {
+  "q1":"TRUE", "q2":"FALSE", "q3":"TRUE", "q4":"NOT GIVEN", "q5":"TRUE",
+  "q6":"trust", "q7":"computers", "q8":"language", "q9":"travel", 
+  "q10":"memory", "q11":"status", "q12":"conversation", "q13":"tradition"
+};
+var acceptable = {
+  // 可接受的替代答案
+};
+function markChoice(q, user){
+  return String(user||'').toUpperCase() === String(answers[q]).toUpperCase();
+}
+function markBlank(q, user){
+  var u = String(user||'').trim().toLowerCase();
+  var key = String(answers[q]).trim().toLowerCase();
+  if(acceptable[q]){
+    return acceptable[q].map(a => a.toLowerCase()).indexOf(u) >= 0;
+  }
+  return u === key;
+}
+function grade(){
+  var total=0, correct=0, lines=[];
+  function push(q, ok, user){
+    total++; if(ok) correct++;
+    lines.push(q.toUpperCase()+": "+(user||'None')+" "+(ok?'✓':'✗'));
+  }
+  // 1–5 判断题
+  for(var n=1;n<=5;n++){
+    var sel=document.querySelector('input[name="q'+n+'"]:checked');
+    var val=sel?sel.value:'';
+    push('q'+n, markChoice('q'+n, val), val);
+  }
+  // 6–13 填空题
+  for(var n=6;n<=13;n++){
+    var el=document.querySelector('input[name="q'+n+'"]');
+    var val=el?el.value:'';
+    push('q'+n, markBlank('q'+n, val), val);
+  }
+  var acc = (total? Math.round(100*correct/total):0);
+  var html = '<p><strong>Score:</strong> '+correct+'/'+total+' <span class="badge">Accuracy '+acc+'%</span></p>';
+  html += '<pre>'+lines.join('\n')+'</pre>';
+  document.getElementById('results').innerHTML = html;
+  var ahtml = '<ol>';
+  ahtml += '<li>1 → TRUE</li>';
+  ahtml += '<li>2 → FALSE</li>';
+  ahtml += '<li>3 → TRUE</li>';
+  ahtml += '<li>4 → NOT GIVEN</li>';
+  ahtml += '<li>5 → TRUE</li>';
+  ahtml += '<li>6 → trust</li>';
+  ahtml += '<li>7 → computers</li>';
+  ahtml += '<li>8 → language</li>';
+  ahtml += '<li>9 → travel</li>';
+  ahtml += '<li>10 → memory</li>';
+  ahtml += '<li>11 → status</li>';
+  ahtml += '<li>12 → conversation</li>';
+  ahtml += '<li>13 → tradition</li>';
+  ahtml += '</ol>';
+  document.getElementById('answerContent').innerHTML = ahtml;
+  document.querySelector('#answerBox .badge').textContent='tap to view';
+}
+function resetForm(){
+  document.querySelectorAll('input[type="radio"]').forEach(el=>el.checked=false);
+  document.querySelectorAll('input.blank').forEach(el=>el.value="");
+  document.getElementById('results').innerHTML='';
+  document.getElementById('answerContent').innerHTML='';
+  document.querySelector('#answerBox .badge').textContent = 'hidden';
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+}
+function scrollToElement(id){
+  var el = document.getElementById(id);
+  if(el){ 
+    el.scrollIntoView({behavior:'smooth', block:'center'}); 
+  }
+  var navs = document.querySelectorAll('.practice-nav .q-item');
+  navs.forEach(n => n.classList.remove('active'));
+  var btn = document.getElementById(id.replace('-anchor','-nav'));
+  if(btn){ 
+    btn.classList.add('active'); 
+    setTimeout(() => btn.classList.remove('active'), 800); 
+  }
+}
+(function(){
+  function mark(qn){
+    var nav = document.getElementById('q'+qn+'-nav');
+    if(!nav) return;
+    var radios = document.querySelectorAll('input[name="q'+qn+'"]');
+    var text = document.querySelector('input[name="q'+qn+'"].blank');
+    var answered=false;
+    if(radios.length){ radios.forEach(function(r){ if(r.checked) answered=true; }); }
+    if(text){ answered = answered || (text.value && text.value.trim().length>0); }
+    if(answered) nav.classList.add('answered'); else nav.classList.remove('answered');
+  }
+  for(var q=1;q<=13;q++){
+    (function(n){
+      var radios = document.querySelectorAll('input[name="q'+n+'"]');
+      radios.forEach(function(r){ r.addEventListener('change', function(){ mark(n); }); });
+      var text = document.querySelector('input[name="q'+n+'"].blank');
+      if(text){ text.addEventListener('input', function(){ mark(n); }); }
+    })(q);
+  }
+  for(var q=1;q<=13;q++){ mark(q); }
+})();
+</script>
+
+<!-- 练习页面数据传输增强脚本 -->
+<script>
+// 检查是否已经有增强脚本
+if (!window.practicePageEnhancer) {
+    // 动态加载增强脚本
+    const script = document.createElement('script');
+    script.src = '../../js/practice-page-enhancer.js';
+    script.onload = function() {
+        console.log('练习页面增强脚本已加载');
+    };
+    script.onerror = function() {
+        console.error('练习页面增强脚本加载失败');
+        // 降级到内联增强
+        loadInlineEnhancer();
+    };
+    document.head.appendChild(script);
+}
+
+// 内联增强器（降级方案）
+function loadInlineEnhancer() {
+    if (window.practicePageEnhancer) return;
+    
+    window.practicePageEnhancer = {
+        initialize: function() {
+            console.log('[InlineEnhancer] 内联增强器已初始化');
+            this.setupCommunication();
+            this.setupAnswerListeners();
+            this.interceptSubmit();
+        },
+        
+        setupCommunication: function() {
+            this.parentWindow = window.opener || window.parent;
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'INIT_SESSION') {
+                    this.sessionId = event.data.data.sessionId;
+                    this.sendMessage('SESSION_READY', {
+                        pageType: this.detectPageType(),
+                        url: window.location.href
+                    });
+                }
+            });
+        },
+        
+        detectPageType: function() {
+            const title = document.title || '';
+            if (title.includes('P1')) return 'P1';
+            if (title.includes('P2')) return 'P2';
+            if (title.includes('P3')) return 'P3';
+            return 'unknown';
+        },
+        
+        setupAnswerListeners: function() {
+            this.answers = {};
+            this.startTime = Date.now();
+            
+            document.addEventListener('change', (e) => {
+                if (e.target.name && e.target.name.startsWith('q')) {
+                    this.answers[e.target.name] = e.target.value;
+                }
+            });
+        },
+        
+        interceptSubmit: function() {
+            // 拦截grade函数
+            if (typeof window.grade === 'function') {
+                const originalGrade = window.grade;
+                window.grade = () => {
+                    const result = originalGrade();
+                    setTimeout(() => this.handleSubmit(), 200);
+                    return result;
+                };
+            }
+            
+            // 监听提交按钮
+            document.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON' && 
+                    (e.target.textContent.includes('Submit') || 
+                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+                    setTimeout(() => this.handleSubmit(), 300);
+                }
+            });
+        },
+        
+        handleSubmit: function() {
+            const results = {
+                sessionId: this.sessionId,
+                startTime: this.startTime,
+                endTime: Date.now(),
+                duration: Math.round((Date.now() - this.startTime) / 1000),
+                answers: this.answers,
+                scoreInfo: this.extractScore(),
+                pageType: this.detectPageType(),
+                url: window.location.href
+            };
+            
+            this.sendMessage('PRACTICE_COMPLETE', results);
+        },
+        
+        extractScore: function() {
+            const resultsEl = document.getElementById('results');
+            if (!resultsEl) return null;
+            
+            const text = resultsEl.textContent || '';
+            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+            if (scoreMatch) {
+                const correct = parseInt(scoreMatch[1]);
+                const total = parseInt(scoreMatch[2]);
+                return {
+                    correct: correct,
+                    total: total,
+                    accuracy: total > 0 ? correct / total : 0,
+                    percentage: Math.round((correct / total) * 100),
+                    source: 'inline_extraction'
+                };
+            }
+            return null;
+        },
+        
+        sendMessage: function(type, data) {
+            if (this.parentWindow) {
+                this.parentWindow.postMessage({
+                    type: type,
+                    data: data,
+                    source: 'practice_page'
+                }, '*');
+            }
+        }
+    };
+    
+    // 初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            window.practicePageEnhancer.initialize();
+        });
+    } else {
+        window.practicePageEnhancer.initialize();
+    }
+}
+</script>
+
+</body>
+</html>
+```
+
+这个代码实现了以下功能：
+
+1. 完整保留了原设计的页面布局和交互元素，包括左右分栏、拖拽调整宽度、计时器等
+2. 替换为"商务名片的重要性"的文章内容和对应题目
+3. 左侧文章末尾添加了空白行防止内容显示不全
+4. 保持了所有原有的交互功能：
+   - 文本高亮功能（可选中任意文本添加/移除高亮）
+   - 笔记功能（可对选中内容添加笔记）
+   - 题目导航和状态标记
+   - 答案提交和评分系统
+   - 答案显示/隐藏功能
+
+代码可以直接在浏览器中运行，无需额外依赖。您可以通过拖拽分栏边界调整左右区域宽度，选中文章文本后会出现高亮工具栏，点击"Highlight"即可添加黄色高亮，"Remove"可移除高亮。底部导航栏可快速跳转到相应题目。

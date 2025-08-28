@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Music: Language We All Speak</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
+  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  .shell { display:flex; height:100vh; width:100%; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  h2,h3,h4 { margin:0 0 10px; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  table { border-collapse: collapse; width:100%; }
+  th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
+  th:first-child, td:first-child { width:92px; }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button:hover { border-color:#fff; }
+  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+  .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:54px; padding:8px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .droplabel { color:#64748b; }
+  .cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:grid; gap:8px; }
+  .pool-slot { min-height:40px; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); }
+  .card:active { cursor:grabbing; }
+  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
+  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
+  .ghost { opacity: .5; }
+  .over { outline:2px dashed #3b82f6; }
+  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
+  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
+  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+  body { padding-bottom: 82px; }
+  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
+  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
+  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #selbar { z-index: 6000 !important; }
+</style>
+</head>
+<body>
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q27-nav" onclick="scrollToElement('q27-anchor')">27</div>
+    <div class="q-item" id="q28-nav" onclick="scrollToElement('q28-anchor')">28</div>
+    <div class="q-item" id="q29-nav" onclick="scrollToElement('q29-anchor')">29</div>
+    <div class="q-item" id="q30-nav" onclick="scrollToElement('q30-anchor')">30</div>
+    <div class="q-item" id="q31-nav" onclick="scrollToElement('q31-anchor')">31</div>
+    <div class="q-item" id="q32-nav" onclick="scrollToElement('q32-anchor')">32</div>
+    <div class="q-item" id="q33-nav" onclick="scrollToElement('q33-anchor')">33</div>
+    <div class="q-item" id="q34-nav" onclick="scrollToElement('q34-anchor')">34</div>
+    <div class="q-item" id="q35-nav" onclick="scrollToElement('q35-anchor')">35</div>
+    <div class="q-item" id="q36-nav" onclick="scrollToElement('q36-anchor')">36</div>
+    <div class="q-item" id="q37-nav" onclick="scrollToElement('q37-anchor')">37</div>
+    <div class="q-item" id="q38-nav" onclick="scrollToElement('q38-anchor')">38</div>
+    <div class="q-item" id="q39-nav" onclick="scrollToElement('q39-anchor')">39</div>
+    <div class="q-item" id="q40-nav" onclick="scrollToElement('q40-anchor')">40</div>
+  </div>
+</div>
+<div class="shell">
+<section class="pane" id="left">
+  <h2>READING PASSAGE 3 <span id="timer">00:00</span></h2>
+  <p>You should spend about 20 minutes on Questions 27–40, which are based on Reading Passage 3 below.</p>
+  <h3>Music: Language We All Speak</h3>
+  
+  <h4>Paragraph A</h4>
+  <p>Music is one of the human species’ relatively few universal abilities. Without formal training, any individual, from Stone Age tribesman to suburban teenager, has the ability to recognise music and, in some fashion, to make it. Why this should be so is a mystery. After all, music isn’t necessary for getting through the day, and if it aids in reproduction, it does so only in highly indirect ways. Language, by contrast, is also everywhere - but for reasons that are more obvious. With language, you and the members of your tribe can organise a migration across Africa, build reed boats and cross the seas, and communicate at night even when you can’t see each other. Modern culture, in all its technological extravagance, springs directly from the human talent for manipulating symbols and syntax.</p>
+  <p>Scientists have always been intrigued by the connection between music and language. Yet over the years, words and melody have acquired a vastly different status in the lab and the seminar room. While language has long been considered essential to unlocking the mechanisms of human intelligence, music is generally treated as an evolutionary frippery - mere “auditory cheesecake”, as the Harvard cognitive scientist Steven Pinker puts it.</p>
+  
+  <h4>Paragraph B</h4>
+  <p>But thanks to a decade-long wave of neuroscience research, that tune is changing. A flurry of recent publications suggests that language and music may equally be able to tell us who we are and where we’re from - not just emotionally, but biologically. In July, the journal Nature Neuroscience devoted a special issue to the topic. And in an article in the 6 August issue of the Journal of Neuroscience, David Schwartz, Catherine Howe and Dale Purves of Duke University argued that the sounds of music and the sounds of language are intricately connected.</p>
+  <p>To grasp the originality of this idea, it’s necessary to realise two things about how music has traditionally been understood. First, musicologists have long emphasised that while each culture stamps a special identity onto its music, music itself has some universal qualities. For example, in virtually all cultures, sound is divided into some or all of the 12 intervals that make up the chromatic scale - that is, the scale represented by the keys on a piano. For centuries, observers have attributed this preference for certain combinations of tones to the mathematical properties of sound itself.</p>
+  <p>Some 2,500 years ago, Pythagoras was the first to note a direct relationship between the harmoniousness of a tone combination and the physical dimensions of the object that produced it. For example, a plucked string will always play an octave lower than a similar string half its size, and a fifth lower than a similar string two-thirds its length. This link between simple ratios and harmony has influenced music theory ever since.</p>
+  
+  <h4>Paragraph C</h4>
+  <p>This music-is-math idea is often accompanied by the notion that music, formally speaking at least, exists apart from the world in which it was created. Writing recently in The New York Review of Books, pianist and critic Charles Rosen discussed the longstanding notion that while painting and sculpture reproduce at least some aspects of the natural world, and writing describes thoughts and feelings we are all familiar with, music is entirely abstracted from the world in which we live. Neither idea is right, according to David Schwartz and his colleagues. Human musical preferences are fundamentally shaped not by elegant algorithms or ratios but by the messy sounds of real life, and of speech in particular – which in turn is shaped by our evolutionary heritage. “The explanation of music, like the explanation of any product of the mind, must be rooted in biology, not in numbers per se,” says Schwartz.</p>
+  <p>Schwartz, Howe and Purves analysed a vast selection of speech sounds from a variety of languages to reveal the underlying patterns common to all utterances. In order to focus only on the raw sounds, they discarded all theories about speech and meaning, and sliced sentences into random bites. Using a database of over 100,000 brief segments of speech, they noted which frequency had the greatest emphasis in each sound. The resulting set of frequencies, they discovered, corresponded closely to the chromatic scale. In short, the building blocks of music are to be found in speech.</p>
+  <p>Far from being abstract, music presents a strange analogue to the patterns created by the sounds of speech. “Music, like visual arts, is rooted in our experience of the natural world,” says Schwartz. “It emulates our sound environment in the way that visual arts emulate the visual environment.” In music we hear the echo of our basic sound-making instrument - the vocal tract. The explanation for human music is simpler still than Pythagoras’s mathematical equations: we like the sounds that are familiar to us - specifically, we like the sounds that remind us of us.</p>
+  <p>This brings up some chicken-or-egg evolutionary questions. It may be that music imitates speech directly, the researchers say, in which case it would seem that language evolved first. It’s also conceivable that music came first and language is in effect an imitation of song - that in everyday speech we hit the musical notes we especially like. Alternatively, it may be that music imitates the general products of the human sound-making system, which just happens to be mostly speech. “We can’t know this,” says Schwartz. “What we do know is that they both come from the same system, and it is this that shapes our preferences.”</p>
+  
+  <h4>Paragraph D</h4>
+  <p>Schwartz’s study also casts light on the long-running question of whether animals understand or appreciate music. Despite the apparent abundance of “music” in the natural world - birdsong, whale song, wolf howls, synchronised chimpanzee hooting - previous studies have found that many laboratory animals don’t show a great affinity for the human variety of music making.</p>
+  <p>Marc Hauser and Josh McDermott of Harvard argued in the July issue of Nature Neuroscience that animals don’t create or perceive music the way we do. The fact that laboratory monkeys can show recognition of human tunes is evidence, they say, of shared general features of the auditory system, not any specific chimpanzee musical ability. As for birds, those most musical beasts, they generally recognise their own tunes - a narrow repertoire - but don’t generate novel melodies like we do. There are no avian Mozarts.</p>
+  <p>But what’s been played to animals, Schwartz notes, is human music. If animals evolve preferences for sound as we do - based upon the soundscape in which they live - then their “music” would be fundamentally different from ours. In the same way our scales derive from human utterances, a cat’s idea of a good tune would derive from yowls and meows. To demonstrate that animals don’t appreciate sound the way we do, we’d need evidence that they don’t respond to “music” constructed from their own sound environment.</p>
+  
+  <h4>Paragraph E</h4>
+  <p>No matter how the connection between language and music is parsed, what is apparent is that our sense of music, even our love for it, is as deeply rooted in our biology and in our brains as language is. This is most obvious with babies, says Sandra Trehub at the University of Toronto, who also published a paper in the Nature Neuroscience special issue.</p>
+  <p>For babies, music and speech are on a continuum. Mothers use musical speech to “regulate infants’ emotional states”, Trehub says. Regardless of what language they speak, the voice all mothers use with babies is the same: “something between speech and song”. This kind of communication “puts the baby in a trance-like state, which may proceed to sleep or extended periods of rapture”. So if the babies of the world could understand the latest research on language and music, they probably wouldn’t be very surprised. The upshot, says Trehub, is that music may be even more of a necessity than we realise.</p>
+
+  <p>&nbsp;</p>
+  <p>&nbsp;</p>
+  <p>&nbsp;</p>
+  <p>&nbsp;</p>
+  <p>&nbsp;</p>
+</section>
+<div id="divider" title="Drag to resize"></div>
+<section class="pane" id="right">
+  <h3>Questions</h3>
+  
+  <div class="group">
+    <h4>Questions 27–31</h4>
+    <p>Reading Passage 3 has five paragraphs, A–E.</p>
+    <p>Choose the correct heading for each paragraph from the list of headings below.</p>
+    <p>Write the correct number, i–viii, in boxes 27–31 on your answer sheet.</p>
+    <div class="headings">
+      <p>List of Headings</p>
+      <ol type="i">
+        <li>Music preferences across different cultures</li>
+        <li>Music as a survival tool</li>
+        <li>The biological roots of music appreciation in infants</li>
+        <li>Traditional views of music and language compared</li>
+        <li>Animals' inability to appreciate human music</li>
+        <li>A challenge to existing theories about music</li>
+        <li>New research linking music and language</li>
+        <li>Animal music and their sound environment</li>
+      </ol>
+    </div>
+    <table>
+      <tr>
+        <th>Paragraph</th>
+        <th>i</th>
+        <th>ii</th>
+        <th>iii</th>
+        <th>iv</th>
+        <th>v</th>
+        <th>vi</th>
+        <th>vii</th>
+        <th>viii</th>
+      </tr>
+      <a id="q27-anchor"></a>
+      <tr id="q27-row">
+        <td>A (27)</td>
+        <td><label><input name="q27" type="radio" value="i"/></label></td>
+        <td><label><input name="q27" type="radio" value="ii"/></label></td>
+        <td><label><input name="q27" type="radio" value="iii"/></label></td>
+        <td><label><input name="q27" type="radio" value="iv"/></label></td>
+        <td><label><input name="q27" type="radio" value="v"/></label></td>
+        <td><label><input name="q27" type="radio" value="vi"/></label></td>
+        <td><label><input name="q27" type="radio" value="vii"/></label></td>
+        <td><label><input name="q27" type="radio" value="viii"/></label></td>
+      </tr>
+      <a id="q28-anchor"></a>
+      <tr id="q28-row">
+        <td>B (28)</td>
+        <td><label><input name="q28" type="radio" value="i"/></label></td>
+        <td><label><input name="q28" type="radio" value="ii"/></label></td>
+        <td><label><input name="q28" type="radio" value="iii"/></label></td>
+        <td><label><input name="q28" type="radio" value="iv"/></label></td>
+        <td><label><input name="q28" type="radio" value="v"/></label></td>
+        <td><label><input name="q28" type="radio" value="vi"/></label></td>
+        <td><label><input name="q28" type="radio" value="vii"/></label></td>
+        <td><label><input name="q28" type="radio" value="viii"/></label></td>
+      </tr>
+      <a id="q29-anchor"></a>
+      <tr id="q29-row">
+        <td>C (29)</td>
+        <td><label><input name="q29" type="radio" value="i"/></label></td>
+        <td><label><input name="q29" type="radio" value="ii"/></label></td>
+        <td><label><input name="q29" type="radio" value="iii"/></label></td>
+        <td><label><input name="q29" type="radio" value="iv"/></label></td>
+        <td><label><input name="q29" type="radio" value="v"/></label></td>
+        <td><label><input name="q29" type="radio" value="vi"/></label></td>
+        <td><label><input name="q29" type="radio" value="vii"/></label></td>
+        <td><label><input name="q29" type="radio" value="viii"/></label></td>
+      </tr>
+      <a id="q30-anchor"></a>
+      <tr id="q30-row">
+        <td>D (30)</td>
+        <td><label><input name="q30" type="radio" value="i"/></label></td>
+        <td><label><input name="q30" type="radio" value="ii"/></label></td>
+        <td><label><input name="q30" type="radio" value="iii"/></label></td>
+        <td><label><input name="q30" type="radio" value="iv"/></label></td>
+        <td><label><input name="q30" type="radio" value="v"/></label></td>
+        <td><label><input name="q30" type="radio" value="vi"/></label></td>
+        <td><label><input name="q30" type="radio" value="vii"/></label></td>
+        <td><label><input name="q30" type="radio" value="viii"/></label></td>
+      </tr>
+      <a id="q31-anchor"></a>
+      <tr id="q31-row">
+        <td>E (31)</td>
+        <td><label><input name="q31" type="radio" value="i"/></label></td>
+        <td><label><input name="q31" type="radio" value="ii"/></label></td>
+        <td><label><input name="q31" type="radio" value="iii"/></label></td>
+        <td><label><input name="q31" type="radio" value="iv"/></label></td>
+        <td><label><input name="q31" type="radio" value="v"/></label></td>
+        <td><label><input name="q31" type="radio" value="vi"/></label></td>
+        <td><label><input name="q31" type="radio" value="vii"/></label></td>
+        <td><label><input name="q31" type="radio" value="viii"/></label></td>
+      </tr>
+    </table>
+  </div>
+  
+  <div class="group">
+    <h4>Questions 32–35</h4>
+    <p>Look at the following statements (Questions 32–35) and the list of researchers below.</p>
+    <p>Match each statement with the correct researcher(s), A–F.</p>
+    <p>Write the correct letter, A–F, in boxes 32–35 on your answer sheet.</p>
+    <p>NB You may use any letter more than once.</p>
+    <p><strong>List of Researchers</strong></p>
+    <ul>
+      <li>A Steven Pinker</li>
+      <li>B David Schwartz</li>
+      <li>C Charles Rosen</li>
+      <li>D Pythagoras</li>
+      <li>E Marc Hauser & Josh McDermott</li>
+      <li>F Sandra Trehub</li>
+    </ul>
+    
+    <a id="q32-anchor"></a>
+    <div id="q32-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>32 Music is considered to have little evolutionary value.</p>
+      <label style="display:block;margin:4px 0;"><input name="q32" type="radio" value="A"/>  A Steven Pinker</label>
+      <label style="display:block;margin:4px 0;"><input name="q32" type="radio" value="B"/>  B David Schwartz</label>
+      <label style="display:block;margin:4px 0;"><input name="q32" type="radio" value="C"/>  C Charles Rosen</label>
+      <label style="display:block;margin:4px 0;"><input name="q32" type="radio" value="D"/>  D Pythagoras</label>
+      <label style="display:block;margin:4px 0;"><input name="q32" type="radio" value="E"/>  E Marc Hauser & Josh McDermott</label>
+      <label style="display:block;margin:4px 0;"><input name="q32" type="radio" value="F"/>  F Sandra Trehub</label>
+    </div>
+    
+    <a id="q33-anchor"></a>
+    <div id="q33-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>33 Music preferences are based on mathematical ratios.</p>
+      <label style="display:block;margin:4px 0;"><input name="q33" type="radio" value="A"/>  A Steven Pinker</label>
+      <label style="display:block;margin:4px 0;"><input name="q33" type="radio" value="B"/>  B David Schwartz</label>
+      <label style="display:block;margin:4px 0;"><input name="q33" type="radio" value="C"/>  C Charles Rosen</label>
+      <label style="display:block;margin:4px 0;"><input name="q33" type="radio" value="D"/>  D Pythagoras</label>
+      <label style="display:block;margin:4px 0;"><input name="q33" type="radio" value="E"/>  E Marc Hauser & Josh McDermott</label>
+      <label style="display:block;margin:4px 0;"><input name="q33" type="radio" value="F"/>  F Sandra Trehub</label>
+    </div>
+    
+    <a id="q34-anchor"></a>
+    <div id="q34-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>34 Animals do not create music in the same way as humans.</p>
+      <label style="display:block;margin:4px 0;"><input name="q34" type="radio" value="A"/>  A Steven Pinker</label>
+      <label style="display:block;margin:4px 0;"><input name="q34" type="radio" value="B"/>  B David Schwartz</label>
+      <label style="display:block;margin:4px 0;"><input name="q34" type="radio" value="C"/>  C Charles Rosen</label>
+      <label style="display:block;margin:4px 0;"><input name="q34" type="radio" value="D"/>  D Pythagoras</label>
+      <label style="display:block;margin:4px 0;"><input name="q34" type="radio" value="E"/>  E Marc Hauser & Josh McDermott</label>
+      <label style="display:block;margin:4px 0;"><input name="q34" type="radio" value="F"/>  F Sandra Trehub</label>
+    </div>
+    
+    <a id="q35-anchor"></a>
+    <div id="q35-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>35 Music and speech exist on a continuous spectrum for infants.</p>
+      <label style="display:block;margin:4px 0;"><input name="q35" type="radio" value="A"/>  A Steven Pinker</label>
+      <label style="display:block;margin:4px 0;"><input name="q35" type="radio" value="B"/>  B David Schwartz</label>
+      <label style="display:block;margin:4px 0;"><input name="q35" type="radio" value="C"/>  C Charles Rosen</label>
+      <label style="display:block;margin:4px 0;"><input name="q35" type="radio" value="D"/>  D Pythagoras</label>
+      <label style="display:block;margin:4px 0;"><input name="q35" type="radio" value="E"/>  E Marc Hauser & Josh McDermott</label>
+      <label style="display:block;margin:4px 0;"><input name="q35" type="radio" value="F"/>  F Sandra Trehub</label>
+    </div>
+  </div>
+  
+  <div class="group">
+    <h4>Questions 36–40</h4>
+    <p>Choose the correct letter, A, B, C or D.</p>
+    <p>Write the correct letter in boxes 36–40 on your answer sheet.</p>
+    
+    <a id="q36-anchor"></a>
+    <div id="q36-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>36 According to the passage, music is different from language in that</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q36" type="radio" value="A"> A music is not necessary for daily survival</label>
+        <label style="margin:0;"><input name="q36" type="radio" value="B"> B music has more evolutionary benefits</label>
+        <label style="margin:0;"><input name="q36" type="radio" value="C"> C music is culturally universal</label>
+        <label style="margin:0;"><input name="q36" type="radio" value="D"> D music is easier to learn</label>
+      </div>
+    </div>
+    
+    <a id="q37-anchor"></a>
+    <div id="q37-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>37 Schwartz and his colleagues believe that music</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q37" type="radio" value="A"> A is based on mathematical principles</label>
+        <label style="margin:0;"><input name="q37" type="radio" value="B"> B is a purely abstract art form</label>
+        <label style="margin:0;"><input name="q37" type="radio" value="C"> C originates from human speech patterns</label>
+        <label style="margin:0;"><input name="q37" type="radio" value="D"> D evolved before human language</label>
+      </div>
+    </div>
+    
+    <a id="q38-anchor"></a>
+    <div id="q38-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>38 The study by Schwartz, Howe and Purves found that</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q38" type="radio" value="A"> A speech sounds correspond to musical scales</label>
+        <label style="margin:0;"><input name="q38" type="radio" value="B"> B all languages have similar sound patterns</label>
+        <label style="margin:0;"><input name="q38" type="radio" value="C"> C mathematical ratios determine speech patterns</label>
+        <label style="margin:0;"><input name="q38" type="radio" value="D"> D music helps people learn language</label>
+      </div>
+    </div>
+    
+    <a id="q39-anchor"></a>
+    <div id="q39-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>39 What does Schwartz suggest about animal music?</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q39" type="radio" value="A"> A Animals cannot create any form of music</label>
+        <label style="margin:0;"><input name="q39" type="radio" value="B"> B Animal music is based on their own sound environment</label>
+        <label style="margin:0;"><input name="q39" type="radio" value="C"> C Animals appreciate human music if exposed to it</label>
+        <label style="margin:0;"><input name="q39" type="radio" value="D"> D Animal music is simpler than human music</label>
+      </div>
+    </div>
+    
+    <a id="q40-anchor"></a>
+    <div id="q40-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>40 What is the main conclusion of the passage?</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q40" type="radio" value="A"> A Music is primarily a cultural phenomenon</label>
+        <label style="margin:0;"><input name="q40" type="radio" value="B"> B Music and language share biological origins</label>
+        <label style="margin:0;"><input name="q40" type="radio" value="C"> C Music appreciation is learned rather than innate</label>
+        <label style="margin:0;"><input name="q40" type="radio" value="D"> D Music evolved to facilitate communication</label>
+      </div>
+    </div>
+  </div>
+  
+  <div style="display:flex;gap:8px;margin-bottom:10px;">
+    <button class="primary" onclick="grade()">Submit</button>
+    <button onclick="resetForm()">Reset</button>
+    <button onclick="toggleNotes()">Notes</button>
+  </div>
+  <div id="results"></div>
+  <details class="answerbox" id="answerBox">
+    <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+    <div id="answerContent"></div>
+  </details>
+</section>
+</div>
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+<script>
+// Timer
+let _t=0; const _timerEl=document.getElementById('timer');
+setInterval(function(){ 
+  _t++; 
+  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
+  var s=String(_t%60).padStart(2,'0'); 
+  _timerEl.textContent=m+':'+s; 
+},1000);
+// Drag divider
+var divider = document.getElementById('divider');
+var left = document.getElementById('left');
+var right = document.getElementById('right');
+var dragging=false;
+function startDrag(e){ 
+  dragging=true; 
+  document.body.style.cursor='ew-resize'; 
+  if(e.preventDefault) e.preventDefault(); 
+}
+function endDrag(){ 
+  dragging=false; 
+  document.body.style.cursor=''; 
+}
+function onMove(clientX){
+  var container = document.querySelector('.shell').getBoundingClientRect();
+  var x = clientX - container.left;
+  x = Math.max(280, Math.min(container.width-320, x));
+  left.style.flex = '0 0 ' + x + 'px';
+  right.style.flex = '1 1 auto';
+}
+divider.addEventListener('mousedown', function(e){ startDrag(e); });
+window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+window.addEventListener('mouseup', endDrag);
+divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
+window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+window.addEventListener('touchend', endDrag);
+// Highlight toolbar
+var selbar = document.getElementById('selbar');
+var btnHL = document.getElementById('btnHL');
+var btnUH = document.getElementById('btnUH');
+var btnNote = document.getElementById('btnNote');
+var lastRange=null;
+var currentHlNode=null;
+var keepToolbar=false;
+function positionSelbarForRect(rect){
+  selbar.style.display='flex';
+  requestAnimationFrame(function(){
+    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+function updateSelbar(){
+  var sel=window.getSelection();
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
+    selbar.style.display='none'; 
+    currentHlNode=null; 
+    return; 
+  }
+  var range = sel.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode=null;
+  positionSelbarForRect(range.getBoundingClientRect());
+}
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', function(){ 
+  var sel=window.getSelection(); 
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
+    if(!keepToolbar && !currentHlNode){ 
+      selbar.style.display='none'; 
+    } 
+  } 
+});
+document.addEventListener('scroll', function(){ 
+  if(selbar.style.display==='flex') updateSelbar(); 
+});
+document.addEventListener('mousedown', function(e){
+  var t = e.target;
+  if(t.classList && t.classList.contains('hl')){
+    keepToolbar = true;
+  } else {
+    keepToolbar = false;
+  }
+}, true);
+document.addEventListener('click', function(e){
+  var target = e.target;
+  if(target.classList && target.classList.contains('hl')){
+    currentHlNode = target;
+    lastRange = null;
+    positionSelbarForRect(target.getBoundingClientRect());
+    var sel=window.getSelection();
+    if(sel) sel.removeAllRanges();
+    setTimeout(function(){ keepToolbar=false; }, 0);
+  }
+}, true);
+function doHighlight(){
+  if(currentHlNode) return;
+  if(!lastRange || lastRange.collapsed) return;
+  var span=document.createElement('span'); span.className='hl';
+  try { lastRange.surroundContents(span); }
+  catch(e){
+    var wrap=document.createElement('span'); wrap.className='hl';
+    wrap.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrap);
+  }
+  selbar.style.display='none';
+  showToast('Highlighted');
+}
+function removeHighlight(){
+  if(currentHlNode){
+    var p = currentHlNode.parentNode;
+    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
+    p.removeChild(currentHlNode); p.normalize();
+    currentHlNode = null;
+    selbar.style.display='none';
+    showToast('Highlight removed');
+    return;
+  }
+  if(!lastRange) return;
+  var selRect = lastRange.getBoundingClientRect();
+  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  var toRemove=[];
+  while(walker.nextNode()){
+    var n=walker.currentNode;
+    if(n.classList && n.classList.contains('hl')) {
+      var r = n.getBoundingClientRect();
+      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+    }
+  }
+  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
+  selbar.style.display='none';
+  showToast('Highlight removed');
+}
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+// Notes
+var notes = document.getElementById('notes');
+var noteArea = document.getElementById('noteArea');
+var btnCopy=document.getElementById('btnCopy');
+var btnClose=document.getElementById('btnClose');
+function toggleNotes(){ 
+  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+}
+window.toggleNotes = toggleNotes;
+btnClose.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async function(){ 
+  await navigator.clipboard.writeText(noteArea.value||''); 
+  showToast('Copied'); 
+});
+btnNote.addEventListener('click', function(){
+  var text = '';
+  if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
+  else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
+  toggleNotes();
+  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
+  selbar.style.display='none';
+});
+// Toast
+var toastEl=document.getElementById('toast');
+function showToast(msg){
+  toastEl.textContent=msg; 
+  toastEl.style.display='block';
+  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+}
+// Answer key and grading
+var answers = {
+  "q27":"iv", "q28":"vii", "q29":"vi", "q30":"viii", "q31":"iii",
+  "q32":"A", "q33":"D", "q34":"E", "q35":"F",
+  "q36":"A", "q37":"C", "q38":"A", "q39":"B", "q40":"B"
+};
+var acceptable = {
+  // 可接受的替代答案
+};
+function markHeading(q, user){
+  return String(user||'').toLowerCase() === String(answers[q]).toLowerCase();
+}
+function markChoice(q, user){
+  return String(user||'').toUpperCase() === String(answers[q]).toUpperCase();
+}
+function markBlank(q, user){
+  var u = String(user||'').trim().toLowerCase();
+  var key = String(answers[q]).trim().toLowerCase();
+  if(acceptable[q]){
+    return acceptable[q].map(a => a.toLowerCase()).indexOf(u) >= 0;
+  }
+  return u === key;
+}
+function grade(){
+  var total=0, correct=0, lines=[];
+  function push(q, ok, user){
+    total++; if(ok) correct++;
+    lines.push(q.toUpperCase()+": "+(user||'None')+" "+(ok?'✅':'❌'));
+  }
+  // 27–31 headings
+  for(var n=27;n<=31;n++){
+    var sel=document.querySelector('input[name="q'+n+'"]:checked');
+    var val=sel?sel.value:'';
+    push('q'+n, markHeading('q'+n, val), val);
+  }
+  // 32–35 matching
+  for(var n=32;n<=35;n++){
+    var sel=document.querySelector('input[name="q'+n+'"]:checked');
+    var val=sel?sel.value:'';
+    push('q'+n, markChoice('q'+n, val), val);
+  }
+  // 36–40 multiple choice
+  for(var n=36;n<=40;n++){
+    var sel=document.querySelector('input[name="q'+n+'"]:checked');
+    var val=sel?sel.value:'';
+    push('q'+n, markChoice('q'+n, val), val);
+  }
+  var acc = (total? Math.round(100*correct/total):0);
+  var html = '<p><strong>Score:</strong> '+correct+'/'+total+' <span class="badge">Accuracy '+acc+'%</span></p>';
+  html += '<pre>'+lines.join('\n')+'</pre>';
+  document.getElementById('results').innerHTML = html;
+  var ahtml = '<ol>';
+  ahtml += '<li>27 → iv (Traditional views of music and language compared)</li>';
+  ahtml += '<li>28 → vii (New research linking music and language)</li>';
+  ahtml += '<li>29 → vi (A challenge to existing theories about music)</li>';
+  ahtml += '<li>30 → viii (Animal music and their sound environment)</li>';
+  ahtml += '<li>31 → iii (The biological roots of music appreciation in infants)</li>';
+  ahtml += '<li>32 → A (Steven Pinker)</li>';
+  ahtml += '<li>33 → D (Pythagoras)</li>';
+  ahtml += '<li>34 → E (Marc Hauser & Josh McDermott)</li>';
+  ahtml += '<li>35 → F (Sandra Trehub)</li>';
+  ahtml += '<li>36 → A (music is not necessary for daily survival)</li>';
+  ahtml += '<li>37 → C (originates from human speech patterns)</li>';
+  ahtml += '<li>38 → A (speech sounds correspond to musical scales)</li>';
+  ahtml += '<li>39 → B (Animal music is based on their own sound environment)</li>';
+  ahtml += '<li>40 → B (Music and language share biological origins)</li>';
+  ahtml += '</ol>';
+  document.getElementById('answerContent').innerHTML = ahtml;
+  document.querySelector('#answerBox .badge').textContent='tap to view';
+}
+function resetForm(){
+  document.querySelectorAll('input[type="radio"]').forEach(el=>el.checked=false);
+  document.querySelectorAll('input.blank').forEach(el=>el.value="");
+  document.getElementById('results').innerHTML='';
+  document.getElementById('answerContent').innerHTML='';
+  document.querySelector('#answerBox .badge').textContent = 'hidden';
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+}
+function scrollToElement(id){
+  var el = document.getElementById(id);
+  if(el){ 
+    el.scrollIntoView({behavior:'smooth', block:'center'}); 
+  }
+  var navs = document.querySelectorAll('.practice-nav .q-item');
+  navs.forEach(n => n.classList.remove('active'));
+  var btn = document.getElementById(id.replace('-anchor','-nav'));
+  if(btn){ 
+    btn.classList.add('active'); 
+    setTimeout(() => btn.classList.remove('active'), 800); 
+  }
+}
+(function(){
+  function mark(qn){
+    var nav = document.getElementById('q'+qn+'-nav');
+    if(!nav) return;
+    var radios = document.querySelectorAll('input[name="q'+qn+'"]');
+    var text = document.querySelector('input[name="q'+qn+'"].blank');
+    var answered=false;
+    if(radios.length){ radios.forEach(function(r){ if(r.checked) answered=true; }); }
+    if(text){ answered = answered || (text.value && text.value.trim().length>0); }
+    if(answered) nav.classList.add('answered'); else nav.classList.remove('answered');
+  }
+  for(var q=27;q<=40;q++){
+    (function(n){
+      var radios = document.querySelectorAll('input[name="q'+n+'"]');
+      radios.forEach(function(r){ r.addEventListener('change', function(){ mark(n); }); });
+      var text = document.querySelector('input[name="q'+n+'"].blank');
+      if(text){ text.addEventListener('input', function(){ mark(n); }); }
+    })(q);
+  }
+  for(var q=27;q<=40;q++){ mark(q); }
+})();
+</script>
+
+<!-- 练习页面数据传输增强脚本 -->
+<script>
+// 检查是否已经有增强脚本
+if (!window.practicePageEnhancer) {
+    // 动态加载增强脚本
+    const script = document.createElement('script');
+    script.src = '../../js/practice-page-enhancer.js';
+    script.onload = function() {
+        console.log('练习页面增强脚本已加载');
+    };
+    script.onerror = function() {
+        console.error('练习页面增强脚本加载失败');
+        // 降级到内联增强
+        loadInlineEnhancer();
+    };
+    document.head.appendChild(script);
+}
+
+// 内联增强器（降级方案）
+function loadInlineEnhancer() {
+    if (window.practicePageEnhancer) return;
+    
+    window.practicePageEnhancer = {
+        initialize: function() {
+            console.log('[InlineEnhancer] 内联增强器已初始化');
+            this.setupCommunication();
+            this.setupAnswerListeners();
+            this.interceptSubmit();
+        },
+        
+        setupCommunication: function() {
+            this.parentWindow = window.opener || window.parent;
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'INIT_SESSION') {
+                    this.sessionId = event.data.data.sessionId;
+                    this.sendMessage('SESSION_READY', {
+                        pageType: this.detectPageType(),
+                        url: window.location.href
+                    });
+                }
+            });
+        },
+        
+        detectPageType: function() {
+            const title = document.title || '';
+            if (title.includes('P1')) return 'P1';
+            if (title.includes('P2')) return 'P2';
+            if (title.includes('P3')) return 'P3';
+            return 'unknown';
+        },
+        
+        setupAnswerListeners: function() {
+            this.answers = {};
+            this.startTime = Date.now();
+            
+            document.addEventListener('change', (e) => {
+                if (e.target.name && e.target.name.startsWith('q')) {
+                    this.answers[e.target.name] = e.target.value;
+                }
+            });
+        },
+        
+        interceptSubmit: function() {
+            // 拦截grade函数
+            if (typeof window.grade === 'function') {
+                const originalGrade = window.grade;
+                window.grade = () => {
+                    const result = originalGrade();
+                    setTimeout(() => this.handleSubmit(), 200);
+                    return result;
+                };
+            }
+            
+            // 监听提交按钮
+            document.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON' && 
+                    (e.target.textContent.includes('Submit') || 
+                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+                    setTimeout(() => this.handleSubmit(), 300);
+                }
+            });
+        },
+        
+        handleSubmit: function() {
+            const results = {
+                sessionId: this.sessionId,
+                startTime: this.startTime,
+                endTime: Date.now(),
+                duration: Math.round((Date.now() - this.startTime) / 1000),
+                answers: this.answers,
+                scoreInfo: this.extractScore(),
+                pageType: this.detectPageType(),
+                url: window.location.href
+            };
+            
+            this.sendMessage('PRACTICE_COMPLETE', results);
+        },
+        
+        extractScore: function() {
+            const resultsEl = document.getElementById('results');
+            if (!resultsEl) return null;
+            
+            const text = resultsEl.textContent || '';
+            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+            if (scoreMatch) {
+                const correct = parseInt(scoreMatch[1]);
+                const total = parseInt(scoreMatch[2]);
+                return {
+                    correct: correct,
+                    total: total,
+                    accuracy: total > 0 ? correct / total : 0,
+                    percentage: Math.round((correct / total) * 100),
+                    source: 'inline_extraction'
+                };
+            }
+            return null;
+        },
+        
+        sendMessage: function(type, data) {
+            if (this.parentWindow) {
+                this.parentWindow.postMessage({
+                    type: type,
+                    data: data,
+                    source: 'practice_page'
+                }, '*');
+            }
+        }
+    };
+    
+    // 初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            window.practicePageEnhancer.initialize();
+        });
+    } else {
+        window.practicePageEnhancer.initialize();
+    }
+}
+</script>
+
+</body>
+</html>

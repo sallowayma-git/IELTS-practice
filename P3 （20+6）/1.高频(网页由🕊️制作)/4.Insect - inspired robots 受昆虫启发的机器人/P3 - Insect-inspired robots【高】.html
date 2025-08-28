@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Insect-inspired robots - Reading Passage 3</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
+  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  .shell { display:flex; height:100vh; width:100%; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  h2,h3,h4 { margin:0 0 10px; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  table { border-collapse: collapse; width:100%; }
+  th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
+  th:first-child, td:first-child { width:92px; }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button:hover { border-color:#fff; }
+  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+  /* DnD styles */
+  .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:40px; padding:4px 8px; display:inline-flex; align-items:center; justify-content:space-between; gap:8px; width: auto; min-width: 120px; max-width: 200px; vertical-align: middle; }
+  .droplabel { color:#64748b; font-size:14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:flex; flex-wrap:wrap; gap:8px; }
+  .pool-slot { min-height:40px; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); white-space: nowrap; }
+  .card:active { cursor:grabbing; }
+  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
+  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
+  .ghost { opacity: .5; }
+  .over { outline:2px dashed #3b82f6; }
+  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
+  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
+  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+/* bottom question nav */
+body { padding-bottom: 82px; }
+.practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
+.practice-nav .title { font-weight:600; color:var(--muted); }
+.practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
+.practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
+.practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+.practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+#selbar { z-index: 6000 !important; } /* ensure toolbar sits above bottom nav */
+</style>
+</head>
+<body>
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q27-nav" onclick="scrollToElement('q27-anchor')">27</div>
+    <div class="q-item" id="q28-nav" onclick="scrollToElement('q28-anchor')">28</div>
+    <div class="q-item" id="q29-nav" onclick="scrollToElement('q29-anchor')">29</div>
+    <div class="q-item" id="q30-nav" onclick="scrollToElement('q30-anchor')">30</div>
+    <div class="q-item" id="q31-nav" onclick="scrollToElement('q31-anchor')">31</div>
+    <div class="q-item" id="q32-nav" onclick="scrollToElement('q32-anchor')">32</div>
+    <div class="q-item" id="q33-nav" onclick="scrollToElement('q33-anchor')">33</div>
+    <div class="q-item" id="q34-nav" onclick="scrollToElement('q34-anchor')">34</div>
+    <div class="q-item" id="q35-nav" onclick="scrollToElement('q35-anchor')">35</div>
+    <div class="q-item" id="q36-nav" onclick="scrollToElement('q36-anchor')">36</div>
+    <div class="q-item" id="q37-nav" onclick="scrollToElement('q37-anchor')">37</div>
+    <div class="q-item" id="q38-nav" onclick="scrollToElement('q38-anchor')">38</div>
+    <div class="q-item" id="q39-nav" onclick="scrollToElement('q39-anchor')">39</div>
+    <div class="q-item" id="q40-nav" onclick="scrollToElement('q40-anchor')">40</div>
+  </div>
+</div>
+<div class="shell">
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 3 <span id="timer">00:00</span></h2>
+    <p>You should spend about 20 minutes on Questions 27–40, which are based on Reading Passage 3 below.</p>
+    <h3>Insect-inspired robots</h3>
+    <p><em>A recent conference reports on developments in biorobotics</em></p>
+    
+    <h4>Section A</h4>
+    <p>A tiny insect navigates its way across featureless salt-pans. A cockroach successfully works out how to scramble over an obstacle. The mantis shrimp scans its aquatic world through hyperspectral eyes. Using the most basic of equipment and brains tinier than a pin-head, insects constantly solve complex problems of movement, vision and navigation – processing data that would challenge a super-computer. How they do it is driving one of the most exciting new fields of technology – biomimetics and biorobotics, the imitation of insect systems to control man-made machines. Delegates at a recent conference presented some outcomes of their work in this area.</p>
+    
+    <h4>Section B</h4>
+    <p>Dr Alex Zelinsky suggested that the method by which wasps use landmarks to find their way back to the nest may one day be part of a system for navigating cars that know where to go. A research team led by Dr Zelinsky has shown that a robot can navigate its way among 50 different landmarks by recognising them individually using a panoramic camera. “The inspiration came from biology, where wasps use a practical method turn back and look to orient themselves as they emerge from their nest. By flying to and fro, they look at the wasp nest from different angles and perspectives so they can recognise it again,” he explained. The robot’s panoramic camera logs the surrounding area and its key landmarks, which are then stored in its computer according to how reliable they are as navigational aids. The landmarks are then scaled, from small to large, so that the robot can recognise whether it is getting closer to or further away from them. Their location is built into a map in its mind, which operates at different scales and instructs the robot whether to turn left or right at a particular mark. The technology provides a general way for a machine to navigate an unknown landscape.</p>
+    
+    <h4>Section C</h4>
+    <p>For three decades, Professor Ruediger Wehner has journeyed from Switzerland to the Sahara Desert where Cataglyphis, a tiny ant with a brain weighing just 0.1 mg, performs acts of navigational genius when it leaves its nest, forages for food and returns successfully. Cataglyphis uses polarised light, caused when air molecules scatter light, to orient and steer itself. Wehner’s team found that the ant has a set of specialised photoreceptors along the upper rim of its eyes that detect polarised light, while other receptors perform different navigational tasks. As the sun moves, the ant notes its direction each time it leaves the nest and updates its internal compass. Using other eye receptors it stores a snapshot image of landmarks close to the nest entrance in its eyes and compares this with what it sees as it returns. The ant also has a way of measuring distance travelled, while a path integrator periodically informs the ant of its current position relative to its point of departure. Rather than integrate all the information it receives in its brain, the ant actually performs a number of complex calculations in different organs. Like a super-computer, the ant has many separate sub-routines going on simultaneously.</p>
+    <p>Using the ant’s ability to steer by polarised light and to store and reuse landscape images, Wehner and colleagues have built “Sahabot,” a small vehicle that uses polarisers and a CCD camera to store 360° images of its surroundings. It navigates by using polarised sunlight and comparing the current images of landmarks to the ones in its memory.</p>
+    
+    <h4>Section D</h4>
+    <p>Professor Robert Michelson had a different desert challenge – to design a flying robot that can not only navigate but also stay aloft and hover in the thin atmosphere of Mars. Drawing inspiration from insect flight, he has gone beyond nature to devise a completely new concept for a flying machine. The “Entomopter” is a sort of double-ended dragonfly whose wings beat reciprocally. Michelson says that the flapping-wing design gives the craft unusually high lift compared with a fixed-wing flyer, enabling it to fly slowly or hover in the thin Martian air – whereas a fixed-wing craft would have to move at more than 400 km/h and could not stop to explore.</p>
+    
+    <h4>Section E</h4>
+    <p>Engineer Roger Quinn and entomologist Professor Roy Ritzmann are taking their inspiration from cockroaches. According to Quinn and Ritzmann, the ability of cockroaches to run very fast over rough terrain may one day give rise to a completely new all-terrain vehicle with six legs, or maybe even wheel-like legs called “whegs.” The key to the cockroach’s remarkable cross-country performance lies partly in the fact that its legs do a lot of the thinking without having to consult the brain. Quinn and Ritzmann are drawing on cockroach skills to create robotic walkers and control strategies that capture the remarkable capacity of these insects to traverse complex terrain and navigate safely toward goals while avoiding obstacles. The team has already designed a series of robots that run on six legs or on whegs, enabling them to handle surprisingly rugged terrain.</p>
+    
+    <h4>Section F</h4>
+    <p>International experts believe there are tremendous opportunities in biorobotics. However, delegates at the conference had differing visions for the future of the science. While some were concerned that the initial applications of biorobotics may be military, others, such as Dr Barbara Webb, predicted swarms of tiny, cheap, insect-like robots as society’s cleaners and collectors. Sonja Kleinlogel hoped the study of the hyperspectral eyes of the mantis shrimp might yield remote sensors that can watch over the environmental health of our oceans. Several delegates were concerned about the ethical implications of biorobotics and urged that close attention be paid to this as the science and technologies develop.</p>
+    
+    <p>&nbsp;</p> <!-- 增加空白行防止加载不完全 -->
+  </section>
+  <div id="divider" title="Drag to resize"></div>
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <h4>Questions 27–32</h4>
+      <p>Reading Passage 3 has six sections, A–F.</p>
+      <p>Which section contains the following information?</p>
+      <p>Write the correct letter, A–F, in boxes 27–32 on your answer sheet.</p>
+      
+      <a id="q27-anchor"></a>
+      <div id="q27-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>27 positive and negative possibilities for the use of insect-inspired robots</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q27" type="radio" value="A"> A</label>
+          <label style="margin:0;"><input name="q27" type="radio" value="B"> B</label>
+          <label style="margin:0;"><input name="q27" type="radio" value="C"> C</label>
+          <label style="margin:0;"><input name="q27" type="radio" value="D"> D</label>
+          <label style="margin:0;"><input name="q27" type="radio" value="E"> E</label>
+          <label style="margin:0;"><input name="q27" type="radio" value="F"> F</label>
+        </div>
+      </div>
+      
+      <a id="q28-anchor"></a>
+      <div id="q28-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>28 how perceived size is used as an aid to navigation</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q28" type="radio" value="A"> A</label>
+          <label style="margin:0;"><input name="q28" type="radio" value="B"> B</label>
+          <label style="margin:0;"><input name="q28" type="radio" value="C"> C</label>
+          <label style="margin:0;"><input name="q28" type="radio" value="D"> D</label>
+          <label style="margin:0;"><input name="q28" type="radio" value="E"> E</label>
+          <label style="margin:0;"><input name="q28" type="radio" value="F"> F</label>
+        </div>
+      </div>
+      
+      <a id="q29-anchor"></a>
+      <div id="q29-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>29 an example of decision-making taking place in the limbs</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q29" type="radio" value="A"> A</label>
+          <label style="margin:0;"><input name="q29" type="radio" value="B"> B</label>
+          <label style="margin:0;"><input name="q29" type="radio" value="C"> C</label>
+          <label style="margin:0;"><input name="q29" type="radio" value="D"> D</label>
+          <label style="margin:0;"><input name="q29" type="radio" value="E"> E</label>
+          <label style="margin:0;"><input name="q29" type="radio" value="F"> F</label>
+        </div>
+      </div>
+      
+      <a id="q30-anchor"></a>
+      <div id="q30-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>30 a description of a potential aid in space exploration</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q30" type="radio" value="A"> A</label>
+          <label style="margin:0;"><input name="q30" type="radio" value="B"> B</label>
+          <label style="margin:0;"><input name="q30" type="radio" value="C"> C</label>
+          <label style="margin:0;"><input name="q30" type="radio" value="D"> D</label>
+          <label style="margin:0;"><input name="q30" type="radio" value="E"> E</label>
+          <label style="margin:0;"><input name="q30" type="radio" value="F"> F</label>
+        </div>
+      </div>
+      
+      <a id="q31-anchor"></a>
+      <div id="q31-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>31 the range of skills that have inspired biorobotics</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q31" type="radio" value="A"> A</label>
+          <label style="margin:0;"><input name="q31" type="radio" value="B"> B</label>
+          <label style="margin:0;"><input name="q31" type="radio" value="C"> C</label>
+          <label style="margin:0;"><input name="q31" type="radio" value="D"> D</label>
+          <label style="margin:0;"><input name="q31" type="radio" value="E"> E</label>
+          <label style="margin:0;"><input name="q31" type="radio" value="F"> F</label>
+        </div>
+      </div>
+      
+      <a id="q32-anchor"></a>
+      <div id="q32-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>32 how a variety of navigational methods operate at the same time</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q32" type="radio" value="A"> A</label>
+          <label style="margin:0;"><input name="q32" type="radio" value="B"> B</label>
+          <label style="margin:0;"><input name="q32" type="radio" value="C"> C</label>
+          <label style="margin:0;"><input name="q32" type="radio" value="D"> D</label>
+          <label style="margin:0;"><input name="q32" type="radio" value="E"> E</label>
+          <label style="margin:0;"><input name="q32" type="radio" value="F"> F</label>
+        </div>
+      </div>
+    </div>
+    
+    <div class="group">
+      <h4>Questions 33–36</h4>
+      <p>Answer the questions below.</p>
+      <p>Choose NO MORE THAN THREE WORDS from the passage for each answer.</p>
+      <p>Write your answers in boxes 33–36 on your answer sheet.</p>
+      
+      <a id="q33-anchor"></a>
+      <div id="q33-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>33 Which creature sees particularly well under water?</p>
+        <input class="blank" maxlength="40" name="q33" placeholder="Write your answer here">
+      </div>
+      
+      <a id="q34-anchor"></a>
+      <div id="q34-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>34 In addition to a computer, what technical equipment is fitted in Dr Zelinsky’s robot?</p>
+        <input class="blank" maxlength="40" name="q34" placeholder="Write your answer here">
+      </div>
+      
+      <a id="q35-anchor"></a>
+      <div id="q35-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>35 Where is the Cataglyphis ant found?</p>
+        <input class="blank" maxlength="40" name="q35" placeholder="Write your answer here">
+      </div>
+      
+      <a id="q36-anchor"></a>
+      <div id="q36-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>36 What atmospheric effect helps the Cataglyphis ant to know its direction?</p>
+        <input class="blank" maxlength="40" name="q36" placeholder="Write your answer here">
+      </div>
+    </div>
+    
+    <div class="group">
+      <h4>Questions 37–40</h4>
+      <p>Look at the following people (Questions 37–40) and the list of robots below.</p>
+      <p>Match each person or people with the correct robot, A–G.</p>
+      <p>Write the correct letter, A–G, in boxes 37–40 on your answer sheet.</p>
+      
+      <p><strong>List of Robots</strong></p>
+      <ul>
+        <li>A a robot that makes use of light as well as stored images for navigational purposes</li>
+        <li>B a robot that can contribute to environmental health</li>
+        <li>C a robot that can move over difficult surfaces</li>
+        <li>D a robot that categorises information from the environment according to its usefulness</li>
+        <li>E a robot that can be used to clean surfaces and collect rubbish</li>
+        <li>F a robot that has improved on the ability of the insect on which it is based</li>
+        <li>G a robot that can replace soldiers in war</li>
+      </ul>
+      
+      <a id="q37-anchor"></a>
+      <div id="q37-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>37 Dr Alex Zelinsky</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q37" type="radio" value="A"> A</label>
+          <label style="margin:0;"><input name="q37" type="radio" value="B"> B</label>
+          <label style="margin:0;"><input name="q37" type="radio" value="C"> C</label>
+          <label style="margin:0;"><input name="q37" type="radio" value="D"> D</label>
+          <label style="margin:0;"><input name="q37" type="radio" value="E"> E</label>
+          <label style="margin:0;"><input name="q37" type="radio" value="F"> F</label>
+          <label style="margin:0;"><input name="q37" type="radio" value="G"> G</label>
+        </div>
+      </div>
+      
+      <a id="q38-anchor"></a>
+      <div id="q38-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>38 Professor Ruediger Wehner</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q38" type="radio" value="A"> A</label>
+          <label style="margin:0;"><input name="q38" type="radio" value="B"> B</label>
+          <label style="margin:0;"><input name="q38" type="radio" value="C"> C</label>
+          <label style="margin:0;"><input name="q38" type="radio" value="D"> D</label>
+          <label style="margin:0;"><input name="q38" type="radio" value="E"> E</label>
+          <label style="margin:0;"><input name="q38" type="radio" value="F"> F</label>
+          <label style="margin:0;"><input name="q38" type="radio" value="G"> G</label>
+        </div>
+      </div>
+      
+      <a id="q39-anchor"></a>
+      <div id="q39-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>39 Professor Robert Michelson</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q39" type="radio" value="A"> A</label>
+          <label style="margin:0;"><input name="q39" type="radio" value="B"> B</label>
+          <label style="margin:0;"><input name="q39" type="radio" value="C"> C</label>
+          <label style="margin:0;"><input name="q39" type="radio" value="D"> D</label>
+          <label style="margin:0;"><input name="q39" type="radio" value="E"> E</label>
+          <label style="margin:0;"><input name="q39" type="radio" value="F"> F</label>
+          <label style="margin:0;"><input name="q39" type="radio" value="G"> G</label>
+        </div>
+      </div>
+      
+      <a id="q40-anchor"></a>
+      <div id="q40-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>40 Roger Quinn and Professor Roy Ritzmann</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q40" type="radio" value="A"> A</label>
+          <label style="margin:0;"><input name="q40" type="radio" value="B"> B</label>
+          <label style="margin:0;"><input name="q40" type="radio" value="C"> C</label>
+          <label style="margin:0;"><input name="q40" type="radio" value="D"> D</label>
+          <label style="margin:0;"><input name="q40" type="radio" value="E"> E</label>
+          <label style="margin:0;"><input name="q40" type="radio" value="F"> F</label>
+          <label style="margin:0;"><input name="q40" type="radio" value="G"> G</label>
+        </div>
+      </div>
+    </div>
+    
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
+</div>
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+<script>
+// Timer
+let _t=0; const _timerEl=document.getElementById('timer');
+setInterval(function(){ 
+  _t++; 
+  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
+  var s=String(_t%60).padStart(2,'0'); 
+  _timerEl.textContent=m+':'+s; 
+},1000);
+// Drag divider
+var divider = document.getElementById('divider');
+var left = document.getElementById('left');
+var right = document.getElementById('right');
+var dragging=false;
+function startDrag(e){ 
+  dragging=true; 
+  document.body.style.cursor='ew-resize'; 
+  if(e.preventDefault) e.preventDefault(); 
+}
+function endDrag(){ 
+  dragging=false; 
+  document.body.style.cursor=''; 
+}
+function onMove(clientX){
+  var container = document.querySelector('.shell').getBoundingClientRect();
+  var x = clientX - container.left;
+  x = Math.max(280, Math.min(container.width-320, x));
+  left.style.flex = '0 0 ' + x + 'px';
+  right.style.flex = '1 1 auto';
+}
+divider.addEventListener('mousedown', function(e){ startDrag(e); });
+window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+window.addEventListener('mouseup', endDrag);
+divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
+window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+window.addEventListener('touchend', endDrag);
+</script>
+<script>
+// Highlight toolbar (fixed for multi-line highlighting)
+var selbar = document.getElementById('selbar');
+var btnHL = document.getElementById('btnHL');
+var btnUH = document.getElementById('btnUH');
+var btnNote = document.getElementById('btnNote');
+var lastRange=null;
+var currentHlNode=null;
+var keepToolbar=false; // prevent selectionchange from hiding toolbar during HL click
+function positionSelbarForRect(rect){
+  selbar.style.display='flex';
+  requestAnimationFrame(function(){
+    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+function updateSelbar(){
+  var sel=window.getSelection();
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
+    selbar.style.display='none'; 
+    currentHlNode=null; 
+    return; 
+  }
+  var range = sel.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode=null;
+  positionSelbarForRect(range.getBoundingClientRect());
+}
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', function(){ 
+  var sel=window.getSelection(); 
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
+    if(!keepToolbar && !currentHlNode){ 
+      selbar.style.display='none'; 
+    } 
+  } 
+});
+document.addEventListener('scroll', function(){ 
+  if(selbar.style.display==='flex') updateSelbar(); 
+});
+// Pre-flag on mousedown to avoid selectionchange hiding the toolbar
+document.addEventListener('mousedown', function(e){
+  var t = e.target;
+  if(t.classList && t.classList.contains('hl')){
+    keepToolbar = true;
+  } else {
+    keepToolbar = false;
+  }
+}, true);
+// Click a highlight -> show toolbar (capture but do not block)
+document.addEventListener('click', function(e){
+  var target = e.target;
+  if(target.classList && target.classList.contains('hl')){
+    currentHlNode = target;
+    lastRange = null;
+    positionSelbarForRect(target.getBoundingClientRect());
+    var sel=window.getSelection();
+    if(sel) sel.removeAllRanges();
+    setTimeout(function(){ keepToolbar=false; }, 0);
+  }
+}, true);
+// Highlight function supporting multi-line and multi-paragraph selection
+function doHighlight(){
+  if(currentHlNode) return;
+  if(!lastRange || lastRange.collapsed) return;
+  
+  // Check if selection spans multiple nodes
+  const startNode = lastRange.startContainer;
+  const endNode = lastRange.endContainer;
+  
+  // Simple selection within a single node
+  if (startNode === endNode) {
+    try {
+      const span = document.createElement('span');
+      span.className = 'hl';
+      lastRange.surroundContents(span);
+      selbar.style.display = 'none';
+      showToast('Highlighted');
+      return;
+    } catch (e) {
+      // Handle edge cases
+    }
+  }
+  
+  // Complex selection across multiple nodes
+  const fragment = lastRange.cloneContents();
+  const div = document.createElement('div');
+  div.appendChild(fragment);
+  
+  // Recursively process nodes and add highlights
+  function processNode(node, parentHighlight) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      if (node.textContent.trim().length > 0) {
+        const span = document.createElement('span');
+        span.className = 'hl';
+        span.textContent = node.textContent;
+        return span;
+      }
+      return node;
+    }
+    
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      // For block elements, create a new block highlight container
+      const isBlock = window.getComputedStyle(node).display.includes('block') || 
+                     ['P', 'H1', 'H2', 'H3', 'H4', 'DIV'].includes(node.tagName);
+      
+      const wrapper = isBlock ? document.createElement(node.tagName.toLowerCase()) : document.createElement('span');
+      wrapper.className = isBlock ? node.className + ' hl' : 'hl';
+      
+      // Copy other attributes
+      Array.from(node.attributes).forEach(attr => {
+        wrapper.setAttribute(attr.name, attr.value);
+      });
+      
+      // Process child nodes
+      while (node.firstChild) {
+        const processedChild = processNode(node.firstChild, wrapper);
+        wrapper.appendChild(processedChild);
+      }
+      
+      return wrapper;
+    }
+    
+    return node;
+  }
+  
+  // Process all content
+  const highlightedContent = processNode(div, null);
+  
+  // Replace original content with highlighted content
+  lastRange.deleteContents();
+  lastRange.insertNode(highlightedContent);
+  
+  selbar.style.display = 'none';
+  showToast('Highlighted');
+}
+function removeHighlight(){
+  if(currentHlNode){
+    // Remove single highlight node
+    const parent = currentHlNode.parentNode;
+    while(currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize(); // Merge adjacent text nodes
+    currentHlNode = null;
+    selbar.style.display='none';
+    showToast('Highlight removed');
+    return;
+  }
+  
+  if(!lastRange) return;
+  
+  // Remove all highlights in selection range
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  
+  while(walker.nextNode()){
+    const node = walker.currentNode;
+    if(node.classList && node.classList.contains('hl')) {
+      const rect = node.getBoundingClientRect();
+      // Check if node overlaps with selection range
+      if(!(rect.right < selRect.left || rect.left > selRect.right || 
+          rect.bottom < selRect.top || rect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
+    }
+  }
+  
+  // Remove all found highlight nodes
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while(el.firstChild) {
+      parent.insertBefore(el.firstChild, el);
+    }
+    parent.removeChild(el);
+    parent.normalize(); // Merge adjacent text nodes
+  });
+  
+  selbar.style.display='none';
+  showToast('Highlight removed');
+}
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+</script>
+<script>
+// Notes functionality
+var notes = document.getElementById('notes');
+var noteArea = document.getElementById('noteArea');
+var btnCopy=document.getElementById('btnCopy');
+var btnClose=document.getElementById('btnClose');
+function toggleNotes(){ 
+  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+}
+window.toggleNotes = toggleNotes;
+btnClose.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async function(){ 
+  await navigator.clipboard.writeText(noteArea.value||''); 
+  showToast('Copied'); 
+});
+btnNote.addEventListener('click', function(){
+  var text = '';
+  if(currentHlNode){ 
+    text = (currentHlNode.textContent||'').trim(); 
+  } else if(lastRange){ 
+    var frag = lastRange.cloneContents(); 
+    text = (frag.textContent||'').trim(); 
+  }
+  toggleNotes();
+  if(text) {
+    noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
+  }
+  selbar.style.display='none';
+});
+// Toast notifications
+var toastEl=document.getElementById('toast');
+function showToast(msg){
+  toastEl.textContent=msg; 
+  toastEl.style.display='block';
+  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+}
+</script>
+<script>
+// Answer key and grading system
+var answers = {
+  "q27":"F", "q28":"B", "q29":"E", "q30":"D", "q31":"A", "q32":"C",
+  "q33":"mantis shrimp", "q34":"panoramic camera", "q35":"Sahara Desert", "q36":"polarised light",
+  "q37":"D", "q38":"A", "q39":"F", "q40":"C"
+};
+function grade(){
+  var total=0, correct=0, lines=[];
+  
+  // Check radio questions (27-32, 37-40)
+  for(let n=27; n<=32; n++){
+    const q = `q${n}`;
+    total++;
+    const selected = document.querySelector(`input[name="${q}"]:checked`);
+    const userAnswer = selected ? selected.value : '';
+    const isCorrect = userAnswer === answers[q];
+    if (isCorrect) correct++;
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✅' : '❌'}`);
+  }
+  
+  // Check text input questions (33-36)
+  for(let n=33; n<=36; n++){
+    const q = `q${n}`;
+    total++;
+    const input = document.querySelector(`input[name="${q}"]`);
+    const userAnswer = input ? input.value.trim().toLowerCase() : '';
+    const isCorrect = userAnswer === answers[q].toLowerCase();
+    if (isCorrect) correct++;
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✅' : '❌'}`);
+  }
+  
+  // Check matching questions (37-40)
+  for(let n=37; n<=40; n++){
+    const q = `q${n}`;
+    total++;
+    const selected = document.querySelector(`input[name="${q}"]:checked`);
+    const userAnswer = selected ? selected.value : '';
+    const isCorrect = userAnswer === answers[q];
+    if (isCorrect) correct++;
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✅' : '❌'}`);
+  }
+  
+  // Show results
+  const acc = Math.round(100 * correct / total);
+  document.getElementById('results').innerHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p>
+    <pre>${lines.join('\n')}</pre>
+  `;
+  
+  // Show answer key
+  document.getElementById('answerContent').innerHTML = `
+    <ol>
+      <li>27 → F</li>
+      <li>28 → B</li>
+      <li>29 → E</li>
+      <li>30 → D</li>
+      <li>31 → A</li>
+      <li>32 → C</li>
+      <li>33 → mantis shrimp</li>
+      <li>34 → panoramic camera</li>
+      <li>35 → Sahara Desert</li>
+      <li>36 → polarised light</li>
+      <li>37 → D</li>
+      <li>38 → A</li>
+      <li>39 → F</li>
+      <li>40 → C</li>
+    </ol>
+  `;
+  document.querySelector('#answerBox .badge').textContent = 'tap to view';
+}
+function resetForm(){
+  // Reset radio buttons
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // Reset text inputs
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = '';
+  });
+  
+  // Reset results and answers
+  document.getElementById('results').innerHTML = '';
+  document.getElementById('answerContent').innerHTML = '';
+  document.querySelector('#answerBox .badge').textContent = 'hidden';
+  
+  // Reset answered status in nav
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+}
+// Scroll to question anchor
+function scrollToElement(id){
+  const el = document.getElementById(id);
+  if(el){ 
+    el.scrollIntoView({behavior:'smooth', block:'center'}); 
+  }
+  // Highlight nav item briefly
+  const navs = document.querySelectorAll('.practice-nav .q-item');
+  navs.forEach(n => n.classList.remove('active'));
+  const btn = document.getElementById(id.replace('-anchor','-nav'));
+  if(btn){ 
+    btn.classList.add('active'); 
+    setTimeout(() => btn.classList.remove('active'), 800); 
+  }
+}
+// Mark answered on interaction
+(function(){
+  function markAnswered(qn){
+    const nav = document.getElementById(`q${qn}-nav`);
+    if(!nav) return;
+    let answered = false;
+    
+    // Check radio buttons
+    const radios = document.querySelectorAll(`input[name="q${qn}"]:checked`);
+    answered = radios.length > 0;
+    
+    // Check text inputs
+    if(!answered) {
+      const input = document.querySelector(`input[name="q${qn}"].blank`);
+      if(input) {
+        answered = input.value.trim().length > 0;
+      }
+    }
+    
+    if(answered) nav.classList.add('answered');
+    else nav.classList.remove('answered');
+  }
+  
+  // Monitor radio buttons
+  for(let n=27; n<=40; n++){
+    document.querySelectorAll(`input[name="q${n}"]`).forEach(radio => {
+      radio.addEventListener('change', () => markAnswered(n));
+    });
+  }
+  
+  // Monitor text inputs
+  for(let n=33; n<=36; n++){
+    const input = document.querySelector(`input[name="q${n}"].blank`);
+    if(input) {
+      input.addEventListener('input', () => markAnswered(n));
+    }
+  }
+})();
+</script>
+
+<!-- 练习页面数据传输增强脚本 -->
+<script>
+// 检查是否已经有增强脚本
+if (!window.practicePageEnhancer) {
+    // 动态加载增强脚本
+    const script = document.createElement('script');
+    script.src = '../../js/practice-page-enhancer.js';
+    script.onload = function() {
+        console.log('练习页面增强脚本已加载');
+    };
+    script.onerror = function() {
+        console.error('练习页面增强脚本加载失败');
+        // 降级到内联增强
+        loadInlineEnhancer();
+    };
+    document.head.appendChild(script);
+}
+
+// 内联增强器（降级方案）
+function loadInlineEnhancer() {
+    if (window.practicePageEnhancer) return;
+    
+    window.practicePageEnhancer = {
+        initialize: function() {
+            console.log('[InlineEnhancer] 内联增强器已初始化');
+            this.setupCommunication();
+            this.setupAnswerListeners();
+            this.interceptSubmit();
+        },
+        
+        setupCommunication: function() {
+            this.parentWindow = window.opener || window.parent;
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'INIT_SESSION') {
+                    this.sessionId = event.data.data.sessionId;
+                    this.sendMessage('SESSION_READY', {
+                        pageType: this.detectPageType(),
+                        url: window.location.href
+                    });
+                }
+            });
+        },
+        
+        detectPageType: function() {
+            const title = document.title || '';
+            if (title.includes('P1')) return 'P1';
+            if (title.includes('P2')) return 'P2';
+            if (title.includes('P3')) return 'P3';
+            return 'unknown';
+        },
+        
+        setupAnswerListeners: function() {
+            this.answers = {};
+            this.startTime = Date.now();
+            
+            document.addEventListener('change', (e) => {
+                if (e.target.name && e.target.name.startsWith('q')) {
+                    this.answers[e.target.name] = e.target.value;
+                }
+            });
+        },
+        
+        interceptSubmit: function() {
+            // 拦截grade函数
+            if (typeof window.grade === 'function') {
+                const originalGrade = window.grade;
+                window.grade = () => {
+                    const result = originalGrade();
+                    setTimeout(() => this.handleSubmit(), 200);
+                    return result;
+                };
+            }
+            
+            // 监听提交按钮
+            document.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON' && 
+                    (e.target.textContent.includes('Submit') || 
+                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+                    setTimeout(() => this.handleSubmit(), 300);
+                }
+            });
+        },
+        
+        handleSubmit: function() {
+            const results = {
+                sessionId: this.sessionId,
+                startTime: this.startTime,
+                endTime: Date.now(),
+                duration: Math.round((Date.now() - this.startTime) / 1000),
+                answers: this.answers,
+                scoreInfo: this.extractScore(),
+                pageType: this.detectPageType(),
+                url: window.location.href
+            };
+            
+            this.sendMessage('PRACTICE_COMPLETE', results);
+        },
+        
+        extractScore: function() {
+            const resultsEl = document.getElementById('results');
+            if (!resultsEl) return null;
+            
+            const text = resultsEl.textContent || '';
+            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+            if (scoreMatch) {
+                const correct = parseInt(scoreMatch[1]);
+                const total = parseInt(scoreMatch[2]);
+                return {
+                    correct: correct,
+                    total: total,
+                    accuracy: total > 0 ? correct / total : 0,
+                    percentage: Math.round((correct / total) * 100),
+                    source: 'inline_extraction'
+                };
+            }
+            return null;
+        },
+        
+        sendMessage: function(type, data) {
+            if (this.parentWindow) {
+                this.parentWindow.postMessage({
+                    type: type,
+                    data: data,
+                    source: 'practice_page'
+                }, '*');
+            }
+        }
+    };
+    
+    // 初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            window.practicePageEnhancer.initialize();
+        });
+    } else {
+        window.practicePageEnhancer.initialize();
+    }
+}
+</script>
+
+</body>
+</html>

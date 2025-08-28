@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>P2 – Learning from the Romans</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); padding-bottom: 82px; }
+  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  .shell { display:flex; height:100vh; width:100%; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  h2,h3,h4 { margin:0 0 10px; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  input.blank { border:none; border-bottom:1px solid #9ca3af; padding:2px 4px; font-size:1em; background:transparent; }
+  input.blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button:hover { border-color:#fff; }
+  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
+  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
+  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
+  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
+  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #selbar { z-index: 6000 !important; }
+</style>
+</head>
+<body>
+
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q14-nav" onclick="scrollToElement('q14-anchor')">14</div>
+    <div class="q-item" id="q15-nav" onclick="scrollToElement('q15-anchor')">15</div>
+    <div class="q-item" id="q16-nav" onclick="scrollToElement('q16-anchor')">16</div>
+    <div class="q-item" id="q17-nav" onclick="scrollToElement('q17-anchor')">17</div>
+    <div class="q-item" id="q18-nav" onclick="scrollToElement('q18-anchor')">18</div>
+    <div class="q-item" id="q19-nav" onclick="scrollToElement('q19-anchor')">19</div>
+    <div class="q-item" id="q20-nav" onclick="scrollToElement('q20-anchor')">20</div>
+    <div class="q-item" id="q21-nav" onclick="scrollToElement('q21-anchor')">21</div>
+    <div class="q-item" id="q22-nav" onclick="scrollToElement('q21-anchor')">22</div>
+    <div class="q-item" id="q23-nav" onclick="scrollToElement('q23-anchor')">23</div>
+    <div class="q-item" id="q24-nav" onclick="scrollToElement('q24-anchor')">24</div>
+    <div class="q-item" id="q25-nav" onclick="scrollToElement('q25-anchor')">25</div>
+    <div class="q-item" id="q26-nav" onclick="scrollToElement('q26-anchor')">26</div>
+  </div>
+</div>
+
+<div class="shell">
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 2 <span id="timer">00:00</span></h2>
+    <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>
+    
+    <h3>Learning from the Romans</h3>
+    <p><em>How an ancient building material is influencing modern construction</em></p>
+    
+    <h4>A</h4>
+    <p>In a quest to make concrete more durable and sustainable, an international team of geologists and engineers has found inspiration in the concrete used by the ancient Romans. The chemical secrets of Roman concrete have been uncovered in samples taken from a concrete Roman breakwater. A breakwater is a barrier that is built out into the sea to protect coasts and harbors from the force of waves. This particular breakwater has spent the last 2,000 years submerged in seawater. The international team of researchers that collected the samples was led by Paulo Monteiro, a professor of civil and environmental engineering at the University of California, Berkeley. Analysis of samples from the ancient underwater site in Pozzuoli Bay near Naples in Italy, and pinpointed why the best Roman concrete was superior to most modern concrete.</p>
+    
+    <h4>B</h4>
+    <p>Concrete was the Roman Empire's construction material of choice. It was used in land monuments such as the Pantheon in Rome, as well as in underwater and partially underwater coastal and harbor structures. Monteiro and his team were particularly interested in how the coastal and harbor structures endured the unforgiving saltwater environment. Chemical analysis of Roman concrete showed that it differs from the modern kind in several ways. One is the content of the cement that binds the material in the concrete. The most commonly used cement in recent decades has been Portland cement. Portland cement is a compound of calcium, silicates, and hydrates (C-S-H). However, analysis of Roman concrete shows that it contains a significantly different cement. Roman cement contains aluminum, which is not found in Portland cement, and less silicon than is found in Portland cement. The resulting calcium-aluminum-silicate-hydrate (C-A-S-H) is an exceptionally stable cement.</p>
+    
+    <h4>C</h4>
+    <p>The recipe for the contents of Roman concrete was first described around 30 BC by Vitruvius, an engineer for the Roman Emperor Augustus. Volcanic ash was one of the ingredients, and it is now understood that this is crucial, as it is volcanic ash that contains the aluminum that ultimately gives Roman concrete its great durability. The Romans devised an efficient method of making concrete for coastal structures. They combined volcanic ash with lime, which added the calcium to the mix. This was then packed, together with stones and chunks of rock, into wooden molds, which were then immersed in seawater. The seawater instantly triggered a hot chemical reaction. The lime was hydrated by the seawater, which means that it incorporated water molecules into its structure, and reacted with the volcanic ash to cement the whole mixture together. This reaction formed the concrete that was used to build some of the most enduring structures in Western civilization.</p>
+    
+    <h4>D</h4>
+    <p>According to Marie Jackson, a member of the research team, Roman concrete is one of the most durable construction materials on the planet, and that was no accident. Shipping was the lifeline of political, economic, and military stability for the Roman Empire, so constructing harbors that would last was critical. ‘Over time, the Romans used less and less concrete.' ‘As the Roman Empire declined, and shipping declined, the need for the seawater concrete declined,' said Jackson. ‘You could also argue that the original structures were built so well that, once they were in place, they didn't need to be replaced,' she added.</p>
+    
+    <h4>E</h4>
+    <p>Producing Roman concrete also left a smaller carbon footprint than its modern counterpart. 'It's not that modern concrete isn't good—it's so good we use 19 billion tons of it a year,' says Monteiro. ‘The problem is that manufacturing Portland cement accounts for seven percent of the carbon dioxide that industry puts into the air.' Portland cement holds most modern concrete together. However, making Portland cement releases carbon dioxide into the atmosphere from burning fuel in order to heat a mix of limestone and clays to 1,450 degrees Celsius. The production of Roman concrete, however, was much cleaner, as less heat was needed. A temperature that was a third lower than that required for making Portland cement was sufficient for making Roman concrete.</p>
+    
+    <h4>F</h4>
+    <p>Some modern concrete no longer contains Portland cement; instead, fly ash is used, which causes fewer greenhouse gas emissions. Fly ash is a waste product from burning coal, and the researchers are investigating whether volcanic ash would be a good, large-volume replacement in countries that cannot access fly ash easily. ‘There is not enough fly ash in this world to replace half of the Portland cement being used,' said Monteiro. 'Many countries don't have fly ash, so the idea is to find alternative local materials that will work, including the kind of volcanic ash that Romans used. Using these alternatives could replace 40 percent of the world's demand for Portland cement.'</p>
+    
+    <h4>G</h4>
+    <p>Cutting greenhouse gas emissions is one powerful incentive for finding a better way to provide the concrete the world needs; another is the need for stronger, longer-lasting buildings, bridges, and other structures. ‘In the middle 20th century, concrete structures were designed to last 50 years, and a lot of them are on borrowed time,' Monteiro says. 'Now we design buildings to last 100 to 120 years.' Yet Roman harbor installations have survived 2,000 years of chemical attack from seawater and wave action. Stronger, longer-lasting modern concrete may be the legacy of a deeper understanding of how the Romans made their incomparable concrete.</p>
+    
+    <p>&nbsp;</p>
+  </section>
+  <div id="divider" title="Drag to resize"></div>
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <h4>Questions 14–20</h4>
+      <p>Reading Passage 2 has seven paragraphs, A–G.</p>
+      <p>Which paragraph contains the following information?</p>
+      <p>Write the correct letter A–G in boxes 14–20 on your answer sheet.</p>
+      
+      <a id="q14-anchor"></a><p>14 an opinion on why the Romans reduced the amount of concrete they made for use in seawater <input name="q14" type="text" class="blank" maxlength="1" style="width: 30px; text-align: center;"></p>
+      <a id="q15-anchor"></a><p>15 a list of the contents of both Portland and Roman cement <input name="q15" type="text" class="blank" maxlength="1" style="width: 30px; text-align: center;"></p>
+      <a id="q16-anchor"></a><p>16 an argument for finding substitutes for a limited resource that is used in making cement <input name="q16" type="text" class="blank" maxlength="1" style="width: 30px; text-align: center;"></p>
+      <a id="q17-anchor"></a><p>17 information about the structure from which the scientists took their Roman concrete samples <input name="q17" type="text" class="blank" maxlength="1" style="width: 30px; text-align: center;"></p>
+      <a id="q18-anchor"></a><p>18 a comparison of the environmental impacts of making modern and Roman concrete <input name="q18" type="text" class="blank" maxlength="1" style="width: 30px; text-align: center;"></p>
+      <a id="q19-anchor"></a><p>19 a comparison of the durability of Roman concrete with concrete produced today <input name="q19" type="text" class="blank" maxlength="1" style="width: 30px; text-align: center;"></p>
+      <a id="q20-anchor"></a><p>20 details of how the Romans used seawater to make concrete <input name="q20" type="text" class="blank" maxlength="1" style="width: 30px; text-align: center;"></p>
+    </div>
+    
+    <div class="group">
+      <a id="q21-anchor"></a><a id="q22-anchor"></a>
+      <h4>Questions 21 and 22</h4>
+      <p>Choose <strong>TWO</strong> letters, A–E.</p>
+      <p>According to the passage, which <strong>TWO</strong> of the following statements about fly ash are true?</p>
+      <div style="margin-top:1em;">
+        <label style="display:block; margin:4px 0;"><input type="checkbox" name="q21-22" value="A"> A Fly ash results in less damage to the environment than Portland cement.</label>
+        <label style="display:block; margin:4px 0;"><input type="checkbox" name="q21-22" value="B"> B Fly ash was used by the Romans as an alternative to volcanic ash.</label>
+        <label style="display:block; margin:4px 0;"><input type="checkbox" name="q21-22" value="C"> C Fly ash is already used in the production of some concrete.</label>
+        <label style="display:block; margin:4px 0;"><input type="checkbox" name="q21-22" value="D"> D All countries have access to fly ash resources.</label>
+        <label style="display:block; margin:4px 0;"><input type="checkbox" name="q21-22" value="E"> E Fly ash will soon replace volcanic ash.</label>
+      </div>
+    </div>
+
+    <div class="group">
+        <h4>Questions 23–26</h4>
+        <p>Complete the summary below.</p>
+        <p>Choose <strong>ONE WORD AND/OR A NUMBER</strong> from the passage for each answer.</p>
+        <div style="padding: 10px; border: 1px solid #ccc; border-radius: 8px; margin-top: 1em;">
+            <h5 style="text-align: center; margin-top: 0;">The environmental effects of concrete production</h5>
+            <p>
+                Roman concrete is better for the environment than modern concrete, which is made by using Portland cement. This is because a temperature of 1,450 degrees Celsius is needed to combine clays and 23 <a id="q23-anchor"></a><input name="q23" type="text" class="blank" maxlength="20"> to make Portland cement. This level of heat was reduced by a 24 <a id="q24-anchor"></a><input name="q24" type="text" class="blank" maxlength="20"> when making Roman concrete. Needing less heat meant less 25 <a id="q25-anchor"></a><input name="q25" type="text" class="blank" maxlength="20"> had to be burned and less carbon dioxide was produced. According to Monteiro, when considering the amount of carbon dioxide emitted by 26 <a id="q26-anchor"></a><input name="q26" type="text" class="blank" maxlength="20">, seven percent of it comes from the manufacture of Portland cement.
+            </p>
+        </div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
+</div>
+
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+
+<script>
+// Timer
+let _t=0; const _timerEl=document.getElementById('timer');
+setInterval(function(){ 
+  _t++; 
+  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
+  var s=String(_t%60).padStart(2,'0'); 
+  _timerEl.textContent=m+':'+s; 
+},1000);
+// Drag divider
+var divider = document.getElementById('divider');
+var left = document.getElementById('left');
+var right = document.getElementById('right');
+var dragging=false;
+function startDrag(e){ 
+  dragging=true; 
+  document.body.style.cursor='ew-resize'; 
+  if(e.preventDefault) e.preventDefault(); 
+}
+function endDrag(){ 
+  dragging=false; 
+  document.body.style.cursor=''; 
+}
+function onMove(clientX){
+  var container = document.querySelector('.shell').getBoundingClientRect();
+  var x = clientX - container.left;
+  x = Math.max(280, Math.min(container.width-320, x));
+  left.style.flex = '0 0 ' + x + 'px';
+  right.style.flex = '1 1 auto';
+}
+divider.addEventListener('mousedown', function(e){ startDrag(e); });
+window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+window.addEventListener('mouseup', endDrag);
+divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
+window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+window.addEventListener('touchend', endDrag);
+// Highlight toolbar
+var selbar = document.getElementById('selbar');
+var btnHL = document.getElementById('btnHL');
+var btnUH = document.getElementById('btnUH');
+var btnNote = document.getElementById('btnNote');
+var lastRange=null;
+var currentHlNode=null;
+var keepToolbar=false;
+function positionSelbarForRect(rect){
+  selbar.style.display='flex';
+  requestAnimationFrame(function(){
+    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+function updateSelbar(){
+  var sel=window.getSelection();
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
+    selbar.style.display='none'; 
+    currentHlNode=null; 
+    return; 
+  }
+  var range = sel.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode=null;
+  positionSelbarForRect(range.getBoundingClientRect());
+}
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', function(){ 
+  var sel=window.getSelection(); 
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
+    if(!keepToolbar && !currentHlNode){ 
+      selbar.style.display='none'; 
+    } 
+  } 
+});
+document.addEventListener('scroll', function(){ 
+  if(selbar.style.display==='flex') updateSelbar(); 
+});
+document.addEventListener('mousedown', function(e){
+  var t = e.target;
+  if(t.classList && t.classList.contains('hl')){
+    keepToolbar = true;
+  } else {
+    keepToolbar = false;
+  }
+}, true);
+document.addEventListener('click', function(e){
+  var target = e.target;
+  if(target.classList && target.classList.contains('hl')){
+    currentHlNode = target;
+    lastRange = null;
+    positionSelbarForRect(target.getBoundingClientRect());
+    var sel=window.getSelection();
+    if(sel) sel.removeAllRanges();
+    setTimeout(function(){ keepToolbar=false; }, 0);
+  }
+}, true);
+function doHighlight(){
+  if(currentHlNode) return;
+  if(!lastRange || lastRange.collapsed) return;
+  var span=document.createElement('span'); span.className='hl';
+  try { lastRange.surroundContents(span); }
+  catch(e){
+    var wrap=document.createElement('span'); wrap.className='hl';
+    wrap.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrap);
+  }
+  selbar.style.display='none';
+  showToast('Highlighted');
+}
+function removeHighlight(){
+  if(currentHlNode){
+    var p = currentHlNode.parentNode;
+    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
+    p.removeChild(currentHlNode); p.normalize();
+    currentHlNode = null;
+    selbar.style.display='none';
+    showToast('Highlight removed');
+    return;
+  }
+  if(!lastRange) return;
+  var selRect = lastRange.getBoundingClientRect();
+  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  var toRemove=[];
+  while(walker.nextNode()){
+    var n=walker.currentNode;
+    if(n.classList && n.classList.contains('hl')) {
+      var r = n.getBoundingClientRect();
+      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+    }
+  }
+  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
+  selbar.style.display='none';
+  showToast('Highlight removed');
+}
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+// Notes
+var notes = document.getElementById('notes');
+var noteArea = document.getElementById('noteArea');
+var btnCopy=document.getElementById('btnCopy');
+var btnClose=document.getElementById('btnClose');
+function toggleNotes(){ 
+  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+}
+window.toggleNotes = toggleNotes;
+btnClose.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async function(){ 
+  await navigator.clipboard.writeText(noteArea.value||''); 
+  showToast('Copied'); 
+});
+btnNote.addEventListener('click', function(){
+  var text = '';
+  if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
+  else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
+  toggleNotes();
+  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
+  selbar.style.display='none';
+});
+// Toast
+var toastEl=document.getElementById('toast');
+function showToast(msg){
+  toastEl.textContent=msg; 
+  toastEl.style.display='block';
+  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+}
+// Answer key and grading
+var answers = {
+  q14: "D", q15: "B", q16: "F", q17: "A", q18: "E", q19: "G", q20: "C",
+  "q21-22": ["A", "C"],
+  q23: "limestone", q24: "third", q25: "fuel", q26: "industry"
+};
+function arraysEqual(a, b) {
+  if (a === b) return true;
+  if (a == null || b == null) return false;
+  if (a.length !== b.length) return false;
+  a.sort(); b.sort();
+  for (var i = 0; i < a.length; ++i) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+function grade(){
+  var total=0, correct=0, lines=[];
+  function push(q, ok, user){
+    total++; if(ok) correct++;
+    lines.push(q.toUpperCase()+": "+(user||'None')+" "+(ok?'✅':'❌'));
+  }
+
+  // 14–20 Paragraph Matching
+  for(var n=14; n<=20; n++){
+    var el = document.querySelector('input[name="q'+n+'"]');
+    var val = el ? el.value.trim().toUpperCase() : '';
+    push('q'+n, val === answers['q'+n], val);
+  }
+
+  // 21-22 Multiple Choice (Choose 2)
+  var user_q21_22 = [];
+  document.querySelectorAll('input[name="q21-22"]:checked').forEach(el => user_q21_22.push(el.value));
+  var ok_q21_22 = arraysEqual(user_q21_22, answers['q21-22']);
+  total++;
+  if(ok_q21_22) correct++;
+  lines.push('Q21-22: ' + (user_q21_22.join(', ') || 'None') + " " + (ok_q21_22 ? '✅':'❌'));
+
+  // 23-26 Summary Completion
+  for(var n=23; n<=26; n++){
+    var el = document.querySelector('input[name="q'+n+'"]');
+    var val = el ? el.value.trim().toLowerCase() : '';
+    push('q'+n, val === answers['q'+n], val);
+  }
+  
+  var acc = (total ? Math.round(100 * correct / total) : 0);
+  var html = '<p><strong>Score:</strong> ' + correct + '/' + total + ' <span class="badge">Accuracy ' + acc + '%</span></p>';
+  html += '<pre>' + lines.join('\n') + '</pre>';
+  document.getElementById('results').innerHTML = html;
+  
+  var ahtml = '<ol start="14">';
+  for(var i=14; i<=20; i++){ ahtml += '<li>' + answers['q'+i] + '</li>'; }
+  ahtml += '<li>A, C (in any order)</li>';
+  ahtml += '<li>A, C (in any order)</li>'; // Placeholder for Q22
+  for(var i=23; i<=26; i++){ ahtml += '<li>' + answers['q'+i] + '</li>'; }
+  ahtml += '</ol>';
+  document.getElementById('answerContent').innerHTML = ahtml;
+  document.querySelector('#answerBox .badge').textContent='tap to view';
+}
+function resetForm(){
+  document.querySelectorAll('input[type="text"], input[type="checkbox"]').forEach(el => {
+      if(el.type === 'checkbox') el.checked=false;
+      else el.value="";
+  });
+  document.getElementById('results').innerHTML='';
+  document.getElementById('answerContent').innerHTML='';
+  document.querySelector('#answerBox .badge').textContent = 'hidden';
+  document.querySelectorAll('.q-item').forEach(item => item.classList.remove('answered'));
+}
+function scrollToElement(id){
+  var el = document.getElementById(id);
+  if(el){ el.scrollIntoView({behavior:'smooth', block:'center'}); }
+  var navs = document.querySelectorAll('.practice-nav .q-item');
+  navs.forEach(n => n.classList.remove('active'));
+  var btn = document.getElementById(id.replace('-anchor','-nav'));
+  if(btn){ 
+    btn.classList.add('active'); 
+    setTimeout(() => btn.classList.remove('active'), 800); 
+  }
+}
+(function(){
+  function mark(qn, isMulti=false, groupName=''){
+    var nav = document.getElementById(`q${qn}-nav`);
+    if(!nav && isMulti) {
+        const ids = groupName.match(/\d+/g);
+        ids.forEach(id => mark(id, false));
+        return;
+    }
+    if(!nav) return;
+    
+    var answered = false;
+    if (isMulti) {
+        answered = document.querySelectorAll(`input[name="${groupName}"]:checked`).length > 0;
+    } else {
+        var text = document.querySelector(`input[name="q${qn}"]`);
+        if(text){ answered = answered || (text.value && text.value.trim().length>0); }
+    }
+    if(answered) nav.classList.add('answered'); else nav.classList.remove('answered');
+  }
+  for(var q=14;q<=26;q++){
+    (function(n){
+      var input = document.querySelector(`input[name="q${n}"], input[name="q21-22"]`);
+      if (input) {
+        if(input.name === "q21-22") {
+            document.querySelectorAll('input[name="q21-22"]').forEach(el => el.addEventListener('change', () => {mark(21, true, 'q21-22'); mark(22, true, 'q21-22');}));
+        } else {
+            input.addEventListener('input', function(){ mark(n); });
+        }
+      }
+    })(q);
+  }
+})();
+</script>
+
+<!-- 练习页面数据传输增强脚本 -->
+<script>
+if (!window.practicePageEnhancer) {
+    const script = document.createElement('script');
+    script.src = '../../js/practice-page-enhancer.js';
+    script.onload = function() { console.log('练习页面增强脚本已加载'); };
+    script.onerror = function() { console.error('练习页面增强脚本加载失败'); loadInlineEnhancer(); };
+    document.head.appendChild(script);
+}
+function loadInlineEnhancer() {
+    if (window.practicePageEnhancer) return;
+    window.practicePageEnhancer = {
+        initialize: function() {
+            this.setupCommunication();
+            this.setupAnswerListeners();
+            this.interceptSubmit();
+        },
+        setupCommunication: function() {
+            this.parentWindow = window.opener || window.parent;
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'INIT_SESSION') {
+                    this.sessionId = event.data.data.sessionId;
+                    this.sendMessage('SESSION_READY', { pageType: this.detectPageType(), url: window.location.href });
+                }
+            });
+        },
+        detectPageType: function() {
+            const title = document.title || '';
+            if (title.includes('P1')) return 'P1';
+            if (title.includes('P2')) return 'P2';
+            if (title.includes('P3')) return 'P3';
+            return 'unknown';
+        },
+        setupAnswerListeners: function() {
+            this.answers = {};
+            this.startTime = Date.now();
+            document.addEventListener('input', (e) => {
+                if (e.target.name) this.answers[e.target.name] = e.target.value;
+            });
+            document.addEventListener('change', (e) => {
+                if (e.target.type === 'checkbox') {
+                    if (!this.answers[e.target.name]) this.answers[e.target.name] = [];
+                    if (e.target.checked) this.answers[e.target.name].push(e.target.value);
+                    else this.answers[e.target.name] = this.answers[e.target.name].filter(v => v !== e.target.value);
+                }
+            });
+        },
+        interceptSubmit: function() {
+            if (typeof window.grade === 'function') {
+                const originalGrade = window.grade;
+                window.grade = () => {
+                    const result = originalGrade();
+                    setTimeout(() => this.handleSubmit(), 200);
+                    return result;
+                };
+            }
+        },
+        handleSubmit: function() {
+            const results = {
+                sessionId: this.sessionId,
+                startTime: this.startTime,
+                endTime: Date.now(),
+                duration: Math.round((Date.now() - this.startTime) / 1000),
+                answers: this.answers,
+                scoreInfo: this.extractScore(),
+                pageType: this.detectPageType(),
+                url: window.location.href
+            };
+            this.sendMessage('PRACTICE_COMPLETE', results);
+        },
+        extractScore: function() {
+            const resultsEl = document.getElementById('results');
+            if (!resultsEl) return null;
+            const text = resultsEl.textContent || '';
+            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+            if (scoreMatch) {
+                const correct = parseInt(scoreMatch[1]);
+                const total = parseInt(scoreMatch[2]);
+                return { correct: correct, total: total, accuracy: total > 0 ? correct / total : 0, percentage: Math.round((correct / total) * 100), source: 'inline_extraction' };
+            }
+            return null;
+        },
+        sendMessage: function(type, data) {
+            if (this.parentWindow) {
+                this.parentWindow.postMessage({ type: type, data: data, source: 'practice_page' }, '*');
+            }
+        }
+    };
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => { window.practicePageEnhancer.initialize(); });
+    } else {
+        window.practicePageEnhancer.initialize();
+    }
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Katherine Mansfield - Reading Passage</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
+  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  .shell { display:flex; height:100vh; width:100%; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  h2,h3,h4 { margin:0 0 10px; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  table { border-collapse: collapse; width:100%; }
+  th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
+  th:first-child, td:first-child { width:92px; }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button:hover { border-color:#fff; }
+  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+  body { padding-bottom: 82px; }
+  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
+  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
+  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #selbar { z-index: 6000 !important; }
+  
+  /* 填空题样式 */
+  .blank-question { margin-bottom: 16px; }
+  .blank-input { width: 120px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px; margin: 0 4px; }
+</style>
+</head>
+<body>
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q1-nav" onclick="scrollToElement('q1-anchor')">1</div>
+    <div class="q-item" id="q2-nav" onclick="scrollToElement('q2-anchor')">2</div>
+    <div class="q-item" id="q3-nav" onclick="scrollToElement('q3-anchor')">3</div>
+    <div class="q-item" id="q4-nav" onclick="scrollToElement('q4-anchor')">4</div>
+    <div class="q-item" id="q5-nav" onclick="scrollToElement('q5-anchor')">5</div>
+    <div class="q-item" id="q6-nav" onclick="scrollToElement('q6-anchor')">6</div>
+    <div class="q-item" id="q7-nav" onclick="scrollToElement('q7-anchor')">7</div>
+    <div class="q-item" id="q8-nav" onclick="scrollToElement('q8-anchor')">8</div>
+    <div class="q-item" id="q9-nav" onclick="scrollToElement('q9-anchor')">9</div>
+    <div class="q-item" id="q10-nav" onclick="scrollToElement('q10-anchor')">10</div>
+    <div class="q-item" id="q11-nav" onclick="scrollToElement('q11-anchor')">11</div>
+    <div class="q-item" id="q12-nav" onclick="scrollToElement('q12-anchor')">12</div>
+    <div class="q-item" id="q13-nav" onclick="scrollToElement('q13-anchor')">13</div>
+  </div>
+</div>
+<div class="shell">
+<section class="pane" id="left">
+  <h2>READING PASSAGE 1 <span id="timer">00:00</span></h2>
+  <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>
+  <h3>Katherine Mansfield</h3>
+  
+  <p>Katherine Mansfield was a modernist writer of short fiction who was born and brought up in New Zealand.</p>
+  
+  <p>Katherine Mansfield Beauchamp Murry was born in 1888, into a prominent family in Wellington, New Zealand. She became one of New Zealand’s best-known writers, using the pen name of Katherine Mansfield. The daughter of a banker, and born into a middle-class family, she was also a first cousin of Countess Elizabeth von Arnim, a distinguished novelist in her time. Mansfield had two older sisters and a younger brother. Her father, Harold Beauchamp, went on to become the chairman of the Bank of New Zealand. In 1893, the Mansfield family moved to Karori, a suburb of Wellington, where Mansfield would spend the happiest years of her childhood; she later used her memories of this time as an inspiration for her Prelude story.</p>
+  
+  <p>Her first published stories appeared in the High School Reporter and the Wellington Girls’ High School magazine in 1898 and 1899. In 1902, she developed strong feelings for a musician who played the cello, Arnold Trowell, although her feelings were not, for the most part, returned. Mansfield herself was an accomplished cellist, having received lessons from Trowell’s father. Mansfield wrote in her journals of feeling isolated to some extent in New Zealand, and, in general terms, of her interest in the Maori people (New Zealand’s native people), who were often portrayed in a sympathetic light in her later stories, such as How Pearl Button Was Kidnapped.</p>
+  
+  <p>She moved to London in 1903, where she attended Queen’s College, along with her two sisters. Mansfield recommenced playing the cello, an occupation that she believed, during her time at Queen’s, she would take up professionally. She also began contributing to the college newspaper, with such a dedication to it that she eventually became its editor. She was particularly interested in the works of the French writers of this period and in the 19th century British writer, Oscar Wilde, and she was appreciated amongst fellow students at Queen’s for her lively and charismatic approach to life and work. She met fellow writer Ida Baker, a South African, at the college, and the pair became lifelong friends. Mansfield did not actively support the suffragette movement in the UK. Women in New Zealand had gained the right to vote in 1893.</p>
+  
+  <p>Mansfield first began journeying into other parts of Europe in the period 1903–1906, mainly to Belgium and Germany. After finishing her schooling in England, she returned to her New Zealand home in 1906, only then beginning to write short stories in a serious way. She had several works published in Australia in a magazine called The Native Companion, which was her first paid writing work, and by this time she had her mind set on becoming a professional writer. It was also the first occasion on which she used the pseudonym “K. Mansfield”.</p>
+  
+  <p>Mansfield rapidly grew discontented with the provincial New Zealand lifestyle, and with her family. Two years later she headed again to London. Her father sent her an annual subsidy of £100 for the rest of her life. In later years, she would express both admiration and disdain for New Zealand in her journals.</p>
+  
+  <p>In 1911, Mansfield met John Middleton Murry, the Oxford scholar and editor of the literary magazine Rhythm. They were later to marry in 1918. Mansfield became a co-editor of Rhythm, which was subsequently called The Blue Review, in which more of her works were published. She and Murry lived in various houses in England and briefly in Paris. The Blue Review failed to gain enough readers and was no longer published. Their attempt to set up as writers in Paris was cut short by Murry’s bankruptcy, which resulted from the failure of this and other journals. Life back in England meant frequently changed addresses and very limited funds.</p>
+  
+  <p>Between 1915 and 1918, Mansfield moved between England and Bandol, France. She and Murry developed close contact with other well-known writers of the time such as D. H. Lawrence, Bertrand Russell and Aldous Huxley. By October 1918 Mansfield had become seriously ill; she had been diagnosed with tuberculosis and was advised to enter a sanatorium. She could no longer spend winters in London. In the autumn of 1918 she was so ill that she decided to go to Ospedaletti in Italy. It was the publication of Bliss and Other Stories in 1920 that was to solidify Mansfield’s reputation as a writer.</p>
+  
+  <p>Mansfield also spent time in Menton, France, as the tenant of her father’s cousin at “The Villa Isola Bella”. There she wrote eight stories including Miss Brill and The Daughters of the Late Colonel, the latter of which she pronounced to be “…the only story that satisfies me to any extent”.</p>
+  
+  <p>Mansfield produced a great deal of work in the final years of her life, and much of her prose and poetry remained unpublished at her death in 1923. After her death, her husband, Murry, took on the task of editing and publishing her works. His efforts resulted in two additional volumes of short stories, The Doves’ Nest and Something Childish, published in 1923 and 1924 respectively; the publication of her Poems; as well as a collection of critical writings (Novels and Novelists) and a number of editions of Mansfield’s previously unpublished letters and journals.</p>
+  
+  <p>&nbsp;</p> <!-- 添加空白行防止加载不完全 -->
+  <p>&nbsp;</p>
+</section>
+<div id="divider" title="Drag to resize"></div>
+<section class="pane" id="right">
+  <h3>Questions</h3>
+  
+  <div class="group">
+    <h4>Questions 1–6</h4>
+    <p>Do the following statements agree with the information given in Reading Passage 1?</p>
+    <p>In boxes 1–6 on your answer sheet, write</p>
+    <table>
+      <tr>
+        <td style="text-align:left"><strong>TRUE</strong></td>
+        <td style="text-align:left">if the statement agrees with the information</td>
+      </tr>
+      <tr>
+        <td style="text-align:left"><strong>FALSE</strong></td>
+        <td style="text-align:left">if the statement contradicts the information</td>
+      </tr>
+      <tr>
+        <td style="text-align:left"><strong>NOT GIVEN</strong></td>
+        <td style="text-align:left">if there is no information on this</td>
+      </tr>
+    </table>
+    
+    <a id="q1-anchor"></a>
+    <div id="q1-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>1 The name Katherine Mansfield, which appears on the writer’s books, was exactly the same as her original name.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q1" type="radio" value="TRUE"> TRUE</label>
+        <label style="margin:0;"><input name="q1" type="radio" value="FALSE"> FALSE</label>
+        <label style="margin:0;"><input name="q1" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+    
+    <a id="q2-anchor"></a>
+    <div id="q2-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>2 Mansfield won a prize for a story she wrote for the High School Reporter.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q2" type="radio" value="TRUE"> TRUE</label>
+        <label style="margin:0;"><input name="q2" type="radio" value="FALSE"> FALSE</label>
+        <label style="margin:0;"><input name="q2" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+    
+    <a id="q3-anchor"></a>
+    <div id="q3-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>3 How Pearl Button Was Kidnapped portrayed Maori people in a favourable way.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q3" type="radio" value="TRUE"> TRUE</label>
+        <label style="margin:0;"><input name="q3" type="radio" value="FALSE"> FALSE</label>
+        <label style="margin:0;"><input name="q3" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+    
+    <a id="q4-anchor"></a>
+    <div id="q4-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>4 When Mansfield was at Queen’s College, she planned to be a professional writer.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q4" type="radio" value="TRUE"> TRUE</label>
+        <label style="margin:0;"><input name="q4" type="radio" value="FALSE"> FALSE</label>
+        <label style="margin:0;"><input name="q4" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+    
+    <a id="q5-anchor"></a>
+    <div id="q5-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>5 Mansfield was unpopular with the other students at Queen’s College.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q5" type="radio" value="TRUE"> TRUE</label>
+        <label style="margin:0;"><input name="q5" type="radio" value="FALSE"> FALSE</label>
+        <label style="margin:0;"><input name="q5" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+    
+    <a id="q6-anchor"></a>
+    <div id="q6-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>6 In London, Mansfield showed little interest in politics.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q6" type="radio" value="TRUE"> TRUE</label>
+        <label style="margin:0;"><input name="q6" type="radio" value="FALSE"> FALSE</label>
+        <label style="margin:0;"><input name="q6" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+  </div>
+  
+  <div class="group">
+    <h4>Questions 7–13</h4>
+    <p>Complete the notes below</p>
+    <p>Choose ONE WORD AND/OR A NUMBER from the passage for each answer</p>
+    <p>Write your answers in boxes 7–13 on your answer sheet</p>
+    
+    <p><strong>Katherine Mansfield’s adult years</strong></p>
+    
+    <a id="q7-anchor"></a>
+    <div id="q7-section" class="blank-question" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>• <input type="text" class="blank-input" name="q7" placeholder="Year"> – moved from England back to New Zealand</p>
+    </div>
+    
+    <a id="q8-anchor"></a>
+    <div id="q8-section" class="blank-question" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>– first paid writing work was in a publication based in <input type="text" class="blank-input" name="q8" placeholder="Country"></p>
+    </div>
+    
+    <a id="q9-anchor"></a>
+    <div id="q9-section" class="blank-question" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>– her <input type="text" class="blank-input" name="q9" placeholder="Noun"> and the New Zealand way of life made her feel dissatisfied</p>
+    </div>
+    
+    <p>• 1908<br>– returned to London</p>
+    
+    <p>• 1911–1919<br>– Met John Middleton Murry in 1911</p>
+    
+    <a id="q10-anchor"></a>
+    <div id="q10-section" class="blank-question" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>– <input type="text" class="blank-input" name="q10" placeholder="Noun"> prevented Mansfield and Murry from staying together in Paris</p>
+    </div>
+    
+    <a id="q11-anchor"></a>
+    <div id="q11-section" class="blank-question" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>– spent time with distinguished <input type="text" class="blank-input" name="q11" placeholder="Noun"></p>
+    </div>
+    
+    <p>– from 1916, tuberculosis restricted the time she spent in London</p>
+    
+    <p>• 1920</p>
+    
+    <a id="q12-anchor"></a>
+    <div id="q12-section" class="blank-question" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>– her <input type="text" class="blank-input" name="q12" placeholder="Noun"> was consolidated when Bliss and Other Stories was published</p>
+    </div>
+    
+    <p>– wrote several stories at "Villa Isola Bella"</p>
+    
+    <p>• 1923–1924</p>
+    
+    <a id="q13-anchor"></a>
+    <div id="q13-section" class="blank-question" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>– Mansfield’s <input type="text" class="blank-input" name="q13" placeholder="Noun"> published more of her works after her death</p>
+    </div>
+  </div>
+  
+  <div style="display:flex;gap:8px;margin-bottom:10px;">
+    <button class="primary" onclick="grade()">Submit</button>
+    <button onclick="resetForm()">Reset</button>
+    <button onclick="toggleNotes()">Notes</button>
+  </div>
+  <div id="results"></div>
+  <details class="answerbox" id="answerBox">
+    <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+    <div id="answerContent"></div>
+  </details>
+</section>
+</div>
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+<script>
+// Timer
+let _t=0; const _timerEl=document.getElementById('timer');
+setInterval(function(){ 
+  _t++; 
+  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
+  var s=String(_t%60).padStart(2,'0'); 
+  _timerEl.textContent=m+':'+s; 
+},1000);
+// Drag divider
+var divider = document.getElementById('divider');
+var left = document.getElementById('left');
+var right = document.getElementById('right');
+var dragging=false;
+function startDrag(e){ 
+  dragging=true; 
+  document.body.style.cursor='ew-resize'; 
+  if(e.preventDefault) e.preventDefault(); 
+}
+function endDrag(){ 
+  dragging=false; 
+  document.body.style.cursor=''; 
+}
+function onMove(clientX){
+  var container = document.querySelector('.shell').getBoundingClientRect();
+  var x = clientX - container.left;
+  x = Math.max(280, Math.min(container.width-320, x));
+  left.style.flex = '0 0 ' + x + 'px';
+  right.style.flex = '1 1 auto';
+}
+divider.addEventListener('mousedown', function(e){ startDrag(e); });
+window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+window.addEventListener('mouseup', endDrag);
+divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
+window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+window.addEventListener('touchend', endDrag);
+// Highlight toolbar
+var selbar = document.getElementById('selbar');
+var btnHL = document.getElementById('btnHL');
+var btnUH = document.getElementById('btnUH');
+var btnNote = document.getElementById('btnNote');
+var lastRange=null;
+var currentHlNode=null;
+var keepToolbar=false;
+function positionSelbarForRect(rect){
+  selbar.style.display='flex';
+  requestAnimationFrame(function(){
+    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+function updateSelbar(){
+  var sel=window.getSelection();
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
+    selbar.style.display='none'; 
+    currentHlNode=null; 
+    return; 
+  }
+  var range = sel.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode=null;
+  positionSelbarForRect(range.getBoundingClientRect());
+}
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', function(){ 
+  var sel=window.getSelection(); 
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
+    if(!keepToolbar && !currentHlNode){ 
+      selbar.style.display='none'; 
+    } 
+  } 
+});
+document.addEventListener('scroll', function(){ 
+  if(selbar.style.display==='flex') updateSelbar(); 
+});
+document.addEventListener('mousedown', function(e){
+  var t = e.target;
+  if(t.classList && t.classList.contains('hl')){
+    keepToolbar = true;
+  } else {
+    keepToolbar = false;
+  }
+}, true);
+document.addEventListener('click', function(e){
+  var target = e.target;
+  if(target.classList && target.classList.contains('hl')){
+    currentHlNode = target;
+    lastRange = null;
+    positionSelbarForRect(target.getBoundingClientRect());
+    var sel=window.getSelection();
+    if(sel) sel.removeAllRanges();
+    setTimeout(function(){ keepToolbar=false; }, 0);
+  }
+}, true);
+function doHighlight(){
+  if(currentHlNode) return;
+  if(!lastRange || lastRange.collapsed) return;
+  var span=document.createElement('span'); span.className='hl';
+  try { lastRange.surroundContents(span); }
+  catch(e){
+    var wrap=document.createElement('span'); wrap.className='hl';
+    wrap.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrap);
+  }
+  selbar.style.display='none';
+  showToast('Highlighted');
+}
+function removeHighlight(){
+  if(currentHlNode){
+    var p = currentHlNode.parentNode;
+    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
+    p.removeChild(currentHlNode); p.normalize();
+    currentHlNode = null;
+    selbar.style.display='none';
+    showToast('Highlight removed');
+    return;
+  }
+  if(!lastRange) return;
+  var selRect = lastRange.getBoundingClientRect();
+  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  var toRemove=[];
+  while(walker.nextNode()){
+    var n=walker.currentNode;
+    if(n.classList && n.classList.contains('hl')) {
+      var r = n.getBoundingClientRect();
+      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+    }
+  }
+  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
+  selbar.style.display='none';
+  showToast('Highlight removed');
+}
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+// Notes
+var notes = document.getElementById('notes');
+var noteArea = document.getElementById('noteArea');
+var btnCopy=document.getElementById('btnCopy');
+var btnClose=document.getElementById('btnClose');
+function toggleNotes(){ 
+  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+}
+window.toggleNotes = toggleNotes;
+btnClose.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async function(){ 
+  await navigator.clipboard.writeText(noteArea.value||''); 
+  showToast('Copied'); 
+});
+btnNote.addEventListener('click', function(){
+  var text = '';
+  if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
+  else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
+  toggleNotes();
+  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
+  selbar.style.display='none';
+});
+// Toast
+var toastEl=document.getElementById('toast');
+function showToast(msg){
+  toastEl.textContent=msg; 
+  toastEl.style.display='block';
+  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+}
+// Answer key and grading
+var answers = {
+  "q1":"FALSE", "q2":"NOT GIVEN", "q3":"TRUE", "q4":"FALSE", "q5":"FALSE", "q6":"NOT GIVEN",
+  "q7":"1906", "q8":"Australia", "q9":"family", "q10":"bankruptcy", "q11":"writers", "q12":"reputation", "q13":"husband"
+};
+function grade(){
+  var total=0, correct=0, lines=[];
+  function push(q, ok, user){
+    total++; if(ok) correct++;
+    lines.push(q.toUpperCase()+": "+(user||'None')+" "+(ok?'✓':'✗'));
+  }
+  // 1–6 true/false/not given
+  for(var n=1;n<=6;n++){
+    var sel=document.querySelector('input[name="q'+n+'"]:checked');
+    var val=sel?sel.value:'';
+    push('q'+n, val === answers['q'+n], val);
+  }
+  // 7–13 blanks
+  for(var n=7;n<=13;n++){
+    var input=document.querySelector('input[name="q'+n+'"]');
+    var val=input?input.value.trim():'', ans=answers['q'+n];
+    // 忽略大小写检查
+    var isCorrect = val.toLowerCase() === ans.toLowerCase();
+    push('q'+n, isCorrect, val);
+  }
+  var acc = (total? Math.round(100*correct/total):0);
+  var html = '<p><strong>Score:</strong> '+correct+'/'+total+' <span class="badge">Accuracy '+acc+'%</span></p>';
+  html += '<pre>'+lines.join('\n')+'</pre>';
+  document.getElementById('results').innerHTML = html;
+  var ahtml = '<ol>';
+  ahtml += '<li>1 → FALSE</li>';
+  ahtml += '<li>2 → NOT GIVEN</li>';
+  ahtml += '<li>3 → TRUE</li>';
+  ahtml += '<li>4 → FALSE</li>';
+  ahtml += '<li>5 → FALSE</li>';
+  ahtml += '<li>6 → NOT GIVEN</li>';
+  ahtml += '<li>7 → 1906</li>';
+  ahtml += '<li>8 → Australia</li>';
+  ahtml += '<li>9 → family</li>';
+  ahtml += '<li>10 → bankruptcy</li>';
+  ahtml += '<li>11 → writers</li>';
+  ahtml += '<li>12 → reputation</li>';
+  ahtml += '<li>13 → husband</li>';
+  ahtml += '</ol>';
+  document.getElementById('answerContent').innerHTML = ahtml;
+  document.querySelector('#answerBox .badge').textContent='tap to view';
+}
+function resetForm(){
+  document.querySelectorAll('input[type="radio"]').forEach(el=>el.checked=false);
+  document.querySelectorAll('input[type="text"]').forEach(el=>el.value="");
+  document.getElementById('results').innerHTML='';
+  document.getElementById('answerContent').innerHTML='';
+  document.querySelector('#answerBox .badge').textContent = 'hidden';
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+}
+function scrollToElement(id){
+  var el = document.getElementById(id);
+  if(el){ 
+    el.scrollIntoView({behavior:'smooth', block:'center'}); 
+  }
+  var navs = document.querySelectorAll('.practice-nav .q-item');
+  navs.forEach(n => n.classList.remove('active'));
+  var btn = document.getElementById(id.replace('-anchor','-nav'));
+  if(btn){ 
+    btn.classList.add('active'); 
+    setTimeout(() => btn.classList.remove('active'), 800); 
+  }
+}
+(function(){
+  function mark(qn){
+    var nav = document.getElementById('q'+qn+'-nav');
+    if(!nav) return;
+    var answered=false;
+    
+    // 判断题
+    if(qn >=1 && qn <=6){
+      var radios = document.querySelectorAll('input[name="q'+qn+'"]:checked');
+      answered = radios.length > 0;
+    } 
+    // 填空题
+    else {
+      var input = document.querySelector('input[name="q'+qn+'"]');
+      answered = input && input.value.trim().length > 0;
+    }
+    
+    if(answered) nav.classList.add('answered');
+    else nav.classList.remove('answered');
+  }
+  
+  // 监听判断题
+  for(var q=1; q<=6; q++){
+    document.querySelectorAll('input[name="q'+q+'"]').forEach(radio => {
+      radio.addEventListener('change', () => mark(q));
+    });
+  }
+  
+  // 监听填空题
+  for(var q=7; q<=13; q++){
+    document.querySelector('input[name="q'+q+'"]').addEventListener('input', () => mark(q));
+  }
+})();
+</script>
+
+<script>
+// 练习页面增强器 - 跨窗口通信功能
+(function() {
+    'use strict';
+    
+    let sessionData = null;
+    let parentWindow = null;
+    let startTime = Date.now();
+    let isSessionActive = false;
+    
+    // 初始化通信功能
+    function initializeCommunication() {
+        console.log('[PracticePageEnhancer] 初始化通信功能');
+        
+        // 监听来自父窗口的消息
+        window.addEventListener('message', function(event) {
+            console.log('[PracticePageEnhancer] 收到消息:', event.data);
+            
+            if (event.data && event.data.type === 'INIT_SESSION') {
+                sessionData = event.data.data;
+                parentWindow = event.source;
+                isSessionActive = true;
+                startTime = Date.now();
+                
+                console.log('[PracticePageEnhancer] 会话已初始化:', sessionData);
+                
+                // 发送会话初始化确认
+                sendMessage('SESSION_INITIALIZED', {
+                    sessionId: sessionData.sessionId,
+                    examId: sessionData.examId,
+                    timestamp: Date.now()
+                });
+                
+                // 设置页面关闭时的数据发送
+                setupPageUnloadHandler();
+            }
+        });
+        
+        // 检测答题完成
+        setupAnswerDetection();
+        
+        console.log('[PracticePageEnhancer] 通信功能已初始化');
+    }
+    
+    // 发送消息到父窗口
+    function sendMessage(type, data) {
+        if (parentWindow && isSessionActive) {
+            const message = {
+                type: type,
+                data: data,
+                source: 'practice_page',
+                timestamp: Date.now()
+            };
+            
+            console.log('[PracticePageEnhancer] 发送消息:', message);
+            parentWindow.postMessage(message, '*');
+        }
+    }
+    
+    // 设置答题检测
+    function setupAnswerDetection() {
+        // 检测提交按钮点击
+        document.addEventListener('click', function(event) {
+            const target = event.target;
+            
+            // 检测是否是提交相关的按钮
+            if (target.tagName === 'BUTTON' && 
+                (target.textContent.includes('提交') || 
+                 target.textContent.includes('Submit') ||
+                 target.textContent.includes('完成') ||
+                 target.textContent.includes('Check') ||
+                 target.id === 'submit-btn' ||
+                 target.className.includes('submit'))) {
+                
+                console.log('[PracticePageEnhancer] 检测到提交按钮点击');
+                
+                // 延迟收集数据，确保答案已处理
+                setTimeout(function() {
+                    collectAndSendPracticeData();
+                }, 1000);
+            }
+        });
+        
+        // 检测表单提交
+        document.addEventListener('submit', function(event) {
+            console.log('[PracticePageEnhancer] 检测到表单提交');
+            setTimeout(function() {
+                collectAndSendPracticeData();
+            }, 1000);
+        });
+    }
+    
+    // 设置页面卸载处理器
+    function setupPageUnloadHandler() {
+        window.addEventListener('beforeunload', function() {
+            if (isSessionActive) {
+                collectAndSendPracticeData();
+            }
+        });
+        
+        // 页面隐藏时也发送数据
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'hidden' && isSessionActive) {
+                collectAndSendPracticeData();
+            }
+        });
+    }
+    
+    // 收集并发送练习数据
+    function collectAndSendPracticeData() {
+        if (!isSessionActive || !sessionData) {
+            console.log('[PracticePageEnhancer] 会话未激活，跳过数据收集');
+            return;
+        }
+        
+        console.log('[PracticePageEnhancer] 开始收集练习数据');
+        
+        const endTime = Date.now();
+        const duration = endTime - startTime;
+        
+        // 收集答案数据
+        const answers = collectAnswers();
+        const score = calculateScore(answers);
+        
+        const practiceData = {
+            sessionId: sessionData.sessionId,
+            examId: sessionData.examId,
+            examTitle: sessionData.examTitle,
+            examCategory: sessionData.examCategory,
+            startTime: startTime,
+            endTime: endTime,
+            duration: duration,
+            answers: answers,
+            score: score.correct,
+            totalQuestions: score.total,
+            accuracy: score.total > 0 ? score.correct / score.total : 0,
+            percentage: score.total > 0 ? Math.round((score.correct / score.total) * 100) : 0,
+            url: window.location.href,
+            source: 'page_extraction',
+            timestamp: endTime
+        };
+        
+        console.log('[PracticePageEnhancer] 练习数据已收集:', practiceData);
+        
+        // 发送练习完成数据
+        sendMessage('PRACTICE_COMPLETE', practiceData);
+        
+        // 标记会话为非活跃状态，避免重复发送
+        isSessionActive = false;
+    }
+    
+    // 收集页面中的答案
+    function collectAnswers() {
+        const answers = [];
+        
+        // 收集输入框答案
+        const inputs = document.querySelectorAll('input[type="text"], input.blank, input.blank-input');
+        inputs.forEach(function(input, index) {
+            if (input.value.trim()) {
+                answers.push({
+                    type: 'text',
+                    question: index + 1,
+                    answer: input.value.trim(),
+                    element: input.tagName + (input.className ? '.' + input.className : '')
+                });
+            }
+        });
+        
+        // 收集选择题答案
+        const selects = document.querySelectorAll('select');
+        selects.forEach(function(select, index) {
+            if (select.value) {
+                answers.push({
+                    type: 'select',
+                    question: index + 1,
+                    answer: select.value,
+                    element: 'SELECT'
+                });
+            }
+        });
+        
+        // 收集单选按钮答案
+        const radios = document.querySelectorAll('input[type="radio"]:checked');
+        radios.forEach(function(radio, index) {
+            answers.push({
+                type: 'radio',
+                question: radio.name || index + 1,
+                answer: radio.value,
+                element: 'INPUT[type="radio"]'
+            });
+        });
+        
+        // 收集复选框答案
+        const checkboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+        checkboxes.forEach(function(checkbox, index) {
+            answers.push({
+                type: 'checkbox',
+                question: checkbox.name || index + 1,
+                answer: checkbox.value,
+                element: 'INPUT[type="checkbox"]'
+            });
+        });
+        
+        console.log('[PracticePageEnhancer] 收集到答案:', answers);
+        return answers;
+    }
+    
+    // 计算得分（简单实现）
+    function calculateScore(answers) {
+        // 这里只是简单计算有答案的题目数量
+        // 实际得分需要根据具体题目的正确答案来计算
+        const total = answers.length;
+        const correct = answers.filter(function(answer) {
+            return answer.answer && answer.answer.trim().length > 0;
+        }).length;
+        
+        return {
+            correct: correct,
+            total: total
+        };
+    }
+    
+    // 页面加载完成后初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeCommunication);
+    } else {
+        initializeCommunication();
+    }
+    
+})();
+</script></body>
+</html>

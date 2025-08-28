@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>P1 – Listening to the Ocean</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
+  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  .shell { display:flex; height:100vh; width:100%; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  h2,h3,h4 { margin:0 0 10px; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  table { border-collapse: collapse; width:100%; }
+  th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
+  th:first-child, td:first-child { width:92px; }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button:hover { border-color:#fff; }
+  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+  .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:40px; padding:4px 8px; display:inline-flex; align-items:center; justify-content:space-between; gap:8px; width: auto; min-width: 120px; max-width: 200px; vertical-align: middle; }
+  .droplabel { color:#64748b; font-size:14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:flex; flex-wrap:wrap; gap:8px; }
+  .pool-slot { min-height:40px; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); white-space: nowrap; }
+  .card:active { cursor:grabbing; }
+  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
+  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
+  .ghost { opacity: .5; }
+  .over { outline:2px dashed #3b82f6; }
+  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
+  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
+  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+  body { padding-bottom: 82px; }
+  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
+  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
+  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #selbar { z-index: 6000 !important; }
+</style>
+</head>
+<body>
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q1-nav" onclick="scrollToElement('q1-anchor')">1</div>
+    <div class="q-item" id="q2-nav" onclick="scrollToElement('q2-anchor')">2</div>
+    <div class="q-item" id="q3-nav" onclick="scrollToElement('q3-anchor')">3</div>
+    <div class="q-item" id="q4-nav" onclick="scrollToElement('q4-anchor')">4</div>
+    <div class="q-item" id="q5-nav" onclick="scrollToElement('q5-anchor')">5</div>
+    <div class="q-item" id="q6-nav" onclick="scrollToElement('q6-anchor')">6</div>
+    <div class="q-item" id="q7-nav" onclick="scrollToElement('q7-anchor')">7</div>
+    <div class="q-item" id="q8-nav" onclick="scrollToElement('q8-anchor')">8</div>
+    <div class="q-item" id="q9-nav" onclick="scrollToElement('q9-anchor')">9</div>
+    <div class="q-item" id="q10-nav" onclick="scrollToElement('q10-anchor')">10</div>
+    <div class="q-item" id="q11-nav" onclick="scrollToElement('q11-anchor')">11</div>
+    <div class="q-item" id="q12-nav" onclick="scrollToElement('q12-anchor')">12</div>
+    <div class="q-item" id="q13-nav" onclick="scrollToElement('q13-anchor')">13</div>
+  </div>
+</div>
+<div class="shell">
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 1 <span id="timer">00:00</span></h2>
+    <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>
+    <h3>Listening to the Ocean</h3>
+    <p>The results of some recent research answer some long-standing questions</p>
+    
+    <h4>Paragraph A</h4>
+    <p>The oceans cover more than 70 per cent of the planet’s surface, yet until quite recently we knew less about their depths than about the surface of the Moon. The Moon has been far more accessible to study because astronomers have long been able to look at its surface, first with the naked eye and then with the telescope, both instruments that focus light. Until the twentieth century, however, no instruments were available for the study of Earth’s oceans: light, which can travel trillions of kilometres through the vast vacuum of space, cannot penetrate very far in seawater.</p>
+    
+    <h4>Paragraph B</h4>
+    <p>It turns out that for penetrating water the best instrument is sound. Curious investigators have long been fascinated by sound and the way it travels in water. As early as 1490, the artist and scientist Leonardo da Vinci observed: ‘If you cause your ship to stop and place the head of a long tube in the water and place the outer extremity to your ear, you will hear ships at a great distance from you.’ It was not until 1826 that two scientists, Colladon and Sturm, accurately measured the speed of sound in water. Using a long tube to listen under water (as da Vinci had suggested), they recorded how fast the sound of a submerged bell travelled across Lake Geneva in Switzerland. What these investigators demonstrated was that water is an excellent medium for sound, transmitting it almost five times faster than its speed in air.</p>
+    
+    <h4>Paragraph C</h4>
+    <p>A number of factors influence how far sound travels under water and how long it lasts, including particles, salinity, temperature and pressure. Particles in seawater can reflect, scatter and absorb certain frequencies of sound, just as certain wavelengths of light may be reflected, scattered and absorbed by specific types of particles in the atmosphere. In 1943, Maurice Ewing and J. L. Worzel conducted an experiment to test the theory that low-frequency waves, which are less vulnerable than higher frequencies to scattering and absorption, should be able to travel great distances, if the sound source is placed correctly. The researchers set off an underwater explosion and learned that it was detected easily by receivers 3,200 kilometres away. In analysing the results of this test, they discovered a kind of ‘sound pipeline’, known as the ‘deep sound channel’. Sound introduced into this channel of water could travel thousands of kilometres with minimal loss of signal.</p>
+    
+    <h4>Paragraph D</h4>
+    <p>The US Navy was quick to appreciate the usefulness of low-frequency sound and the deep sound channel. They developed the Sound Surveillance System (SOSUS), which involved underwater microphones, called hydrophones, that were placed on the ocean bottom and connected by cables to on-shore processing centres. It was Christopher Clark of Cornell University who soon realised that SOSUS could be used to listen to whales. Using a SOSUS receiver in the West Indies, he could hear whales that were 1,770 kilometres away.</p>
+    
+    <h4>Paragraph E</h4>
+    <p>Whales are the biggest of Earth’s creatures, yet these animals are also remarkably elusive. Scientists wishing to observe blue whales must simply wait in their ships for the whales to surface. A few whales have been tracked briefly in the wild in this way but not for very great distances, and much about them remains unknown. But by using SOSUS, scientists can track the whales and position them on a map. Moreover, they can track not just one whale at a time, but many creatures simultaneously. They can also learn to distinguish whale calls; researchers have detected changes in the calls of finback whales as the seasons change, and have found that blue whales in different regions of the Pacific Ocean have different calls.</p>
+    
+    <h4>Paragraph F</h4>
+    <p>SOSUS has also proved instrumental in obtaining information crucial to our understanding of climate. The system has enabled researchers to begin making ocean-temperature measurements on a global scale, measurements that are key to understanding the workings of heat transfer between the ocean and the atmosphere. The ocean plays an enormous role in determining air temperature - the heat capacity in only the upper few metres of ocean is thought to be equal to all of the heat in the entire atmosphere. For sound waves travelling horizontally in the ocean, speed is largely a function of temperature. Thus, the travel time of a wave of sound between two points is a sensitive indicator of the average temperature along its path. Transmitting sound in numerous directions through the deep sound channel can give scientists measurements spanning vast areas of the globe. Thousands of sound paths in the ocean can be pieced together into a map of global ocean temperatures, and by repeating measurements along the same paths over time, scientists can track changes in temperature over months or years.</p>
+    
+    <h4>Paragraph G</h4>
+    <p>Researchers are also using other acoustic techniques to monitor climate. Oceanographer Jeff Nystuen, for example, has explored the use of sound to measure rainfall over the ocean. Monitoring changing global rainfall patterns will contribute to understanding major climate change as well as the weather phenomenon known as El Niño. Since 1985, Nystuen has used hydrophones to listen to rain over the ocean, acoustically measuring not only the rainfall rate but also the rainfall type, ranging from drizzle to thunderstorms. By using the sound of rain under water as a ‘natural’ rain gauge, the measurement of rainfall over the oceans will become available to climatologists. In this way, modern society continues to benefit from the investigations of those who, like Leonardo da Vinci, pursued the answers to some basic questions of nature.</p>
+    
+    <p>&nbsp;</p> <!-- 添加空白行防止加载不完全 -->
+  </section>
+  <div id="divider" title="Drag to resize"></div>
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <h4>Questions 1–4</h4>
+      <p>Do the following statements agree with the information given in Reading Passage 1?</p>
+      <p>In boxes 1–4 on your answer sheet, write</p>
+      <ul>
+        <li>TRUE if the statement agrees with the information</li>
+        <li>FALSE if the statement contradicts the information</li>
+        <li>NOT GIVEN if there is no information on this</li>
+      </ul>
+      
+      <a id="q1-anchor"></a>
+      <div id="q1-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>1 In the past, it was easier for scientists to study the Moon than the oceans.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q1" type="radio" value="TRUE"> TRUE</label>
+          <label style="margin:0;"><input name="q1" type="radio" value="FALSE"> FALSE</label>
+          <label style="margin:0;"><input name="q1" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q2-anchor"></a>
+      <div id="q2-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>2 Techniques for investigating the Moon are the same as techniques for researching the ocean.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q2" type="radio" value="TRUE"> TRUE</label>
+          <label style="margin:0;"><input name="q2" type="radio" value="FALSE"> FALSE</label>
+          <label style="margin:0;"><input name="q2" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q3-anchor"></a>
+      <div id="q3-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>3 Measuring temperature changes in the ocean using sound is more time-consuming than other methods.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q3" type="radio" value="TRUE"> TRUE</label>
+          <label style="margin:0;"><input name="q3" type="radio" value="FALSE"> FALSE</label>
+          <label style="margin:0;"><input name="q3" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q4-anchor"></a>
+      <div id="q4-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>4 Hydrophones can distinguish different kinds of rain.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q4" type="radio" value="TRUE"> TRUE</label>
+          <label style="margin:0;"><input name="q4" type="radio" value="FALSE"> FALSE</label>
+          <label style="margin:0;"><input name="q4" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+    </div>
+    
+    <div class="group">
+      <h4>Questions 5–8</h4>
+      <p>Reading Passage 1 has seven paragraphs, A–G.</p>
+      <p>Which paragraph contains the following information?</p>
+      <p>Write the correct letter, A–G, in boxes 5–8 on your answer sheet.</p>
+      <p>NB You may use any letter more than once.</p>
+      
+      <a id="q5-anchor"></a>
+      <div id="q5-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>5 examples of things that affect the distance sound can travel in water</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q5" type="radio" value="A"> A</label>
+          <label style="margin:0;"><input name="q5" type="radio" value="B"> B</label>
+          <label style="margin:0;"><input name="q5" type="radio" value="C"> C</label>
+          <label style="margin:0;"><input name="q5" type="radio" value="D"> D</label>
+          <label style="margin:0;"><input name="q5" type="radio" value="E"> E</label>
+          <label style="margin:0;"><input name="q5" type="radio" value="F"> F</label>
+          <label style="margin:0;"><input name="q5" type="radio" value="G"> G</label>
+        </div>
+      </div>
+      
+      <a id="q6-anchor"></a>
+      <div id="q6-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>6 details of the connection between ocean temperatures and climate</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q6" type="radio" value="A"> A</label>
+          <label style="margin:0;"><input name="q6" type="radio" value="B"> B</label>
+          <label style="margin:0;"><input name="q6" type="radio" value="C"> C</label>
+          <label style="margin:0;"><input name="q6" type="radio" value="D"> D</label>
+          <label style="margin:0;"><input name="q6" type="radio" value="E"> E</label>
+          <label style="margin:0;"><input name="q6" type="radio" value="F"> F</label>
+          <label style="margin:0;"><input name="q6" type="radio" value="G"> G</label>
+        </div>
+      </div>
+      
+      <a id="q7-anchor"></a>
+      <div id="q7-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>7 details of ways in which light and sound are similar</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q7" type="radio" value="A"> A</label>
+          <label style="margin:0;"><input name="q7" type="radio" value="B"> B</label>
+          <label style="margin:0;"><input name="q7" type="radio" value="C"> C</label>
+          <label style="margin:0;"><input name="q7" type="radio" value="D"> D</label>
+          <label style="margin:0;"><input name="q7" type="radio" value="E"> E</label>
+          <label style="margin:0;"><input name="q7" type="radio" value="F"> F</label>
+          <label style="margin:0;"><input name="q7" type="radio" value="G"> G</label>
+        </div>
+      </div>
+      
+      <a id="q8-anchor"></a>
+      <div id="q8-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>8 a reference to a long-term study of different types of weather</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q8" type="radio" value="A"> A</label>
+          <label style="margin:0;"><input name="q8" type="radio" value="B"> B</label>
+          <label style="margin:0;"><input name="q8" type="radio" value="C"> C</label>
+          <label style="margin:0;"><input name="q8" type="radio" value="D"> D</label>
+          <label style="margin:0;"><input name="q8" type="radio" value="E"> E</label>
+          <label style="margin:0;"><input name="q8" type="radio" value="F"> F</label>
+          <label style="margin:0;"><input name="q8" type="radio" value="G"> G</label>
+        </div>
+      </div>
+    </div>
+    
+    <div class="group">
+      <h4>Questions 9–13</h4>
+      <p>Choose the correct letter, A, B, C or D.</p>
+      <p>Write the correct letter in boxes 9–13 on your answer sheet.</p>
+      
+      <a id="q9-anchor"></a>
+      <div id="q9-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>9 According to the passage, who conducted research into the rate at which sound travels in water?</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q9" type="radio" value="A"> A Leonardo da Vinci</label>
+          <label style="margin:0;"><input name="q9" type="radio" value="B"> B Colladon and Sturm</label>
+          <label style="margin:0;"><input name="q9" type="radio" value="C"> C Ewing and Worzel</label>
+          <label style="margin:0;"><input name="q9" type="radio" value="D"> D Jeff Nystuen</label>
+        </div>
+      </div>
+      
+      <a id="q10-anchor"></a>
+      <div id="q10-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>10 According to the passage, who conducted research into the distances certain types of sound waves travel in water?</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q10" type="radio" value="A"> A Leonardo da Vinci</label>
+          <label style="margin:0;"><input name="q10" type="radio" value="B"> B Colladon and Sturm</label>
+          <label style="margin:0;"><input name="q10" type="radio" value="C"> C Ewing and Worzel</label>
+          <label style="margin:0;"><input name="q10" type="radio" value="D"> D Christopher Clark</label>
+        </div>
+      </div>
+      
+      <a id="q11-anchor"></a>
+      <div id="q11-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>11 SOSUS allows whale researchers to</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q11" type="radio" value="A"> A follow a number of whales at the same time.</label>
+          <label style="margin:0;"><input name="q11" type="radio" value="B"> B protect whales as they migrate.</label>
+          <label style="margin:0;"><input name="q11" type="radio" value="C"> C imitate whale calls of different species.</label>
+          <label style="margin:0;"><input name="q11" type="radio" value="D"> D change the whales’ direction of travel.</label>
+        </div>
+      </div>
+      
+      <a id="q12-anchor"></a>
+      <div id="q12-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>12 Finback whale calls change</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q12" type="radio" value="A"> A when scientists track them.</label>
+          <label style="margin:0;"><input name="q12" type="radio" value="B"> B at different times of year.</label>
+          <label style="margin:0;"><input name="q12" type="radio" value="C"> C when whales communicate with other species.</label>
+          <label style="margin:0;"><input name="q12" type="radio" value="D"> D when whales come to the surface.</label>
+        </div>
+      </div>
+      
+      <a id="q13-anchor"></a>
+      <div id="q13-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>13 SOSUS allows scientists to</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q13" type="radio" value="A"> A make accurate maps of the ocean floor.</label>
+          <label style="margin:0;"><input name="q13" type="radio" value="B"> B measure water-level changes.</label>
+          <label style="margin:0;"><input name="q13" type="radio" value="C"> C investigate ocean currents.</label>
+          <label style="margin:0;"><input name="q13" type="radio" value="D"> D measure variations in temperature.</label>
+        </div>
+      </div>
+    </div>
+    
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
+</div>
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+<script>
+// Timer
+let _t=0; const _timerEl=document.getElementById('timer');
+setInterval(function(){ 
+  _t++; 
+  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
+  var s=String(_t%60).padStart(2,'0'); 
+  _timerEl.textContent=m+':'+s; 
+},1000);
+// Drag divider
+var divider = document.getElementById('divider');
+var left = document.getElementById('left');
+var right = document.getElementById('right');
+var dragging=false;
+function startDrag(e){ 
+  dragging=true; 
+  document.body.style.cursor='ew-resize'; 
+  if(e.preventDefault) e.preventDefault(); 
+}
+function endDrag(){ 
+  dragging=false; 
+  document.body.style.cursor=''; 
+}
+function onMove(clientX){
+  var container = document.querySelector('.shell').getBoundingClientRect();
+  var x = clientX - container.left;
+  x = Math.max(280, Math.min(container.width-320, x));
+  left.style.flex = '0 0 ' + x + 'px';
+  right.style.flex = '1 1 auto';
+}
+divider.addEventListener('mousedown', function(e){ startDrag(e); });
+window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+window.addEventListener('mouseup', endDrag);
+divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
+window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+window.addEventListener('touchend', endDrag);
+</script>
+<script>
+// Highlight toolbar
+var selbar = document.getElementById('selbar');
+var btnHL = document.getElementById('btnHL');
+var btnUH = document.getElementById('btnUH');
+var btnNote = document.getElementById('btnNote');
+var lastRange=null;
+var currentHlNode=null;
+var keepToolbar=false;
+function positionSelbarForRect(rect){
+  selbar.style.display='flex';
+  requestAnimationFrame(function(){
+    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+function updateSelbar(){
+  var sel=window.getSelection();
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
+    selbar.style.display='none'; 
+    currentHlNode=null; 
+    return; 
+  }
+  var range = sel.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode=null;
+  positionSelbarForRect(range.getBoundingClientRect());
+}
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', function(){ 
+  var sel=window.getSelection(); 
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
+    if(!keepToolbar && !currentHlNode){ 
+      selbar.style.display='none'; 
+    } 
+  } 
+});
+document.addEventListener('scroll', function(){ 
+  if(selbar.style.display==='flex') updateSelbar(); 
+});
+document.addEventListener('mousedown', function(e){
+  var t = e.target;
+  if(t.classList && t.classList.contains('hl')){
+    keepToolbar = true;
+  } else {
+    keepToolbar = false;
+  }
+}, true);
+document.addEventListener('click', function(e){
+  var target = e.target;
+  if(target.classList && target.classList.contains('hl')){
+    currentHlNode = target;
+    lastRange = null;
+    positionSelbarForRect(target.getBoundingClientRect());
+    var sel=window.getSelection();
+    if(sel) sel.removeAllRanges();
+    setTimeout(function(){ keepToolbar=false; }, 0);
+  }
+}, true);
+function doHighlight(){
+  if(currentHlNode) return;
+  if(!lastRange || lastRange.collapsed) return;
+  var span=document.createElement('span'); span.className='hl';
+  try { lastRange.surroundContents(span); }
+  catch(e){
+    var wrap=document.createElement('span'); wrap.className='hl';
+    wrap.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrap);
+  }
+  selbar.style.display='none';
+  showToast('Highlighted');
+}
+function removeHighlight(){
+  if(currentHlNode){
+    var p = currentHlNode.parentNode;
+    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
+    p.removeChild(currentHlNode); p.normalize();
+    currentHlNode = null;
+    selbar.style.display='none';
+    showToast('Highlight removed');
+    return;
+  }
+  if(!lastRange) return;
+  var selRect = lastRange.getBoundingClientRect();
+  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  var toRemove=[];
+  while(walker.nextNode()){
+    var n=walker.currentNode;
+    if(n.classList && n.classList.contains('hl')) {
+      var r = n.getBoundingClientRect();
+      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+    }
+  }
+  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
+  selbar.style.display='none';
+  showToast('Highlight removed');
+}
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+</script>
+<script>
+// Notes
+var notes = document.getElementById('notes');
+var noteArea = document.getElementById('noteArea');
+var btnCopy=document.getElementById('btnCopy');
+var btnClose=document.getElementById('btnClose');
+function toggleNotes(){ 
+  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+}
+window.toggleNotes = toggleNotes;
+btnClose.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async function(){ 
+  await navigator.clipboard.writeText(noteArea.value||''); 
+  showToast('Copied'); 
+});
+btnNote.addEventListener('click', function(){
+  var text = '';
+  if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
+  else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
+  toggleNotes();
+  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
+  selbar.style.display='none';
+});
+// Toast
+var toastEl=document.getElementById('toast');
+function showToast(msg){
+  toastEl.textContent=msg; 
+  toastEl.style.display='block';
+  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+}
+</script>
+<script>
+// Drag and drop for questions (if needed)
+const cards = document.querySelectorAll('.card');
+const dropzones = document.querySelectorAll('.dropzone');
+cards.forEach(card => {
+  card.addEventListener('dragstart', () => {
+    card.classList.add('dragging');
+  });
+  card.addEventListener('dragend', () => {
+    card.classList.remove('dragging');
+  });
+});
+dropzones.forEach(zone => {
+  zone.addEventListener('dragover', e => {
+    e.preventDefault();
+    zone.classList.add('over');
+  });
+  
+  zone.addEventListener('dragleave', () => {
+    zone.classList.remove('over');
+  });
+  
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('over');
+    const draggingCard = document.querySelector('.dragging');
+    if (draggingCard) {
+      // Clear existing content
+      zone.innerHTML = '';
+      zone.appendChild(draggingCard);
+      // Mark as answered
+      const targetQ = zone.dataset.target;
+      document.getElementById(targetQ + '-nav').classList.add('answered');
+    }
+  });
+});
+</script>
+<script>
+// Answer key and grading
+var answers = {
+  "q1":"TRUE", "q2":"FALSE", "q3":"NOT GIVEN", "q4":"TRUE",
+  "q5":"C", "q6":"F", "q7":"C", "q8":"G",
+  "q9":"B", "q10":"C", "q11":"A", "q12":"B", "q13":"D"
+};
+function grade(){
+  var total=0, correct=0, lines=[];
+  
+  // Check questions 1-13
+  for(let n=1; n<=13; n++){
+    const q = `q${n}`;
+    total++;
+    const selected = document.querySelector(`input[name="${q}"]:checked`);
+    const userAnswer = selected ? selected.value : '';
+    const isCorrect = userAnswer === answers[q];
+    if (isCorrect) correct++;
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✅' : '❌'}`);
+  }
+  
+  // Show results
+  const acc = Math.round(100 * correct / total);
+  document.getElementById('results').innerHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p>
+    <pre>${lines.join('\n')}</pre>
+  `;
+  
+  // Show answer key
+  document.getElementById('answerContent').innerHTML = `
+    <ol>
+      <li>1 → TRUE</li>
+      <li>2 → FALSE</li>
+      <li>3 → NOT GIVEN</li>
+      <li>4 → TRUE</li>
+      <li>5 → C</li>
+      <li>6 → F</li>
+      <li>7 → C</li>
+      <li>8 → G</li>
+      <li>9 → B (Colladon and Sturm)</li>
+      <li>10 → C (Ewing and Worzel)</li>
+      <li>11 → A (follow a number of whales at the same time)</li>
+      <li>12 → B (at different times of year)</li>
+      <li>13 → D (measure variations in temperature)</li>
+    </ol>
+  `;
+  document.querySelector('#answerBox .badge').textContent = 'tap to view';
+}
+function resetForm(){
+  // Reset radio buttons
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // Reset results and answers
+  document.getElementById('results').innerHTML = '';
+  document.getElementById('answerContent').innerHTML = '';
+  document.querySelector('#answerBox .badge').textContent = 'hidden';
+  
+  // Reset answered status in nav
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+}
+// Scroll to question anchor
+function scrollToElement(id){
+  const el = document.getElementById(id);
+  if(el){ 
+    el.scrollIntoView({behavior:'smooth', block:'center'}); 
+  }
+  // Highlight nav item briefly
+  const navs = document.querySelectorAll('.practice-nav .q-item');
+  navs.forEach(n => n.classList.remove('active'));
+  const btn = document.getElementById(id.replace('-anchor','-nav'));
+  if(btn){ 
+    btn.classList.add('active'); 
+    setTimeout(() => btn.classList.remove('active'), 800); 
+  }
+}
+// Mark answered on interaction
+(function(){
+  function markAnswered(qn){
+    const nav = document.getElementById(`q${qn}-nav`);
+    if(!nav) return;
+    
+    // Check radio buttons
+    const radios = document.querySelectorAll(`input[name="q${qn}"]:checked`);
+    const answered = radios.length > 0;
+    
+    if(answered) nav.classList.add('answered');
+    else nav.classList.remove('answered');
+  }
+  
+  // Monitor radio buttons
+  for(let n=1; n<=13; n++){
+    document.querySelectorAll(`input[name="q${n}"]`).forEach(radio => {
+      radio.addEventListener('change', () => markAnswered(n));
+    });
+  }
+})();
+</script>
+
+<!-- 练习页面数据传输增强脚本 -->
+<script>
+// 检查是否已经有增强脚本
+if (!window.practicePageEnhancer) {
+    // 动态加载增强脚本
+    const script = document.createElement('script');
+    script.src = '../../js/practice-page-enhancer.js';
+    script.onload = function() {
+        console.log('练习页面增强脚本已加载');
+    };
+    script.onerror = function() {
+        console.error('练习页面增强脚本加载失败');
+        // 降级到内联增强
+        loadInlineEnhancer();
+    };
+    document.head.appendChild(script);
+}
+
+// 内联增强器（降级方案）
+function loadInlineEnhancer() {
+    if (window.practicePageEnhancer) return;
+    
+    window.practicePageEnhancer = {
+        initialize: function() {
+            console.log('[InlineEnhancer] 内联增强器已初始化');
+            this.setupCommunication();
+            this.setupAnswerListeners();
+            this.interceptSubmit();
+        },
+        
+        setupCommunication: function() {
+            this.parentWindow = window.opener || window.parent;
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'INIT_SESSION') {
+                    this.sessionId = event.data.data.sessionId;
+                    this.sendMessage('SESSION_READY', {
+                        pageType: this.detectPageType(),
+                        url: window.location.href
+                    });
+                }
+            });
+        },
+        
+        detectPageType: function() {
+            const title = document.title || '';
+            if (title.includes('P1')) return 'P1';
+            if (title.includes('P2')) return 'P2';
+            if (title.includes('P3')) return 'P3';
+            return 'unknown';
+        },
+        
+        setupAnswerListeners: function() {
+            this.answers = {};
+            this.startTime = Date.now();
+            
+            document.addEventListener('change', (e) => {
+                if (e.target.name && e.target.name.startsWith('q')) {
+                    this.answers[e.target.name] = e.target.value;
+                }
+            });
+        },
+        
+        interceptSubmit: function() {
+            // 拦截grade函数
+            if (typeof window.grade === 'function') {
+                const originalGrade = window.grade;
+                window.grade = () => {
+                    const result = originalGrade();
+                    setTimeout(() => this.handleSubmit(), 200);
+                    return result;
+                };
+            }
+            
+            // 监听提交按钮
+            document.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON' && 
+                    (e.target.textContent.includes('Submit') || 
+                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+                    setTimeout(() => this.handleSubmit(), 300);
+                }
+            });
+        },
+        
+        handleSubmit: function() {
+            const results = {
+                sessionId: this.sessionId,
+                startTime: this.startTime,
+                endTime: Date.now(),
+                duration: Math.round((Date.now() - this.startTime) / 1000),
+                answers: this.answers,
+                scoreInfo: this.extractScore(),
+                pageType: this.detectPageType(),
+                url: window.location.href
+            };
+            
+            this.sendMessage('PRACTICE_COMPLETE', results);
+        },
+        
+        extractScore: function() {
+            const resultsEl = document.getElementById('results');
+            if (!resultsEl) return null;
+            
+            const text = resultsEl.textContent || '';
+            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+            if (scoreMatch) {
+                const correct = parseInt(scoreMatch[1]);
+                const total = parseInt(scoreMatch[2]);
+                return {
+                    correct: correct,
+                    total: total,
+                    accuracy: total > 0 ? correct / total : 0,
+                    percentage: Math.round((correct / total) * 100),
+                    source: 'inline_extraction'
+                };
+            }
+            return null;
+        },
+        
+        sendMessage: function(type, data) {
+            if (this.parentWindow) {
+                this.parentWindow.postMessage({
+                    type: type,
+                    data: data,
+                    source: 'practice_page'
+                }, '*');
+            }
+        }
+    };
+    
+    // 初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            window.practicePageEnhancer.initialize();
+        });
+    } else {
+        window.practicePageEnhancer.initialize();
+    }
+}
+</script>
+
+</body>
+</html>

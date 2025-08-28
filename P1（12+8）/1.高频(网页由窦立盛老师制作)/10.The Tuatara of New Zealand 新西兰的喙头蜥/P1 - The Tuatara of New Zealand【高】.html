@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>The Tuatara of New Zealand</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
+  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  .shell { display:flex; height:100vh; width:100%; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  h2,h3,h4 { margin:0 0 10px; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  table { border-collapse: collapse; width:100%; }
+  th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
+  th:first-child, td:first-child { width:92px; }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size:13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button:hover { border-color:#fff; }
+  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+  .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:40px; padding:4px 8px; display:inline-flex; align-items:center; justify-content:space-between; gap:8px; width: auto; min-width: 120px; max-width: 200px; vertical-align: middle; }
+  .droplabel { color:#64748b; font-size:14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:flex; flex-wrap:wrap; gap:8px; }
+  .pool-slot { min-height:40px; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); white-space: nowrap; }
+  .card:active { cursor:grabbing; }
+  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
+  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
+  .ghost { opacity: .5; }
+  .over { outline:2px dashed #3b82f6; }
+  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
+  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
+  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+  body { padding-bottom: 82px; }
+  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
+  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
+  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #selbar { z-index: 6000 !important; }
+</style>
+</head>
+<body>
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q1-nav" onclick="scrollToElement('q1-anchor')">1</div>
+    <div class="q-item" id="q2-nav" onclick="scrollToElement('q2-anchor')">2</div>
+    <div class="q-item" id="q3-nav" onclick="scrollToElement('q3-anchor')">3</div>
+    <div class="q-item" id="q4-nav" onclick="scrollToElement('q4-anchor')">4</div>
+    <div class="q-item" id="q5-nav" onclick="scrollToElement('q5-anchor')">5</div>
+    <div class="q-item" id="q6-nav" onclick="scrollToElement('q6-anchor')">6</div>
+    <div class="q-item" id="q7-nav" onclick="scrollToElement('q7-anchor')">7</div>
+    <div class="q-item" id="q8-nav" onclick="scrollToElement('q8-anchor')">8</div>
+    <div class="q-item" id="q9-nav" onclick="scrollToElement('q9-anchor')">9</div>
+    <div class="q-item" id="q10-nav" onclick="scrollToElement('q10-anchor')">10</div>
+    <div class="q-item" id="q11-nav" onclick="scrollToElement('q11-anchor')">11</div>
+    <div class="q-item" id="q12-nav" onclick="scrollToElement('q12-anchor')">12</div>
+    <div class="q-item" id="q13-nav" onclick="scrollToElement('q13-anchor')">13</div>
+  </div>
+</div>
+<div class="shell">
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 1 <span id="timer">00:00</span></h2>
+    <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>
+    <h3>The Tuatara of New Zealand</h3>
+    
+    <p>Tuatara are lizard-like reptiles found only in New Zealand. They are representative of ancient life forms. Tuatara are the sole surviving members of an ancient lineage of reptiles called Sphenodontia, which is over 250 million years old. Because tuatara still resemble fossils of reptiles that lived during the age of dinosaurs, they are often called “living fossils”. Now only two species survive in New Zealand. One is the Brothers Island tuatara which, until recent re-introductions to sanctuaries (safe places for wildlife), survived only on North Brother Island. The other species is the common tuatara, which inhabits many other offshore islands. Although the two species appear similar, they have genetic differences. Tuatara bones have been found in many parts of New Zealand; where dated, they are usually a few hundred to 5,000 years old. It is not known whether these bones belong to the two living species or to others that are now extinct.</p>
+    
+    <p>Many anatomical features distinguish tuatara from other living reptiles-for example, they have a distinctive pattern of openings in the skull, a unique type of haemoglobin in the blood, and males have no external reproductive organ. Adults range from 30 to 75 centimetres in length and weigh between 250 and 1,200 grams. Males are larger than females and have more developed spines in the crest along the neck, back and tail.</p>
+    
+    <p>The male tuatara courts the female by approaching her with a proud walk. Tuatara mate in late summer, and the female usually lays 6–10 eggs the following spring in a shallow ground-level nest. She may guard the nest for a few nights, then return to her underground burrow. The eggs incubate for about a year, so hatchlings emerge just as new eggs are being laid the next season. Evidence indicates that the sex of hatchlings is determined by both genetic and environmental factors: warmer eggs are more likely to produce males, while cooler eggs tend to produce females. The hatchlings receive no parental care and must find their own food.</p>
+    
+    <p>Tuatara live a long time, reaching reproductive maturity at about 15 years and breeding for many decades. Their maximum lifespan is uncertain, but many individuals have lived to 80 years while still looking vigorous and healthy. Tuatara live in underground burrows and are more active at night, though they bask in the sun by day. Both sexes are territorial; males aggressively defend their range by posturing and, if necessary, fighting. Their teeth are their chief weapons, and a bite can cause serious injury. Tuatara are carnivorous, feeding on invertebrates, lizards and the baby seabirds with which they often share burrows.</p>
+    
+    <p>Tuatara were once widespread and abundant on the New Zealand mainland, but when Polynesian settlers arrived (about 1250–1300 AD) they brought Pacific rats, which killed tuatara. By the time of European settlement in the 1840s, tuatara were almost extinct on the mainland. Some islands provided temporary refuges, but these too were eventually invaded by rats and other mammalian predators.</p>
+    
+    <p>Gradually tuatara became confined to 32 near-shore islands. Many of these islands were tiny, some only one hectare in size. A few, such as the Poor Knights Islands off the northeastern coast of New Zealand and some islands in Cook Strait, still support the common tuatara. The Brothers Island tuatara survived only on North Brother Island, but new populations have been created on Titi Island in the Marlborough Sounds and on Somes Island in Wellington Harbour.</p>
+    
+    <p>Tuatara can live in remarkably dense populations. Most tuatara islands support 50–100 individuals per hectare, so an island of just 10 hectares may hold hundreds. Larger islands rich in seabirds and invertebrates-key tuatara prey-may support even greater densities. The largest population is on Stephens Island, where numbers reach up to 2,500 per hectare in some areas, with a total of at least 30,000 individuals. Overall, the tuatara population across all islands is estimated at 50,000–100,000.</p>
+    
+    <p>Legal protection was granted to tuatara and their islands in 1895, yet the reptiles continued to decline. Since then, active conservation management has reversed the trend, and new populations have been established on predator-free islands. In the mid-1980s the New Zealand Wildlife Service (now the Department of Conservation) developed methods to eradicate rats from islands. Rats have since been removed from almost all tuatara islands, making these habitats safe for many threatened native species. Conservationists have also collected eggs for incubation, bred tuatara in captivity, and relocated them to rat-free islands off the Northland coast and to Stephens Island in Cook Strait-areas never invaded by rats and largely free of other mammalian predators. Two additional predator-free islands now host tuatara, raising the total to 37. Many more introductions are planned for islands and mainland reserves cleared of predators.</p>
+    
+    <p>&nbsp;</p>
+    <p>&nbsp;</p>
+  </section>
+  <div id="divider" title="Drag to resize"></div>
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <h4>Questions 1–6</h4>
+      <p>Do the following statements agree with the information given in Reading Passage 1?</p>
+      <p>In boxes 1–6 on your answer sheet, write</p>
+      <ul>
+        <li>TRUE if the statement agrees with the information</li>
+        <li>FALSE if the statement contradicts the information</li>
+        <li>NOT GIVEN if there is no information on this</li>
+      </ul>
+      
+      <a id="q1-anchor"></a>
+      <div id="q1-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>1 The two living species of tuatara look alike.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q1" type="radio" value="TRUE"> TRUE</label>
+          <label style="margin:0;"><input name="q1" type="radio" value="FALSE"> FALSE</label>
+          <label style="margin:0;"><input name="q1" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q2-anchor"></a>
+      <div id="q2-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>2 Many tuatara bones that have been discovered are millions of years old.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q2" type="radio" value="TRUE"> TRUE</label>
+          <label style="margin:0;"><input name="q2" type="radio" value="FALSE"> FALSE</label>
+          <label style="margin:0;"><input name="q2" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q3-anchor"></a>
+      <div id="q3-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>3 The tails of male tuatara are a different colour from those of female tuatara.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q3" type="radio" value="TRUE"> TRUE</label>
+          <label style="margin:0;"><input name="q3" type="radio" value="FALSE"> FALSE</label>
+          <label style="margin:0;"><input name="q3" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q4-anchor"></a>
+      <div id="q4-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>4 The female tuatara lays her eggs in a burrow.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q4" type="radio" value="TRUE"> TRUE</label>
+          <label style="margin:0;"><input name="q4" type="radio" value="FALSE"> FALSE</label>
+          <label style="margin:0;"><input name="q4" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q5-anchor"></a>
+      <div id="q5-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>5 There are more female hatchlings than male hatchlings.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q5" type="radio" value="TRUE"> TRUE</label>
+          <label style="margin:0;"><input name="q5" type="radio" value="FALSE"> FALSE</label>
+          <label style="margin:0;"><input name="q5" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q6-anchor"></a>
+      <div id="q6-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>6 Once they have hatched, young tuatara have to look after themselves.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q6" type="radio" value="TRUE"> TRUE</label>
+          <label style="margin:0;"><input name="q6" type="radio" value="FALSE"> FALSE</label>
+          <label style="margin:0;"><input name="q6" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+    </div>
+    
+    <div class="group">
+      <h4>Questions 7–13</h4>
+      <p>Complete the notes below.</p>
+      <p>Choose ONE WORD AND/OR A NUMBER from the passage for each answer.</p>
+      <p>Write your answers in boxes 7–13 on your answer sheet.</p>
+      <p>The tuatara</p>
+      
+      <a id="q7-anchor"></a>
+      <div id="q7-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>Lifespan</p>
+        <p>maximum lifespan unknown</p>
+        <p>many live to at least <input class="blank" maxlength="40" name="q7" placeholder="7"/> years</p>
+      </div>
+      
+      <a id="q8-anchor"></a>
+      <div id="q8-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>Behaviour</p>
+        <p>attack other creatures with their <input class="blank" maxlength="40" name="q8" placeholder="8"/></p>
+      </div>
+      
+      <a id="q9-anchor"></a>
+      <div id="q9-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>eat young <input class="blank" maxlength="40" name="q9" placeholder="9"/> that share the same burrows, as well as invertebrates and reptiles</p>
+      </div>
+      
+      <a id="q10-anchor"></a>
+      <div id="q10-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>Population</p>
+        <p>• abundant until rats were introduced by <input class="blank" maxlength="40" name="q10" placeholder="10"/> people</p>
+      </div>
+      
+      <a id="q11-anchor"></a>
+      <div id="q11-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>• by the 1840s, hardly any tuatara were found on the <input class="blank" maxlength="40" name="q11" placeholder="11"/></p>
+      </div>
+      
+      <a id="q12-anchor"></a>
+      <div id="q12-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>• islands off the north-eastern coast and in Cook Strait are now home to the <input class="blank" maxlength="40" name="q12" placeholder="12"/> tuatara</p>
+      </div>
+      
+      <a id="q13-anchor"></a>
+      <div id="q13-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>• Brothers Island tuatara found only on North Brother Island</p>
+        <p>• density of tuatara on Stephens Island is up to <input class="blank" maxlength="40" name="q13" placeholder="13"/> per hectare</p>
+      </div>
+    </div>
+    
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
+</div>
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+<script>
+// Timer
+let _t=0; const _timerEl=document.getElementById('timer');
+setInterval(function(){ 
+  _t++; 
+  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
+  var s=String(_t%60).padStart(2,'0'); 
+  _timerEl.textContent=m+':'+s; 
+},1000);
+// Drag divider
+var divider = document.getElementById('divider');
+var left = document.getElementById('left');
+var right = document.getElementById('right');
+var dragging=false;
+function startDrag(e){ 
+  dragging=true; 
+  document.body.style.cursor='ew-resize'; 
+  if(e.preventDefault) e.preventDefault(); 
+}
+function endDrag(){ 
+  dragging=false; 
+  document.body.style.cursor=''; 
+}
+function onMove(clientX){
+  var container = document.querySelector('.shell').getBoundingClientRect();
+  var x = clientX - container.left;
+  x = Math.max(280, Math.min(container.width-320, x));
+  left.style.flex = '0 0 ' + x + 'px';
+  right.style.flex = '1 1 auto';
+}
+divider.addEventListener('mousedown', function(e){ startDrag(e); });
+window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+window.addEventListener('mouseup', endDrag);
+divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
+window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+window.addEventListener('touchend', endDrag);
+</script>
+<script>
+// Highlight toolbar
+var selbar = document.getElementById('selbar');
+var btnHL = document.getElementById('btnHL');
+var btnUH = document.getElementById('btnUH');
+var btnNote = document.getElementById('btnNote');
+var lastRange=null;
+var currentHlNode=null;
+var keepToolbar=false;
+function positionSelbarForRect(rect){
+  selbar.style.display='flex';
+  requestAnimationFrame(function(){
+    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+function updateSelbar(){
+  var sel=window.getSelection();
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
+    selbar.style.display='none'; 
+    currentHlNode=null; 
+    return; 
+  }
+  var range = sel.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode=null;
+  positionSelbarForRect(range.getBoundingClientRect());
+}
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', function(){ 
+  var sel=window.getSelection(); 
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
+    if(!keepToolbar && !currentHlNode){ 
+      selbar.style.display='none'; 
+    } 
+  } 
+});
+document.addEventListener('scroll', function(){ 
+  if(selbar.style.display==='flex') updateSelbar(); 
+});
+document.addEventListener('mousedown', function(e){
+  var t = e.target;
+  if(t.classList && t.classList.contains('hl')){
+    keepToolbar = true;
+  } else {
+    keepToolbar = false;
+  }
+}, true);
+document.addEventListener('click', function(e){
+  var target = e.target;
+  if(target.classList && target.classList.contains('hl')){
+    currentHlNode = target;
+    lastRange = null;
+    positionSelbarForRect(target.getBoundingClientRect());
+    var sel=window.getSelection();
+    if(sel) sel.removeAllRanges();
+    setTimeout(function(){ keepToolbar=false; }, 0);
+  }
+}, true);
+function doHighlight(){
+  if(currentHlNode) return;
+  if(!lastRange || lastRange.collapsed) return;
+  var span=document.createElement('span'); span.className='hl';
+  try { lastRange.surroundContents(span); }
+  catch(e){
+    var wrap=document.createElement('span'); wrap.className='hl';
+    wrap.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrap);
+  }
+  selbar.style.display='none';
+  showToast('Highlighted');
+}
+function removeHighlight(){
+  if(currentHlNode){
+    var p = currentHlNode.parentNode;
+    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
+    p.removeChild(currentHlNode); p.normalize();
+    currentHlNode = null;
+    selbar.style.display='none';
+    showToast('Highlight removed');
+    return;
+  }
+  if(!lastRange) return;
+  var selRect = lastRange.getBoundingClientRect();
+  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  var toRemove=[];
+  while(walker.nextNode()){
+    var n=walker.currentNode;
+    if(n.classList && n.classList.contains('hl')) {
+      var r = n.getBoundingClientRect();
+      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+    }
+  }
+  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
+  selbar.style.display='none';
+  showToast('Highlight removed');
+}
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+</script>
+<script>
+// Notes
+var notes = document.getElementById('notes');
+var noteArea = document.getElementById('noteArea');
+var btnCopy=document.getElementById('btnCopy');
+var btnClose=document.getElementById('btnClose');
+function toggleNotes(){ 
+  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+}
+window.toggleNotes = toggleNotes;
+btnClose.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async function(){ 
+  await navigator.clipboard.writeText(noteArea.value||''); 
+  showToast('Copied'); 
+});
+btnNote.addEventListener('click', function(){
+  var text = '';
+  if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
+  else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
+  toggleNotes();
+  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
+  selbar.style.display='none';
+});
+// Toast
+var toastEl=document.getElementById('toast');
+function showToast(msg){
+  toastEl.textContent=msg; 
+  toastEl.style.display='block';
+  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+}
+</script>
+<script>
+// Answer key and grading
+var answers = {
+  "q1":"TRUE", "q2":"FALSE", "q3":"NOT GIVEN", "q4":"FALSE", "q5":"NOT GIVEN", "q6":"TRUE",
+  "q7":"80", "q8":"teeth", "q9":"seabirds", "q10":"Polynesian", "q11":"mainland", "q12":"common", "q13":"2,500"
+};
+function grade(){
+  var total=0, correct=0, lines=[];
+  
+  // Check radio questions (1-6)
+  for(let n=1; n<=6; n++){
+    const q = `q${n}`;
+    total++;
+    const selected = document.querySelector(`input[name="${q}"]:checked`);
+    const userAnswer = selected ? selected.value : '';
+    const isCorrect = userAnswer === answers[q];
+    if (isCorrect) correct++;
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? 'âœ…' : 'âŒ'}`);
+  }
+  
+  // Check blank questions (7-13)
+  for(let n=7; n<=13; n++){
+    const q = `q${n}`;
+    total++;
+    const input = document.querySelector(`input[name="${q}"]`);
+    const userAnswer = input ? input.value.trim() : '';
+    const isCorrect = userAnswer.toLowerCase() === answers[q].toLowerCase();
+    if (isCorrect) correct++;
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? 'âœ…' : 'âŒ'}`);
+  }
+  
+  // Show results
+  const acc = Math.round(100 * correct / total);
+  document.getElementById('results').innerHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p>
+    <pre>${lines.join('\n')}</pre>
+  `;
+  
+  // Show answer key
+  document.getElementById('answerContent').innerHTML = `
+    <ol>
+      <li>1 â†’ TRUE</li>
+      <li>2 â†’ FALSE</li>
+      <li>3 â†’ NOT GIVEN</li>
+      <li>4 â†’ FALSE</li>
+      <li>5 â†’ NOT GIVEN</li>
+      <li>6 â†’ TRUE</li>
+      <li>7 â†’ 80</li>
+      <li>8 â†’ teeth</li>
+      <li>9 â†’ seabirds</li>
+      <li>10 â†’ Polynesian</li>
+      <li>11 â†’ mainland</li>
+      <li>12 â†’ common</li>
+      <li>13 â†’ 2,500</li>
+    </ol>
+  `;
+  document.querySelector('#answerBox .badge').textContent = 'tap to view';
+}
+function resetForm(){
+  // Reset radio buttons
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // Reset text inputs
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = '';
+  });
+  
+  // Reset results and answers
+  document.getElementById('results').innerHTML = '';
+  document.getElementById('answerContent').innerHTML = '';
+  document.querySelector('#answerBox .badge').textContent = 'hidden';
+  
+  // Reset answered status in nav
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+}
+// Scroll to question anchor
+function scrollToElement(id){
+  const el = document.getElementById(id);
+  if(el){ 
+    el.scrollIntoView({behavior:'smooth', block:'center'}); 
+  }
+  // Highlight nav item briefly
+  const navs = document.querySelectorAll('.practice-nav .q-item');
+  navs.forEach(n => n.classList.remove('active'));
+  const btn = document.getElementById(id.replace('-anchor','-nav'));
+  if(btn){ 
+    btn.classList.add('active'); 
+    setTimeout(() => btn.classList.remove('active'), 800); 
+  }
+}
+// Mark answered on interaction
+(function(){
+  function markAnswered(qn){
+    const nav = document.getElementById(`q${qn}-nav`);
+    if(!nav) return;
+    let answered = false;
+    
+    // Check radio buttons (1-6)
+    if(qn >=1 && qn <=6){
+      const radios = document.querySelectorAll(`input[name="q${qn}"]:checked`);
+      answered = radios.length > 0;
+    } 
+    // Check text inputs (7-13)
+    else if(qn >=7 && qn <=13){
+      const input = document.querySelector(`input[name="q${qn}"]`);
+      answered = input && input.value.trim().length > 0;
+    }
+    
+    if(answered) nav.classList.add('answered');
+    else nav.classList.remove('answered');
+  }
+  
+  // Monitor radio buttons (1-6)
+  for(let n=1; n<=6; n++){
+    document.querySelectorAll(`input[name="q${n}"]`).forEach(radio => {
+      radio.addEventListener('change', () => markAnswered(n));
+    });
+  }
+  
+  // Monitor text inputs (7-13)
+  for(let n=7; n<=13; n++){
+    const input = document.querySelector(`input[name="q${n}"]`);
+    if(input){
+      input.addEventListener('input', () => markAnswered(n));
+    }
+  }
+})();
+</script>
+
+<!-- 练习页面数据传输增强脚本 -->
+<script>
+// 检查是否已经有增强脚本
+if (!window.practicePageEnhancer) {
+    // 动态加载增强脚本
+    const script = document.createElement('script');
+    script.src = '../../js/practice-page-enhancer.js';
+    script.onload = function() {
+        console.log('练习页面增强脚本已加载');
+    };
+    script.onerror = function() {
+        console.error('练习页面增强脚本加载失败');
+        // 降级到内联增强
+        loadInlineEnhancer();
+    };
+    document.head.appendChild(script);
+}
+
+// 内联增强器（降级方案）
+function loadInlineEnhancer() {
+    if (window.practicePageEnhancer) return;
+    
+    window.practicePageEnhancer = {
+        initialize: function() {
+            console.log('[InlineEnhancer] 内联增强器已初始化');
+            this.setupCommunication();
+            this.setupAnswerListeners();
+            this.interceptSubmit();
+        },
+        
+        setupCommunication: function() {
+            this.parentWindow = window.opener || window.parent;
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'INIT_SESSION') {
+                    this.sessionId = event.data.data.sessionId;
+                    this.sendMessage('SESSION_READY', {
+                        pageType: this.detectPageType(),
+                        url: window.location.href
+                    });
+                }
+            });
+        },
+        
+        detectPageType: function() {
+            const title = document.title || '';
+            if (title.includes('P1')) return 'P1';
+            if (title.includes('P2')) return 'P2';
+            if (title.includes('P3')) return 'P3';
+            return 'unknown';
+        },
+        
+        setupAnswerListeners: function() {
+            this.answers = {};
+            this.startTime = Date.now();
+            
+            document.addEventListener('change', (e) => {
+                if (e.target.name && e.target.name.startsWith('q')) {
+                    this.answers[e.target.name] = e.target.value;
+                }
+            });
+        },
+        
+        interceptSubmit: function() {
+            // 拦截grade函数
+            if (typeof window.grade === 'function') {
+                const originalGrade = window.grade;
+                window.grade = () => {
+                    const result = originalGrade();
+                    setTimeout(() => this.handleSubmit(), 200);
+                    return result;
+                };
+            }
+            
+            // 监听提交按钮
+            document.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON' && 
+                    (e.target.textContent.includes('Submit') || 
+                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+                    setTimeout(() => this.handleSubmit(), 300);
+                }
+            });
+        },
+        
+        handleSubmit: function() {
+            const results = {
+                sessionId: this.sessionId,
+                startTime: this.startTime,
+                endTime: Date.now(),
+                duration: Math.round((Date.now() - this.startTime) / 1000),
+                answers: this.answers,
+                scoreInfo: this.extractScore(),
+                pageType: this.detectPageType(),
+                url: window.location.href
+            };
+            
+            this.sendMessage('PRACTICE_COMPLETE', results);
+        },
+        
+        extractScore: function() {
+            const resultsEl = document.getElementById('results');
+            if (!resultsEl) return null;
+            
+            const text = resultsEl.textContent || '';
+            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+            if (scoreMatch) {
+                const correct = parseInt(scoreMatch[1]);
+                const total = parseInt(scoreMatch[2]);
+                return {
+                    correct: correct,
+                    total: total,
+                    accuracy: total > 0 ? correct / total : 0,
+                    percentage: Math.round((correct / total) * 100),
+                    source: 'inline_extraction'
+                };
+            }
+            return null;
+        },
+        
+        sendMessage: function(type, data) {
+            if (this.parentWindow) {
+                this.parentWindow.postMessage({
+                    type: type,
+                    data: data,
+                    source: 'practice_page'
+                }, '*');
+            }
+        }
+    };
+    
+    // 初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            window.practicePageEnhancer.initialize();
+        });
+    } else {
+        window.practicePageEnhancer.initialize();
+    }
+}
+</script>
+
+</body>
+</html>s

@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>{{EXAM_TITLE}} (Generated Template)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
+  #timer { position:fixed; top:10px; left:10px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:6px 10px; font-size:14px; z-index:1000; }
+  .shell { display:flex; height:100vh; width:100%; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 280px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  #divider::after { content:""; position:absolute; inset:0; }
+  h2,h3 { margin:0 0 10px; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  table { border-collapse: collapse; width:100%; }
+  th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button[disabled] { opacity: .45; cursor: not-allowed; }
+  #selbar button:hover { border-color:#fff; }
+  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+  
+  /* Question type specific styles */
+  .fill-blank { border-bottom: 1px solid var(--accent); min-width: 80px; padding: 2px 4px; margin: 0 2px; }
+  .multiple-choice label { display: block; margin: 4px 0; cursor: pointer; }
+  .matching-table th:first-child { width: 200px; text-align: left; }
+  .true-false-ng label { display: inline-block; margin-right: 15px; }
+  .dropdown-select { border: 1px solid var(--line); border-radius: 4px; padding: 4px 8px; }
+  
+  /* Generated content indicator */
+  .generated-notice { 
+    background: #fef3c7; 
+    border: 1px solid #f59e0b; 
+    border-radius: 8px; 
+    padding: 8px 12px; 
+    margin-bottom: 16px; 
+    font-size: 14px; 
+    color: #92400e; 
+  }
+</style>
+</head>
+<body>
+<div id="timer">00:00</div>
+
+<div class="shell">
+  <section class="pane" id="left">
+    
+<div class="generated-notice">
+  📝 This HTML version was automatically generated from the PDF exam. Content may need manual verification.
+</div>
+
+<h2>READING PASSAGE {{PASSAGE_NUMBER}}</h2>
+<p>You should spend about 20 minutes on Questions {{QUESTION_RANGE}}, which are based on Reading Passage {{PASSAGE_NUMBER}} below.</p>
+<h3>{{PASSAGE_TITLE}}</h3>
+
+{{PASSAGE_CONTENT}}
+
+  </section>
+
+  <div id="divider" title="Drag to resize"></div>
+
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+
+    {{QUESTIONS_CONTENT}}
+
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    <div id="results"></div>
+  </section>
+</div>
+
+<div id="selbar" role="toolbar" aria-label="Selection tools">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// Timer functionality
+let t=0; const timerEl=document.getElementById('timer');
+setInterval(function(){ t++; var m=String(Math.floor(t/60)).padStart(2,'0'); var s=String(t%60).padStart(2,'0'); timerEl.textContent=m+':'+s; },1000);
+
+// Drag divider functionality
+var divider = document.getElementById('divider');
+var left = document.getElementById('left');
+var right = document.getElementById('right');
+var dragging=false;
+function startDrag(e){ dragging=true; document.body.style.cursor='ew-resize'; if(e.preventDefault) e.preventDefault(); }
+function endDrag(){ dragging=false; document.body.style.cursor=''; }
+function onMove(clientX){
+  var container = document.querySelector('.shell').getBoundingClientRect();
+  var x = clientX - container.left;
+  x = Math.max(280, Math.min(container.width-280, x));
+  left.style.flex = '0 0 ' + x + 'px';
+  right.style.flex = '1 1 auto';
+}
+divider.addEventListener('mousedown', function(e){ startDrag(e); });
+window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+window.addEventListener('mouseup', endDrag);
+divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
+window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+window.addEventListener('touchend', endDrag);
+
+// Selection toolbar functionality
+var selbar = document.getElementById('selbar');
+var btnHL = document.getElementById('btnHL');
+var btnUH = document.getElementById('btnUH');
+var btnNote = document.getElementById('btnNote');
+var lastRange=null;
+var currentHlNode=null;
+
+function setHighlightButtonState(){
+  if(currentHlNode){
+    btnHL.setAttribute('disabled','true');
+  } else {
+    btnHL.removeAttribute('disabled');
+  }
+}
+
+function positionSelbarForRect(rect){
+  selbar.style.display='flex';
+  requestAnimationFrame(function(){
+    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+  setHighlightButtonState();
+}
+
+function updateSelbar(){
+  var sel=window.getSelection();
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed){
+    if(!currentHlNode){ selbar.style.display='none'; }
+    return;
+  }
+  var range = sel.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode=null;
+  positionSelbarForRect(range.getBoundingClientRect());
+}
+
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', function(){
+  var sel=window.getSelection();
+  if((!sel || sel.rangeCount===0 || sel.isCollapsed) && !currentHlNode){
+    selbar.style.display='none';
+  }
+});
+document.addEventListener('scroll', function(){ if(selbar.style.display==='flex') {
+  var rect;
+  if(currentHlNode){ rect = currentHlNode.getBoundingClientRect(); }
+  else if(lastRange){ rect = lastRange.getBoundingClientRange(); }
+  if(rect) positionSelbarForRect(rect);
+}});
+
+// Click a highlight -> show toolbar
+document.addEventListener('click', function(e){
+  var target = e.target;
+  if(target.classList && target.classList.contains('hl')){
+    currentHlNode = target;
+    lastRange = null;
+    positionSelbarForRect(target.getBoundingClientRect());
+    var sel=window.getSelection();
+    if(sel){ sel.removeAllRanges(); }
+  }
+}, true);
+
+// Add highlight
+function addHighlight(){
+  if(currentHlNode){ return; }
+  if(!lastRange || lastRange.collapsed) return;
+  var span=document.createElement('span'); span.className='hl';
+  try { lastRange.surroundContents(span); }
+  catch(e){
+    var wrap=document.createElement('span'); wrap.className='hl';
+    wrap.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrap);
+  }
+  selbar.style.display='none';
+  showToast('Highlighted');
+}
+
+// Remove highlight
+function removeHighlight(){
+  if(currentHlNode){
+    var p = currentHlNode.parentNode;
+    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
+    p.removeChild(currentHlNode); p.normalize();
+    currentHlNode = null;
+    selbar.style.display='none';
+    showToast('Highlight removed');
+    return;
+  }
+  if(!lastRange) return;
+  var selRect = lastRange.getBoundingClientRect();
+  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  var toRemove=[];
+  while(walker.nextNode()){
+    var n=walker.currentNode;
+    if(n.classList && n.classList.contains('hl')) {
+      var r = n.getBoundingClientRect();
+      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+    }
+  }
+  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
+  selbar.style.display='none';
+  showToast('Highlight removed');
+}
+
+btnHL.addEventListener('click', addHighlight);
+btnUH.addEventListener('click', removeHighlight);
+
+// Notes functionality
+var notes = document.getElementById('notes');
+var noteArea = document.getElementById('noteArea');
+var btnCopy=document.getElementById('btnCopy');
+var btnClose=document.getElementById('btnClose');
+function toggleNotes(){ notes.style.display = (notes.style.display==='flex'?'none':'flex'); }
+window.toggleNotes = toggleNotes;
+btnClose.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async function(){ await navigator.clipboard.writeText(noteArea.value||''); showToast('Copied'); });
+btnNote.addEventListener('click', function(){
+  var text = '';
+  if(currentHlNode){
+    text = (currentHlNode.textContent||'').trim();
+  } else if(lastRange){
+    var frag = lastRange.cloneContents();
+    text = (frag.textContent||'').trim();
+  }
+  toggleNotes();
+  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
+  selbar.style.display='none';
+});
+
+// Toast notifications
+var toastEl=document.getElementById('toast');
+function showToast(msg){
+  toastEl.textContent=msg; toastEl.style.display='block';
+  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+}
+
+// Grading system - to be populated by generator
+var answerKey = {{ANSWER_KEY}};
+
+function grade(){
+  var score=0, total=0, lines=[];
+  Object.keys(answerKey).forEach(function(q){
+    total++;
+    var chosen = document.querySelector('input[name="'+q+'"]:checked');
+    var val = chosen ? chosen.value : "";
+    if(val === answerKey[q]){ score++; lines.push(q+': '+val+' ✅'); }
+    else { lines.push(q+': '+(val||'None')+' ❌ (Correct: '+answerKey[q]+')'); }
+  });
+  document.getElementById('results').innerHTML = '<p><strong>Score:</strong> '+score+'/'+total+'</p><pre>'+lines.join('\n')+'</pre>';
+}
+
+function resetForm(){
+  document.querySelectorAll('input[type="radio"], input[type="checkbox"], input[type="text"], select').forEach(function(i){ 
+    if(i.type === 'radio' || i.type === 'checkbox') i.checked=false; 
+    else if(i.type === 'text') i.value='';
+    else if(i.tagName === 'SELECT') i.selectedIndex=0;
+  });
+  document.getElementById('results').innerHTML='';
+}
+</script>
+
+<!-- Practice page enhancer integration -->
+<script>
+// Check if enhancer script exists and load it
+if (!window.practicePageEnhancer) {
+    const script = document.createElement('script');
+    script.src = '../../js/practice-page-enhancer.js';
+    script.onload = function() {
+        console.log('Practice page enhancer loaded');
+    };
+    script.onerror = function() {
+        console.error('Practice page enhancer failed to load');
+        loadInlineEnhancer();
+    };
+    document.head.appendChild(script);
+}
+
+// Inline enhancer fallback
+function loadInlineEnhancer() {
+    if (window.practicePageEnhancer) return;
+    
+    window.practicePageEnhancer = {
+        initialize: function() {
+            console.log('[Generated Template] Inline enhancer initialized');
+            this.setupCommunication();
+            this.setupAnswerListeners();
+            this.interceptSubmit();
+        },
+        
+        setupCommunication: function() {
+            this.parentWindow = window.opener || window.parent;
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'INIT_SESSION') {
+                    this.sessionId = event.data.data.sessionId;
+                    this.sendMessage('SESSION_READY', {
+                        pageType: this.detectPageType(),
+                        url: window.location.href,
+                        isGenerated: true
+                    });
+                }
+            });
+        },
+        
+        detectPageType: function() {
+            const title = document.title || '';
+            if (title.includes('P1')) return 'P1';
+            if (title.includes('P2')) return 'P2';
+            if (title.includes('P3')) return 'P3';
+            return 'unknown';
+        },
+        
+        setupAnswerListeners: function() {
+            this.answers = {};
+            this.startTime = Date.now();
+            
+            document.addEventListener('change', (e) => {
+                if (e.target.name && e.target.name.startsWith('q')) {
+                    this.answers[e.target.name] = e.target.value;
+                }
+            });
+        },
+        
+        interceptSubmit: function() {
+            if (typeof window.grade === 'function') {
+                const originalGrade = window.grade;
+                window.grade = () => {
+                    const result = originalGrade();
+                    setTimeout(() => this.handleSubmit(), 200);
+                    return result;
+                };
+            }
+            
+            document.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON' && 
+                    (e.target.textContent.includes('Submit') || 
+                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+                    setTimeout(() => this.handleSubmit(), 300);
+                }
+            });
+        },
+        
+        handleSubmit: function() {
+            const results = {
+                sessionId: this.sessionId,
+                startTime: this.startTime,
+                endTime: Date.now(),
+                duration: Math.round((Date.now() - this.startTime) / 1000),
+                answers: this.answers,
+                scoreInfo: this.extractScore(),
+                pageType: this.detectPageType(),
+                url: window.location.href,
+                isGenerated: true
+            };
+            
+            this.sendMessage('PRACTICE_COMPLETE', results);
+        },
+        
+        extractScore: function() {
+            const resultsEl = document.getElementById('results');
+            if (!resultsEl) return null;
+            
+            const text = resultsEl.textContent || '';
+            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+            if (scoreMatch) {
+                const correct = parseInt(scoreMatch[1]);
+                const total = parseInt(scoreMatch[2]);
+                return {
+                    correct: correct,
+                    total: total,
+                    accuracy: total > 0 ? correct / total : 0,
+                    percentage: Math.round((correct / total) * 100),
+                    source: 'generated_template'
+                };
+            }
+            return null;
+        },
+        
+        sendMessage: function(type, data) {
+            if (this.parentWindow) {
+                this.parentWindow.postMessage({
+                    type: type,
+                    data: data,
+                    source: 'practice_page'
+                }, '*');
+            }
+        }
+    };
+    
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            window.practicePageEnhancer.initialize();
+        });
+    } else {
+        window.practicePageEnhancer.initialize();
+    }
+}
+</script>
+
+</body>
+</html>

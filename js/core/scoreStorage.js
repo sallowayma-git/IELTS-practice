@@ -1,0 +1,754 @@
+/**
+ * 成绩记录和存储系统
+ * 负责答题结果解析、标准化存储和数据备份恢复
+ */
+class ScoreStorage {
+    constructor() {
+        this.storageKeys = {
+            practiceRecords: 'practice_records',
+            userStats: 'user_stats',
+            backupData: 'backup_data',
+            storageVersion: 'storage_version'
+        };
+        
+        this.currentVersion = '1.0.0';
+        this.maxRecords = 1000;
+        this.backupInterval = 24 * 60 * 60 * 1000; // 24小时
+        
+        this.initialize();
+    }
+
+    /**
+     * 初始化存储系统
+     */
+    initialize() {
+        console.log('ScoreStorage initialized');
+        
+        // 检查存储版本并迁移数据
+        this.checkStorageVersion();
+        
+        // 初始化数据结构
+        this.initializeDataStructures();
+        
+        // 设置自动备份
+        this.setupAutoBackup();
+        
+        // 清理过期数据
+        this.cleanupExpiredData();
+    }
+
+    /**
+     * 检查存储版本
+     */
+    checkStorageVersion() {
+        const storedVersion = storage.get(this.storageKeys.storageVersion);
+        
+        if (!storedVersion) {
+            // 首次使用，设置版本
+            storage.set(this.storageKeys.storageVersion, this.currentVersion);
+            console.log('Storage version initialized:', this.currentVersion);
+        } else if (storedVersion !== this.currentVersion) {
+            // 版本不匹配，执行数据迁移
+            this.migrateData(storedVersion, this.currentVersion);
+        }
+    }
+
+    /**
+     * 数据迁移
+     */
+    migrateData(fromVersion, toVersion) {
+        console.log(`Migrating data from ${fromVersion} to ${toVersion}`);
+        
+        try {
+            // 备份当前数据
+            this.createBackup('migration_backup');
+            
+            // 根据版本执行相应的迁移逻辑
+            if (fromVersion < '1.0.0') {
+                this.migrateToV1();
+            }
+            
+            // 更新版本号
+            storage.set(this.storageKeys.storageVersion, toVersion);
+            console.log('Data migration completed successfully');
+            
+        } catch (error) {
+            console.error('Data migration failed:', error);
+            // 恢复备份数据
+            this.restoreBackup('migration_backup');
+        }
+    }
+
+    /**
+     * 迁移到版本1.0.0
+     */
+    migrateToV1() {
+        // 标准化练习记录格式
+        const records = storage.get(this.storageKeys.practiceRecords, []);
+        const standardizedRecords = records.map(record => this.standardizeRecord(record));
+        storage.set(this.storageKeys.practiceRecords, standardizedRecords);
+        
+        // 重新计算用户统计
+        this.recalculateUserStats();
+    }
+
+    /**
+     * 初始化数据结构
+     */
+    initializeDataStructures() {
+        // 确保基础数据结构存在
+        if (!storage.get(this.storageKeys.practiceRecords)) {
+            storage.set(this.storageKeys.practiceRecords, []);
+        }
+        
+        if (!storage.get(this.storageKeys.userStats)) {
+            storage.set(this.storageKeys.userStats, this.getDefaultUserStats());
+        }
+    }
+
+    /**
+     * 获取默认用户统计
+     */
+    getDefaultUserStats() {
+        return {
+            totalPractices: 0,
+            totalTimeSpent: 0,
+            averageScore: 0,
+            categoryStats: {},
+            questionTypeStats: {},
+            streakDays: 0,
+            lastPracticeDate: null,
+            achievements: [],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+    }
+
+    /**
+     * 保存练习记录
+     */
+    savePracticeRecord(recordData) {
+        try {
+            // 标准化记录格式
+            const standardizedRecord = this.standardizeRecord(recordData);
+            
+            // 验证记录数据
+            this.validateRecord(standardizedRecord);
+            
+            // 获取现有记录
+            const records = storage.get(this.storageKeys.practiceRecords, []);
+            
+            // 添加新记录
+            records.push(standardizedRecord);
+            
+            // 维护记录数量限制
+            if (records.length > this.maxRecords) {
+                records.splice(0, records.length - this.maxRecords);
+            }
+            
+            // 保存记录
+            storage.set(this.storageKeys.practiceRecords, records);
+            
+            // 更新用户统计
+            this.updateUserStats(standardizedRecord);
+            
+            console.log('Practice record saved:', standardizedRecord.id);
+            return standardizedRecord;
+            
+        } catch (error) {
+            console.error('Failed to save practice record:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * 标准化记录格式
+     */
+    standardizeRecord(recordData) {
+        const now = new Date().toISOString();
+        
+        return {
+            // 基础信息
+            id: recordData.id || this.generateRecordId(),
+            examId: recordData.examId,
+            sessionId: recordData.sessionId,
+            
+            // 时间信息
+            startTime: recordData.startTime,
+            endTime: recordData.endTime,
+            duration: recordData.duration || 0,
+            
+            // 成绩信息
+            status: recordData.status || 'completed',
+            score: recordData.score || 0,
+            totalQuestions: recordData.totalQuestions || 0,
+            correctAnswers: recordData.correctAnswers || 0,
+            accuracy: recordData.accuracy || 0,
+            
+            // 答题详情
+            answers: this.standardizeAnswers(recordData.answers || []),
+            questionTypePerformance: recordData.questionTypePerformance || {},
+            
+            // 元数据
+            metadata: {
+                examTitle: '',
+                category: '',
+                frequency: '',
+                ...recordData.metadata
+            },
+            
+            // 系统信息
+            version: this.currentVersion,
+            createdAt: recordData.createdAt || now,
+            updatedAt: now
+        };
+    }
+
+    /**
+     * 标准化答案格式
+     */
+    standardizeAnswers(answers) {
+        return answers.map((answer, index) => ({
+            questionId: answer.questionId || `q${index + 1}`,
+            answer: answer.answer || '',
+            correct: Boolean(answer.correct),
+            timeSpent: answer.timeSpent || 0,
+            questionType: answer.questionType || 'unknown',
+            timestamp: answer.timestamp || new Date().toISOString()
+        }));
+    }
+
+    /**
+     * 验证记录数据
+     */
+    validateRecord(record) {
+        const requiredFields = ['id', 'examId', 'startTime', 'endTime'];
+        
+        for (const field of requiredFields) {
+            if (!record[field]) {
+                throw new Error(`Missing required field: ${field}`);
+            }
+        }
+        
+        // 验证时间格式
+        if (new Date(record.startTime).toString() === 'Invalid Date') {
+            throw new Error('Invalid startTime format');
+        }
+        
+        if (new Date(record.endTime).toString() === 'Invalid Date') {
+            throw new Error('Invalid endTime format');
+        }
+        
+        // 验证数值范围
+        if (record.accuracy < 0 || record.accuracy > 1) {
+            throw new Error('Accuracy must be between 0 and 1');
+        }
+        
+        if (record.duration < 0) {
+            throw new Error('Duration cannot be negative');
+        }
+    }
+
+    /**
+     * 更新用户统计
+     */
+    updateUserStats(practiceRecord) {
+        const stats = storage.get(this.storageKeys.userStats, this.getDefaultUserStats());
+        
+        // 更新基础统计
+        stats.totalPractices += 1;
+        stats.totalTimeSpent += practiceRecord.duration;
+        
+        // 计算平均分数
+        const totalScore = (stats.averageScore * (stats.totalPractices - 1)) + practiceRecord.accuracy;
+        stats.averageScore = totalScore / stats.totalPractices;
+        
+        // 更新分类统计
+        this.updateCategoryStats(stats, practiceRecord);
+        
+        // 更新题型统计
+        this.updateQuestionTypeStats(stats, practiceRecord);
+        
+        // 更新连续学习天数
+        this.updateStreakDays(stats, practiceRecord);
+        
+        // 检查成就
+        this.checkAchievements(stats, practiceRecord);
+        
+        // 更新时间戳
+        stats.updatedAt = new Date().toISOString();
+        
+        // 保存统计数据
+        storage.set(this.storageKeys.userStats, stats);
+        
+        console.log('User stats updated');
+    }
+
+    /**
+     * 更新分类统计
+     */
+    updateCategoryStats(stats, practiceRecord) {
+        const category = practiceRecord.metadata.category;
+        if (!category) return;
+        
+        if (!stats.categoryStats[category]) {
+            stats.categoryStats[category] = {
+                practices: 0,
+                avgScore: 0,
+                timeSpent: 0,
+                bestScore: 0,
+                totalQuestions: 0,
+                correctAnswers: 0
+            };
+        }
+        
+        const catStats = stats.categoryStats[category];
+        catStats.practices += 1;
+        catStats.timeSpent += practiceRecord.duration;
+        catStats.totalQuestions += practiceRecord.totalQuestions;
+        catStats.correctAnswers += practiceRecord.correctAnswers;
+        catStats.bestScore = Math.max(catStats.bestScore, practiceRecord.accuracy);
+        
+        // 重新计算平均分数
+        const catTotalScore = (catStats.avgScore * (catStats.practices - 1)) + practiceRecord.accuracy;
+        catStats.avgScore = catTotalScore / catStats.practices;
+    }
+
+    /**
+     * 更新题型统计
+     */
+    updateQuestionTypeStats(stats, practiceRecord) {
+        if (!practiceRecord.questionTypePerformance) return;
+        
+        Object.entries(practiceRecord.questionTypePerformance).forEach(([type, performance]) => {
+            if (!stats.questionTypeStats[type]) {
+                stats.questionTypeStats[type] = {
+                    practices: 0,
+                    accuracy: 0,
+                    totalQuestions: 0,
+                    correctAnswers: 0,
+                    avgTimePerQuestion: 0
+                };
+            }
+            
+            const typeStats = stats.questionTypeStats[type];
+            typeStats.practices += 1;
+            typeStats.totalQuestions += performance.total || 0;
+            typeStats.correctAnswers += performance.correct || 0;
+            
+            // 重新计算准确率
+            typeStats.accuracy = typeStats.totalQuestions > 0 
+                ? typeStats.correctAnswers / typeStats.totalQuestions 
+                : 0;
+            
+            // 计算平均每题用时
+            if (performance.timeSpent && performance.total) {
+                const newAvgTime = performance.timeSpent / performance.total;
+                typeStats.avgTimePerQuestion = (typeStats.avgTimePerQuestion * (typeStats.practices - 1) + newAvgTime) / typeStats.practices;
+            }
+        });
+    }
+
+    /**
+     * 更新连续学习天数
+     */
+    updateStreakDays(stats, practiceRecord) {
+        const today = new Date(practiceRecord.startTime).toDateString();
+        const lastDate = stats.lastPracticeDate ? new Date(stats.lastPracticeDate).toDateString() : null;
+        
+        if (lastDate !== today) {
+            if (lastDate) {
+                const daysDiff = (new Date(today) - new Date(lastDate)) / (1000 * 60 * 60 * 24);
+                if (daysDiff === 1) {
+                    stats.streakDays += 1;
+                } else if (daysDiff > 1) {
+                    stats.streakDays = 1;
+                }
+            } else {
+                stats.streakDays = 1;
+            }
+            stats.lastPracticeDate = today;
+        }
+    }
+
+    /**
+     * 检查成就
+     */
+    checkAchievements(stats, practiceRecord) {
+        const achievements = stats.achievements || [];
+        
+        // 首次练习成就
+        if (stats.totalPractices === 1 && !achievements.includes('first-practice')) {
+            achievements.push('first-practice');
+        }
+        
+        // 连续学习成就
+        if (stats.streakDays >= 7 && !achievements.includes('week-streak')) {
+            achievements.push('week-streak');
+        }
+        
+        if (stats.streakDays >= 30 && !achievements.includes('month-streak')) {
+            achievements.push('month-streak');
+        }
+        
+        // 高分成就
+        if (practiceRecord.accuracy >= 0.9 && !achievements.includes('high-scorer')) {
+            achievements.push('high-scorer');
+        }
+        
+        // 分类掌握成就
+        const category = practiceRecord.metadata.category;
+        if (category && stats.categoryStats[category]) {
+            const catStats = stats.categoryStats[category];
+            if (catStats.practices >= 10 && catStats.avgScore >= 0.8) {
+                const achievementKey = `${category.toLowerCase()}-master`;
+                if (!achievements.includes(achievementKey)) {
+                    achievements.push(achievementKey);
+                }
+            }
+        }
+        
+        stats.achievements = achievements;
+    }
+
+    /**
+     * 获取练习记录
+     */
+    getPracticeRecords(filters = {}) {
+        const records = storage.get(this.storageKeys.practiceRecords, []);
+        
+        if (Object.keys(filters).length === 0) {
+            return records.sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+        }
+        
+        return records.filter(record => {
+            // 按考试ID筛选
+            if (filters.examId && record.examId !== filters.examId) return false;
+            
+            // 按分类筛选
+            if (filters.category && record.metadata.category !== filters.category) return false;
+            
+            // 按时间范围筛选
+            if (filters.startDate && new Date(record.startTime) < new Date(filters.startDate)) return false;
+            if (filters.endDate && new Date(record.startTime) > new Date(filters.endDate)) return false;
+            
+            // 按准确率筛选
+            if (filters.minAccuracy && record.accuracy < filters.minAccuracy) return false;
+            if (filters.maxAccuracy && record.accuracy > filters.maxAccuracy) return false;
+            
+            // 按状态筛选
+            if (filters.status && record.status !== filters.status) return false;
+            
+            return true;
+        }).sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+    }
+
+    /**
+     * 获取用户统计
+     */
+    getUserStats() {
+        return storage.get(this.storageKeys.userStats, this.getDefaultUserStats());
+    }
+
+    /**
+     * 重新计算用户统计
+     */
+    recalculateUserStats() {
+        console.log('Recalculating user stats...');
+        
+        const records = storage.get(this.storageKeys.practiceRecords, []);
+        const stats = this.getDefaultUserStats();
+        
+        // 重新计算所有统计数据
+        records.forEach(record => {
+            this.updateUserStats(record);
+        });
+        
+        console.log('User stats recalculated');
+    }
+
+    /**
+     * 创建数据备份
+     */
+    createBackup(backupName = null) {
+        const timestamp = new Date().toISOString();
+        const backupId = backupName || `backup_${timestamp.replace(/[:.]/g, '-')}`;
+        
+        const backupData = {
+            id: backupId,
+            timestamp,
+            version: this.currentVersion,
+            data: {
+                practiceRecords: storage.get(this.storageKeys.practiceRecords, []),
+                userStats: storage.get(this.storageKeys.userStats, {}),
+                storageVersion: storage.get(this.storageKeys.storageVersion)
+            }
+        };
+        
+        // 获取现有备份
+        const backups = storage.get(this.storageKeys.backupData, []);
+        
+        // 添加新备份
+        backups.push(backupData);
+        
+        // 保持最近10个备份
+        if (backups.length > 10) {
+            backups.splice(0, backups.length - 10);
+        }
+        
+        // 保存备份
+        storage.set(this.storageKeys.backupData, backups);
+        
+        console.log('Backup created:', backupId);
+        return backupId;
+    }
+
+    /**
+     * 恢复数据备份
+     */
+    restoreBackup(backupId) {
+        const backups = storage.get(this.storageKeys.backupData, []);
+        const backup = backups.find(b => b.id === backupId);
+        
+        if (!backup) {
+            throw new Error(`Backup not found: ${backupId}`);
+        }
+        
+        try {
+            // 恢复数据
+            storage.set(this.storageKeys.practiceRecords, backup.data.practiceRecords);
+            storage.set(this.storageKeys.userStats, backup.data.userStats);
+            storage.set(this.storageKeys.storageVersion, backup.data.storageVersion);
+            
+            console.log('Backup restored:', backupId);
+            return true;
+            
+        } catch (error) {
+            console.error('Failed to restore backup:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * 获取备份列表
+     */
+    getBackups() {
+        return storage.get(this.storageKeys.backupData, [])
+            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    }
+
+    /**
+     * 导出数据
+     */
+    exportData(format = 'json') {
+        const exportData = {
+            exportDate: new Date().toISOString(),
+            version: this.currentVersion,
+            practiceRecords: storage.get(this.storageKeys.practiceRecords, []),
+            userStats: storage.get(this.storageKeys.userStats, {}),
+            backups: storage.get(this.storageKeys.backupData, [])
+        };
+        
+        switch (format.toLowerCase()) {
+            case 'json':
+                return JSON.stringify(exportData, null, 2);
+            case 'csv':
+                return this.convertToCSV(exportData.practiceRecords);
+            default:
+                throw new Error(`Unsupported export format: ${format}`);
+        }
+    }
+
+    /**
+     * 转换为CSV格式
+     */
+    convertToCSV(records) {
+        if (records.length === 0) return '';
+        
+        const headers = [
+            'ID', '考试ID', '开始时间', '结束时间', '用时(秒)', 
+            '状态', '分数', '总题数', '正确数', '准确率', 
+            '分类', '频率', '题目标题'
+        ];
+        
+        const rows = records.map(record => [
+            record.id,
+            record.examId,
+            record.startTime,
+            record.endTime,
+            record.duration,
+            record.status,
+            record.score,
+            record.totalQuestions,
+            record.correctAnswers,
+            Math.round(record.accuracy * 100) + '%',
+            record.metadata.category || '',
+            record.metadata.frequency || '',
+            record.metadata.examTitle || ''
+        ]);
+        
+        return [headers, ...rows]
+            .map(row => row.map(cell => `"${cell}"`).join(','))
+            .join('\n');
+    }
+
+    /**
+     * 导入数据
+     */
+    importData(importData, options = {}) {
+        try {
+            const data = typeof importData === 'string' ? JSON.parse(importData) : importData;
+            
+            // 验证数据格式
+            if (!data.practiceRecords || !Array.isArray(data.practiceRecords)) {
+                throw new Error('Invalid import data format');
+            }
+            
+            // 创建备份
+            const backupId = this.createBackup('pre_import_backup');
+            
+            if (options.merge) {
+                // 合并模式：添加新记录
+                const existingRecords = storage.get(this.storageKeys.practiceRecords, []);
+                const existingIds = new Set(existingRecords.map(r => r.id));
+                
+                const newRecords = data.practiceRecords.filter(r => !existingIds.has(r.id));
+                const mergedRecords = [...existingRecords, ...newRecords];
+                
+                storage.set(this.storageKeys.practiceRecords, mergedRecords);
+                
+                // 重新计算统计
+                this.recalculateUserStats();
+                
+                console.log(`Imported ${newRecords.length} new records`);
+                
+            } else {
+                // 替换模式：完全替换数据
+                storage.set(this.storageKeys.practiceRecords, data.practiceRecords);
+                
+                if (data.userStats) {
+                    storage.set(this.storageKeys.userStats, data.userStats);
+                } else {
+                    this.recalculateUserStats();
+                }
+                
+                console.log(`Imported ${data.practiceRecords.length} records (replace mode)`);
+            }
+            
+            return true;
+            
+        } catch (error) {
+            console.error('Failed to import data:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * 设置自动备份
+     */
+    setupAutoBackup() {
+        // 检查上次备份时间
+        const lastBackup = this.getLastBackupTime();
+        const now = Date.now();
+        
+        if (!lastBackup || (now - lastBackup) > this.backupInterval) {
+            this.createBackup();
+        }
+        
+        // 设置定期备份
+        setInterval(() => {
+            this.createBackup();
+        }, this.backupInterval);
+    }
+
+    /**
+     * 获取最后备份时间
+     */
+    getLastBackupTime() {
+        const backups = storage.get(this.storageKeys.backupData, []);
+        if (backups.length === 0) return null;
+        
+        const lastBackup = backups[backups.length - 1];
+        return new Date(lastBackup.timestamp).getTime();
+    }
+
+    /**
+     * 清理过期数据
+     */
+    cleanupExpiredData() {
+        // 清理超过1年的练习记录
+        const oneYearAgo = new Date();
+        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+        
+        const records = storage.get(this.storageKeys.practiceRecords, []);
+        const validRecords = records.filter(record => 
+            new Date(record.startTime) > oneYearAgo
+        );
+        
+        if (validRecords.length !== records.length) {
+            storage.set(this.storageKeys.practiceRecords, validRecords);
+            console.log(`Cleaned up ${records.length - validRecords.length} expired records`);
+        }
+        
+        // 清理过期备份
+        const backups = storage.get(this.storageKeys.backupData, []);
+        const validBackups = backups.filter(backup => 
+            new Date(backup.timestamp) > oneYearAgo
+        );
+        
+        if (validBackups.length !== backups.length) {
+            storage.set(this.storageKeys.backupData, validBackups);
+            console.log(`Cleaned up ${backups.length - validBackups.length} expired backups`);
+        }
+    }
+
+    /**
+     * 生成记录ID
+     */
+    generateRecordId() {
+        return `record_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
+
+    /**
+     * 获取存储统计信息
+     */
+    getStorageStats() {
+        const records = storage.get(this.storageKeys.practiceRecords, []);
+        const backups = storage.get(this.storageKeys.backupData, []);
+        
+        return {
+            totalRecords: records.length,
+            totalBackups: backups.length,
+            oldestRecord: records.length > 0 ? records[0].startTime : null,
+            newestRecord: records.length > 0 ? records[records.length - 1].startTime : null,
+            storageVersion: storage.get(this.storageKeys.storageVersion),
+            estimatedSize: this.estimateStorageSize()
+        };
+    }
+
+    /**
+     * 估算存储大小
+     */
+    estimateStorageSize() {
+        const data = {
+            practiceRecords: storage.get(this.storageKeys.practiceRecords, []),
+            userStats: storage.get(this.storageKeys.userStats, {}),
+            backupData: storage.get(this.storageKeys.backupData, [])
+        };
+        
+        const jsonString = JSON.stringify(data);
+        return jsonString.length; // 字节数的近似值
+    }
+
+    /**
+     * 销毁存储系统
+     */
+    destroy() {
+        // 创建最终备份
+        this.createBackup('final_backup');
+        console.log('ScoreStorage destroyed');
+    }
+}
+
+// 确保全局可用
+window.ScoreStorage = ScoreStorage;

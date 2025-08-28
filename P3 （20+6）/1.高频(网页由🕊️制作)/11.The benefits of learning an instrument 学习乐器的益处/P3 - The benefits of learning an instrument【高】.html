@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>P3 - The benefits of learning an instrument</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
+  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  .shell { display:flex; height:100vh; width:100%; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  h2,h3,h4 { margin:0 0 10px; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  table { border-collapse: collapse; width:100%; }
+  th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
+  th:first-child, td:first-child { width:92px; }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button:hover { border-color:#fff; }
+  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+  .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:40px; padding:4px 8px; display:inline-flex; align-items:center; justify-content:space-between; gap:8px; width: auto; min-width: 120px; max-width: 200px; vertical-align: middle; }
+  .droplabel { color:#64748b; font-size:14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:flex; flex-wrap:wrap; gap:8px; }
+  .pool-slot { min-height:40px; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); white-space: nowrap; }
+  .card:active { cursor:grabbing; }
+  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
+  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
+  .ghost { opacity: .5; }
+  .over { outline:2px dashed #3b82f6; }
+  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
+  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
+  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+  body { padding-bottom: 82px; }
+  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
+  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
+  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #selbar { z-index: 6000 !important; }
+</style>
+</head>
+<body>
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q27-nav" onclick="scrollToElement('q27-anchor')">27</div>
+    <div class="q-item" id="q28-nav" onclick="scrollToElement('q28-anchor')">28</div>
+    <div class="q-item" id="q29-nav" onclick="scrollToElement('q29-anchor')">29</div>
+    <div class="q-item" id="q30-nav" onclick="scrollToElement('q30-anchor')">30</div>
+    <div class="q-item" id="q31-nav" onclick="scrollToElement('q31-anchor')">31</div>
+    <div class="q-item" id="q32-nav" onclick="scrollToElement('q32-anchor')">32</div>
+    <div class="q-item" id="q33-nav" onclick="scrollToElement('q33-anchor')">33</div>
+    <div class="q-item" id="q34-nav" onclick="scrollToElement('q34-anchor')">34</div>
+    <div class="q-item" id="q35-nav" onclick="scrollToElement('q35-anchor')">35</div>
+    <div class="q-item" id="q36-nav" onclick="scrollToElement('q36-anchor')">36</div>
+    <div class="q-item" id="q37-nav" onclick="scrollToElement('q37-anchor')">37</div>
+    <div class="q-item" id="q38-nav" onclick="scrollToElement('q38-anchor')">38</div>
+    <div class="q-item" id="q39-nav" onclick="scrollToElement('q39-anchor')">39</div>
+    <div class="q-item" id="q40-nav" onclick="scrollToElement('q40-anchor')">40</div>
+  </div>
+</div>
+<div class="shell">
+<section class="pane" id="left">
+  <h2>READING PASSAGE 3 <span id="timer">00:00</span></h2>
+  <p>You should spend about 20 minutes on Questions 27–40, which are based on Reading Passage 3 below.</p>
+  <h3>The benefits of learning an instrument</h3>
+  
+  <p>Studies show that learning a musical instrument can bring about significant improvements in your brain.</p>
+  
+  <p>Are music lessons the way to get smarter? That’s what a lot of parents and experts believe: studying an instrument gives children an advantage in the development of their intellectual, perceptual, and cognitive skills. This may, however, turn out to be wishful thinking. Two highly convincing trials carried out recently have found no evidence to support this idea; the IQs of pre-school children who attended several weeks of music classes as part of these studies did not differ significantly from the IQs of those who had not.</p>
+  
+  <p>But that does not mean that the advantages of learning to play music are limited to expressing yourself, impressing friends, or just having fun. A growing number of studies show that learning an instrument in childhood can do something perhaps more valuable for the brain: it can provide benefits as we age, in the form of an added defence against memory loss, cognitive decline, and impaired hearing. Not only that, you may well get those benefits even if you haven’t picked up your instrument in years, or decide to take up music for the first time in mid-life or beyond. According to neuropsychologist Brenda Hanna-Pladdy of Emory University in Atlanta, the time spent learning and practising specific types of motor control and coordination-each finger on each hand doing something different, and for wind and brass instruments, also using your mouth and breathing-contributes to the brain boost that shows up later in life.</p>
+  
+  <p>You can even map the impact of musical training on the brain itself. In one study, Harvard neurologist Gottfried Schlaug found that the brains of adult professional musicians had a larger volume of grey matter than the brains of non-musicians had. Schlaug and colleagues also found that after 15 months of musical training in early childhood, structural brain changes associated with motor and auditory improvements begin to appear. ‘What’s unique about playing an instrument is that it requires a wide array of brain regions and cognitive functions to work together simultaneously, in both the right and left hemispheres of the brain,’ says Alison Balbag of the University of Southern California. ‘Playing music may be an efficient way to stimulate the brain,’ she says, ‘cutting across a broad swath of its regions and cognitive functions, and with ripple effects through the decades.’</p>
+  
+  <p>More research is showing this might well be the case. In her first study on the subject, Hanna-Pladdy divided 70 healthy adults between the ages of 60 and 83 into three groups: musicians who had studied an instrument for at least ten years, those who had played between one and nine years, and a control group who had never learned an instrument. The group who had studied for at least ten years scored the highest when tested in such areas as non-verbal and visuo-spatial memory, naming objects, and taking in and adapting new information. Her follow-up study a year later confirmed those findings and further suggested that starting musical training before the age of nine and keeping at it for ten years or more may yield the greatest benefits. Interestingly, it was the group who had the lowest level of general education which showed the greatest gap in scores between those who had studied an instrument in childhood and those who had not. Hanna-Pladdy suspects that musical training could have made up for the lack of cognitive stimulation these people had.</p>
+  
+  <p>Neuroscientist Nina Kraus of Northwestern University in Chicago has found still more positive effects of early musical training. She measured the electrical activity in the auditory brainstem of adults, aged 55 to 70, as they responded to the synthesised speech syllable ‘da’. Although none of the subjects had played a musical instrument in 40 years, those who had trained the longest-between four and fourteen years-responded the fastest. ‘That’s significant,’ says Kraus, ‘because hearing tends to decline as we age, including the ability to quickly and accurately discern consonants, a skill crucial to understanding and participating in conversation. If your nervous system is not keeping up with the timing necessary for encoding consonants, you will lose out on the flow and meaning of the conversation, and that can potentially create a downward spiral leading to a sense of social isolation,’ says Kraus. In addition, the fact that musical training appears to enhance auditory working memory might help reinforce in later life the memory capacity that facilitates verbal interaction.</p>
+  
+  <p>In another study at the University of South Florida, assistant professor of music education Jennifer Bugos studied the impact of elementary piano instruction on adults between the ages of 60 and 85. After six months, those who had received piano lessons showed more robust gains in memory, verbal fluency, the speed at which they processed information, planning ability, and other cognitive functions compared with those who had not received the lessons. Bugos believes that playing an instrument has beneficial effects, regardless of how old the person is when he or she begins. ‘Musical training contains all the components of a cognitive training programme that sometimes are overlooked,’ she says. ‘And just as we work out our bodies, we should work out our minds.’</p>
+  
+  <p>&nbsp;</p> <!-- 增加空白行防止加载不完全 -->
+  <p>&nbsp;</p>
+</section>
+<div id="divider" title="Drag to resize"></div>
+<section class="pane" id="right">
+  <h3>Questions</h3>
+  
+  <div class="group">
+    <h4>Questions 27–30</h4>
+    <p>Do the following statements agree with the claims of the writer in Reading Passage 3?</p>
+    <p>In boxes 27–30 on your answer sheet, write</p>
+    <ul>
+      <li>YES if the statement agrees with the claims of the writer</li>
+      <li>NO if the statement contradicts the claims of the writer</li>
+      <li>NOT GIVEN if it is impossible to say what the writer thinks about this</li>
+    </ul>
+    
+    <a id="q27-anchor"></a>
+    <div id="q27-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>27 Many parents indicate that their children struggle to learn a musical instrument.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q27" type="radio" value="YES"> YES</label>
+        <label style="margin:0;"><input name="q27" type="radio" value="NO"> NO</label>
+        <label style="margin:0;"><input name="q27" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+    
+    <a id="q28-anchor"></a>
+    <div id="q28-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>28 The findings of the recent research into pre-school children’s IQs are unreliable.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q28" type="radio" value="YES"> YES</label>
+        <label style="margin:0;"><input name="q28" type="radio" value="NO"> NO</label>
+        <label style="margin:0;"><input name="q28" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+    
+    <a id="q29-anchor"></a>
+    <div id="q29-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>29 The main reasons people take up an instrument are that they enjoy playing music and being creative.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q29" type="radio" value="YES"> YES</label>
+        <label style="margin:0;"><input name="q29" type="radio" value="NO"> NO</label>
+        <label style="margin:0;"><input name="q29" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+    
+    <a id="q30-anchor"></a>
+    <div id="q30-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>30 Evidence about the long-term advantages of learning an instrument is increasing.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q30" type="radio" value="YES"> YES</label>
+        <label style="margin:0;"><input name="q30" type="radio" value="NO"> NO</label>
+        <label style="margin:0;"><input name="q30" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+  </div>
+  
+  <div class="group">
+    <h4>Questions 31–35</h4>
+    <p>Choose the correct letter, A, B, C or D.</p>
+    <p>Write the correct letter in boxes 31–35 on your answer sheet.</p>
+    
+    <a id="q31-anchor"></a>
+    <div id="q31-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>31 The studies mentioned in the first paragraph</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q31" type="radio" value="A"> A confirm a link between musical training and intelligence.</label>
+        <label style="margin:0;"><input name="q31" type="radio" value="B"> B present misleading information about the value of learning an instrument.</label>
+        <label style="margin:0;"><input name="q31" type="radio" value="C"> C suggest that there are undiscovered benefits to studying music.</label>
+        <label style="margin:0;"><input name="q31" type="radio" value="D"> D cast doubt on a belief about the effects of taking music lessons.</label>
+      </div>
+    </div>
+    
+    <a id="q32-anchor"></a>
+    <div id="q32-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>32 According to the second paragraph, there may be many benefits to studying music,</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q32" type="radio" value="A"> A even for those who begin learning in adulthood.</label>
+        <label style="margin:0;"><input name="q32" type="radio" value="B"> B providing the person learns the correct techniques.</label>
+        <label style="margin:0;"><input name="q32" type="radio" value="C"> C especially if the person practises on a regular basis.</label>
+        <label style="margin:0;"><input name="q32" type="radio" value="D"> D particularly if the person plays a range of different instruments.</label>
+      </div>
+    </div>
+    
+    <a id="q33-anchor"></a>
+    <div id="q33-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>33 The phrase ‘this might well be the case’ in the fourth paragraph suggests that</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q33" type="radio" value="A"> A music lessons and long-term physical well-being may be connected.</label>
+        <label style="margin:0;"><input name="q33" type="radio" value="B"> B the ability to learn music may depend on neurological features.</label>
+        <label style="margin:0;"><input name="q33" type="radio" value="C"> C learning an instrument may have a lasting impact on brain function.</label>
+        <label style="margin:0;"><input name="q33" type="radio" value="D"> D older people’s brains may be better suited to studying music than those of children.</label>
+      </div>
+    </div>
+    
+    <a id="q34-anchor"></a>
+    <div id="q34-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>34 Which aspect of playing an instrument was included in Hanna-Pladdy’s follow-up study but not in her first study?</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q34" type="radio" value="A"> A the number of years that the person had played</label>
+        <label style="margin:0;"><input name="q34" type="radio" value="B"> B at which age the person began having lessons</label>
+        <label style="margin:0;"><input name="q34" type="radio" value="C"> C the length of time since the person last played</label>
+        <label style="margin:0;"><input name="q34" type="radio" value="D"> D how the person had practised as a child</label>
+      </div>
+    </div>
+    
+    <a id="q35-anchor"></a>
+    <div id="q35-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>35 What do Hanna-Pladdy’s studies suggest about people’s general education?</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q35" type="radio" value="A"> A Studying music compensates for an otherwise limited level of education.</label>
+        <label style="margin:0;"><input name="q35" type="radio" value="B"> B Learning to play an instrument improves educational performance.</label>
+        <label style="margin:0;"><input name="q35" type="radio" value="C"> C Highly educated people are more likely to benefit from music training.</label>
+        <label style="margin:0;"><input name="q35" type="radio" value="D"> D Level of education makes no difference to a person’s musical ability.</label>
+      </div>
+    </div>
+  </div>
+  
+  <div class="group">
+    <h4>Questions 36–40</h4>
+    <p>Complete each sentence with the correct ending, A-F, below.</p>
+    <p>Write the correct letter, A-F, in boxes 36–40 on your answer sheet.</p>
+    
+    <div class="cardpool">
+      <div class="card" draggable="true" data-value="A">A comparing the brains of people who had never played an instrument with those who played for a living.</div>
+      <div class="card" draggable="true" data-value="B">B activating many different parts of the brain at the same time.</div>
+      <div class="card" draggable="true" data-value="C">C teaching a group of older people to play an instrument.</div>
+      <div class="card" draggable="true" data-value="D">D acquiring the particular set of physical skills needed to play an instrument.</div>
+      <div class="card" draggable="true" data-value="E">E discovering which group of people becomes the best musicians.</div>
+      <div class="card" draggable="true" data-value="F">F having played an instrument for a considerable length of time.</div>
+    </div>
+    
+    <a id="q36-anchor"></a>
+    <div id="q36-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>36 Brenda Hanna-Pladdy believes the cognitive benefits of music lessons are a result of</p>
+      <div class="dropzone" data-target="q36"><span class="droplabel">Drag answer here</span></div>
+    </div>
+    
+    <a id="q37-anchor"></a>
+    <div id="q37-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>37 The research undertaken by Gottfried Schlaug focused on</p>
+      <div class="dropzone" data-target="q37"><span class="droplabel">Drag answer here</span></div>
+    </div>
+    
+    <a id="q38-anchor"></a>
+    <div id="q38-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>38 According to Alison Balbag, playing an instrument is a unique experience because it involves</p>
+      <div class="dropzone" data-target="q38"><span class="droplabel">Drag answer here</span></div>
+    </div>
+    
+    <a id="q39-anchor"></a>
+    <div id="q39-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>39 Nina Kraus believes there is a link between better hearing in later life and the experience of</p>
+      <div class="dropzone" data-target="q39"><span class="droplabel">Drag answer here</span></div>
+    </div>
+    
+    <a id="q40-anchor"></a>
+    <div id="q40-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>40 Jennifer Bugos’s study involved</p>
+      <div class="dropzone" data-target="q40"><span class="droplabel">Drag answer here</span></div>
+    </div>
+  </div>
+  
+  <div style="display:flex;gap:8px;margin-bottom:10px;">
+    <button class="primary" onclick="grade()">Submit</button>
+    <button onclick="resetForm()">Reset</button>
+    <button onclick="toggleNotes()">Notes</button>
+  </div>
+  <div id="results"></div>
+  <details class="answerbox" id="answerBox">
+    <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+    <div id="answerContent"></div>
+  </details>
+</section>
+</div>
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+<script>
+// Timer
+let _t=0; const _timerEl=document.getElementById('timer');
+setInterval(function(){ 
+  _t++; 
+  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
+  var s=String(_t%60).padStart(2,'0'); 
+  _timerEl.textContent=m+':'+s; 
+},1000);
+// Drag divider
+var divider = document.getElementById('divider');
+var left = document.getElementById('left');
+var right = document.getElementById('right');
+var dragging=false;
+function startDrag(e){ 
+  dragging=true; 
+  document.body.style.cursor='ew-resize'; 
+  if(e.preventDefault) e.preventDefault(); 
+}
+function endDrag(){ 
+  dragging=false; 
+  document.body.style.cursor=''; 
+}
+function onMove(clientX){
+  var container = document.querySelector('.shell').getBoundingClientRect();
+  var x = clientX - container.left;
+  x = Math.max(280, Math.min(container.width-320, x));
+  left.style.flex = '0 0 ' + x + 'px';
+  right.style.flex = '1 1 auto';
+}
+divider.addEventListener('mousedown', function(e){ startDrag(e); });
+window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+window.addEventListener('mouseup', endDrag);
+divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
+window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+window.addEventListener('touchend', endDrag);
+// Highlight toolbar
+var selbar = document.getElementById('selbar');
+var btnHL = document.getElementById('btnHL');
+var btnUH = document.getElementById('btnUH');
+var btnNote = document.getElementById('btnNote');
+var lastRange=null;
+var currentHlNode=null;
+var keepToolbar=false;
+function positionSelbarForRect(rect){
+  selbar.style.display='flex';
+  requestAnimationFrame(function(){
+    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+function updateSelbar(){
+  var sel=window.getSelection();
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
+    selbar.style.display='none'; 
+    currentHlNode=null; 
+    return; 
+  }
+  var range = sel.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode=null;
+  positionSelbarForRect(range.getBoundingClientRect());
+}
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', function(){ 
+  var sel=window.getSelection(); 
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
+    if(!keepToolbar && !currentHlNode){ 
+      selbar.style.display='none'; 
+    } 
+  } 
+});
+document.addEventListener('scroll', function(){ 
+  if(selbar.style.display==='flex') updateSelbar(); 
+});
+document.addEventListener('mousedown', function(e){
+  var t = e.target;
+  if(t.classList && t.classList.contains('hl')){
+    keepToolbar = true;
+  } else {
+    keepToolbar = false;
+  }
+}, true);
+document.addEventListener('click', function(e){
+  var target = e.target;
+  if(target.classList && target.classList.contains('hl')){
+    currentHlNode = target;
+    lastRange = null;
+    positionSelbarForRect(target.getBoundingClientRect());
+    var sel=window.getSelection();
+    if(sel) sel.removeAllRanges();
+    setTimeout(function(){ keepToolbar=false; }, 0);
+  }
+}, true);
+function doHighlight(){
+  if(currentHlNode) return;
+  if(!lastRange || lastRange.collapsed) return;
+  const startNode = lastRange.startContainer;
+  const endNode = lastRange.endContainer;
+  
+  if (startNode === endNode) {
+    try {
+      const span = document.createElement('span');
+      span.className = 'hl';
+      lastRange.surroundContents(span);
+      selbar.style.display = 'none';
+      showToast('Highlighted');
+      return;
+    } catch (e) {
+      // 处理边界情况
+    }
+  }
+  
+  const fragment = lastRange.cloneContents();
+  const div = document.createElement('div');
+  div.appendChild(fragment);
+  
+  function processNode(node, parentHighlight) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      if (node.textContent.trim().length > 0) {
+        const span = document.createElement('span');
+        span.className = 'hl';
+        span.textContent = node.textContent;
+        return span;
+      }
+      return node;
+    }
+    
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const isBlock = window.getComputedStyle(node).display.includes('block') || 
+                     ['P', 'H1', 'H2', 'H3', 'H4', 'DIV'].includes(node.tagName);
+      
+      const wrapper = isBlock ? document.createElement(node.tagName.toLowerCase()) : document.createElement('span');
+      wrapper.className = isBlock ? node.className + ' hl' : 'hl';
+      
+      Array.from(node.attributes).forEach(attr => {
+        wrapper.setAttribute(attr.name, attr.value);
+      });
+      
+      while (node.firstChild) {
+        const processedChild = processNode(node.firstChild, wrapper);
+        wrapper.appendChild(processedChild);
+      }
+      
+      return wrapper;
+    }
+    
+    return node;
+  }
+  
+  const highlightedContent = processNode(div, null);
+  
+  lastRange.deleteContents();
+  lastRange.insertNode(highlightedContent);
+  
+  selbar.style.display = 'none';
+  showToast('Highlighted');
+}
+function removeHighlight(){
+  if(currentHlNode){
+    const parent = currentHlNode.parentNode;
+    while(currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize();
+    currentHlNode = null;
+    selbar.style.display='none';
+    showToast('Highlight removed');
+    return;
+  }
+  
+  if(!lastRange) return;
+  
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  
+  while(walker.nextNode()){
+    const node = walker.currentNode;
+    if(node.classList && node.classList.contains('hl')) {
+      const rect = node.getBoundingClientRect();
+      if(!(rect.right < selRect.left || rect.left > selRect.right || 
+          rect.bottom < selRect.top || rect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
+    }
+  }
+  
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while(el.firstChild) {
+      parent.insertBefore(el.firstChild, el);
+    }
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  
+  selbar.style.display='none';
+  showToast('Highlight removed');
+}
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+// Notes
+var notes = document.getElementById('notes');
+var noteArea = document.getElementById('noteArea');
+var btnCopy=document.getElementById('btnCopy');
+var btnClose=document.getElementById('btnClose');
+function toggleNotes(){ 
+  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+}
+window.toggleNotes = toggleNotes;
+btnClose.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async function(){ 
+  await navigator.clipboard.writeText(noteArea.value||''); 
+  showToast('Copied'); 
+});
+btnNote.addEventListener('click', function(){
+  var text = '';
+  if(currentHlNode){ 
+    text = (currentHlNode.textContent||'').trim(); 
+  } else if(lastRange){ 
+    var frag = lastRange.cloneContents(); 
+    text = (frag.textContent||'').trim(); 
+  }
+  toggleNotes();
+  if(text) {
+    noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
+  }
+  selbar.style.display='none';
+});
+// Toast
+var toastEl=document.getElementById('toast');
+function showToast(msg){
+  toastEl.textContent=msg; 
+  toastEl.style.display='block';
+  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+}
+// Drag and drop for questions 36-40
+const cards = document.querySelectorAll('.card');
+const dropzones = document.querySelectorAll('.dropzone');
+cards.forEach(card => {
+  card.addEventListener('dragstart', () => {
+    card.classList.add('dragging');
+  });
+  card.addEventListener('dragend', () => {
+    card.classList.remove('dragging');
+  });
+});
+dropzones.forEach(zone => {
+  zone.addEventListener('dragover', e => {
+    e.preventDefault();
+    zone.classList.add('over');
+  });
+  
+  zone.addEventListener('dragleave', () => {
+    zone.classList.remove('over');
+  });
+  
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('over');
+    const draggingCard = document.querySelector('.dragging');
+    if (draggingCard) {
+      zone.innerHTML = '';
+      zone.appendChild(draggingCard);
+      const targetQ = zone.dataset.target;
+      document.getElementById(targetQ + '-nav').classList.add('answered');
+    }
+  });
+});
+// Answer key and grading
+var answers = {
+  "q27":"NOT GIVEN", "q28":"NO", "q29":"NOT GIVEN", "q30":"YES",
+  "q31":"D", "q32":"A", "q33":"C", "q34":"B", "q35":"A",
+  "q36":"D", "q37":"A", "q38":"B", "q39":"F", "q40":"C"
+};
+function grade(){
+  var total=0, correct=0, lines=[];
+  
+  // Check radio questions (27-35)
+  for(let n=27; n<=35; n++){
+    const q = `q${n}`;
+    total++;
+    const selected = document.querySelector(`input[name="${q}"]:checked`);
+    const userAnswer = selected ? selected.value : '';
+    const isCorrect = userAnswer === answers[q];
+    if (isCorrect) correct++;
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✓' : '✗'}`);
+  }
+  
+  // Check drag-and-drop questions (36-40)
+  dropzones.forEach(zone => {
+    const q = zone.dataset.target;
+    total++;
+    const selectedCard = zone.querySelector('.card');
+    const userAnswer = selectedCard ? selectedCard.dataset.value : '';
+    const isCorrect = userAnswer === answers[q];
+    if (isCorrect) correct++;
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✓' : '✗'}`);
+  });
+  
+  // Show results
+  const acc = Math.round(100 * correct / total);
+  document.getElementById('results').innerHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p>
+    <pre>${lines.join('\n')}</pre>
+  `;
+  
+  // Show answer key
+  document.getElementById('answerContent').innerHTML = `
+    <ol>
+      <li>27 → NOT GIVEN</li>
+      <li>28 → NO</li>
+      <li>29 → NOT GIVEN</li>
+      <li>30 → YES</li>
+      <li>31 → D</li>
+      <li>32 → A</li>
+      <li>33 → C</li>
+      <li>34 → B</li>
+      <li>35 → A</li>
+      <li>36 → D</li>
+      <li>37 → A</li>
+      <li>38 → B</li>
+      <li>39 → F</li>
+      <li>40 → C</li>
+    </ol>
+  `;
+  document.querySelector('#answerBox .badge').textContent = 'tap to view';
+}
+function resetForm(){
+  // Reset drag-and-drop
+  dropzones.forEach(zone => {
+    const card = zone.querySelector('.card');
+    if (card) {
+      document.querySelector('.cardpool').appendChild(card);
+      zone.innerHTML = '<span class="droplabel">Drag answer here</span>';
+    }
+  });
+  
+  // Reset radio buttons
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // Reset results and answers
+  document.getElementById('results').innerHTML = '';
+  document.getElementById('answerContent').innerHTML = '';
+  document.querySelector('#answerBox .badge').textContent = 'hidden';
+  
+  // Reset answered status in nav
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+}
+function scrollToElement(id){
+  const el = document.getElementById(id);
+  if(el){ 
+    el.scrollIntoView({behavior:'smooth', block:'center'}); 
+  }
+  const navs = document.querySelectorAll('.practice-nav .q-item');
+  navs.forEach(n => n.classList.remove('active'));
+  const btn = document.getElementById(id.replace('-anchor','-nav'));
+  if(btn){ 
+    btn.classList.add('active'); 
+    setTimeout(() => btn.classList.remove('active'), 800); 
+  }
+}
+(function(){
+  function markAnswered(qn){
+    const nav = document.getElementById(`q${qn}-nav`);
+    if(!nav) return;
+    let answered = false;
+    
+    // Check dropzones (36-40)
+    if(qn >=36 && qn <=40){
+      const zone = document.querySelector(`.dropzone[data-target="q${qn}"]`);
+      answered = zone.querySelector('.card') !== null;
+    } 
+    // Check radio buttons (27-35)
+    else {
+      const radios = document.querySelectorAll(`input[name="q${qn}"]:checked`);
+      answered = radios.length > 0;
+    }
+    
+    if(answered) nav.classList.add('answered');
+    else nav.classList.remove('answered');
+  }
+  
+  // Monitor dropzones
+  dropzones.forEach(zone => {
+    zone.addEventListener('drop', () => {
+      const qn = zone.dataset.target.replace('q', '');
+      markAnswered(qn);
+    });
+  });
+  
+  // Monitor radio buttons
+  for(let n=27; n<=35; n++){
+    document.querySelectorAll(`input[name="q${n}"]`).forEach(radio => {
+      radio.addEventListener('change', () => markAnswered(n));
+    });
+  }
+})();
+</script>
+
+<!-- 练习页面数据传输增强脚本 -->
+<script>
+// 检查是否已经有增强脚本
+if (!window.practicePageEnhancer) {
+    // 动态加载增强脚本
+    const script = document.createElement('script');
+    script.src = '../../js/practice-page-enhancer.js';
+    script.onload = function() {
+        console.log('练习页面增强脚本已加载');
+    };
+    script.onerror = function() {
+        console.error('练习页面增强脚本加载失败');
+        // 降级到内联增强
+        loadInlineEnhancer();
+    };
+    document.head.appendChild(script);
+}
+
+// 内联增强器（降级方案）
+function loadInlineEnhancer() {
+    if (window.practicePageEnhancer) return;
+    
+    window.practicePageEnhancer = {
+        initialize: function() {
+            console.log('[InlineEnhancer] 内联增强器已初始化');
+            this.setupCommunication();
+            this.setupAnswerListeners();
+            this.interceptSubmit();
+        },
+        
+        setupCommunication: function() {
+            this.parentWindow = window.opener || window.parent;
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'INIT_SESSION') {
+                    this.sessionId = event.data.data.sessionId;
+                    this.sendMessage('SESSION_READY', {
+                        pageType: this.detectPageType(),
+                        url: window.location.href
+                    });
+                }
+            });
+        },
+        
+        detectPageType: function() {
+            const title = document.title || '';
+            if (title.includes('P1')) return 'P1';
+            if (title.includes('P2')) return 'P2';
+            if (title.includes('P3')) return 'P3';
+            return 'unknown';
+        },
+        
+        setupAnswerListeners: function() {
+            this.answers = {};
+            this.startTime = Date.now();
+            
+            document.addEventListener('change', (e) => {
+                if (e.target.name && e.target.name.startsWith('q')) {
+                    this.answers[e.target.name] = e.target.value;
+                }
+            });
+        },
+        
+        interceptSubmit: function() {
+            // 拦截grade函数
+            if (typeof window.grade === 'function') {
+                const originalGrade = window.grade;
+                window.grade = () => {
+                    const result = originalGrade();
+                    setTimeout(() => this.handleSubmit(), 200);
+                    return result;
+                };
+            }
+            
+            // 监听提交按钮
+            document.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON' && 
+                    (e.target.textContent.includes('Submit') || 
+                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+                    setTimeout(() => this.handleSubmit(), 300);
+                }
+            });
+        },
+        
+        handleSubmit: function() {
+            const results = {
+                sessionId: this.sessionId,
+                startTime: this.startTime,
+                endTime: Date.now(),
+                duration: Math.round((Date.now() - this.startTime) / 1000),
+                answers: this.answers,
+                scoreInfo: this.extractScore(),
+                pageType: this.detectPageType(),
+                url: window.location.href
+            };
+            
+            this.sendMessage('PRACTICE_COMPLETE', results);
+        },
+        
+        extractScore: function() {
+            const resultsEl = document.getElementById('results');
+            if (!resultsEl) return null;
+            
+            const text = resultsEl.textContent || '';
+            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+            if (scoreMatch) {
+                const correct = parseInt(scoreMatch[1]);
+                const total = parseInt(scoreMatch[2]);
+                return {
+                    correct: correct,
+                    total: total,
+                    accuracy: total > 0 ? correct / total : 0,
+                    percentage: Math.round((correct / total) * 100),
+                    source: 'inline_extraction'
+                };
+            }
+            return null;
+        },
+        
+        sendMessage: function(type, data) {
+            if (this.parentWindow) {
+                this.parentWindow.postMessage({
+                    type: type,
+                    data: data,
+                    source: 'practice_page'
+                }, '*');
+            }
+        }
+    };
+    
+    // 初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            window.practicePageEnhancer.initialize();
+        });
+    } else {
+        window.practicePageEnhancer.initialize();
+    }
+}
+</script>
+
+</body>
+</html>

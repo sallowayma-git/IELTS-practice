@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>P3 – Flower Power</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
+  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  .shell { display:flex; height:100vh; width:100%; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  h2,h3,h4 { margin:0 0 10px; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  table { border-collapse: collapse; width:100%; }
+  th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
+  th:first-child, td:first-child { width:92px; }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button:hover { border-color:#fff; }
+  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+  .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:54px; padding:8px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .droplabel { color:#64748b; }
+  .cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:grid; gap:8px; }
+  .pool-slot { min-height:40px; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); }
+  .card:active { cursor:grabbing; }
+  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
+  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
+  .ghost { opacity: .5; }
+  .over { outline:2px dashed #3b82f6; }
+  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
+  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
+  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+  body { padding-bottom: 82px; }
+  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
+  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
+  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #selbar { z-index: 6000 !important; }
+</style>
+</head>
+<body>
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q27-nav" onclick="scrollToElement('q27-anchor')">27</div>
+    <div class="q-item" id="q28-nav" onclick="scrollToElement('q28-anchor')">28</div>
+    <div class="q-item" id="q29-nav" onclick="scrollToElement('q29-anchor')">29</div>
+    <div class="q-item" id="q30-nav" onclick="scrollToElement('q30-anchor')">30</div>
+    <div class="q-item" id="q31-nav" onclick="scrollToElement('q31-anchor')">31</div>
+    <div class="q-item" id="q32-nav" onclick="scrollToElement('q32-anchor')">32</div>
+    <div class="q-item" id="q33-nav" onclick="scrollToElement('q33-anchor')">33</div>
+    <div class="q-item" id="q34-nav" onclick="scrollToElement('q34-anchor')">34</div>
+    <div class="q-item" id="q35-nav" onclick="scrollToElement('q35-anchor')">35</div>
+    <div class="q-item" id="q36-nav" onclick="scrollToElement('q36-anchor')">36</div>
+    <div class="q-item" id="q37-nav" onclick="scrollToElement('q37-anchor')">37</div>
+    <div class="q-item" id="q38-nav" onclick="scrollToElement('q38-anchor')">38</div>
+    <div class="q-item" id="q39-nav" onclick="scrollToElement('q39-anchor')">39</div>
+    <div class="q-item" id="q40-nav" onclick="scrollToElement('q40-anchor')">40</div>
+  </div>
+</div>
+<div class="shell">
+<section class="pane" id="left">
+  <h2>READING PASSAGE 3 <span id="timer">00:00</span></h2>
+  <p>You should spend about 20 minutes on Questions 27–40, which are based on Reading Passage 3 below.</p>
+  <h3>Flower Power</h3>
+  
+  <h4>Paragraph A</h4>
+  <p>Why do we give people flowers? To offer condolence to those who are grieving. To celebrate. To woo. To ask for forgiveness. We all know intuitively that there is a universal emotional response. In the US alone, the flower industry is now worth about $5 billion a year, which suggests that, at the very least, they service a compelling human need.</p>
+  
+  <h4>Paragraph B</h4>
+  <p>Recent studies at the Department of Psychology at Rutgers State University of New Jersey investigated claims that flowers are unique among living organisms in their ability to induce profound changes in our emotional state. As the first part of their research, the Rutgers team visited 150 women in their homes. Each was presented with a variety of gifts such as flowers, fruit or sweets. The women were unaware that the study was about the effect of the flowers on their emotions. They were told that it was a study about their daily moods, and that they would receive a gift in return for taking part. Following the presentation of the gift, those receiving flowers were assessed as displaying a much more positive mood than those who got other gifts, and this effect lasted for several days. After receiving flowers, they were also more willing to answer questions concerning their social circle and intimate conversations with friends and family. The results suggest that flowers influence our secondary socio-emotional behaviours, as well as having a strong effect on our immediate emotional expression.</p>
+  
+  <h4>Paragraph C</h4>
+  <p>In the second study, the psychologists observed participants being handed single flowers, or alternative gifts, in a constrained and stressful situation – inside an elevator. Contrary to predictions regarding gender differences, both men and women presented with flowers were more likely to smile, to stand closer and to initiate conversation. Several subjects who were given the alternative gift then learnt that flowers were also being handed out, and returned to the elevator and demanded a flower. The scientists used elevators for this study precisely because the most typical behaviour in sparsely occupied elevators is for people to retreat to opposite corners. The subjects who received flowers, however, closed up that space to a considerable extent – indicating that the flowers not only induced a strong positive mood, but brought a significant affiliation among people who had never previously met.</p>
+  
+  <h4>Paragraph D</h4>
+  <p>The third study involved regularly sending flowers to a selected sample of men and women. The researchers found not only a profound elevation of mood, but also reliable improvements in other measures of cognitive function, like memory. In this series of experiments, some participants produced such extraordinary emotional displays that the psychologists were totally unprepared for them. Subjects gave spontaneous hugs and kisses to the people who delivered the flowers, and sent invitations to the psychologists to come to their homes for refreshments.</p>
+  
+  <h4>Paragraph E</h4>
+  <p>Various evolutionary hypotheses attempt to explain the remarkably powerful psychological effect of flowers. One is that our aesthetic preferences for fertile locations and growing things stem from prehistory, when these clues in our environment could mean the difference between starvation and survival. We may have become hardwired to respond positively to flowers because for early man, finding them in a particular location predicted future food supplies and possibly a better place to rear children. Yet the flaw in this argument is that the showy flowers which humans seem to find most visually attractive are generally found on those plants which yield no edible products.</p>
+  
+  <h4>Paragraph F</h4>
+  <p>The Rutgers psychologists’ findings show that the various physical attributes of flowers combine to directly affect our emotions through multi-channel interactions. We have evolved preferences for the particular colours, textures, patterned symmetries and specific floral odours which influence our moods. Indeed, previous research has established that popular perfumes, which often have a floral ‘top-note’, will actually reduce depression. The origins of these inclinations may well be as the evolutionary theories suggest: the patterned symmetries of flowers can be detected easily as a recognisable signal within a wide variety of visual arrays, and a response to certain colour tones is important in finding ripe fruit against a leafy background. But, claim the Rutgers team, these preferences have long been separated from their primary evolutionary use, and become rewarding to us more generally. Thus plants with preferred colours, shapes and odours – despite having no other products – would therefore be protected and dispersed.</p>
+  
+  <h4>Paragraph G</h4>
+  <p>The Rutgers study suggests that flowers may have actually evolved to exploit their peculiar impact on humans. The team’s theory proposes a plant-human co-evolution, or even domestication, based on the intense emotional rewards that flowers provide. The idea that flowering plants, with no known food or other basic survival value to man, have co-evolved with us by exploiting an emotional niche instead, is very much like the scenario presented for the evolution of dogs. Flowers may be the plant equivalent of ‘companion animals’. If this is true, then there is a very real sense in which, when you next give flowers, they are using you just as much as you are using them.</p>
+  
+  <p>&nbsp;</p> <!-- 新增空白行防止加载不完全 -->
+</section>
+<div id="divider" title="Drag to resize"></div>
+<section class="pane" id="right">
+  <h3>Questions</h3>
+  
+  <div class="group">
+    <h4>Questions 27–33</h4>
+    <p>Reading Passage 3 has seven paragraphs, A–G.</p>
+    <p>Choose the correct heading for each paragraph from the list of headings below.</p>
+    <p>Write the correct number, i–viii, in boxes 27–33 on your answer sheet.</p>
+    <div class="headings">
+      <p>List of Headings</p>
+      <ol type="i">
+        <li>A negative reaction to receiving flowers</li>
+        <li>Some surprisingly strong responses to flowers</li>
+        <li>A mutually beneficial relationship?</li>
+        <li>Becoming more open about personal matters</li>
+        <li>Some common social functions of flowers</li>
+        <li>Sensory appeal versus practical purpose of flowers</li>
+        <li>Bridging the gap between strangers in an enclosed space</li>
+        <li>An imperfect theory</li>
+      </ol>
+    </div>
+    <table>
+      <tr>
+        <th>Paragraph</th>
+        <th>i</th>
+        <th>ii</th>
+        <th>iii</th>
+        <th>iv</th>
+        <th>v</th>
+        <th>vi</th>
+        <th>vii</th>
+        <th>viii</th>
+      </tr>
+      <a id="q27-anchor"></a>
+      <tr id="q27-row">
+        <td>A (27)</td>
+        <td><label><input name="q27" type="radio" value="i"/></label></td>
+        <td><label><input name="q27" type="radio" value="ii"/></label></td>
+        <td><label><input name="q27" type="radio" value="iii"/></label></td>
+        <td><label><input name="q27" type="radio" value="iv"/></label></td>
+        <td><label><input name="q27" type="radio" value="v"/></label></td>
+        <td><label><input name="q27" type="radio" value="vi"/></label></td>
+        <td><label><input name="q27" type="radio" value="vii"/></label></td>
+        <td><label><input name="q27" type="radio" value="viii"/></label></td>
+      </tr>
+      <a id="q28-anchor"></a>
+      <tr id="q28-row">
+        <td>B (28)</td>
+        <td><label><input name="q28" type="radio" value="i"/></label></td>
+        <td><label><input name="q28" type="radio" value="ii"/></label></td>
+        <td><label><input name="q28" type="radio" value="iii"/></label></td>
+        <td><label><input name="q28" type="radio" value="iv"/></label></td>
+        <td><label><input name="q28" type="radio" value="v"/></label></td>
+        <td><label><input name="q28" type="radio" value="vi"/></label></td>
+        <td><label><input name="q28" type="radio" value="vii"/></label></td>
+        <td><label><input name="q28" type="radio" value="viii"/></label></td>
+      </tr>
+      <a id="q29-anchor"></a>
+      <tr id="q29-row">
+        <td>C (29)</td>
+        <td><label><input name="q29" type="radio" value="i"/></label></td>
+        <td><label><input name="q29" type="radio" value="ii"/></label></td>
+        <td><label><input name="q29" type="radio" value="iii"/></label></td>
+        <td><label><input name="q29" type="radio" value="iv"/></label></td>
+        <td><label><input name="q29" type="radio" value="v"/></label></td>
+        <td><label><input name="q29" type="radio" value="vi"/></label></td>
+        <td><label><input name="q29" type="radio" value="vii"/></label></td>
+        <td><label><input name="q29" type="radio" value="viii"/></label></td>
+      </tr>
+      <a id="q30-anchor"></a>
+      <tr id="q30-row">
+        <td>D (30)</td>
+        <td><label><input name="q30" type="radio" value="i"/></label></td>
+        <td><label><input name="q30" type="radio" value="ii"/></label></td>
+        <td><label><input name="q30" type="radio" value="iii"/></label></td>
+        <td><label><input name="q30" type="radio" value="iv"/></label></td>
+        <td><label><input name="q30" type="radio" value="v"/></label></td>
+        <td><label><input name="q30" type="radio" value="vi"/></label></td>
+        <td><label><input name="q30" type="radio" value="vii"/></label></td>
+        <td><label><input name="q30" type="radio" value="viii"/></label></td>
+      </tr>
+      <a id="q31-anchor"></a>
+      <tr id="q31-row">
+        <td>E (31)</td>
+        <td><label><input name="q31" type="radio" value="i"/></label></td>
+        <td><label><input name="q31" type="radio" value="ii"/></label></td>
+        <td><label><input name="q31" type="radio" value="iii"/></label></td>
+        <td><label><input name="q31" type="radio" value="iv"/></label></td>
+        <td><label><input name="q31" type="radio" value="v"/></label></td>
+        <td><label><input name="q31" type="radio" value="vi"/></label></td>
+        <td><label><input name="q31" type="radio" value="vii"/></label></td>
+        <td><label><input name="q31" type="radio" value="viii"/></label></td>
+      </tr>
+      <a id="q32-anchor"></a>
+      <tr id="q32-row">
+        <td>F (32)</td>
+        <td><label><input name="q32" type="radio" value="i"/></label></td>
+        <td><label><input name="q32" type="radio" value="ii"/></label></td>
+        <td><label><input name="q32" type="radio" value="iii"/></label></td>
+        <td><label><input name="q32" type="radio" value="iv"/></label></td>
+        <td><label><input name="q32" type="radio" value="v"/></label></td>
+        <td><label><input name="q32" type="radio" value="vi"/></label></td>
+        <td><label><input name="q32" type="radio" value="vii"/></label></td>
+        <td><label><input name="q32" type="radio" value="viii"/></label></td>
+      </tr>
+      <a id="q33-anchor"></a>
+      <tr id="q33-row">
+        <td>G (33)</td>
+        <td><label><input name="q33" type="radio" value="i"/></label></td>
+        <td><label><input name="q33" type="radio" value="ii"/></label></td>
+        <td><label><input name="q33" type="radio" value="iii"/></label></td>
+        <td><label><input name="q33" type="radio" value="iv"/></label></td>
+        <td><label><input name="q33" type="radio" value="v"/></label></td>
+        <td><label><input name="q33" type="radio" value="vi"/></label></td>
+        <td><label><input name="q33" type="radio" value="vii"/></label></td>
+        <td><label><input name="q33" type="radio" value="viii"/></label></td>
+      </tr>
+    </table>
+  </div>
+  
+  <div class="group">
+    <h4>Questions 34–37</h4>
+    <p>Look at the following statements (Questions 34–37) and the list of studies below.</p>
+    <p>Match each statement with the correct studies, A–C</p>
+    <p>Write the correct letter, A, B or C, in boxes 34–37 on your answer sheet.</p>
+    <p>NB You may use any letter more than once.</p>
+    <p><strong>List of Studies</strong></p>
+    <ul>
+      <li>A the first study</li>
+      <li>B the second study</li>
+      <li>C the third study</li>
+    </ul>
+    
+    <a id="q34-anchor"></a>
+    <div id="q34-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>34 The study focused on participants’ short-term reaction to receiving flowers.</p>
+      <label style="display:block;margin:4px 0;"><input name="q34" type="radio" value="A"/>  A the first study</label>
+      <label style="display:block;margin:4px 0;"><input name="q34" type="radio" value="B"/>  B the second study</label>
+      <label style="display:block;margin:4px 0;"><input name="q34" type="radio" value="C"/>  C the third study</label>
+    </div>
+    
+    <a id="q35-anchor"></a>
+    <div id="q35-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>35 Participants were deliberately misled as to the aim of the study.</p>
+      <label style="display:block;margin:4px 0;"><input name="q35" type="radio" value="A"/>  A the first study</label>
+      <label style="display:block;margin:4px 0;"><input name="q35" type="radio" value="B"/>  B the second study</label>
+      <label style="display:block;margin:4px 0;"><input name="q35" type="radio" value="C"/>  C the third study</label>
+    </div>
+    
+    <a id="q36-anchor"></a>
+    <div id="q36-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>36 Receiving flowers had a notable effect on participants’ mental capacities.</p>
+      <label style="display:block;margin:4px 0;"><input name="q36" type="radio" value="A"/>  A the first study</label>
+      <label style="display:block;margin:4px 0;"><input name="q36" type="radio" value="B"/>  B the second study</label>
+      <label style="display:block;margin:4px 0;"><input name="q36" type="radio" value="C"/>  C the third study</label>
+    </div>
+    
+    <a id="q37-anchor"></a>
+    <div id="q37-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>37 Male and female responses were more uniform than expected.</p>
+      <label style="display:block;margin:4px 0;"><input name="q37" type="radio" value="A"/>  A the first study</label>
+      <label style="display:block;margin:4px 0;"><input name="q37" type="radio" value="B"/>  B the second study</label>
+      <label style="display:block;margin:4px 0;"><input name="q37" type="radio" value="C"/>  C the third study</label>
+    </div>
+  </div>
+  
+  <div class="group">
+    <a id="q38-anchor"></a>
+    <h4>Questions 38–40</h4>
+    <p>Complete the summary below.</p>
+    <p>Choose ONE WORD ONLY from passage for each answer.</p>
+    <p>Write your answers in boxes 38–40 on your answer sheet.</p>
+    <p>A possible explanation for the appeal of flowers</p>
+    <p>It has been suggested that our intense response to flowers originates in prehistoric times. The presence of flowers might indicate a potential source of <input class="blank" maxlength="40" name="q38" placeholder="38"/> in a particular location, and primitive humans would search for such signs when looking for a suitable site to raise their <a id="q39-anchor"></a><input class="blank" maxlength="40" name="q39" placeholder="39"/>. The interpretation of these signs was essential for the survival of our ancestors. However, the problem with this idea is that the plants producing the most attractive flowers do not usually have fruit which is <a id="q40-anchor"></a><input class="blank" maxlength="40" name="q40" placeholder="40"/>.</p>
+  </div>
+  
+  <div style="display:flex;gap:8px;margin-bottom:10px;">
+    <button class="primary" onclick="grade()">Submit</button>
+    <button onclick="resetForm()">Reset</button>
+    <button onclick="toggleNotes()">Notes</button>
+  </div>
+  <div id="results"></div>
+  <details class="answerbox" id="answerBox">
+    <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+    <div id="answerContent"></div>
+  </details>
+</section>
+</div>
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+<script>
+// Timer
+let _t=0; const _timerEl=document.getElementById('timer');
+setInterval(function(){ 
+  _t++; 
+  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
+  var s=String(_t%60).padStart(2,'0'); 
+  _timerEl.textContent=m+':'+s; 
+},1000);
+
+// Drag divider
+var divider = document.getElementById('divider');
+var left = document.getElementById('left');
+var right = document.getElementById('right');
+var dragging=false;
+function startDrag(e){ 
+  dragging=true; 
+  document.body.style.cursor='ew-resize'; 
+  if(e.preventDefault) e.preventDefault(); 
+}
+function endDrag(){ 
+  dragging=false; 
+  document.body.style.cursor=''; 
+}
+function onMove(clientX){
+  var container = document.querySelector('.shell').getBoundingClientRect();
+  var x = clientX - container.left;
+  x = Math.max(280, Math.min(container.width-320, x));
+  left.style.flex = '0 0 ' + x + 'px';
+  right.style.flex = '1 1 auto';
+}
+divider.addEventListener('mousedown', function(e){ startDrag(e); });
+window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+window.addEventListener('mouseup', endDrag);
+divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
+window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+window.addEventListener('touchend', endDrag);
+
+// Highlight toolbar
+var selbar = document.getElementById('selbar');
+var btnHL = document.getElementById('btnHL');
+var btnUH = document.getElementById('btnUH');
+var btnNote = document.getElementById('btnNote');
+var lastRange=null;
+var currentHlNode=null;
+var keepToolbar=false;
+function positionSelbarForRect(rect){
+  selbar.style.display='flex';
+  requestAnimationFrame(function(){
+    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+function updateSelbar(){
+  var sel=window.getSelection();
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
+    selbar.style.display='none'; 
+    currentHlNode=null; 
+    return; 
+  }
+  var range = sel.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode=null;
+  positionSelbarForRect(range.getBoundingClientRect());
+}
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', function(){ 
+  var sel=window.getSelection(); 
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
+    if(!keepToolbar && !currentHlNode){ 
+      selbar.style.display='none'; 
+    } 
+  } 
+});
+document.addEventListener('scroll', function(){ 
+  if(selbar.style.display==='flex') updateSelbar(); 
+});
+document.addEventListener('mousedown', function(e){
+  var t = e.target;
+  if(t.classList && t.classList.contains('hl')){
+    keepToolbar = true;
+  } else {
+    keepToolbar = false;
+  }
+}, true);
+document.addEventListener('click', function(e){
+  var target = e.target;
+  if(target.classList && target.classList.contains('hl')){
+    currentHlNode = target;
+    lastRange = null;
+    positionSelbarForRect(target.getBoundingClientRect());
+    var sel=window.getSelection();
+    if(sel) sel.removeAllRanges();
+    setTimeout(function(){ keepToolbar=false; }, 0);
+  }
+}, true);
+function doHighlight(){
+  if(currentHlNode) return;
+  if(!lastRange || lastRange.collapsed) return;
+  var span=document.createElement('span'); span.className='hl';
+  try { lastRange.surroundContents(span); }
+  catch(e){
+    var wrap=document.createElement('span'); wrap.className='hl';
+    wrap.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrap);
+  }
+  selbar.style.display='none';
+  showToast('Highlighted');
+}
+function removeHighlight(){
+  if(currentHlNode){
+    var p = currentHlNode.parentNode;
+    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
+    p.removeChild(currentHlNode); p.normalize();
+    currentHlNode = null;
+    selbar.style.display='none';
+    showToast('Highlight removed');
+    return;
+  }
+  if(!lastRange) return;
+  var selRect = lastRange.getBoundingClientRect();
+  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  var toRemove=[];
+  while(walker.nextNode()){
+    var n=walker.currentNode;
+    if(n.classList && n.classList.contains('hl')) {
+      var r = n.getBoundingClientRect();
+      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+    }
+  }
+  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
+  selbar.style.display='none';
+  showToast('Highlight removed');
+}
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+
+// Notes
+var notes = document.getElementById('notes');
+var noteArea = document.getElementById('noteArea');
+var btnCopy=document.getElementById('btnCopy');
+var btnClose=document.getElementById('btnClose');
+function toggleNotes(){ 
+  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+}
+window.toggleNotes = toggleNotes;
+btnClose.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async function(){ 
+  await navigator.clipboard.writeText(noteArea.value||''); 
+  showToast('Copied'); 
+});
+btnNote.addEventListener('click', function(){
+  var text = '';
+  if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
+  else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
+  toggleNotes();
+  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
+  selbar.style.display='none';
+});
+
+// Toast
+var toastEl=document.getElementById('toast');
+function showToast(msg){
+  toastEl.textContent=msg; 
+  toastEl.style.display='block';
+  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+}
+
+// Answer key and grading
+var answers = {
+  "q27":"v", "q28":"iv", "q29":"vii", "q30":"ii", "q31":"viii", "q32":"vi", "q33":"iii",
+  "q34":"B", "q35":"A", "q36":"C", "q37":"B",
+  "q38":"food", "q39":"children", "q40":"edible"
+};
+var acceptable = {
+  "q39": ["children", "Children"]
+};
+function markHeading(q, user){
+  return String(user||'').toLowerCase() === String(answers[q]).toLowerCase();
+}
+function markChoice(q, user){
+  return String(user||'').toUpperCase() === String(answers[q]).toUpperCase();
+}
+function markBlank(q, user){
+  var u = String(user||'').trim().toLowerCase();
+  var key = String(answers[q]).trim().toLowerCase();
+  if(acceptable[q]){
+    return acceptable[q].map(a => a.toLowerCase()).indexOf(u) >= 0;
+  }
+  return u === key;
+}
+function grade(){
+  var total=0, correct=0, lines=[];
+  function push(q, ok, user){
+    total++; if(ok) correct++;
+    lines.push(q.toUpperCase()+": "+(user||'None')+" "+(ok?'✅':'❌'));
+  }
+  // 27–33 headings
+  for(var n=27;n<=33;n++){
+    var sel=document.querySelector('input[name="q'+n+'"]:checked');
+    var val=sel?sel.value:'';
+    push('q'+n, markHeading('q'+n, val), val);
+  }
+  // 34–37 matching
+  for(var n=34;n<=37;n++){
+    var sel=document.querySelector('input[name="q'+n+'"]:checked');
+    var val=sel?sel.value:'';
+    push('q'+n, markChoice('q'+n, val), val);
+  }
+  // 38–40 blanks
+  for(var n=38;n<=40;n++){
+    var el=document.querySelector('input[name="q'+n+'"]');
+    var val=el?el.value:'';
+    push('q'+n, markBlank('q'+n, val), val);
+  }
+  var acc = (total? Math.round(100*correct/total):0);
+  var html = '<p><strong>Score:</strong> '+correct+'/'+total+' <span class="badge">Accuracy '+acc+'%</span></p>';
+  html += '<pre>'+lines.join('\n')+'</pre>';
+  document.getElementById('results').innerHTML = html;
+  var ahtml = '<ol>';
+  ahtml += '<li>27 → v (Some common social functions of flowers)</li>';
+  ahtml += '<li>28 → iv (Becoming more open about personal matters)</li>';
+  ahtml += '<li>29 → vii (Bridging the gap between strangers in an enclosed space)</li>';
+  ahtml += '<li>30 → ii (Some surprisingly strong responses to flowers)</li>';
+  ahtml += '<li>31 → viii (An imperfect theory)</li>';
+  ahtml += '<li>32 → vi (Sensory appeal versus practical purpose of flowers)</li>';
+  ahtml += '<li>33 → iii (A mutually beneficial relationship?)</li>';
+  ahtml += '<li>34 → B (the second study)</li>';
+  ahtml += '<li>35 → A (the first study)</li>';
+  ahtml += '<li>36 → C (the third study)</li>';
+  ahtml += '<li>37 → B (the second study)</li>';
+  ahtml += '<li>38 → food</li>';
+  ahtml += '<li>39 → children</li>';
+  ahtml += '<li>40 → edible</li>';
+  ahtml += '</ol>';
+  document.getElementById('answerContent').innerHTML = ahtml;
+  document.querySelector('#answerBox .badge').textContent='tap to view';
+}
+function resetForm(){
+  document.querySelectorAll('input[type="radio"]').forEach(el=>el.checked=false);
+  document.querySelectorAll('input.blank').forEach(el=>el.value="");
+  document.getElementById('results').innerHTML='';
+  document.getElementById('answerContent').innerHTML='';
+  document.querySelector('#answerBox .badge').textContent = 'hidden';
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+}
+function scrollToElement(id){
+  var el = document.getElementById(id);
+  if(el){ 
+    el.scrollIntoView({behavior:'smooth', block:'center'}); 
+  }
+  var navs = document.querySelectorAll('.practice-nav .q-item');
+  navs.forEach(n => n.classList.remove('active'));
+  var btn = document.getElementById(id.replace('-anchor','-nav'));
+  if(btn){ 
+    btn.classList.add('active'); 
+    setTimeout(() => btn.classList.remove('active'), 800); 
+  }
+}
+(function(){
+  function mark(qn){
+    var nav = document.getElementById('q'+qn+'-nav');
+    if(!nav) return;
+    var radios = document.querySelectorAll('input[name="q'+qn+'"]');
+    var text = document.querySelector('input[name="q'+qn+'"].blank');
+    var answered=false;
+    if(radios.length){ radios.forEach(function(r){ if(r.checked) answered=true; }); }
+    if(text){ answered = answered || (text.value && text.value.trim().length>0); }
+    if(answered) nav.classList.add('answered'); else nav.classList.remove('answered');
+  }
+  for(var q=27;q<=40;q++){
+    (function(n){
+      var radios = document.querySelectorAll('input[name="q'+n+'"]');
+      radios.forEach(function(r){ r.addEventListener('change', function(){ mark(n); }); });
+      var text = document.querySelector('input[name="q'+n+'"].blank');
+      if(text){ text.addEventListener('input', function(){ mark(n); }); }
+    })(q);
+  }
+  for(var q=27;q<=40;q++){ mark(q); }
+})();
+</script>
+
+<!-- 练习页面数据传输增强脚本 -->
+<script>
+// 检查是否已经有增强脚本
+if (!window.practicePageEnhancer) {
+    // 动态加载增强脚本
+    const script = document.createElement('script');
+    script.src = '../../js/practice-page-enhancer.js';
+    script.onload = function() {
+        console.log('练习页面增强脚本已加载');
+    };
+    script.onerror = function() {
+        console.error('练习页面增强脚本加载失败');
+        // 降级到内联增强
+        loadInlineEnhancer();
+    };
+    document.head.appendChild(script);
+}
+
+// 内联增强器（降级方案）
+function loadInlineEnhancer() {
+    if (window.practicePageEnhancer) return;
+    
+    window.practicePageEnhancer = {
+        initialize: function() {
+            console.log('[InlineEnhancer] 内联增强器已初始化');
+            this.setupCommunication();
+            this.setupAnswerListeners();
+            this.interceptSubmit();
+        },
+        
+        setupCommunication: function() {
+            this.parentWindow = window.opener || window.parent;
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'INIT_SESSION') {
+                    this.sessionId = event.data.data.sessionId;
+                    this.sendMessage('SESSION_READY', {
+                        pageType: this.detectPageType(),
+                        url: window.location.href
+                    });
+                }
+            });
+        },
+        
+        detectPageType: function() {
+            const title = document.title || '';
+            if (title.includes('P1')) return 'P1';
+            if (title.includes('P2')) return 'P2';
+            if (title.includes('P3')) return 'P3';
+            return 'unknown';
+        },
+        
+        setupAnswerListeners: function() {
+            this.answers = {};
+            this.startTime = Date.now();
+            
+            document.addEventListener('change', (e) => {
+                if (e.target.name && e.target.name.startsWith('q')) {
+                    this.answers[e.target.name] = e.target.value;
+                }
+            });
+        },
+        
+        interceptSubmit: function() {
+            // 拦截grade函数
+            if (typeof window.grade === 'function') {
+                const originalGrade = window.grade;
+                window.grade = () => {
+                    const result = originalGrade();
+                    setTimeout(() => this.handleSubmit(), 200);
+                    return result;
+                };
+            }
+            
+            // 监听提交按钮
+            document.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON' && 
+                    (e.target.textContent.includes('Submit') || 
+                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+                    setTimeout(() => this.handleSubmit(), 300);
+                }
+            });
+        },
+        
+        handleSubmit: function() {
+            const results = {
+                sessionId: this.sessionId,
+                startTime: this.startTime,
+                endTime: Date.now(),
+                duration: Math.round((Date.now() - this.startTime) / 1000),
+                answers: this.answers,
+                scoreInfo: this.extractScore(),
+                pageType: this.detectPageType(),
+                url: window.location.href
+            };
+            
+            this.sendMessage('PRACTICE_COMPLETE', results);
+        },
+        
+        extractScore: function() {
+            const resultsEl = document.getElementById('results');
+            if (!resultsEl) return null;
+            
+            const text = resultsEl.textContent || '';
+            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+            if (scoreMatch) {
+                const correct = parseInt(scoreMatch[1]);
+                const total = parseInt(scoreMatch[2]);
+                return {
+                    correct: correct,
+                    total: total,
+                    accuracy: total > 0 ? correct / total : 0,
+                    percentage: Math.round((correct / total) * 100),
+                    source: 'inline_extraction'
+                };
+            }
+            return null;
+        },
+        
+        sendMessage: function(type, data) {
+            if (this.parentWindow) {
+                this.parentWindow.postMessage({
+                    type: type,
+                    data: data,
+                    source: 'practice_page'
+                }, '*');
+            }
+        }
+    };
+    
+    // 初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            window.practicePageEnhancer.initialize();
+        });
+    } else {
+        window.practicePageEnhancer.initialize();
+    }
+}
+</script>
+
+</body>
+</html>

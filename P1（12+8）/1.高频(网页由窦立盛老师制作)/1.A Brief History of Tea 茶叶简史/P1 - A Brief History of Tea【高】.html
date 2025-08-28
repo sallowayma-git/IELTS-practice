@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>P1 – A Brief History of Tea (Integrated v10)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
+  #timer { position:fixed; top:10px; left:10px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:6px 10px; font-size:14px; z-index:1000; }
+  .shell { display:flex; height:100vh; width:100%; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 280px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  #divider::after { content:""; position:absolute; inset:0; }
+  h2,h3 { margin:0 0 10px; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  table { border-collapse: collapse; width:100%; }
+  th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button[disabled] { opacity: .45; cursor: not-allowed; }
+  #selbar button:hover { border-color:#fff; }
+  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+</style>
+</head>
+<body>
+<div id="timer">00:00</div>
+
+<div class="shell">
+  <section class="pane" id="left">
+    
+<h2>READING PASSAGE 1</h2>
+<p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>
+<h3>A Brief History of Tea</h3>
+
+<h4>Paragraph A</h4>
+<p>The story of tea began in ancient China over 5,000 years ago. According to legend, the Emperor Shen Nung was a skilled ruler, creative scientist and patron of the arts. His far-sighted edicts required, among other things, that all drinking water be boiled as a hygienic precaution. One summer day, while visiting a distant region of his realm, he and the court stopped to rest. In accordance with his ruling, the servants began to boil water for the court to drink. Dried leaves from a nearby bush fell into the boiling water, and as the leaves infused the water turned brown. As a scientist, the Emperor was intrigued by the new liquid, drank some, and found it very refreshing. And so, according to legend, tea was created.</p>
+
+<h4>Paragraph B</h4>
+<p>Tea consumption spread throughout Chinese culture, reaching into every aspect of society. The first definitive book was written on tea – a book clearly reflecting Zen Buddhist philosophy – 1,200 years ago. The first tea seeds were brought to Japan by a returning Buddhist priest, who had seen the value of tea in enhancing meditation in China. As a result, he is known as the “Father of Tea” in Japan. Because of this early association, tea in Japan has always been linked with Zen Buddhism. Tea received the Japanese Emperor’s support almost instantly and spread rapidly from the royal court and monasteries to other sections of society.</p>
+
+<h4>Paragraph C</h4>
+<p>Tea was elevated to an art form in the Japanese tea ceremony, in which supreme importance is given to making tea in the most perfect, most polite, most graceful, most charming manner possible. Such a purity of expression prompted the creation of a particular form of architecture for tea houses, duplicating the simplicity of a forest cottage. The cultural/artistic hostesses of Japan, the geishas, began to specialise in the presentation of the tea ceremony. However, as more and more people became involved in the excitement surrounding tea, the purity of the original concept was lost, and for a period the tea ceremony became corrupted, boisterous and highly embellished. Efforts were then made to return to the earlier simplicity, with the result that, in the 15th and 16th centuries, tea was viewed as the ultimate gift. Even warlords paused for tea before battles.</p>
+
+<h4>Paragraph D</h4>
+<p>While tea was at this high level of development in parts of Asia, information concerning the then-unknown beverage began to filter back to Europe. Earlier traders had mentioned it, but were unclear as to whether tea should be eaten or drunk. The first European to personally encounter tea and write about it was Portuguese – Portugal, with her technologically advanced navy, had been successful in gaining the first right of trade with China.</p>
+
+<h4>Paragraph E</h4>
+<p>Tea finally arrived in Europe in the 16th century, brought to Holland by the country’s navy, and became very fashionable in the Dutch capital, The Hague. This was due in part to tea being very expensive (over $100 per pound), which immediately made it the domain of the wealthy. Slowly, as the amount of tea imported increased, the price fell, and by 1675 it was available in common food shops throughout Holland.</p>
+
+<h4>Paragraph F</h4>
+<p>As the consumption of tea increased dramatically in Dutch society, doctors and university authorities in Holland argued as to its benefits or drawbacks. The public largely ignored the scholarly debate and continued to enjoy their new beverage, though the controversy lasted from 1635 to roughly 1657. Throughout this period, France and Holland led Europe in the use of tea.</p>
+
+<h4>Paragraph G</h4>
+<p>As the craze for all things oriental swept through Europe, tea became part of everyday life. Adding milk to the drink was first mentioned in 1680. Around that time, Dutch inns provided the first restaurant service of tea. Innkeepers would furnish guests with a portable tea set complete with a heating unit. The Dutchman would then prepare tea for himself and his friends outside in the inn garden. Tea remained popular in France for only about fifty years, being replaced by a preference for wine, chocolate and exotic coffees. Tea was introduced into England in 1660 by King Charles II and his Portuguese queen, who were both confirmed tea drinkers. Tea mania swept across England as it had earlier spread throughout France and Holland. By 1708, tea importation had risen to thirteen times the 1699 level. Tea was drunk by all levels of society.</p>
+
+<h4>Paragraph H</h4>
+<p>Russian interest in tea began as early as 1618, when the Chinese embassy in Moscow presented several chests of tea to the Emperor, Czar Alexis. Later in the century, a trade treaty between Russia and China allowed caravans to cross back and forth freely between the two countries. Still, the journey was not easy. The average caravan consisted of 200 to 300 camels, and the 18,000-kilometre trip took over 16 months to complete. Eventually, however, tea became – as it still is – one of the most popular drinks in the country.</p>
+
+  </section>
+
+  <div id="divider" title="Drag to resize"></div>
+
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+
+    <div class="group">
+      <h4>Questions 1–8</h4>
+      <p>Reading Passage 1 has eight paragraphs A–H.</p>
+      <p>Choose the correct heading for each paragraph from the list of headings below.</p>
+      <p>Write the correct number, <strong>i–x</strong>, in boxes <strong>1–8</strong> on your answer sheet.</p>
+
+      <div class="headings">
+        <p><strong>List of Headings</strong></p>
+        <ol type="i">
+          <li>Not enough tea to meet demand</li>
+          <li>Religious objections</li>
+          <li>In – and sometimes out – of fashion</li>
+          <li>A connection between tea and religion</li>
+          <li>A luxury item</li>
+          <li>News of tea reaches another continent</li>
+          <li>Is tea a good or a bad thing?</li>
+          <li>A chance discovery</li>
+          <li>Tea-making as a ritual</li>
+          <li>Difficulties in importing tea</li>
+        </ol>
+      </div>
+
+      <table>
+        <tr>
+          <th>Paragraph</th>
+          <th>i</th><th>ii</th><th>iii</th><th>iv</th><th>v</th><th>vi</th><th>vii</th><th>viii</th><th>ix</th><th>x</th>
+        </tr>
+        <tr><td>A</td><td><input type="radio" name="q1" value="i"></td><td><input type="radio" name="q1" value="ii"></td><td><input type="radio" name="q1" value="iii"></td><td><input type="radio" name="q1" value="iv"></td><td><input type="radio" name="q1" value="v"></td><td><input type="radio" name="q1" value="vi"></td><td><input type="radio" name="q1" value="vii"></td><td><input type="radio" name="q1" value="viii"></td><td><input type="radio" name="q1" value="ix"></td><td><input type="radio" name="q1" value="x"></td></tr>
+        <tr><td>B</td><td><input type="radio" name="q2" value="i"></td><td><input type="radio" name="q2" value="ii"></td><td><input type="radio" name="q2" value="iii"></td><td><input type="radio" name="q2" value="iv"></td><td><input type="radio" name="q2" value="v"></td><td><input type="radio" name="q2" value="vi"></td><td><input type="radio" name="q2" value="vii"></td><td><input type="radio" name="q2" value="viii"></td><td><input type="radio" name="q2" value="ix"></td><td><input type="radio" name="q2" value="x"></td></tr>
+        <tr><td>C</td><td><input type="radio" name="q3" value="i"></td><td><input type="radio" name="q3" value="ii"></td><td><input type="radio" name="q3" value="iii"></td><td><input type="radio" name="q3" value="iv"></td><td><input type="radio" name="q3" value="v"></td><td><input type="radio" name="q3" value="vi"></td><td><input type="radio" name="q3" value="vii"></td><td><input type="radio" name="q3" value="viii"></td><td><input type="radio" name="q3" value="ix"></td><td><input type="radio" name="q3" value="x"></td></tr>
+        <tr><td>D</td><td><input type="radio" name="q4" value="i"></td><td><input type="radio" name="q4" value="ii"></td><td><input type="radio" name="q4" value="iii"></td><td><input type="radio" name="q4" value="iv"></td><td><input type="radio" name="q4" value="v"></td><td><input type="radio" name="q4" value="vi"></td><td><input type="radio" name="q4" value="vii"></td><td><input type="radio" name="q4" value="viii"></td><td><input type="radio" name="q4" value="ix"></td><td><input type="radio" name="q4" value="x"></td></tr>
+        <tr><td>E</td><td><input type="radio" name="q5" value="i"></td><td><input type="radio" name="q5" value="ii"></td><td><input type="radio" name="q5" value="iii"></td><td><input type="radio" name="q5" value="iv"></td><td><input type="radio" name="q5" value="v"></td><td><input type="radio" name="q5" value="vi"></td><td><input type="radio" name="q5" value="vii"></td><td><input type="radio" name="q5" value="viii"></td><td><input type="radio" name="q5" value="ix"></td><td><input type="radio" name="q5" value="x"></td></tr>
+        <tr><td>F</td><td><input type="radio" name="q6" value="i"></td><td><input type="radio" name="q6" value="ii"></td><td><input type="radio" name="q6" value="iii"></td><td><input type="radio" name="q6" value="iv"></td><td><input type="radio" name="q6" value="v"></td><td><input type="radio" name="q6" value="vi"></td><td><input type="radio" name="q6" value="vii"></td><td><input type="radio" name="q6" value="viii"></td><td><input type="radio" name="q6" value="ix"></td><td><input type="radio" name="q6" value="x"></td></tr>
+        <tr><td>G</td><td><input type="radio" name="q7" value="i"></td><td><input type="radio" name="q7" value="ii"></td><td><input type="radio" name="q7" value="iii"></td><td><input type="radio" name="q7" value="iv"></td><td><input type="radio" name="q7" value="v"></td><td><input type="radio" name="q7" value="vi"></td><td><input type="radio" name="q7" value="vii"></td><td><input type="radio" name="q7" value="viii"></td><td><input type="radio" name="q7" value="ix"></td><td><input type="radio" name="q7" value="x"></td></tr>
+        <tr><td>H</td><td><input type="radio" name="q8" value="i"></td><td><input type="radio" name="q8" value="ii"></td><td><input type="radio" name="q8" value="iii"></td><td><input type="radio" name="q8" value="iv"></td><td><input type="radio" name="q8" value="v"></td><td><input type="radio" name="q8" value="vi"></td><td><input type="radio" name="q8" value="vii"></td><td><input type="radio" name="q8" value="viii"></td><td><input type="radio" name="q8" value="ix"></td><td><input type="radio" name="q8" value="x"></td></tr>
+      </table>
+    </div>
+
+    <div class="group">
+      <h4>Questions 9–13</h4>
+      <p>Look at the following statements (Questions 9–13) and the list of countries below.</p>
+      <p>Match each statement with the correct country, <strong>A–G</strong>.</p>
+      <p><strong>List of Countries:</strong> A China &nbsp; B Japan &nbsp; C Portugal &nbsp; D Holland &nbsp; E France &nbsp; F England &nbsp; G Russia</p>
+
+      <ol start="9">
+        <li>Claims that tea might be harmful failed to affect its popularity.<br>
+          <label><input type="radio" name="q9" value="A"> A</label> <label><input type="radio" name="q9" value="B"> B</label> <label><input type="radio" name="q9" value="C"> C</label> <label><input type="radio" name="q9" value="D"> D</label> <label><input type="radio" name="q9" value="E"> E</label> <label><input type="radio" name="q9" value="F"> F</label> <label><input type="radio" name="q9" value="G"> G</label>
+        </li>
+        <li>Tea lost favour to other drinks.<br>
+          <label><input type="radio" name="q10" value="A"> A</label> <label><input type="radio" name="q10" value="B"> B</label> <label><input type="radio" name="q10" value="C"> C</label> <label><input type="radio" name="q10" value="D"> D</label> <label><input type="radio" name="q10" value="E"> E</label> <label><input type="radio" name="q10" value="F"> F</label> <label><input type="radio" name="q10" value="G"> G</label>
+        </li>
+        <li>Special buildings were constructed in which to drink tea.<br>
+          <label><input type="radio" name="q11" value="A"> A</label> <label><input type="radio" name="q11" value="B"> B</label> <label><input type="radio" name="q11" value="C"> C</label> <label><input type="radio" name="q11" value="D"> D</label> <label><input type="radio" name="q11" value="E"> E</label> <label><input type="radio" name="q11" value="F"> F</label> <label><input type="radio" name="q11" value="G"> G</label>
+        </li>
+        <li>Animals were involved in importing tea.<br>
+          <label><input type="radio" name="q12" value="A"> A</label> <label><input type="radio" name="q12" value="B"> B</label> <label><input type="radio" name="q12" value="C"> C</label> <label><input type="radio" name="q12" value="D"> D</label> <label><input type="radio" name="q12" value="E"> E</label> <label><input type="radio" name="q12" value="F"> F</label> <label><input type="radio" name="q12" value="G"> G</label>
+        </li>
+        <li>A ruler’s specialist knowledge led to an interest in tea.<br>
+          <label><input type="radio" name="q13" value="A"> A</label> <label><input type="radio" name="q13" value="B"> B</label> <label><input type="radio" name="q13" value="C"> C</label> <label><input type="radio" name="q13" value="D"> D</label> <label><input type="radio" name="q13" value="E"> E</label> <label><input type="radio" name="q13" value="F"> F</label> <label><input type="radio" name="q13" value="G"> G</label>
+        </li>
+      </ol>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    <div id="results"></div>
+  </section>
+</div>
+
+<div id="selbar" role="toolbar" aria-label="Selection tools">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+
+<div id="toast"></div>
+
+<script>
+let t=0; const timerEl=document.getElementById('timer');
+setInterval(function(){ t++; var m=String(Math.floor(t/60)).padStart(2,'0'); var s=String(t%60).padStart(2,'0'); timerEl.textContent=m+':'+s; },1000);
+
+// Drag divider
+var divider = document.getElementById('divider');
+var left = document.getElementById('left');
+var right = document.getElementById('right');
+var dragging=false;
+function startDrag(e){ dragging=true; document.body.style.cursor='ew-resize'; if(e.preventDefault) e.preventDefault(); }
+function endDrag(){ dragging=false; document.body.style.cursor=''; }
+function onMove(clientX){
+  var container = document.querySelector('.shell').getBoundingClientRect();
+  var x = clientX - container.left;
+  x = Math.max(280, Math.min(container.width-280, x));
+  left.style.flex = '0 0 ' + x + 'px';
+  right.style.flex = '1 1 auto';
+}
+divider.addEventListener('mousedown', function(e){ startDrag(e); });
+window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+window.addEventListener('mouseup', endDrag);
+divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
+window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+window.addEventListener('touchend', endDrag);
+
+// Selection toolbar
+var selbar = document.getElementById('selbar');
+var btnHL = document.getElementById('btnHL');
+var btnUH = document.getElementById('btnUH');
+var btnNote = document.getElementById('btnNote');
+var lastRange=null;
+var currentHlNode=null;
+
+function setHighlightButtonState(){
+  if(currentHlNode){
+    btnHL.setAttribute('disabled','true');
+  } else {
+    btnHL.removeAttribute('disabled');
+  }
+}
+
+function positionSelbarForRect(rect){
+  selbar.style.display='flex';
+  requestAnimationFrame(function(){
+    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+  setHighlightButtonState();
+}
+
+function updateSelbar(){
+  var sel=window.getSelection();
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed){
+    if(!currentHlNode){ selbar.style.display='none'; }
+    return;
+  }
+  var range = sel.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode=null;
+  positionSelbarForRect(range.getBoundingClientRect());
+}
+
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', function(){
+  var sel=window.getSelection();
+  if((!sel || sel.rangeCount===0 || sel.isCollapsed) && !currentHlNode){
+    selbar.style.display='none';
+  }
+});
+document.addEventListener('scroll', function(){ if(selbar.style.display==='flex') {
+  var rect;
+  if(currentHlNode){ rect = currentHlNode.getBoundingClientRect(); }
+  else if(lastRange){ rect = lastRange.getBoundingClientRect(); }
+  if(rect) positionSelbarForRect(rect);
+}});
+
+// Click a highlight -> show toolbar (same as selection), do NOT auto-remove
+document.addEventListener('click', function(e){
+  var target = e.target;
+  if(target.classList && target.classList.contains('hl')){
+    currentHlNode = target;
+    lastRange = null; // clicking highlight uses node reference, not selection
+    positionSelbarForRect(target.getBoundingClientRect());
+    var sel=window.getSelection();
+    if(sel){ sel.removeAllRanges(); } // keep UI clean
+  }
+}, true);
+
+// Add highlight for normal selection
+function addHighlight(){
+  if(currentHlNode){ return; } // already highlighted, no-op
+  if(!lastRange || lastRange.collapsed) return;
+  var span=document.createElement('span'); span.className='hl';
+  try { lastRange.surroundContents(span); }
+  catch(e){
+    var wrap=document.createElement('span'); wrap.className='hl';
+    wrap.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrap);
+  }
+  selbar.style.display='none';
+  showToast('Highlighted');
+}
+
+// Remove highlight: if clicking on a block, remove that block; else remove any highlight intersecting selection
+function removeHighlight(){
+  if(currentHlNode){
+    var p = currentHlNode.parentNode;
+    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
+    p.removeChild(currentHlNode); p.normalize();
+    currentHlNode = null;
+    selbar.style.display='none';
+    showToast('Highlight removed');
+    return;
+  }
+  if(!lastRange) return;
+  var selRect = lastRange.getBoundingClientRect();
+  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  var toRemove=[];
+  while(walker.nextNode()){
+    var n=walker.currentNode;
+    if(n.classList && n.classList.contains('hl')) {
+      var r = n.getBoundingClientRect();
+      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+    }
+  }
+  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
+  selbar.style.display='none';
+  showToast('Highlight removed');
+}
+
+btnHL.addEventListener('click', addHighlight);
+btnUH.addEventListener('click', removeHighlight);
+
+// Notes
+var notes = document.getElementById('notes');
+var noteArea = document.getElementById('noteArea');
+var btnCopy=document.getElementById('btnCopy');
+var btnClose=document.getElementById('btnClose');
+function toggleNotes(){ notes.style.display = (notes.style.display==='flex'?'none':'flex'); }
+window.toggleNotes = toggleNotes;
+btnClose.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async function(){ await navigator.clipboard.writeText(noteArea.value||''); showToast('Copied'); });
+btnNote.addEventListener('click', function(){
+  var text = '';
+  if(currentHlNode){
+    text = (currentHlNode.textContent||'').trim();
+  } else if(lastRange){
+    var frag = lastRange.cloneContents();
+    text = (frag.textContent||'').trim();
+  }
+  toggleNotes();
+  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
+  selbar.style.display='none';
+});
+
+// Toast
+var toastEl=document.getElementById('toast');
+function showToast(msg){
+  toastEl.textContent=msg; toastEl.style.display='block';
+  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+}
+
+// Grading
+var answerKey = {
+  q1: "viii", q2: "iv", q3: "ix", q4: "vi", q5: "v", q6: "vii", q7: "iii", q8: "x",
+  q9: "D", q10: "E", q11: "B", q12: "G", q13: "A"
+};
+function grade(){
+  var score=0, total=0, lines=[];
+  Object.keys(answerKey).forEach(function(q){
+    total++;
+    var chosen = document.querySelector('input[name="'+q+'"]:checked');
+    var val = chosen ? chosen.value : "";
+    if(val === answerKey[q]){ score++; lines.push(q+': '+val+' ✅'); }
+    else { lines.push(q+': '+(val||'None')+' ❌ (Correct: '+answerKey[q]+')'); }
+  });
+  document.getElementById('results').innerHTML = '<p><strong>Score:</strong> '+score+'/'+total+'</p><pre>'+lines.join('\n')+'</pre>';
+}
+function resetForm(){
+  document.querySelectorAll('input[type="radio"]').forEach(function(i){ i.checked=false; });
+  document.getElementById('results').innerHTML='';
+}
+</script>
+
+<!-- 练习页面数据传输增强脚本 -->
+<script>
+// 检查是否已经有增强脚本
+if (!window.practicePageEnhancer) {
+    // 动态加载增强脚本
+    const script = document.createElement('script');
+    script.src = '../../js/practice-page-enhancer.js';
+    script.onload = function() {
+        console.log('练习页面增强脚本已加载');
+    };
+    script.onerror = function() {
+        console.error('练习页面增强脚本加载失败');
+        // 降级到内联增强
+        loadInlineEnhancer();
+    };
+    document.head.appendChild(script);
+}
+
+// 内联增强器（降级方案）
+function loadInlineEnhancer() {
+    if (window.practicePageEnhancer) return;
+    
+    window.practicePageEnhancer = {
+        initialize: function() {
+            console.log('[InlineEnhancer] 内联增强器已初始化');
+            this.setupCommunication();
+            this.setupAnswerListeners();
+            this.interceptSubmit();
+        },
+        
+        setupCommunication: function() {
+            this.parentWindow = window.opener || window.parent;
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'INIT_SESSION') {
+                    this.sessionId = event.data.data.sessionId;
+                    this.sendMessage('SESSION_READY', {
+                        pageType: this.detectPageType(),
+                        url: window.location.href
+                    });
+                }
+            });
+        },
+        
+        detectPageType: function() {
+            const title = document.title || '';
+            if (title.includes('P1')) return 'P1';
+            if (title.includes('P2')) return 'P2';
+            if (title.includes('P3')) return 'P3';
+            return 'unknown';
+        },
+        
+        setupAnswerListeners: function() {
+            this.answers = {};
+            this.startTime = Date.now();
+            
+            document.addEventListener('change', (e) => {
+                if (e.target.name && e.target.name.startsWith('q')) {
+                    this.answers[e.target.name] = e.target.value;
+                }
+            });
+        },
+        
+        interceptSubmit: function() {
+            // 拦截grade函数
+            if (typeof window.grade === 'function') {
+                const originalGrade = window.grade;
+                window.grade = () => {
+                    const result = originalGrade();
+                    setTimeout(() => this.handleSubmit(), 200);
+                    return result;
+                };
+            }
+            
+            // 监听提交按钮
+            document.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON' && 
+                    (e.target.textContent.includes('Submit') || 
+                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+                    setTimeout(() => this.handleSubmit(), 300);
+                }
+            });
+        },
+        
+        handleSubmit: function() {
+            const results = {
+                sessionId: this.sessionId,
+                startTime: this.startTime,
+                endTime: Date.now(),
+                duration: Math.round((Date.now() - this.startTime) / 1000),
+                answers: this.answers,
+                scoreInfo: this.extractScore(),
+                pageType: this.detectPageType(),
+                url: window.location.href
+            };
+            
+            this.sendMessage('PRACTICE_COMPLETE', results);
+        },
+        
+        extractScore: function() {
+            const resultsEl = document.getElementById('results');
+            if (!resultsEl) return null;
+            
+            const text = resultsEl.textContent || '';
+            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+            if (scoreMatch) {
+                const correct = parseInt(scoreMatch[1]);
+                const total = parseInt(scoreMatch[2]);
+                return {
+                    correct: correct,
+                    total: total,
+                    accuracy: total > 0 ? correct / total : 0,
+                    percentage: Math.round((correct / total) * 100),
+                    source: 'inline_extraction'
+                };
+            }
+            return null;
+        },
+        
+        sendMessage: function(type, data) {
+            if (this.parentWindow) {
+                this.parentWindow.postMessage({
+                    type: type,
+                    data: data,
+                    source: 'practice_page'
+                }, '*');
+            }
+        }
+    };
+    
+    // 初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            window.practicePageEnhancer.initialize();
+        });
+    } else {
+        window.practicePageEnhancer.initialize();
+    }
+}
+</script>
+
+</body>
+</html>

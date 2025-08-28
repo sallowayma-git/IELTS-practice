@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>P1 – The Development of Plastics</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
+  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  .shell { display:flex; height:100vh; width:100%; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  h2,h3,h4 { margin:0 0 10px; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  table { border-collapse: collapse; width:100%; }
+  th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
+  th:first-child, td:first-child { width:92px; }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button:hover { border-color:#fff; }
+  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+  .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:54px; padding:8px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .droplabel { color:#64748b; }
+  .cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:grid; gap:8px; }
+  .pool-slot { min-height:40px; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); }
+  .card:active { cursor:grabbing; }
+  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
+  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
+  .ghost { opacity: .5; }
+  .over { outline:2px dashed #3b82f6; }
+  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
+  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
+  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+  body { padding-bottom: 82px; }
+  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
+  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
+  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #selbar { z-index: 6000 !important; }
+</style>
+</head>
+<body>
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q1-nav" onclick="scrollToElement('q1-anchor')">1</div>
+    <div class="q-item" id="q2-nav" onclick="scrollToElement('q2-anchor')">2</div>
+    <div class="q-item" id="q3-nav" onclick="scrollToElement('q3-anchor')">3</div>
+    <div class="q-item" id="q4-nav" onclick="scrollToElement('q4-anchor')">4</div>
+    <div class="q-item" id="q5-nav" onclick="scrollToElement('q5-anchor')">5</div>
+    <div class="q-item" id="q6-nav" onclick="scrollToElement('q6-anchor')">6</div>
+    <div class="q-item" id="q7-nav" onclick="scrollToElement('q7-anchor')">7</div>
+    <div class="q-item" id="q8-nav" onclick="scrollToElement('q8-anchor')">8</div>
+    <div class="q-item" id="q9-nav" onclick="scrollToElement('q9-anchor')">9</div>
+    <div class="q-item" id="q10-nav" onclick="scrollToElement('q10-anchor')">10</div>
+    <div class="q-item" id="q11-nav" onclick="scrollToElement('q11-anchor')">11</div>
+    <div class="q-item" id="q12-nav" onclick="scrollToElement('q12-anchor')">12</div>
+    <div class="q-item" id="q13-nav" onclick="scrollToElement('q13-anchor')">13</div>
+  </div>
+</div>
+<div class="shell">
+<section class="pane" id="left">
+  <h2>READING PASSAGE 1 <span id="timer">00:00</span></h2>
+  <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>
+  <h3>The Development of Plastics</h3>
+  
+  <p>When rubber was first commercially produced in Europe during the nineteenth century, it rapidly became a very important commodity, particularly in the fields of transportation and electricity. However, during the twentieth century a number of new synthetic materials, called plastics, superseded natural rubber in all but a few applications. Rubber is a polymer-a compound containing large molecules that are formed by the bonding of many smaller, simpler units, repeated over and over again. The same bonding principle- polymerization-underlies the creation of a huge range of plastics by the chemical industry.</p>
+  
+  <p>The first plastic was developed as a result of a competition in the USA. In the 1860s, $10,000 was offered to anybody who could replace ivory-supplies of which were declining-with something equally good as a material for making billiard balls. The prize was won by John Wesley Hyatt with a material called celluloid. Celluloid was made by dissolving cellulose, a carbohydrate derived from plants, in a solution of camphor dissolved in ethanol. This new material rapidly found uses in the manufacture of products such as knife handles, detachable collars and cuffs, spectacle frames and photographic film. Without celluloid, the film industry could never have got off the ground at the end of the 19th century.</p>
+  
+  <p>Celluloid can be repeatedly softened and reshaped by heat, and is known as a thermoplastic. In 1907, Leo Baekeland, a Belgian chemist working in the USA, invented a different kind of plastic, by causing phenol and formaldehyde to react together. Baekeland called the material Bakelite, and it was the first of the thermosets-plastics that can be cast and moulded while hot, but cannot be softened by heat and reshaped once they have set. Bakelite was a good insulator, and was resistant to water, acids and moderate heat. With these properties it was soon being used in the manufacture of switches, household items such as knife handles, and electrical components for cars.</p>
+  
+  <p>Soon chemists began looking for other small molecules that could be strung together to make polymers. In the 1930s British chemists discovered that the gas ethylene would polymerize under heat and pressure to form a thermoplastic they called polythene. Polypropylene followed in the 1950s. Both were used to make bottles, pipes and plastic bags. A small change in the starting material-replacing a hydrogen atom in ethylene with a chlorine atom-produced PVC (polyvinyl chloride), a hard, fireproof plastic suitable for drains and gutters. And by adding certain chemicals, a soft form of PVC could be produced, suitable as a substitute for rubber in items such as waterproof clothing. A closely related plastic was Teflon, or PTFE (polytetrafluoroethylene). This had a very low coefficient of friction, making it ideal for bearings, rollers, and non-stick frying pans. Polystyrene, developed during the 1930s in Germany, was a clear, glass-like material, used in food containers, domestic appliances and toys. Expanded polystyrene-a white, rigid foam- was widely used in packaging and insulation. Polyurethanes, also developed in Germany, found uses as adhesives, coatings, and-in the form of rigid foams-as insulation materials. They are all produced from chemicals derived from crude oil, which contains exactly the same elements-carbon and hydrogen-as many plastics.</p>
+  
+  <p>The first of the man-made fibres, nylon, was also created in the 1930s. Its inventor was a chemist called Wallace Carothers, who worked for the Du Pont company in the USA. He found that under the right conditions, two chemicals-hexamethylenediamine and adipic acid-would form a polymer that could be pumped out through holes and then stretched to form long glossy threads that could be woven like silk. Its first use was to make parachutes for the US armed forces in World War II. In the post-war years nylon completely replaced silk in the manufacture of stockings. Subsequently many other synthetic fibres joined nylon, including Orlon, Acrilan and Terylene. Today most garments are made of a blend of natural fibres, such as cotton and wool, and man-made fibres that make fabrics easier to look after.</p>
+  
+  <p>The great strength of plastic is its indestructibility. However, this quality is also something of a drawback: beaches all over the world, even on the remotest islands, are littered with plastic bottles that nothing can destroy. Nor is it very easy to recycle plastics, as different types of plastic are often used in the same items and call for different treatments. Plastics can be made biodegradable by incorporating into their structure a material such as starch, which is attacked by bacteria and causes the plastic to fall apart. Other materials can be incorporated that gradually decay in sunlight-although bottles made of such materials have to be stored in the dark, to ensure that they do not disintegrate before they have been used.</p>
+  
+  <p>&nbsp;</p> <!-- 空白行防止加载不完全 -->
+  <p>&nbsp;</p>
+</section>
+<div id="divider" title="Drag to resize"></div>
+<section class="pane" id="right">
+  <h3>Questions</h3>
+  
+  <div class="group">
+    <h4>Questions 1–7</h4>
+    <p>Complete the table below.</p>
+    <p>Choose NO MORE THAN THREE WORDS from the passage for each answer.</p>
+    <p>Write your answers in boxes 1–7 on your answer sheet.</p>
+    
+    <table>
+      <tr>
+        <th>Name of plastic</th>
+        <th>Original region</th>
+        <th>Date of invention</th>
+        <th>Property</th>
+        <th>Common use</th>
+      </tr>
+      <a id="q1-anchor"></a>
+      <tr id="q1-row">
+        <td>Celluloid</td>
+        <td>US</td>
+        <td>1860s</td>
+        <td>Can be softened and reshaped by heat</td>
+        <td><input class="blank" maxlength="40" name="q1" placeholder="1"></td>
+      </tr>
+      <a id="q2-anchor"></a>
+      <tr id="q2-row">
+        <td><input class="blank" maxlength="40" name="q2" placeholder="2"></td>
+        <td>US</td>
+        <td>1907</td>
+        <td>Can be cast and moulded but cannot be softened by heat</td>
+        <td rowspan="2"><a id="q3-anchor"></a><input class="blank" maxlength="40" name="q3" placeholder="3"><br>household items and car parts</td>
+      </tr>
+      <a id="q4-anchor"></a>
+      <tr id="q4-row">
+        <td>Polythene</td>
+        <td><input class="blank" maxlength="40" name="q4" placeholder="4"></td>
+        <td>1930s</td>
+        <td>Thermoplastic</td>
+        <td>Bottles, pipes and plastic bags</td>
+      </tr>
+      <a id="q5-anchor"></a>
+      <tr id="q5-row">
+        <td>Rigid PVC</td>
+        <td>-</td>
+        <td>-</td>
+        <td><input class="blank" maxlength="40" name="q5" placeholder="5"></td>
+        <td>Drains and gutters</td>
+      </tr>
+      <a id="q6-anchor"></a>
+      <tr id="q6-row">
+        <td>Polystyrene</td>
+        <td>Germany</td>
+        <td>1930s</td>
+        <td><input class="blank" maxlength="40" name="q6" placeholder="6"></td>
+        <td>Food containers, domestic appliances and toys</td>
+      </tr>
+      <a id="q7-anchor"></a>
+      <tr id="q7-row">
+        <td>Polyurethanes</td>
+        <td>Germany</td>
+        <td>-</td>
+        <td><input class="blank" maxlength="40" name="q7" placeholder="7"> foams</td>
+        <td>Adhesives, coatings and insulation</td>
+      </tr>
+    </table>
+  </div>
+  
+  <div class="group">
+    <h4>Questions 8–13</h4>
+    <p>Do the following statements agree with the information in Reading Passage 1?</p>
+    <p>In boxes 8–13 on your answer sheet, write:</p>
+    <ul>
+      <li>TRUE if the statement agrees with the information</li>
+      <li>FALSE if the statement contradicts the information</li>
+      <li>NOT GIVEN if there is no information about this</li>
+    </ul>
+    
+    <a id="q8-anchor"></a>
+    <div id="q8-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>8 The chemical structure of plastic is very different from that of rubber.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q8" type="radio" value="TRUE"> TRUE</label>
+        <label style="margin:0;"><input name="q8" type="radio" value="FALSE"> FALSE</label>
+        <label style="margin:0;"><input name="q8" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+    
+    <a id="q9-anchor"></a>
+    <div id="q9-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>9 John Wesley was a famous chemist.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q9" type="radio" value="TRUE"> TRUE</label>
+        <label style="margin:0;"><input name="q9" type="radio" value="FALSE"> FALSE</label>
+        <label style="margin:0;"><input name="q9" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+    
+    <a id="q10-anchor"></a>
+    <div id="q10-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>10 Celluloid and Bakelite react to heat in the same way.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q10" type="radio" value="TRUE"> TRUE</label>
+        <label style="margin:0;"><input name="q10" type="radio" value="FALSE"> FALSE</label>
+        <label style="margin:0;"><input name="q10" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+    
+    <a id="q11-anchor"></a>
+    <div id="q11-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>11 The mix of different varieties of plastic can make recycling more difficult.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q11" type="radio" value="TRUE"> TRUE</label>
+        <label style="margin:0;"><input name="q11" type="radio" value="FALSE"> FALSE</label>
+        <label style="margin:0;"><input name="q11" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+    
+    <a id="q12-anchor"></a>
+    <div id="q12-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>12 Adding starch to plastic can make plastic more durable.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q12" type="radio" value="TRUE"> TRUE</label>
+        <label style="margin:0;"><input name="q12" type="radio" value="FALSE"> FALSE</label>
+        <label style="margin:0;"><input name="q12" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+    
+    <a id="q13-anchor"></a>
+    <div id="q13-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>13 Some plastic containers have to be preserved in special conditions.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q13" type="radio" value="TRUE"> TRUE</label>
+        <label style="margin:0;"><input name="q13" type="radio" value="FALSE"> FALSE</label>
+        <label style="margin:0;"><input name="q13" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+  </div>
+  
+  <div style="display:flex;gap:8px;margin-bottom:10px;">
+    <button class="primary" onclick="grade()">Submit</button>
+    <button onclick="resetForm()">Reset</button>
+    <button onclick="toggleNotes()">Notes</button>
+  </div>
+  <div id="results"></div>
+  <details class="answerbox" id="answerBox">
+    <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+    <div id="answerContent"></div>
+  </details>
+</section>
+</div>
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+<script>
+// Timer
+let _t=0; const _timerEl=document.getElementById('timer');
+setInterval(function(){ 
+  _t++; 
+  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
+  var s=String(_t%60).padStart(2,'0'); 
+  _timerEl.textContent=m+':'+s; 
+},1000);
+// Drag divider
+var divider = document.getElementById('divider');
+var left = document.getElementById('left');
+var right = document.getElementById('right');
+var dragging=false;
+function startDrag(e){ 
+  dragging=true; 
+  document.body.style.cursor='ew-resize'; 
+  if(e.preventDefault) e.preventDefault(); 
+}
+function endDrag(){ 
+  dragging=false; 
+  document.body.style.cursor=''; 
+}
+function onMove(clientX){
+  var container = document.querySelector('.shell').getBoundingClientRect();
+  var x = clientX - container.left;
+  x = Math.max(280, Math.min(container.width-320, x));
+  left.style.flex = '0 0 ' + x + 'px';
+  right.style.flex = '1 1 auto';
+}
+divider.addEventListener('mousedown', function(e){ startDrag(e); });
+window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+window.addEventListener('mouseup', endDrag);
+divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
+window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+window.addEventListener('touchend', endDrag);
+// Highlight toolbar
+var selbar = document.getElementById('selbar');
+var btnHL = document.getElementById('btnHL');
+var btnUH = document.getElementById('btnUH');
+var btnNote = document.getElementById('btnNote');
+var lastRange=null;
+var currentHlNode=null;
+var keepToolbar=false;
+function positionSelbarForRect(rect){
+  selbar.style.display='flex';
+  requestAnimationFrame(function(){
+    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+function updateSelbar(){
+  var sel=window.getSelection();
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
+    selbar.style.display='none'; 
+    currentHlNode=null; 
+    return; 
+  }
+  var range = sel.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode=null;
+  positionSelbarForRect(range.getBoundingClientRect());
+}
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', function(){ 
+  var sel=window.getSelection(); 
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
+    if(!keepToolbar && !currentHlNode){ 
+      selbar.style.display='none'; 
+    } 
+  } 
+});
+document.addEventListener('scroll', function(){ 
+  if(selbar.style.display==='flex') updateSelbar(); 
+});
+document.addEventListener('mousedown', function(e){
+  var t = e.target;
+  if(t.classList && t.classList.contains('hl')){
+    keepToolbar = true;
+  } else {
+    keepToolbar = false;
+  }
+}, true);
+document.addEventListener('click', function(e){
+  var target = e.target;
+  if(target.classList && target.classList.contains('hl')){
+    currentHlNode = target;
+    lastRange = null;
+    positionSelbarForRect(target.getBoundingClientRect());
+    var sel=window.getSelection();
+    if(sel) sel.removeAllRanges();
+    setTimeout(function(){ keepToolbar=false; }, 0);
+  }
+}, true);
+function doHighlight(){
+  if(currentHlNode) return;
+  if(!lastRange || lastRange.collapsed) return;
+  var span=document.createElement('span'); span.className='hl';
+  try { lastRange.surroundContents(span); }
+  catch(e){
+    var wrap=document.createElement('span'); wrap.className='hl';
+    wrap.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrap);
+  }
+  selbar.style.display='none';
+  showToast('Highlighted');
+}
+function removeHighlight(){
+  if(currentHlNode){
+    var p = currentHlNode.parentNode;
+    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
+    p.removeChild(currentHlNode); p.normalize();
+    currentHlNode = null;
+    selbar.style.display='none';
+    showToast('Highlight removed');
+    return;
+  }
+  if(!lastRange) return;
+  var selRect = lastRange.getBoundingClientRect();
+  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  var toRemove=[];
+  while(walker.nextNode()){
+    var n=walker.currentNode;
+    if(n.classList && n.classList.contains('hl')) {
+      var r = n.getBoundingClientRect();
+      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+    }
+  }
+  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
+  selbar.style.display='none';
+  showToast('Highlight removed');
+}
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+// Notes
+var notes = document.getElementById('notes');
+var noteArea = document.getElementById('noteArea');
+var btnCopy=document.getElementById('btnCopy');
+var btnClose=document.getElementById('btnClose');
+function toggleNotes(){ 
+  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+}
+window.toggleNotes = toggleNotes;
+btnClose.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async function(){ 
+  await navigator.clipboard.writeText(noteArea.value||''); 
+  showToast('Copied'); 
+});
+btnNote.addEventListener('click', function(){
+  var text = '';
+  if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
+  else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
+  toggleNotes();
+  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
+  selbar.style.display='none';
+});
+// Toast
+var toastEl=document.getElementById('toast');
+function showToast(msg){
+  toastEl.textContent=msg; 
+  toastEl.style.display='block';
+  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+}
+// Answer key and grading
+var answers = {
+  "q1":"photographic film", "q2":"Bakelite", "q3":"switches", "q4":"British", "q5":"fireproof", "q6":"clear and glass-like", "q7":"rigid",
+  "q8":"FALSE", "q9":"NOT GIVEN", "q10":"FALSE", "q11":"TRUE", "q12":"FALSE", "q13":"TRUE"
+};
+var acceptable = {
+  "q6": ["clear, glass-like", "clear and glass-like"],
+  "q4": ["British", "UK", "Britain"]
+};
+function markBlank(q, user){
+  var u = String(user||'').trim().toLowerCase();
+  var key = String(answers[q]).trim().toLowerCase();
+  if(acceptable[q]){
+    return acceptable[q].map(a => a.toLowerCase()).indexOf(u) >= 0;
+  }
+  return u === key;
+}
+function markChoice(q, user){
+  return String(user||'').toUpperCase() === String(answers[q]).toUpperCase();
+}
+function grade(){
+  var total=0, correct=0, lines=[];
+  function push(q, ok, user){
+    total++; if(ok) correct++;
+    lines.push(q.toUpperCase()+": "+(user||'None')+" "+(ok?'✅':'❌'));
+  }
+  // 1–7 blanks
+  for(var n=1;n<=7;n++){
+    var el=document.querySelector('input[name="q'+n+'"]');
+    var val=el?el.value:'';
+    push('q'+n, markBlank('q'+n, val), val);
+  }
+  // 8–13 true/false/not given
+  for(var n=8;n<=13;n++){
+    var sel=document.querySelector('input[name="q'+n+'"]:checked');
+    var val=sel?sel.value:'';
+    push('q'+n, markChoice('q'+n, val), val);
+  }
+  var acc = (total? Math.round(100*correct/total):0);
+  var html = '<p><strong>Score:</strong> '+correct+'/'+total+' <span class="badge">Accuracy '+acc+'%</span></p>';
+  html += '<pre>'+lines.join('\n')+'</pre>';
+  document.getElementById('results').innerHTML = html;
+  var ahtml = '<ol>';
+  ahtml += '<li>1 → photographic film</li>';
+  ahtml += '<li>2 → Bakelite</li>';
+  ahtml += '<li>3 → switches</li>';
+  ahtml += '<li>4 → British</li>';
+  ahtml += '<li>5 → fireproof</li>';
+  ahtml += '<li>6 → clear and glass-like</li>';
+  ahtml += '<li>7 → rigid</li>';
+  ahtml += '<li>8 → FALSE</li>';
+  ahtml += '<li>9 → NOT GIVEN</li>';
+  ahtml += '<li>10 → FALSE</li>';
+  ahtml += '<li>11 → TRUE</li>';
+  ahtml += '<li>12 → FALSE</li>';
+  ahtml += '<li>13 → TRUE</li>';
+  ahtml += '</ol>';
+  document.getElementById('answerContent').innerHTML = ahtml;
+  document.querySelector('#answerBox .badge').textContent='tap to view';
+}
+function resetForm(){
+  document.querySelectorAll('input[type="radio"]').forEach(el=>el.checked=false);
+  document.querySelectorAll('input.blank').forEach(el=>el.value="");
+  document.getElementById('results').innerHTML='';
+  document.getElementById('answerContent').innerHTML='';
+  document.querySelector('#answerBox .badge').textContent = 'hidden';
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+}
+function scrollToElement(id){
+  var el = document.getElementById(id);
+  if(el){ 
+    el.scrollIntoView({behavior:'smooth', block:'center'}); 
+  }
+  var navs = document.querySelectorAll('.practice-nav .q-item');
+  navs.forEach(n => n.classList.remove('active'));
+  var btn = document.getElementById(id.replace('-anchor','-nav'));
+  if(btn){ 
+    btn.classList.add('active'); 
+    setTimeout(() => btn.classList.remove('active'), 800); 
+  }
+}
+(function(){
+  function mark(qn){
+    var nav = document.getElementById('q'+qn+'-nav');
+    if(!nav) return;
+    var text = document.querySelector('input[name="q'+qn+'"].blank');
+    var radios = document.querySelectorAll('input[name="q'+qn+'"]');
+    var answered=false;
+    if(text){ answered = answered || (text.value && text.value.trim().length>0); }
+    if(radios.length){ radios.forEach(function(r){ if(r.checked) answered=true; }); }
+    if(answered) nav.classList.add('answered'); else nav.classList.remove('answered');
+  }
+  for(var q=1;q<=13;q++){
+    (function(n){
+      var text = document.querySelector('input[name="q'+n+'"].blank');
+      if(text){ text.addEventListener('input', function(){ mark(n); }); }
+      var radios = document.querySelectorAll('input[name="q'+n+'"]');
+      radios.forEach(function(r){ r.addEventListener('change', function(){ mark(n); }); });
+    })(q);
+  }
+  for(var q=1;q<=13;q++){ mark(q); }
+})();
+</script>
+
+<script>
+// 练习页面增强器 - 跨窗口通信功能
+(function() {
+    'use strict';
+    
+    let sessionData = null;
+    let parentWindow = null;
+    let startTime = Date.now();
+    let isSessionActive = false;
+    
+    // 初始化通信功能
+    function initializeCommunication() {
+        console.log('[PracticePageEnhancer] 初始化通信功能');
+        
+        // 监听来自父窗口的消息
+        window.addEventListener('message', function(event) {
+            console.log('[PracticePageEnhancer] 收到消息:', event.data);
+            
+            if (event.data && event.data.type === 'INIT_SESSION') {
+                sessionData = event.data.data;
+                parentWindow = event.source;
+                isSessionActive = true;
+                startTime = Date.now();
+                
+                console.log('[PracticePageEnhancer] 会话已初始化:', sessionData);
+                
+                // 发送会话初始化确认
+                sendMessage('SESSION_INITIALIZED', {
+                    sessionId: sessionData.sessionId,
+                    examId: sessionData.examId,
+                    timestamp: Date.now()
+                });
+                
+                // 设置页面关闭时的数据发送
+                setupPageUnloadHandler();
+            }
+        });
+        
+        // 检测答题完成
+        setupAnswerDetection();
+        
+        console.log('[PracticePageEnhancer] 通信功能已初始化');
+    }
+    
+    // 发送消息到父窗口
+    function sendMessage(type, data) {
+        if (parentWindow && isSessionActive) {
+            const message = {
+                type: type,
+                data: data,
+                source: 'practice_page',
+                timestamp: Date.now()
+            };
+            
+            console.log('[PracticePageEnhancer] 发送消息:', message);
+            parentWindow.postMessage(message, '*');
+        }
+    }
+    
+    // 设置答题检测
+    function setupAnswerDetection() {
+        // 检测提交按钮点击
+        document.addEventListener('click', function(event) {
+            const target = event.target;
+            
+            // 检测是否是提交相关的按钮
+            if (target.tagName === 'BUTTON' && 
+                (target.textContent.includes('提交') || 
+                 target.textContent.includes('Submit') ||
+                 target.textContent.includes('完成') ||
+                 target.textContent.includes('Check') ||
+                 target.id === 'submit-btn' ||
+                 target.className.includes('submit'))) {
+                
+                console.log('[PracticePageEnhancer] 检测到提交按钮点击');
+                
+                // 延迟收集数据，确保答案已处理
+                setTimeout(function() {
+                    collectAndSendPracticeData();
+                }, 1000);
+            }
+        });
+        
+        // 检测表单提交
+        document.addEventListener('submit', function(event) {
+            console.log('[PracticePageEnhancer] 检测到表单提交');
+            setTimeout(function() {
+                collectAndSendPracticeData();
+            }, 1000);
+        });
+    }
+    
+    // 设置页面卸载处理器
+    function setupPageUnloadHandler() {
+        window.addEventListener('beforeunload', function() {
+            if (isSessionActive) {
+                collectAndSendPracticeData();
+            }
+        });
+        
+        // 页面隐藏时也发送数据
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'hidden' && isSessionActive) {
+                collectAndSendPracticeData();
+            }
+        });
+    }
+    
+    // 收集并发送练习数据
+    function collectAndSendPracticeData() {
+        if (!isSessionActive || !sessionData) {
+            console.log('[PracticePageEnhancer] 会话未激活，跳过数据收集');
+            return;
+        }
+        
+        console.log('[PracticePageEnhancer] 开始收集练习数据');
+        
+        const endTime = Date.now();
+        const duration = endTime - startTime;
+        
+        // 收集答案数据
+        const answers = collectAnswers();
+        const score = calculateScore(answers);
+        
+        const practiceData = {
+            sessionId: sessionData.sessionId,
+            examId: sessionData.examId,
+            examTitle: sessionData.examTitle,
+            examCategory: sessionData.examCategory,
+            startTime: startTime,
+            endTime: endTime,
+            duration: duration,
+            answers: answers,
+            score: score.correct,
+            totalQuestions: score.total,
+            accuracy: score.total > 0 ? score.correct / score.total : 0,
+            percentage: score.total > 0 ? Math.round((score.correct / score.total) * 100) : 0,
+            url: window.location.href,
+            source: 'page_extraction',
+            timestamp: endTime
+        };
+        
+        console.log('[PracticePageEnhancer] 练习数据已收集:', practiceData);
+        
+        // 发送练习完成数据
+        sendMessage('PRACTICE_COMPLETE', practiceData);
+        
+        // 标记会话为非活跃状态，避免重复发送
+        isSessionActive = false;
+    }
+    
+    // 收集页面中的答案
+    function collectAnswers() {
+        const answers = [];
+        
+        // 收集输入框答案
+        const inputs = document.querySelectorAll('input[type="text"], input.blank, input.blank-input');
+        inputs.forEach(function(input, index) {
+            if (input.value.trim()) {
+                answers.push({
+                    type: 'text',
+                    question: index + 1,
+                    answer: input.value.trim(),
+                    element: input.tagName + (input.className ? '.' + input.className : '')
+                });
+            }
+        });
+        
+        // 收集选择题答案
+        const selects = document.querySelectorAll('select');
+        selects.forEach(function(select, index) {
+            if (select.value) {
+                answers.push({
+                    type: 'select',
+                    question: index + 1,
+                    answer: select.value,
+                    element: 'SELECT'
+                });
+            }
+        });
+        
+        // 收集单选按钮答案
+        const radios = document.querySelectorAll('input[type="radio"]:checked');
+        radios.forEach(function(radio, index) {
+            answers.push({
+                type: 'radio',
+                question: radio.name || index + 1,
+                answer: radio.value,
+                element: 'INPUT[type="radio"]'
+            });
+        });
+        
+        // 收集复选框答案
+        const checkboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+        checkboxes.forEach(function(checkbox, index) {
+            answers.push({
+                type: 'checkbox',
+                question: checkbox.name || index + 1,
+                answer: checkbox.value,
+                element: 'INPUT[type="checkbox"]'
+            });
+        });
+        
+        console.log('[PracticePageEnhancer] 收集到答案:', answers);
+        return answers;
+    }
+    
+    // 计算得分（简单实现）
+    function calculateScore(answers) {
+        // 这里只是简单计算有答案的题目数量
+        // 实际得分需要根据具体题目的正确答案来计算
+        const total = answers.length;
+        const correct = answers.filter(function(answer) {
+            return answer.answer && answer.answer.trim().length > 0;
+        }).length;
+        
+        return {
+            correct: correct,
+            total: total
+        };
+    }
+    
+    // 页面加载完成后初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeCommunication);
+    } else {
+        initializeCommunication();
+    }
+    
+})();
+</script></body>
+</html>

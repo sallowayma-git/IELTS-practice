@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>What makes a musical expert?</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
+  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  .shell { display:flex; height:100vh; width:100%; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  h2,h3,h4 { margin:0 0 10px; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  table { border-collapse: collapse; width:100%; }
+  th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
+  th:first-child, td:first-child { width:92px; }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button:hover { border-color:#fff; }
+  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+  .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:40px; padding:4px 8px; display:inline-flex; align-items:center; justify-content:space-between; gap:8px; width: auto; min-width: 120px; max-width: 200px; vertical-align: middle; }
+  .droplabel { color:#64748b; font-size:14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:flex; flex-wrap:wrap; gap:8px; }
+  .pool-slot { min-height:40px; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); white-space: nowrap; }
+  .card:active { cursor:grabbing; }
+  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
+  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
+  .ghost { opacity: .5; }
+  .over { outline:2px dashed #3b82f6; }
+  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
+  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
+  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+  body { padding-bottom: 82px; }
+  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
+  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
+  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #selbar { z-index: 6000 !important; }
+</style>
+</head>
+<body>
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q27-nav" onclick="scrollToElement('q27-anchor')">27</div>
+    <div class="q-item" id="q28-nav" onclick="scrollToElement('q28-anchor')">28</div>
+    <div class="q-item" id="q29-nav" onclick="scrollToElement('q29-anchor')">29</div>
+    <div class="q-item" id="q30-nav" onclick="scrollToElement('q30-anchor')">30</div>
+    <div class="q-item" id="q31-nav" onclick="scrollToElement('q31-anchor')">31</div>
+    <div class="q-item" id="q32-nav" onclick="scrollToElement('q32-anchor')">32</div>
+    <div class="q-item" id="q33-nav" onclick="scrollToElement('q33-anchor')">33</div>
+    <div class="q-item" id="q34-nav" onclick="scrollToElement('q34-anchor')">34</div>
+    <div class="q-item" id="q35-nav" onclick="scrollToElement('q35-anchor')">35</div>
+    <div class="q-item" id="q36-nav" onclick="scrollToElement('q36-anchor')">36</div>
+    <div class="q-item" id="q37-nav" onclick="scrollToElement('q37-anchor')">37</div>
+    <div class="q-item" id="q38-nav" onclick="scrollToElement('q38-anchor')">38</div>
+    <div class="q-item" id="q39-nav" onclick="scrollToElement('q39-anchor')">39</div>
+    <div class="q-item" id="q40-nav" onclick="scrollToElement('q40-anchor')">40</div>
+  </div>
+</div>
+<div class="shell">
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 3 <span id="timer">00:00</span></h2>
+    <p>You should spend about 20 minutes on Questions 27–40, which are based on Reading Passage 3 below.</p>
+    <h3>What makes a musical expert?</h3>
+    <p><em>How does someone become expert in music? And is it really possible to have a talent for music?</em></p>
+    
+    <p>Does that class of people acknowledged to be musical experts just have more of the same basic skills we are all endowed with, or do they have a set of abilities - or neural structures - that are totally different from those of the rest of us? Are high levels of musical achievement simply the result of training and practice, or are they based on innate brain structure - what we refer to as talent? Talent can be defined as something that originates in genetic structures and that is identifiable by trained people who can recognize its existence before a person has achieved exceptional levels of performance. The emphasis on early identification means that to investigate it, we study the development of skills in children.</p>
+    
+    <p>It is evident that some children acquire skills more rapidly than others: the age of onset for walking and talking varies widely, even between children in the same household. There may be genetic factors at work, but these are closely linked with other factors - with a presumably environmental component - such as motivation and family dynamics. Similar factors can influence musical development and can mask the contribution of genetics to musical ability.</p>
+    
+    <p>Brain studies, so far, haven’t been of much use in sorting out the issues. Gottfried Schlaug at Harvard collected brain scans of individuals with absolute pitch (AP) and showed that a region in the brain called the planum temporale is larger in these people than in others. This suggests that the planum is involved in AP, but it’s not clear if it starts out larger in people who eventually acquire AP, or if the acquisition of AP makes the planum increase in size.</p>
+    
+    <p>Results of research into the areas of the brain involved in skilled motor movement are more conclusive. Studies of violin players have shown that the region of the brain responsible for controlling the movement of the left hand (the hand that requires greater precision in violin playing) increases in size as a result of practice. We do not know yet if the propensity for increase pre-exists in some people and not others.</p>
+    
+    <p><em>*individuals with absolute pitch: people who can identify or sing any musical note correctly without help</em></p>
+    
+    <p>The evidence against talent comes from research on how much training the experts do. Like experts in mathematics, chess, or sports, experts in music require lengthy periods of instruction and practice. In several studies, the very best music students were found to have practised more than twice as much as the others. In another study, students were secretly divided into two groups based on teachers’ perceptions of their talent. Several years later, it was found that the students who achieved the highest performance ratings had practised the most, irrespective of which talent group they had been assigned to, suggesting that practice does not merely correlate with achievement, but causes it.</p>
+    
+    <p>Anders Ericsson, at Florida State University, approaches the topic of musical expertise as a general problem in cognitive psychology. He takes as a starting point the assumption that there are certain issues involved in becoming an expert at anything; that we can learn about musical expertise by studying expert chess players, athletes, artists, mathematicians, as well as the musicians themselves. The emerging picture from such studies is that ten thousand hours of practice is required to achieve the level of mastery associated with being a world-class expert - in anything. In study after study, of composers, ice-skaters, concert pianists, chess players and master criminals, this number comes up again and again. Someone would do this amount of practice if they practised, for example, roughly 20 hours a week for ten years. Of course, this does not address why some people do not seem to get anywhere when they practise, and why some people get more out of their practice sessions than others. But no-one has yet found a case in which true world-class expertise was accomplished in less time. It seems that it takes the brain this long to assimilate all that it needs to know to achieve true mastery.</p>
+    
+    <p>The ten-thousand-hour theory is consistent with what we know about how the brain learns. Learning requires the assimilation and consolidation of information in neural tissue. The more experiences we have with something, the stronger the memory/learning trace for that experience becomes. Although people differ in how long it takes them to consolidate information neurally, it remains true that increased practice leads to a greater number of neural traces, which create stronger memory representation.</p>
+    
+    <p>The classic rebuttal to this theory goes something like this: What about Mozart? I hear that he composed his first symphony at the age of four! First, there is a factual error here: Mozart did not write it until he was eight. Still, this is unusual, to say the least. However, this early work received little acclaim and was not performed very often. In fact, the only reason we know about it is because the child who wrote it grew up to become Mozart. And Mozart had an expert teacher in his father, who was renowned as a teacher of musicians all over Europe. We do not know how much Mozart practised, but if he started at age two and worked thirty-two hours a week (quite possible, given that his father was a stern taskmaster) he would have made his ten thousand hours by the time he composed his first symphony. This does not mean that there are no genetic factors involved in Mozart’s greatness, but that inborn traits may not be the only cause.</p>
+    
+    <p>&nbsp;</p> <!-- 添加空白行防止加载不完全 -->
+  </section>
+  <div id="divider" title="Drag to resize"></div>
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <h4>Questions 27–30</h4>
+      <p>Choose the correct letter, A, B, C or D.</p>
+      <p>Write the correct letter in boxes 27–30 on your answer sheet.</p>
+      
+      <a id="q27-anchor"></a>
+      <div id="q27-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>27 In the first paragraph, the writer suggests that a talented musician is someone</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q27" type="radio" value="A"> A who is aware of being set apart from other people.</label>
+          <label style="margin:0;"><input name="q27" type="radio" value="B"> B whose brain structure is unlike that of other people.</label>
+          <label style="margin:0;"><input name="q27" type="radio" value="C"> C who can perform extremely well in early childhood.</label>
+          <label style="margin:0;"><input name="q27" type="radio" value="D"> D whose essential skills are more varied than those of ordinary people.</label>
+        </div>
+      </div>
+      
+      <a id="q28-anchor"></a>
+      <div id="q28-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>28 According to the writer, what is unclear about the findings of Gottfried Schlaug?</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q28" type="radio" value="A"> A which part of the brain is linked to a particular musical skill.</label>
+          <label style="margin:0;"><input name="q28" type="radio" value="B"> B which type of musical skill leads to the greatest change in the brain.</label>
+          <label style="margin:0;"><input name="q28" type="radio" value="C"> C whether a feature of the brain is a cause or an effect of a musical skill.</label>
+          <label style="margin:0;"><input name="q28" type="radio" value="D"> D whether the acquisition of a musical skill is easier for some people than others.</label>
+        </div>
+      </div>
+      
+      <a id="q29-anchor"></a>
+      <div id="q29-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>29 According to the writer, what has been established by studies of violin players?</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q29" type="radio" value="A"> A Changes may occur in the brain following violin practice.</label>
+          <label style="margin:0;"><input name="q29" type="radio" value="B"> B Left-handed violinists have a different brain structure from other people.</label>
+          <label style="margin:0;"><input name="q29" type="radio" value="C"> C A violinist’s hand size is not due to practice but to genetic factors.</label>
+          <label style="margin:0;"><input name="q29" type="radio" value="D"> D Violinists are born with brains that have a particular structure.</label>
+        </div>
+      </div>
+      
+      <a id="q30-anchor"></a>
+      <div id="q30-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>30 According to the writer, findings on the amount of practice done by expert musicians suggest that</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q30" type="radio" value="A"> A talent may have little to do with expertise.</label>
+          <label style="margin:0;"><input name="q30" type="radio" value="B"> B practice may actually prevent the development of talent.</label>
+          <label style="margin:0;"><input name="q30" type="radio" value="C"> C talent may not be recognised by teachers.</label>
+          <label style="margin:0;"><input name="q30" type="radio" value="D"> D expertise may be related to quality of instruction.</label>
+        </div>
+      </div>
+    </div>
+    
+    <div class="group">
+      <h4>Questions 31–36</h4>
+      <p>Do the following statements agree with the claims of the writer in Reading Passage 3?</p>
+      <p>In boxes 31–36 on your answer sheet, write</p>
+      <ul>
+        <li>YES if the statement agrees with the claims of the writer</li>
+        <li>NO if the statement contradicts the claims of the writer</li>
+        <li>NOT GIVEN if it is impossible to say what the writer thinks about this</li>
+      </ul>
+      
+      <a id="q31-anchor"></a>
+      <div id="q31-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>31 Anders Ericsson’s work with cognitive psychology has influenced other researchers.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q31" type="radio" value="YES"> YES</label>
+          <label style="margin:0;"><input name="q31" type="radio" value="NO"> NO</label>
+          <label style="margin:0;"><input name="q31" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q32-anchor"></a>
+      <div id="q32-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>32 Different areas of expertise seem to have one specific thing in common.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q32" type="radio" value="YES"> YES</label>
+          <label style="margin:0;"><input name="q32" type="radio" value="NO"> NO</label>
+          <label style="margin:0;"><input name="q32" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q33-anchor"></a>
+      <div id="q33-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>33 In order to be useful, practice must be carried out regularly every day.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q33" type="radio" value="YES"> YES</label>
+          <label style="margin:0;"><input name="q33" type="radio" value="NO"> NO</label>
+          <label style="margin:0;"><input name="q33" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q34-anchor"></a>
+      <div id="q34-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>34 Anyone who practises for long enough can reach the level of a world-class expert.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q34" type="radio" value="YES"> YES</label>
+          <label style="margin:0;"><input name="q34" type="radio" value="NO"> NO</label>
+          <label style="margin:0;"><input name="q34" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q35-anchor"></a>
+      <div id="q35-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>35 Occasionally, someone can become an expert at a global level with fewer than 10,000 hours’ practice.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q35" type="radio" value="YES"> YES</label>
+          <label style="margin:0;"><input name="q35" type="radio" value="NO"> NO</label>
+          <label style="margin:0;"><input name="q35" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q36-anchor"></a>
+      <div id="q36-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>36 Existing knowledge of learning and cognitive skills supports the importance of practice.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q36" type="radio" value="YES"> YES</label>
+          <label style="margin:0;"><input name="q36" type="radio" value="NO"> NO</label>
+          <label style="margin:0;"><input name="q36" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+    </div>
+    
+    <div class="group">
+      <h4>Questions 37–40</h4>
+      <p>Complete the summary using the list of words, A-J, below.</p>
+      <p>Write the correct letter, A-J, in boxes 37–40 on your answer sheet.</p>
+      
+      <p>Mozart</p>
+      <p>The case of Mozart could be quoted as evidence against the 10,000-hour practice theory. However, the writer points out that the young Mozart received a lot of <a id="q37-anchor"></a><div class="dropzone" data-target="q37"><span class="droplabel">Drag answer here</span></div> from his father, and that the symphony he wrote at the age of <a id="q38-anchor"></a><div class="dropzone" data-target="q38"><span class="droplabel">Drag answer here</span></div> was not <a id="q39-anchor"></a><div class="dropzone" data-target="q39"><span class="droplabel">Drag answer here</span></div> and may be of only academic interest. The case therefore supports the view that expertise is not solely the result of <a id="q40-anchor"></a><div class="dropzone" data-target="q40"><span class="droplabel">Drag answer here</span></div> characteristics.</p>
+      
+      <div class="cardpool">
+        <div class="card" draggable="true" data-value="A">A popular</div>
+        <div class="card" draggable="true" data-value="B">B artistic</div>
+        <div class="card" draggable="true" data-value="C">C completed</div>
+        <div class="card" draggable="true" data-value="D">D eight</div>
+        <div class="card" draggable="true" data-value="E">E tuition</div>
+        <div class="card" draggable="true" data-value="F">F encouragement</div>
+        <div class="card" draggable="true" data-value="G">G inherited</div>
+        <div class="card" draggable="true" data-value="H">H four</div>
+        <div class="card" draggable="true" data-value="I">I practice</div>
+        <div class="card" draggable="true" data-value="J">J two</div>
+      </div>
+    </div>
+    
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
+</div>
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+<script>
+// Timer
+let _t=0; const _timerEl=document.getElementById('timer');
+setInterval(function(){ 
+  _t++; 
+  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
+  var s=String(_t%60).padStart(2,'0'); 
+  _timerEl.textContent=m+':'+s; 
+},1000);
+// Drag divider
+var divider = document.getElementById('divider');
+var left = document.getElementById('left');
+var right = document.getElementById('right');
+var dragging=false;
+function startDrag(e){ 
+  dragging=true; 
+  document.body.style.cursor='ew-resize'; 
+  if(e.preventDefault) e.preventDefault(); 
+}
+function endDrag(){ 
+  dragging=false; 
+  document.body.style.cursor=''; 
+}
+function onMove(clientX){
+  var container = document.querySelector('.shell').getBoundingClientRect();
+  var x = clientX - container.left;
+  x = Math.max(280, Math.min(container.width-320, x));
+  left.style.flex = '0 0 ' + x + 'px';
+  right.style.flex = '1 1 auto';
+}
+divider.addEventListener('mousedown', function(e){ startDrag(e); });
+window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+window.addEventListener('mouseup', endDrag);
+divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
+window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+window.addEventListener('touchend', endDrag);
+</script>
+<script>
+// Highlight toolbar
+var selbar = document.getElementById('selbar');
+var btnHL = document.getElementById('btnHL');
+var btnUH = document.getElementById('btnUH');
+var btnNote = document.getElementById('btnNote');
+var lastRange=null;
+var currentHlNode=null;
+var keepToolbar=false;
+function positionSelbarForRect(rect){
+  selbar.style.display='flex';
+  requestAnimationFrame(function(){
+    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+function updateSelbar(){
+  var sel=window.getSelection();
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
+    selbar.style.display='none'; 
+    currentHlNode=null; 
+    return; 
+  }
+  var range = sel.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode=null;
+  positionSelbarForRect(range.getBoundingClientRect());
+}
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', function(){ 
+  var sel=window.getSelection(); 
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
+    if(!keepToolbar && !currentHlNode){ 
+      selbar.style.display='none'; 
+    } 
+  } 
+});
+document.addEventListener('scroll', function(){ 
+  if(selbar.style.display==='flex') updateSelbar(); 
+});
+document.addEventListener('mousedown', function(e){
+  var t = e.target;
+  if(t.classList && t.classList.contains('hl')){
+    keepToolbar = true;
+  } else {
+    keepToolbar = false;
+  }
+}, true);
+document.addEventListener('click', function(e){
+  var target = e.target;
+  if(target.classList && target.classList.contains('hl')){
+    currentHlNode = target;
+    lastRange = null;
+    positionSelbarForRect(target.getBoundingClientRect());
+    var sel=window.getSelection();
+    if(sel) sel.removeAllRanges();
+    setTimeout(function(){ keepToolbar=false; }, 0);
+  }
+}, true);
+function doHighlight(){
+  if(currentHlNode) return;
+  if(!lastRange || lastRange.collapsed) return;
+  
+  // 处理简单选择（同一节点内）
+  if (lastRange.startContainer === lastRange.endContainer) {
+    try {
+      const span = document.createElement('span');
+      span.className = 'hl';
+      lastRange.surroundContents(span);
+      selbar.style.display = 'none';
+      showToast('Highlighted');
+      return;
+    } catch (e) {
+      // 处理边界情况
+    }
+  }
+  
+  // 处理复杂选择（跨多个节点）
+  const fragment = lastRange.cloneContents();
+  const div = document.createElement('div');
+  div.appendChild(fragment);
+  
+  // 递归处理所有文本节点并添加高亮
+  function processNode(node, parentHighlight) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      if (node.textContent.trim().length > 0) {
+        const span = document.createElement('span');
+        span.className = 'hl';
+        span.textContent = node.textContent;
+        return span;
+      }
+      return node;
+    }
+    
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      // 对于块级元素，创建新的块级高亮容器
+      const isBlock = window.getComputedStyle(node).display.includes('block') || 
+                     ['P', 'H1', 'H2', 'H3', 'H4', 'DIV'].includes(node.tagName);
+      
+      const wrapper = isBlock ? document.createElement(node.tagName.toLowerCase()) : document.createElement('span');
+      wrapper.className = isBlock ? node.className + ' hl' : 'hl';
+      
+      // 复制其他属性
+      Array.from(node.attributes).forEach(attr => {
+        wrapper.setAttribute(attr.name, attr.value);
+      });
+      
+      // 处理子节点
+      while (node.firstChild) {
+        const processedChild = processNode(node.firstChild, wrapper);
+        wrapper.appendChild(processedChild);
+      }
+      
+      return wrapper;
+    }
+    
+    return node;
+  }
+  
+  // 处理所有内容
+  const highlightedContent = processNode(div, null);
+  
+  // 清除原有内容并插入高亮内容
+  lastRange.deleteContents();
+  lastRange.insertNode(highlightedContent);
+  
+  selbar.style.display = 'none';
+  showToast('Highlighted');
+}
+function removeHighlight(){
+  if(currentHlNode){
+    // 移除单个高亮元素
+    const parent = currentHlNode.parentNode;
+    while(currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize(); // 合并相邻文本节点
+    currentHlNode = null;
+    selbar.style.display='none';
+    showToast('Highlight removed');
+    return;
+  }
+  
+  if(!lastRange) return;
+  
+  // 移除选区内的所有高亮
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  
+  while(walker.nextNode()){
+    const node = walker.currentNode;
+    if(node.classList && node.classList.contains('hl')) {
+      const rect = node.getBoundingClientRect();
+      // 检查节点是否与选区重叠
+      if(!(rect.right < selRect.left || rect.left > selRect.right || 
+          rect.bottom < selRect.top || rect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
+    }
+  }
+  
+  // 移除所有找到的高亮元素
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while(el.firstChild) {
+      parent.insertBefore(el.firstChild, el);
+    }
+    parent.removeChild(el);
+    parent.normalize(); // 合并相邻文本节点
+  });
+  
+  selbar.style.display='none';
+  showToast('Highlight removed');
+}
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+</script>
+<script>
+// Notes
+var notes = document.getElementById('notes');
+var noteArea = document.getElementById('noteArea');
+var btnCopy=document.getElementById('btnCopy');
+var btnClose=document.getElementById('btnClose');
+function toggleNotes(){ 
+  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+}
+window.toggleNotes = toggleNotes;
+btnClose.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async function(){ 
+  await navigator.clipboard.writeText(noteArea.value||''); 
+  showToast('Copied'); 
+});
+btnNote.addEventListener('click', function(){
+  var text = '';
+  if(currentHlNode){ 
+    text = (currentHlNode.textContent||'').trim(); 
+  } else if(lastRange){ 
+    var frag = lastRange.cloneContents(); 
+    text = (frag.textContent||'').trim(); 
+  }
+  toggleNotes();
+  if(text) {
+    noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
+  }
+  selbar.style.display='none';
+});
+// Toast
+var toastEl=document.getElementById('toast');
+function showToast(msg){
+  toastEl.textContent=msg; 
+  toastEl.style.display='block';
+  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+}
+</script>
+<script>
+// Drag and drop for questions 37-40
+const cards = document.querySelectorAll('.card');
+const dropzones = document.querySelectorAll('.dropzone');
+cards.forEach(card => {
+  card.addEventListener('dragstart', () => {
+    card.classList.add('dragging');
+  });
+  card.addEventListener('dragend', () => {
+    card.classList.remove('dragging');
+  });
+});
+dropzones.forEach(zone => {
+  zone.addEventListener('dragover', e => {
+    e.preventDefault();
+    zone.classList.add('over');
+  });
+  
+  zone.addEventListener('dragleave', () => {
+    zone.classList.remove('over');
+  });
+  
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('over');
+    const draggingCard = document.querySelector('.dragging');
+    if (draggingCard) {
+      // 清除现有内容
+      zone.innerHTML = '';
+      zone.appendChild(draggingCard);
+      // 标记为已回答
+      const targetQ = zone.dataset.target;
+      document.getElementById(targetQ + '-nav').classList.add('answered');
+    }
+  });
+});
+</script>
+<script>
+// Answer key and grading
+var answers = {
+  "q27":"B", "q28":"C", "q29":"A", "q30":"A",
+  "q31":"NOT GIVEN", "q32":"YES", "q33":"NOT GIVEN", "q34":"NO", "q35":"NO", "q36":"YES",
+  "q37":"E", "q38":"D", "q39":"A", "q40":"G"
+};
+function grade(){
+  var total=0, correct=0, lines=[];
+  
+  // 检查单选题 (27-30, 31-36)
+  for(let n=27; n<=36; n++){
+    const q = `q${n}`;
+    total++;
+    const selected = document.querySelector(`input[name="${q}"]:checked`);
+    const userAnswer = selected ? selected.value : '';
+    const isCorrect = userAnswer === answers[q];
+    if (isCorrect) correct++;
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✅' : '❌'}`);
+  }
+  
+  // 检查拖放题 (37-40)
+  dropzones.forEach(zone => {
+    const q = zone.dataset.target;
+    total++;
+    const selectedCard = zone.querySelector('.card');
+    const userAnswer = selectedCard ? selectedCard.dataset.value : '';
+    const isCorrect = userAnswer === answers[q];
+    if (isCorrect) correct++;
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✅' : '❌'}`);
+  });
+  
+  // 显示结果
+  const acc = Math.round(100 * correct / total);
+  document.getElementById('results').innerHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p>
+    <pre>${lines.join('\n')}</pre>
+  `;
+  
+  // 显示答案
+  document.getElementById('answerContent').innerHTML = `
+    <ol>
+      <li>27 → B</li>
+      <li>28 → C</li>
+      <li>29 → A</li>
+      <li>30 → A</li>
+      <li>31 → NOT GIVEN</li>
+      <li>32 → YES</li>
+      <li>33 → NOT GIVEN</li>
+      <li>34 → NO</li>
+      <li>35 → NO</li>
+      <li>36 → YES</li>
+      <li>37 → E (tuition)</li>
+      <li>38 → D (eight)</li>
+      <li>39 → A (popular)</li>
+      <li>40 → G (inherited)</li>
+    </ol>
+  `;
+  document.querySelector('#answerBox .badge').textContent = 'tap to view';
+}
+function resetForm(){
+  // 重置拖放题
+  dropzones.forEach(zone => {
+    const card = zone.querySelector('.card');
+    if (card) {
+      document.querySelector('.cardpool').appendChild(card);
+      zone.innerHTML = '<span class="droplabel">Drag answer here</span>';
+    }
+  });
+  
+  // 重置单选题
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // 重置结果和答案
+  document.getElementById('results').innerHTML = '';
+  document.getElementById('answerContent').innerHTML = '';
+  document.querySelector('#answerBox .badge').textContent = 'hidden';
+  
+  // 重置导航栏的已回答状态
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+}
+// 滚动到问题锚点
+function scrollToElement(id){
+  const el = document.getElementById(id);
+  if(el){ 
+    el.scrollIntoView({behavior:'smooth', block:'center'}); 
+  }
+  // 短暂高亮导航项
+  const navs = document.querySelectorAll('.practice-nav .q-item');
+  navs.forEach(n => n.classList.remove('active'));
+  const btn = document.getElementById(id.replace('-anchor','-nav'));
+  if(btn){ 
+    btn.classList.add('active'); 
+    setTimeout(() => btn.classList.remove('active'), 800); 
+  }
+}
+// 监听交互并标记已回答
+(function(){
+  function markAnswered(qn){
+    const nav = document.getElementById(`q${qn}-nav`);
+    if(!nav) return;
+    let answered = false;
+    
+    // 检查拖放区 (37-40)
+    if(qn >=37 && qn <=40){
+      const zone = document.querySelector(`.dropzone[data-target="q${qn}"]`);
+      answered = zone.querySelector('.card') !== null;
+    } 
+    // 检查单选题 (27-30, 31-36)
+    else {
+      const radios = document.querySelectorAll(`input[name="q${qn}"]:checked`);
+      answered = radios.length > 0;
+    }
+    
+    if(answered) nav.classList.add('answered');
+    else nav.classList.remove('answered');
+  }
+  
+  // 监听拖放区
+  dropzones.forEach(zone => {
+    zone.addEventListener('drop', () => {
+      const qn = zone.dataset.target.replace('q', '');
+      markAnswered(qn);
+    });
+  });
+  
+  // 监听单选题
+  for(let n=27; n<=36; n++){
+    document.querySelectorAll(`input[name="q${n}"]`).forEach(radio => {
+      radio.addEventListener('change', () => markAnswered(n));
+    });
+  }
+})();
+</script>
+
+<!-- 练习页面数据传输增强脚本 -->
+<script>
+// 检查是否已经有增强脚本
+if (!window.practicePageEnhancer) {
+    // 动态加载增强脚本
+    const script = document.createElement('script');
+    script.src = '../../js/practice-page-enhancer.js';
+    script.onload = function() {
+        console.log('练习页面增强脚本已加载');
+    };
+    script.onerror = function() {
+        console.error('练习页面增强脚本加载失败');
+        // 降级到内联增强
+        loadInlineEnhancer();
+    };
+    document.head.appendChild(script);
+}
+
+// 内联增强器（降级方案）
+function loadInlineEnhancer() {
+    if (window.practicePageEnhancer) return;
+    
+    window.practicePageEnhancer = {
+        initialize: function() {
+            console.log('[InlineEnhancer] 内联增强器已初始化');
+            this.setupCommunication();
+            this.setupAnswerListeners();
+            this.interceptSubmit();
+        },
+        
+        setupCommunication: function() {
+            this.parentWindow = window.opener || window.parent;
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'INIT_SESSION') {
+                    this.sessionId = event.data.data.sessionId;
+                    this.sendMessage('SESSION_READY', {
+                        pageType: this.detectPageType(),
+                        url: window.location.href
+                    });
+                }
+            });
+        },
+        
+        detectPageType: function() {
+            const title = document.title || '';
+            if (title.includes('P1')) return 'P1';
+            if (title.includes('P2')) return 'P2';
+            if (title.includes('P3')) return 'P3';
+            return 'unknown';
+        },
+        
+        setupAnswerListeners: function() {
+            this.answers = {};
+            this.startTime = Date.now();
+            
+            document.addEventListener('change', (e) => {
+                if (e.target.name && e.target.name.startsWith('q')) {
+                    this.answers[e.target.name] = e.target.value;
+                }
+            });
+        },
+        
+        interceptSubmit: function() {
+            // 拦截grade函数
+            if (typeof window.grade === 'function') {
+                const originalGrade = window.grade;
+                window.grade = () => {
+                    const result = originalGrade();
+                    setTimeout(() => this.handleSubmit(), 200);
+                    return result;
+                };
+            }
+            
+            // 监听提交按钮
+            document.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON' && 
+                    (e.target.textContent.includes('Submit') || 
+                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+                    setTimeout(() => this.handleSubmit(), 300);
+                }
+            });
+        },
+        
+        handleSubmit: function() {
+            const results = {
+                sessionId: this.sessionId,
+                startTime: this.startTime,
+                endTime: Date.now(),
+                duration: Math.round((Date.now() - this.startTime) / 1000),
+                answers: this.answers,
+                scoreInfo: this.extractScore(),
+                pageType: this.detectPageType(),
+                url: window.location.href
+            };
+            
+            this.sendMessage('PRACTICE_COMPLETE', results);
+        },
+        
+        extractScore: function() {
+            const resultsEl = document.getElementById('results');
+            if (!resultsEl) return null;
+            
+            const text = resultsEl.textContent || '';
+            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+            if (scoreMatch) {
+                const correct = parseInt(scoreMatch[1]);
+                const total = parseInt(scoreMatch[2]);
+                return {
+                    correct: correct,
+                    total: total,
+                    accuracy: total > 0 ? correct / total : 0,
+                    percentage: Math.round((correct / total) * 100),
+                    source: 'inline_extraction'
+                };
+            }
+            return null;
+        },
+        
+        sendMessage: function(type, data) {
+            if (this.parentWindow) {
+                this.parentWindow.postMessage({
+                    type: type,
+                    data: data,
+                    source: 'practice_page'
+                }, '*');
+            }
+        }
+    };
+    
+    // 初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            window.practicePageEnhancer.initialize();
+        });
+    } else {
+        window.practicePageEnhancer.initialize();
+    }
+}
+</script>
+
+</body>
+</html>

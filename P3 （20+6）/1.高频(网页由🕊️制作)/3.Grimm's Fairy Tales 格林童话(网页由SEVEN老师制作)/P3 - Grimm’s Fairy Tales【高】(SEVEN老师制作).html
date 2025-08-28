@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>P3 – Grimm’s Fairy Tales</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
+  #timer { position:fixed; top:10px; left:10px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:6px 10px; font-size:14px; z-index:1000; }
+  .shell { display:flex; height:100vh; width:100%; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 280px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  #divider::after { content:""; position:absolute; inset:0; }
+  h2,h3 { margin:0 0 10px; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  table { border-collapse: collapse; width:100%; }
+  th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button[disabled] { opacity: .45; cursor: not-allowed; }
+  #selbar button:hover { border-color:#fff; }
+  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+</style>
+</head>
+<body>
+<div id="timer">00:00</div>
+<div class="shell">
+  <section class="pane" id="left">
+    
+<h2>READING PASSAGE 3</h2>
+<p>You should spend about 20 minutes on Questions 27–40, which are based on Reading Passage 3 below.</p>
+<h3>Grimm’s Fairy Tales</h3>
+<h4>Paragraph A</h4>
+<p>The Brothers Grimm, Jacob and Wilhelm, named their story collection Children’s and Household Tales and published the first of its seven editions in Germany in 1812. The table of contents reads like an A-list of fairy-tale celebrities: Cinderella, Sleeping Beauty, Snow White, Little Red Riding Hood, Rapunzel, Rumpelstiltskin, Hansel and Gretel, the Frog King. Drawn mostly from oral narratives, the 210 stories in the Grimm’s’ collection represent an anthology of fairy tales, animal fables, rustic farces, and religious allegories that remain unrivalled to this day.</p>
+<h4>Paragraph B</h4>
+<p>Such lasting fame would have shocked the humble Grimms. During their lifetimes the collection sold modestly in Germany, at first only a few hundred copies a year. The early editions were not even aimed at children. The brothers initially refused to consider illustrations, and scholarly footnotes took up almost as much space as the tales themselves. Jacob and Wilhelm viewed themselves as patriotic folklorists, not as entertainers of children. They began their work at a time when Germany had been overrun by the French under Napoleon, who was intent on suppressing local culture. As young, workaholic scholars, single and sharing a cramped flat, the Brothers Grimm undertook the fairy-tale collection with the goal of serving the endangered oral tradition of Germany.</p>
+<h4>Paragraph C</h4>
+<p>For much of the 19th-century teachers, parents, and religious figures, particularly in the United States, deplored the Grimms’ collection for its raw, uncivilized content. Offended adults objected to the gruesome punishments inflicted on the stories’ villains. In the original “Snow White” the evil stepmother is forced to dance in red-hot iron shoes until she falls down dead. Even today some protective parents shy from the Grimms’ tales because of their reputation for violence.</p>
+<h4>Paragraph D</h4>
+<p>Despite its sometimes rocky reception, Children’s and Household Tales gradually took root with the public. The brothers had not foreseen that the appearance of their work would coincide with a great flowering of children’s literature in Europe. English publishers led the way, issuing high-quality picture books such as Jack and the Beanstalk and handsome folktale collections, all to satisfy a newly literate audience seeking virtuous material for the nursery. Once the Brothers Grimm sighted this new public, they set about refining and softening their tales, which had originated centuries earlier as earthy peasant fare. In the Grimms’ hands, cruel mothers became nasty stepmothers, unmarried lovers were made chaste, and the incestuous father was recast as the devil.</p>
+<h4>Paragraph E</h4>
+<p>In the 20th century, the Grimms’ fairy tales have come to rule the bookshelves of children’s bedrooms. The stories read like dreams come true: handsome lads and beautiful damsels, armed with magic, triumph over giants and witches and wild beasts. They outwit mean, selfish adults. Inevitably the boy and girl fall in love and live happily ever after. And parents keep reading because they approve of the finger-wagging lessons inserted into the stories: keep your promises, don’t talk to strangers, work hard, obey your parents. According to the Grimms, the collection served as “a manual of manners”.</p>
+<h4>Paragraph F</h4>
+<p>Altogether some 40 persons delivered tales to the Grimms. Many of the storytellers came to the Grimms’ house in Kassel. The brothers particularly welcomed the visits of Dorothea Viehmann, a widow who walked to town to sell produce from her garden. An innkeeper’s daughter, Viehmann had grown up listening to stories from travellers on the road to Frankfurt. Among her treasure was “Aschenputtel” -Cinderella. Marie Hassenpflug was a 20-year-old friend of their sister, Charlotte, from a well-bred, French-speaking family. Marie’s wonderful stories blended motifs from the oral tradition and from Perrault’s influential 1697 book, Tales of My Mother Goose, which contained elaborate versions of “Little Red Riding Hood”, “Snow White”, and “Sleeping Beauty”, among others. Many of these had been adapted from earlier Italian tales.</p>
+<h4>Paragraph G</h4>
+<p>Given that the origins of many of the Grimm fairy tales reach throughout Europe and into the Middle East and Orient, the question must be asked: How German are the Grimm tales? Very, says scholar Heinz Rolleke. Love of the underdog, rustic simplicity, creative energy-these are Teutonic traits. The coarse texture of life during medieval times in Germany, when many of the tales entered the oral tradition, also coloured the narratives. Throughout Europe, children were often neglected and abandoned, like Hansel and Gretel. Accused witches were burned at the stake, like the evil mother-in-law in “The Six Swans”. “The cruelty in the stories was not the Grimms’ fantasy”, Rolleke points out, “It reflected the law-and-order system of the old times”.</p>
+<h4>Paragraph H</h4>
+<p>The editorial fingerprints left by the Grimms betray the specific values of 19th-century Christian, bourgeois German society. But that has not stopped the tales from being embraced by almost every culture and nationality in the world. What accounts for this widespread, enduring popularity? Bernhard Lauer points to the “universal style” of the writing, you have no concrete descriptions of the land, or the clothes, or the forest, or the castles. It makes the stories timeless and placeless. “The tales allow us to express ‘our utopian longings’,” says Jack Zipes of the University of Minnesota, whose 1987 translation of the complete fairy tales captures the rustic vigour of the original text. “They show a striving for happiness that none of us knows but that we sense is possible. We can identify with the heroes of the tales and become in our mind the masters and mistresses of our own destinies.”</p>
+<h4>Paragraph I</h4>
+<p>Fairy tales provide a workout for the unconscious, psychoanalysts maintain. Bruno Bettelheim famously promoted the therapeutic value of the Grimms’ stories, calling fairy tales the “great comforters”. By confronting fears and phobias, symbolized by witches, heartless stepmothers, and hungry wolves, children find they can master their anxieties. Bettelheim’s theory continues to be hotly debated. But most young readers aren’t interested in exercising their unconsciousness. The Grimm tales, in fact, please in an infinite number of ways, something about them seems to mirror whatever moods or interests we bring to our reading of them. The flexibility of interpretation suits them for almost any time and any culture.</p>
+  </section>
+  <div id="divider" title="Drag to resize"></div>
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    <div class="group">
+      <h4>Questions 27–32</h4>
+      <p>Do the following statements agree with the information given in Reading Passage 3?</p>
+      <p>In boxes 27–32 on your answer sheet, write:</p>
+      <ul>
+        <li>YES if the statement agrees with the claims of the writer</li>
+        <li>NO if the statement contradicts the claims of the writer</li>
+        <li>NOT GIVEN if it is impossible to say what the writer thinks about this</li>
+      </ul>
+      <ol start="27">
+        <li>The Grimm brothers believed they would achieve international fame.<br>
+          <label><input type="radio" name="q27" value="YES"> YES</label> <label><input type="radio" name="q27" value="NO"> NO</label> <label><input type="radio" name="q27" value="NOT GIVEN"> NOT GIVEN</label>
+        </li>
+        <li>The Grimm brothers were forced to work in secret.<br>
+          <label><input type="radio" name="q28" value="YES"> YES</label> <label><input type="radio" name="q28" value="NO"> NO</label> <label><input type="radio" name="q28" value="NOT GIVEN"> NOT GIVEN</label>
+        </li>
+        <li>Some parents today still think Grimm fairy tales are not suitable for children.<br>
+          <label><input type="radio" name="q29" value="YES"> YES</label> <label><input type="radio" name="q29" value="NO"> NO</label> <label><input type="radio" name="q29" value="NOT GIVEN"> NOT GIVEN</label>
+        </li>
+        <li>The first edition of Grimm’s fairy tales sold more widely in England than in Germany.<br>
+          <label><input type="radio" name="q30" value="YES"> YES</label> <label><input type="radio" name="q30" value="NO"> NO</label> <label><input type="radio" name="q30" value="NOT GIVEN"> NOT GIVEN</label>
+        </li>
+        <li>Adults like reading Grimm’s fairy tales for reasons different from those of children.<br>
+          <label><input type="radio" name="q31" value="YES"> YES</label> <label><input type="radio" name="q31" value="NO"> NO</label> <label><input type="radio" name="q31" value="NOT GIVEN"> NOT GIVEN</label>
+        </li>
+        <li>The Grimm brothers based the story “Cinderella” on the life of Dorothea Viehmann.<br>
+          <label><input type="radio" name="q32" value="YES"> YES</label> <label><input type="radio" name="q32" value="NO"> NO</label> <label><input type="radio" name="q32" value="NOT GIVEN"> NOT GIVEN</label>
+        </li>
+      </ol>
+    </div>
+    <div class="group">
+      <h4>Questions 33–35</h4>
+      <p>Choose the correct letter, A, B, C or D.</p>
+      <p>Write your answers in boxes 33–35 on your answer sheet.</p>
+      <ol start="33">
+        <li>In paragraph D, what changes happened at that time in Europe?<br>
+          <label><input type="radio" name="q33" value="A"> A. Literacy levels of the population increased.</label><br>
+          <label><input type="radio" name="q33" value="B"> B. The development of printing technology made it easier to publish.</label><br>
+          <label><input type="radio" name="q33" value="C"> C. Schools were open to children.</label><br>
+          <label><input type="radio" name="q33" value="D"> D. People were fond of collecting superb picture books.</label>
+        </li>
+        <li>What changes did the Grimm Brothers make in later editions?<br>
+          <label><input type="radio" name="q34" value="A"> A. They made the stories shorter.</label><br>
+          <label><input type="radio" name="q34" value="B"> B. They used more oral language.</label><br>
+          <label><input type="radio" name="q34" value="C"> C. The content of the tales became less violent.</label><br>
+          <label><input type="radio" name="q34" value="D"> D. They found other origins of the tales.</label>
+        </li>
+        <li>What did Marie Hassenpflug contribute to the Grimm’s Fairy tales?<br>
+          <label><input type="radio" name="q35" value="A"> A. She wrote stories.</label><br>
+          <label><input type="radio" name="q35" value="B"> B. She discussed the stories with them.</label><br>
+          <label><input type="radio" name="q35" value="C"> C. She translated a popular book for the brothers using her talent for languages.</label><br>
+          <label><input type="radio" name="q35" value="D"> D. She told the oral stories that were based on traditional Italian stories.</label>
+        </li>
+      </ol>
+    </div>
+    <div class="group">
+      <h4>Questions 36–40</h4>
+      <p>Complete each sentence with the correct ending, A-H below.</p>
+      <p>Write the correct letter, A-H, in boxes 36–40 on your answer sheet.</p>
+      <p><strong>List of endings</strong></p>
+      <ul>
+        <li>A. reflect what life was like at that time.</li>
+        <li>B. help children deal with their problems.</li>
+        <li>C. demonstrate the outdated system.</li>
+        <li>D. tell of the simplicity of life in the German countryside.</li>
+        <li>E. encourage people to believe that they can do anything.</li>
+        <li>F. recognize the heroes in the real life.</li>
+        <li>G. contribute to the belief in nature’s power.</li>
+        <li>H. avoid details about characters’ social settings.</li>
+      </ul>
+      <ol start="36">
+        <li>Heinz Rolleke said the Grimm’s tales are “German” because some tales<br>
+          <label><input type="radio" name="q36" value="A"> A</label> <label><input type="radio" name="q36" value="B"> B</label> <label><input type="radio" name="q36" value="C"> C</label> <label><input type="radio" name="q36" value="D"> D</label> <label><input type="radio" name="q36" value="E"> E</label> <label><input type="radio" name="q36" value="F"> F</label> <label><input type="radio" name="q36" value="G"> G</label> <label><input type="radio" name="q36" value="H"> H</label>
+        </li>
+        <li>Heinz Rolleke said the abandoned children in tales<br>
+          <label><input type="radio" name="q37" value="A"> A</label> <label><input type="radio" name="q37" value="B"> B</label> <label><input type="radio" name="q37" value="C"> C</label> <label><input type="radio" name="q37" value="D"> D</label> <label><input type="radio" name="q37" value="E"> E</label> <label><input type="radio" name="q37" value="F"> F</label> <label><input type="radio" name="q37" value="G"> G</label> <label><input type="radio" name="q37" value="H"> H</label>
+        </li>
+        <li>Bernhard Lauer said the writing style of the Grimm brothers is universal because they<br>
+          <label><input type="radio" name="q38" value="A"> A</label> <label><input type="radio" name="q38" value="B"> B</label> <label><input type="radio" name="q38" value="C"> C</label> <label><input type="radio" name="q38" value="D"> D</label> <label><input type="radio" name="q38" value="E"> E</label> <label><input type="radio" name="q38" value="F"> F</label> <label><input type="radio" name="q38" value="G"> G</label> <label><input type="radio" name="q38" value="H"> H</label>
+        </li>
+        <li>Jack Zipes said the pursuit of happiness in the tales means they<br>
+          <label><input type="radio" name="q39" value="A"> A</label> <label><input type="radio" name="q39" value="B"> B</label> <label><input type="radio" name="q39" value="C"> C</label> <label><input type="radio" name="q39" value="D"> D</label> <label><input type="radio" name="q39" value="E"> E</label> <label><input type="radio" name="q39" value="F"> F</label> <label><input type="radio" name="q39" value="G"> G</label> <label><input type="radio" name="q39" value="H"> H</label>
+        </li>
+        <li>Bruno Bettelheim said the therapeutic value of the tales means that the fairy tales<br>
+          <label><input type="radio" name="q40" value="A"> A</label> <label><input type="radio" name="q40" value="B"> B</label> <label><input type="radio" name="q40" value="C"> C</label> <label><input type="radio" name="q40" value="D"> D</label> <label><input type="radio" name="q40" value="E"> E</label> <label><input type="radio" name="q40" value="F"> F</label> <label><input type="radio" name="q40" value="G"> G</label> <label><input type="radio" name="q40" value="H"> H</label>
+        </li>
+      </ol>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    <div id="results"></div>
+  </section>
+</div>
+<div id="selbar" role="toolbar" aria-label="Selection tools">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+<script>
+let t=0; const timerEl=document.getElementById('timer');
+setInterval(function(){ t++; var m=String(Math.floor(t/60)).padStart(2,'0'); var s=String(t%60).padStart(2,'0'); timerEl.textContent=m+':'+s; },1000);
+// Drag divider
+var divider = document.getElementById('divider');
+var left = document.getElementById('left');
+var right = document.getElementById('right');
+var dragging=false;
+function startDrag(e){ dragging=true; document.body.style.cursor='ew-resize'; if(e.preventDefault) e.preventDefault(); }
+function endDrag(){ dragging=false; document.body.style.cursor=''; }
+function onMove(clientX){
+  var container = document.querySelector('.shell').getBoundingClientRect();
+  var x = clientX - container.left;
+  x = Math.max(280, Math.min(container.width-280, x));
+  left.style.flex = '0 0 ' + x + 'px';
+  right.style.flex = '1 1 auto';
+}
+divider.addEventListener('mousedown', function(e){ startDrag(e); });
+window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+window.addEventListener('mouseup', endDrag);
+divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
+window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+window.addEventListener('touchend', endDrag);
+// Selection toolbar
+var selbar = document.getElementById('selbar');
+var btnHL = document.getElementById('btnHL');
+var btnUH = document.getElementById('btnUH');
+var btnNote = document.getElementById('btnNote');
+var lastRange=null;
+var currentHlNode=null;
+function setHighlightButtonState(){
+  if(currentHlNode){
+    btnHL.setAttribute('disabled','true');
+  } else {
+    btnHL.removeAttribute('disabled');
+  }
+}
+function positionSelbarForRect(rect){
+  selbar.style.display='flex';
+  requestAnimationFrame(function(){
+    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+  setHighlightButtonState();
+}
+function updateSelbar(){
+  var sel=window.getSelection();
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed){
+    if(!currentHlNode){ selbar.style.display='none'; }
+    return;
+  }
+  var range = sel.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode=null;
+  positionSelbarForRect(range.getBoundingClientRect());
+}
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', function(){
+  var sel=window.getSelection();
+  if((!sel || sel.rangeCount===0 || sel.isCollapsed) && !currentHlNode){
+    selbar.style.display='none';
+  }
+});
+document.addEventListener('scroll', function(){ if(selbar.style.display==='flex') {
+  var rect;
+  if(currentHlNode){ rect = currentHlNode.getBoundingClientRect(); }
+  else if(lastRange){ rect = lastRange.getBoundingClientRect(); }
+  if(rect) positionSelbarForRect(rect);
+}});
+// Click a highlight -> show toolbar (same as selection), do NOT auto-remove
+document.addEventListener('click', function(e){
+  var target = e.target;
+  if(target.classList && target.classList.contains('hl')){
+    currentHlNode = target;
+    lastRange = null; // clicking highlight uses node reference, not selection
+    positionSelbarForRect(target.getBoundingClientRect());
+    var sel=window.getSelection();
+    if(sel){ sel.removeAllRanges(); } // keep UI clean
+  }
+}, true);
+// Add highlight for normal selection
+function addHighlight(){
+  if(currentHlNode){ return; } // already highlighted, no-op
+  if(!lastRange || lastRange.collapsed) return;
+  var span=document.createElement('span'); span.className='hl';
+  try { lastRange.surroundContents(span); }
+  catch(e){
+    var wrap=document.createElement('span'); wrap.className='hl';
+    wrap.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrap);
+  }
+  selbar.style.display='none';
+  showToast('Highlighted');
+}
+// Remove highlight: if clicking on a block, remove that block; else remove any highlight intersecting selection
+function removeHighlight(){
+  if(currentHlNode){
+    var p = currentHlNode.parentNode;
+    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
+    p.removeChild(currentHlNode); p.normalize();
+    currentHlNode = null;
+    selbar.style.display='none';
+    showToast('Highlight removed');
+    return;
+  }
+  if(!lastRange) return;
+  var selRect = lastRange.getBoundingClientRect();
+  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  var toRemove=[];
+  while(walker.nextNode()){
+    var n=walker.currentNode;
+    if(n.classList && n.classList.contains('hl')) {
+      var r = n.getBoundingClientRect();
+      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+    }
+  }
+  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
+  selbar.style.display='none';
+  showToast('Highlight removed');
+}
+btnHL.addEventListener('click', addHighlight);
+btnUH.addEventListener('click', removeHighlight);
+// Notes
+var notes = document.getElementById('notes');
+var noteArea = document.getElementById('noteArea');
+var btnCopy=document.getElementById('btnCopy');
+var btnClose=document.getElementById('btnClose');
+function toggleNotes(){ notes.style.display = (notes.style.display==='flex'?'none':'flex'); }
+window.toggleNotes = toggleNotes;
+btnClose.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async function(){ await navigator.clipboard.writeText(noteArea.value||''); showToast('Copied'); });
+btnNote.addEventListener('click', function(){
+  var text = '';
+  if(currentHlNode){
+    text = (currentHlNode.textContent||'').trim();
+  } else if(lastRange){
+    var frag = lastRange.cloneContents();
+    text = (frag.textContent||'').trim();
+  }
+  toggleNotes();
+  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
+  selbar.style.display='none';
+});
+// Toast
+var toastEl=document.getElementById('toast');
+function showToast(msg){
+  toastEl.textContent=msg; toastEl.style.display='block';
+  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+}
+// Grading
+var answerKey = {
+  q27: "NO", q28: "NOT GIVEN", q29: "YES", q30: "NOT GIVEN", q31: "YES", q32: "NO",
+  q33: "A", q34: "C", q35: "D",
+  q36: "D", q37: "A", q38: "H", q39: "E", q40: "B"
+};
+function grade(){
+  var score=0, total=0, lines=[];
+  Object.keys(answerKey).forEach(function(q){
+    total++;
+    var chosen = document.querySelector('input[name="'+q+'"]:checked');
+    var val = chosen ? chosen.value : "";
+    if(val === answerKey[q]){ score++; lines.push(q+': '+val+' ✔️'); }
+    else { lines.push(q+': '+(val||'None')+' ❌ (Correct: '+answerKey[q]+')'); }
+  });
+  document.getElementById('results').innerHTML = '<p><strong>Score:</strong> '+score+'/'+total+'</p><pre>'+lines.join('\n')+'</pre>';
+}
+function resetForm(){
+  document.querySelectorAll('input[type="radio"]').forEach(function(i){ i.checked=false; });
+  document.getElementById('results').innerHTML='';
+}
+</script>
+
+<!-- 练习页面数据传输增强脚本 -->
+<script>
+// 检查是否已经有增强脚本
+if (!window.practicePageEnhancer) {
+    // 动态加载增强脚本
+    const script = document.createElement('script');
+    script.src = '../../js/practice-page-enhancer.js';
+    script.onload = function() {
+        console.log('练习页面增强脚本已加载');
+    };
+    script.onerror = function() {
+        console.error('练习页面增强脚本加载失败');
+        // 降级到内联增强
+        loadInlineEnhancer();
+    };
+    document.head.appendChild(script);
+}
+
+// 内联增强器（降级方案）
+function loadInlineEnhancer() {
+    if (window.practicePageEnhancer) return;
+    
+    window.practicePageEnhancer = {
+        initialize: function() {
+            console.log('[InlineEnhancer] 内联增强器已初始化');
+            this.setupCommunication();
+            this.setupAnswerListeners();
+            this.interceptSubmit();
+        },
+        
+        setupCommunication: function() {
+            this.parentWindow = window.opener || window.parent;
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'INIT_SESSION') {
+                    this.sessionId = event.data.data.sessionId;
+                    this.sendMessage('SESSION_READY', {
+                        pageType: this.detectPageType(),
+                        url: window.location.href
+                    });
+                }
+            });
+        },
+        
+        detectPageType: function() {
+            const title = document.title || '';
+            if (title.includes('P1')) return 'P1';
+            if (title.includes('P2')) return 'P2';
+            if (title.includes('P3')) return 'P3';
+            return 'unknown';
+        },
+        
+        setupAnswerListeners: function() {
+            this.answers = {};
+            this.startTime = Date.now();
+            
+            document.addEventListener('change', (e) => {
+                if (e.target.name && e.target.name.startsWith('q')) {
+                    this.answers[e.target.name] = e.target.value;
+                }
+            });
+        },
+        
+        interceptSubmit: function() {
+            // 拦截grade函数
+            if (typeof window.grade === 'function') {
+                const originalGrade = window.grade;
+                window.grade = () => {
+                    const result = originalGrade();
+                    setTimeout(() => this.handleSubmit(), 200);
+                    return result;
+                };
+            }
+            
+            // 监听提交按钮
+            document.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON' && 
+                    (e.target.textContent.includes('Submit') || 
+                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+                    setTimeout(() => this.handleSubmit(), 300);
+                }
+            });
+        },
+        
+        handleSubmit: function() {
+            const results = {
+                sessionId: this.sessionId,
+                startTime: this.startTime,
+                endTime: Date.now(),
+                duration: Math.round((Date.now() - this.startTime) / 1000),
+                answers: this.answers,
+                scoreInfo: this.extractScore(),
+                pageType: this.detectPageType(),
+                url: window.location.href
+            };
+            
+            this.sendMessage('PRACTICE_COMPLETE', results);
+        },
+        
+        extractScore: function() {
+            const resultsEl = document.getElementById('results');
+            if (!resultsEl) return null;
+            
+            const text = resultsEl.textContent || '';
+            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+            if (scoreMatch) {
+                const correct = parseInt(scoreMatch[1]);
+                const total = parseInt(scoreMatch[2]);
+                return {
+                    correct: correct,
+                    total: total,
+                    accuracy: total > 0 ? correct / total : 0,
+                    percentage: Math.round((correct / total) * 100),
+                    source: 'inline_extraction'
+                };
+            }
+            return null;
+        },
+        
+        sendMessage: function(type, data) {
+            if (this.parentWindow) {
+                this.parentWindow.postMessage({
+                    type: type,
+                    data: data,
+                    source: 'practice_page'
+                }, '*');
+            }
+        }
+    };
+    
+    // 初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            window.practicePageEnhancer.initialize();
+        });
+    } else {
+        window.practicePageEnhancer.initialize();
+    }
+}
+</script>
+
+</body>
+</html>

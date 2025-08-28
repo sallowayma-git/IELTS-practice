@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Reading Passage 3 - Whale Culture</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
+  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  .shell { display:flex; height:100vh; width:100%; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  h2,h3,h4 { margin:0 0 10px; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  table { border-collapse: collapse; width:100%; }
+  th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
+  th:first-child, td:first-child { width:92px; }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button:hover { border-color:#fff; }
+  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+  .answer-input { border:2px solid #cbd5e1; background:#f8fafc; border-radius:10px; min-height:40px; padding:4px 8px; width: 150px; margin:0 4px; vertical-align: middle; font-size:14px; }
+  .answer-input:focus { outline:2px solid #3b82f6; border-color: transparent; }
+  .cardpool { display:none; /* 隐藏原来的选项卡片区域 */ }
+  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
+  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
+  .ghost { opacity: .5; }
+  .over { outline:2px dashed #3b82f6; }
+  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
+  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
+  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+  body { padding-bottom: 82px; }
+  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
+  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
+  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #selbar { z-index: 6000 !important; }
+</style>
+</head>
+<body>
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q27-nav" onclick="scrollToElement('q27-anchor')">27</div>
+    <div class="q-item" id="q28-nav" onclick="scrollToElement('q28-anchor')">28</div>
+    <div class="q-item" id="q29-nav" onclick="scrollToElement('q29-anchor')">29</div>
+    <div class="q-item" id="q30-nav" onclick="scrollToElement('q30-anchor')">30</div>
+    <div class="q-item" id="q31-nav" onclick="scrollToElement('q31-anchor')">31</div>
+    <div class="q-item" id="q32-nav" onclick="scrollToElement('q32-anchor')">32</div>
+    <div class="q-item" id="q33-nav" onclick="scrollToElement('q33-anchor')">33</div>
+    <div class="q-item" id="q34-nav" onclick="scrollToElement('q34-anchor')">34</div>
+    <div class="q-item" id="q35-nav" onclick="scrollToElement('q35-anchor')">35</div>
+    <div class="q-item" id="q36-nav" onclick="scrollToElement('q36-anchor')">36</div>
+    <div class="q-item" id="q37-nav" onclick="scrollToElement('q37-anchor')">37</div>
+    <div class="q-item" id="q38-nav" onclick="scrollToElement('q38-anchor')">38</div>
+    <div class="q-item" id="q39-nav" onclick="scrollToElement('q39-anchor')">39</div>
+    <div class="q-item" id="q40-nav" onclick="scrollToElement('q40-anchor')">40</div>
+  </div>
+</div>
+<div class="shell">
+<section class="pane" id="left">
+  <h2>READING PASSAGE 3 <span id="timer">00:00</span></h2>
+  <p>You should spend about 20 minutes on Questions 27–40, which are based on Reading Passage 3 below.</p>
+  <h3>WHALE CULTURE</h3>
+  
+  <p><strong>A</strong> Most social scientists stubbornly resist the idea that animals have culture. Even such advanced cetacean mammals as whales and dolphins clearly don't have art, literature, or architecture. But patient observation over many years has begun to reveal behaviours that can only be learnt from other whales. And that, say whale biologists, constitutes culture.</p>
+  
+  <p><strong>B</strong> So far, humpback and killer whales provide the best evidence of culture in cetaceans, and the song of male humpback is among the most striking examples. Humpback populations in different oceans sing different songs, but within the same ocean they all stick to the same one. However, during the breeding season the sounds change, as it appears that females are drawn to novel songs. One male might add an extra set of groans; another might drop a series of grunts. Soon all the other males have altered their own rendition to incorporate the changes until they are once again singing the same song. Since this occurs among thousands of whales spread across a vast part of the planet, the change cannot be in response to any factor in the animal's environment. The latest version of the song can be learnt only from other whales – almost certainly by imitation.</p>
+  
+  <p><strong>C</strong> Culture plays an even bigger part in the life of killer whales. Nowhere is this more obvious than along the north-west coast of America, where killer whales are split into two distinct populations – two quite separate cultures. Residents live in stable groups of perhaps 20 whales in all. Calves stay with their mothers throughout adulthood, and in many years of observation no one has ever seen a whale switch pods. Transients travel in smaller, more changeable groups of between three and six.</p>
+  
+  <p><strong>D</strong> One of the most obvious distinctions between the transient and resident societies is the way they impart information. Killer whales detect prey with a range of echo-locating clicks, but converse with a vocabulary of squeaks, whistles and whines. Transients have only a few such calls, and all transient societies share the same ones. Residents have a much more extensive repertoire, and each family group has its own unique and distinctive set of calls. Despite regular interaction between them, each resident pod sticks firmly to its own dialect. Research shows these dialects are maintained for at least 40 years.</p>
+  
+  <p><strong>E</strong> To qualify as part of killer whale culture, dialects must be learnt from other members of the pod. Animals with different dialects share the same waters, so the variation can't be a product of physical environment. 'And we can throw out the notion that dialects are genetic,' says Lance Barrett-Lennard of the University of British Columbia. He has spent the past seven years analysing DNA from 270 whales. His paternity tests reveal the female killer whales invariably attract mates from outside their own pod – males with a very different dialect. If dialects were programmed by genetics, call patterns from both father and mother would be passed on to the calf. 'A calf uses the calls of its natal pod very precisely. There's no input from the father,' says Barrett-Lennard.</p>
+  
+  <p><strong>F</strong> The question still remains – is this culture? It is, according to Frans de Waal of Emory University in Atlanta, who argues that culture is just another biological adaptation that has evolved in many creatures. One benefit of viewing culture in this way is that you can start to understand how and why it might have arisen in these creatures. Whales have several biological attributes that give them an advantage in social learning. Apart from their advanced mental abilities, they are adept at recognising sounds: ideal for communicating in the marine environment. Many species spend years rearing their offspring, and live in small, stable, multi-generational societies, a social system that provides ample opportunity for teaching and learning.</p>
+  
+  <p><strong>G</strong> But why have cetaceans evolved the ability to learn from other group members? Experts in whale biology believe that ecological factors and the need to adapt to sudden changes in the environment played a large part in the emergence of culture. Although the ocean is a relatively stable habitat in many ways, it is highly changeable in one crucial respect – the availability of food. One moment there might be a plentiful supply of fish, the next they've disappeared. When that happens, the past experience of senior members of the group – and the ability to share this knowledge – is a huge asset. The dialects of killer whales allow members of the group to identify each other, enabling them to share information about food hot spots. Among resident killer whales, it also allows females to avoid inbreeding by picking out a mate with a strange dialect from outside their pod, says Barrett-Lennard.</p>
+  
+  <p><strong>H</strong> The importance of sharing information seems to have led to biological changes in at least some species of whale. Female killer whales, like humans, are very unusual in that they live up to a quarter of a century after they have had their last offspring. And what whale matriarchs offer is the most important thing of all – cultural knowledge, vital for the group's survival, passed directly from one generation to the next.</p>
+  
+  <p>&nbsp;</p>
+  <p>&nbsp;</p>
+</section>
+<div id="divider" title="Drag to resize"></div>
+<section class="pane" id="right">
+  <h3>Questions</h3>
+  
+  <div class="group">
+    <h4>Questions 27–31</h4>
+    <p>Do the following statements agree with the views of the writer in Reading Passage 3?</p>
+    <p>In boxes 27–31 on your answer sheet, write</p>
+    <ul>
+      <li>YES if the statement agrees with the claims of the writer</li>
+      <li>NO if the statement contradicts the claims of the writer</li>
+      <li>NOT GIVEN if it is impossible to say what the writer thinks about this</li>
+    </ul>
+    
+    <a id="q27-anchor"></a>
+    <div id="q27-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>27 Resident killer whales appear to remain with their maternal group for life.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q27" type="radio" value="YES"> YES</label>
+        <label style="margin:0;"><input name="q27" type="radio" value="NO"> NO</label>
+        <label style="margin:0;"><input name="q27" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+    
+    <a id="q28-anchor"></a>
+    <div id="q28-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>28 Resident killer whales have a more restricted range of calls than transients.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q28" type="radio" value="YES"> YES</label>
+        <label style="margin:0;"><input name="q28" type="radio" value="NO"> NO</label>
+        <label style="margin:0;"><input name="q28" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+    
+    <a id="q29-anchor"></a>
+    <div id="q29-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>29 There is a vocabulary of sounds which is common to all transient killer whales.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q29" type="radio" value="YES"> YES</label>
+        <label style="margin:0;"><input name="q29" type="radio" value="NO"> NO</label>
+        <label style="margin:0;"><input name="q29" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+    
+    <a id="q30-anchor"></a>
+    <div id="q30-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>30 Resident killer whales share the dialects of other resident communities living in the same waters.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q30" type="radio" value="YES"> YES</label>
+        <label style="margin:0;"><input name="q30" type="radio" value="NO"> NO</label>
+        <label style="margin:0;"><input name="q30" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+    
+    <a id="q31-anchor"></a>
+    <div id="q31-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>31 The dialects of transient killer whales remain constant over time.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q31" type="radio" value="YES"> YES</label>
+        <label style="margin:0;"><input name="q31" type="radio" value="NO"> NO</label>
+        <label style="margin:0;"><input name="q31" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+  </div>
+  
+  <div class="group">
+    <h4>Questions 32–34</h4>
+    <p>Complete the summary below.</p>
+    <p>Choose NO MORE THAN TWO WORDS from the passage for each answer.</p>
+    <p>Write your answers in boxes 32–34 on your answer sheet.</p>
+    
+    <p>It has been observed that resident killer whales invariably live in fixed family groups, known as <a id="q32-anchor"></a><input type="text" class="answer-input" id="q32-input" maxlength="10">. Each of these has its own unique set of calls, despite close contact with other family groups. As the same areas of ocean contain many different groups with widely varying dialects, it is clear that these differences could not have emerged as a result of <a id="q33-anchor"></a><input type="text" class="answer-input" id="q33-input" maxlength="15">.</p>
+    <p>According to tests conducted by Lance Barrett-Lennard, a calf communicates exclusively with the dialect of the group to which its <a id="q34-anchor"></a><input type="text" class="answer-input" id="q34-input" maxlength="10"> belongs. Barrett-Lennard also rejects the idea that the call patterns are inherited.</p>
+    
+    <div class="cardpool">
+      <div class="card" draggable="true" data-value="pods">pods</div>
+      <div class="card" draggable="true" data-value="genetics">genetics</div>
+      <div class="card" draggable="true" data-value="mother">mother</div>
+      <div class="card" draggable="true" data-value="environment">environment</div>
+      <div class="card" draggable="true" data-value="family">family</div>
+      <div class="card" draggable="true" data-value="father">father</div>
+      <div class="card" draggable="true" data-value="society">society</div>
+      <div class="card" draggable="true" data-value="culture">culture</div>
+    </div>
+  </div>
+  
+  <div class="group">
+    <h4>Questions 35–37</h4>
+    <p>Choose THREE letters, A-F.</p>
+    <p>Write the correct letters in boxes 35–37 on your answer sheet.</p>
+    <p>Which THREE of the following features of whales are mentioned in the passage?</p>
+    
+    <a id="q35-anchor"></a>
+    <div id="q35-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q35" type="checkbox" value="A"> A intelligence</label>
+        <label style="margin:0;"><input name="q35" type="checkbox" value="B"> B physical strength</label>
+        <label style="margin:0;"><input name="q35" type="checkbox" value="C"> C sensitivity to sound</label>
+        <label style="margin:0;"><input name="q35" type="checkbox" value="D"> D prolonged life span</label>
+        <label style="margin:0;"><input name="q35" type="checkbox" value="E"> E lengthy period of fertility</label>
+        <label style="margin:0;"><input name="q35" type="checkbox" value="F"> F adaptability to variety of foods</label>
+      </div>
+    </div>
+  </div>
+  
+  <div class="group">
+    <h4>Questions 38–40</h4>
+    <p>Reading passage 3 has eight paragraphs, A-H.</p>
+    <p>Which paragraph contains the following information?</p>
+    <p>Write the correct letter, A-H, in boxes 38–40 on your answer sheet.</p>
+    
+    <a id="q38-anchor"></a>
+    <div id="q38-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>38 an example of the kind of information passed by whales to each other</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q38" type="radio" value="A"> A</label>
+        <label style="margin:0;"><input name="q38" type="radio" value="B"> B</label>
+        <label style="margin:0;"><input name="q38" type="radio" value="C"> C</label>
+        <label style="margin:0;"><input name="q38" type="radio" value="D"> D</label>
+        <label style="margin:0;"><input name="q38" type="radio" value="E"> E</label>
+        <label style="margin:0;"><input name="q38" type="radio" value="F"> F</label>
+        <label style="margin:0;"><input name="q38" type="radio" value="G"> G</label>
+        <label style="margin:0;"><input name="q38" type="radio" value="H"> H</label>
+      </div>
+    </div>
+    
+    <a id="q39-anchor"></a>
+    <div id="q39-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>39 a reference to variations in communication styles between different cultures within one species</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q39" type="radio" value="A"> A</label>
+        <label style="margin:0;"><input name="q39" type="radio" value="B"> B</label>
+        <label style="margin:0;"><input name="q39" type="radio" value="C"> C</label>
+        <label style="margin:0;"><input name="q39" type="radio" value="D"> D</label>
+        <label style="margin:0;"><input name="q39" type="radio" value="E"> E</label>
+        <label style="margin:0;"><input name="q39" type="radio" value="F"> F</label>
+        <label style="margin:0;"><input name="q39" type="radio" value="G"> G</label>
+        <label style="margin:0;"><input name="q39" type="radio" value="H"> H</label>
+      </div>
+    </div>
+    
+    <a id="q40-anchor"></a>
+    <div id="q40-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>40 ways in which the skills of whales are favourable for development of culture</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q40" type="radio" value="A"> A</label>
+        <label style="margin:0;"><input name="q40" type="radio" value="B"> B</label>
+        <label style="margin:0;"><input name="q40" type="radio" value="C"> C</label>
+        <label style="margin:0;"><input name="q40" type="radio" value="D"> D</label>
+        <label style="margin:0;"><input name="q40" type="radio" value="E"> E</label>
+        <label style="margin:0;"><input name="q40" type="radio" value="F"> F</label>
+        <label style="margin:0;"><input name="q40" type="radio" value="G"> G</label>
+        <label style="margin:0;"><input name="q40" type="radio" value="H"> H</label>
+      </div>
+    </div>
+  </div>
+  
+  <div style="display:flex;gap:8px;margin-bottom:10px;">
+    <button class="primary" onclick="grade()">Submit</button>
+    <button onclick="resetForm()">Reset</button>
+    <button onclick="toggleNotes()">Notes</button>
+  </div>
+  <div id="results"></div>
+  <details class="answerbox" id="answerBox">
+    <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+    <div id="answerContent"></div>
+  </details>
+</section>
+</div>
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+<script>
+// Timer
+let _t=0; const _timerEl=document.getElementById('timer');
+setInterval(function(){ 
+  _t++; 
+  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
+  var s=String(_t%60).padStart(2,'0'); 
+  _timerEl.textContent=m+':'+s; 
+},1000);
+// Drag divider
+var divider = document.getElementById('divider');
+var left = document.getElementById('left');
+var right = document.getElementById('right');
+var dragging=false;
+function startDrag(e){ 
+  dragging=true; 
+  document.body.style.cursor='ew-resize'; 
+  if(e.preventDefault) e.preventDefault(); 
+}
+function endDrag(){ 
+  dragging=false; 
+  document.body.style.cursor=''; 
+}
+function onMove(clientX){
+  var container = document.querySelector('.shell').getBoundingClientRect();
+  var x = clientX - container.left;
+  x = Math.max(280, Math.min(container.width-320, x));
+  left.style.flex = '0 0 ' + x + 'px';
+  right.style.flex = '1 1 auto';
+}
+divider.addEventListener('mousedown', function(e){ startDrag(e); });
+window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+window.addEventListener('mouseup', endDrag);
+divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
+window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+window.addEventListener('touchend', endDrag);
+
+// Highlight toolbar
+var selbar = document.getElementById('selbar');
+var btnHL = document.getElementById('btnHL');
+var btnUH = document.getElementById('btnUH');
+var btnNote = document.getElementById('btnNote');
+var lastRange=null;
+var currentHlNode=null;
+var keepToolbar=false;
+function positionSelbarForRect(rect){
+  selbar.style.display='flex';
+  requestAnimationFrame(function(){
+    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+function updateSelbar(){
+  var sel=window.getSelection();
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
+    selbar.style.display='none'; 
+    currentHlNode=null; 
+    return; 
+  }
+  var range = sel.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode=null;
+  positionSelbarForRect(range.getBoundingClientRect());
+}
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', function(){ 
+  var sel=window.getSelection(); 
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
+    if(!keepToolbar && !currentHlNode){ 
+      selbar.style.display='none'; 
+    } 
+  } 
+});
+document.addEventListener('scroll', function(){ 
+  if(selbar.style.display==='flex') updateSelbar(); 
+});
+document.addEventListener('mousedown', function(e){
+  var t = e.target;
+  if(t.classList && t.classList.contains('hl')){
+    keepToolbar = true;
+  } else {
+    keepToolbar = false;
+  }
+}, true);
+document.addEventListener('click', function(e){
+  var target = e.target;
+  if(target.classList && target.classList.contains('hl')){
+    currentHlNode = target;
+    lastRange = null;
+    positionSelbarForRect(target.getBoundingClientRect());
+    var sel=window.getSelection();
+    if(sel) sel.removeAllRanges();
+    setTimeout(function(){ keepToolbar=false; }, 0);
+  }
+}, true);
+function doHighlight(){
+  if(currentHlNode) return;
+  if(!lastRange || lastRange.collapsed) return;
+  var span=document.createElement('span'); span.className='hl';
+  try { lastRange.surroundContents(span); }
+  catch(e){
+    var wrap=document.createElement('span'); wrap.className='hl';
+    wrap.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrap);
+  }
+  selbar.style.display='none';
+  showToast('Highlighted');
+}
+function removeHighlight(){
+  if(currentHlNode){
+    var p = currentHlNode.parentNode;
+    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
+    p.removeChild(currentHlNode); p.normalize();
+    currentHlNode = null;
+    selbar.style.display='none';
+    showToast('Highlight removed');
+    return;
+  }
+  if(!lastRange) return;
+  var selRect = lastRange.getBoundingClientRect();
+  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  var toRemove=[];
+  while(walker.nextNode()){
+    var n=walker.currentNode;
+    if(n.classList && n.classList.contains('hl')) {
+      var r = n.getBoundingClientRect();
+      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+    }
+  }
+  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
+  selbar.style.display='none';
+  showToast('Highlight removed');
+}
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+// Notes
+var notes = document.getElementById('notes');
+var noteArea = document.getElementById('noteArea');
+var btnCopy=document.getElementById('btnCopy');
+var btnClose=document.getElementById('btnClose');
+function toggleNotes(){ 
+  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+}
+window.toggleNotes = toggleNotes;
+btnClose.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async function(){ 
+  await navigator.clipboard.writeText(noteArea.value||''); 
+  showToast('Copied'); 
+});
+btnNote.addEventListener('click', function(){
+  var text = '';
+  if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
+  else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
+  toggleNotes();
+  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
+  selbar.style.display='none';
+});
+// Toast
+var toastEl=document.getElementById('toast');
+function showToast(msg){
+  toastEl.textContent=msg; 
+  toastEl.style.display='block';
+  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+}
+// Answer key and grading
+var answers = {
+  "q27":"YES", "q28":"NO", "q29":"YES", "q30":"NO", "q31":"NOT GIVEN",
+  "q32":"pods", "q33":"environment", "q34":"mother",
+  "q35":"A", "q36":"C", "q37":"D",
+  "q38":"G", "q39":"D", "q40":"F"
+};
+function grade(){
+  var total=0, correct=0, lines=[];
+  
+  // Check radio questions (27-31)
+  for(let n=27; n<=31; n++){
+    const q = `q${n}`;
+    total++;
+    const selected = document.querySelector(`input[name="${q}"]:checked`);
+    const userAnswer = selected ? selected.value : '';
+    const isCorrect = userAnswer === answers[q];
+    if (isCorrect) correct++;
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✓' : '✗'}`);
+  }
+  
+  // Check input questions (32-34)
+  for(let n=32; n<=34; n++){
+    const q = `q${n}`;
+    total++;
+    const input = document.getElementById(`${q}-input`);
+    const userAnswer = input ? input.value.trim().toLowerCase() : '';
+    const isCorrect = userAnswer === answers[q];
+    if (isCorrect) correct++;
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✓' : '✗'}`);
+  }
+  
+  // Check checkbox questions (35-37)
+  const checkboxes = document.querySelectorAll('input[name="q35"]:checked');
+  total += 3;
+  let correctCheckboxes = 0;
+  checkboxes.forEach(checkbox => {
+    if (checkbox.value === answers.q35 || checkbox.value === answers.q36 || checkbox.value === answers.q37) {
+      correctCheckboxes++;
+    }
+  });
+  correct += correctCheckboxes;
+  lines.push(`Q35-37: ${correctCheckboxes}/3 correct`);
+  
+  // Check radio questions (38-40)
+  for(let n=38; n<=40; n++){
+    const q = `q${n}`;
+    total++;
+    const selected = document.querySelector(`input[name="${q}"]:checked`);
+    const userAnswer = selected ? selected.value : '';
+    const isCorrect = userAnswer === answers[q];
+    if (isCorrect) correct++;
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✓' : '✗'}`);
+  }
+  
+  // Show results
+  const acc = Math.round(100 * correct / total);
+  document.getElementById('results').innerHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p>
+    <pre>${lines.join('\n')}</pre>
+  `;
+  
+  // Show answer key
+  document.getElementById('answerContent').innerHTML = `
+    <ol>
+      <li>27 → YES</li>
+      <li>28 → NO</li>
+      <li>29 → YES</li>
+      <li>30 → NO</li>
+      <li>31 → NOT GIVEN</li>
+      <li>32 → pods</li>
+      <li>33 → environment</li>
+      <li>34 → mother</li>
+      <li>35-37 → A, C, D</li>
+      <li>38 → G</li>
+      <li>39 → D</li>
+      <li>40 → F</li>
+    </ol>
+  `;
+  document.querySelector('#answerBox .badge').textContent = 'tap to view';
+}
+function resetForm(){
+  // Reset input fields (32-34)
+  for(let n=32; n<=34; n++){
+    const input = document.getElementById(`q${n}-input`);
+    if (input) input.value = '';
+  }
+  
+  // Reset radio buttons
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // Reset checkboxes
+  document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+    checkbox.checked = false;
+  });
+  
+  // Reset results and answers
+  document.getElementById('results').innerHTML = '';
+  document.getElementById('answerContent').innerHTML = '';
+  document.querySelector('#answerBox .badge').textContent = 'hidden';
+  
+  // Reset answered status in nav
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+}
+function scrollToElement(id){
+  const el = document.getElementById(id);
+  if(el){ 
+    el.scrollIntoView({behavior:'smooth', block:'center'}); 
+  }
+  // Highlight nav item briefly
+  const navs = document.querySelectorAll('.practice-nav .q-item');
+  navs.forEach(n => n.classList.remove('active'));
+  const btn = document.getElementById(id.replace('-anchor','-nav'));
+  if(btn){ 
+    btn.classList.add('active'); 
+    setTimeout(() => btn.classList.remove('active'), 800); 
+  }
+}
+// Mark answered on interaction
+(function(){
+  function markAnswered(qn){
+    const nav = document.getElementById(`q${qn}-nav`);
+    if(!nav) return;
+    let answered = false;
+    
+    // Check input fields (32-34)
+    if(qn >=32 && qn <=34){
+      const input = document.getElementById(`q${qn}-input`);
+      answered = input && input.value.trim() !== '';
+    } 
+    // Check radio buttons (27-31, 38-40)
+    else {
+      const radios = document.querySelectorAll(`input[name="q${qn}"]:checked`);
+      answered = radios.length > 0;
+    }
+    
+    if(answered) nav.classList.add('answered');
+    else nav.classList.remove('answered');
+  }
+  
+  // Monitor input fields
+  for(let n=32; n<=34; n++){
+    const input = document.getElementById(`q${n}-input`);
+    if(input) {
+      input.addEventListener('input', () => markAnswered(n));
+    }
+  }
+  
+  // Monitor radio buttons
+  for(let n=27; n<=31; n++){
+    document.querySelectorAll(`input[name="q${n}"]`).forEach(radio => {
+      radio.addEventListener('change', () => markAnswered(n));
+    });
+  }
+  
+  // Monitor checkboxes
+  document.querySelectorAll('input[name="q35"]').forEach(checkbox => {
+    checkbox.addEventListener('change', () => {
+      markAnswered(35);
+      markAnswered(36);
+      markAnswered(37);
+    });
+  });
+  
+  // Monitor paragraph questions
+  for(let n=38; n<=40; n++){
+    document.querySelectorAll(`input[name="q${n}"]`).forEach(radio => {
+      radio.addEventListener('change', () => markAnswered(n));
+    });
+  }
+})();
+</script>
+
+<script>
+// 练习页面增强器 - 跨窗口通信功能
+(function() {
+    'use strict';
+    
+    let sessionData = null;
+    let parentWindow = null;
+    let startTime = Date.now();
+    let isSessionActive = false;
+    
+    // 初始化通信功能
+    function initializeCommunication() {
+        console.log('[PracticePageEnhancer] 初始化通信功能');
+        
+        // 监听来自父窗口的消息
+        window.addEventListener('message', function(event) {
+            console.log('[PracticePageEnhancer] 收到消息:', event.data);
+            
+            if (event.data && event.data.type === 'INIT_SESSION') {
+                sessionData = event.data.data;
+                parentWindow = event.source;
+                isSessionActive = true;
+                startTime = Date.now();
+                
+                console.log('[PracticePageEnhancer] 会话已初始化:', sessionData);
+                
+                // 发送会话初始化确认
+                sendMessage('SESSION_INITIALIZED', {
+                    sessionId: sessionData.sessionId,
+                    examId: sessionData.examId,
+                    timestamp: Date.now()
+                });
+                
+                // 设置页面关闭时的数据发送
+                setupPageUnloadHandler();
+            }
+        });
+        
+        // 检测答题完成
+        setupAnswerDetection();
+        
+        console.log('[PracticePageEnhancer] 通信功能已初始化');
+    }
+    
+    // 发送消息到父窗口
+    function sendMessage(type, data) {
+        if (parentWindow && isSessionActive) {
+            const message = {
+                type: type,
+                data: data,
+                source: 'practice_page',
+                timestamp: Date.now()
+            };
+            
+            console.log('[PracticePageEnhancer] 发送消息:', message);
+            parentWindow.postMessage(message, '*');
+        }
+    }
+    
+    // 设置答题检测
+    function setupAnswerDetection() {
+        // 检测提交按钮点击
+        document.addEventListener('click', function(event) {
+            const target = event.target;
+            
+            // 检测是否是提交相关的按钮
+            if (target.tagName === 'BUTTON' && 
+                (target.textContent.includes('提交') || 
+                 target.textContent.includes('Submit') ||
+                 target.textContent.includes('完成') ||
+                 target.textContent.includes('Check') ||
+                 target.id === 'submit-btn' ||
+                 target.className.includes('submit'))) {
+                
+                console.log('[PracticePageEnhancer] 检测到提交按钮点击');
+                
+                // 延迟收集数据，确保答案已处理
+                setTimeout(function() {
+                    collectAndSendPracticeData();
+                }, 1000);
+            }
+        });
+        
+        // 检测表单提交
+        document.addEventListener('submit', function(event) {
+            console.log('[PracticePageEnhancer] 检测到表单提交');
+            setTimeout(function() {
+                collectAndSendPracticeData();
+            }, 1000);
+        });
+    }
+    
+    // 设置页面卸载处理器
+    function setupPageUnloadHandler() {
+        window.addEventListener('beforeunload', function() {
+            if (isSessionActive) {
+                collectAndSendPracticeData();
+            }
+        });
+        
+        // 页面隐藏时也发送数据
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'hidden' && isSessionActive) {
+                collectAndSendPracticeData();
+            }
+        });
+    }
+    
+    // 收集并发送练习数据
+    function collectAndSendPracticeData() {
+        if (!isSessionActive || !sessionData) {
+            console.log('[PracticePageEnhancer] 会话未激活，跳过数据收集');
+            return;
+        }
+        
+        console.log('[PracticePageEnhancer] 开始收集练习数据');
+        
+        const endTime = Date.now();
+        const duration = endTime - startTime;
+        
+        // 收集答案数据
+        const answers = collectAnswers();
+        const score = calculateScore(answers);
+        
+        const practiceData = {
+            sessionId: sessionData.sessionId,
+            examId: sessionData.examId,
+            examTitle: sessionData.examTitle,
+            examCategory: sessionData.examCategory,
+            startTime: startTime,
+            endTime: endTime,
+            duration: duration,
+            answers: answers,
+            score: score.correct,
+            totalQuestions: score.total,
+            accuracy: score.total > 0 ? score.correct / score.total : 0,
+            percentage: score.total > 0 ? Math.round((score.correct / score.total) * 100) : 0,
+            url: window.location.href,
+            source: 'page_extraction',
+            timestamp: endTime
+        };
+        
+        console.log('[PracticePageEnhancer] 练习数据已收集:', practiceData);
+        
+        // 发送练习完成数据
+        sendMessage('PRACTICE_COMPLETE', practiceData);
+        
+        // 标记会话为非活跃状态，避免重复发送
+        isSessionActive = false;
+    }
+    
+    // 收集页面中的答案
+    function collectAnswers() {
+        const answers = [];
+        
+        // 收集输入框答案
+        const inputs = document.querySelectorAll('input[type="text"], input.blank, input.blank-input');
+        inputs.forEach(function(input, index) {
+            if (input.value.trim()) {
+                answers.push({
+                    type: 'text',
+                    question: index + 1,
+                    answer: input.value.trim(),
+                    element: input.tagName + (input.className ? '.' + input.className : '')
+                });
+            }
+        });
+        
+        // 收集选择题答案
+        const selects = document.querySelectorAll('select');
+        selects.forEach(function(select, index) {
+            if (select.value) {
+                answers.push({
+                    type: 'select',
+                    question: index + 1,
+                    answer: select.value,
+                    element: 'SELECT'
+                });
+            }
+        });
+        
+        // 收集单选按钮答案
+        const radios = document.querySelectorAll('input[type="radio"]:checked');
+        radios.forEach(function(radio, index) {
+            answers.push({
+                type: 'radio',
+                question: radio.name || index + 1,
+                answer: radio.value,
+                element: 'INPUT[type="radio"]'
+            });
+        });
+        
+        // 收集复选框答案
+        const checkboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+        checkboxes.forEach(function(checkbox, index) {
+            answers.push({
+                type: 'checkbox',
+                question: checkbox.name || index + 1,
+                answer: checkbox.value,
+                element: 'INPUT[type="checkbox"]'
+            });
+        });
+        
+        console.log('[PracticePageEnhancer] 收集到答案:', answers);
+        return answers;
+    }
+    
+    // 计算得分（简单实现）
+    function calculateScore(answers) {
+        // 这里只是简单计算有答案的题目数量
+        // 实际得分需要根据具体题目的正确答案来计算
+        const total = answers.length;
+        const correct = answers.filter(function(answer) {
+            return answer.answer && answer.answer.trim().length > 0;
+        }).length;
+        
+        return {
+            correct: correct,
+            total: total
+        };
+    }
+    
+    // 页面加载完成后初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeCommunication);
+    } else {
+        initializeCommunication();
+    }
+    
+})();
+</script></body>
+</html>

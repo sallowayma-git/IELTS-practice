@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>P3 – Star Performers</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
+  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  .shell { display:flex; height:100vh; width:100%; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  h2,h3,h4 { margin:0 0 10px; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  table { border-collapse: collapse; width:100%; }
+  th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
+  th:first-child, td:first-child { width:92px; }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button:hover { border-color:#fff; }
+  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+  .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:40px; padding:4px 8px; display:inline-flex; align-items:center; justify-content:space-between; gap:8px; width: auto; min-width: 120px; max-width: 200px; vertical-align: middle; }
+  .droplabel { color:#64748b; font-size:14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:flex; flex-wrap:wrap; gap:8px; }
+  .pool-slot { min-height:40px; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); white-space: nowrap; }
+  .card:active { cursor:grabbing; }
+  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
+  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
+  .ghost { opacity: .5; }
+  .over { outline:2px dashed #3b82f6; }
+  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
+  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
+  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+  body { padding-bottom: 82px; }
+  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
+  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
+  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #selbar { z-index: 6000 !important; }
+</style>
+</head>
+<body>
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q27-nav" onclick="scrollToElement('q27-anchor')">27</div>
+    <div class="q-item" id="q28-nav" onclick="scrollToElement('q28-anchor')">28</div>
+    <div class="q-item" id="q29-nav" onclick="scrollToElement('q29-anchor')">29</div>
+    <div class="q-item" id="q30-nav" onclick="scrollToElement('q30-anchor')">30</div>
+    <div class="q-item" id="q31-nav" onclick="scrollToElement('q31-anchor')">31</div>
+    <div class="q-item" id="q32-nav" onclick="scrollToElement('q32-anchor')">32</div>
+    <div class="q-item" id="q33-nav" onclick="scrollToElement('q33-anchor')">33</div>
+    <div class="q-item" id="q34-nav" onclick="scrollToElement('q34-anchor')">34</div>
+    <div class="q-item" id="q35-nav" onclick="scrollToElement('q35-anchor')">35</div>
+    <div class="q-item" id="q36-nav" onclick="scrollToElement('q36-anchor')">36</div>
+    <div class="q-item" id="q37-nav" onclick="scrollToElement('q37-anchor')">37</div>
+    <div class="q-item" id="q38-nav" onclick="scrollToElement('q38-anchor')">38</div>
+    <div class="q-item" id="q39-nav" onclick="scrollToElement('q39-anchor')">39</div>
+    <div class="q-item" id="q40-nav" onclick="scrollToElement('q40-anchor')">40</div>
+  </div>
+</div>
+<div class="shell">
+<section class="pane" id="left">
+  <h2>READING PASSAGE 3 <span id="timer">00:00</span></h2>
+  <p>You should spend about 20 minutes on Questions 27–40, which are based on Reading Passage 3 below.</p>
+  <h3>Star Performers</h3>
+  <p>Most organisations are looking for talent. But what if they’ve got it wrong, asks Jeffrey Pfeffer</p>
+  
+  <h4>Paragraph A</h4>
+  <p>One widely held assumption about talent is that it is a reasonably fixed characteristic and it is therefore the job of organisations to identify, recruit and retain star performers. This belief affects the way people are managed in the workplace. Most recruitment decisions are influenced by the skills and abilities of an individual rather than their aptitude and attitude. In terms of career development, organisations invest in staff who have been selected to reach higher-level positions, while ignoring front-line employees and people with less perceived potential. This idea, that talent is a fixed, identifiable characteristic – and that those firms with the best people do the best – is both flawed and harmful to people and organisations. There is a lot of evidence on this point, and it is useful to highlight some of the most pertinent arguments.</p>
+  
+  <h4>Paragraph B</h4>
+  <p>First, are there stars? There is no question that in every field, from sports to computer programming to music, there are people who are better than the rest. As psychologist Dean Keith Simonton, who has spent his career studying greatness, has said, ‘Wherever you look, the same story can be told. Identify the ten per cent who have achieved the most in a certain endeavour. Count the accomplishments they have to their credit. Now tally the accomplishments of the remaining 90 per cent. The first tally will equal or surpass the second.’ For instance, in music, 16 individuals have produced about 50 per cent of the Western classical music that is performed and recorded today, while another 235 composers have produced the remaining half. The more interesting questions concern not the existence of stars, but whether these stars can be reliably identified and, even more importantly, whether their talent is a fixed aspect or can be altered.</p>
+  
+  <h4>Paragraph C</h4>
+  <p>Identifying the best people is tricky. Quality of performance changes over time and this is true whether we are talking about professors or footballers. If performance naturally varies, any measurement taken at a single point in time, such as when someone is being hired, will have error and imprecision. Therefore, single assessments of talent are likely to contain mistakes in their categorisation of people. Also, judgements about performance and ability depend on the standards used to judge what is good and bad. It should surprise no-one that for Bach to be considered a great musician, standards of music needed to change to embrace the qualities that his compositions possessed. Similarly, artists and art come in and out of fashion, which means that what is genius depends not only on a person’s ability, but on the prevailing standards used to evaluate output.</p>
+  
+  <h4>Paragraph D</h4>
+  <p>Finally, it is difficult to evaluate people and their abilities with precision. In the domain of work, research shows that the best predictors of job performance tend to be measures of intelligence. But even these measures correlate only loosely with performance, which means that more than 80 per cent of the variation in performance is unexplained by even the best predictors. Even in the sports arena, where one would think natural ability would be readily assessed because sports teams spend lots of resources on identifying talent, mistakes get made. Basketball star Michael Jordan was dropped by his high-school basketball coach and a number of top American football quarterbacks were available early in their careers because they were not considered good enough by various teams.</p>
+  
+  <h4>Paragraph E</h4>
+  <p>This leads on to the next question: is talent born or made? Should organisations assume that almost anyone can become a star performer, which implies that there ought to be a greater emphasis on motivation and development, or do they just figure out who is good and who isn’t? Here the evidence is clear: talent is at least as much ‘created’ as inherent and, more importantly, the customary way companies think about identifying talent almost certainly works to destroy a lot of untapped potential. Decades of research by K. Anders Ericsson, professor of psychology at Florida State University, show that exceptional performance doesn’t happen without around ten years of nearly daily, deliberate practice for about four hours a day, by people who, with the assistance of their coaches, have access to the best techniques. Once achieved, exceptional performance can’t be maintained without relentless effort. So performance may be as much a consequence of training as it is of innate ability, which suggests that performance can be altered by how people are managed.</p>
+  
+  <h4>Paragraph F</h4>
+  <p>Further research by Stanford psychology professor Carol Dweck shows that the tendency of organisations to see performance results as an opportunity for an ‘assessment’ of ability, results in lower performance and poor motivation. Dweck identified two sets of goals that people bring to a performance context: ‘performance goals, where the purpose is to validate one’s ability or avoid demonstrating a lack of ability, and learning goals, where the aim is to acquire new knowledge and skills’. People with performance goals have been shown to be more prone to helpless behaviour and debilitation after a setback, while people with learning goals strive for higher performance. The implications for managing people and talent are clear. Seeing talent as fixed and job performance as a way of classifying people creates a self-fulfilling prophecy in which ability and intelligence do become fixed. By contrast, seeing ability as malleable leads to a different sort of self-fulfilling prophecy, in which individuals and their employers may invest in ways to enhance performance.</p>
+
+  <p>&nbsp;</p> <!-- 添加空白行防止加载不完全 -->
+  <p>&nbsp;</p> <!-- 额外添加一行空白行，确保加载稳定性 -->
+</section>
+<div id="divider" title="Drag to resize"></div>
+<section class="pane" id="right">
+  <h3>Questions</h3>
+  
+  <div class="group">
+    <h4>Questions 27–32</h4>
+    <p>Reading Passage 3 has six paragraphs, A–F.</p>
+    <p>Which paragraph contains the following information?</p>
+    <p>Write the correct letter, A–F, in boxes 27–32 on your answer sheet.</p>
+    <p>NB You may use any letter more than once.</p>
+    
+    <a id="q27-anchor"></a>
+    <div id="q27-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>27 disagreement with the view that employing talented people enables companies to achieve top performance</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q27" type="radio" value="A"> A</label>
+        <label style="margin:0;"><input name="q27" type="radio" value="B"> B</label>
+        <label style="margin:0;"><input name="q27" type="radio" value="C"> C</label>
+        <label style="margin:0;"><input name="q27" type="radio" value="D"> D</label>
+        <label style="margin:0;"><input name="q27" type="radio" value="E"> E</label>
+        <label style="margin:0;"><input name="q27" type="radio" value="F"> F</label>
+      </div>
+    </div>
+    
+    <a id="q28-anchor"></a>
+    <div id="q28-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>28 a description of what individuals have to do on a regular basis to improve their performance</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q28" type="radio" value="A"> A</label>
+        <label style="margin:0;"><input name="q28" type="radio" value="B"> B</label>
+        <label style="margin:0;"><input name="q28" type="radio" value="C"> C</label>
+        <label style="margin:0;"><input name="q28" type="radio" value="D"> D</label>
+        <label style="margin:0;"><input name="q28" type="radio" value="E"> E</label>
+        <label style="margin:0;"><input name="q28" type="radio" value="F"> F</label>
+      </div>
+    </div>
+    
+    <a id="q29-anchor"></a>
+    <div id="q29-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>29 the evidence that exceptional talent exists in all areas of life</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q29" type="radio" value="A"> A</label>
+        <label style="margin:0;"><input name="q29" type="radio" value="B"> B</label>
+        <label style="margin:0;"><input name="q29" type="radio" value="C"> C</label>
+        <label style="margin:0;"><input name="q29" type="radio" value="D"> D</label>
+        <label style="margin:0;"><input name="q29" type="radio" value="E"> E</label>
+        <label style="margin:0;"><input name="q29" type="radio" value="F"> F</label>
+      </div>
+    </div>
+    
+    <a id="q30-anchor"></a>
+    <div id="q30-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>30 how different ways of evaluating achievement at work can cause different reactions in employees</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q30" type="radio" value="A"> A</label>
+        <label style="margin:0;"><input name="q30" type="radio" value="B"> B</label>
+        <label style="margin:0;"><input name="q30" type="radio" value="C"> C</label>
+        <label style="margin:0;"><input name="q30" type="radio" value="D"> D</label>
+        <label style="margin:0;"><input name="q30" type="radio" value="E"> E</label>
+        <label style="margin:0;"><input name="q30" type="radio" value="F"> F</label>
+      </div>
+    </div>
+    
+    <a id="q31-anchor"></a>
+    <div id="q31-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>31 the belief that the time when an assessment is carried out affects its accuracy</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q31" type="radio" value="A"> A</label>
+        <label style="margin:0;"><input name="q31" type="radio" value="B"> B</label>
+        <label style="margin:0;"><input name="q31" type="radio" value="C"> C</label>
+        <label style="margin:0;"><input name="q31" type="radio" value="D"> D</label>
+        <label style="margin:0;"><input name="q31" type="radio" value="E"> E</label>
+        <label style="margin:0;"><input name="q31" type="radio" value="F"> F</label>
+      </div>
+    </div>
+    
+    <a id="q32-anchor"></a>
+    <div id="q32-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>32 the extent to which different talented individuals have contributed to their particular area of achievement</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q32" type="radio" value="A"> A</label>
+        <label style="margin:0;"><input name="q32" type="radio" value="B"> B</label>
+        <label style="margin:0;"><input name="q32" type="radio" value="C"> C</label>
+        <label style="margin:0;"><input name="q32" type="radio" value="D"> D</label>
+        <label style="margin:0;"><input name="q32" type="radio" value="E"> E</label>
+        <label style="margin:0;"><input name="q32" type="radio" value="F"> F</label>
+      </div>
+    </div>
+  </div>
+  
+  <div class="group">
+    <h4>Questions 33–35</h4>
+    <p>Answer the questions below.</p>
+    <p>Choose NO MORE THAN TWO WORDS AND/OR A NUMBER from the passage for each answer.</p>
+    <p>Write your answers in boxes 33–35 on your answer sheet.</p>
+    
+    <a id="q33-anchor"></a>
+    <div id="q33-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>33 How many Western classical composers are identified as exceptionally talented?</p>
+      <input type="text" name="q33" style="width:100%; padding:6px; border:1px solid var(--line); border-radius:6px; margin-top:4px;" placeholder="Enter answer here">
+    </div>
+    
+    <a id="q34-anchor"></a>
+    <div id="q34-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>34 Which composer initially received little recognition for his work?</p>
+      <input type="text" name="q34" style="width:100%; padding:6px; border:1px solid var(--line); border-radius:6px; margin-top:4px;" placeholder="Enter answer here">
+    </div>
+    
+    <a id="q35-anchor"></a>
+    <div id="q35-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>35 Who can help improve the performance of people practising daily?</p>
+      <input type="text" name="q35" style="width:100%; padding:6px; border:1px solid var(--line); border-radius:6px; margin-top:4px;" placeholder="Enter answer here">
+    </div>
+  </div>
+  
+  <div class="group">
+    <h4>Questions 36–40</h4>
+    <p>Do the following statements agree with the information given in Reading Passage 3?</p>
+    <p>In boxes 36–40 on your answer sheet, write</p>
+    <ul>
+      <li>TRUE if the statement agrees with the information</li>
+      <li>FALSE if the statement contradicts the information</li>
+      <li>NOT GIVEN if there is no information on this</li>
+    </ul>
+    
+    <a id="q36-anchor"></a>
+    <div id="q36-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>36 Companies usually hire people on the basis of their character.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q36" type="radio" value="TRUE"> TRUE</label>
+        <label style="margin:0;"><input name="q36" type="radio" value="FALSE"> FALSE</label>
+        <label style="margin:0;"><input name="q36" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+    
+    <a id="q37-anchor"></a>
+    <div id="q37-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>37 There are some areas of sport that have a greater proportion of talent than others.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q37" type="radio" value="TRUE"> TRUE</label>
+        <label style="margin:0;"><input name="q37" type="radio" value="FALSE"> FALSE</label>
+        <label style="margin:0;"><input name="q37" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+    
+    <a id="q38-anchor"></a>
+    <div id="q38-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>38 Measures of intelligence accurately predict performance at work.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q38" type="radio" value="TRUE"> TRUE</label>
+        <label style="margin:0;"><input name="q38" type="radio" value="FALSE"> FALSE</label>
+        <label style="margin:0;"><input name="q38" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+    
+    <a id="q39-anchor"></a>
+    <div id="q39-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>39 There are cases in which talented sportspeople have been overlooked.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q39" type="radio" value="TRUE"> TRUE</label>
+        <label style="margin:0;"><input name="q39" type="radio" value="FALSE"> FALSE</label>
+        <label style="margin:0;"><input name="q39" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+    
+    <a id="q40-anchor"></a>
+    <div id="q40-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>40 Newly formed organisations have the most highly motivated staff.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q40" type="radio" value="TRUE"> TRUE</label>
+        <label style="margin:0;"><input name="q40" type="radio" value="FALSE"> FALSE</label>
+        <label style="margin:0;"><input name="q40" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+      </div>
+    </div>
+  </div>
+  
+  <div style="display:flex;gap:8px;margin-bottom:10px;">
+    <button class="primary" onclick="grade()">Submit</button>
+    <button onclick="resetForm()">Reset</button>
+    <button onclick="toggleNotes()">Notes</button>
+  </div>
+  <div id="results"></div>
+  <details class="answerbox" id="answerBox">
+    <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+    <div id="answerContent"></div>
+  </details>
+</section>
+</div>
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+<script>
+// Timer
+let _t=0; const _timerEl=document.getElementById('timer');
+setInterval(function(){ 
+  _t++; 
+  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
+  var s=String(_t%60).padStart(2,'0'); 
+  _timerEl.textContent=m+':'+s; 
+},1000);
+// Drag divider
+var divider = document.getElementById('divider');
+var left = document.getElementById('left');
+var right = document.getElementById('right');
+var dragging=false;
+function startDrag(e){ 
+  dragging=true; 
+  document.body.style.cursor='ew-resize'; 
+  if(e.preventDefault) e.preventDefault(); 
+}
+function endDrag(){ 
+  dragging=false; 
+  document.body.style.cursor=''; 
+}
+function onMove(clientX){
+  var container = document.querySelector('.shell').getBoundingClientRect();
+  var x = clientX - container.left;
+  x = Math.max(280, Math.min(container.width-320, x));
+  left.style.flex = '0 0 ' + x + 'px';
+  right.style.flex = '1 1 auto';
+}
+divider.addEventListener('mousedown', function(e){ startDrag(e); });
+window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+window.addEventListener('mouseup', endDrag);
+divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
+window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+window.addEventListener('touchend', endDrag);
+// Highlight toolbar
+var selbar = document.getElementById('selbar');
+var btnHL = document.getElementById('btnHL');
+var btnUH = document.getElementById('btnUH');
+var btnNote = document.getElementById('btnNote');
+var lastRange=null;
+var currentHlNode=null;
+var keepToolbar=false;
+function positionSelbarForRect(rect){
+  selbar.style.display='flex';
+  requestAnimationFrame(function(){
+    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+function updateSelbar(){
+  var sel=window.getSelection();
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
+    selbar.style.display='none'; 
+    currentHlNode=null; 
+    return; 
+  }
+  var range = sel.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode=null;
+  positionSelbarForRect(range.getBoundingClientRect());
+}
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', function(){ 
+  var sel=window.getSelection(); 
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
+    if(!keepToolbar && !currentHlNode){ 
+      selbar.style.display='none'; 
+    } 
+  } 
+});
+document.addEventListener('scroll', function(){ 
+  if(selbar.style.display==='flex') updateSelbar(); 
+});
+document.addEventListener('mousedown', function(e){
+  var t = e.target;
+  if(t.classList && t.classList.contains('hl')){
+    keepToolbar = true;
+  } else {
+    keepToolbar = false;
+  }
+}, true);
+document.addEventListener('click', function(e){
+  var target = e.target;
+  if(target.classList && target.classList.contains('hl')){
+    currentHlNode = target;
+    lastRange = null;
+    positionSelbarForRect(target.getBoundingClientRect());
+    var sel=window.getSelection();
+    if(sel) sel.removeAllRanges();
+    setTimeout(function(){ keepToolbar=false; }, 0);
+  }
+}, true);
+function doHighlight(){
+  if(currentHlNode) return;
+  if(!lastRange || lastRange.collapsed) return;
+  var span=document.createElement('span'); span.className='hl';
+  try { lastRange.surroundContents(span); }
+  catch(e){
+    var wrap=document.createElement('span'); wrap.className='hl';
+    wrap.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrap);
+  }
+  selbar.style.display='none';
+  showToast('Highlighted');
+}
+function removeHighlight(){
+  if(currentHlNode){
+    var p = currentHlNode.parentNode;
+    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
+    p.removeChild(currentHlNode); p.normalize();
+    currentHlNode = null;
+    selbar.style.display='none';
+    showToast('Highlight removed');
+    return;
+  }
+  if(!lastRange) return;
+  var selRect = lastRange.getBoundingClientRect();
+  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  var toRemove=[];
+  while(walker.nextNode()){
+    var n=walker.currentNode;
+    if(n.classList && n.classList.contains('hl')) {
+      var r = n.getBoundingClientRect();
+      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+    }
+  }
+  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
+  selbar.style.display='none';
+  showToast('Highlight removed');
+}
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+// Notes
+var notes = document.getElementById('notes');
+var noteArea = document.getElementById('noteArea');
+var btnCopy=document.getElementById('btnCopy');
+var btnClose=document.getElementById('btnClose');
+function toggleNotes(){ 
+  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+}
+window.toggleNotes = toggleNotes;
+btnClose.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async function(){ 
+  await navigator.clipboard.writeText(noteArea.value||''); 
+  showToast('Copied'); 
+});
+btnNote.addEventListener('click', function(){
+  var text = '';
+  if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
+  else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
+  toggleNotes();
+  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
+  selbar.style.display='none';
+});
+// Toast
+var toastEl=document.getElementById('toast');
+function showToast(msg){
+  toastEl.textContent=msg; 
+  toastEl.style.display='block';
+  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+}
+// Answer key and grading
+var answers = {
+  "q27":"A", "q28":"E", "q29":"B", "q30":"F", "q31":"C", "q32":"B",
+  "q33":"16", "q34":"Bach", "q35":"coaches",
+  "q36":"FALSE", "q37":"NOT GIVEN", "q38":"FALSE", "q39":"TRUE", "q40":"NOT GIVEN"
+};
+var acceptable = {
+  "q33":["16"],
+  "q34":["Bach"],
+  "q35":["coaches", "Coaches"]
+};
+function markChoice(q, user){
+  return String(user||'').toUpperCase() === String(answers[q]).toUpperCase();
+}
+function markBlank(q, user){
+  var u = String(user||'').trim().toLowerCase();
+  var key = String(answers[q]).trim().toLowerCase();
+  if(acceptable[q]){
+    return acceptable[q].map(a => a.toLowerCase()).indexOf(u) >= 0;
+  }
+  return u === key;
+}
+function grade(){
+  var total=0, correct=0, lines=[];
+  
+  // Check radio questions (27-32, 36-40)
+  for(let n=27;n<=32;n++){
+    total++;
+    const q = `q${n}`;
+    const selected = document.querySelector(`input[name="${q}"]:checked`);
+    const userAnswer = selected ? selected.value : '';
+    const isCorrect = markChoice(q, userAnswer);
+    if(isCorrect) correct++;
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✅' : '❌'}`);
+  }
+  
+  // Check blank questions (33-35)
+  for(let n=33;n<=35;n++){
+    total++;
+    const q = `q${n}`;
+    const input = document.querySelector(`input[name="${q}"]`);
+    const userAnswer = input ? input.value : '';
+    const isCorrect = markBlank(q, userAnswer);
+    if(isCorrect) correct++;
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✅' : '❌'}`);
+  }
+  
+  // Check true/false/not given (36-40)
+  for(let n=36;n<=40;n++){
+    total++;
+    const q = `q${n}`;
+    const selected = document.querySelector(`input[name="${q}"]:checked`);
+    const userAnswer = selected ? selected.value : '';
+    const isCorrect = markChoice(q, userAnswer);
+    if(isCorrect) correct++;
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✅' : '❌'}`);
+  }
+  
+  // Show results
+  const acc = Math.round(100 * correct / total);
+  document.getElementById('results').innerHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p>
+    <pre>${lines.join('\n')}</pre>
+  `;
+  
+  // Show answer key
+  document.getElementById('answerContent').innerHTML = `
+    <ol>
+      <li>27 → A (Disagreement with "talented people = top performance")</li>
+      <li>28 → E (Daily deliberate practice + coach assistance)</li>
+      <li>29 → B (Exceptional talent in all fields: sports, programming, music)</li>
+      <li>30 → F (Performance goals vs learning goals → different reactions)</li>
+      <li>31 → C (Single-point-in-time assessment has error)</li>
+      <li>32 → B (16 composers = 50% of Western classical music; 235 = remaining 50%)</li>
+      <li>33 → 16 (Exceptionally talented Western classical composers)</li>
+      <li>34 → Bach (Initially little recognition, needed standard changes)</li>
+      <li>35 → coaches (Help improve performance of daily practitioners)</li>
+      <li>36 → FALSE (Companies hire based on skills/abilities, not character)</li>
+      <li>37 → NOT GIVEN (No info on "sport areas with higher talent proportion")</li>
+      <li>38 → FALSE (Intelligence measures correlate loosely with work performance)</li>
+      <li>39 → TRUE (Michael Jordan dropped; football quarterbacks overlooked)</li>
+      <li>40 → NOT GIVEN (No info on "newly formed organisations' staff motivation")</li>
+    </ol>
+  `;
+  document.querySelector('#answerBox .badge').textContent = 'tap to view';
+}
+function resetForm(){
+  // Reset radio buttons
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // Reset text inputs
+  document.querySelectorAll('input[name^="q33"], input[name^="q34"], input[name^="q35"]').forEach(input => {
+    input.value = '';
+  });
+  
+  // Reset results and answers
+  document.getElementById('results').innerHTML = '';
+  document.getElementById('answerContent').innerHTML = '';
+  document.querySelector('#answerBox .badge').textContent = 'hidden';
+  
+  // Reset answered status in nav
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+}
+function scrollToElement(id){
+  const el = document.getElementById(id);
+  if(el){ 
+    el.scrollIntoView({behavior:'smooth', block:'center'}); 
+  }
+  // Highlight nav item briefly
+  const navs = document.querySelectorAll('.practice-nav .q-item');
+  navs.forEach(n => n.classList.remove('active'));
+  const btn = document.getElementById(id.replace('-anchor','-nav'));
+  if(btn){ 
+    btn.classList.add('active'); 
+    setTimeout(() => btn.classList.remove('active'), 800); 
+  }
+}
+// Mark answered on interaction
+(function(){
+  function markAnswered(qn){
+    const nav = document.getElementById(`q${qn}-nav`);
+    if(!nav) return;
+    let answered = false;
+    
+    // Check radio buttons (27-32, 36-40)
+    if((qn >=27 && qn <=32) || (qn >=36 && qn <=40)){
+      const radios = document.querySelectorAll(`input[name="q${qn}"]:checked`);
+      answered = radios.length > 0;
+    } 
+    // Check text inputs (33-35)
+    else if(qn >=33 && qn <=35){
+      const input = document.querySelector(`input[name="q${qn}"]`);
+      answered = input && input.value.trim().length > 0;
+    }
+    
+    if(answered) nav.classList.add('answered');
+    else nav.classList.remove('answered');
+  }
+  
+  // Monitor radio buttons
+  for(let n=27;n<=32;n++){
+    document.querySelectorAll(`input[name="q${n}"]`).forEach(radio => {
+      radio.addEventListener('change', () => markAnswered(n));
+    });
+  }
+  for(let n=36;n<=40;n++){
+    document.querySelectorAll(`input[name="q${n}"]`).forEach(radio => {
+      radio.addEventListener('change', () => markAnswered(n));
+    });
+  }
+  
+  // Monitor text inputs
+  for(let n=33;n<=35;n++){
+    const input = document.querySelector(`input[name="q${n}"]`);
+    input.addEventListener('input', () => markAnswered(n));
+  }
+})();
+</script>
+
+<script>
+// 检查是否已经有增强脚本
+if (!window.practicePageEnhancer) {
+    // 动态加载增强脚本
+    const script = document.createElement('script');
+    script.src = '../../../js/practice-page-enhancer.js';
+    script.onload = function() {
+        console.log('[PracticePageEnhancer] 外部脚本加载成功');
+        if (window.practicePageEnhancer) {
+            window.practicePageEnhancer.initialize();
+        }
+    };
+    script.onerror = function() {
+        console.log('[PracticePageEnhancer] 外部脚本加载失败，使用内联版本');
+        loadInlineEnhancer();
+    };
+    document.head.appendChild(script);
+    
+    // 超时降级
+    setTimeout(function() {
+        if (!window.practicePageEnhancer) {
+            console.log('[PracticePageEnhancer] 超时降级到内联版本');
+            loadInlineEnhancer();
+        }
+    }, 2000);
+}
+
+// 内联增强器（降级方案）
+function loadInlineEnhancer() {
+    if (window.practicePageEnhancer) return;
+    
+    window.practicePageEnhancer = {
+        initialize: function() {
+            console.log('[InlineEnhancer] 内联增强器已初始化');
+            this.setupCommunication();
+            this.setupAnswerListeners();
+            this.interceptSubmit();
+        },
+        
+        setupCommunication: function() {
+            this.parentWindow = window.opener || window.parent;
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'INIT_SESSION') {
+                    this.sessionId = event.data.data.sessionId;
+                    this.sendMessage('SESSION_READY', {
+                        pageType: this.detectPageType(),
+                        url: window.location.href
+                    });
+                }
+            });
+        },
+        
+        detectPageType: function() {
+            const title = document.title || '';
+            if (title.includes('P1')) return 'P1';
+            if (title.includes('P2')) return 'P2';
+            if (title.includes('P3')) return 'P3';
+            return 'unknown';
+        },
+        
+        setupAnswerListeners: function() {
+            this.answers = {};
+            this.startTime = Date.now();
+            
+            document.addEventListener('change', (e) => {
+                if (e.target.name && e.target.name.startsWith('q')) {
+                    this.answers[e.target.name] = e.target.value;
+                }
+            });
+        },
+        
+        interceptSubmit: function() {
+            // 拦截grade函数
+            if (typeof window.grade === 'function') {
+                const originalGrade = window.grade;
+                window.grade = () => {
+                    const result = originalGrade();
+                    setTimeout(() => this.handleSubmit(), 200);
+                    return result;
+                };
+            }
+            
+            // 监听提交按钮
+            document.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON' && 
+                    (e.target.textContent.includes('Submit') || 
+                     e.target.textContent.includes('提交') ||
+                     e.target.textContent.includes('完成') ||
+                     e.target.textContent.includes('Check') ||
+                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+                    setTimeout(() => this.handleSubmit(), 300);
+                }
+            });
+        },
+        
+        handleSubmit: function() {
+            const results = {
+                sessionId: this.sessionId,
+                startTime: this.startTime,
+                endTime: Date.now(),
+                duration: Math.round((Date.now() - this.startTime) / 1000),
+                answers: this.answers,
+                scoreInfo: this.extractScore(),
+                pageType: this.detectPageType(),
+                url: window.location.href
+            };
+            
+            this.sendMessage('PRACTICE_COMPLETE', results);
+        },
+        
+        extractScore: function() {
+            const resultsEl = document.getElementById('results');
+            if (!resultsEl) return null;
+            
+            const text = resultsEl.textContent || '';
+            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+            if (scoreMatch) {
+                const correct = parseInt(scoreMatch[1]);
+                const total = parseInt(scoreMatch[2]);
+                return {
+                    correct: correct,
+                    total: total,
+                    accuracy: total > 0 ? correct / total : 0,
+                    percentage: Math.round((correct / total) * 100),
+                    source: 'inline_extraction'
+                };
+            }
+            return null;
+        },
+        
+        sendMessage: function(type, data) {
+            if (this.parentWindow) {
+                this.parentWindow.postMessage({
+                    type: type,
+                    data: data,
+                    source: 'practice_page'
+                }, '*');
+            }
+        }
+    };
+    
+    // 初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            window.practicePageEnhancer.initialize();
+        });
+    } else {
+        window.practicePageEnhancer.initialize();
+    }
+}
+</script></body>
+</html>

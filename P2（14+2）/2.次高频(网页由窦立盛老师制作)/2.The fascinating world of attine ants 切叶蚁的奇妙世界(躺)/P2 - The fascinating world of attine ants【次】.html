@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P2 - The fascinating world of attine ants【次】</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 20px;
+        }
+
+        .passage {
+            margin-bottom: 30px;
+        }
+
+        .questions {
+            margin-top: 30px;
+        }
+
+        .question-group {
+            margin-bottom: 25px;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-left: 4px solid #007acc;
+        }
+
+        .question {
+            margin-bottom: 10px;
+        }
+
+        .answer-input {
+            border: none;
+            border-bottom: 2px solid #ccc;
+            padding: 5px;
+            margin: 0 5px;
+            min-width: 100px;
+            background-color: transparent;
+        }
+
+        .answer-input:focus {
+            outline: none;
+            border-bottom-color: #007acc;
+        }
+
+        .submit-btn {
+            background-color: #007acc;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+
+        .submit-btn:hover {
+            background-color: #005a99;
+        }
+
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            display: none;
+        }
+
+        .result.correct {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .result.incorrect {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>IELTS Reading Practice</h1>
+            <h2>P2 - The fascinating world of attine ants【次】</h2>
+        </div>
+
+        <div class="passage">
+            <h3>Reading Passage</h3>
+            <p>Deep in the rainforests of Central and South America, a remarkable agricultural revolution has been taking place for millions of years. Attine ants, also known as leafcutter ants, have developed one of the most sophisticated farming systems in the animal kingdom, cultivating fungus gardens that sustain their entire colonies.</p>
+
+            <p>The process begins when worker ants venture out from their underground nests to harvest fresh leaves from the forest canopy. However, these ants do not eat the leaves directly. Instead, they carry the leaf fragments back to their colonies, where they are processed by smaller worker ants who chew them into a pulp-like substance. This masticated material serves as the growing medium for a special type of fungus that the ants have been cultivating for over 50 million years.</p>
+
+            <p>The relationship between attine ants and their fungus is a perfect example of mutualism in nature. The ants provide the fungus with fresh organic matter and carefully maintain optimal growing conditions, including temperature and humidity control. In return, the fungus produces specialized structures called gongylidia, which serve as the primary food source for the ant colony. These nutrient-rich structures are perfectly adapted to meet the ants' dietary needs.</p>
+
+            <p>What makes this system even more remarkable is the ants' sophisticated pest management strategies. The fungus gardens are constantly threatened by parasitic fungi and bacteria that could destroy the crop. To combat these threats, attine ants have evolved a three-pronged defense system. First, they practice strict hygiene, removing any contaminated material from their gardens. Second, they secrete antimicrobial compounds that help suppress harmful microorganisms. Third, and most fascinatingly, they maintain colonies of beneficial bacteria on their bodies that produce antibiotics specifically targeted against garden parasites.</p>
+
+            <p>The complexity of attine ant agriculture rivals that of human farming in many ways. Different species have specialized roles within the colony, from the large soldiers that defend the nest to the tiny workers that tend the fungus gardens with meticulous care. The ants even practice crop rotation, abandoning exhausted garden chambers and establishing new ones to maintain soil fertility.</p>
+
+            <p>Recent research has revealed that this ancient partnership has led to remarkable evolutionary adaptations on both sides. The cultivated fungus has become so dependent on the ants that it can no longer survive in the wild, while the ants have lost the ability to digest cellulose directly and rely entirely on their fungal partners for nutrition. This co-evolution represents one of the most successful agricultural partnerships in the natural world.</p>
+        </div>
+
+        <div class="questions">
+            <h3>Questions 14-20</h3>
+            <p><strong>Complete the sentences below. Choose NO MORE THAN TWO WORDS from the passage for each answer.</strong></p>
+
+            <div class="question-group">
+                <div class="question">
+                    14. Attine ants are also known as <input type="text" class="answer-input" data-answer="leafcutter ants"> and live in Central and South America.
+                </div>
+                <div class="question">
+                    15. Worker ants chew leaves into a <input type="text" class="answer-input" data-answer="pulp-like substance"> that serves as growing medium for fungus.
+                </div>
+                <div class="question">
+                    16. The fungus produces specialized structures called <input type="text" class="answer-input" data-answer="gongylidia"> which feed the ant colony.
+                </div>
+                <div class="question">
+                    17. Ants practice strict <input type="text" class="answer-input" data-answer="hygiene"> by removing contaminated material from gardens.
+                </div>
+                <div class="question">
+                    18. Beneficial bacteria on the ants' bodies produce <input type="text" class="answer-input" data-answer="antibiotics"> against garden parasites.
+                </div>
+                <div class="question">
+                    19. Ants practice <input type="text" class="answer-input" data-answer="crop rotation"> by abandoning exhausted chambers and creating new ones.
+                </div>
+                <div class="question">
+                    20. The cultivated fungus can no longer survive <input type="text" class="answer-input" data-answer="in the wild"> due to its dependence on ants.
+                </div>
+            </div>
+
+            <button class="submit-btn" onclick="checkAnswers()">Check Answers</button>
+            <div class="result" id="result"></div>
+        </div>
+    </div>
+
+    <script>
+        function checkAnswers() {
+            const inputs = document.querySelectorAll('.answer-input');
+            let correct = 0;
+            let total = inputs.length;
+
+            inputs.forEach(input => {
+                const userAnswer = input.value.trim().toLowerCase();
+                const correctAnswer = input.getAttribute('data-answer').toLowerCase();
+
+                if (userAnswer === correctAnswer) {
+                    input.style.backgroundColor = '#d4edda';
+                    input.style.color = '#155724';
+                    correct++;
+                } else {
+                    input.style.backgroundColor = '#f8d7da';
+                    input.style.color = '#721c24';
+                }
+            });
+
+            const resultDiv = document.getElementById('result');
+            resultDiv.style.display = 'block';
+
+            if (correct === total) {
+                resultDiv.className = 'result correct';
+                resultDiv.innerHTML = `<strong>Excellent!</strong> You got all ${correct} out of ${total} questions correct!`;
+            } else {
+                resultDiv.className = 'result incorrect';
+                resultDiv.innerHTML = `<strong>Score:</strong> ${correct} out of ${total} correct. Review the highlighted answers and try again.`;
+            }
+        }
+
+        // Allow Enter key to submit
+        document.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                checkAnswers();
+            }
+        });
+    </script>
+
+<script>
+// 练习页面增强器 - 跨窗口通信功能
+(function() {
+    'use strict';
+    
+    let sessionData = null;
+    let parentWindow = null;
+    let startTime = Date.now();
+    let isSessionActive = false;
+    
+    // 初始化通信功能
+    function initializeCommunication() {
+        console.log('[PracticePageEnhancer] 初始化通信功能');
+        
+        // 监听来自父窗口的消息
+        window.addEventListener('message', function(event) {
+            console.log('[PracticePageEnhancer] 收到消息:', event.data);
+            
+            if (event.data && event.data.type === 'INIT_SESSION') {
+                sessionData = event.data.data;
+                parentWindow = event.source;
+                isSessionActive = true;
+                startTime = Date.now();
+                
+                console.log('[PracticePageEnhancer] 会话已初始化:', sessionData);
+                
+                // 发送会话初始化确认
+                sendMessage('SESSION_INITIALIZED', {
+                    sessionId: sessionData.sessionId,
+                    examId: sessionData.examId,
+                    timestamp: Date.now()
+                });
+                
+                // 设置页面关闭时的数据发送
+                setupPageUnloadHandler();
+            }
+        });
+        
+        // 检测答题完成
+        setupAnswerDetection();
+        
+        console.log('[PracticePageEnhancer] 通信功能已初始化');
+    }
+    
+    // 发送消息到父窗口
+    function sendMessage(type, data) {
+        if (parentWindow && isSessionActive) {
+            const message = {
+                type: type,
+                data: data,
+                source: 'practice_page',
+                timestamp: Date.now()
+            };
+            
+            console.log('[PracticePageEnhancer] 发送消息:', message);
+            parentWindow.postMessage(message, '*');
+        }
+    }
+    
+    // 设置答题检测
+    function setupAnswerDetection() {
+        // 检测提交按钮点击
+        document.addEventListener('click', function(event) {
+            const target = event.target;
+            
+            // 检测是否是提交相关的按钮
+            if (target.tagName === 'BUTTON' && 
+                (target.textContent.includes('提交') || 
+                 target.textContent.includes('Submit') ||
+                 target.textContent.includes('完成') ||
+                 target.textContent.includes('Check') ||
+                 target.id === 'submit-btn' ||
+                 target.className.includes('submit'))) {
+                
+                console.log('[PracticePageEnhancer] 检测到提交按钮点击');
+                
+                // 延迟收集数据，确保答案已处理
+                setTimeout(function() {
+                    collectAndSendPracticeData();
+                }, 1000);
+            }
+        });
+        
+        // 检测表单提交
+        document.addEventListener('submit', function(event) {
+            console.log('[PracticePageEnhancer] 检测到表单提交');
+            setTimeout(function() {
+                collectAndSendPracticeData();
+            }, 1000);
+        });
+    }
+    
+    // 设置页面卸载处理器
+    function setupPageUnloadHandler() {
+        window.addEventListener('beforeunload', function() {
+            if (isSessionActive) {
+                collectAndSendPracticeData();
+            }
+        });
+        
+        // 页面隐藏时也发送数据
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'hidden' && isSessionActive) {
+                collectAndSendPracticeData();
+            }
+        });
+    }
+    
+    // 收集并发送练习数据
+    function collectAndSendPracticeData() {
+        if (!isSessionActive || !sessionData) {
+            console.log('[PracticePageEnhancer] 会话未激活，跳过数据收集');
+            return;
+        }
+        
+        console.log('[PracticePageEnhancer] 开始收集练习数据');
+        
+        const endTime = Date.now();
+        const duration = endTime - startTime;
+        
+        // 收集答案数据
+        const answers = collectAnswers();
+        const score = calculateScore(answers);
+        
+        const practiceData = {
+            sessionId: sessionData.sessionId,
+            examId: sessionData.examId,
+            examTitle: sessionData.examTitle,
+            examCategory: sessionData.examCategory,
+            startTime: startTime,
+            endTime: endTime,
+            duration: duration,
+            answers: answers,
+            score: score.correct,
+            totalQuestions: score.total,
+            accuracy: score.total > 0 ? score.correct / score.total : 0,
+            percentage: score.total > 0 ? Math.round((score.correct / score.total) * 100) : 0,
+            url: window.location.href,
+            source: 'page_extraction',
+            timestamp: endTime
+        };
+        
+        console.log('[PracticePageEnhancer] 练习数据已收集:', practiceData);
+        
+        // 发送练习完成数据
+        sendMessage('PRACTICE_COMPLETE', practiceData);
+        
+        // 标记会话为非活跃状态，避免重复发送
+        isSessionActive = false;
+    }
+    
+    // 收集页面中的答案
+    function collectAnswers() {
+        const answers = [];
+        
+        // 收集输入框答案
+        const inputs = document.querySelectorAll('input[type="text"], input.blank, input.blank-input');
+        inputs.forEach(function(input, index) {
+            if (input.value.trim()) {
+                answers.push({
+                    type: 'text',
+                    question: index + 1,
+                    answer: input.value.trim(),
+                    element: input.tagName + (input.className ? '.' + input.className : '')
+                });
+            }
+        });
+        
+        // 收集选择题答案
+        const selects = document.querySelectorAll('select');
+        selects.forEach(function(select, index) {
+            if (select.value) {
+                answers.push({
+                    type: 'select',
+                    question: index + 1,
+                    answer: select.value,
+                    element: 'SELECT'
+                });
+            }
+        });
+        
+        // 收集单选按钮答案
+        const radios = document.querySelectorAll('input[type="radio"]:checked');
+        radios.forEach(function(radio, index) {
+            answers.push({
+                type: 'radio',
+                question: radio.name || index + 1,
+                answer: radio.value,
+                element: 'INPUT[type="radio"]'
+            });
+        });
+        
+        // 收集复选框答案
+        const checkboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+        checkboxes.forEach(function(checkbox, index) {
+            answers.push({
+                type: 'checkbox',
+                question: checkbox.name || index + 1,
+                answer: checkbox.value,
+                element: 'INPUT[type="checkbox"]'
+            });
+        });
+        
+        console.log('[PracticePageEnhancer] 收集到答案:', answers);
+        return answers;
+    }
+    
+    // 计算得分（简单实现）
+    function calculateScore(answers) {
+        // 这里只是简单计算有答案的题目数量
+        // 实际得分需要根据具体题目的正确答案来计算
+        const total = answers.length;
+        const correct = answers.filter(function(answer) {
+            return answer.answer && answer.answer.trim().length > 0;
+        }).length;
+        
+        return {
+            correct: correct,
+            total: total
+        };
+    }
+    
+    // 页面加载完成后初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeCommunication);
+    } else {
+        initializeCommunication();
+    }
+    
+})();
+</script>
+
+<!-- 练习页面数据传输增强脚本 -->
+<script>
+// 检查是否已经有增强脚本
+if (!window.practicePageEnhancer) {
+    // 动态加载增强脚本
+    const script = document.createElement('script');
+    script.src = '../../js/practice-page-enhancer.js';
+    script.onload = function() {
+        console.log('练习页面增强脚本已加载');
+    };
+    script.onerror = function() {
+        console.error('练习页面增强脚本加载失败');
+        // 降级到内联增强
+        loadInlineEnhancer();
+    };
+    document.head.appendChild(script);
+}
+
+// 内联增强器（降级方案）
+function loadInlineEnhancer() {
+    if (window.practicePageEnhancer) return;
+    
+    window.practicePageEnhancer = {
+        initialize: function() {
+            console.log('[InlineEnhancer] 内联增强器已初始化');
+            this.setupCommunication();
+            this.setupAnswerListeners();
+            this.interceptSubmit();
+        },
+        
+        setupCommunication: function() {
+            this.parentWindow = window.opener || window.parent;
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'INIT_SESSION') {
+                    this.sessionId = event.data.data.sessionId;
+                    this.sendMessage('SESSION_READY', {
+                        pageType: this.detectPageType(),
+                        url: window.location.href
+                    });
+                }
+            });
+        },
+        
+        detectPageType: function() {
+            const title = document.title || '';
+            if (title.includes('P1')) return 'P1';
+            if (title.includes('P2')) return 'P2';
+            if (title.includes('P3')) return 'P3';
+            return 'unknown';
+        },
+        
+        setupAnswerListeners: function() {
+            this.answers = {};
+            this.startTime = Date.now();
+            
+            document.addEventListener('change', (e) => {
+                if (e.target.name && e.target.name.startsWith('q')) {
+                    this.answers[e.target.name] = e.target.value;
+                }
+            });
+        },
+        
+        interceptSubmit: function() {
+            // 拦截grade函数
+            if (typeof window.grade === 'function') {
+                const originalGrade = window.grade;
+                window.grade = () => {
+                    const result = originalGrade();
+                    setTimeout(() => this.handleSubmit(), 200);
+                    return result;
+                };
+            }
+            
+            // 监听提交按钮
+            document.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON' && 
+                    (e.target.textContent.includes('Submit') || 
+                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+                    setTimeout(() => this.handleSubmit(), 300);
+                }
+            });
+        },
+        
+        handleSubmit: function() {
+            const results = {
+                sessionId: this.sessionId,
+                startTime: this.startTime,
+                endTime: Date.now(),
+                duration: Math.round((Date.now() - this.startTime) / 1000),
+                answers: this.answers,
+                scoreInfo: this.extractScore(),
+                pageType: this.detectPageType(),
+                url: window.location.href
+            };
+            
+            this.sendMessage('PRACTICE_COMPLETE', results);
+        },
+        
+        extractScore: function() {
+            const resultsEl = document.getElementById('results');
+            if (!resultsEl) return null;
+            
+            const text = resultsEl.textContent || '';
+            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+            if (scoreMatch) {
+                const correct = parseInt(scoreMatch[1]);
+                const total = parseInt(scoreMatch[2]);
+                return {
+                    correct: correct,
+                    total: total,
+                    accuracy: total > 0 ? correct / total : 0,
+                    percentage: Math.round((correct / total) * 100),
+                    source: 'inline_extraction'
+                };
+            }
+            return null;
+        },
+        
+        sendMessage: function(type, data) {
+            if (this.parentWindow) {
+                this.parentWindow.postMessage({
+                    type: type,
+                    data: data,
+                    source: 'practice_page'
+                }, '*');
+            }
+        }
+    };
+    
+    // 初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            window.practicePageEnhancer.initialize();
+        });
+    } else {
+        window.practicePageEnhancer.initialize();
+    }
+}
+</script>
+
+</body>
+
+</html>

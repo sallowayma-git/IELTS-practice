@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>A unique golden textile - Reading Passage 2</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
+  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  .shell { display:flex; height:100vh; width:100%; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  h2,h3,h4 { margin:0 0 10px; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  table { border-collapse: collapse; width:100%; }
+  th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
+  th:first-child, td:first-child { width:92px; }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button:hover { border-color:#fff; }
+  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+  .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:54px; padding:8px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .droplabel { color:#64748b; }
+  .cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:grid; gap:8px; }
+  .pool-slot { min-height:40px; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); }
+  .card:active { cursor:grabbing; }
+  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
+  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
+  .ghost { opacity: .5; }
+  .over { outline:2px dashed #3b82f6; }
+  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
+  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
+  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+  body { padding-bottom: 82px; }
+  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
+  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
+  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #selbar { z-index: 6000 !important; }
+</style>
+</head>
+<body>
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q14-nav" onclick="scrollToElement('q14-anchor')">14</div>
+    <div class="q-item" id="q15-nav" onclick="scrollToElement('q15-anchor')">15</div>
+    <div class="q-item" id="q16-nav" onclick="scrollToElement('q16-anchor')">16</div>
+    <div class="q-item" id="q17-nav" onclick="scrollToElement('q17-anchor')">17</div>
+    <div class="q-item" id="q18-nav" onclick="scrollToElement('q18-anchor')">18</div>
+    <div class="q-item" id="q19-nav" onclick="scrollToElement('q19-anchor')">19</div>
+    <div class="q-item" id="q20-nav" onclick="scrollToElement('q20-anchor')">20</div>
+    <div class="q-item" id="q21-nav" onclick="scrollToElement('q21-anchor')">21</div>
+    <div class="q-item" id="q22-nav" onclick="scrollToElement('q22-anchor')">22</div>
+    <div class="q-item" id="q23-nav" onclick="scrollToElement('q23-anchor')">23</div>
+    <div class="q-item" id="q24-nav" onclick="scrollToElement('q24-anchor')">24</div>
+    <div class="q-item" id="q25-nav" onclick="scrollToElement('q25-anchor')">25</div>
+    <div class="q-item" id="q26-nav" onclick="scrollToElement('q26-anchor')">26</div>
+  </div>
+</div>
+<div class="shell">
+<section class="pane" id="left">
+  <h2>READING PASSAGE 2 <span id="timer">00:00</span></h2>
+  <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>
+  <h3>A unique golden textile</h3>
+  <p>A two-man project to use spider silk is achieved after 4 years</p>
+  
+  <h4>Paragraph A</h4>
+  <p>A rare textile made from the silk of more than a million wild spiders has been on display at the American Museum of Natural History in New York City. To produce this golden cloth, 70 people spent four years collecting golden-orb spiders from telephone poles in Madagascar, while another dozen workers carefully extracted about 80 feet of silk filament from each of the arachnids. The resulting 11-foot-by-4-foot textile is the only large piece of cloth made from natural spider silk in the world today.</p>
+  
+  <h4>Paragraph B</h4>
+  <p>Spider silk is very elastic and strong compared with steel or Kevlar, said textile expert Simon Peers, who co-led the project. Kevlar is a lightweight synthetic fabric, chemically related to nylon, that is used in bullet-proof vests. Kevlar is resistant to wear, tear and heat and has virtually no melting point. But the tensile strength of spider silk is even greater than Kevlar’s aramid filaments and higher than that of high-grade steel. Most importantly, spider silk is extremely lightweight: a strand long enough to circle the Earth would weigh less than 500 grams (18 oz). It is also especially ductile, able to stretch up to 140 percent of its length without breaking and to retain its strength below –40 °C, giving it toughness equal to that of leading commercial fibres.</p>
+  
+  <h4>Paragraph C</h4>
+  <p>Researchers have long been intrigued by the unique properties of spider silk. Unfortunately, spider silk is extremely hard to mass-produce. Unlike silkworms-easy to raise in captivity-spiders have a habit of biting off each other’s heads when housed together. According to Peers, there is intensive research worldwide aimed at replicating spider-silk tensile properties for use in medicine and industry, but no-one has yet reproduced all the qualities of natural silk.</p>
+  
+  <h4>Paragraph D</h4>
+  <p>Peers conceived the idea of weaving spider silk after reading about French missionary Jacob Paul Camboué, who worked with spiders in Madagascar during the 1880s and 1890s. Camboué built a small hand-driven machine to extract silk from up to 24 spiders at once, without harming them: the spiders were briefly restrained, their silk collected, then released. Peers built a replica of this 24-spider “silking” machine, said co-leader Nicholas Godley. As a test the pair collected about 20 spiders. “When we stuck them in the machine and started turning it, lo and behold, this beautiful gold-coloured silk started coming out,” Godley recalled.</p>
+  
+  <h4>Paragraph E</h4>
+  <p>To make a textile of any significant size, the scale had to increase dramatically. Fourteen thousand spiders yield about an ounce of silk, Godley said, and the finished textile weighs about 2.6 pounds. By the end, handlers had worked with more than one million female golden-orb spiders-abundant in Madagascar and famed for their golden thread. Because the spiders produce silk only in the rainy season, all were collected between October and June. An additional 12 workers used hand-powered machines to extract the silk and twist it into 96-filament yarn. After “silking”, the spiders were released; within a week they regenerate their silk, allowing the same individuals to be used again-“the gift that never stops giving,” said Godley.</p>
+  
+  <h4>Paragraph F</h4>
+  <p>Spending four years to produce a single piece of cloth is hardly practical for scientists or companies hoping to exploit spider silk in biomedicine or as a Kevlar alternative. Several groups have inserted spider genes into bacteria and even goats to make silk, but results have been only partly successful. One reason is that spider silk begins as a liquid protein produced in a special gland in the abdomen. Using the spinneret, the spider applies force that rearranges the protein’s molecular structure, transforming it into solid fibre. “When we talk about a spider spinning silk, we’re talking about how it applies forces to convert liquid to solid,” explained spider-silk expert Todd Blackledge of the University of Akron, who was not involved in the project. “Every year we get closer to mass production, but we’re not there yet.” For now, we must be content with one extraordinarily beautiful cloth-courtesy of more than a million spiders.</p>
+  
+  <p>&nbsp;</p> <!-- 增加空白行防止加载不完全 -->
+  <p>&nbsp;</p>
+</section>
+<div id="divider" title="Drag to resize"></div>
+<section class="pane" id="right">
+  <h3>Questions</h3>
+  
+  <div class="group">
+    <h4>Questions 14–19</h4>
+    <p>Reading Passage 2 has six paragraphs A–F.</p>
+    <p>Choose the correct heading for each paragraph from the list of headings below.</p>
+    <p>Write the correct number, i–ix, in boxes 14–19 on your answer sheet.</p>
+    <div class="headings">
+      <p>List of Headings</p>
+      <ol type="i">
+        <li>Experimenting with an old idea</li>
+        <li>Life cycle of Madagascar spiders</li>
+        <li>Advances in the textile industry</li>
+        <li>Resources needed to meet the project’s demands</li>
+        <li>The physical properties of spider silk</li>
+        <li>A scientific analysis of spider silk</li>
+        <li>A unique work of art</li>
+        <li>Importance of the silk-textile market</li>
+        <li>Difficulties of raising spiders in captivity</li>
+      </ol>
+    </div>
+    <table>
+      <tr>
+        <th>Paragraph</th>
+        <th>i</th>
+        <th>ii</th>
+        <th>iii</th>
+        <th>iv</th>
+        <th>v</th>
+        <th>vi</th>
+        <th>vii</th>
+        <th>viii</th>
+        <th>ix</th>
+      </tr>
+      <a id="q14-anchor"></a>
+      <tr id="q14-row">
+        <td>A (14)</td>
+        <td><label><input name="q14" type="radio" value="i"/></label></td>
+        <td><label><input name="q14" type="radio" value="ii"/></label></td>
+        <td><label><input name="q14" type="radio" value="iii"/></label></td>
+        <td><label><input name="q14" type="radio" value="iv"/></label></td>
+        <td><label><input name="q14" type="radio" value="v"/></label></td>
+        <td><label><input name="q14" type="radio" value="vi"/></label></td>
+        <td><label><input name="q14" type="radio" value="vii"/></label></td>
+        <td><label><input name="q14" type="radio" value="viii"/></label></td>
+        <td><label><input name="q14" type="radio" value="ix"/></label></td>
+      </tr>
+      <a id="q15-anchor"></a>
+      <tr id="q15-row">
+        <td>B (15)</td>
+        <td><label><input name="q15" type="radio" value="i"/></label></td>
+        <td><label><input name="q15" type="radio" value="ii"/></label></td>
+        <td><label><input name="q15" type="radio" value="iii"/></label></td>
+        <td><label><input name="q15" type="radio" value="iv"/></label></td>
+        <td><label><input name="q15" type="radio" value="v"/></label></td>
+        <td><label><input name="q15" type="radio" value="vi"/></label></td>
+        <td><label><input name="q15" type="radio" value="vii"/></label></td>
+        <td><label><input name="q15" type="radio" value="viii"/></label></td>
+        <td><label><input name="q15" type="radio" value="ix"/></label></td>
+      </tr>
+      <a id="q16-anchor"></a>
+      <tr id="q16-row">
+        <td>C (16)</td>
+        <td><label><input name="q16" type="radio" value="i"/></label></td>
+        <td><label><input name="q16" type="radio" value="ii"/></label></td>
+        <td><label><input name="q16" type="radio" value="iii"/></label></td>
+        <td><label><input name="q16" type="radio" value="iv"/></label></td>
+        <td><label><input name="q16" type="radio" value="v"/></label></td>
+        <td><label><input name="q16" type="radio" value="vi"/></label></td>
+        <td><label><input name="q16" type="radio" value="vii"/></label></td>
+        <td><label><input name="q16" type="radio" value="viii"/></label></td>
+        <td><label><input name="q16" type="radio" value="ix"/></label></td>
+      </tr>
+      <a id="q17-anchor"></a>
+      <tr id="q17-row">
+        <td>D (17)</td>
+        <td><label><input name="q17" type="radio" value="i"/></label></td>
+        <td><label><input name="q17" type="radio" value="ii"/></label></td>
+        <td><label><input name="q17" type="radio" value="iii"/></label></td>
+        <td><label><input name="q17" type="radio" value="iv"/></label></td>
+        <td><label><input name="q17" type="radio" value="v"/></label></td>
+        <td><label><input name="q17" type="radio" value="vi"/></label></td>
+        <td><label><input name="q17" type="radio" value="vii"/></label></td>
+        <td><label><input name="q17" type="radio" value="viii"/></label></td>
+        <td><label><input name="q17" type="radio" value="ix"/></label></td>
+      </tr>
+      <a id="q18-anchor"></a>
+      <tr id="q18-row">
+        <td>E (18)</td>
+        <td><label><input name="q18" type="radio" value="i"/></label></td>
+        <td><label><input name="q18" type="radio" value="ii"/></label></td>
+        <td><label><input name="q18" type="radio" value="iii"/></label></td>
+        <td><label><input name="q18" type="radio" value="iv"/></label></td>
+        <td><label><input name="q18" type="radio" value="v"/></label></td>
+        <td><label><input name="q18" type="radio" value="vi"/></label></td>
+        <td><label><input name="q18" type="radio" value="vii"/></label></td>
+        <td><label><input name="q18" type="radio" value="viii"/></label></td>
+        <td><label><input name="q18" type="radio" value="ix"/></label></td>
+      </tr>
+      <a id="q19-anchor"></a>
+      <tr id="q19-row">
+        <td>F (19)</td>
+        <td><label><input name="q19" type="radio" value="i"/></label></td>
+        <td><label><input name="q19" type="radio" value="ii"/></label></td>
+        <td><label><input name="q19" type="radio" value="iii"/></label></td>
+        <td><label><input name="q19" type="radio" value="iv"/></label></td>
+        <td><label><input name="q19" type="radio" value="v"/></label></td>
+        <td><label><input name="q19" type="radio" value="vi"/></label></td>
+        <td><label><input name="q19" type="radio" value="vii"/></label></td>
+        <td><label><input name="q19" type="radio" value="viii"/></label></td>
+        <td><label><input name="q19" type="radio" value="ix"/></label></td>
+      </tr>
+    </table>
+  </div>
+  
+  <div class="group">
+    <h4>Questions 20–23</h4>
+    <p>Look at the following statements (Questions 20–23) and the list of researchers below.</p>
+    <p>Match each statement with the correct researcher, A, B or C.</p>
+    <p>Write the correct letter, A, B or C, in boxes 20–23 on your answer sheet.</p>
+    <p>NB You may use any letter more than once.</p>
+    <p><strong>List of Researchers</strong></p>
+    <ul>
+      <li>A Simon Peers</li>
+      <li>B Nicholas Godley</li>
+      <li>C Todd Blackledge</li>
+    </ul>
+    
+    <a id="q20-anchor"></a>
+    <div id="q20-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>20 It takes a tremendous number of spiders to make a small amount of silk.</p>
+      <label style="display:block;margin:4px 0;"><input name="q20" type="radio" value="A"/>  A Simon Peers</label>
+      <label style="display:block;margin:4px 0;"><input name="q20" type="radio" value="B"/>  B Nicholas Godley</label>
+      <label style="display:block;margin:4px 0;"><input name="q20" type="radio" value="C"/>  C Todd Blackledge</label>
+    </div>
+    
+    <a id="q21-anchor"></a>
+    <div id="q21-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>21 Scientists want to use the qualities of spider silk for medical purposes.</p>
+      <label style="display:block;margin:4px 0;"><input name="q21" type="radio" value="A"/>  A Simon Peers</label>
+      <label style="display:block;margin:4px 0;"><input name="q21" type="radio" value="B"/>  B Nicholas Godley</label>
+      <label style="display:block;margin:4px 0;"><input name="q21" type="radio" value="C"/>  C Todd Blackledge</label>
+    </div>
+    
+    <a id="q22-anchor"></a>
+    <div id="q22-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>22 Scientists are making some progress in their efforts to manufacture spider silk.</p>
+      <label style="display:block;margin:4px 0;"><input name="q22" type="radio" value="A"/>  A Simon Peers</label>
+      <label style="display:block;margin:4px 0;"><input name="q22" type="radio" value="B"/>  B Nicholas Godley</label>
+      <label style="display:block;margin:4px 0;"><input name="q22" type="radio" value="C"/>  C Todd Blackledge</label>
+    </div>
+    
+    <a id="q23-anchor"></a>
+    <div id="q23-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>23 Spider silk compares favourably to materials known for their strength.</p>
+      <label style="display:block;margin:4px 0;"><input name="q23" type="radio" value="A"/>  A Simon Peers</label>
+      <label style="display:block;margin:4px 0;"><input name="q23" type="radio" value="B"/>  B Nicholas Godley</label>
+      <label style="display:block;margin:4px 0;"><input name="q23" type="radio" value="C"/>  C Todd Blackledge</label>
+    </div>
+  </div>
+  
+  <div class="group">
+    <a id="q24-anchor"></a>
+    <h4>Questions 24–26</h4>
+    <p>Complete the summary below.</p>
+    <p>Choose ONE WORD ONLY from the passage for each answer.</p>
+    <p>Write your answers in boxes 24–26 on your answer sheet.</p>
+    <p>Producing spider silk in the lab</p>
+    <p>Both scientists and manufacturers are interested in producing silk for many different purposes. Some researchers have tried to grow silk by introducing genetic material into <input class="blank" maxlength="40" name="q24" placeholder="24"/> and some animals. But these experiments have been somewhat disappointing.</p>
+    <p>It is difficult to make spider silk in a lab setting because the silk comes from a liquid protein made in a <input class="blank" maxlength="40" name="q25" placeholder="25"/> inside the spider’s body. When a spider spins silk, it applies <input class="blank" maxlength="40" name="q26" placeholder="26"/> that turns this liquid into solid silk. Scientists cannot replicate this yet.</p>
+  </div>
+  
+  <div style="display:flex;gap:8px;margin-bottom:10px;">
+    <button class="primary" onclick="grade()">Submit</button>
+    <button onclick="resetForm()">Reset</button>
+    <button onclick="toggleNotes()">Notes</button>
+  </div>
+  <div id="results"></div>
+  <details class="answerbox" id="answerBox">
+    <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+    <div id="answerContent"></div>
+  </details>
+</section>
+</div>
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+<script>
+// Timer
+let _t=0; const _timerEl=document.getElementById('timer');
+setInterval(function(){ 
+  _t++; 
+  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
+  var s=String(_t%60).padStart(2,'0'); 
+  _timerEl.textContent=m+':'+s; 
+},1000);
+// Drag divider
+var divider = document.getElementById('divider');
+var left = document.getElementById('left');
+var right = document.getElementById('right');
+var dragging=false;
+function startDrag(e){ 
+  dragging=true; 
+  document.body.style.cursor='ew-resize'; 
+  if(e.preventDefault) e.preventDefault(); 
+}
+function endDrag(){ 
+  dragging=false; 
+  document.body.style.cursor=''; 
+}
+function onMove(clientX){
+  var container = document.querySelector('.shell').getBoundingClientRect();
+  var x = clientX - container.left;
+  x = Math.max(280, Math.min(container.width-320, x));
+  left.style.flex = '0 0 ' + x + 'px';
+  right.style.flex = '1 1 auto';
+}
+divider.addEventListener('mousedown', function(e){ startDrag(e); });
+window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+window.addEventListener('mouseup', endDrag);
+divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
+window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+window.addEventListener('touchend', endDrag);
+// Highlight toolbar
+var selbar = document.getElementById('selbar');
+var btnHL = document.getElementById('btnHL');
+var btnUH = document.getElementById('btnUH');
+var btnNote = document.getElementById('btnNote');
+var lastRange=null;
+var currentHlNode=null;
+var keepToolbar=false;
+function positionSelbarForRect(rect){
+  selbar.style.display='flex';
+  requestAnimationFrame(function(){
+    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+function updateSelbar(){
+  var sel=window.getSelection();
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
+    selbar.style.display='none'; 
+    currentHlNode=null; 
+    return; 
+  }
+  var range = sel.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode=null;
+  positionSelbarForRect(range.getBoundingClientRect());
+}
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', function(){ 
+  var sel=window.getSelection(); 
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
+    if(!keepToolbar && !currentHlNode){ 
+      selbar.style.display='none'; 
+    } 
+  } 
+});
+document.addEventListener('scroll', function(){ 
+  if(selbar.style.display==='flex') updateSelbar(); 
+});
+document.addEventListener('mousedown', function(e){
+  var t = e.target;
+  if(t.classList && t.classList.contains('hl')){
+    keepToolbar = true;
+  } else {
+    keepToolbar = false;
+  }
+}, true);
+document.addEventListener('click', function(e){
+  var target = e.target;
+  if(target.classList && target.classList.contains('hl')){
+    currentHlNode = target;
+    lastRange = null;
+    positionSelbarForRect(target.getBoundingClientRect());
+    var sel=window.getSelection();
+    if(sel) sel.removeAllRanges();
+    setTimeout(function(){ keepToolbar=false; }, 0);
+  }
+}, true);
+function doHighlight(){
+  if(currentHlNode) return;
+  if(!lastRange || lastRange.collapsed) return;
+  var span=document.createElement('span'); span.className='hl';
+  try { lastRange.surroundContents(span); }
+  catch(e){
+    var wrap=document.createElement('span'); wrap.className='hl';
+    wrap.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrap);
+  }
+  selbar.style.display='none';
+  showToast('Highlighted');
+}
+function removeHighlight(){
+  if(currentHlNode){
+    var p = currentHlNode.parentNode;
+    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
+    p.removeChild(currentHlNode); p.normalize();
+    currentHlNode = null;
+    selbar.style.display='none';
+    showToast('Highlight removed');
+    return;
+  }
+  if(!lastRange) return;
+  var selRect = lastRange.getBoundingClientRect();
+  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  var toRemove=[];
+  while(walker.nextNode()){
+    var n=walker.currentNode;
+    if(n.classList && n.classList.contains('hl')) {
+      var r = n.getBoundingClientRect();
+      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+    }
+  }
+  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
+  selbar.style.display='none';
+  showToast('Highlight removed');
+}
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+// Notes
+var notes = document.getElementById('notes');
+var noteArea = document.getElementById('noteArea');
+var btnCopy=document.getElementById('btnCopy');
+var btnClose=document.getElementById('btnClose');
+function toggleNotes(){ 
+  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+}
+window.toggleNotes = toggleNotes;
+btnClose.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async function(){ 
+  await navigator.clipboard.writeText(noteArea.value||''); 
+  showToast('Copied'); 
+});
+btnNote.addEventListener('click', function(){
+  var text = '';
+  if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
+  else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
+  toggleNotes();
+  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
+  selbar.style.display='none';
+});
+// Toast
+var toastEl=document.getElementById('toast');
+function showToast(msg){
+  toastEl.textContent=msg; 
+  toastEl.style.display='block';
+  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+}
+// Answer key and grading
+var answers = {
+  "q14":"vii", "q15":"v", "q16":"ix", "q17":"i", "q18":"iv", "q19":"vi",
+  "q20":"B", "q21":"A", "q22":"C", "q23":"A",
+  "q24":"bacteria", "q25":"gland", "q26":"force"
+};
+var acceptable = {
+  // Add any acceptable variations here
+};
+function markHeading(q, user){
+  return String(user||'').toLowerCase() === String(answers[q]).toLowerCase();
+}
+function markChoice(q, user){
+  return String(user||'').toUpperCase() === String(answers[q]).toUpperCase();
+}
+function markBlank(q, user){
+  var u = String(user||'').trim().toLowerCase();
+  var key = String(answers[q]).trim().toLowerCase();
+  if(acceptable[q]){
+    return acceptable[q].map(a => a.toLowerCase()).indexOf(u) >= 0;
+  }
+  return u === key;
+}
+function grade(){
+  var total=0, correct=0, lines=[];
+  function push(q, ok, user){
+    total++; if(ok) correct++;
+    lines.push(q.toUpperCase()+": "+(user||'None')+" "+(ok?'✓':'✗'));
+  }
+  // 14–19 headings
+  for(var n=14;n<=19;n++){
+    var sel=document.querySelector('input[name="q'+n+'"]:checked');
+    var val=sel?sel.value:'';
+    push('q'+n, markHeading('q'+n, val), val);
+  }
+  // 20–23 matching
+  for(var n=20;n<=23;n++){
+    var sel=document.querySelector('input[name="q'+n+'"]:checked');
+    var val=sel?sel.value:'';
+    push('q'+n, markChoice('q'+n, val), val);
+  }
+  // 24–26 blanks
+  for(var n=24;n<=26;n++){
+    var el=document.querySelector('input[name="q'+n+'"]');
+    var val=el?el.value:'';
+    push('q'+n, markBlank('q'+n, val), val);
+  }
+  var acc = (total? Math.round(100*correct/total):0);
+  var html = '<p><strong>Score:</strong> '+correct+'/'+total+' <span class="badge">Accuracy '+acc+'%</span></p>';
+  html += '<pre>'+lines.join('\n')+'</pre>';
+  document.getElementById('results').innerHTML = html;
+  var ahtml = '<ol>';
+  ahtml += '<li>14 → vii (A unique work of art)</li>';
+  ahtml += '<li>15 → v (The physical properties of spider silk)</li>';
+  ahtml += '<li>16 → ix (Difficulties of raising spiders in captivity)</li>';
+  ahtml += '<li>17 → i (Experimenting with an old idea)</li>';
+  ahtml += '<li>18 → iv (Resources needed to meet the project’s demands)</li>';
+  ahtml += '<li>19 → vi (A scientific analysis of spider silk)</li>';
+  ahtml += '<li>20 → B (Nicholas Godley)</li>';
+  ahtml += '<li>21 → A (Simon Peers)</li>';
+  ahtml += '<li>22 → C (Todd Blackledge)</li>';
+  ahtml += '<li>23 → A (Simon Peers)</li>';
+  ahtml += '<li>24 → bacteria</li>';
+  ahtml += '<li>25 → gland</li>';
+  ahtml += '<li>26 → force</li>';
+  ahtml += '</ol>';
+  document.getElementById('answerContent').innerHTML = ahtml;
+  document.querySelector('#answerBox .badge').textContent='tap to view';
+}
+function resetForm(){
+  document.querySelectorAll('input[type="radio"]').forEach(el=>el.checked=false);
+  document.querySelectorAll('input.blank').forEach(el=>el.value="");
+  document.getElementById('results').innerHTML='';
+  document.getElementById('answerContent').innerHTML='';
+  document.querySelector('#answerBox .badge').textContent = 'hidden';
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+}
+function scrollToElement(id){
+  var el = document.getElementById(id);
+  if(el){ 
+    el.scrollIntoView({behavior:'smooth', block:'center'}); 
+  }
+  var navs = document.querySelectorAll('.practice-nav .q-item');
+  navs.forEach(n => n.classList.remove('active'));
+  var btn = document.getElementById(id.replace('-anchor','-nav'));
+  if(btn){ 
+    btn.classList.add('active'); 
+    setTimeout(() => btn.classList.remove('active'), 800); 
+  }
+}
+(function(){
+  function mark(qn){
+    var nav = document.getElementById('q'+qn+'-nav');
+    if(!nav) return;
+    var radios = document.querySelectorAll('input[name="q'+qn+'"]');
+    var text = document.querySelector('input[name="q'+qn+'"].blank');
+    var answered=false;
+    if(radios.length){ radios.forEach(function(r){ if(r.checked) answered=true; }); }
+    if(text){ answered = answered || (text.value && text.value.trim().length>0); }
+    if(answered) nav.classList.add('answered'); else nav.classList.remove('answered');
+  }
+  for(var q=14;q<=26;q++){
+    (function(n){
+      var radios = document.querySelectorAll('input[name="q'+n+'"]');
+      radios.forEach(function(r){ r.addEventListener('change', function(){ mark(n); }); });
+      var text = document.querySelector('input[name="q'+n+'"].blank');
+      if(text){ text.addEventListener('input', function(){ mark(n); }); }
+    })(q);
+  }
+  for(var q=14;q<=26;q++){ mark(q); }
+})();
+</script>
+
+<!-- 练习页面数据传输增强脚本 -->
+<script>
+// 检查是否已经有增强脚本
+if (!window.practicePageEnhancer) {
+    // 动态加载增强脚本
+    const script = document.createElement('script');
+    script.src = '../../js/practice-page-enhancer.js';
+    script.onload = function() {
+        console.log('练习页面增强脚本已加载');
+    };
+    script.onerror = function() {
+        console.error('练习页面增强脚本加载失败');
+        // 降级到内联增强
+        loadInlineEnhancer();
+    };
+    document.head.appendChild(script);
+}
+
+// 内联增强器（降级方案）
+function loadInlineEnhancer() {
+    if (window.practicePageEnhancer) return;
+    
+    window.practicePageEnhancer = {
+        initialize: function() {
+            console.log('[InlineEnhancer] 内联增强器已初始化');
+            this.setupCommunication();
+            this.setupAnswerListeners();
+            this.interceptSubmit();
+        },
+        
+        setupCommunication: function() {
+            this.parentWindow = window.opener || window.parent;
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'INIT_SESSION') {
+                    this.sessionId = event.data.data.sessionId;
+                    this.sendMessage('SESSION_READY', {
+                        pageType: this.detectPageType(),
+                        url: window.location.href
+                    });
+                }
+            });
+        },
+        
+        detectPageType: function() {
+            const title = document.title || '';
+            if (title.includes('P1')) return 'P1';
+            if (title.includes('P2')) return 'P2';
+            if (title.includes('P3')) return 'P3';
+            return 'unknown';
+        },
+        
+        setupAnswerListeners: function() {
+            this.answers = {};
+            this.startTime = Date.now();
+            
+            document.addEventListener('change', (e) => {
+                if (e.target.name && e.target.name.startsWith('q')) {
+                    this.answers[e.target.name] = e.target.value;
+                }
+            });
+        },
+        
+        interceptSubmit: function() {
+            // 拦截grade函数
+            if (typeof window.grade === 'function') {
+                const originalGrade = window.grade;
+                window.grade = () => {
+                    const result = originalGrade();
+                    setTimeout(() => this.handleSubmit(), 200);
+                    return result;
+                };
+            }
+            
+            // 监听提交按钮
+            document.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON' && 
+                    (e.target.textContent.includes('Submit') || 
+                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+                    setTimeout(() => this.handleSubmit(), 300);
+                }
+            });
+        },
+        
+        handleSubmit: function() {
+            const results = {
+                sessionId: this.sessionId,
+                startTime: this.startTime,
+                endTime: Date.now(),
+                duration: Math.round((Date.now() - this.startTime) / 1000),
+                answers: this.answers,
+                scoreInfo: this.extractScore(),
+                pageType: this.detectPageType(),
+                url: window.location.href
+            };
+            
+            this.sendMessage('PRACTICE_COMPLETE', results);
+        },
+        
+        extractScore: function() {
+            const resultsEl = document.getElementById('results');
+            if (!resultsEl) return null;
+            
+            const text = resultsEl.textContent || '';
+            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+            if (scoreMatch) {
+                const correct = parseInt(scoreMatch[1]);
+                const total = parseInt(scoreMatch[2]);
+                return {
+                    correct: correct,
+                    total: total,
+                    accuracy: total > 0 ? correct / total : 0,
+                    percentage: Math.round((correct / total) * 100),
+                    source: 'inline_extraction'
+                };
+            }
+            return null;
+        },
+        
+        sendMessage: function(type, data) {
+            if (this.parentWindow) {
+                this.parentWindow.postMessage({
+                    type: type,
+                    data: data,
+                    source: 'practice_page'
+                }, '*');
+            }
+        }
+    };
+    
+    // 初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            window.practicePageEnhancer.initialize();
+        });
+    } else {
+        window.practicePageEnhancer.initialize();
+    }
+}
+</script>
+
+</body>
+</html>

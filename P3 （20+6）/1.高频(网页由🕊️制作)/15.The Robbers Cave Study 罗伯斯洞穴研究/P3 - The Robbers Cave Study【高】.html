@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>The Robbers Cave Study</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
+  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  .shell { display:flex; height:100vh; width:100%; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  h2,h3,h4 { margin:0 0 10px; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  table { border-collapse: collapse; width:100%; }
+  th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
+  th:first-child, td:first-child { width:92px; }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button:hover { border-color:#fff; }
+  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+  .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:54px; padding:8px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .droplabel { color:#64748b; }
+  .cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:grid; gap:8px; }
+  .pool-slot { min-height:40px; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); }
+  .card:active { cursor:grabbing; }
+  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
+  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
+  .ghost { opacity: .5; }
+  .over { outline:2px dashed #3b82f6; }
+  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
+  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
+  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+  body { padding-bottom: 82px; }
+  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
+  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
+  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #selbar { z-index: 6000 !important; }
+  .answer-table { margin-top: 10px; }
+  .answer-table th, .answer-table td { text-align: left; padding: 8px; }
+</style>
+</head>
+<body>
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q27-nav" onclick="scrollToElement('q27-anchor')">27</div>
+    <div class="q-item" id="q28-nav" onclick="scrollToElement('q28-anchor')">28</div>
+    <div class="q-item" id="q29-nav" onclick="scrollToElement('q29-anchor')">29</div>
+    <div class="q-item" id="q30-nav" onclick="scrollToElement('q30-anchor')">30</div>
+    <div class="q-item" id="q31-nav" onclick="scrollToElement('q31-anchor')">31</div>
+    <div class="q-item" id="q32-nav" onclick="scrollToElement('q32-anchor')">32</div>
+    <div class="q-item" id="q33-nav" onclick="scrollToElement('q33-anchor')">33</div>
+    <div class="q-item" id="q34-nav" onclick="scrollToElement('q34-anchor')">34</div>
+    <div class="q-item" id="q35-nav" onclick="scrollToElement('q35-anchor')">35</div>
+    <div class="q-item" id="q36-nav" onclick="scrollToElement('q36-anchor')">36</div>
+    <div class="q-item" id="q37-nav" onclick="scrollToElement('q37-anchor')">37</div>
+    <div class="q-item" id="q38-nav" onclick="scrollToElement('q38-anchor')">38</div>
+    <div class="q-item" id="q39-nav" onclick="scrollToElement('q39-anchor')">39</div>
+    <div class="q-item" id="q40-nav" onclick="scrollToElement('q40-anchor')">40</div>
+  </div>
+</div>
+<div class="shell">
+<section class="pane" id="left">
+  <h2>READING PASSAGE 3 <span id="timer">00:00</span></h2>
+  <p>You should spend about 20 minutes on Questions 27–40, which are based on Reading Passage 3 below.</p>
+  <h3>The Robbers Cave Study</h3>
+  <p><em>A review of a famous study into group behaviour</em></p>
+  
+  <p>Group self-centredness seems to occur the minute people are divided into groups. It doesn’t matter what the group is, or on what basis it was formed, we perceive the group we belong to as being superior to other groups and we develop an ‘in-group’ bias.</p>
+  
+  <p>Probably one of the most famous pieces of research looking at group behaviour was a field study conducted by Sherif in 1956. This study involved 22 boys aged between 11 and 12, who were divided into two groups. The groups were roughly matched in terms of sporting ability, camping experience and general popularity among their peers. Their parents were told that they were going to a three-week summer camp to see how well they would work alongside other boys when put into different teams. The parents were also told that the boys would not be allowed to be visited during that time, but would be able to go home if they wanted to. It was intended that the data for the study would be collected by participant observers.</p>
+  
+  <p>At first, neither set of boys knew of the existence of the other set. They were taken to their respective campsites, which were located on a 200-acre, densely wooded area in Robbers Cave State Park, Oklahoma. The first week was spent doing a variety of activities, such as pitching tents and cooking. During this week, the two groups seemed to develop different group norms, one group being more ‘tough’ than the other, from which two boys went home early, as they were homesick. The groups were given a set of caps and T-shirts, and gave themselves names: the ‘Eagles’ and the ‘Rattlers’ (the latter being the tougher group).</p>
+  
+  <p>At the end of the first week, they became aware of each other’s existence by finding litter left by the other group or overhearing voices. Sherif noticed that already the groups had started to refer to the other group as ‘them’ and their group as ‘us’. This marked the beginning of phase two of the experiment.</p>
+  
+  <p>The groups were told that they were going to take part in a ‘Grand Tournament’, which involved ten different sporting events, and they were shown the prizes for winning. The tournament was also to include in the final scores points which would be awarded for other activities, such as how tidy the cabins were kept. These scores were displayed on big scoreboards in what now became a joint hall where the two groups ate their meals together. This was necessary so the two groups would think they were on almost equal scores in the time leading up to the final event, which would increase the sense of competition. Needless to say, these scores were manipulated by the experimenters.</p>
+  
+  <p>In order to check how high the levels of group self-centredness were in the groups at this time, a number of tasks were set up which involved the groups rating their own members and members of the other group. Each time, group members rated the boys in their own group much better at the tasks than the other boys, even though there was no real difference between them. They were also asked to rate all others in terms of how desirable they were as friends, and 93 per cent of friendship preferences were in-group preferences.</p>
+  
+  <p>When the tournament started, the first game was basketball. The group that was thought to be less tough lost the game and claimed that they had lost only because the other group were bigger and older than they were. The Eagles won the next ball game and then were said to be cheating in the tug-of-war. This resulted in visits by both groups to each other’s cabins over the course of the next 24 hours, where they ripped the mosquito nets, turned over the beds and generally made a mess. The Eagles devised a new weapon in the conflict which consisted of ‘rocks in socks’ – and so it went on. Eventually, the Eagles won the tournament (with some help from the experimenters) and it was time for phase three to begin.</p>
+  
+  <p>Research has suggested that the best way to reduce group conflict is by non-competitive contact. This required two conditions: that the groups had equal status and that they had a common goal to work towards. This was exactly what Sherif engineered. There were actually seven situations organised which gave the groups equal-status contact; these were things like having meals together or watching films together. The meals resulted in food fights; the films were enjoyed by both groups sitting totally apart from each other.</p>
+  
+  <p>The other situations, where the groups had to work for common goals, had a much better outcome. These included raising money to go and see a film and solving problems, such as one with the water supply. The final common goal was a visit by truck to Cedar Lake to camp there before the end of the holiday. In this situation, although both groups travelled in separate trucks, another problem-solving situation arose when one of the trucks became stuck. All the boys joined in, using one of the tug-of-war ropes to help move it. At this point the group boundaries were beginning to disappear. On the final day, when they were due to return home, the boys themselves suggested that they travel in one bus and sat in friendship groups rather than as Eagles and Rattlers.</p>
+  
+  <p>&nbsp;</p> <!-- 额外添加的空白行防止加载不完全 -->
+</section>
+<div id="divider" title="Drag to resize"></div>
+<section class="pane" id="right">
+  <h3>Questions</h3>
+  
+  <div class="group">
+    <a id="q27-anchor"></a>
+    <a id="q28-anchor"></a>
+    <h4>Questions 27 and 28</h4>
+    <p>Choose TWO letters, A–F.</p>
+    <p>Write the correct letters in boxes 27 and 28 on your answer sheet.</p>
+    <p>Which TWO of the following statements about the boys who took part in the study are made by the writer?</p>
+    <ul>
+      <li>A They had approximately the same number of friends.</li>
+      <li>B Some of their parents helped to set up the camp.</li>
+      <li>C They selected the group that they wanted to be in.</li>
+      <li>D They were responsible for bringing their own tents.</li>
+      <li>E They received clothes that identified the group they belonged to.</li>
+      <li>F Some of them were criticised for dropping litter.</li>
+    </ul>
+    <div style="margin-top: 10px;">
+      <label style="display:block;margin:4px 0;"><input name="q27" type="checkbox" value="A"> A</label>
+      <label style="display:block;margin:4px 0;"><input name="q27" type="checkbox" value="B"> B</label>
+      <label style="display:block;margin:4px 0;"><input name="q27" type="checkbox" value="C"> C</label>
+      <label style="display:block;margin:4px 0;"><input name="q27" type="checkbox" value="D"> D</label>
+      <label style="display:block;margin:4px 0;"><input name="q27" type="checkbox" value="E"> E</label>
+      <label style="display:block;margin:4px 0;"><input name="q27" type="checkbox" value="F"> F</label>
+    </div>
+  </div>
+  
+  <div class="group">
+    <h4>Questions 29–34</h4>
+    <p>Complete the summary below.</p>
+    <p>Choose NO MORE THAN TWO WORDS from the passage for each answer.</p>
+    <p>Write your answers in boxes 29–34 on your answer sheet.</p>
+    <p><strong>The Grand Tournament</strong></p>
+    <p>The Grand Tournament marked the second part of Sherif’s experiment. It included a range of <a id="q29-anchor"></a><input class="blank" maxlength="40" name="q29" placeholder="29"/> that each team would compete in, and the allocation of extra points for things like cleaning cabins.</p>
+    <p>To increase the competitive element of the tournament, the organisers used <a id="q30-anchor"></a><input class="blank" maxlength="40" name="q30" placeholder="30"/> in the dining hall. They also made sure that the boys were under the impression that their scores were nearly <a id="q31-anchor"></a><input class="blank" maxlength="40" name="q31" placeholder="31"/> as the tournament neared its end.</p>
+    <p>The <a id="q32-anchor"></a><input class="blank" maxlength="40" name="q32" placeholder="32"/>, who were thought to be the tougher group, won the first ball game and lost the second. In other games there were accusations of <a id="q33-anchor"></a><input class="blank" maxlength="40" name="q33" placeholder="33"/>. During the next day, various instances of conflict occurred within the boys’ cabins. Eventually, the tournament was won by the group that was considered to be <a id="q34-anchor"></a><input class="blank" maxlength="40" name="q34" placeholder="34"/> – the Eagles.</p>
+  </div>
+  
+  <div class="group">
+    <h4>Questions 35–38</h4>
+    <p>Complete the table below.</p>
+    <p>Choose NO MORE THAN TWO WORDS from the passage for each answer.</p>
+    <p>Write your answers in boxes 35–38 on your answer sheet.</p>
+    <p><strong>Phase 3: Non-competitive contact</strong></p>
+    <table>
+      <tr>
+        <th>Conditions</th>
+        <th>Type of situation</th>
+        <th>Result</th>
+      </tr>
+      <tr>
+        <td>Equal status</td>
+        <td>eating</td>
+        <td><a id="q35-anchor"></a><input class="blank" maxlength="40" name="q35" placeholder="35"/></td>
+      </tr>
+      <tr>
+        <td></td>
+        <td><a id="q36-anchor"></a><input class="blank" maxlength="40" name="q36" placeholder="36"/></td>
+        <td>enjoyed them but were not sitting together</td>
+      </tr>
+      <tr>
+        <td>A <a id="q37-anchor"></a><input class="blank" maxlength="40" name="q37" placeholder="37"/></td>
+        <td>raising money</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td></td>
+        <td><a id="q38-anchor"></a><input class="blank" maxlength="40" name="q38" placeholder="38"/>, e.g. stuck truck</td>
+        <td>friendship groups</td>
+      </tr>
+    </table>
+  </div>
+  
+  <div class="group">
+    <a id="q39-anchor"></a>
+    <a id="q40-anchor"></a>
+    <h4>Questions 39 and 40</h4>
+    <p>Choose TWO letters, A–F.</p>
+    <p>Write the correct letters in boxes 39 and 40 on your answer sheet.</p>
+    <p>Which TWO of the following statements are true of the experimenters who ran the study?</p>
+    <ul>
+      <li>A They collected their data from secret observation posts.</li>
+      <li>B They encouraged the boys to use the terms ‘them’ and ‘us’.</li>
+      <li>C They used a rating exercise to assess the amount of in-group bias.</li>
+      <li>D They took steps to avoid personal injury among the boys.</li>
+      <li>E They secretly altered some of the results of the tournament.</li>
+      <li>F They joined in with the non-competitive activities.</li>
+    </ul>
+    <div style="margin-top: 10px;">
+      <label style="display:block;margin:4px 0;"><input name="q39" type="checkbox" value="A"> A</label>
+      <label style="display:block;margin:4px 0;"><input name="q39" type="checkbox" value="B"> B</label>
+      <label style="display:block;margin:4px 0;"><input name="q39" type="checkbox" value="C"> C</label>
+      <label style="display:block;margin:4px 0;"><input name="q39" type="checkbox" value="D"> D</label>
+      <label style="display:block;margin:4px 0;"><input name="q39" type="checkbox" value="E"> E</label>
+      <label style="display:block;margin:4px 0;"><input name="q39" type="checkbox" value="F"> F</label>
+    </div>
+  </div>
+  
+  <div style="display:flex;gap:8px;margin-bottom:10px;">
+    <button class="primary" onclick="grade()">Submit</button>
+    <button onclick="resetForm()">Reset</button>
+    <button onclick="toggleNotes()">Notes</button>
+  </div>
+  <div id="results"></div>
+  <details class="answerbox" id="answerBox">
+    <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+    <div id="answerContent">
+      <table class="answer-table">
+        <tr>
+          <th>Question</th>
+          <th>Answer</th>
+          <th>Key定位句</th>
+        </tr>
+        <tr>
+          <td>27</td>
+          <td>A</td>
+          <td>"The groups were roughly matched ... general popularity among their peers."(第2段)</td>
+        </tr>
+        <tr>
+          <td>28</td>
+          <td>E</td>
+          <td>"The groups were given a set of caps and T-shirts..."(第3段)</td>
+        </tr>
+        <tr>
+          <td>29</td>
+          <td>sporting events</td>
+          <td>"...which involved ten different sporting events..."(第5段)</td>
+        </tr>
+        <tr>
+          <td>30</td>
+          <td>scoreboards</td>
+          <td>"These scores were displayed on big scoreboards..."(第5段)</td>
+        </tr>
+        <tr>
+          <td>31</td>
+          <td>equal scores</td>
+          <td>"...so the two groups would think they were on almost equal scores..."(第5段)</td>
+        </tr>
+        <tr>
+          <td>32</td>
+          <td>Rattlers</td>
+          <td>"...the 'Eagles' and the 'Rattlers' (the latter being the tougher group)."(第3段)</td>
+        </tr>
+        <tr>
+          <td>33</td>
+          <td>cheating</td>
+          <td>"The Eagles won the next ball game and then were said to be cheating..."(第7段)</td>
+        </tr>
+        <tr>
+          <td>34</td>
+          <td>less tough</td>
+          <td>"The group that was thought to be less tough lost the game ... Eventually, the Eagles won..."(第7段)</td>
+        </tr>
+        <tr>
+          <td>35</td>
+          <td>food fights</td>
+          <td>"The meals resulted in food fights;..."(第8段)</td>
+        </tr>
+        <tr>
+          <td>36</td>
+          <td>watching films</td>
+          <td>"...or watching films together. The meals resulted in food fights; the films were enjoyed..."(第8段)</td>
+        </tr>
+        <tr>
+          <td>37</td>
+          <td>common goal</td>
+          <td>"The other situations, where the groups had to work for common goals..."(第9段)</td>
+        </tr>
+        <tr>
+          <td>38</td>
+          <td>problem solving</td>
+          <td>"...another problem-solving situation arose when one of the trucks became stuck..."(第9段)</td>
+        </tr>
+        <tr>
+          <td>39</td>
+          <td>C</td>
+          <td>"...a number of tasks were set up which involved the groups rating their own members..."(第6段)</td>
+        </tr>
+        <tr>
+          <td>40</td>
+          <td>E</td>
+          <td>"Needless to say, these scores were manipulated by the experimenters."(第5段)</td>
+        </tr>
+      </table>
+    </div>
+  </details>
+</section>
+</div>
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+<script>
+// Timer
+let _t=0; const _timerEl=document.getElementById('timer');
+setInterval(function(){ 
+  _t++; 
+  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
+  var s=String(_t%60).padStart(2,'0'); 
+  _timerEl.textContent=m+':'+s; 
+},1000);
+// Drag divider
+var divider = document.getElementById('divider');
+var left = document.getElementById('left');
+var right = document.getElementById('right');
+var dragging=false;
+function startDrag(e){ 
+  dragging=true; 
+  document.body.style.cursor='ew-resize'; 
+  if(e.preventDefault) e.preventDefault(); 
+}
+function endDrag(){ 
+  dragging=false; 
+  document.body.style.cursor=''; 
+}
+function onMove(clientX){
+  var container = document.querySelector('.shell').getBoundingClientRect();
+  var x = clientX - container.left;
+  x = Math.max(280, Math.min(container.width-320, x));
+  left.style.flex = '0 0 ' + x + 'px';
+  right.style.flex = '1 1 auto';
+}
+divider.addEventListener('mousedown', function(e){ startDrag(e); });
+window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+window.addEventListener('mouseup', endDrag);
+divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
+window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+window.addEventListener('touchend', endDrag);
+// Highlight toolbar
+var selbar = document.getElementById('selbar');
+var btnHL = document.getElementById('btnHL');
+var btnUH = document.getElementById('btnUH');
+var btnNote = document.getElementById('btnNote');
+var lastRange=null;
+var currentHlNode=null;
+var keepToolbar=false;
+function positionSelbarForRect(rect){
+  selbar.style.display='flex';
+  requestAnimationFrame(function(){
+    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+function updateSelbar(){
+  var sel=window.getSelection();
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
+    selbar.style.display='none'; 
+    currentHlNode=null; 
+    return; 
+  }
+  var range = sel.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode=null;
+  positionSelbarForRect(range.getBoundingClientRect());
+}
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', function(){ 
+  var sel=window.getSelection(); 
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
+    if(!keepToolbar && !currentHlNode){ 
+      selbar.style.display='none'; 
+    } 
+  } 
+});
+document.addEventListener('scroll', function(){ 
+  if(selbar.style.display==='flex') updateSelbar(); 
+});
+document.addEventListener('mousedown', function(e){
+  var t = e.target;
+  if(t.classList && t.classList.contains('hl')){
+    keepToolbar = true;
+  } else {
+    keepToolbar = false;
+  }
+}, true);
+document.addEventListener('click', function(e){
+  var target = e.target;
+  if(target.classList && target.classList.contains('hl')){
+    currentHlNode = target;
+    lastRange = null;
+    positionSelbarForRect(target.getBoundingClientRect());
+    var sel=window.getSelection();
+    if(sel) sel.removeAllRanges();
+    setTimeout(function(){ keepToolbar=false; }, 0);
+  }
+}, true);
+function doHighlight(){
+  if(currentHlNode) return;
+  if(!lastRange || lastRange.collapsed) return;
+  var span=document.createElement('span'); span.className='hl';
+  try { lastRange.surroundContents(span); }
+  catch(e){
+    var wrap=document.createElement('span'); wrap.className='hl';
+    wrap.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrap);
+  }
+  selbar.style.display='none';
+  showToast('Highlighted');
+}
+function removeHighlight(){
+  if(currentHlNode){
+    var p = currentHlNode.parentNode;
+    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
+    p.removeChild(currentHlNode); p.normalize();
+    currentHlNode = null;
+    selbar.style.display='none';
+    showToast('Highlight removed');
+    return;
+  }
+  if(!lastRange) return;
+  var selRect = lastRange.getBoundingClientRect();
+  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  var toRemove=[];
+  while(walker.nextNode()){
+    var n=walker.currentNode;
+    if(n.classList && n.classList.contains('hl')) {
+      var r = n.getBoundingClientRect();
+      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+    }
+  }
+  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
+  selbar.style.display='none';
+  showToast('Highlight removed');
+}
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+// Notes
+var notes = document.getElementById('notes');
+var noteArea = document.getElementById('noteArea');
+var btnCopy=document.getElementById('btnCopy');
+var btnClose=document.getElementById('btnClose');
+function toggleNotes(){ 
+  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+}
+window.toggleNotes = toggleNotes;
+btnClose.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async function(){ 
+  await navigator.clipboard.writeText(noteArea.value||''); 
+  showToast('Copied'); 
+});
+btnNote.addEventListener('click', function(){
+  var text = '';
+  if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
+  else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
+  toggleNotes();
+  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
+  selbar.style.display='none';
+});
+// Toast
+var toastEl=document.getElementById('toast');
+function showToast(msg){
+  toastEl.textContent=msg; 
+  toastEl.style.display='block';
+  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+}
+// Answer key and grading
+var answers = {
+  "q27":["A", "E"], 
+  "q28":["A", "E"],
+  "q29":"sporting events", 
+  "q30":"scoreboards", 
+  "q31":"equal scores", 
+  "q32":"Rattlers", 
+  "q33":"cheating", 
+  "q34":"less tough",
+  "q35":"food fights", 
+  "q36":"watching films", 
+  "q37":"common goal", 
+  "q38":"problem solving",
+  "q39":["C", "E"], 
+  "q40":["C", "E"]
+};
+function grade(){
+  var total=0, correct=0, lines=[];
+  
+  // Questions 27 and 28
+  total += 2;
+  var q27Checked = Array.from(document.querySelectorAll('input[name="q27"]:checked')).map(cb => cb.value);
+  var q27Correct = q27Checked.length === 2 && 
+                  answers["q27"].includes(q27Checked[0]) && 
+                  answers["q27"].includes(q27Checked[1]);
+  if(q27Correct) correct += 2;
+  lines.push(`Q27-28: ${q27Checked.join(', ')} ${q27Correct ? '✅' : '❌'}`);
+  
+  // Questions 29-34
+  for(var n=29;n<=34;n++){
+    total++;
+    var el=document.querySelector('input[name="q'+n+'"]');
+    var val=el?el.value.trim().toLowerCase():"";
+    var key=answers["q"+n].toLowerCase();
+    var isCorrect = val === key;
+    if(isCorrect) correct++;
+    lines.push(`Q${n}: ${val || 'None'} ${isCorrect ? '✅' : '❌'}`);
+  }
+  
+  // Questions 35-38
+  for(var n=35;n<=38;n++){
+    total++;
+    var el=document.querySelector('input[name="q'+n+'"]');
+    var val=el?el.value.trim().toLowerCase():"";
+    var key=answers["q"+n].toLowerCase();
+    var isCorrect = val === key;
+    if(isCorrect) correct++;
+    lines.push(`Q${n}: ${val || 'None'} ${isCorrect ? '✅' : '❌'}`);
+  }
+  
+  // Questions 39 and 40
+  total += 2;
+  var q39Checked = Array.from(document.querySelectorAll('input[name="q39"]:checked')).map(cb => cb.value);
+  var q39Correct = q39Checked.length === 2 && 
+                  answers["q39"].includes(q39Checked[0]) && 
+                  answers["q39"].includes(q39Checked[1]);
+  if(q39Correct) correct += 2;
+  lines.push(`Q39-40: ${q39Checked.join(', ')} ${q39Correct ? '✅' : '❌'}`);
+  
+  // Show results
+  var acc = Math.round(100 * correct / total);
+  document.getElementById('results').innerHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p>
+    <pre>${lines.join('\n')}</pre>
+  `;
+  document.querySelector('#answerBox .badge').textContent='tap to view';
+}
+function resetForm(){
+  // Reset checkboxes
+  document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+    checkbox.checked = false;
+  });
+  
+  // Reset text inputs
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = "";
+  });
+  
+  // Reset results and answers
+  document.getElementById('results').innerHTML = '';
+  document.querySelector('#answerBox .badge').textContent = 'hidden';
+  
+  // Reset answered status in nav
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+}
+function scrollToElement(id){
+  var el = document.getElementById(id);
+  if(el){ 
+    el.scrollIntoView({behavior:'smooth', block:'center'}); 
+  }
+  // Highlight nav item briefly
+  var navs = document.querySelectorAll('.practice-nav .q-item');
+  navs.forEach(n => n.classList.remove('active'));
+  var btn = document.getElementById(id.replace('-anchor','-nav'));
+  if(btn){ 
+    btn.classList.add('active'); 
+    setTimeout(() => btn.classList.remove('active'), 800); 
+  }
+}
+// Mark answered on interaction
+(function(){
+  function markAnswered(qn){
+    var nav = document.getElementById(`q${qn}-nav`);
+    if(!nav) return;
+    let answered = false;
+    
+    // Check checkboxes (27,28,39,40)
+    if((qn >=27 && qn <=28) || (qn >=39 && qn <=40)){
+      const checkboxes = document.querySelectorAll(`input[name="q${qn >=29 ? 27 : qn}"]:checked`);
+      answered = checkboxes.length > 0;
+    } 
+    // Check text inputs (29-38)
+    else {
+      const input = document.querySelector(`input[name="q${qn}"]`);
+      answered = input && input.value.trim().length > 0;
+    }
+    
+    if(answered) nav.classList.add('answered');
+    else nav.classList.remove('answered');
+  }
+  
+  // Monitor checkboxes
+  document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+    checkbox.addEventListener('change', function(){
+      const qn = this.name === "q27" ? 27 : 39;
+      markAnswered(qn);
+      markAnswered(qn + 1);
+    });
+  });
+  
+  // Monitor text inputs
+  for(let n=29; n<=38; n++){
+    document.querySelector(`input[name="q${n}"]`).addEventListener('input', function(){
+      markAnswered(n);
+    });
+  }
+})();
+</script>
+
+<!-- 练习页面数据传输增强脚本 -->
+<script>
+// 检查是否已经有增强脚本
+if (!window.practicePageEnhancer) {
+    // 动态加载增强脚本
+    const script = document.createElement('script');
+    script.src = '../../js/practice-page-enhancer.js';
+    script.onload = function() {
+        console.log('练习页面增强脚本已加载');
+    };
+    script.onerror = function() {
+        console.error('练习页面增强脚本加载失败');
+        // 降级到内联增强
+        loadInlineEnhancer();
+    };
+    document.head.appendChild(script);
+}
+
+// 内联增强器（降级方案）
+function loadInlineEnhancer() {
+    if (window.practicePageEnhancer) return;
+    
+    window.practicePageEnhancer = {
+        initialize: function() {
+            console.log('[InlineEnhancer] 内联增强器已初始化');
+            this.setupCommunication();
+            this.setupAnswerListeners();
+            this.interceptSubmit();
+        },
+        
+        setupCommunication: function() {
+            this.parentWindow = window.opener || window.parent;
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'INIT_SESSION') {
+                    this.sessionId = event.data.data.sessionId;
+                    this.sendMessage('SESSION_READY', {
+                        pageType: this.detectPageType(),
+                        url: window.location.href
+                    });
+                }
+            });
+        },
+        
+        detectPageType: function() {
+            const title = document.title || '';
+            if (title.includes('P1')) return 'P1';
+            if (title.includes('P2')) return 'P2';
+            if (title.includes('P3')) return 'P3';
+            return 'unknown';
+        },
+        
+        setupAnswerListeners: function() {
+            this.answers = {};
+            this.startTime = Date.now();
+            
+            document.addEventListener('change', (e) => {
+                if (e.target.name && e.target.name.startsWith('q')) {
+                    this.answers[e.target.name] = e.target.value;
+                }
+            });
+        },
+        
+        interceptSubmit: function() {
+            // 拦截grade函数
+            if (typeof window.grade === 'function') {
+                const originalGrade = window.grade;
+                window.grade = () => {
+                    const result = originalGrade();
+                    setTimeout(() => this.handleSubmit(), 200);
+                    return result;
+                };
+            }
+            
+            // 监听提交按钮
+            document.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON' && 
+                    (e.target.textContent.includes('Submit') || 
+                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+                    setTimeout(() => this.handleSubmit(), 300);
+                }
+            });
+        },
+        
+        handleSubmit: function() {
+            const results = {
+                sessionId: this.sessionId,
+                startTime: this.startTime,
+                endTime: Date.now(),
+                duration: Math.round((Date.now() - this.startTime) / 1000),
+                answers: this.answers,
+                scoreInfo: this.extractScore(),
+                pageType: this.detectPageType(),
+                url: window.location.href
+            };
+            
+            this.sendMessage('PRACTICE_COMPLETE', results);
+        },
+        
+        extractScore: function() {
+            const resultsEl = document.getElementById('results');
+            if (!resultsEl) return null;
+            
+            const text = resultsEl.textContent || '';
+            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+            if (scoreMatch) {
+                const correct = parseInt(scoreMatch[1]);
+                const total = parseInt(scoreMatch[2]);
+                return {
+                    correct: correct,
+                    total: total,
+                    accuracy: total > 0 ? correct / total : 0,
+                    percentage: Math.round((correct / total) * 100),
+                    source: 'inline_extraction'
+                };
+            }
+            return null;
+        },
+        
+        sendMessage: function(type, data) {
+            if (this.parentWindow) {
+                this.parentWindow.postMessage({
+                    type: type,
+                    data: data,
+                    source: 'practice_page'
+                }, '*');
+            }
+        }
+    };
+    
+    // 初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            window.practicePageEnhancer.initialize();
+        });
+    } else {
+        window.practicePageEnhancer.initialize();
+    }
+}
+</script>
+
+</body>
+</html>

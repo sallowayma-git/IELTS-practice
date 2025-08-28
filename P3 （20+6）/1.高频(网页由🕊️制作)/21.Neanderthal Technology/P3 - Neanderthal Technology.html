@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Neanderthal Technology</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
+  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  .shell { display:flex; height:100vh; width:100%; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  h2,h3,h4 { margin:0 0 10px; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  table { border-collapse: collapse; width:100%; }
+  th, td { border:1px solid var(--line); padding:6px; text-align:left; font-size:14px; }
+  th:first-child, td:first-child { width:auto; }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button:hover { border-color:#fff; }
+  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+  .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:40px; padding:4px 8px; display:inline-flex; align-items:center; justify-content:space-between; gap:8px; width: auto; min-width: 120px; max-width: 200px; vertical-align: middle; }
+  .droplabel { color:#64748b; font-size:14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:flex; flex-wrap:wrap; gap:8px; }
+  .pool-slot { min-height:40px; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); white-space: nowrap; }
+  .card:active { cursor:grabbing; }
+  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
+  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
+  .ghost { opacity: .5; }
+  .over { outline:2px dashed #3b82f6; }
+  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
+  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
+  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+  body { padding-bottom: 82px; }
+  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
+  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
+  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #selbar { z-index: 6000 !important; }
+</style>
+</head>
+<body>
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q27-nav" onclick="scrollToElement('q27-anchor')">27</div>
+    <div class="q-item" id="q28-nav" onclick="scrollToElement('q28-anchor')">28</div>
+    <div class="q-item" id="q29-nav" onclick="scrollToElement('q29-anchor')">29</div>
+    <div class="q-item" id="q30-nav" onclick="scrollToElement('q30-anchor')">30</div>
+    <div class="q-item" id="q31-nav" onclick="scrollToElement('q31-anchor')">31</div>
+    <div class="q-item" id="q32-nav" onclick="scrollToElement('q32-anchor')">32</div>
+    <div class="q-item" id="q33-nav" onclick="scrollToElement('q33-anchor')">33</div>
+    <div class="q-item" id="q34-nav" onclick="scrollToElement('q34-anchor')">34</div>
+    <div class="q-item" id="q35-nav" onclick="scrollToElement('q35-anchor')">35</div>
+    <div class="q-item" id="q36-nav" onclick="scrollToElement('q36-anchor')">36</div>
+    <div class="q-item" id="q37-nav" onclick="scrollToElement('q37-anchor')">37</div>
+    <div class="q-item" id="q38-nav" onclick="scrollToElement('q38-anchor')">38</div>
+    <div class="q-item" id="q39-nav" onclick="scrollToElement('q39-anchor')">39</div>
+    <div class="q-item" id="q40-nav" onclick="scrollToElement('q40-anchor')">40</div>
+  </div>
+</div>
+<div class="shell">
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 3 <span id="timer">00:00</span></h2>
+    <p>You should spend about 20 minutes on Questions 27–40, which are based on Reading Passage 3 below.</p>
+    <div style="display:flex; gap:10px; margin-bottom: 20px;">
+      <!-- Removed AI-related buttons to meet user's request -->
+    </div>
+    <h3>Neanderthal Technology</h3>
+    
+    <p>A We think of our prehistoric ancestors as people of the ice and snow, living in caves, and for many of the West European Neanderthalers that is just a picture of their life. But where there were no caves, further to the east on the Russian steppe, for example, open-air sites with some sort of constructed shelter were the only option. We now know much more about the cave sites than the open-air ones because, historically, it was the cave sites of Western Europe that were first explored by archaeologists and also because open-air sites are harder to find - many of them have disappeared under deep mud deposits or under the rising postglacial seas. Caves, moreover, aid the survival of archaeological material and can preserve the records of remote millennia.</p>
+    
+    <p>B In south-west France, the limestone caves of the Périgord region made ideal homes for the Neanderthal people. There were good supplies of flint to hand for axes and the like, and the caves were often sited in small river valleys that offered protection against the worst of the weather. The Neanderthalers liked south-facing caves, for obvious reasons of sunshine and wind avoidance, and caves at some height above the valley floor offered refuge from floods and good game-watching vantage points. The Périgord region during the last ice age was, in fact, an exceptionally benign habitat for humans. It enjoyed a rather maritime climate with cooler summers that permitted the extension of tundra and steppe over its higher plateaux, and its year-round high levels of sunshine favoured the growth of the ground plants needed by reindeer, bison and horse. Winters were mildish for the ice age, animals never needed to migrate far from summer to winter, and men never needed to travel far from home to find abundant supplies of meat.</p>
+    
+    <p>C In Central and Eastern Europe, where caves are less readily available, such open-air sites as have been discovered were mostly located near water: bottom-land was a good area to be for people and animals, and also because the sedimentation pattern of lakes and stream courses has aided archaeological preservation - whereas erosion has presumably blown away sites which were out in the open. Some of the open-air sites in Germany, Central Europe and Russia have provided valuable information about Neanderthal man and his way of life. From Moldova, for example, comes evidence that has been interpreted as the remains of wind-breaks, or even a large tent-ring, up to about 8x5 m in size, of mainly mammoth bones enclosing a dense concentration of stone tools, animal bones and ash.</p>
+    
+    <p>D From the West European caves more evidence of built structures is available, and some of it goes back a long way in time. In the Grotte du Lazaret, near Nice, at a date during the last ice age but one, claims for some sort of skin tent within the cave have been advanced, on the basis of arrangements of large stones out from the cave wall that might have supported timber struts for a covering of skins up to the rock face above. At Lazaret, what might be openings in the hypothesised tents seem to point away from the cave mouth, and finds of wolf and fox foot bones, without the rest of the skeletons, inside these 'tents' have been thought to indicate the use of animal pelts as bed coverings. The two patches of ash at Lazaret that mark ancient fires, with stone tools around them evidently made and used on the spot, are edged with small marine mollusc shells, prompting the excavator to suggest that seaweed had been used as bedding around the fires. The cave of Baume-Bonne in the Basses-Alpes region of France, another early site, boasts ten square metres of cobbles brought up from the local river and laid down, as though to take care of a puddle area in the cave, with the smoothest and roundest surfaces of the stones uppermost, and there are other similar cases.</p>
+    
+    <p>E The ash encountered in concentrations at some sites testifies to the Neanderthal people's use of fire: not surprising, since use of fire was, by Neanderthal times, an already ancient accomplishment of evolving humanity, and survival in the sub-arctic conditions faced by the Neanderthalers is inconceivable without control of fire. Fire gave warmth, light, heat for cooking and defence against predatory animals. A charred piece of birch from Krapina in Croatia is thought to be the remains of a fire-making twirl stick. But Neanderthal hearths, in the sense of specially constructed places for fire, are fewer and harder to identify with certainty than the mere ash piles that are a regular feature of their sites. They seem often to have just lit a small fire (40-50 cm across) on the existing ground surface of the cave, without preparation. Judging from the shallow penetration of heat effects under the ash, this fire was only of short duration. Sometimes the fires were larger in size, up to one metre across, and quite irregular in shape. It is not always easy to decide how much additional structure some fires possessed: claims of stone circles to contain the fire run up against the fact that stones tend to litter the cave floors everywhere and those around a fire can quite accidentally look as though they were arranged in a circle.</p>
+    
+    <p>&nbsp;</p>
+  </section>
+  <div id="divider" title="Drag to resize"></div>
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <h4>Questions 27–31</h4>
+      <p>Reading Passage 3 has five sections, A-E.</p>
+      <p>Choose the correct heading for each section from the list of headings below.</p>
+      <p>Write the correct number, i-vi, in boxes 27–31 on your answer sheet.</p>
+      
+      <a id="q27-anchor"></a>
+      <div style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>27 Section A</p>
+        <div class="dropzone" data-target="q27"><span class="droplabel">Drag answer here</span></div>
+      </div>
+      <a id="q28-anchor"></a>
+      <div style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>28 Section B</p>
+        <div class="dropzone" data-target="q28"><span class="droplabel">Drag answer here</span></div>
+      </div>
+      <a id="q29-anchor"></a>
+      <div style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>29 Section C</p>
+        <div class="dropzone" data-target="q29"><span class="droplabel">Drag answer here</span></div>
+      </div>
+      <a id="q30-anchor"></a>
+      <div style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>30 Section D</p>
+        <div class="dropzone" data-target="q30"><span class="droplabel">Drag answer here</span></div>
+      </div>
+      <a id="q31-anchor"></a>
+      <div style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>31 Section E</p>
+        <div class="dropzone" data-target="q31"><span class="droplabel">Drag answer here</span></div>
+      </div>
+
+      <h4>List of Headings</h4>
+      <div class="cardpool" id="pool-27-31">
+        <div class="card" draggable="true" data-value="i">i Evidence of outdoor dwellings</div>
+        <div class="card" draggable="true" data-value="ii">ii Learning to make fire</div>
+        <div class="card" draggable="true" data-value="iii">iii A perfect place to live</div>
+        <div class="card" draggable="true" data-value="iv">iv Examining the cave contents</div>
+        <div class="card" draggable="true" data-value="v">v Contrasting two types of home</div>
+        <div class="card" draggable="true" data-value="vi">vi A vital source of power</div>
+      </div>
+    </div>
+    
+    <div class="group">
+      <h4>Questions 32–36</h4>
+      <p>Look at the following findings (Questions 32–36) and the list of places below.</p>
+      <p>Match each finding with the correct place, A–E.</p>
+      <p>Write the correct letter, A–E, in boxes 32–36 on your answer sheet.</p>
+      <p>NB You may use any letter more than once.</p>
+      
+      <a id="q32-anchor"></a>
+      <div style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>32 a burnt piece of wood</p>
+        <div class="dropzone" data-target="q32"><span class="droplabel">Drag answer here</span></div>
+      </div>
+      <a id="q33-anchor"></a>
+      <div style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>33 evidence of efforts to prevent pools of water forming</p>
+        <div class="dropzone" data-target="q33"><span class="droplabel">Drag answer here</span></div>
+      </div>
+      <a id="q34-anchor"></a>
+      <div style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>34 the remains of sea creatures</p>
+        <div class="dropzone" data-target="q34"><span class="droplabel">Drag answer here</span></div>
+      </div>
+      <a id="q35-anchor"></a>
+      <div style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>35 a circular arrangement of animal bones</p>
+        <div class="dropzone" data-target="q35"><span class="droplabel">Drag answer here</span></div>
+      </div>
+      <a id="q36-anchor"></a>
+      <div style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>36 evidence suggesting the use of animal fur for warmth</p>
+        <div class="dropzone" data-target="q36"><span class="droplabel">Drag answer here</span></div>
+      </div>
+      
+      <h4>List of Places</h4>
+      <div class="cardpool" id="pool-32-36">
+        <div class="card" draggable="true" data-value="A">A The Périgord region</div>
+        <div class="card" draggable="true" data-value="B">B Moldova</div>
+        <div class="card" draggable="true" data-value="C">C The Grotte du Lazaret</div>
+        <div class="card" draggable="true" data-value="D">D The cave of Baume-Bonne</div>
+        <div class="card" draggable="true" data-value="E">E Krapina</div>
+      </div>
+    </div>
+    
+    <div class="group">
+      <h4>Questions 37–39</h4>
+      <p>Complete the summary below.</p>
+      <p>Choose NO MORE THAN TWO WORDS from the passage for each answer.</p>
+      <p>Write your answers in boxes 37–39 on your answer sheet.</p>
+      
+      <p>The use of fire</p>
+      <p>Neanderthalers could not have survived without fire because the conditions they lived in were <a id="q37-anchor"></a><input class="blank" maxlength="40" name="q37" placeholder="37"/></p>
+      <p>Most evidence of purpose-built fires takes the form of ash piles, features of which suggest that the fires lasted a <a id="q38-anchor"></a><input class="blank" maxlength="40" name="q38" placeholder="38"/> time. It is hard to be certain about the size and structure of the fires, though they were certainly needed to protect the occupants from dangerous <a id="q39-anchor"></a><input class="blank" maxlength="40" name="q39" placeholder="39"/> among other things.</p>
+    </div>
+    
+    <div class="group">
+      <h4>Question 40</h4>
+      <p>Choose the correct letter, A, B, C or D.</p>
+      <p>Write the correct letter in box 40 on your answer sheet.</p>
+      
+      <a id="q40-anchor"></a>
+      <div id="q40-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>40 The purpose of the writer of this article is to</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q40" type="radio" value="A"> A argue that Neanderthal homes were bigger than originally thought.</label>
+          <label style="margin:0;"><input name="q40" type="radio" value="B"> B explain why Neanderthal people migrated to Western Europe.</label>
+          <label style="margin:0;"><input name="q40" type="radio" value="C"> C discuss what is known about Neanderthal settlements.</label>
+          <label style="margin:0;"><input name="q40" type="radio" value="D"> D track the progress of early Neanderthal development.</label>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
+</div>
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+<script>
+// Timer
+let _t = 0;
+const _timerEl = document.getElementById('timer');
+let timerInterval;
+
+function startTimer() {
+    if (timerInterval) return;
+    timerInterval = setInterval(() => {
+        _t++;
+        const m = String(Math.floor(_t / 60)).padStart(2, '0');
+        const s = String(_t % 60).padStart(2, '0');
+        _timerEl.textContent = `${m}:${s}`;
+    }, 1000);
+}
+
+function stopTimer() {
+    clearInterval(timerInterval);
+    timerInterval = null;
+}
+
+// Initial timer start on page load
+window.onload = startTimer;
+
+// Drag divider
+var divider = document.getElementById('divider');
+var left = document.getElementById('left');
+var right = document.getElementById('right');
+var dragging = false;
+function startDrag(e){ 
+  dragging = true; 
+  document.body.style.cursor = 'ew-resize'; 
+  if(e.preventDefault) e.preventDefault(); 
+}
+function endDrag(){ 
+  dragging = false; 
+  document.body.style.cursor = ''; 
+}
+function onMove(clientX){
+  var container = document.querySelector('.shell').getBoundingClientRect();
+  var x = clientX - container.left;
+  x = Math.max(280, Math.min(container.width - 320, x));
+  left.style.flex = '0 0 ' + x + 'px';
+  right.style.flex = '1 1 auto';
+}
+divider.addEventListener('mousedown', function(e){ startDrag(e); });
+window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+window.addEventListener('mouseup', endDrag);
+divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
+window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+window.addEventListener('touchend', endDrag);
+
+// Drag and drop for questions
+const cardPools = document.querySelectorAll('.cardpool');
+const dropzones = document.querySelectorAll('.dropzone');
+const initialCardHTML = {
+  'pool-27-31': `
+    <div class="card" draggable="true" data-value="i">i Evidence of outdoor dwellings</div>
+    <div class="card" draggable="true" data-value="ii">ii Learning to make fire</div>
+    <div class="card" draggable="true" data-value="iii">iii A perfect place to live</div>
+    <div class="card" draggable="true" data-value="iv">iv Examining the cave contents</div>
+    <div class="card" draggable="true" data-value="v">v Contrasting two types of home</div>
+    <div class="card" draggable="true" data-value="vi">vi A vital source of power</div>
+  `,
+  'pool-32-36': `
+    <div class="card" draggable="true" data-value="A">A The Périgord region</div>
+    <div class="card" draggable="true" data-value="B">B Moldova</div>
+    <div class="card" draggable="true" data-value="C">C The Grotte du Lazaret</div>
+    <div class="card" draggable="true" data-value="D">D The cave of Baume-Bonne</div>
+    <div class="card" draggable="true" data-value="E">E Krapina</div>
+  `
+};
+
+function addDragListenersToCards(cards) {
+    cards.forEach(card => {
+        card.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('text/plain', e.target.dataset.value);
+            e.dataTransfer.setData('text/html', e.target.outerHTML);
+            e.target.classList.add('dragging');
+        });
+        card.addEventListener('dragend', (e) => {
+            e.target.classList.remove('dragging');
+        });
+    });
+}
+
+// Initializing drag listeners
+addDragListenersToCards(document.querySelectorAll('.card'));
+
+dropzones.forEach(zone => {
+  zone.addEventListener('dragover', e => {
+    e.preventDefault();
+    zone.classList.add('over');
+  });
+  
+  zone.addEventListener('dragleave', () => {
+    zone.classList.remove('over');
+  });
+  
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('over');
+
+    const dataValue = e.dataTransfer.getData('text/plain');
+    const dataHtml = e.dataTransfer.getData('text/html');
+    
+    // Create a new card based on the dropped data
+    const droppedCard = document.createElement('div');
+    droppedCard.innerHTML = dataHtml;
+    const cardEl = droppedCard.firstElementChild;
+    
+    if (cardEl) {
+      const qNum = parseInt(zone.dataset.target.replace('q', ''));
+      const oldCard = zone.querySelector('.card');
+      
+      // Handle returning old card to its original pool
+      if (oldCard) {
+          const originalPool = oldCard.closest('.cardpool');
+          if (originalPool) {
+              originalPool.appendChild(oldCard);
+          } else {
+              oldCard.remove();
+          }
+      }
+
+      // Append the new card to the dropzone
+      zone.innerHTML = '';
+      zone.appendChild(cardEl);
+
+      // Re-add drag listeners to the new card
+      addDragListenersToCards([cardEl]);
+      
+      const targetQ = zone.dataset.target;
+      document.getElementById(targetQ + '-nav').classList.add('answered');
+    }
+  });
+});
+
+// Highlight toolbar
+var selbar = document.getElementById('selbar');
+var btnHL = document.getElementById('btnHL');
+var btnUH = document.getElementById('btnUH');
+var btnNote = document.getElementById('btnNote');
+var lastRange = null;
+var currentHlNode = null;
+var keepToolbar = false;
+function positionSelbarForRect(rect){
+  selbar.style.display = 'flex';
+  requestAnimationFrame(function(){
+    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    var leftPos = window.scrollX + rect.left + rect.width / 2 - selbar.offsetWidth / 2;
+    selbar.style.top = ((top > 0) ? top : (window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+function updateSelbar(){
+  var sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) { 
+    selbar.style.display = 'none'; 
+    currentHlNode = null; 
+    return; 
+  }
+  var range = sel.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode = null;
+  positionSelbarForRect(range.getBoundingClientRect());
+}
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', function(){ 
+  var sel = window.getSelection(); 
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) { 
+    if (!keepToolbar && !currentHlNode) { 
+      selbar.style.display = 'none'; 
+    } 
+  } 
+});
+document.addEventListener('scroll', function(){ 
+  if (selbar.style.display === 'flex') updateSelbar(); 
+});
+document.addEventListener('mousedown', function(e){
+  var t = e.target;
+  if (t.classList && t.classList.contains('hl')) {
+    keepToolbar = true;
+  } else {
+    keepToolbar = false;
+  }
+}, true);
+document.addEventListener('click', function(e){
+  var target = e.target;
+  if (target.classList && target.classList.contains('hl')) {
+    currentHlNode = target;
+    lastRange = null;
+    positionSelbarForRect(target.getBoundingClientRect());
+    var sel = window.getSelection();
+    if (sel) sel.removeAllRanges();
+    setTimeout(function(){ keepToolbar = false; }, 0);
+  }
+}, true);
+function doHighlight(){
+  if(currentHlNode) return;
+  if(!lastRange || lastRange.collapsed) return;
+  var span = document.createElement('span'); span.className = 'hl';
+  try { lastRange.surroundContents(span); }
+  catch(e){
+    var wrap = document.createElement('span'); wrap.className = 'hl';
+    wrap.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrap);
+  }
+  selbar.style.display = 'none';
+  showToast('Highlighted');
+}
+function removeHighlight(){
+  if(currentHlNode){
+    var p = currentHlNode.parentNode;
+    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
+    p.removeChild(currentHlNode); p.normalize();
+    currentHlNode = null;
+    selbar.style.display = 'none';
+    showToast('Highlight removed');
+    return;
+  }
+  if(!lastRange) return;
+  var selRect = lastRange.getBoundingClientRect();
+  var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  var toRemove = [];
+  while(walker.nextNode()){
+    var n = walker.currentNode;
+    if(n.classList && n.classList.contains('hl')) {
+      var r = n.getBoundingClientRect();
+      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+    }
+  }
+  toRemove.forEach(function(el){ var p = el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
+  selbar.style.display = 'none';
+  showToast('Highlight removed');
+}
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+
+// Notes
+var notes = document.getElementById('notes');
+var noteArea = document.getElementById('noteArea');
+var btnCopy = document.getElementById('btnCopy');
+var btnClose = document.getElementById('btnClose');
+function toggleNotes(){ 
+  notes.style.display = (notes.style.display === 'flex' ? 'none' : 'flex'); 
+}
+window.toggleNotes = toggleNotes;
+btnClose.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async function(){ 
+  await navigator.clipboard.writeText(noteArea.value || ''); 
+  showToast('Copied'); 
+});
+btnNote.addEventListener('click', function(){
+  var text = '';
+  if (currentHlNode) { 
+    text = (currentHlNode.textContent || '').trim(); 
+  } else if (lastRange) { 
+    var frag = lastRange.cloneContents(); 
+    text = (frag.textContent || '').trim(); 
+  }
+  toggleNotes();
+  if (text) {
+    noteArea.value = (noteArea.value ? noteArea.value + '\n' : '') + '> ' + text + '\n';
+  }
+  selbar.style.display = 'none';
+});
+
+// Toast
+var toastEl = document.getElementById('toast');
+function showToast(msg){
+  toastEl.textContent = msg; 
+  toastEl.style.display = 'block';
+  setTimeout(function(){ toastEl.style.display = 'none'; }, 1200);
+}
+
+// Answer key and grading
+var answers = {
+  "q27":"v", "q28":"iii", "q29":"i", "q30":"iv", "q31":"vi",
+  "q32":"E", "q33":"D", "q34":"C", "q35":"B", "q36":"C",
+  "q37":"sub-arctic", "q38":"short", "q39":"predatory animals",
+  "q40":"C"
+};
+const cardValueToText = {
+  "i": "i Evidence of outdoor dwellings", "ii": "ii Learning to make fire", "iii": "iii A perfect place to live",
+  "iv": "iv Examining the cave contents", "v": "v Contrasting two types of home", "vi": "vi A vital source of power",
+  "A": "A The Périgord region", "B": "B Moldova", "C": "C The Grotte du Lazaret",
+  "D": "D The cave of Baume-Bonne", "E": "E Krapina"
+};
+
+function grade(){
+  stopTimer();
+  var total=0, correct=0, lines=[];
+  
+  // Check drag-and-drop questions (27-36)
+  for(let n=27; n<=36; n++){
+    const q = `q${n}`;
+    total++;
+    const dropzone = document.querySelector(`.dropzone[data-target="${q}"]`);
+    const selectedCard = dropzone ? dropzone.querySelector('.card') : null;
+    const userAnswer = selectedCard ? selectedCard.dataset.value : '';
+    const isCorrect = userAnswer === answers[q];
+    let userDisplay = selectedCard ? selectedCard.textContent.trim() : 'None';
+    let resultLine = `${q.toUpperCase()}: ${userDisplay} ${isCorrect ? '✅' : '❌'}`;
+    if (!isCorrect) {
+      const correctText = cardValueToText[answers[q]] || answers[q];
+      resultLine += ` (Correct: ${correctText})`;
+    }
+    lines.push(resultLine);
+    if (isCorrect) correct++;
+  }
+  
+  // Check text input questions (37-39)
+  for(let n=37; n<=39; n++){
+    const q = `q${n}`;
+    total++;
+    const input = document.querySelector(`input[name="${q}"]`);
+    const userAnswer = input ? input.value.trim().toLowerCase() : '';
+    const isCorrect = userAnswer === answers[q].toLowerCase();
+    let resultLine = `${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✅' : '❌'}`;
+    if (!isCorrect) {
+      resultLine += ` (Correct: ${answers[q]})`;
+    }
+    lines.push(resultLine);
+    if (isCorrect) correct++;
+  }
+  
+  // Check radio question (40)
+  const q = 'q40';
+  total++;
+  const selected = document.querySelector(`input[name="${q}"]:checked`);
+    const userAnswer = selected ? selected.value : '';
+  const isCorrect = userAnswer === answers[q];
+  let userDisplay = userAnswer || 'None';
+  let resultLine = `${q.toUpperCase()}: ${userDisplay} ${isCorrect ? '✅' : '❌'}`;
+  if (!isCorrect) {
+    resultLine += ` (Correct: ${answers[q]})`;
+  }
+  lines.push(resultLine);
+  if (isCorrect) correct++;
+
+  // Show results
+  const acc = Math.round(100 * correct / total);
+  document.getElementById('results').innerHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p>
+    <pre>${lines.join('\n')}</pre>
+  `;
+  
+  // Show answer key
+  const answerContent = `
+    <table>
+      <thead>
+        <tr>
+          <th>Question</th>
+          <th>Answer</th>
+          <th>Location</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>27</td><td>v</td><td>Section A</td></tr>
+        <tr><td>28</td><td>iii</td><td>Section B</td></tr>
+        <tr><td>29</td><td>i</td><td>Section C</td></tr>
+        <tr><td>30</td><td>iv</td><td>Section D</td></tr>
+        <tr><td>31</td><td>vi</td><td>Section E</td></tr>
+        <tr><td>32</td><td>E</td><td>Section E</td></tr>
+        <tr><td>33</td><td>D</td><td>Section D</td></tr>
+        <tr><td>34</td><td>C</td><td>Section D</td></tr>
+        <tr><td>35</td><td>B</td><td>Section C</td></tr>
+        <tr><td>36</td><td>C</td><td>Section D</td></tr>
+        <tr><td>37</td><td>sub-arctic</td><td>Section E</td></tr>
+        <tr><td>38</td><td>short</td><td>Section E</td></tr>
+        <tr><td>39</td><td>predatory animals</td><td>Section E</td></tr>
+        <tr><td>40</td><td>C</td><td>Full article</td></tr>
+      </tbody>
+    </table>
+  `;
+  document.getElementById('answerContent').innerHTML = answerContent;
+  document.querySelector('#answerBox .badge').textContent = 'tap to view';
+}
+
+function resetForm(){
+  // Reset all dropzones
+  document.querySelectorAll('.dropzone').forEach(zone => {
+    zone.innerHTML = '<span class="droplabel">Drag answer here</span>';
+  });
+  
+  // Reset all card pools
+  document.getElementById('pool-27-31').innerHTML = initialCardHTML['pool-27-31'];
+  document.getElementById('pool-32-36').innerHTML = initialCardHTML['pool-32-36'];
+  
+  // Re-add event listeners to the cards
+  addDragListenersToCards(document.querySelectorAll('.card'));
+  
+  // Reset text inputs
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = "";
+  });
+  
+  // Reset radio buttons
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // Reset results and answers
+  document.getElementById('results').innerHTML = '';
+  document.getElementById('answerContent').innerHTML = '';
+  document.querySelector('#answerBox .badge').textContent = 'hidden';
+  
+  // Reset answered status in nav
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+  
+  _t = 0;
+  _timerEl.textContent = '00:00';
+  startTimer();
+}
+
+function scrollToElement(id){
+  const el = document.getElementById(id);
+  if (el) { 
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' }); 
+  }
+  const navs = document.querySelectorAll('.practice-nav .q-item');
+  navs.forEach(n => n.classList.remove('active'));
+  const btn = document.getElementById(id.replace('-anchor','-nav'));
+  if (btn) { 
+    btn.classList.add('active'); 
+    setTimeout(() => btn.classList.remove('active'), 800); 
+  }
+}
+
+// Mark answered on interaction
+(function(){
+  function markAnswered(qn){
+    const nav = document.getElementById(`q${qn}-nav`);
+    if (!nav) return;
+    let answered = false;
+    
+    // Check dropzones
+    if (qn >= 27 && qn <= 36) {
+      const zone = document.querySelector(`.dropzone[data-target="q${qn}"]`);
+      answered = zone.querySelector('.card') !== null;
+    } 
+    // Check text inputs
+    else if (qn >= 37 && qn <= 39) {
+      const input = document.querySelector(`input[name="q${qn}"]`);
+      answered = input && input.value.trim().length > 0;
+    }
+    // Check radio buttons
+    else {
+      const radios = document.querySelectorAll(`input[name="q${qn}"]:checked`);
+      answered = radios.length > 0;
+    }
+    
+    if (answered) nav.classList.add('answered');
+    else nav.classList.remove('answered');
+  }
+  
+  dropzones.forEach(zone => {
+    zone.addEventListener('drop', () => {
+      const qn = zone.dataset.target.replace('q', '');
+      markAnswered(qn);
+    });
+  });
+  
+  for (let n=37; n<=39; n++) {
+    document.querySelector(`input[name="q${n}"]`).addEventListener('input', () => markAnswered(n));
+  }
+  
+  document.querySelector(`input[name="q40"]`).addEventListener('change', () => markAnswered(40));
+})();
+</script>
+
+<!-- 练习页面数据传输增强脚本 -->
+<script>
+// 检查是否已经有增强脚本
+if (!window.practicePageEnhancer) {
+    // 动态加载增强脚本
+    const script = document.createElement('script');
+    script.src = '../../js/practice-page-enhancer.js';
+    script.onload = function() {
+        console.log('练习页面增强脚本已加载');
+    };
+    script.onerror = function() {
+        console.error('练习页面增强脚本加载失败');
+        // 降级到内联增强
+        loadInlineEnhancer();
+    };
+    document.head.appendChild(script);
+}
+
+// 内联增强器（降级方案）
+function loadInlineEnhancer() {
+    if (window.practicePageEnhancer) return;
+    
+    window.practicePageEnhancer = {
+        initialize: function() {
+            console.log('[InlineEnhancer] 内联增强器已初始化');
+            this.setupCommunication();
+            this.setupAnswerListeners();
+            this.interceptSubmit();
+        },
+        
+        setupCommunication: function() {
+            this.parentWindow = window.opener || window.parent;
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'INIT_SESSION') {
+                    this.sessionId = event.data.data.sessionId;
+                    this.sendMessage('SESSION_READY', {
+                        pageType: this.detectPageType(),
+                        url: window.location.href
+                    });
+                }
+            });
+        },
+        
+        detectPageType: function() {
+            const title = document.title || '';
+            if (title.includes('P1')) return 'P1';
+            if (title.includes('P2')) return 'P2';
+            if (title.includes('P3')) return 'P3';
+            return 'unknown';
+        },
+        
+        setupAnswerListeners: function() {
+            this.answers = {};
+            this.startTime = Date.now();
+            
+            document.addEventListener('change', (e) => {
+                if (e.target.name && e.target.name.startsWith('q')) {
+                    this.answers[e.target.name] = e.target.value;
+                }
+            });
+        },
+        
+        interceptSubmit: function() {
+            // 拦截grade函数
+            if (typeof window.grade === 'function') {
+                const originalGrade = window.grade;
+                window.grade = () => {
+                    const result = originalGrade();
+                    setTimeout(() => this.handleSubmit(), 200);
+                    return result;
+                };
+            }
+            
+            // 监听提交按钮
+            document.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON' && 
+                    (e.target.textContent.includes('Submit') || 
+                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+                    setTimeout(() => this.handleSubmit(), 300);
+                }
+            });
+        },
+        
+        handleSubmit: function() {
+            const results = {
+                sessionId: this.sessionId,
+                startTime: this.startTime,
+                endTime: Date.now(),
+                duration: Math.round((Date.now() - this.startTime) / 1000),
+                answers: this.answers,
+                scoreInfo: this.extractScore(),
+                pageType: this.detectPageType(),
+                url: window.location.href
+            };
+            
+            this.sendMessage('PRACTICE_COMPLETE', results);
+        },
+        
+        extractScore: function() {
+            const resultsEl = document.getElementById('results');
+            if (!resultsEl) return null;
+            
+            const text = resultsEl.textContent || '';
+            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+            if (scoreMatch) {
+                const correct = parseInt(scoreMatch[1]);
+                const total = parseInt(scoreMatch[2]);
+                return {
+                    correct: correct,
+                    total: total,
+                    accuracy: total > 0 ? correct / total : 0,
+                    percentage: Math.round((correct / total) * 100),
+                    source: 'inline_extraction'
+                };
+            }
+            return null;
+        },
+        
+        sendMessage: function(type, data) {
+            if (this.parentWindow) {
+                this.parentWindow.postMessage({
+                    type: type,
+                    data: data,
+                    source: 'practice_page'
+                }, '*');
+            }
+        }
+    };
+    
+    // 初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            window.practicePageEnhancer.initialize();
+        });
+    } else {
+        window.practicePageEnhancer.initialize();
+    }
+}
+</script>
+
+</body>
+</html>

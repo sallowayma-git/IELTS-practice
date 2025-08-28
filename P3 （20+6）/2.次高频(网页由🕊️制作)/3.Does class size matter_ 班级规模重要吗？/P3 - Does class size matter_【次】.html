@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Does class size matter?</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
+  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  .shell { display:flex; height:100vh; width:100%; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  h2,h3,h4 { margin:0 0 10px; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  table { border-collapse: collapse; width:100%; }
+  th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
+  th:first-child, td:first-child { width:92px; }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button:hover { border-color:#fff; }
+  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+  .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:54px; padding:8px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .droplabel { color:#64748b; }
+  .cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:grid; gap:8px; }
+  .pool-slot { min-height:40px; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); }
+  .card:active { cursor:grabbing; }
+  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
+  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
+  .ghost { opacity: .5; }
+  .over { outline:2px dashed #3b82f6; }
+  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
+  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
+  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+  body { padding-bottom: 82px; }
+  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
+  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
+  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #selbar { z-index: 6000 !important; }
+</style>
+</head>
+<body>
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q27-nav" onclick="scrollToElement('q27-anchor')">27</div>
+    <div class="q-item" id="q28-nav" onclick="scrollToElement('q28-anchor')">28</div>
+    <div class="q-item" id="q29-nav" onclick="scrollToElement('q29-anchor')">29</div>
+    <div class="q-item" id="q30-nav" onclick="scrollToElement('q30-anchor')">30</div>
+    <div class="q-item" id="q31-nav" onclick="scrollToElement('q31-anchor')">31</div>
+    <div class="q-item" id="q32-nav" onclick="scrollToElement('q32-anchor')">32</div>
+    <div class="q-item" id="q33-nav" onclick="scrollToElement('q33-anchor')">33</div>
+    <div class="q-item" id="q34-nav" onclick="scrollToElement('q34-anchor')">34</div>
+    <div class="q-item" id="q35-nav" onclick="scrollToElement('q35-anchor')">35</div>
+    <div class="q-item" id="q36-nav" onclick="scrollToElement('q36-anchor')">36</div>
+    <div class="q-item" id="q37-nav" onclick="scrollToElement('q37-anchor')">37</div>
+    <div class="q-item" id="q38-nav" onclick="scrollToElement('q38-anchor')">38</div>
+    <div class="q-item" id="q39-nav" onclick="scrollToElement('q39-anchor')">39</div>
+    <div class="q-item" id="q40-nav" onclick="scrollToElement('q40-anchor')">40</div>
+  </div>
+</div>
+<div class="shell">
+<section class="pane" id="left">
+  <h2>READING PASSAGE 3 <span id="timer">00:00</span></h2>
+  <p>You should spend about 20 minutes on Questions 27–40, which are based on Reading Passage 3 below.</p>
+  <h3>Does class size matter?</h3>
+  
+  <h4>Paragraph A</h4>
+  <p>Of all the ideas for improving education, few are as simple or attractive as reducing the number of pupils per teacher. With its uncomplicated appeal, class-size reduction has lately gone from being a subject of primarily academic interest to becoming a public issue. In the U.S., more than 20 states have adopted policies aimed at decreasing class size.</p>
+  
+  <h4>Paragraph B</h4>
+  <p>One way investigators have attempted to analyse the effects of class size is by reviewing existing data, such as records kept by the U.S. Department of Education. These show that between 1969 and 1997, the average number of pupils per teacher in American public and private elementary schools fell from 25 to 18, a decline of more than 27 per cent. In secondary schools, the number also fell, from 19 to 14. Do these findings mean that class size makes no difference? Not necessarily. For a variety of reasons, most researchers, including us, pay little attention to those figures. For instance, schools strive for more than just high test scores; they also try to keep their dropout rates low. Indeed, the dropout rate for students aged 16 to 24 fell from 15 to 11 per cent over that period. Because drop-outs generally come from the low end of the achievement distribution, a reduction in the dropout rate could be expected to pull down average test scores in the upper grades. Ideally, U.S. students would all come from families that are financially well-off, with two highly educated, English-speaking parents who are involved in their children’s schooling. Teachers would all be creative and have complete mastery of their subject matter. Schools would be nicely outfitted with libraries, computers and other resources.</p>
+  
+  <h4>Paragraph C</h4>
+  <p>Over the past 35 years, hundreds of studies and analyses of existing data (such as the Department of Education records) have focused on class size. Unfortunately, most of these studies were poorly designed. The notable exception was the STAR project. Students entering kindergarten were randomly assigned to one of three kinds of classes: a small class of 13 to 17 students, or a regular-size class of 22 to 26 students. The students remained in whatever category they had been assigned to through the third grade, after which they joined a regular classroom in the fourth. To ensure that teaching quality did not differ, teachers were randomly assigned to small- and regularsize classrooms. Few teachers received any special training for working with small classes, and there were no new curricular materials.</p>
+  
+  <h4>Paragraph D</h4>
+  <p>Charles M. Achilles of Eastern Michigan University found “an array of benefits of small classes” in his review. He also found that the effect was stronger for minority students: Black and Hispanic children improved their scores slightly more than did other students - a significant finding from a policy standpoint. He argues that the STAR data cannot be used to prove that the gains persist for years after a student has returned to regularsize classes. He and others have also shown that, during the study, too many children migrated from the regular to the small classes, probably because school personnel caved in to parent demands. The criticism does not undermine the finding of a statistically significant benefit of being in a small class.</p>
+  
+  <h4>Paragraph E</h4>
+  <p>California’s multi-billion-dollar effort, begun in 1996, stands more as a model of what not to do than as an initiative worthy of emulation. The state is trying to reduce class size in kindergarten through grade three from a maximum of 33 to a maximum of 20 in rich and poor districts alike - despite a shortage of qualified teachers, especially in low-income areas. This across-the-board approach may be politically expedient, but it seems actually to have exacerbated the disparity in resources available to rich and poor schools in California. The better-paying, more affluent districts got the best teachers - including a fair number of the good teachers from poorer schools. Evaluators found a small but statistically significant achievement advantage in reading, writing and mathematics for students in classes that had been reduced to 20 or fewer pupils, as compared with classes of more than 20. The second programme, Wisconsin’s Student Achievement Guarantee in Education (SAGE), also begun in 1996, was a five-year study. It was small - class size was reduced in just 14 schools - but noteworthy because it targeted schools in which at least 30 per cent of the students were below the poverty level.</p>
+  
+  <h4>Paragraph F</h4>
+  <p>Studies such as STAR and SAGE have made it hard to argue that reducing class sizes makes no difference. On the other hand, the California initiative has shown that the strategy, applied with too little forethought and insight, can consume billions of dollars and, at least in the short run, produce only minuscule gains and even some losses. Legislators and administrators need more solid information on the relative costs of other options before they can make sensible policy decisions.</p>
+  
+  <p>&nbsp;</p>
+  <p>&nbsp;</p>
+  <p>&nbsp;</p>
+</section>
+<div id="divider" title="Drag to resize"></div>
+<section class="pane" id="right">
+  <h3>Questions</h3>
+  
+  <div class="group">
+    <h4>Questions 27–31</h4>
+    <p>Reading Passage 3 has six paragraphs, A–F.</p>
+    <p>Which paragraph contains the following information?</p>
+    <p>Write the correct letter, A–F, in boxes 27–31 on your answer sheet.</p>
+    
+    <a id="q27-anchor"></a>
+    <div id="q27-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>27 Criticism of the STAR programme due to some factors that are not reliable.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q27" type="radio" value="A"> A</label>
+        <label style="margin:0;"><input name="q27" type="radio" value="B"> B</label>
+        <label style="margin:0;"><input name="q27" type="radio" value="C"> C</label>
+        <label style="margin:0;"><input name="q27" type="radio" value="D"> D</label>
+        <label style="margin:0;"><input name="q27" type="radio" value="E"> E</label>
+        <label style="margin:0;"><input name="q27" type="radio" value="F"> F</label>
+      </div>
+    </div>
+    
+    <a id="q28-anchor"></a>
+    <div id="q28-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>28 Two research programmes reached the same result.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q28" type="radio" value="A"> A</label>
+        <label style="margin:0;"><input name="q28" type="radio" value="B"> B</label>
+        <label style="margin:0;"><input name="q28" type="radio" value="C"> C</label>
+        <label style="margin:0;"><input name="q28" type="radio" value="D"> D</label>
+        <label style="margin:0;"><input name="q28" type="radio" value="E"> E</label>
+        <label style="margin:0;"><input name="q28" type="radio" value="F"> F</label>
+      </div>
+    </div>
+    
+    <a id="q29-anchor"></a>
+    <div id="q29-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>29 Class-size reduction has gone from being a subject of primarily academic interest to becoming a public issue.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q29" type="radio" value="A"> A</label>
+        <label style="margin:0;"><input name="q29" type="radio" value="B"> B</label>
+        <label style="margin:0;"><input name="q29" type="radio" value="C"> C</label>
+        <label style="margin:0;"><input name="q29" type="radio" value="D"> D</label>
+        <label style="margin:0;"><input name="q29" type="radio" value="E"> E</label>
+        <label style="margin:0;"><input name="q29" type="radio" value="F"> F</label>
+      </div>
+    </div>
+    
+    <a id="q30-anchor"></a>
+    <div id="q30-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>30 Actions were taken to ensure the reliability of the data.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q30" type="radio" value="A"> A</label>
+        <label style="margin:0;"><input name="q30" type="radio" value="B"> B</label>
+        <label style="margin:0;"><input name="q30" type="radio" value="C"> C</label>
+        <label style="margin:0;"><input name="q30" type="radio" value="D"> D</label>
+        <label style="margin:0;"><input name="q30" type="radio" value="E"> E</label>
+        <label style="margin:0;"><input name="q30" type="radio" value="F"> F</label>
+      </div>
+    </div>
+    
+    <a id="q31-anchor"></a>
+    <div id="q31-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>31 The existing data had been affected by many factors.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+        <label style="margin:0;"><input name="q31" type="radio" value="A"> A</label>
+        <label style="margin:0;"><input name="q31" type="radio" value="B"> B</label>
+        <label style="margin:0;"><input name="q31" type="radio" value="C"> C</label>
+        <label style="margin:0;"><input name="q31" type="radio" value="D"> D</label>
+        <label style="margin:0;"><input name="q31" type="radio" value="E"> E</label>
+        <label style="margin:0;"><input name="q31" type="radio" value="F"> F</label>
+      </div>
+    </div>
+  </div>
+  
+  <div class="group">
+    <h4>Questions 32–40</h4>
+    <p>Look at the following statements (Questions 32–40) and the list of projects below.</p>
+    <p>Match each statement with the correct project, A–C.</p>
+    <p>Write the correct letter, A–C, in boxes 32–40 on your answer sheet.</p>
+    <p>NB You may use any letter more than once.</p>
+    <p><strong>List of Projects</strong></p>
+    <ul>
+      <li>A STAR</li>
+      <li>B California</li>
+      <li>C SAGE</li>
+    </ul>
+    
+    <a id="q32-anchor"></a>
+    <div id="q32-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>32 Class composition was left by chance.</p>
+      <label style="display:block;margin:4px 0;"><input name="q32" type="radio" value="A"/>  A STAR</label>
+      <label style="display:block;margin:4px 0;"><input name="q32" type="radio" value="B"/>  B California</label>
+      <label style="display:block;margin:4px 0;"><input name="q32" type="radio" value="C"/>  C SAGE</label>
+    </div>
+    
+    <a id="q33-anchor"></a>
+    <div id="q33-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>33 Small class size resulted in better performance even when students went to the fourth grade.</p>
+      <label style="display:block;margin:4px 0;"><input name="q33" type="radio" value="A"/>  A STAR</label>
+      <label style="display:block;margin:4px 0;"><input name="q33" type="radio" value="B"/>  B California</label>
+      <label style="display:block;margin:4px 0;"><input name="q33" type="radio" value="C"/>  C SAGE</label>
+    </div>
+    
+    <a id="q34-anchor"></a>
+    <div id="q34-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>34 Special groups benefited from the programme.</p>
+      <label style="display:block;margin:4px 0;"><input name="q34" type="radio" value="A"/>  A STAR</label>
+      <label style="display:block;margin:4px 0;"><input name="q34" type="radio" value="B"/>  B California</label>
+      <label style="display:block;margin:4px 0;"><input name="q34" type="radio" value="C"/>  C SAGE</label>
+    </div>
+    
+    <a id="q35-anchor"></a>
+    <div id="q35-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>35 The programme did some preliminary work.</p>
+      <label style="display:block;margin:4px 0;"><input name="q35" type="radio" value="A"/>  A STAR</label>
+      <label style="display:block;margin:4px 0;"><input name="q35" type="radio" value="B"/>  B California</label>
+      <label style="display:block;margin:4px 0;"><input name="q35" type="radio" value="C"/>  C SAGE</label>
+    </div>
+    
+    <a id="q36-anchor"></a>
+    <div id="q36-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>36 The students remained in whatever category they had been assigned to through the third grade.</p>
+      <label style="display:block;margin:4px 0;"><input name="q36" type="radio" value="A"/>  A STAR</label>
+      <label style="display:block;margin:4px 0;"><input name="q36" type="radio" value="B"/>  B California</label>
+      <label style="display:block;margin:4px 0;"><input name="q36" type="radio" value="C"/>  C SAGE</label>
+    </div>
+    
+    <a id="q37-anchor"></a>
+    <div id="q37-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>37 It targeted schools in which at least 30 per cent of the students were below the poverty level.</p>
+      <label style="display:block;margin:4px 0;"><input name="q37" type="radio" value="A"/>  A STAR</label>
+      <label style="display:block;margin:4px 0;"><input name="q37" type="radio" value="B"/>  B California</label>
+      <label style="display:block;margin:4px 0;"><input name="q37" type="radio" value="C"/>  C SAGE</label>
+    </div>
+    
+    <a id="q38-anchor"></a>
+    <div id="q38-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>38 Some schools needed extra teachers’ assistants to implement this project.</p>
+      <label style="display:block;margin:4px 0;"><input name="q38" type="radio" value="A"/>  A STAR</label>
+      <label style="display:block;margin:4px 0;"><input name="q38" type="radio" value="B"/>  B California</label>
+      <label style="display:block;margin:4px 0;"><input name="q38" type="radio" value="C"/>  C SAGE</label>
+    </div>
+    
+    <a id="q39-anchor"></a>
+    <div id="q39-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>39 The programme aggravated the situation of poorer districts, which were already having trouble recruiting and retaining good teachers.</p>
+      <label style="display:block;margin:4px 0;"><input name="q39" type="radio" value="A"/>  A STAR</label>
+      <label style="display:block;margin:4px 0;"><input name="q39" type="radio" value="B"/>  B California</label>
+      <label style="display:block;margin:4px 0;"><input name="q39" type="radio" value="C"/>  C SAGE</label>
+    </div>
+    
+    <a id="q40-anchor"></a>
+    <div id="q40-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>40 Students’ backgrounds also affected their performance.</p>
+      <label style="display:block;margin:4px 0;"><input name="q40" type="radio" value="A"/>  A STAR</label>
+      <label style="display:block;margin:4px 0;"><input name="q40" type="radio" value="B"/>  B California</label>
+      <label style="display:block;margin:4px 0;"><input name="q40" type="radio" value="C"/>  C SAGE</label>
+    </div>
+  </div>
+  
+  <div style="display:flex;gap:8px;margin-bottom:10px;">
+    <button class="primary" onclick="grade()">Submit</button>
+    <button onclick="resetForm()">Reset</button>
+    <button onclick="toggleNotes()">Notes</button>
+  </div>
+  <div id="results"></div>
+  <details class="answerbox" id="answerBox">
+    <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+    <div id="answerContent"></div>
+  </details>
+</section>
+</div>
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+<script>
+// Timer
+let _t=0; const _timerEl=document.getElementById('timer');
+setInterval(function(){ 
+  _t++; 
+  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
+  var s=String(_t%60).padStart(2,'0'); 
+  _timerEl.textContent=m+':'+s; 
+},1000);
+// Drag divider
+var divider = document.getElementById('divider');
+var left = document.getElementById('left');
+var right = document.getElementById('right');
+var dragging=false;
+function startDrag(e){ 
+  dragging=true; 
+  document.body.style.cursor='ew-resize'; 
+  if(e.preventDefault) e.preventDefault(); 
+}
+function endDrag(){ 
+  dragging=false; 
+  document.body.style.cursor=''; 
+}
+function onMove(clientX){
+  var container = document.querySelector('.shell').getBoundingClientRect();
+  var x = clientX - container.left;
+  x = Math.max(280, Math.min(container.width-320, x));
+  left.style.flex = '0 0 ' + x + 'px';
+  right.style.flex = '1 1 auto';
+}
+divider.addEventListener('mousedown', function(e){ startDrag(e); });
+window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+window.addEventListener('mouseup', endDrag);
+divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
+window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+window.addEventListener('touchend', endDrag);
+// Highlight toolbar
+var selbar = document.getElementById('selbar');
+var btnHL = document.getElementById('btnHL');
+var btnUH = document.getElementById('btnUH');
+var btnNote = document.getElementById('btnNote');
+var lastRange=null;
+var currentHlNode=null;
+var keepToolbar=false;
+function positionSelbarForRect(rect){
+  selbar.style.display='flex';
+  requestAnimationFrame(function(){
+    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+function updateSelbar(){
+  var sel=window.getSelection();
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
+    selbar.style.display='none'; 
+    currentHlNode=null; 
+    return; 
+  }
+  var range = sel.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode=null;
+  positionSelbarForRect(range.getBoundingClientRect());
+}
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', function(){ 
+  var sel=window.getSelection(); 
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
+    if(!keepToolbar && !currentHlNode){ 
+      selbar.style.display='none'; 
+    } 
+  } 
+});
+document.addEventListener('scroll', function(){ 
+  if(selbar.style.display==='flex') updateSelbar(); 
+});
+document.addEventListener('mousedown', function(e){
+  var t = e.target;
+  if(t.classList && t.classList.contains('hl')){
+    keepToolbar = true;
+  } else {
+    keepToolbar = false;
+  }
+}, true);
+document.addEventListener('click', function(e){
+  var target = e.target;
+  if(target.classList && target.classList.contains('hl')){
+    currentHlNode = target;
+    lastRange = null;
+    positionSelbarForRect(target.getBoundingClientRect());
+    var sel=window.getSelection();
+    if(sel) sel.removeAllRanges();
+    setTimeout(function(){ keepToolbar=false; }, 0);
+  }
+}, true);
+function doHighlight(){
+  if(currentHlNode) return;
+  if(!lastRange || lastRange.collapsed) return;
+  var span=document.createElement('span'); span.className='hl';
+  try { lastRange.surroundContents(span); }
+  catch(e){
+    var wrap=document.createElement('span'); wrap.className='hl';
+    wrap.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrap);
+  }
+  selbar.style.display='none';
+  showToast('Highlighted');
+}
+function removeHighlight(){
+  if(currentHlNode){
+    var p = currentHlNode.parentNode;
+    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
+    p.removeChild(currentHlNode); p.normalize();
+    currentHlNode = null;
+    selbar.style.display='none';
+    showToast('Highlight removed');
+    return;
+  }
+  if(!lastRange) return;
+  var selRect = lastRange.getBoundingClientRect();
+  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  var toRemove=[];
+  while(walker.nextNode()){
+    var n=walker.currentNode;
+    if(n.classList && n.classList.contains('hl')) {
+      var r = n.getBoundingClientRect();
+      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+    }
+  }
+  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
+  selbar.style.display='none';
+  showToast('Highlight removed');
+}
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+// Notes
+var notes = document.getElementById('notes');
+var noteArea = document.getElementById('noteArea');
+var btnCopy=document.getElementById('btnCopy');
+var btnClose=document.getElementById('btnClose');
+function toggleNotes(){ 
+  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+}
+window.toggleNotes = toggleNotes;
+btnClose.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async function(){ 
+  await navigator.clipboard.writeText(noteArea.value||''); 
+  showToast('Copied'); 
+});
+btnNote.addEventListener('click', function(){
+  var text = '';
+  if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
+  else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
+  toggleNotes();
+  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
+  selbar.style.display='none';
+});
+// Toast
+var toastEl=document.getElementById('toast');
+function showToast(msg){
+  toastEl.textContent=msg; 
+  toastEl.style.display='block';
+  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+}
+// Answer key and grading
+var answers = {
+  "q27":"D", "q28":"F", "q29":"A", "q30":"C", "q31":"B",
+  "q32":"A", "q33":"A", "q34":"A", "q35":"C", "q36":"A", 
+  "q37":"C", "q38":"A", "q39":"B", "q40":"A"
+};
+function grade(){
+  var total=0, correct=0, lines=[];
+  function push(q, ok, user){
+    total++; if(ok) correct++;
+    lines.push(q.toUpperCase()+": "+(user||'None')+" "+(ok?'✓':'✗'));
+  }
+  // 27–31
+  for(var n=27;n<=31;n++){
+    var sel=document.querySelector('input[name="q'+n+'"]:checked');
+    var val=sel?sel.value:'';
+    push('q'+n, val === answers['q'+n], val);
+  }
+  // 32–40
+  for(var n=32;n<=40;n++){
+    var sel=document.querySelector('input[name="q'+n+'"]:checked');
+    var val=sel?sel.value:'';
+    push('q'+n, val === answers['q'+n], val);
+  }
+  var acc = (total? Math.round(100*correct/total):0);
+  var html = '<p><strong>Score:</strong> '+correct+'/'+total+' <span class="badge">Accuracy '+acc+'%</span></p>';
+  html += '<pre>'+lines.join('\n')+'</pre>';
+  document.getElementById('results').innerHTML = html;
+  var ahtml = '<ol>';
+  ahtml += '<li>27 → D</li>';
+  ahtml += '<li>28 → F</li>';
+  ahtml += '<li>29 → A</li>';
+  ahtml += '<li>30 → C</li>';
+  ahtml += '<li>31 → B</li>';
+  ahtml += '<li>32 → A (STAR)</li>';
+  ahtml += '<li>33 → A (STAR)</li>';
+  ahtml += '<li>34 → A (STAR)</li>';
+  ahtml += '<li>35 → C (SAGE)</li>';
+  ahtml += '<li>36 → A (STAR)</li>';
+  ahtml += '<li>37 → C (SAGE)</li>';
+  ahtml += '<li>38 → A (STAR)</li>';
+  ahtml += '<li>39 → B (California)</li>';
+  ahtml += '<li>40 → A (STAR)</li>';
+  ahtml += '</ol>';
+  document.getElementById('answerContent').innerHTML = ahtml;
+  document.querySelector('#answerBox .badge').textContent='tap to view';
+}
+function resetForm(){
+  document.querySelectorAll('input[type="radio"]').forEach(el=>el.checked=false);
+  document.getElementById('results').innerHTML='';
+  document.getElementById('answerContent').innerHTML='';
+  document.querySelector('#answerBox .badge').textContent = 'hidden';
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+}
+function scrollToElement(id){
+  var el = document.getElementById(id);
+  if(el){ 
+    el.scrollIntoView({behavior:'smooth', block:'center'}); 
+  }
+  var navs = document.querySelectorAll('.practice-nav .q-item');
+  navs.forEach(n => n.classList.remove('active'));
+  var btn = document.getElementById(id.replace('-anchor','-nav'));
+  if(btn){ 
+    btn.classList.add('active'); 
+    setTimeout(() => btn.classList.remove('active'), 800); 
+  }
+}
+(function(){
+  function mark(qn){
+    var nav = document.getElementById('q'+qn+'-nav');
+    if(!nav) return;
+    var radios = document.querySelectorAll('input[name="q'+qn+'"]');
+    var answered=false;
+    radios.forEach(function(r){ if(r.checked) answered=true; });
+    if(answered) nav.classList.add('answered'); else nav.classList.remove('answered');
+  }
+  for(var q=27;q<=40;q++){
+    (function(n){
+      var radios = document.querySelectorAll('input[name="q'+n+'"]');
+      radios.forEach(function(r){ r.addEventListener('change', function(){ mark(n); }); });
+    })(q);
+  }
+  for(var q=27;q<=40;q++){ mark(q); }
+})();
+</script>
+
+<!-- 练习页面数据传输增强脚本 -->
+<script>
+// 检查是否已经有增强脚本
+if (!window.practicePageEnhancer) {
+    // 动态加载增强脚本
+    const script = document.createElement('script');
+    script.src = '../../js/practice-page-enhancer.js';
+    script.onload = function() {
+        console.log('练习页面增强脚本已加载');
+    };
+    script.onerror = function() {
+        console.error('练习页面增强脚本加载失败');
+        // 降级到内联增强
+        loadInlineEnhancer();
+    };
+    document.head.appendChild(script);
+}
+
+// 内联增强器（降级方案）
+function loadInlineEnhancer() {
+    if (window.practicePageEnhancer) return;
+    
+    window.practicePageEnhancer = {
+        initialize: function() {
+            console.log('[InlineEnhancer] 内联增强器已初始化');
+            this.setupCommunication();
+            this.setupAnswerListeners();
+            this.interceptSubmit();
+        },
+        
+        setupCommunication: function() {
+            this.parentWindow = window.opener || window.parent;
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'INIT_SESSION') {
+                    this.sessionId = event.data.data.sessionId;
+                    this.sendMessage('SESSION_READY', {
+                        pageType: this.detectPageType(),
+                        url: window.location.href
+                    });
+                }
+            });
+        },
+        
+        detectPageType: function() {
+            const title = document.title || '';
+            if (title.includes('P1')) return 'P1';
+            if (title.includes('P2')) return 'P2';
+            if (title.includes('P3')) return 'P3';
+            return 'unknown';
+        },
+        
+        setupAnswerListeners: function() {
+            this.answers = {};
+            this.startTime = Date.now();
+            
+            document.addEventListener('change', (e) => {
+                if (e.target.name && e.target.name.startsWith('q')) {
+                    this.answers[e.target.name] = e.target.value;
+                }
+            });
+        },
+        
+        interceptSubmit: function() {
+            // 拦截grade函数
+            if (typeof window.grade === 'function') {
+                const originalGrade = window.grade;
+                window.grade = () => {
+                    const result = originalGrade();
+                    setTimeout(() => this.handleSubmit(), 200);
+                    return result;
+                };
+            }
+            
+            // 监听提交按钮
+            document.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON' && 
+                    (e.target.textContent.includes('Submit') || 
+                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+                    setTimeout(() => this.handleSubmit(), 300);
+                }
+            });
+        },
+        
+        handleSubmit: function() {
+            const results = {
+                sessionId: this.sessionId,
+                startTime: this.startTime,
+                endTime: Date.now(),
+                duration: Math.round((Date.now() - this.startTime) / 1000),
+                answers: this.answers,
+                scoreInfo: this.extractScore(),
+                pageType: this.detectPageType(),
+                url: window.location.href
+            };
+            
+            this.sendMessage('PRACTICE_COMPLETE', results);
+        },
+        
+        extractScore: function() {
+            const resultsEl = document.getElementById('results');
+            if (!resultsEl) return null;
+            
+            const text = resultsEl.textContent || '';
+            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+            if (scoreMatch) {
+                const correct = parseInt(scoreMatch[1]);
+                const total = parseInt(scoreMatch[2]);
+                return {
+                    correct: correct,
+                    total: total,
+                    accuracy: total > 0 ? correct / total : 0,
+                    percentage: Math.round((correct / total) * 100),
+                    source: 'inline_extraction'
+                };
+            }
+            return null;
+        },
+        
+        sendMessage: function(type, data) {
+            if (this.parentWindow) {
+                this.parentWindow.postMessage({
+                    type: type,
+                    data: data,
+                    source: 'practice_page'
+                }, '*');
+            }
+        }
+    };
+    
+    // 初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            window.practicePageEnhancer.initialize();
+        });
+    } else {
+        window.practicePageEnhancer.initialize();
+    }
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>P2 - Stress Less</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
+  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  .shell { display:flex; height:100vh; width:100%; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  h2,h3,h4 { margin:0 0 10px; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  table { border-collapse: collapse; width:100%; }
+  th, td { border:1px solid var(--line); padding:6px; text-align:left; font-size:14px; }
+  th:first-child, td:first-child { width:auto; }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button:hover { border-color:#fff; }
+  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+  .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:40px; padding:4px 8px; display:inline-flex; align-items:center; justify-content:space-between; gap:8px; width: auto; min-width: 120px; max-width: 200px; vertical-align: middle; }
+  .droplabel { color:#64748b; font-size:14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:flex; flex-wrap:wrap; gap:8px; }
+  .pool-slot { min-height:40px; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); white-space: nowrap; }
+  .card:active { cursor:grabbing; }
+  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
+  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
+  .ghost { opacity: .5; }
+  .over { outline:2px dashed #3b82f6; }
+  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
+  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
+  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+  body { padding-bottom: 82px; }
+  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
+  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
+  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #selbar { z-index: 6000 !important; }
+  input[type="text"] {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 14px;
+    min-width: 120px;
+  }
+</style>
+</head>
+<body>
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q14-nav" onclick="scrollToElement('q14-anchor')">14</div>
+    <div class="q-item" id="q15-nav" onclick="scrollToElement('q15-anchor')">15</div>
+    <div class="q-item" id="q16-nav" onclick="scrollToElement('q16-anchor')">16</div>
+    <div class="q-item" id="q17-nav" onclick="scrollToElement('q17-anchor')">17</div>
+    <div class="q-item" id="q18-nav" onclick="scrollToElement('q18-anchor')">18</div>
+    <div class="q-item" id="q19-nav" onclick="scrollToElement('q19-anchor')">19</div>
+    <div class="q-item" id="q20-nav" onclick="scrollToElement('q20-anchor')">20</div>
+    <div class="q-item" id="q21-nav" onclick="scrollToElement('q21-anchor')">21</div>
+    <div class="q-item" id="q22-nav" onclick="scrollToElement('q22-anchor')">22</div>
+    <div class="q-item" id="q23-nav" onclick="scrollToElement('q23-anchor')">23</div>
+    <div class="q-item" id="q24-nav" onclick="scrollToElement('q24-anchor')">24</div>
+    <div class="q-item" id="q25-nav" onclick="scrollToElement('q25-anchor')">25</div>
+    <div class="q-item" id="q26-nav" onclick="scrollToElement('q26-anchor')">26</div>
+  </div>
+</div>
+<div class="shell">
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 2 <span id="timer">00:00</span></h2>
+    <p>You should spend about 20 minutes on Questions 14-26, which are based on Reading Passage 2 below.</p>
+    <h3>Stress Less</h3>
+    
+    <p>How busy is too busy? For some it means sometimes having to have a short lunch; for others it may mean missing lunch altogether. For a few, it is not being able to take a day off once a month. Then there is a group of people for whom working every evening and weekend is normal, and feeling stressed is taken for granted. For most senior executives, workloads swing between extremely busy and frenzied. Neil Plumridge, vice-president of a management consultancy company, says that his weeks vary from a 'manageable' 45 hours to 80 hours, but average 60 hours.</p>
+
+    <p>Three signs warn Plumridge about his workload: sleep, scheduling and family. He knows he is doing too much when he gets less than six hours' sleep for three consecutive nights, when he is constantly having to reschedule appointments, and when he misses a family birthday or anniversary. 'Then,' he says, 'I know things are out of control. Plumridge states that stress is often caused by his having unrealistic expectations of himself. 'I'll promise a client that I'll do something tomorrow, and then I'll promise another client that I'll do the same thing, when I know it's not going to happen. I could have said: "Why don't I give that to you in 48 hours?" The client wouldn't care.'</p>
+    
+    <p>Over-committing is something people experience as an individual problem. However, new research indicates that people may be designed to over-commit. A study in the Journal of Experimental Psychology shows that people always believe that they will be less busy in the future. This is a misapprehension according to the authors of the report, Gal Zauberman of the University of North Carolina and John Lynch of Duke University. 'On average, an individual will be just as busy two weeks or a month from now as he or she is today. But that is not how it appears in everyday life, they say. 'People make commitments long in advance that they would never make if the same commitments required immediate action. They discount future time investments relatively steeply.'</p>
+
+    <p>Being 'too busy' is highly subjective, but for any individual there are some concrete signs of stress: disturbed sleep and declining mental and physical health are the most common examples. Figures for National Workers' Compensation (insurance against injury caused by work) show that stress causes the most loss of time of any workplace injury: employees suffering stress are absent from work for an average of 16.6 weeks. The effects of stress are also expensive. The Australian Government insurer reports that, in 2003-2004, claims for stress-related psychological injury accounted for 7% of insurance claims, but almost 27% of the amount paid out in claim payments.</p>
+
+    <p>Experts say the key to dealing with stress is not to focus on relief - a game of golf or a massage but to reassess workloads. Neil Plumridge says he makes it a priority to work out what has to change: that might mean allocating extra staff to a job, allowing more time, or changing expectations. He also relies on the advice of colleagues, saying that his peers coach each other on business problems: 'Just a fresh pair of eyes over an issue can help,' he states.</p>
+
+    <p>Executive stress is not confined to big organisations. Vanessa Stoykov has been running her own advertising agency and public relations business for seven years. Her company has grown so fast that it appeared on the Business Review Weekly 'Fast 100' list of fastest-growing small enterprises in 2004, just after Stoykov had her first child. In 2005, revenue was projected to double to $2.4 million. She had just had her second child. With a fast-growing business and two small children, Stoykov says she has mastered the art of caring for children, typing, and talking on the phone at the same time. But, unlike many others, she appears to thrive on the mental stimulation of running her own business, despite the stress.</p>
+
+    <p>Jan Elsner, a psychologist who specialises in executive coaching, says that doing well on a demanding workload is typical of senior executives. Some people work best with high-adrenaline periods followed by quieter times, while others thrive under sustained pressure. Elsner's practice is based on a movement known as positive psychology, a school of thought that argues that positive experiences - feeling engaged and challenged, for example do not balance out negative experiences such as stress; instead they help people increase their resilience over time. Elsner says that many of the senior business people she coaches are increasingly relying more on regulating stress through methods such as meditation. She points to research showing that meditation can alter the biochemistry of the brain and the way that brains and bodies react to stress.</p>
+
+    <p>Some experts believe there is too much emphasis on treating job stress as an individual problem. Tony LaMontagne, of the University of Melbourne, says that while personality traits do have some effect on stress, it is systemic stressors qualities of job roles and organisations themselves that have a far greater effect. His recent research shows that the major predictor of stress is the level of job control a person has. The best type of job combines challenging work with high autonomy. The worst jobs combine challenging work and low control. People with demanding jobs but little autonomy have up to four times the probability of depression and more than double the risk of heart attack.</p>
+    
+  </section>
+  <div id="divider" title="Drag to resize"></div>
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <h4>Questions 14-18</h4>
+      <p>Look at the following statements (Questions 14-18) and the list of people below.</p>
+      <p>Match each statement with the correct person, A-D.</p>
+      <p>Write the correct letter, A-D, in boxes 14-18 on your answer sheet.</p>
+      <p>NB You may use any letter more than once.</p>
+
+      <a id="q14-anchor"></a>
+      <div style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>14 High-level workers tend to react positively to stress</p>
+        <div class="dropzone" data-target="q14"><span class="droplabel">Drag answer here</span></div>
+      </div>
+      <a id="q15-anchor"></a>
+      <div style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>15 Stress levels are increased by trying to please customers</p>
+        <div class="dropzone" data-target="q15"><span class="droplabel">Drag answer here</span></div>
+      </div>
+      <a id="q16-anchor"></a>
+      <div style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>16 Support from other workers may relieve stress</p>
+        <div class="dropzone" data-target="q16"><span class="droplabel">Drag answer here</span></div>
+      </div>
+      <a id="q17-anchor"></a>
+      <div style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>17 Lack of independence at work is often responsible for stress</p>
+        <div class="dropzone" data-target="q17"><span class="droplabel">Drag answer here</span></div>
+      </div>
+      <a id="q18-anchor"></a>
+      <div style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>18 Workers commonly expect their workloads to lessen over time</p>
+        <div class="dropzone" data-target="q18"><span class="droplabel">Drag answer here</span></div>
+      </div>
+
+      <h4>List of People</h4>
+      <div class="cardpool" id="pool-14-18">
+        <div class="card" draggable="true" data-value="A">A Neil Plumridge</div>
+        <div class="card" draggable="true" data-value="B">B Gal Zauberman and John Lynch</div>
+        <div class="card" draggable="true" data-value="C">C Jan Elsner</div>
+        <div class="card" draggable="true" data-value="D">D Tony LaMontagne</div>
+      </div>
+    </div>
+    
+    <div class="group">
+      <h4>Questions 19-21</h4>
+      <p>Choose the correct letter, A, B, C or D.</p>
+      <p>Write the correct letter in boxes 19-21 on your answer sheet.</p>
+      
+      <a id="q19-anchor"></a>
+      <div id="q19-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>19 Which of the following is NOT mentioned by Neil Plumridge as an indication that his workload is too heavy?</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q19" type="radio" value="A"> A an inability to keep to his schedule</label>
+          <label style="margin:0;"><input name="q19" type="radio" value="B"> B inattention to family celebrations</label>
+          <label style="margin:0;"><input name="q19" type="radio" value="C"> C a lack of concentration on a task</label>
+          <label style="margin:0;"><input name="q19" type="radio" value="D"> D a period of insufficient sleep</label>
+        </div>
+      </div>
+      
+      <a id="q20-anchor"></a>
+      <div id="q20-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>20 Which method of lessening work stress is NOT suggested by Neil Plumridge?</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q20" type="radio" value="A"> A rethinking ideas of what can be achieved</label>
+          <label style="margin:0;"><input name="q20" type="radio" value="B"> B extending the deadline for completing the task</label>
+          <label style="margin:0;"><input name="q20" type="radio" value="C"> C using more workers on a project</label>
+          <label style="margin:0;"><input name="q20" type="radio" value="D"> D taking more time off for sport or other recreation</label>
+        </div>
+      </div>
+      
+      <a id="q21-anchor"></a>
+      <div id="q21-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>21 According to Jan Elsner, meditation offers a method of</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q21" type="radio" value="A"> A taking a worker's mind off his troubles.</label>
+          <label style="margin:0;"><input name="q21" type="radio" value="B"> B changing the physical response to stress.</label>
+          <label style="margin:0;"><input name="q21" type="radio" value="C"> C resting more effectively.</label>
+          <label style="margin:0;"><input name="q21" type="radio" value="D"> D encouraging executives to take breaks.</label>
+        </div>
+      </div>
+    </div>
+    
+    <div class="group">
+      <h4>Questions 22-26</h4>
+      <p>Complete the summary below.</p>
+      <p>Choose NO MORE THAN TWO WORDS AND/OR A NUMBER from the passage for each answer.</p>
+      <p>Write your answers in boxes 22-26 on your answer sheet.</p>
+      
+      <p>Stress: its effects and how to reduce it</p>
+      <p>Statistics on workers' compensation show that people take more time off work due to stress than for any other <a id="q22-anchor"></a><input class="blank" maxlength="40" name="q22" placeholder="22"/> at work. On average, workers who take time off because of stress stay away for <a id="q23-anchor"></a><input class="blank" maxlength="40" name="q23" placeholder="23"/> of the total, they account for </p>
+      <p>This absence comes at a high price while the number of insurance claims due to stress amount to only <a id="q24-anchor"></a><input class="blank" maxlength="40" name="q24" placeholder="24"/> a much higher proportion of the cost of claim payments.</p>
+      <p>Experts believe that seeking to relieve stress through physical therapies such as sport or <a id="q25-anchor"></a><input class="blank" maxlength="40" name="q25" placeholder="25"/> may be less effective than simply reviewing your <a id="q26-anchor"></a><input class="blank" maxlength="40" name="q26" placeholder="26"/> </p>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
+</div>
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+<script>
+// Timer
+let _t = 0;
+const _timerEl = document.getElementById('timer');
+let timerInterval;
+
+function startTimer() {
+    if (timerInterval) return;
+    timerInterval = setInterval(() => {
+        _t++;
+        const m = String(Math.floor(_t / 60)).padStart(2, '0');
+        const s = String(_t % 60).padStart(2, '0');
+        _timerEl.textContent = `${m}:${s}`;
+    }, 1000);
+}
+
+function stopTimer() {
+    clearInterval(timerInterval);
+    timerInterval = null;
+}
+
+// Initial timer start on page load
+window.onload = startTimer;
+
+// Drag divider
+var divider = document.getElementById('divider');
+var left = document.getElementById('left');
+var right = document.getElementById('right');
+var dragging = false;
+function startDrag(e){ 
+  dragging = true; 
+  document.body.style.cursor = 'ew-resize'; 
+  if(e.preventDefault) e.preventDefault(); 
+}
+function endDrag(){ 
+  dragging = false; 
+  document.body.style.cursor = ''; 
+}
+function onMove(clientX){
+  var container = document.querySelector('.shell').getBoundingClientRect();
+  var x = clientX - container.left;
+  x = Math.max(280, Math.min(container.width - 320, x));
+  left.style.flex = '0 0 ' + x + 'px';
+  right.style.flex = '1 1 auto';
+}
+divider.addEventListener('mousedown', function(e){ startDrag(e); });
+window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+window.addEventListener('mouseup', endDrag);
+divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
+window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+window.addEventListener('touchend', endDrag);
+
+// Drag and drop for questions
+const cardPools = document.querySelectorAll('.cardpool');
+const dropzones = document.querySelectorAll('.dropzone');
+const initialCardHTML = {
+  'pool-14-18': `
+    <div class="card" draggable="true" data-value="A">A Neil Plumridge</div>
+    <div class="card" draggable="true" data-value="B">B Gal Zauberman and John Lynch</div>
+    <div class="card" draggable="true" data-value="C">C Jan Elsner</div>
+    <div class="card" draggable="true" data-value="D">D Tony LaMontagne</div>
+  `
+};
+
+function addDragListenersToCards(cards) {
+    cards.forEach(card => {
+        card.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('text/plain', e.target.dataset.value);
+            e.dataTransfer.setData('text/html', e.target.outerHTML);
+            e.target.classList.add('dragging');
+        });
+        card.addEventListener('dragend', (e) => {
+            e.target.classList.remove('dragging');
+        });
+    });
+}
+
+// Initializing drag listeners
+addDragListenersToCards(document.querySelectorAll('.card'));
+
+dropzones.forEach(zone => {
+  zone.addEventListener('dragover', e => {
+    e.preventDefault();
+    zone.classList.add('over');
+  });
+  
+  zone.addEventListener('dragleave', () => {
+    zone.classList.remove('over');
+  });
+  
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('over');
+
+    const dataValue = e.dataTransfer.getData('text/plain');
+    const dataHtml = e.dataTransfer.getData('text/html');
+    
+    // Create a new card based on the dropped data
+    const droppedCard = document.createElement('div');
+    droppedCard.innerHTML = dataHtml;
+    const cardEl = droppedCard.firstElementChild;
+    
+    if (cardEl) {
+      const qNum = parseInt(zone.dataset.target.replace('q', ''));
+      const oldCard = zone.querySelector('.card');
+      
+      // Handle returning old card to its original pool
+      if (oldCard) {
+          const originalPool = oldCard.closest('.cardpool');
+          if (originalPool) {
+              originalPool.appendChild(oldCard);
+          } else {
+              oldCard.remove();
+          }
+      }
+
+      // Append the new card to the dropzone
+      zone.innerHTML = '';
+      zone.appendChild(cardEl);
+
+      // Re-add drag listeners to the new card
+      addDragListenersToCards([cardEl]);
+      
+      const targetQ = zone.dataset.target;
+      document.getElementById(targetQ + '-nav').classList.add('answered');
+    }
+  });
+});
+
+// Highlight toolbar
+var selbar = document.getElementById('selbar');
+var btnHL = document.getElementById('btnHL');
+var btnUH = document.getElementById('btnUH');
+var btnNote = document.getElementById('btnNote');
+var lastRange = null;
+var currentHlNode = null;
+var keepToolbar = false;
+function positionSelbarForRect(rect){
+  selbar.style.display = 'flex';
+  requestAnimationFrame(function(){
+    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    var leftPos = window.scrollX + rect.left + rect.width / 2 - selbar.offsetWidth / 2;
+    selbar.style.top = ((top > 0) ? top : (window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+function updateSelbar(){
+  var sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) { 
+    selbar.style.display = 'none'; 
+    currentHlNode = null; 
+    return; 
+  }
+  var range = sel.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode = null;
+  positionSelbarForRect(range.getBoundingClientRect());
+}
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', function(){ 
+  var sel = window.getSelection(); 
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) { 
+    if (!keepToolbar && !currentHlNode) { 
+      selbar.style.display = 'none'; 
+    } 
+  } 
+});
+document.addEventListener('scroll', function(){ 
+  if (selbar.style.display === 'flex') updateSelbar(); 
+});
+document.addEventListener('mousedown', function(e){
+  var t = e.target;
+  if (t.classList && t.classList.contains('hl')) {
+    keepToolbar = true;
+  } else {
+    keepToolbar = false;
+  }
+}, true);
+document.addEventListener('click', function(e){
+  var target = e.target;
+  if (target.classList && target.classList.contains('hl')) {
+    currentHlNode = target;
+    lastRange = null;
+    positionSelbarForRect(target.getBoundingClientRect());
+    var sel = window.getSelection();
+    if (sel) sel.removeAllRanges();
+    setTimeout(function(){ keepToolbar = false; }, 0);
+  }
+}, true);
+function doHighlight(){
+  if(currentHlNode) return;
+  if(!lastRange || lastRange.collapsed) return;
+  var span = document.createElement('span'); span.className = 'hl';
+  try { lastRange.surroundContents(span); }
+  catch(e){
+    var wrap = document.createElement('span'); wrap.className = 'hl';
+    wrap.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrap);
+  }
+  selbar.style.display = 'none';
+  showToast('Highlighted');
+}
+function removeHighlight(){
+  if(currentHlNode){
+    var p = currentHlNode.parentNode;
+    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
+    p.removeChild(currentHlNode); p.normalize();
+    currentHlNode = null;
+    selbar.style.display = 'none';
+    showToast('Highlight removed');
+    return;
+  }
+  if(!lastRange) return;
+  var selRect = lastRange.getBoundingClientRect();
+  var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  var toRemove = [];
+  while(walker.nextNode()){
+    var n = walker.currentNode;
+    if(n.classList && n.classList.contains('hl')) {
+      var r = n.getBoundingClientRect();
+      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+    }
+  }
+  toRemove.forEach(function(el){ var p = el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
+  selbar.style.display = 'none';
+  showToast('Highlight removed');
+}
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+
+// Notes
+var notes = document.getElementById('notes');
+var noteArea = document.getElementById('noteArea');
+var btnCopy = document.getElementById('btnCopy');
+var btnClose = document.getElementById('btnClose');
+function toggleNotes(){ 
+  notes.style.display = (notes.style.display === 'flex' ? 'none' : 'flex'); 
+}
+window.toggleNotes = toggleNotes;
+btnClose.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async function(){ 
+  await navigator.clipboard.writeText(noteArea.value || ''); 
+  showToast('Copied'); 
+});
+btnNote.addEventListener('click', function(){
+  var text = '';
+  if (currentHlNode) { 
+    text = (currentHlNode.textContent || '').trim(); 
+  } else if (lastRange) { 
+    var frag = lastRange.cloneContents(); 
+    text = (frag.textContent || '').trim(); 
+  }
+  toggleNotes();
+  if (text) {
+    noteArea.value = (noteArea.value ? noteArea.value + '\n' : '') + '> ' + text + '\n';
+  }
+  selbar.style.display = 'none';
+});
+
+// Toast
+var toastEl = document.getElementById('toast');
+function showToast(msg){
+  toastEl.textContent = msg; 
+  toastEl.style.display = 'block';
+  setTimeout(function(){ toastEl.style.display = 'none'; }, 1200);
+}
+
+// Answer key and grading
+var answers = {
+  "q14":"C", "q15":"A", "q16":"A", "q17":"D", "q18":"B",
+  "q19":"C", "q20":"D", "q21":"B",
+  "q22":"injury", "q23":"16.6 weeks", "q24":"7%", "q25":"massage", "q26":"workloads"
+};
+const cardValueToText = {
+  "A": "A Neil Plumridge", "B": "B Gal Zauberman and John Lynch", "C": "C Jan Elsner",
+  "D": "D Tony LaMontagne"
+};
+
+function grade(){
+  stopTimer();
+  var total=0, correct=0, lines=[];
+  
+  // Check drag-and-drop questions (14-18)
+  for(let n=14; n<=18; n++){
+    const q = `q${n}`;
+    total++;
+    const dropzone = document.querySelector(`.dropzone[data-target="${q}"]`);
+    const selectedCard = dropzone ? dropzone.querySelector('.card') : null;
+    const userAnswer = selectedCard ? selectedCard.dataset.value : '';
+    const isCorrect = userAnswer === answers[q];
+    let userDisplay = selectedCard ? selectedCard.textContent.trim() : 'None';
+    let resultLine = `${q.toUpperCase()}: ${userDisplay} ${isCorrect ? '✅' : '❌'}`;
+    if (!isCorrect) {
+      const correctText = cardValueToText[answers[q]] || answers[q];
+      resultLine += ` (Correct: ${correctText})`;
+    }
+    lines.push(resultLine);
+    if (isCorrect) correct++;
+  }
+
+  // Check radio questions (19-21)
+  for(let n=19; n<=21; n++){
+    const q = `q${n}`;
+    total++;
+    const selected = document.querySelector(`input[name="${q}"]:checked`);
+    const userAnswer = selected ? selected.value : '';
+    const isCorrect = userAnswer === answers[q];
+    let resultLine = `${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✅' : '❌'}`;
+    if (!isCorrect) {
+      resultLine += ` (Correct: ${answers[q]})`;
+    }
+    lines.push(resultLine);
+    if (isCorrect) correct++;
+  }
+  
+  // Check text input questions (22-26)
+  for(let n=22; n<=26; n++){
+    const q = `q${n}`;
+    total++;
+    const input = document.querySelector(`input[name="${q}"]`);
+    const userAnswer = input ? input.value.trim().toLowerCase() : '';
+    const isCorrect = userAnswer === answers[q].toLowerCase();
+    let resultLine = `${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✅' : '❌'}`;
+    if (!isCorrect) {
+      resultLine += ` (Correct: ${answers[q]})`;
+    }
+    lines.push(resultLine);
+    if (isCorrect) correct++;
+  }
+
+  // Show results
+  const acc = Math.round(100 * correct / total);
+  document.getElementById('results').innerHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p>
+    <pre>${lines.join('\n')}</pre>
+  `;
+  
+  // Show answer key
+  const answerContent = `
+    <table>
+      <thead>
+        <tr>
+          <th>Question</th>
+          <th>Answer</th>
+          <th>Location</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>14</td><td>C</td><td>Paragraph 7</td></tr>
+        <tr><td>15</td><td>A</td><td>Paragraph 2</td></tr>
+        <tr><td>16</td><td>A</td><td>Paragraph 5</td></tr>
+        <tr><td>17</td><td>D</td><td>Paragraph 8</td></tr>
+        <tr><td>18</td><td>B</td><td>Paragraph 3</td></tr>
+        <tr><td>19</td><td>C</td><td>Paragraph 2</td></tr>
+        <tr><td>20</td><td>D</td><td>Paragraph 5</td></tr>
+        <tr><td>21</td><td>B</td><td>Paragraph 7</td></tr>
+        <tr><td>22</td><td>injury</td><td>Paragraph 4</td></tr>
+        <tr><td>23</td><td>16.6 weeks</td><td>Paragraph 4</td></tr>
+        <tr><td>24</td><td>7%</td><td>Paragraph 4</td></tr>
+        <tr><td>25</td><td>massage</td><td>Paragraph 5</td></tr>
+        <tr><td>26</td><td>workloads</td><td>Paragraph 5</td></tr>
+      </tbody>
+    </table>
+  `;
+  document.getElementById('answerContent').innerHTML = answerContent;
+  document.querySelector('#answerBox .badge').textContent = 'tap to view';
+}
+
+function resetForm(){
+  // Reset all dropzones
+  document.querySelectorAll('.dropzone').forEach(zone => {
+    zone.innerHTML = '<span class="droplabel">Drag answer here</span>';
+  });
+  
+  // Reset all card pools
+  document.getElementById('pool-14-18').innerHTML = initialCardHTML['pool-14-18'];
+  
+  // Re-add event listeners to the cards
+  addDragListenersToCards(document.querySelectorAll('.card'));
+  
+  // Reset text inputs
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = "";
+  });
+  
+  // Reset radio buttons
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // Reset results and answers
+  document.getElementById('results').innerHTML = '';
+  document.getElementById('answerContent').innerHTML = '';
+  document.querySelector('#answerBox .badge').textContent = 'hidden';
+  
+  // Reset answered status in nav
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+  
+  _t = 0;
+  _timerEl.textContent = '00:00';
+  startTimer();
+}
+
+function scrollToElement(id){
+  const el = document.getElementById(id);
+  if (el) { 
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' }); 
+  }
+  const navs = document.querySelectorAll('.practice-nav .q-item');
+  navs.forEach(n => n.classList.remove('active'));
+  const btn = document.getElementById(id.replace('-anchor','-nav'));
+  if (btn) { 
+    btn.classList.add('active'); 
+    setTimeout(() => btn.classList.remove('active'), 800); 
+  }
+}
+
+// Mark answered on interaction
+(function(){
+  function markAnswered(qn){
+    const nav = document.getElementById(`q${qn}-nav`);
+    if (!nav) return;
+    let answered = false;
+    
+    // Check dropzones
+    if (qn >= 14 && qn <= 18) {
+      const zone = document.querySelector(`.dropzone[data-target="q${qn}"]`);
+      answered = zone.querySelector('.card') !== null;
+    } 
+    // Check radio buttons
+    else if (qn >= 19 && qn <= 21) {
+      const radios = document.querySelectorAll(`input[name="q${qn}"]:checked`);
+      answered = radios.length > 0;
+    }
+    // Check text inputs
+    else {
+      const input = document.querySelector(`input[name="q${qn}"]`);
+      answered = input && input.value.trim().length > 0;
+    }
+    
+    if (answered) nav.classList.add('answered');
+    else nav.classList.remove('answered');
+  }
+  
+  dropzones.forEach(zone => {
+    zone.addEventListener('drop', () => {
+      const qn = zone.dataset.target.replace('q', '');
+      markAnswered(qn);
+    });
+  });
+
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      const qn = e.target.name.replace('q', '');
+      markAnswered(qn);
+    });
+  });
+  
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.addEventListener('input', (e) => {
+      const qn = e.target.name.replace('q', '');
+      markAnswered(qn);
+    });
+  });
+})();
+</script>
+
+<script>
+// 练习页面增强器 - 跨窗口通信功能
+(function() {
+    'use strict';
+    
+    let sessionData = null;
+    let parentWindow = null;
+    let startTime = Date.now();
+    let isSessionActive = false;
+    
+    // 初始化通信功能
+    function initializeCommunication() {
+        console.log('[PracticePageEnhancer] 初始化通信功能');
+        
+        // 监听来自父窗口的消息
+        window.addEventListener('message', function(event) {
+            console.log('[PracticePageEnhancer] 收到消息:', event.data);
+            
+            if (event.data && event.data.type === 'INIT_SESSION') {
+                sessionData = event.data.data;
+                parentWindow = event.source;
+                isSessionActive = true;
+                startTime = Date.now();
+                
+                console.log('[PracticePageEnhancer] 会话已初始化:', sessionData);
+                
+                // 发送会话初始化确认
+                sendMessage('SESSION_INITIALIZED', {
+                    sessionId: sessionData.sessionId,
+                    examId: sessionData.examId,
+                    timestamp: Date.now()
+                });
+                
+                // 设置页面关闭时的数据发送
+                setupPageUnloadHandler();
+            }
+        });
+        
+        // 检测答题完成
+        setupAnswerDetection();
+        
+        console.log('[PracticePageEnhancer] 通信功能已初始化');
+    }
+    
+    // 发送消息到父窗口
+    function sendMessage(type, data) {
+        if (parentWindow && isSessionActive) {
+            const message = {
+                type: type,
+                data: data,
+                source: 'practice_page',
+                timestamp: Date.now()
+            };
+            
+            console.log('[PracticePageEnhancer] 发送消息:', message);
+            parentWindow.postMessage(message, '*');
+        }
+    }
+    
+    // 设置答题检测
+    function setupAnswerDetection() {
+        // 检测提交按钮点击
+        document.addEventListener('click', function(event) {
+            const target = event.target;
+            
+            // 检测是否是提交相关的按钮
+            if (target.tagName === 'BUTTON' && 
+                (target.textContent.includes('提交') || 
+                 target.textContent.includes('Submit') ||
+                 target.textContent.includes('完成') ||
+                 target.textContent.includes('Check') ||
+                 target.id === 'submit-btn' ||
+                 target.className.includes('submit'))) {
+                
+                console.log('[PracticePageEnhancer] 检测到提交按钮点击');
+                
+                // 延迟收集数据，确保答案已处理
+                setTimeout(function() {
+                    collectAndSendPracticeData();
+                }, 1000);
+            }
+        });
+        
+        // 检测表单提交
+        document.addEventListener('submit', function(event) {
+            console.log('[PracticePageEnhancer] 检测到表单提交');
+            setTimeout(function() {
+                collectAndSendPracticeData();
+            }, 1000);
+        });
+    }
+    
+    // 设置页面卸载处理器
+    function setupPageUnloadHandler() {
+        window.addEventListener('beforeunload', function() {
+            if (isSessionActive) {
+                collectAndSendPracticeData();
+            }
+        });
+        
+        // 页面隐藏时也发送数据
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'hidden' && isSessionActive) {
+                collectAndSendPracticeData();
+            }
+        });
+    }
+    
+    // 收集并发送练习数据
+    function collectAndSendPracticeData() {
+        if (!isSessionActive || !sessionData) {
+            console.log('[PracticePageEnhancer] 会话未激活，跳过数据收集');
+            return;
+        }
+        
+        console.log('[PracticePageEnhancer] 开始收集练习数据');
+        
+        const endTime = Date.now();
+        const duration = endTime - startTime;
+        
+        // 收集答案数据
+        const answers = collectAnswers();
+        const score = calculateScore(answers);
+        
+        const practiceData = {
+            sessionId: sessionData.sessionId,
+            examId: sessionData.examId,
+            examTitle: sessionData.examTitle,
+            examCategory: sessionData.examCategory,
+            startTime: startTime,
+            endTime: endTime,
+            duration: duration,
+            answers: answers,
+            score: score.correct,
+            totalQuestions: score.total,
+            accuracy: score.total > 0 ? score.correct / score.total : 0,
+            percentage: score.total > 0 ? Math.round((score.correct / score.total) * 100) : 0,
+            url: window.location.href,
+            source: 'page_extraction',
+            timestamp: endTime
+        };
+        
+        console.log('[PracticePageEnhancer] 练习数据已收集:', practiceData);
+        
+        // 发送练习完成数据
+        sendMessage('PRACTICE_COMPLETE', practiceData);
+        
+        // 标记会话为非活跃状态，避免重复发送
+        isSessionActive = false;
+    }
+    
+    // 收集页面中的答案
+    function collectAnswers() {
+        const answers = [];
+        
+        // 收集输入框答案
+        const inputs = document.querySelectorAll('input[type="text"], input.blank, input.blank-input');
+        inputs.forEach(function(input, index) {
+            if (input.value.trim()) {
+                answers.push({
+                    type: 'text',
+                    question: index + 1,
+                    answer: input.value.trim(),
+                    element: input.tagName + (input.className ? '.' + input.className : '')
+                });
+            }
+        });
+        
+        // 收集选择题答案
+        const selects = document.querySelectorAll('select');
+        selects.forEach(function(select, index) {
+            if (select.value) {
+                answers.push({
+                    type: 'select',
+                    question: index + 1,
+                    answer: select.value,
+                    element: 'SELECT'
+                });
+            }
+        });
+        
+        // 收集单选按钮答案
+        const radios = document.querySelectorAll('input[type="radio"]:checked');
+        radios.forEach(function(radio, index) {
+            answers.push({
+                type: 'radio',
+                question: radio.name || index + 1,
+                answer: radio.value,
+                element: 'INPUT[type="radio"]'
+            });
+        });
+        
+        // 收集复选框答案
+        const checkboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+        checkboxes.forEach(function(checkbox, index) {
+            answers.push({
+                type: 'checkbox',
+                question: checkbox.name || index + 1,
+                answer: checkbox.value,
+                element: 'INPUT[type="checkbox"]'
+            });
+        });
+        
+        console.log('[PracticePageEnhancer] 收集到答案:', answers);
+        return answers;
+    }
+    
+    // 计算得分（简单实现）
+    function calculateScore(answers) {
+        // 这里只是简单计算有答案的题目数量
+        // 实际得分需要根据具体题目的正确答案来计算
+        const total = answers.length;
+        const correct = answers.filter(function(answer) {
+            return answer.answer && answer.answer.trim().length > 0;
+        }).length;
+        
+        return {
+            correct: correct,
+            total: total
+        };
+    }
+    
+    // 页面加载完成后初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeCommunication);
+    } else {
+        initializeCommunication();
+    }
+    
+})();
+</script></body>
+</html>

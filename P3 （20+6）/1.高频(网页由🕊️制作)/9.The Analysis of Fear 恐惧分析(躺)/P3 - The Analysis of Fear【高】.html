@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>P3 - The Analysis of Fear</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
+  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  .shell { display:flex; height:100vh; width:100%; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  h2,h3,h4 { margin:0 0 10px; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  table { border-collapse: collapse; width:100%; }
+  th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
+  th:first-child, td:first-child { width:92px; }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button:hover { border-color:#fff; }
+  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+  .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:54px; padding:8px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .droplabel { color:#64748b; }
+  .cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:grid; gap:8px; }
+  .pool-slot { min-height:40px; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); }
+  .card:active { cursor:grabbing; }
+  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
+  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
+  .ghost { opacity: .5; }
+  .over { outline:2px dashed #3b82f6; }
+  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
+  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
+  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+  body { padding-bottom: 82px; }
+  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
+  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
+  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #selbar { z-index: 6000 !important; }
+  input.blank { border: 1px solid #ccc; padding: 4px; border-radius: 4px; width: 180px; }
+</style>
+</head>
+<body>
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q27-nav" onclick="scrollToElement('q27-anchor')">27</div>
+    <div class="q-item" id="q28-nav" onclick="scrollToElement('q28-anchor')">28</div>
+    <div class="q-item" id="q29-nav" onclick="scrollToElement('q29-anchor')">29</div>
+    <div class="q-item" id="q30-nav" onclick="scrollToElement('q30-anchor')">30</div>
+    <div class="q-item" id="q31-nav" onclick="scrollToElement('q31-anchor')">31</div>
+    <div class="q-item" id="q32-nav" onclick="scrollToElement('q32-anchor')">32</div>
+    <div class="q-item" id="q33-nav" onclick="scrollToElement('q33-anchor')">33</div>
+    <div class="q-item" id="q34-nav" onclick="scrollToElement('q34-anchor')">34</div>
+    <div class="q-item" id="q35-nav" onclick="scrollToElement('q35-anchor')">35</div>
+    <div class="q-item" id="q36-nav" onclick="scrollToElement('q36-anchor')">36</div>
+    <div class="q-item" id="q37-nav" onclick="scrollToElement('q37-anchor')">37</div>
+    <div class="q-item" id="q38-nav" onclick="scrollToElement('q38-anchor')">38</div>
+    <div class="q-item" id="q39-nav" onclick="scrollToElement('q39-anchor')">39</div>
+    <div class="q-item" id="q40-nav" onclick="scrollToElement('q40-anchor')">40</div>
+  </div>
+</div>
+<div class="shell">
+<section class="pane" id="left">
+  <h2>READING PASSAGE 3 <span id="timer">00:00</span></h2>
+  <p>You should spend about 20 minutes on Questions 27–40, which are based on Reading Passage 3 below.</p>
+  <h3>The Analysis of Fear</h3>
+  <p><em>Researchers are investigating the processes in the brain that give rise to fear in animals. The results may lead to new ways to treat human anxiety.</em></p>
+  
+  <p>Over the years, the majority of people acquire a range of skills for coping with frightening situations. They will attempt to placate a vexed teacher or boss and will shout and run when chased by a hostile stranger. But some individuals become overwhelmed in circumstances others would consider only minimally stressful: fear of ridicule might cause them to shake uncontrollably when called on to speak in a group, or terror of strangers might lead them to hide at home, unable to work or shop for groceries. Why do certain people fall prey to excessive fear?</p>
+  
+  <p>Ned H. Kalin and Steven E. Shelton at the University of Wisconsin-Madison are addressing this problem by identifying specific brain processes that regulate fear and its associated behaviors. Despite the availability of non-invasive computer-imaging techniques, such information is still extremely difficult to obtain in humans. Hence, they have turned their attention to another primate, the rhesus monkey. These animals undergo many of the same physiological and psychological developmental stages that humans do, but in a more compressed time span. As we gain more insight into the nature and operation of neural circuits that modulate fear in monkeys, it should be possible to pinpoint the brain processes that cause inordinate anxiety in people, and to devise new therapies to counteract it. Effective interventions would be particularly valuable if they were applied at an early age, as growing evidence suggests overly fearful youngsters are at high risk of later emotional distress.</p>
+  
+  <p>When they began their studies two decades ago, Kalin and Shelton knew that they would first have to find cues that elicit fear and identify behaviors that reflect different types of anxiety. With such information in hand, they could then proceed to determine the age at which monkeys begin to match defensive behaviors selectively to specific cues. Finally, by determining the parts of the brain that reach maturity during the same time span, they could gain clues to the regions that underlie the regulation of fear and fear-related behavior.</p>
+  
+  <p>The experiments were carried out at the University of Wisconsin-Madison. Kalin and Shelton discerned varied behaviors by exposing monkeys between six and 12 months old to three related situations. In the alone condition, an animal was separated from its mother and left by itself in a cage for ten minutes. In the no-eye-contact condition, a person stood motionless outside the cage and avoided looking at the solitary infant. In the stare condition, a person was again present and motionless but, assuming a neutral expression, peered directly at the animal. These positions are no more frightening than those that primates encounter frequently in the wild, or those that human infants meet whenever they are left at a day-care centre.</p>
+  
+  <p>In the alone condition, most monkeys became very active and emitted frequent gentle “coo” calls made with pursed lips. More than 40 years ago it was deduced that when an infant monkey is separated from its mother, it yearns to regain the closeness and security provided by nearness to the parent. These responses help to draw the mother's attention. In contrast, in the more frightening no-eye-contact situation, the monkeys reduced their activity greatly and sometimes froze for extended periods of time. When an infant spots a potential predator, its goal shifts from attracting the mother to becoming inconspicuous. Inhibiting motion and freezing are common attempts to achieve this in many species. If the infant perceives that it has been detected, its aim shifts to warding off an attack. So the stare condition evoked a third set of responses. The monkeys made several hostile gestures: barking (forcing air from the abdomen through the vocal cords to emit a harsh, growl-like sound) and staring back. Sometimes the animals mixed the threatening displays with submissive ones, such as fear grimaces, which look something like wary grins, or grinding of teeth.</p>
+  
+  <p>Having identified three categories of defensive behaviours, Kalin and Shelton set about determining when infant monkeys first begin to apply them effectively. Several lines of work had led them to surmise that the ability to make such choices emerges when an infant is around two months old. To establish the critical period of development, they examined four groups of infant monkeys ranging in age up to 12 weeks old. The babies were separated from their mothers, left to acclimatise to a cage, and then exposed to the alone, no-eye-contact and stare conditions. All sessions were videotaped for analysis. They found that the infants in the youngest group (no more than two weeks old) engaged in defensive behaviours, but they lacked some motor control and seemed to act randomly, as if they had not noticed the human beings that were present. Babies in the two intermediate-age groups had good motor control, but their actions seemed unrelated to the test condition. Only animals in the oldest group (nine- to 12-week-old) conducted themselves differently in each situation, and their reactions were both appropriate and identical to those of mature monkeys. This finding meant motor control was not the prime determinant of selective responding and that nine to 12 weeks is the critical age for the appearance of a monkey's ability to adaptively modulate its defensive activity to meet changing demands.</p>
+  
+  <p>&nbsp;</p> 
+</section>
+<div id="divider" title="Drag to resize"></div>
+<section class="pane" id="right">
+  <h3>Questions</h3>
+  
+  <div class="group">
+    <h4>Questions 27–30</h4>
+    <p>Choose the correct letter, A, B, C or D.</p>
+    <p>Write the correct letter in boxes 27–30 on your answer sheet.</p>
+
+    <a id="q27-anchor"></a>
+    <div id="q27-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>27 In the first paragraph, the writer points out that</p>
+      <label style="display:block;margin:4px 0;"><input name="q27" type="radio" value="A"/> A fear and stress are different feelings.</label>
+      <label style="display:block;margin:4px 0;"><input name="q27" type="radio" value="B"/> B most humans develop strategies for dealing with fear.</label>
+      <label style="display:block;margin:4px 0;"><input name="q27" type="radio" value="C"/> C business situations cause more fear than others.</label>
+      <label style="display:block;margin:4px 0;"><input name="q27" type="radio" value="D"/> D some people never experience fear.</label>
+    </div>
+
+    <a id="q28-anchor"></a>
+    <div id="q28-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>28 When discussing the use of rhesus monkeys as experimental subjects, the writer notes that</p>
+      <label style="display:block;margin:4px 0;"><input name="q28" type="radio" value="A"/> A they react more quickly to fear than humans.</label>
+      <label style="display:block;margin:4px 0;"><input name="q28" type="radio" value="B"/> B they are more influenced by fear than humans.</label>
+      <label style="display:block;margin:4px 0;"><input name="q28" type="radio" value="C"/> C their mental growth resembles that of humans.</label>
+      <label style="display:block;margin:4px 0;"><input name="q28" type="radio" value="D"/> D their brains work more slowly than those of humans.</label>
+    </div>
+
+    <a id="q29-anchor"></a>
+    <div id="q29-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>29 Which of the following did Kalin and Shelton outline as the second stage in their research project?</p>
+      <label style="display:block;margin:4px 0;"><input name="q29" type="radio" value="A"/> A the identification of expressions of anxiety in monkeys</label>
+      <label style="display:block;margin:4px 0;"><input name="q29" type="radio" value="B"/> B the identification of situations that arouse stress in monkeys</label>
+      <label style="display:block;margin:4px 0;"><input name="q29" type="radio" value="C"/> C an analysis of brain development in monkeys</label>
+      <label style="display:block;margin:4px 0;"><input name="q29" type="radio" value="D"/> D the study of reactions to fear in monkeys of different ages</label>
+    </div>
+
+    <a id="q30-anchor"></a>
+    <div id="q30-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>30 In the fourth paragraph, the writer notes that the three related situations</p>
+      <label style="display:block;margin:4px 0;"><input name="q30" type="radio" value="A"/> A reflect common experiences for infant humans and monkeys.</label>
+      <label style="display:block;margin:4px 0;"><input name="q30" type="radio" value="B"/> B highlight the similarities between monkey and human infant care.</label>
+      <label style="display:block;margin:4px 0;"><input name="q30" type="radio" value="C"/> C were predicted to cause monkeys more distress than human infants.</label>
+      <label style="display:block;margin:4px 0;"><input name="q30" type="radio" value="D"/> D were graded in terms of their potential effect on young monkeys.</label>
+    </div>
+  </div>
+
+  <div class="group">
+    <h4>Questions 31–35</h4>
+    <p>Look at the following responses of monkeys and the list of conditions below.</p>
+    <p>Match each response with the correct condition, A, B or C.</p>
+    <p>Write the correct letter, A, B or C, in boxes 31–35 on your answer sheet.</p>
+    <p>NB You may use any letter more than once.</p>
+
+    <div style="background:#f1f5f9;border-radius:10px;padding:12px;margin:12px 0;">
+      <p style="margin:0; text-align:center; font-weight:bold;">List of Conditions</p>
+      <p style="margin:4px 0 0;">A the alone condition</p>
+      <p style="margin:4px 0 0;">B the no-eye-contact condition</p>
+      <p style="margin:4px 0 0;">C the stare condition</p>
+    </div>
+
+    <a id="q31-anchor"></a>
+    <div id="q31-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>31 aggressive facial expressions</p>
+      <label style="margin:0 4px;"><input name="q31" type="radio" value="A"/> A</label>
+      <label style="margin:0 4px;"><input name="q31" type="radio" value="B"/> B</label>
+      <label style="margin:0 4px;"><input name="q31" type="radio" value="C"/> C</label>
+    </div>
+
+    <a id="q32-anchor"></a>
+    <div id="q32-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>32 prolonged stillness</p>
+      <label style="margin:0 4px;"><input name="q32" type="radio" value="A"/> A</label>
+      <label style="margin:0 4px;"><input name="q32" type="radio" value="B"/> B</label>
+      <label style="margin:0 4px;"><input name="q32" type="radio" value="C"/> C</label>
+    </div>
+
+    <a id="q33-anchor"></a>
+    <div id="q33-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>33 a combination of contradictory signals</p>
+      <label style="margin:0 4px;"><input name="q33" type="radio" value="A"/> A</label>
+      <label style="margin:0 4px;"><input name="q33" type="radio" value="B"/> B</label>
+      <label style="margin:0 4px;"><input name="q33" type="radio" value="C"/> C</label>
+    </div>
+
+    <a id="q34-anchor"></a>
+    <div id="q34-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>34 appeals for maternal protection</p>
+      <label style="margin:0 4px;"><input name="q34" type="radio" value="A"/> A</label>
+      <label style="margin:0 4px;"><input name="q34" type="radio" value="B"/> B</label>
+      <label style="margin:0 4px;"><input name="q34" type="radio" value="C"/> C</label>
+    </div>
+
+    <a id="q35-anchor"></a>
+    <div id="q35-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+      <p>35 the production of soft sounds</p>
+      <label style="margin:0 4px;"><input name="q35" type="radio" value="A"/> A</label>
+      <label style="margin:0 4px;"><input name="q35" type="radio" value="B"/> B</label>
+      <label style="margin:0 4px;"><input name="q35" type="radio" value="C"/> C</label>
+    </div>
+  </div>
+
+  <div class="group">
+    <a id="q36-anchor"></a>
+    <h4>Questions 36–40</h4>
+    <p>Complete the summary below.</p>
+    <p>Choose NO MORE THAN THREE WORDS AND / OR A NUMBER from the passage for each answer.</p>
+    <p>Write your answers in boxes 36–40 on your answer sheet.</p>
+    <p>Once they had identified three types of defensive behaviour, Kalin and Shelton grouped the monkeys according to their <input class="blank" maxlength="40" name="q36" placeholder="36"/>, in order to discover precisely when they were able to respond appropriately to different fear-related cues. They videotaped their results and found that monkeys as young as <a id="q37-anchor"></a><input class="blank" maxlength="40" name="q37" placeholder="37"/> reacted to the cues but in a haphazard fashion. The researchers noted that they seemed to be unaware of the <a id="q38-anchor"></a><input class="blank" maxlength="40" name="q38" placeholder="38"/> who were around them. Despite demonstrating <a id="q39-anchor"></a><input class="blank" maxlength="40" name="q39" placeholder="39"/>, the monkeys in the middle groups failed to react in ways corresponding to the experimental situation. The oldest group, however, reacted in the same way as <a id="q40-anchor"></a><input class="blank" maxlength="40" name="q40" placeholder="40"/>, and the researchers concluded that monkeys are capable of selective responding between nine and 12 weeks old.</p>
+  </div>
+  
+  <div style="display:flex;gap:8px;margin-bottom:10px;">
+    <button class="primary" onclick="grade()">Submit</button>
+    <button onclick="resetForm()">Reset</button>
+    <button onclick="toggleNotes()">Notes</button>
+  </div>
+  <div id="results"></div>
+  <details class="answerbox" id="answerBox">
+    <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+    <div id="answerContent"></div>
+  </details>
+</section>
+</div>
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+<script>
+// Timer
+let _t=0; const _timerEl=document.getElementById('timer');
+setInterval(function(){ 
+  _t++; 
+  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
+  var s=String(_t%60).padStart(2,'0'); 
+  _timerEl.textContent=m+':'+s; 
+},1000);
+
+// Drag divider
+var divider = document.getElementById('divider');
+var left = document.getElementById('left');
+var right = document.getElementById('right');
+var dragging=false;
+function startDrag(e){ 
+  dragging=true; 
+  document.body.style.cursor='ew-resize'; 
+  if(e.preventDefault) e.preventDefault(); 
+}
+function endDrag(){ 
+  dragging=false; 
+  document.body.style.cursor=''; 
+}
+function onMove(clientX){
+  var container = document.querySelector('.shell').getBoundingClientRect();
+  var x = clientX - container.left;
+  x = Math.max(280, Math.min(container.width-320, x));
+  left.style.flex = '0 0 ' + x + 'px';
+  right.style.flex = '1 1 auto';
+}
+divider.addEventListener('mousedown', function(e){ startDrag(e); });
+window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+window.addEventListener('mouseup', endDrag);
+divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
+window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+window.addEventListener('touchend', endDrag);
+
+// Highlight toolbar
+var selbar = document.getElementById('selbar');
+var btnHL = document.getElementById('btnHL');
+var btnUH = document.getElementById('btnUH');
+var btnNote = document.getElementById('btnNote');
+var lastRange=null;
+var currentHlNode=null;
+var keepToolbar=false;
+function positionSelbarForRect(rect){
+  selbar.style.display='flex';
+  requestAnimationFrame(function(){
+    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+function updateSelbar(){
+  var sel=window.getSelection();
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
+    selbar.style.display='none'; 
+    currentHlNode=null; 
+    return; 
+  }
+  var range = sel.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode=null;
+  positionSelbarForRect(range.getBoundingClientRect());
+}
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', function(){ 
+  var sel=window.getSelection(); 
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
+    if(!keepToolbar && !currentHlNode){ 
+      selbar.style.display='none'; 
+    } 
+  } 
+});
+document.addEventListener('scroll', function(){ 
+  if(selbar.style.display==='flex') updateSelbar(); 
+});
+document.addEventListener('mousedown', function(e){
+  var t = e.target;
+  if(t.classList && t.classList.contains('hl')){
+    keepToolbar = true;
+  } else {
+    keepToolbar = false;
+  }
+}, true);
+document.addEventListener('click', function(e){
+  var target = e.target;
+  if(target.classList && target.classList.contains('hl')){
+    currentHlNode = target;
+    lastRange = null;
+    positionSelbarForRect(target.getBoundingClientRect());
+    var sel=window.getSelection();
+    if(sel) sel.removeAllRanges();
+    setTimeout(function(){ keepToolbar=false; }, 0);
+  }
+}, true);
+function doHighlight(){
+  if(currentHlNode) return;
+  if(!lastRange || lastRange.collapsed) return;
+  var span=document.createElement('span'); span.className='hl';
+  try { lastRange.surroundContents(span); }
+  catch(e){
+    var wrap=document.createElement('span'); wrap.className='hl';
+    wrap.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrap);
+  }
+  selbar.style.display='none';
+  showToast('Highlighted');
+}
+function removeHighlight(){
+  if(currentHlNode){
+    var p = currentHlNode.parentNode;
+    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
+    p.removeChild(currentHlNode); p.normalize();
+    currentHlNode = null;
+    selbar.style.display='none';
+    showToast('Highlight removed');
+    return;
+  }
+  if(!lastRange) return;
+  var selRect = lastRange.getBoundingClientRect();
+  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  var toRemove=[];
+  while(walker.nextNode()){
+    var n=walker.currentNode;
+    if(n.classList && n.classList.contains('hl')) {
+      var r = n.getBoundingClientRect();
+      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+    }
+  }
+  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
+  selbar.style.display='none';
+  showToast('Highlight removed');
+}
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+
+// Notes
+var notes = document.getElementById('notes');
+var noteArea = document.getElementById('noteArea');
+var btnCopy=document.getElementById('btnCopy');
+var btnClose=document.getElementById('btnClose');
+function toggleNotes(){ 
+  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+}
+window.toggleNotes = toggleNotes;
+btnClose.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async function(){ 
+  await navigator.clipboard.writeText(noteArea.value||''); 
+  showToast('Copied'); 
+});
+btnNote.addEventListener('click', function(){
+  var text = '';
+  if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
+  else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
+  toggleNotes();
+  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
+  selbar.style.display='none';
+});
+
+// Toast
+var toastEl=document.getElementById('toast');
+function showToast(msg){
+  toastEl.textContent=msg; 
+  toastEl.style.display='block';
+  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+}
+
+// Answer key and grading
+var answers = {
+  "q27":"B", "q28":"C", "q29":"D", "q30":"A",
+  "q31":"C", "q32":"B", "q33":"C", "q34":"A", "q35":"A",
+  "q36":"age", "q37":"two weeks", "q38":"human beings", "q39":"good motor control", "q40":"mature monkeys"
+};
+
+function markChoice(q, user){
+  return String(user||'').toUpperCase() === String(answers[q]).toUpperCase();
+}
+function markBlank(q, user){
+  var u = String(user||'').trim().toLowerCase();
+  var key = String(answers[q]).trim().toLowerCase();
+  return u === key;
+}
+function grade(){
+  var total=0, correct=0, lines=[];
+  function push(q, ok, user, correctAns){
+    total++; if(ok) correct++;
+    lines.push(q.toUpperCase()+": "+(user||'None')+" "+(ok?'✅':'❌') + (!ok ? ` (Ans: ${correctAns})` : ''));
+  }
+  // 27–30 Multiple Choice
+  for(var n=27;n<=30;n++){
+    var sel=document.querySelector('input[name="q'+n+'"]:checked');
+    var val=sel?sel.value:'';
+    push('q'+n, markChoice('q'+n, val), val, answers['q'+n]);
+  }
+  // 31–35 Matching
+  for(var n=31;n<=35;n++){
+    var sel=document.querySelector('input[name="q'+n+'"]:checked');
+    var val=sel?sel.value:'';
+    push('q'+n, markChoice('q'+n, val), val, answers['q'+n]);
+  }
+  // 36–40 Blanks
+  for(var n=36;n<=40;n++){
+    var el=document.querySelector('input[name="q'+n+'"]');
+    var val=el?el.value:'';
+    push('q'+n, markBlank('q'+n, val), val, answers['q'+n]);
+  }
+  var acc = (total? Math.round(100*correct/total):0);
+  var html = '<p><strong>Score:</strong> '+correct+'/'+total+' <span class="badge">Accuracy '+acc+'%</span></p>';
+  html += '<pre>'+lines.join('\n')+'</pre>';
+  document.getElementById('results').innerHTML = html;
+  var ahtml = '<ol>';
+  ahtml += '<li>27 → B</li>';
+  ahtml += '<li>28 → C</li>';
+  ahtml += '<li>29 → D</li>';
+  ahtml += '<li>30 → A</li>';
+  ahtml += '<li>31 → C</li>';
+  ahtml += '<li>32 → B</li>';
+  ahtml += '<li>33 → C</li>';
+  ahtml += '<li>34 → A</li>';
+  ahtml += '<li>35 → A</li>';
+  ahtml += '<li>36 → age</li>';
+  ahtml += '<li>37 → two weeks</li>';
+  ahtml += '<li>38 → human beings</li>';
+  ahtml += '<li>39 → good motor control</li>';
+  ahtml += '<li>40 → mature monkeys</li>';
+  ahtml += '</ol>';
+  document.getElementById('answerContent').innerHTML = ahtml;
+  document.querySelector('#answerBox .badge').textContent='tap to view';
+}
+function resetForm(){
+  document.querySelectorAll('input[type="radio"]').forEach(el=>el.checked=false);
+  document.querySelectorAll('input.blank').forEach(el=>el.value="");
+  document.getElementById('results').innerHTML='';
+  document.getElementById('answerContent').innerHTML='';
+  document.querySelector('#answerBox .badge').textContent = 'hidden';
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+}
+function scrollToElement(id){
+  var el = document.getElementById(id);
+  if(el){ 
+    el.scrollIntoView({behavior:'smooth', block:'center'}); 
+  }
+  var navs = document.querySelectorAll('.practice-nav .q-item');
+  navs.forEach(n => n.classList.remove('active'));
+  var btn = document.getElementById(id.replace('-anchor','-nav'));
+  if(btn){ 
+    btn.classList.add('active'); 
+    setTimeout(() => btn.classList.remove('active'), 800); 
+  }
+}
+(function(){
+  function mark(qn){
+    var nav = document.getElementById('q'+qn+'-nav');
+    if(!nav) return;
+    var radios = document.querySelectorAll('input[name="q'+qn+'"]');
+    var text = document.querySelector('input[name="q'+qn+'"].blank');
+    var answered=false;
+    if(radios.length){ radios.forEach(function(r){ if(r.checked) answered=true; }); }
+    if(text){ answered = answered || (text.value && text.value.trim().length>0); }
+    if(answered) nav.classList.add('answered'); else nav.classList.remove('answered');
+  }
+  for(var q=27;q<=40;q++){
+    (function(n){
+      var radios = document.querySelectorAll('input[name="q'+n+'"]');
+      radios.forEach(function(r){ r.addEventListener('change', function(){ mark(n); }); });
+      var text = document.querySelector('input[name="q'+n+'"].blank');
+      if(text){ text.addEventListener('input', function(){ mark(n); }); }
+    })(q);
+  }
+})();
+</script>
+
+<!-- 练习页面数据传输增强脚本 -->
+<script>
+// 检查是否已经有增强脚本
+if (!window.practicePageEnhancer) {
+    // 动态加载增强脚本
+    const script = document.createElement('script');
+    script.src = '../../js/practice-page-enhancer.js';
+    script.onload = function() {
+        console.log('练习页面增强脚本已加载');
+    };
+    script.onerror = function() {
+        console.error('练习页面增强脚本加载失败');
+        // 降级到内联增强
+        loadInlineEnhancer();
+    };
+    document.head.appendChild(script);
+}
+
+// 内联增强器（降级方案）
+function loadInlineEnhancer() {
+    if (window.practicePageEnhancer) return;
+    
+    window.practicePageEnhancer = {
+        initialize: function() {
+            console.log('[InlineEnhancer] 内联增强器已初始化');
+            this.setupCommunication();
+            this.setupAnswerListeners();
+            this.interceptSubmit();
+        },
+        
+        setupCommunication: function() {
+            this.parentWindow = window.opener || window.parent;
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'INIT_SESSION') {
+                    this.sessionId = event.data.data.sessionId;
+                    this.sendMessage('SESSION_READY', {
+                        pageType: this.detectPageType(),
+                        url: window.location.href
+                    });
+                }
+            });
+        },
+        
+        detectPageType: function() {
+            const title = document.title || '';
+            if (title.includes('P1')) return 'P1';
+            if (title.includes('P2')) return 'P2';
+            if (title.includes('P3')) return 'P3';
+            return 'unknown';
+        },
+        
+        setupAnswerListeners: function() {
+            this.answers = {};
+            this.startTime = Date.now();
+            
+            document.addEventListener('change', (e) => {
+                if (e.target.name && e.target.name.startsWith('q')) {
+                    this.answers[e.target.name] = e.target.value;
+                }
+            });
+            document.addEventListener('input', (e) => {
+                if (e.target.name && e.target.name.startsWith('q') && e.target.classList.contains('blank')) {
+                    this.answers[e.target.name] = e.target.value;
+                }
+            });
+        },
+        
+        interceptSubmit: function() {
+            // 拦截grade函数
+            if (typeof window.grade === 'function') {
+                const originalGrade = window.grade;
+                window.grade = () => {
+                    const result = originalGrade();
+                    setTimeout(() => this.handleSubmit(), 200);
+                    return result;
+                };
+            }
+            
+            // 监听提交按钮
+            document.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON' && 
+                    (e.target.textContent.includes('Submit') || 
+                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+                    setTimeout(() => this.handleSubmit(), 300);
+                }
+            });
+        },
+        
+        handleSubmit: function() {
+            const results = {
+                sessionId: this.sessionId,
+                startTime: this.startTime,
+                endTime: Date.now(),
+                duration: Math.round((Date.now() - this.startTime) / 1000),
+                answers: this.answers,
+                scoreInfo: this.extractScore(),
+                pageType: this.detectPageType(),
+                url: window.location.href
+            };
+            
+            this.sendMessage('PRACTICE_COMPLETE', results);
+        },
+        
+        extractScore: function() {
+            const resultsEl = document.getElementById('results');
+            if (!resultsEl) return null;
+            
+            const text = resultsEl.textContent || '';
+            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+            if (scoreMatch) {
+                const correct = parseInt(scoreMatch[1]);
+                const total = parseInt(scoreMatch[2]);
+                return {
+                    correct: correct,
+                    total: total,
+                    accuracy: total > 0 ? correct / total : 0,
+                    percentage: Math.round((correct / total) * 100),
+                    source: 'inline_extraction'
+                };
+            }
+            return null;
+        },
+        
+        sendMessage: function(type, data) {
+            if (this.parentWindow) {
+                this.parentWindow.postMessage({
+                    type: type,
+                    data: data,
+                    source: 'practice_page'
+                }, '*');
+            }
+        }
+    };
+    
+    // 初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            window.practicePageEnhancer.initialize();
+        });
+    } else {
+        window.practicePageEnhancer.initialize();
+    }
+}
+</script>
+
+</body>
+</html>

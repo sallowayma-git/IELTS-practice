@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>P2 – Should space be explored by robots or by humans</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
+  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  .shell { display:flex; height:100vh; width:100%; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  h2,h3,h4 { margin:0 0 10px; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  table { border-collapse: collapse; width:100%; }
+  th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
+  th:first-child, td:first-child { width:92px; }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button:hover { border-color:#fff; }
+  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+  .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:40px; padding:4px 8px; display:inline-flex; align-items:center; justify-content:space-between; gap:8px; width: auto; min-width: 120px; max-width: 200px; vertical-align: middle; }
+  .droplabel { color:#64748b; font-size:14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:flex; flex-wrap:wrap; gap:8px; }
+  .pool-slot { min-height:40px; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); white-space: nowrap; }
+  .card:active { cursor:grabbing; }
+  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
+  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
+  .ghost { opacity: .5; }
+  .over { outline:2px dashed #3b82f6; }
+  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
+  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
+  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+  body { padding-bottom: 82px; }
+  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
+  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
+  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #selbar { z-index: 6000 !important; }
+  .checkbox-group { display:flex; flex-wrap:wrap; gap:10px; margin:8px 0; }
+  .checkbox-group label { display:flex; align-items:center; gap:4px; cursor:pointer; }
+</style>
+</head>
+<body>
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q14-nav" onclick="scrollToElement('q14-anchor')">14</div>
+    <div class="q-item" id="q15-nav" onclick="scrollToElement('q15-anchor')">15</div>
+    <div class="q-item" id="q16-nav" onclick="scrollToElement('q16-anchor')">16</div>
+    <div class="q-item" id="q17-nav" onclick="scrollToElement('q17-anchor')">17</div>
+    <div class="q-item" id="q18-nav" onclick="scrollToElement('q18-anchor')">18</div>
+    <div class="q-item" id="q19-nav" onclick="scrollToElement('q19-anchor')">19</div>
+    <div class="q-item" id="q20-nav" onclick="scrollToElement('q20-anchor')">20</div>
+    <div class="q-item" id="q21-nav" onclick="scrollToElement('q21-anchor')">21</div>
+    <div class="q-item" id="q22-nav" onclick="scrollToElement('q22-anchor')">22</div>
+    <div class="q-item" id="q23-nav" onclick="scrollToElement('q23-anchor')">23</div>
+    <div class="q-item" id="q24-nav" onclick="scrollToElement('q24-anchor')">24</div>
+    <div class="q-item" id="q25-nav" onclick="scrollToElement('q25-anchor')">25</div>
+    <div class="q-item" id="q26-nav" onclick="scrollToElement('q26-anchor')">26</div>
+  </div>
+</div>
+<div class="shell">
+<section class="pane" id="left">
+  <h2>READING PASSAGE 2 <span id="timer">00:00</span></h2>
+  <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>
+  <h3>Should space be explored by robots or by humans?</h3>
+  
+  <h4>Paragraph A</h4>
+  <p>The advisability of humans participating directly in space travel continues to cause many debates. There is no doubt that the presence of people on board a space vehicle makes its design much more complex and challenging, and produces a large increase in costs, since safety requirements are greatly increased, and the performance of the technology providing necessities for human passengers such as oxygen, food and water must be guaranteed. Moreover, the systems required are bulky and costly, and their complexity increases for long-duration missions. Meanwhile, advances in electronics and computer science allow increasingly complex tasks to be entrusted to robots, and unmanned space probes are becoming lighter, smaller and more convenient.</p>
+  
+  <h4>Paragraph B</h4>
+  <p>However, experience has shown that the idea of humans in space is popular with the public. Humans can also be useful; there are many cases when only direct intervention by an astronaut or cosmonaut can correct the malfunction of an automatic device. Astronauts and cosmonauts have proved that they can adapt to conditions of weightlessness and work in space without encountering too many problems, as was seen in the operations to repair and to upgrade the Hubble Space Telescope. One human characteristic which is particularly precious in space missions, and which so far is lacking in robots, is the ability to perform a great variety of tasks. In addition, robots are not good at reacting to situations they have not been specifically prepared for. This is especially important in the case of deep space missions. While in the case of the Moon it is possible for someone on Earth to ‘tele-operate’ a robotic device such as a probe, as the two-way link time is only a couple of seconds, on Mars the two-way link time is several minutes, so sending instructions from Earth is more difficult.</p>
+  
+  <h4>Paragraph C</h4>
+  <p>Many of the promises of artificial intelligence are still far from being fulfilled. The construction of machines simulating human logical reasoning moves towards ever more distant dates. The more the performance of computers improves, the more we realise how difficult it is to build machines which display logical abilities. In the past it was confidently predicted that we would soon have fully automated factories in which all operations were performed without any human intervention, and forecasts of the complete substitution of workers by robots in many production areas were made. Today, these perspectives are being revised. It seems that all machines, even the smartest ones, must cooperate with humans. Rather than replacing humans, the present need appears to be for an intelligent machine capable of helping a human operator without replacing him or her. The word ‘cobot’, from ‘collaborative robot’, has been invented to designate this type of robot.</p>
+  
+  <h4>Paragraph D</h4>
+  <p>A similar trend is also apparent in the field of space exploration. Tasks which were in the past entrusted only to machines are now performed by human beings, sometimes with the aim of using simpler and less costly devices, sometimes to obtain better performance. In many cases, to involve a person in the control loop is a welcome simplification which may lower the cost of a mission without compromising safety. Many operations originally designed to be performed under completely automatic control can be performed more efficiently by astronauts, perhaps helped by their ‘cobots’. The human-machine relationship must evolve towards a closer collaboration.</p>
+  
+  <h4>Paragraph E</h4>
+  <p>One way this could happen is by adopting the Mars Outposts approach, proposed by the Planetary Society. This would involve sending a number of robotic research stations to Mars, equipped with permanent communications and navigational systems. They would perform research, and establish the infrastructure needed to prepare future landing sites for the exploration of Mars by humans. It has also been suggested that in the most difficult environments, as on Venus or Jupiter, robots could be controlled by human beings located in spaceships which remain in orbit around the planet. In this case, the link time for communication between humans and robots would be far less than it would be from Earth.</p>
+  
+  <h4>Paragraph F</h4>
+  <p>But if space is to be more than a place to build automatic laboratories or set up industrial enterprises in the vicinity of our planet, the presence of humans is essential. They must learn how to voyage through space towards destinations which will be not only scientific bases but also places to live. If space is a frontier, that frontier must see the presence of people. So the aim for humankind in the future will be not just the exploration of space, but its colonisation. The result of exploring and living in space may be a deep change in the views which humankind has of itself. And this process is already under way. The images of Earth taken from the Moon in the Apollo programme have given humankind a new consciousness of its fragility, its smallness, and its unity. These impressions have triggered a realisation of the need to protect and preserve it, for it is the place in the solar system most suitable for us and above all it is the only place we have, at least for now.</p>
+  
+  <p>&nbsp;</p> <!-- 空白行防止加载不完全 -->
+  <p>&nbsp;</p> <!-- 额外空白行优化显示 -->
+</section>
+<div id="divider" title="Drag to resize"></div>
+<section class="pane" id="right">
+  <h3>Questions</h3>
+  
+  <!-- Questions 14-19: Heading Matching -->
+  <div class="group">
+    <h4>Questions 14–19</h4>
+    <p>Reading Passage 2 has six paragraphs, A–F.</p>
+    <p>Choose the correct heading for each paragraph from the list of headings below.</p>
+    <p>Write the correct number, i–ix, in boxes 14–19 on your answer sheet.</p>
+    <div class="headings">
+      <p>List of Headings</p>
+      <ol type="i">
+        <li>Robots on Earth – a re-evaluation</li>
+        <li>The barriers to cooperation in space exploration</li>
+        <li>Some limitations of robots in space</li>
+        <li>Reduced expectations for space exploration</li>
+        <li>A general reconsideration of human/robot responsibilities in space</li>
+        <li>Problems in using humans for space exploration</li>
+        <li>The danger to humans of intelligent machines</li>
+        <li>Space settlement and the development of greater self-awareness</li>
+        <li>Possible examples of cooperation in space</li>
+      </ol>
+    </div>
+    <table>
+      <tr>
+        <th>Paragraph</th>
+        <th>i</th>
+        <th>ii</th>
+        <th>iii</th>
+        <th>iv</th>
+        <th>v</th>
+        <th>vi</th>
+        <th>vii</th>
+        <th>viii</th>
+        <th>ix</th>
+      </tr>
+      <a id="q14-anchor"></a>
+      <tr id="q14-row">
+        <td>A (14)</td>
+        <td><label><input name="q14" type="radio" value="i"/></label></td>
+        <td><label><input name="q14" type="radio" value="ii"/></label></td>
+        <td><label><input name="q14" type="radio" value="iii"/></label></td>
+        <td><label><input name="q14" type="radio" value="iv"/></label></td>
+        <td><label><input name="q14" type="radio" value="v"/></label></td>
+        <td><label><input name="q14" type="radio" value="vi"/></label></td>
+        <td><label><input name="q14" type="radio" value="vii"/></label></td>
+        <td><label><input name="q14" type="radio" value="viii"/></label></td>
+        <td><label><input name="q14" type="radio" value="ix"/></label></td>
+      </tr>
+      <a id="q15-anchor"></a>
+      <tr id="q15-row">
+        <td>B (15)</td>
+        <td><label><input name="q15" type="radio" value="i"/></label></td>
+        <td><label><input name="q15" type="radio" value="ii"/></label></td>
+        <td><label><input name="q15" type="radio" value="iii"/></label></td>
+        <td><label><input name="q15" type="radio" value="iv"/></label></td>
+        <td><label><input name="q15" type="radio" value="v"/></label></td>
+        <td><label><input name="q15" type="radio" value="vi"/></label></td>
+        <td><label><input name="q15" type="radio" value="vii"/></label></td>
+        <td><label><input name="q15" type="radio" value="viii"/></label></td>
+        <td><label><input name="q15" type="radio" value="ix"/></label></td>
+      </tr>
+      <a id="q16-anchor"></a>
+      <tr id="q16-row">
+        <td>C (16)</td>
+        <td><label><input name="q16" type="radio" value="i"/></label></td>
+        <td><label><input name="q16" type="radio" value="ii"/></label></td>
+        <td><label><input name="q16" type="radio" value="iii"/></label></td>
+        <td><label><input name="q16" type="radio" value="iv"/></label></td>
+        <td><label><input name="q16" type="radio" value="v"/></label></td>
+        <td><label><input name="q16" type="radio" value="vi"/></label></td>
+        <td><label><input name="q16" type="radio" value="vii"/></label></td>
+        <td><label><input name="q16" type="radio" value="viii"/></label></td>
+        <td><label><input name="q16" type="radio" value="ix"/></label></td>
+      </tr>
+      <a id="q17-anchor"></a>
+      <tr id="q17-row">
+        <td>D (17)</td>
+        <td><label><input name="q17" type="radio" value="i"/></label></td>
+        <td><label><input name="q17" type="radio" value="ii"/></label></td>
+        <td><label><input name="q17" type="radio" value="iii"/></label></td>
+        <td><label><input name="q17" type="radio" value="iv"/></label></td>
+        <td><label><input name="q17" type="radio" value="v"/></label></td>
+        <td><label><input name="q17" type="radio" value="vi"/></label></td>
+        <td><label><input name="q17" type="radio" value="vii"/></label></td>
+        <td><label><input name="q17" type="radio" value="viii"/></label></td>
+        <td><label><input name="q17" type="radio" value="ix"/></label></td>
+      </tr>
+      <a id="q18-anchor"></a>
+      <tr id="q18-row">
+        <td>E (18)</td>
+        <td><label><input name="q18" type="radio" value="i"/></label></td>
+        <td><label><input name="q18" type="radio" value="ii"/></label></td>
+        <td><label><input name="q18" type="radio" value="iii"/></label></td>
+        <td><label><input name="q18" type="radio" value="iv"/></label></td>
+        <td><label><input name="q18" type="radio" value="v"/></label></td>
+        <td><label><input name="q18" type="radio" value="vi"/></label></td>
+        <td><label><input name="q18" type="radio" value="vii"/></label></td>
+        <td><label><input name="q18" type="radio" value="viii"/></label></td>
+        <td><label><input name="q18" type="radio" value="ix"/></label></td>
+      </tr>
+      <a id="q19-anchor"></a>
+      <tr id="q19-row">
+        <td>F (19)</td>
+        <td><label><input name="q19" type="radio" value="i"/></label></td>
+        <td><label><input name="q19" type="radio" value="ii"/></label></td>
+        <td><label><input name="q19" type="radio" value="iii"/></label></td>
+        <td><label><input name="q19" type="radio" value="iv"/></label></td>
+        <td><label><input name="q19" type="radio" value="v"/></label></td>
+        <td><label><input name="q19" type="radio" value="vi"/></label></td>
+        <td><label><input name="q19" type="radio" value="vii"/></label></td>
+        <td><label><input name="q19" type="radio" value="viii"/></label></td>
+        <td><label><input name="q19" type="radio" value="ix"/></label></td>
+      </tr>
+    </table>
+  </div>
+  
+  <!-- Questions 20-21: Multiple Choice (Two Answers) -->
+  <div class="group">
+    <a id="q20-anchor"></a>
+    <a id="q21-anchor"></a>
+    <h4>Questions 20 and 21</h4>
+    <p>Choose TWO letters, A–E.</p>
+    <p>Write the correct letters in boxes 20 and 21 on your answer sheet.</p>
+    <p>According to the writer, which TWO predictions about artificial intelligence have not yet been fulfilled?</p>
+    <div class="checkbox-group">
+      <label><input type="checkbox" name="q20-21" value="A"/> A Robots will work independently of humans.</label>
+      <label><input type="checkbox" name="q20-21" value="B"/> B Robots will begin to oppose human interests.</label>
+      <label><input type="checkbox" name="q20-21" value="C"/> C Robots will be used to help humans perform tasks more efficiently.</label>
+      <label><input type="checkbox" name="q20-21" value="D"/> D Robots will think in the same way as humans.</label>
+      <label><input type="checkbox" name="q20-21" value="E"/> E Robots will become too costly to use on space missions.</label>
+    </div>
+  </div>
+  
+  <!-- Questions 22-26: Summary Completion -->
+  <div class="group">
+    <h4>Questions 22–26</h4>
+    <p>Complete the summary below.</p>
+    <p>Choose ONE WORD ONLY from the passage for each answer.</p>
+    <p>Write your answers in boxes 22–26 on your answer sheet.</p>
+    <p><strong>Humans in space – the Mars Outposts approach and its implications</strong></p>
+    <p>One way of exploring space would be through collaboration between humans and robots. For example, when exploring the planet Mars, robots could be used to set up <a id="q22-anchor"></a><input class="blank" maxlength="40" name="q22" placeholder="22"/> and do initial research before humans arrive. In other cases, humans could stay in orbiting <a id="q23-anchor"></a><input class="blank" maxlength="40" name="q23" placeholder="23"/> and give orders to robots working on the surface of the planet. This would increase the speed of <a id="q24-anchor"></a><input class="blank" maxlength="40" name="q24" placeholder="24"/> with the robots.</p>
+    <p>In such ways, robots might be used to work in space in commercial enterprises or <a id="q25-anchor"></a><input class="blank" maxlength="40" name="q25" placeholder="25"/>. However, the final aim of humankind may be the <a id="q26-anchor"></a><input class="blank" maxlength="40" name="q26" placeholder="26"/> of space, and this could in turn change people’s attitudes towards Earth.</p>
+  </div>
+  
+  <div style="display:flex;gap:8px;margin-bottom:10px;">
+    <button class="primary" onclick="grade()">Submit</button>
+    <button onclick="resetForm()">Reset</button>
+    <button onclick="toggleNotes()">Notes</button>
+  </div>
+  <div id="results"></div>
+  <details class="answerbox" id="answerBox">
+    <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+    <div id="answerContent"></div>
+  </details>
+</section>
+</div>
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+<script>
+// Timer
+let _t=0; const _timerEl=document.getElementById('timer');
+setInterval(function(){ 
+  _t++; 
+  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
+  var s=String(_t%60).padStart(2,'0'); 
+  _timerEl.textContent=m+':'+s; 
+},1000);
+
+// Drag divider
+var divider = document.getElementById('divider');
+var left = document.getElementById('left');
+var right = document.getElementById('right');
+var dragging=false;
+function startDrag(e){ 
+  dragging=true; 
+  document.body.style.cursor='ew-resize'; 
+  if(e.preventDefault) e.preventDefault(); 
+}
+function endDrag(){ 
+  dragging=false; 
+  document.body.style.cursor=''; 
+}
+function onMove(clientX){
+  var container = document.querySelector('.shell').getBoundingClientRect();
+  var x = clientX - container.left;
+  x = Math.max(280, Math.min(container.width-320, x));
+  left.style.flex = '0 0 ' + x + 'px';
+  right.style.flex = '1 1 auto';
+}
+divider.addEventListener('mousedown', function(e){ startDrag(e); });
+window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+window.addEventListener('mouseup', endDrag);
+divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
+window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+window.addEventListener('touchend', endDrag);
+
+// Highlight toolbar
+var selbar = document.getElementById('selbar');
+var btnHL = document.getElementById('btnHL');
+var btnUH = document.getElementById('btnUH');
+var btnNote = document.getElementById('btnNote');
+var lastRange=null;
+var currentHlNode=null;
+var keepToolbar=false;
+function positionSelbarForRect(rect){
+  selbar.style.display='flex';
+  requestAnimationFrame(function(){
+    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+function updateSelbar(){
+  var sel=window.getSelection();
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
+    selbar.style.display='none'; 
+    currentHlNode=null; 
+    return; 
+  }
+  var range = sel.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode=null;
+  positionSelbarForRect(range.getBoundingClientRect());
+}
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', function(){ 
+  var sel=window.getSelection(); 
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
+    if(!keepToolbar && !currentHlNode){ 
+      selbar.style.display='none'; 
+    } 
+  } 
+});
+document.addEventListener('scroll', function(){ 
+  if(selbar.style.display==='flex') updateSelbar(); 
+});
+document.addEventListener('mousedown', function(e){
+  var t = e.target;
+  if(t.classList && t.classList.contains('hl')){
+    keepToolbar = true;
+  } else {
+    keepToolbar = false;
+  }
+}, true);
+document.addEventListener('click', function(e){
+  var target = e.target;
+  if(target.classList && target.classList.contains('hl')){
+    currentHlNode = target;
+    lastRange = null;
+    positionSelbarForRect(target.getBoundingClientRect());
+    var sel=window.getSelection();
+    if(sel) sel.removeAllRanges();
+    setTimeout(function(){ keepToolbar=false; }, 0);
+  }
+}, true);
+function doHighlight(){
+  if(currentHlNode) return;
+  if(!lastRange || lastRange.collapsed) return;
+  var span=document.createElement('span'); span.className='hl';
+  try { lastRange.surroundContents(span); }
+  catch(e){
+    var wrap=document.createElement('span'); wrap.className='hl';
+    wrap.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrap);
+  }
+  selbar.style.display='none';
+  showToast('Highlighted');
+}
+function removeHighlight(){
+  if(currentHlNode){
+    var p = currentHlNode.parentNode;
+    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
+    p.removeChild(currentHlNode); p.normalize();
+    currentHlNode = null;
+    selbar.style.display='none';
+    showToast('Highlight removed');
+    return;
+  }
+  if(!lastRange) return;
+  var selRect = lastRange.getBoundingClientRect();
+  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  var toRemove=[];
+  while(walker.nextNode()){
+    var n=walker.currentNode;
+    if(n.classList && n.classList.contains('hl')) {
+      var r = n.getBoundingClientRect();
+      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+    }
+  }
+  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
+  selbar.style.display='none';
+  showToast('Highlight removed');
+}
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+
+// Notes
+var notes = document.getElementById('notes');
+var noteArea = document.getElementById('noteArea');
+var btnCopy=document.getElementById('btnCopy');
+var btnClose=document.getElementById('btnClose');
+function toggleNotes(){ 
+  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+}
+window.toggleNotes = toggleNotes;
+btnClose.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async function(){ 
+  await navigator.clipboard.writeText(noteArea.value||''); 
+  showToast('Copied'); 
+});
+btnNote.addEventListener('click', function(){
+  var text = '';
+  if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
+  else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
+  toggleNotes();
+  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
+  selbar.style.display='none';
+});
+
+// Toast
+var toastEl=document.getElementById('toast');
+function showToast(msg){
+  toastEl.textContent=msg; 
+  toastEl.style.display='block';
+  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+}
+
+// Answer key and grading
+var answers = {
+  "q14":"vi", "q15":"iii", "q16":"i", "q17":"v", "q18":"ix", "q19":"viii",
+  "q20":"A", "q21":"D",
+  "q22":"infrastructure", "q23":"spaceships", "q24":"communication", "q25":"laboratories", "q26":"colonisation"
+};
+
+function grade(){
+  var total=0, correct=0, lines=[];
+  
+  // 14-19: Heading Matching
+  for(var n=14;n<=19;n++){
+    total++;
+    var sel=document.querySelector('input[name="q'+n+'"]:checked');
+    var userAnswer=sel?sel.value:'';
+    var isCorrect=userAnswer===answers['q'+n];
+    if(isCorrect) correct++;
+    lines.push(`Q${n}: ${userAnswer||'None'} ${isCorrect?'✅':'❌'}`);
+  }
+  
+  // 20-21: Multiple Choice (Two Answers)
+  total+=2;
+  var checkboxes=document.querySelectorAll('input[name="q20-21"]:checked');
+  var userAnswers=Array.from(checkboxes).map(cb=>cb.value);
+  var correctAnswers=[answers.q20, answers.q21];
+  var correctCount=userAnswers.filter(ans=>correctAnswers.includes(ans)).length;
+  correct+=correctCount;
+  lines.push(`Q20-21: Selected [${userAnswers.join(', ')}] | Correct [${correctAnswers.join(', ')}] (${correctCount}/2 correct)`);
+  
+  // 22-26: Summary Completion
+  for(var n=22;n<=26;n++){
+    total++;
+    var el=document.querySelector('input[name="q'+n+'"]');
+    var userAnswer=el?el.value.trim().toLowerCase():'', key=answers['q'+n].toLowerCase();
+    var isCorrect=userAnswer===key;
+    if(isCorrect) correct++;
+    lines.push(`Q${n}: ${userAnswer||'None'} ${isCorrect?'✅':'❌'}`);
+  }
+  
+  // Calculate score and accuracy
+  var accuracy=Math.round(100*correct/total);
+  var resultHtml=`<p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${accuracy}%</span></p>`;
+  resultHtml+=`<pre>${lines.join('\n')}</pre>`;
+  document.getElementById('results').innerHTML=resultHtml;
+  
+  // Show answer key
+  var answerHtml=`<ol>
+    <li>14 → vi (Problems in using humans for space exploration)</li>
+    <li>15 → iii (Some limitations of robots in space)</li>
+    <li>16 → i (Robots on Earth – a re-evaluation)</li>
+    <li>17 → v (A general reconsideration of human/robot responsibilities in space)</li>
+    <li>18 → ix (Possible examples of cooperation in space)</li>
+    <li>19 → viii (Space settlement and the development of greater self-awareness)</li>
+    <li>20 → A (Robots will work independently of humans)</li>
+    <li>21 → D (Robots will think in the same way as humans)</li>
+    <li>22 → infrastructure</li>
+    <li>23 → spaceships</li>
+    <li>24 → communication</li>
+    <li>25 → laboratories</li>
+    <li>26 → colonisation</li>
+  </ol>`;
+  document.getElementById('answerContent').innerHTML=answerHtml;
+  document.querySelector('#answerBox .badge').textContent='tap to hide';
+}
+
+// Reset form
+function resetForm(){
+  // Reset radio buttons (14-19)
+  document.querySelectorAll('input[type="radio"]').forEach(el=>el.checked=false);
+  
+  // Reset checkboxes (20-21)
+  document.querySelectorAll('input[name="q20-21"]').forEach(el=>el.checked=false);
+  
+  // Reset text inputs (22-26)
+  document.querySelectorAll('input.blank').forEach(el=>el.value='');
+  
+  // Reset results and answer box
+  document.getElementById('results').innerHTML='';
+  document.getElementById('answerContent').innerHTML='';
+  document.querySelector('#answerBox .badge').textContent='hidden';
+  
+  // Reset navigation item status
+  document.querySelectorAll('.q-item').forEach(item=>item.classList.remove('answered'));
+}
+
+// Scroll to question
+function scrollToElement(id){
+  var el=document.getElementById(id);
+  if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
+  
+  // Highlight navigation item briefly
+  var navs=document.querySelectorAll('.q-item');
+  navs.forEach(n=>n.classList.remove('active'));
+  var btn=document.getElementById(id.replace('-anchor','-nav'));
+  if(btn){
+    btn.classList.add('active');
+    setTimeout(()=>btn.classList.remove('active'), 800);
+  }
+}
+
+// Mark question as answered on interaction
+(function(){
+  function markAnswered(qn){
+    var nav=document.getElementById(`q${qn}-nav`);
+    if(!nav) return;
+    var answered=false;
+    
+    // Check radio buttons (14-19)
+    if(qn>=14&&qn<=19){
+      var radio=document.querySelector(`input[name="q${qn}"]:checked`);
+      answered=!!radio;
+    }
+    // Check checkboxes (20-21) - mark both as answered when any is checked
+    else if(qn===20||qn===21){
+      var checked=document.querySelectorAll('input[name="q20-21"]:checked').length;
+      answered=checked>0;
+      document.getElementById('q20-nav').classList.toggle('answered', answered);
+      document.getElementById('q21-nav').classList.toggle('answered', answered);
+      return;
+    }
+    // Check text inputs (22-26)
+    else if(qn>=22&&qn<=26){
+      var input=document.querySelector(`input[name="q${qn}"]`);
+      answered=!!(input&&input.value.trim());
+    }
+    
+    nav.classList.toggle('answered', answered);
+  }
+  
+  // Monitor radio buttons (14-19)
+  for(var n=14;n<=19;n++){
+    document.querySelectorAll(`input[name="q${n}"]`).forEach(radio=>{
+      radio.addEventListener('change', ()=>markAnswered(n));
+    });
+  }
+  
+  // Monitor checkboxes (20-21)
+  document.querySelectorAll('input[name="q20-21"]').forEach(checkbox=>{
+    checkbox.addEventListener('change', ()=>{
+      markAnswered(20);
+      markAnswered(21);
+    });
+  });
+  
+  // Monitor text inputs (22-26)
+  for(var n=22;n<=26;n++){
+    document.querySelector(`input[name="q${n}"]`).addEventListener('input', ()=>{
+      markAnswered(n);
+    });
+  }
+})();
+</script>
+
+<script>
+// 检查是否已经有增强脚本
+if (!window.practicePageEnhancer) {
+    // 动态加载增强脚本
+    const script = document.createElement('script');
+    script.src = '../../../js/practice-page-enhancer.js';
+    script.onload = function() {
+        console.log('[PracticePageEnhancer] 外部脚本加载成功');
+        if (window.practicePageEnhancer) {
+            window.practicePageEnhancer.initialize();
+        }
+    };
+    script.onerror = function() {
+        console.log('[PracticePageEnhancer] 外部脚本加载失败，使用内联版本');
+        loadInlineEnhancer();
+    };
+    document.head.appendChild(script);
+    
+    // 超时降级
+    setTimeout(function() {
+        if (!window.practicePageEnhancer) {
+            console.log('[PracticePageEnhancer] 超时降级到内联版本');
+            loadInlineEnhancer();
+        }
+    }, 2000);
+}
+
+// 内联增强器（降级方案）
+function loadInlineEnhancer() {
+    if (window.practicePageEnhancer) return;
+    
+    window.practicePageEnhancer = {
+        initialize: function() {
+            console.log('[InlineEnhancer] 内联增强器已初始化');
+            this.setupCommunication();
+            this.setupAnswerListeners();
+            this.interceptSubmit();
+        },
+        
+        setupCommunication: function() {
+            this.parentWindow = window.opener || window.parent;
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'INIT_SESSION') {
+                    this.sessionId = event.data.data.sessionId;
+                    this.sendMessage('SESSION_READY', {
+                        pageType: this.detectPageType(),
+                        url: window.location.href
+                    });
+                }
+            });
+        },
+        
+        detectPageType: function() {
+            const title = document.title || '';
+            if (title.includes('P1')) return 'P1';
+            if (title.includes('P2')) return 'P2';
+            if (title.includes('P3')) return 'P3';
+            return 'unknown';
+        },
+        
+        setupAnswerListeners: function() {
+            this.answers = {};
+            this.startTime = Date.now();
+            
+            document.addEventListener('change', (e) => {
+                if (e.target.name && e.target.name.startsWith('q')) {
+                    this.answers[e.target.name] = e.target.value;
+                }
+            });
+        },
+        
+        interceptSubmit: function() {
+            // 拦截grade函数
+            if (typeof window.grade === 'function') {
+                const originalGrade = window.grade;
+                window.grade = () => {
+                    const result = originalGrade();
+                    setTimeout(() => this.handleSubmit(), 200);
+                    return result;
+                };
+            }
+            
+            // 监听提交按钮
+            document.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON' && 
+                    (e.target.textContent.includes('Submit') || 
+                     e.target.textContent.includes('提交') ||
+                     e.target.textContent.includes('完成') ||
+                     e.target.textContent.includes('Check') ||
+                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+                    setTimeout(() => this.handleSubmit(), 300);
+                }
+            });
+        },
+        
+        handleSubmit: function() {
+            const results = {
+                sessionId: this.sessionId,
+                startTime: this.startTime,
+                endTime: Date.now(),
+                duration: Math.round((Date.now() - this.startTime) / 1000),
+                answers: this.answers,
+                scoreInfo: this.extractScore(),
+                pageType: this.detectPageType(),
+                url: window.location.href
+            };
+            
+            this.sendMessage('PRACTICE_COMPLETE', results);
+        },
+        
+        extractScore: function() {
+            const resultsEl = document.getElementById('results');
+            if (!resultsEl) return null;
+            
+            const text = resultsEl.textContent || '';
+            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+            if (scoreMatch) {
+                const correct = parseInt(scoreMatch[1]);
+                const total = parseInt(scoreMatch[2]);
+                return {
+                    correct: correct,
+                    total: total,
+                    accuracy: total > 0 ? correct / total : 0,
+                    percentage: Math.round((correct / total) * 100),
+                    source: 'inline_extraction'
+                };
+            }
+            return null;
+        },
+        
+        sendMessage: function(type, data) {
+            if (this.parentWindow) {
+                this.parentWindow.postMessage({
+                    type: type,
+                    data: data,
+                    source: 'practice_page'
+                }, '*');
+            }
+        }
+    };
+    
+    // 初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            window.practicePageEnhancer.initialize();
+        });
+    } else {
+        window.practicePageEnhancer.initialize();
+    }
+}
+</script></body>
+</html>

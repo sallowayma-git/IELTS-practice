@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>How are deserts formed - Reading Passage 2</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
+  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  .shell { display:flex; height:100vh; width:100%; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  h2,h3,h4 { margin:0 0 10px; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  table { border-collapse: collapse; width:100%; }
+  th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
+  th:first-child, td:first-child { width:92px; }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button:hover { border-color:#fff; }
+  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+  body { padding-bottom: 82px; }
+  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
+  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
+  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #selbar { z-index: 6000 !important; }
+</style>
+</head>
+<body>
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q14-nav" onclick="scrollToElement('q14-anchor')">14</div>
+    <div class="q-item" id="q15-nav" onclick="scrollToElement('q15-anchor')">15</div>
+    <div class="q-item" id="q16-nav" onclick="scrollToElement('q16-anchor')">16</div>
+    <div class="q-item" id="q17-nav" onclick="scrollToElement('q17-anchor')">17</div>
+    <div class="q-item" id="q18-nav" onclick="scrollToElement('q18-anchor')">18</div>
+    <div class="q-item" id="q19-nav" onclick="scrollToElement('q19-anchor')">19</div>
+    <div class="q-item" id="q20-nav" onclick="scrollToElement('q20-anchor')">20</div>
+    <div class="q-item" id="q21-nav" onclick="scrollToElement('q21-anchor')">21</div>
+    <div class="q-item" id="q22-nav" onclick="scrollToElement('q22-anchor')">22</div>
+    <div class="q-item" id="q23-nav" onclick="scrollToElement('q23-anchor')">23</div>
+    <div class="q-item" id="q24-nav" onclick="scrollToElement('q24-anchor')">24</div>
+    <div class="q-item" id="q25-nav" onclick="scrollToElement('q25-anchor')">25</div>
+    <div class="q-item" id="q26-nav" onclick="scrollToElement('q26-anchor')">26</div>
+  </div>
+</div>
+<div class="shell">
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 2 <span id="timer">00:00</span></h2>
+    <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>
+    <h3>How are deserts formed</h3>
+    
+    <h4>Section A</h4>
+    <p>A desert refers to a barren section of land, mainly in arid and semi-arid areas, where there is almost no precipitation and the environment is hostile for any creature to inhabit. Deserts have been classified in a number of ways, generally combining total precipitation, how many days the rainfall occurs, temperature, humidity, and sometimes additional factors. In some places, deserts have clear boundaries marked by rivers, mountains or other landforms, while in other places there are no clear-cut borders between deserts and other landscape features.</p>
+    
+    <h4>Section B</h4>
+    <p>In arid areas where there is no covering of vegetation to protect the land, sand and dust storms frequently take place. This phenomenon often occurs along the desert margins rather than within the deserts, where there is already no finer material left. When a steady wind starts to blow, fine particles on the open ground begin vibrating. As the wind picks up, some of the particles are lifted into the air. When they fall onto the ground, they hit other particles, which are then jerked into the air in their turn, initiating a chain reaction.</p>
+    
+    <h4>Section C</h4>
+    <p>There has been a great deal of publicity about how severe desertification can be, but the academic circle has never agreed on its causes. A common misunderstanding is that a shortage of precipitation causes desertification-yet land in some barren areas will soon recover after rain falls. In fact, more often than not, human activities are responsible. It is widely accepted that the explosion in world population, especially in developing countries, is the primary cause of soil degradation and desertification. As populations become denser, the cultivation of crops has expanded into progressively drier areas. These regions are especially likely to go through periods of severe drought, which explains why crop failures are common. The raising of most crops requires the natural vegetation cover to be removed first; when crop failures occur, extensive tracts of land are left devoid of plant cover and thus susceptible to wind and water erosion. Throughout the 1990s, dry-land areas experienced a population growth of 18.5 per cent, mostly in severely impoverished developing countries.</p>
+    
+    <h4>Section D</h4>
+    <p>Livestock farming in semi-arid areas accelerates soil erosion and becomes one of the reasons for advancing desertification. In such areas, where the vegetation is dominated by grasses, the breeding of livestock is a major economic activity. Grasses are necessary for anchoring barren topsoil in a dry-land area. When a specific field is used to graze an excessive herd, it loses vegetation cover, and the soil is trampled as well as pulverised, leaving the topsoil exposed to destructive forces such as wind and unexpected thunderstorms. For centuries, nomads have grazed their flocks and herds wherever pasture could be found, and oases have offered opportunities for a more settled way of living. For some nomads, wherever they move, the desert follows.</p>
+    
+    <h4>Section E</h4>
+    <p>Trees are of great importance when it comes to maintaining topsoil and slowing down wind speed. In many Asian countries, firewood is the chief fuel used for cooking and heating, which has caused uncontrolled clear-cutting of forests in dry-land ecosystems. When too many trees are cut down, windstorms and dust storms tend to occur.</p>
+    
+    <h4>Section F</h4>
+    <p>What is worse, political conflicts and wars can also contribute to desertification. To escape invading enemies, refugees often move into some of the most vulnerable ecosystems on the planet. They bring along their traditional cultivation practices, which may not be suitable for their new settlements.</p>
+    
+    <h4>Section G</h4>
+    <p>In the 20th century, one state in the United States had a large section of farmland that turned into desert. Since then, measures have been enforced so that such a phenomenon will not happen again. To avoid the recurrence of desertification, people must find livelihoods that do not rely on traditional land uses, are less demanding on local natural resources, yet can still generate viable income. Such livelihoods include, but are not limited to, dry-land aquaculture for the raising of fish, crustaceans and industrial compounds derived from micro-algae, greenhouse agriculture, and activities related to tourism. Another way to prevent desertification is to create economic prospects in the city centres of dry-lands and in areas outside them. Changing the wider economic and institutional structures so that people have new ways to support themselves would help alleviate the pressures that drive desertification.</p>
+    
+    <h4>Section H</h4>
+    <p>In today’s society, new technologies are being used to address the problems brought about by desertification. Satellites, for example, have been utilised to investigate the influence that people and livestock have on our planet. However, this does not mean that alternative technologies are not needed to help tackle the processes of desertification.</p>
+    
+    <p>&nbsp;</p>
+    <p>&nbsp;</p>
+  </section>
+  <div id="divider" title="Drag to resize"></div>
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <h4>Questions 14–20</h4>
+      <p>Reading Passage 2 has eight paragraphs, A–H.</p>
+      <p>Which paragraph contains the following information?</p>
+      <p>Write the correct letter, A–H, in boxes 14–20 on your answer sheet.</p>
+      <p>NB You may use any letter more than once.</p>
+      
+      <a id="q14-anchor"></a>
+      <div id="q14-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>14 a reference to the irregular movement of particles</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q14" type="radio" value="A"> A</label>
+          <label style="margin:0;"><input name="q14" type="radio" value="B"> B</label>
+          <label style="margin:0;"><input name="q14" type="radio" value="C"> C</label>
+          <label style="margin:0;"><input name="q14" type="radio" value="D"> D</label>
+          <label style="margin:0;"><input name="q14" type="radio" value="E"> E</label>
+          <label style="margin:0;"><input name="q14" type="radio" value="F"> F</label>
+          <label style="margin:0;"><input name="q14" type="radio" value="G"> G</label>
+          <label style="margin:0;"><input name="q14" type="radio" value="H"> H</label>
+        </div>
+      </div>
+      
+      <a id="q15-anchor"></a>
+      <div id="q15-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>15 mention of productive land turning into desert in the 20th century</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q15" type="radio" value="A"> A</label>
+          <label style="margin:0;"><input name="q15" type="radio" value="B"> B</label>
+          <label style="margin:0;"><input name="q15" type="radio" value="C"> C</label>
+          <label style="margin:0;"><input name="q15" type="radio" value="D"> D</label>
+          <label style="margin:0;"><input name="q15" type="radio" value="E"> E</label>
+          <label style="margin:0;"><input name="q15" type="radio" value="F"> F</label>
+          <label style="margin:0;"><input name="q15" type="radio" value="G"> G</label>
+          <label style="margin:0;"><input name="q15" type="radio" value="H"> H</label>
+        </div>
+      </div>
+      
+      <a id="q16-anchor"></a>
+      <div id="q16-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>16 types of deserts</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q16" type="radio" value="A"> A</label>
+          <label style="margin:0;"><input name="q16" type="radio" value="B"> B</label>
+          <label style="margin:0;"><input name="q16" type="radio" value="C"> C</label>
+          <label style="margin:0;"><input name="q16" type="radio" value="D"> D</label>
+          <label style="margin:0;"><input name="q16" type="radio" value="E"> E</label>
+          <label style="margin:0;"><input name="q16" type="radio" value="F"> F</label>
+          <label style="margin:0;"><input name="q16" type="radio" value="G"> G</label>
+          <label style="margin:0;"><input name="q16" type="radio" value="H"> H</label>
+        </div>
+      </div>
+      
+      <a id="q17-anchor"></a>
+      <div id="q17-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>17 mention of technical methods used to tackle the problems of deserts</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q17" type="radio" value="A"> A</label>
+          <label style="margin:0;"><input name="q17" type="radio" value="B"> B</label>
+          <label style="margin:0;"><input name="q17" type="radio" value="C"> C</label>
+          <label style="margin:0;"><input name="q17" type="radio" value="D"> D</label>
+          <label style="margin:0;"><input name="q17" type="radio" value="E"> E</label>
+          <label style="margin:0;"><input name="q17" type="radio" value="F"> F</label>
+          <label style="margin:0;"><input name="q17" type="radio" value="G"> G</label>
+          <label style="margin:0;"><input name="q17" type="radio" value="H"> H</label>
+        </div>
+      </div>
+      
+      <a id="q18-anchor"></a>
+      <div id="q18-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>18 the influence of migration on desertification</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q18" type="radio" value="A"> A</label>
+          <label style="margin:0;"><input name="q18" type="radio" value="B"> B</label>
+          <label style="margin:0;"><input name="q18" type="radio" value="C"> C</label>
+          <label style="margin:0;"><input name="q18" type="radio" value="D"> D</label>
+          <label style="margin:0;"><input name="q18" type="radio" value="E"> E</label>
+          <label style="margin:0;"><input name="q18" type="radio" value="F"> F</label>
+          <label style="margin:0;"><input name="q18" type="radio" value="G"> G</label>
+          <label style="margin:0;"><input name="q18" type="radio" value="H"> H</label>
+        </div>
+      </div>
+      
+      <a id="q19-anchor"></a>
+      <div id="q19-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>19 lack of agreement among scientists about the causes of desertification</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q19" type="radio" value="A"> A</label>
+          <label style="margin:0;"><input name="q19" type="radio" value="B"> B</label>
+          <label style="margin:0;"><input name="q19" type="radio" value="C"> C</label>
+          <label style="margin:0;"><input name="q19" type="radio" value="D"> D</label>
+          <label style="margin:0;"><input name="q19" type="radio" value="E"> E</label>
+          <label style="margin:0;"><input name="q19" type="radio" value="F"> F</label>
+          <label style="margin:0;"><input name="q19" type="radio" value="G"> G</label>
+          <label style="margin:0;"><input name="q19" type="radio" value="H"> H</label>
+        </div>
+      </div>
+      
+      <a id="q20-anchor"></a>
+      <div id="q20-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>20 a description of the harmful effects of farming practices</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q20" type="radio" value="A"> A</label>
+          <label style="margin:0;"><input name="q20" type="radio" value="B"> B</label>
+          <label style="margin:0;"><input name="q20" type="radio" value="C"> C</label>
+          <label style="margin:0;"><input name="q20" type="radio" value="D"> D</label>
+          <label style="margin:0;"><input name="q20" type="radio" value="E"> E</label>
+          <label style="margin:0;"><input name="q20" type="radio" value="F"> F</label>
+          <label style="margin:0;"><input name="q20" type="radio" value="G"> G</label>
+          <label style="margin:0;"><input name="q20" type="radio" value="H"> H</label>
+        </div>
+      </div>
+    </div>
+    
+    <div class="group">
+      <h4>Questions 21–26</h4>
+      <p>Do the following statements agree with the information given in Reading Passage 2?</p>
+      <p>In boxes 21–26 on your answer sheet, write</p>
+      <ul>
+        <li>TRUE if the statement agrees with the information</li>
+        <li>FALSE if the statement contradicts the information</li>
+        <li>NOT GIVEN if there is no information on this</li>
+      </ul>
+      
+      <a id="q21-anchor"></a>
+      <div id="q21-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>21 It is difficult to ascertain where deserts end in some areas.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q21" type="radio" value="TRUE"> TRUE</label>
+          <label style="margin:0;"><input name="q21" type="radio" value="FALSE"> FALSE</label>
+          <label style="margin:0;"><input name="q21" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q22-anchor"></a>
+      <div id="q22-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>22 The media is uninterested in the problems of desertification.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q22" type="radio" value="TRUE"> TRUE</label>
+          <label style="margin:0;"><input name="q22" type="radio" value="FALSE"> FALSE</label>
+          <label style="margin:0;"><input name="q22" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q23-anchor"></a>
+      <div id="q23-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>23 The most common cause of desertification is a lack of rainfall.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q23" type="radio" value="TRUE"> TRUE</label>
+          <label style="margin:0;"><input name="q23" type="radio" value="FALSE"> FALSE</label>
+          <label style="margin:0;"><input name="q23" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q24-anchor"></a>
+      <div id="q24-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>24 Farming animals in semi-arid areas will increase soil erosion.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q24" type="radio" value="TRUE"> TRUE</label>
+          <label style="margin:0;"><input name="q24" type="radio" value="FALSE"> FALSE</label>
+          <label style="margin:0;"><input name="q24" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q25-anchor"></a>
+      <div id="q25-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>25 People in Asian countries no longer use firewood as their chief fuel.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q25" type="radio" value="TRUE"> TRUE</label>
+          <label style="margin:0;"><input name="q25" type="radio" value="FALSE"> FALSE</label>
+          <label style="margin:0;"><input name="q25" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q26-anchor"></a>
+      <div id="q26-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>26 Technology for studying the relationship between people, livestock and desertification has not yet been invented.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q26" type="radio" value="TRUE"> TRUE</label>
+          <label style="margin:0;"><input name="q26" type="radio" value="FALSE"> FALSE</label>
+          <label style="margin:0;"><input name="q26" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+    </div>
+    
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
+</div>
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+<script>
+// Timer functionality
+let _t=0; const _timerEl=document.getElementById('timer');
+setInterval(function(){ 
+  _t++; 
+  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
+  var s=String(_t%60).padStart(2,'0'); 
+  _timerEl.textContent=m+':'+s; 
+},1000);
+
+// Divider drag functionality
+var divider = document.getElementById('divider');
+var left = document.getElementById('left');
+var right = document.getElementById('right');
+var dragging=false;
+function startDrag(e){ 
+  dragging=true; 
+  document.body.style.cursor='ew-resize'; 
+  if(e.preventDefault) e.preventDefault(); 
+}
+function endDrag(){ 
+  dragging=false; 
+  document.body.style.cursor=''; 
+}
+function onMove(clientX){
+  var container = document.querySelector('.shell').getBoundingClientRect();
+  var x = clientX - container.left;
+  x = Math.max(280, Math.min(container.width-320, x));
+  left.style.flex = '0 0 ' + x + 'px';
+  right.style.flex = '1 1 auto';
+}
+divider.addEventListener('mousedown', function(e){ startDrag(e); });
+window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+window.addEventListener('mouseup', endDrag);
+divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
+window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+window.addEventListener('touchend', endDrag);
+
+// Highlight functionality
+var selbar = document.getElementById('selbar');
+var btnHL = document.getElementById('btnHL');
+var btnUH = document.getElementById('btnUH');
+var btnNote = document.getElementById('btnNote');
+var lastRange=null;
+var currentHlNode=null;
+var keepToolbar=false;
+
+function positionSelbarForRect(rect){
+  selbar.style.display='flex';
+  requestAnimationFrame(function(){
+    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+
+function updateSelbar(){
+  var sel=window.getSelection();
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
+    selbar.style.display='none'; 
+    currentHlNode=null; 
+    return; 
+  }
+  var range = sel.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode=null;
+  positionSelbarForRect(range.getBoundingClientRect());
+}
+
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', function(){ 
+  var sel=window.getSelection(); 
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
+    if(!keepToolbar && !currentHlNode){ 
+      selbar.style.display='none'; 
+    } 
+  } 
+});
+document.addEventListener('scroll', function(){ 
+  if(selbar.style.display==='flex') updateSelbar(); 
+});
+
+document.addEventListener('mousedown', function(e){
+  var t = e.target;
+  if(t.classList && t.classList.contains('hl')){
+    keepToolbar = true;
+  } else {
+    keepToolbar = false;
+  }
+}, true);
+
+document.addEventListener('click', function(e){
+  var target = e.target;
+  if(target.classList && target.classList.contains('hl')){
+    currentHlNode = target;
+    lastRange = null;
+    positionSelbarForRect(target.getBoundingClientRect());
+    var sel=window.getSelection();
+    if(sel) sel.removeAllRanges();
+    setTimeout(function(){ keepToolbar=false; }, 0);
+  }
+}, true);
+
+function doHighlight(){
+  if(currentHlNode) return;
+  if(!lastRange || lastRange.collapsed) return;
+  
+  const startNode = lastRange.startContainer;
+  const endNode = lastRange.endContainer;
+  
+  if (startNode === endNode) {
+    try {
+      const span = document.createElement('span');
+      span.className = 'hl';
+      lastRange.surroundContents(span);
+      selbar.style.display = 'none';
+      showToast('Highlighted');
+      return;
+    } catch (e) {}
+  }
+  
+  const fragment = lastRange.cloneContents();
+  const div = document.createElement('div');
+  div.appendChild(fragment);
+  
+  function processNode(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      if (node.textContent.trim().length > 0) {
+        const span = document.createElement('span');
+        span.className = 'hl';
+        span.textContent = node.textContent;
+        return span;
+      }
+      return node;
+    }
+    
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const isBlock = window.getComputedStyle(node).display.includes('block') || 
+                     ['P', 'H1', 'H2', 'H3', 'H4', 'DIV'].includes(node.tagName);
+      
+      const wrapper = isBlock ? document.createElement(node.tagName.toLowerCase()) : document.createElement('span');
+      wrapper.className = isBlock ? node.className + ' hl' : 'hl';
+      
+      Array.from(node.attributes).forEach(attr => {
+        wrapper.setAttribute(attr.name, attr.value);
+      });
+      
+      while (node.firstChild) {
+        const processedChild = processNode(node.firstChild);
+        wrapper.appendChild(processedChild);
+      }
+      
+      return wrapper;
+    }
+    
+    return node;
+  }
+  
+  const highlightedContent = processNode(div);
+  lastRange.deleteContents();
+  lastRange.insertNode(highlightedContent);
+  
+  selbar.style.display = 'none';
+  showToast('Highlighted');
+}
+
+function removeHighlight(){
+  if(currentHlNode){
+    const parent = currentHlNode.parentNode;
+    while(currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize();
+    currentHlNode = null;
+    selbar.style.display='none';
+    showToast('Highlight removed');
+    return;
+  }
+  
+  if(!lastRange) return;
+  
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  
+  while(walker.nextNode()){
+    const node = walker.currentNode;
+    if(node.classList && node.classList.contains('hl')) {
+      const rect = node.getBoundingClientRect();
+      if(!(rect.right < selRect.left || rect.left > selRect.right || 
+          rect.bottom < selRect.top || rect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
+    }
+  }
+  
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while(el.firstChild) {
+      parent.insertBefore(el.firstChild, el);
+    }
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  
+  selbar.style.display='none';
+  showToast('Highlight removed');
+}
+
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+
+// Notes functionality
+var notes = document.getElementById('notes');
+var noteArea = document.getElementById('noteArea');
+var btnCopy=document.getElementById('btnCopy');
+var btnClose=document.getElementById('btnClose');
+
+function toggleNotes(){ 
+  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+}
+window.toggleNotes = toggleNotes;
+
+btnClose.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async function(){ 
+  await navigator.clipboard.writeText(noteArea.value||''); 
+  showToast('Copied'); 
+});
+
+btnNote.addEventListener('click', function(){
+  var text = '';
+  if(currentHlNode){ 
+    text = (currentHlNode.textContent||'').trim(); 
+  } else if(lastRange){ 
+    var frag = lastRange.cloneContents(); 
+    text = (frag.textContent||'').trim(); 
+  }
+  toggleNotes();
+  if(text) {
+    noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
+  }
+  selbar.style.display='none';
+});
+
+// Toast notifications
+var toastEl=document.getElementById('toast');
+function showToast(msg){
+  toastEl.textContent=msg; 
+  toastEl.style.display='block';
+  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+}
+
+// Answer key and grading
+var answers = {
+  "q14":"B", "q15":"G", "q16":"A", "q17":"H", "q18":"F", "q19":"C", "q20":"D",
+  "q21":"TRUE", "q22":"FALSE", "q23":"FALSE", "q24":"TRUE", "q25":"FALSE", "q26":"FALSE"
+};
+
+function grade(){
+  var total=0, correct=0, lines=[];
+  
+  for(let n=14; n<=26; n++){
+    const q = `q${n}`;
+    total++;
+    const selected = document.querySelector(`input[name="${q}"]:checked`);
+    const userAnswer = selected ? selected.value : '';
+    const isCorrect = userAnswer === answers[q];
+    if (isCorrect) correct++;
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✓' : '✗'}`);
+  }
+  
+  const acc = Math.round(100 * correct / total);
+  document.getElementById('results').innerHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p>
+    <pre>${lines.join('\n')}</pre>
+  `;
+  
+  document.getElementById('answerContent').innerHTML = `
+    <ol>
+      <li>14 → B</li>
+      <li>15 → G</li>
+      <li>16 → A</li>
+      <li>17 → H</li>
+      <li>18 → F</li>
+      <li>19 → C</li>
+      <li>20 → D</li>
+      <li>21 → TRUE</li>
+      <li>22 → FALSE</li>
+      <li>23 → FALSE</li>
+      <li>24 → TRUE</li>
+      <li>25 → FALSE</li>
+      <li>26 → FALSE</li>
+    </ol>
+  `;
+  document.querySelector('#answerBox .badge').textContent = 'tap to view';
+}
+
+function resetForm(){
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  document.getElementById('results').innerHTML = '';
+  document.getElementById('answerContent').innerHTML = '';
+  document.querySelector('#answerBox .badge').textContent = 'hidden';
+  
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+}
+
+function scrollToElement(id){
+  const el = document.getElementById(id);
+  if(el){ 
+    el.scrollIntoView({behavior:'smooth', block:'center'}); 
+  }
+  const navs = document.querySelectorAll('.practice-nav .q-item');
+  navs.forEach(n => n.classList.remove('active'));
+  const btn = document.getElementById(id.replace('-anchor','-nav'));
+  if(btn){ 
+    btn.classList.add('active'); 
+    setTimeout(() => btn.classList.remove('active'), 800); 
+  }
+}
+
+(function(){
+  function markAnswered(qn){
+    const nav = document.getElementById(`q${qn}-nav`);
+    if(!nav) return;
+    const radios = document.querySelectorAll(`input[name="q${qn}"]:checked`);
+    const answered = radios.length > 0;
+    
+    if(answered) nav.classList.add('answered');
+    else nav.classList.remove('answered');
+  }
+  
+  for(let n=14; n<=26; n++){
+    document.querySelectorAll(`input[name="q${n}"]`).forEach(radio => {
+      radio.addEventListener('change', () => markAnswered(n));
+    });
+  }
+})();
+</script>
+
+<!-- 练习页面数据传输增强脚本 -->
+<script>
+// 检查是否已经有增强脚本
+if (!window.practicePageEnhancer) {
+    // 动态加载增强脚本
+    const script = document.createElement('script');
+    script.src = '../../js/practice-page-enhancer.js';
+    script.onload = function() {
+        console.log('练习页面增强脚本已加载');
+    };
+    script.onerror = function() {
+        console.error('练习页面增强脚本加载失败');
+        // 降级到内联增强
+        loadInlineEnhancer();
+    };
+    document.head.appendChild(script);
+}
+
+// 内联增强器（降级方案）
+function loadInlineEnhancer() {
+    if (window.practicePageEnhancer) return;
+    
+    window.practicePageEnhancer = {
+        initialize: function() {
+            console.log('[InlineEnhancer] 内联增强器已初始化');
+            this.setupCommunication();
+            this.setupAnswerListeners();
+            this.interceptSubmit();
+        },
+        
+        setupCommunication: function() {
+            this.parentWindow = window.opener || window.parent;
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'INIT_SESSION') {
+                    this.sessionId = event.data.data.sessionId;
+                    this.sendMessage('SESSION_READY', {
+                        pageType: this.detectPageType(),
+                        url: window.location.href
+                    });
+                }
+            });
+        },
+        
+        detectPageType: function() {
+            const title = document.title || '';
+            if (title.includes('P1')) return 'P1';
+            if (title.includes('P2')) return 'P2';
+            if (title.includes('P3')) return 'P3';
+            return 'unknown';
+        },
+        
+        setupAnswerListeners: function() {
+            this.answers = {};
+            this.startTime = Date.now();
+            
+            document.addEventListener('change', (e) => {
+                if (e.target.name && e.target.name.startsWith('q')) {
+                    this.answers[e.target.name] = e.target.value;
+                }
+            });
+        },
+        
+        interceptSubmit: function() {
+            // 拦截grade函数
+            if (typeof window.grade === 'function') {
+                const originalGrade = window.grade;
+                window.grade = () => {
+                    const result = originalGrade();
+                    setTimeout(() => this.handleSubmit(), 200);
+                    return result;
+                };
+            }
+            
+            // 监听提交按钮
+            document.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON' && 
+                    (e.target.textContent.includes('Submit') || 
+                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+                    setTimeout(() => this.handleSubmit(), 300);
+                }
+            });
+        },
+        
+        handleSubmit: function() {
+            const results = {
+                sessionId: this.sessionId,
+                startTime: this.startTime,
+                endTime: Date.now(),
+                duration: Math.round((Date.now() - this.startTime) / 1000),
+                answers: this.answers,
+                scoreInfo: this.extractScore(),
+                pageType: this.detectPageType(),
+                url: window.location.href
+            };
+            
+            this.sendMessage('PRACTICE_COMPLETE', results);
+        },
+        
+        extractScore: function() {
+            const resultsEl = document.getElementById('results');
+            if (!resultsEl) return null;
+            
+            const text = resultsEl.textContent || '';
+            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+            if (scoreMatch) {
+                const correct = parseInt(scoreMatch[1]);
+                const total = parseInt(scoreMatch[2]);
+                return {
+                    correct: correct,
+                    total: total,
+                    accuracy: total > 0 ? correct / total : 0,
+                    percentage: Math.round((correct / total) * 100),
+                    source: 'inline_extraction'
+                };
+            }
+            return null;
+        },
+        
+        sendMessage: function(type, data) {
+            if (this.parentWindow) {
+                this.parentWindow.postMessage({
+                    type: type,
+                    data: data,
+                    source: 'practice_page'
+                }, '*');
+            }
+        }
+    };
+    
+    // 初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            window.practicePageEnhancer.initialize();
+        });
+    } else {
+        window.practicePageEnhancer.initialize();
+    }
+}
+</script>
+
+</body>
+</html>

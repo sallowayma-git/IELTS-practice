@@ -1,0 +1,1111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Images and Places</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
+  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  .shell { display:flex; height:100vh; width:100%; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  h2,h3,h4 { margin:0 0 10px; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  table { border-collapse: collapse; width:100%; }
+  th, td { border:1px solid var(--line); padding:6px; text-align:left; font-size:14px; }
+  th:first-child, td:first-child { width:auto; }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button:hover { border-color:#fff; }
+  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+  .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:40px; padding:4px 8px; display:inline-flex; align-items:center; justify-content:space-between; gap:8px; width: auto; min-width: 120px; max-width: 200px; vertical-align: middle; }
+  .droplabel { color:#64748b; font-size:14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:flex; flex-wrap:wrap; gap:8px; }
+  .pool-slot { min-height:40px; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); white-space: nowrap; }
+  .card:active { cursor:grabbing; }
+  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
+  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
+  .ghost { opacity: .5; }
+  .over { outline:2px dashed #3b82f6; }
+  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
+  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
+  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+  body { padding-bottom: 82px; }
+  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
+  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
+  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #selbar { z-index: 6000 !important; }
+  input[type="text"] {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 14px;
+    min-width: 120px;
+  }
+</style>
+</head>
+<body>
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q27-nav" onclick="scrollToElement('q27-anchor')">27</div>
+    <div class="q-item" id="q28-nav" onclick="scrollToElement('q28-anchor')">28</div>
+    <div class="q-item" id="q29-nav" onclick="scrollToElement('q29-anchor')">29</div>
+    <div class="q-item" id="q30-nav" onclick="scrollToElement('q30-anchor')">30</div>
+    <div class="q-item" id="q31-nav" onclick="scrollToElement('q31-anchor')">31</div>
+    <div class="q-item" id="q32-nav" onclick="scrollToElement('q32-anchor')">32</div>
+    <div class="q-item" id="q33-nav" onclick="scrollToElement('q33-anchor')">33</div>
+    <div class="q-item" id="q34-nav" onclick="scrollToElement('q34-anchor')">34</div>
+    <div class="q-item" id="q35-nav" onclick="scrollToElement('q35-anchor')">35</div>
+    <div class="q-item" id="q36-nav" onclick="scrollToElement('q36-anchor')">36</div>
+    <div class="q-item" id="q37-nav" onclick="scrollToElement('q37-anchor')">37</div>
+    <div class="q-item" id="q38-nav" onclick="scrollToElement('q38-anchor')">38</div>
+    <div class="q-item" id="q39-nav" onclick="scrollToElement('q39-anchor')">39</div>
+    <div class="q-item" id="q40-nav" onclick="scrollToElement('q40-anchor')">40</div>
+  </div>
+</div>
+<div class="shell">
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 3 <span id="timer">00:00</span></h2>
+    <p>You should spend about 20 minutes on Questions 27–40, which are based on Reading Passage 3 on the following pages.</p>
+    <h3>Images and Places</h3>
+    <p>A new research method uses photography to try to explain why people form an attachment to certain places</p>
+
+    <p>A Human beings naturally become attached to places they visit or inhabit and these emotional attachments have become increasingly important in research on recreation sites and activities. Research into this phenomenon is called 'sense-of-place research'. This research has employed a variety of approaches to gauge people's feelings toward a place, including surveys and personal interviews, but so far has not used photo-based methods. However, Visitor Employed Photography (VEP), used to capture visitor perceptions of landscape and recreational quality, represents a potential innovation in sense-of-place research.</p>
+
+    <p>B A 'place' is a setting that we give meaning to based on the personal experiences, relationships and feelings we associate with it. A crucial distinction that needs to be made is between the more subjective concept of attachment and the symbolic 'meanings' or labels we use to describe the type of place a setting represents. Is, for example, a multiple-use forest area a wilderness? A playground? A workplace? Symbolic meanings are important in that they form the basis of our attachment to a place: we attribute meaning to our settings, and in turn become attached to the meanings (Stedman, 2003).</p>
+
+    <p>All settings can have multiple meanings depending on how we encounter them. Some researchers suggest that, because meaning emerges through individual experience, for example 'my camping trip', place meanings are completely individualistic: a given setting such as a park will contain as many different meanings as there are people using the setting (Meinig, 1979). Others, however, (e.g. Greider & Garkovich, 1994) assert that meanings are based on social categories and therefore are shared by others within these categories. For example, farmers share certain meanings for a plot of land that are distinct from those of real-estate developers or hunters.</p>
+
+    <p>C Clearly, place attachment is built through familiarity with a place over a period of months or even years. Relph (1976) describes sense-of-place attachment as the steady accumulation of events within a setting; this creates 'home places'. According to this view, those who have participated fully in the life of the home or community, or have accumulated a series of everyday events in a setting, will have the strongest attachment to it. Extended residence in a place tends to make us feel toward it almost as a living thing, affecting our emotions in the same way as a family would (Ryden, 1993). However, Tuan (1977) notes that a sense of place may also develop quite rapidly in 'chosen places', where dramatic landscapes and intense experiences can lead to an immediate attachment.</p>
+
+    <p>Indeed, many settings, especially those that attract visitors, may simultaneously exist as home places and chosen places.</p>
+
+    <p>D Clearly we are dealing with a complex phenomenon and photo-based research methods may help us to understand it better. In VEP, tourists are asked to take photographs. This technique has primarily been used to assess the perceptions of visitors to parks and recreation places. Haywood (1990) describes several benefits of VEP. Photography is an enjoyable, familiar activity to tourists which helps to sharpen observation and identify specific locations that are important. It can give clearer ideas on elements that are liked or disliked and also facilitates comparisons between places.</p>
+
+    <p>E However, several methodological issues need to be taken into account. First, who should take the photographs? VEP research typically involves visitors or tourists but, when applied to questions of attachment to a community, this approach has potential pitfalls. Chenoweth (1984) notes that research subjects may take photos that represent only a part of their entire recreational experience. This tendency probably relates to unfamiliarity with the setting. For example, when researchers assign the task of photographing a travel route with which respondents are not familiar, participants may save too many pictures and then use them all up at the end of their visit, even if there is no suitable material.</p>
+
+    <p>Markwell (1997) noted an opposite tendency in his study of pictures taken on a nature tour: beginnings of excursions were over-represented, due perhaps to the initial novelty of the trip. Furthermore, Haywood (1990) suggests that compressing the photo-taking period into a single day (as he did in his work) may result in an over-representation of tourist icons rather than ordinary places.</p>
+
+    <p>In contrast, Yamashita (2002), when focusing on local residents' perceptions of the qualities of the water around them, noted that residents may have more difficulty expressing visual appeal than visitors, precisely because they are insiders and less conscious of aesthetic qualities. When addressing complex attachment to landscape, we would expect, however, that familiarity ought to increase the validity of the items selected to represent sources of attachment.</p>
+
+    <p>We also expect that photographs taken by local residents will represent a wider range of phenomena than pictures taken by transient visitors.</p>
+
+    <p>F But how should the photographs be interpreted? Goin (2001) notes that with every photo taken 'a fiction is created but presents to the uninformed an overwhelming conviction of fact' (p. 363). By implication, what photos appear to be and what they really represent may be very different things, and some follow-up helps to uncover the intended meanings of the participant. Yamashita (2002) notes the utility of asking respondents to provide descriptions of each photo in a notebook or diary. These elaborations are helpful, but in cases of complex phenomena, an interview may help participants clarify their intentions (Markwell, 1997).</p>
+    
+  </section>
+  <div id="divider" title="Drag to resize"></div>
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <h4>Questions 27-32</h4>
+      <p>Reading Passage 3 has six sections, A-F.</p>
+      <p>Choose the correct heading for each section from the list of headings below.</p>
+      <p>Write the correct number, i-viii, in boxes 27-32 on your answer sheet.</p>
+      
+      <a id="q27-anchor"></a>
+      <div style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>27 Section A</p>
+        <div class="dropzone" data-target="q27"><span class="droplabel">Drag answer here</span></div>
+      </div>
+      <a id="q28-anchor"></a>
+      <div style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>28 Section B</p>
+        <div class="dropzone" data-target="q28"><span class="droplabel">Drag answer here</span></div>
+      </div>
+      <a id="q29-anchor"></a>
+      <div style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>29 Section C</p>
+        <div class="dropzone" data-target="q29"><span class="droplabel">Drag answer here</span></div>
+      </div>
+      <a id="q30-anchor"></a>
+      <div style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>30 Section D</p>
+        <div class="dropzone" data-target="q30"><span class="droplabel">Drag answer here</span></div>
+      </div>
+      <a id="q31-anchor"></a>
+      <div style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>31 Section E</p>
+        <div class="dropzone" data-target="q31"><span class="droplabel">Drag answer here</span></div>
+      </div>
+      <a id="q32-anchor"></a>
+      <div style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>32 Section F</p>
+        <div class="dropzone" data-target="q32"><span class="droplabel">Drag answer here</span></div>
+      </div>
+
+      <h4>List of Headings</h4>
+      <div class="cardpool" id="pool-27-32">
+        <div class="card" draggable="true" data-value="i">i The relevance of time to the sense of belonging to a place</div>
+        <div class="card" draggable="true" data-value="ii">ii Making sense of photographic studies</div>
+        <div class="card" draggable="true" data-value="iii">iii The advantages of photography in sense-of-place research</div>
+        <div class="card" draggable="true" data-value="iv">iv Reasons for weak attachments</div>
+        <div class="card" draggable="true" data-value="v">v A new approach to sense-of-place research</div>
+        <div class="card" draggable="true" data-value="vi">vi Defining the significance of places</div>
+        <div class="card" draggable="true" data-value="vii">vii Important considerations when using VEP</div>
+        <div class="card" draggable="true" data-value="viii">viii Local residents' feelings towards visitors</div>
+      </div>
+    </div>
+    
+    <div class="group">
+      <h4>Questions 33-38</h4>
+      <p>Look at the following observations (Questions 33-38) and the list of people below.</p>
+      <p>Match each observation with the correct person, A-G.</p>
+      <p>Write the correct letter, A-G, in boxes 33-38 on your answer sheet.</p>
+      
+      <a id="q33-anchor"></a>
+      <div style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>33 Our attachment to a place can happen quickly.</p>
+        <div class="dropzone" data-target="q33"><span class="droplabel">Drag answer here</span></div>
+      </div>
+      <a id="q34-anchor"></a>
+      <div style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>34 Limiting the amount of time for taking photographs may produce a narrow range of images.</p>
+        <div class="dropzone" data-target="q34"><span class="droplabel">Drag answer here</span></div>
+      </div>
+      <a id="q35-anchor"></a>
+      <div style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>35 Members of a group will hold a similar view about a place.</p>
+        <div class="dropzone" data-target="q35"><span class="droplabel">Drag answer here</span></div>
+      </div>
+      <a id="q36-anchor"></a>
+      <div style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>36 Given time, a place can have the same impact on us as people do.</p>
+        <div class="dropzone" data-target="q36"><span class="droplabel">Drag answer here</span></div>
+      </div>
+      <a id="q37-anchor"></a>
+      <div style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>37 Tourists should keep a written account of their photographs.</p>
+        <div class="dropzone" data-target="q37"><span class="droplabel">Drag answer here</span></div>
+      </div>
+      <a id="q38-anchor"></a>
+      <div style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>38 Each place means something different to each visitor.</p>
+        <div class="dropzone" data-target="q38"><span class="droplabel">Drag answer here</span></div>
+      </div>
+
+      <h4>List of People</h4>
+      <div class="cardpool" id="pool-33-38">
+        <div class="card" draggable="true" data-value="A">A Meinig</div>
+        <div class="card" draggable="true" data-value="B">B Greider and Garkovich</div>
+        <div class="card" draggable="true" data-value="C">C Ryden</div>
+        <div class="card" draggable="true" data-value="D">D Tuan</div>
+        <div class="card" draggable="true" data-value="E">E Haywood</div>
+        <div class="card" draggable="true" data-value="F">F Markwell</div>
+        <div class="card" draggable="true" data-value="G">G Yamashita</div>
+      </div>
+    </div>
+    
+    <div class="group">
+      <h4>Questions 39 and 40</h4>
+      <p>Choose the correct letter, A, B, C or D.</p>
+      <p>Write the correct letter in boxes 39 and 40 on your answer sheet.</p>
+      
+      <a id="q39-anchor"></a>
+      <div id="q39-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>39 The 2002 study by Yamashita shows that local residents</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q39" type="radio" value="A"> A appreciate the beauty of their surroundings.</label>
+          <label style="margin:0;"><input name="q39" type="radio" value="B"> B know their surroundings too well to appreciate them.</label>
+          <label style="margin:0;"><input name="q39" type="radio" value="C"> C consider water the most important aspect of their surroundings.</label>
+          <label style="margin:0;"><input name="q39" type="radio" value="D"> D dislike the negative impact of visitors on their surroundings.</label>
+        </div>
+      </div>
+      
+      <a id="q40-anchor"></a>
+      <div id="q40-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>40 In the final paragraph, the writer states that photographs present</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label style="margin:0;"><input name="q40" type="radio" value="A"> A a factual account of a visit.</label>
+          <label style="margin:0;"><input name="q40" type="radio" value="B"> B an unreliable source for research.</label>
+          <label style="margin:0;"><input name="q40" type="radio" value="C"> C a clear picture of the visitor's feelings.</label>
+          <label style="margin:0;"><input name="q40" type="radio" value="D"> D an image that needs to be explained to others.</label>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
+</div>
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+<script>
+// Timer
+let _t = 0;
+const _timerEl = document.getElementById('timer');
+let timerInterval;
+
+function startTimer() {
+    if (timerInterval) return;
+    timerInterval = setInterval(() => {
+        _t++;
+        const m = String(Math.floor(_t / 60)).padStart(2, '0');
+        const s = String(_t % 60).padStart(2, '0');
+        _timerEl.textContent = `${m}:${s}`;
+    }, 1000);
+}
+
+function stopTimer() {
+    clearInterval(timerInterval);
+    timerInterval = null;
+}
+
+// Initial timer start on page load
+window.onload = startTimer;
+
+// Drag divider
+var divider = document.getElementById('divider');
+var left = document.getElementById('left');
+var right = document.getElementById('right');
+var dragging = false;
+function startDrag(e){ 
+  dragging = true; 
+  document.body.style.cursor = 'ew-resize'; 
+  if(e.preventDefault) e.preventDefault(); 
+}
+function endDrag(){ 
+  dragging = false; 
+  document.body.style.cursor = ''; 
+}
+function onMove(clientX){
+  var container = document.querySelector('.shell').getBoundingClientRect();
+  var x = clientX - container.left;
+  x = Math.max(280, Math.min(container.width - 320, x));
+  left.style.flex = '0 0 ' + x + 'px';
+  right.style.flex = '1 1 auto';
+}
+divider.addEventListener('mousedown', function(e){ startDrag(e); });
+window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+window.addEventListener('mouseup', endDrag);
+divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
+window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+window.addEventListener('touchend', endDrag);
+
+// Drag and drop for questions
+const cardPools = document.querySelectorAll('.cardpool');
+const dropzones = document.querySelectorAll('.dropzone');
+const initialCardHTML = {
+  'pool-27-32': `
+    <div class="card" draggable="true" data-value="i">i The relevance of time to the sense of belonging to a place</div>
+    <div class="card" draggable="true" data-value="ii">ii Making sense of photographic studies</div>
+    <div class="card" draggable="true" data-value="iii">iii The advantages of photography in sense-of-place research</div>
+    <div class="card" draggable="true" data-value="iv">iv Reasons for weak attachments</div>
+    <div class="card" draggable="true" data-value="v">v A new approach to sense-of-place research</div>
+    <div class="card" draggable="true" data-value="vi">vi Defining the significance of places</div>
+    <div class="card" draggable="true" data-value="vii">vii Important considerations when using VEP</div>
+    <div class="card" draggable="true" data-value="viii">viii Local residents' feelings towards visitors</div>
+  `,
+  'pool-33-38': `
+    <div class="card" draggable="true" data-value="A">A Meinig</div>
+    <div class="card" draggable="true" data-value="B">B Greider and Garkovich</div>
+    <div class="card" draggable="true" data-value="C">C Ryden</div>
+    <div class="card" draggable="true" data-value="D">D Tuan</div>
+    <div class="card" draggable="true" data-value="E">E Haywood</div>
+    <div class="card" draggable="true" data-value="F">F Markwell</div>
+    <div class="card" draggable="true" data-value="G">G Yamashita</div>
+  `
+};
+
+function addDragListenersToCards(cards) {
+    cards.forEach(card => {
+        card.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('text/plain', e.target.dataset.value);
+            e.dataTransfer.setData('text/html', e.target.outerHTML);
+            e.target.classList.add('dragging');
+        });
+        card.addEventListener('dragend', (e) => {
+            e.target.classList.remove('dragging');
+        });
+    });
+}
+
+// Initializing drag listeners
+addDragListenersToCards(document.querySelectorAll('.card'));
+
+dropzones.forEach(zone => {
+  zone.addEventListener('dragover', e => {
+    e.preventDefault();
+    zone.classList.add('over');
+  });
+  
+  zone.addEventListener('dragleave', () => {
+    zone.classList.remove('over');
+  });
+  
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('over');
+
+    const dataValue = e.dataTransfer.getData('text/plain');
+    const dataHtml = e.dataTransfer.getData('text/html');
+    
+    // Create a new card based on the dropped data
+    const droppedCard = document.createElement('div');
+    droppedCard.innerHTML = dataHtml;
+    const cardEl = droppedCard.firstElementChild;
+    
+    if (cardEl) {
+      const qNum = parseInt(zone.dataset.target.replace('q', ''));
+      const oldCard = zone.querySelector('.card');
+      
+      // Handle returning old card to its original pool
+      if (oldCard) {
+          const originalPool = oldCard.closest('.cardpool');
+          if (originalPool) {
+              originalPool.appendChild(oldCard);
+          } else {
+              oldCard.remove();
+          }
+      }
+
+      // Append the new card to the dropzone
+      zone.innerHTML = '';
+      zone.appendChild(cardEl);
+
+      // Re-add drag listeners to the new card
+      addDragListenersToCards([cardEl]);
+      
+      const targetQ = zone.dataset.target;
+      document.getElementById(targetQ + '-nav').classList.add('answered');
+    }
+  });
+});
+
+// Highlight toolbar
+var selbar = document.getElementById('selbar');
+var btnHL = document.getElementById('btnHL');
+var btnUH = document.getElementById('btnUH');
+var btnNote = document.getElementById('btnNote');
+var lastRange = null;
+var currentHlNode = null;
+var keepToolbar = false;
+function positionSelbarForRect(rect){
+  selbar.style.display = 'flex';
+  requestAnimationFrame(function(){
+    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    var leftPos = window.scrollX + rect.left + rect.width / 2 - selbar.offsetWidth / 2;
+    selbar.style.top = ((top > 0) ? top : (window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+function updateSelbar(){
+  var sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) { 
+    selbar.style.display = 'none'; 
+    currentHlNode = null; 
+    return; 
+  }
+  var range = sel.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode = null;
+  positionSelbarForRect(range.getBoundingClientRect());
+}
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', function(){ 
+  var sel = window.getSelection(); 
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) { 
+    if (!keepToolbar && !currentHlNode) { 
+      selbar.style.display = 'none'; 
+    } 
+  } 
+});
+document.addEventListener('scroll', function(){ 
+  if (selbar.style.display === 'flex') updateSelbar(); 
+});
+document.addEventListener('mousedown', function(e){
+  var t = e.target;
+  if (t.classList && t.classList.contains('hl')) {
+    keepToolbar = true;
+  } else {
+    keepToolbar = false;
+  }
+}, true);
+document.addEventListener('click', function(e){
+  var target = e.target;
+  if (target.classList && target.classList.contains('hl')) {
+    currentHlNode = target;
+    lastRange = null;
+    positionSelbarForRect(target.getBoundingClientRect());
+    var sel = window.getSelection();
+    if (sel) sel.removeAllRanges();
+    setTimeout(function(){ keepToolbar = false; }, 0);
+  }
+}, true);
+function doHighlight(){
+  if(currentHlNode) return;
+  if(!lastRange || lastRange.collapsed) return;
+  var span = document.createElement('span'); span.className = 'hl';
+  try { lastRange.surroundContents(span); }
+  catch(e){
+    var wrap = document.createElement('span'); wrap.className = 'hl';
+    wrap.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrap);
+  }
+  selbar.style.display = 'none';
+  showToast('Highlighted');
+}
+function removeHighlight(){
+  if(currentHlNode){
+    var p = currentHlNode.parentNode;
+    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
+    p.removeChild(currentHlNode); p.normalize();
+    currentHlNode = null;
+    selbar.style.display = 'none';
+    showToast('Highlight removed');
+    return;
+  }
+  if(!lastRange) return;
+  var selRect = lastRange.getBoundingClientRect();
+  var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  var toRemove = [];
+  while(walker.nextNode()){
+    var n = walker.currentNode;
+    if(n.classList && n.classList.contains('hl')) {
+      var r = n.getBoundingClientRect();
+      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+    }
+  }
+  toRemove.forEach(function(el){ var p = el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
+  selbar.style.display = 'none';
+  showToast('Highlight removed');
+}
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+
+// Notes
+var notes = document.getElementById('notes');
+var noteArea = document.getElementById('noteArea');
+var btnCopy = document.getElementById('btnCopy');
+var btnClose = document.getElementById('btnClose');
+function toggleNotes(){ 
+  notes.style.display = (notes.style.display === 'flex' ? 'none' : 'flex'); 
+}
+window.toggleNotes = toggleNotes;
+btnClose.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async function(){ 
+  await navigator.clipboard.writeText(noteArea.value || ''); 
+  showToast('Copied'); 
+});
+btnNote.addEventListener('click', function(){
+  var text = '';
+  if (currentHlNode) { 
+    text = (currentHlNode.textContent || '').trim(); 
+  } else if (lastRange) { 
+    var frag = lastRange.cloneContents(); 
+    text = (frag.textContent || '').trim(); 
+  }
+  toggleNotes();
+  if (text) {
+    noteArea.value = (noteArea.value ? noteArea.value + '\n' : '') + '> ' + text + '\n';
+  }
+  selbar.style.display = 'none';
+});
+
+// Toast
+var toastEl = document.getElementById('toast');
+function showToast(msg){
+  toastEl.textContent = msg; 
+  toastEl.style.display = 'block';
+  setTimeout(function(){ toastEl.style.display = 'none'; }, 1200);
+}
+
+// Answer key and grading
+var answers = {
+  "q27":"v", "q28":"vi", "q29":"i", "q30":"iii", "q31":"vii", "q32":"ii",
+  "q33":"D", "q34":"E", "q35":"B", "q36":"C", "q37":"G", "q38":"A",
+  "q39":"B", "q40":"D"
+};
+const cardValueToText = {
+  "i": "i The relevance of time to the sense of belonging to a place",
+  "ii": "ii Making sense of photographic studies",
+  "iii": "iii The advantages of photography in sense-of-place research",
+  "iv": "iv Reasons for weak attachments",
+  "v": "v A new approach to sense-of-place research",
+  "vi": "vi Defining the significance of places",
+  "vii": "vii Important considerations when using VEP",
+  "viii": "viii Local residents' feelings towards visitors",
+  "A": "A Meinig", "B": "B Greider and Garkovich", "C": "C Ryden", "D": "D Tuan",
+  "E": "E Haywood", "F": "F Markwell", "G": "G Yamashita"
+};
+
+function grade(){
+  stopTimer();
+  var total=0, correct=0, lines=[];
+  
+  // Check drag-and-drop questions (27-38)
+  for(let n=27; n<=38; n++){
+    const q = `q${n}`;
+    total++;
+    const dropzone = document.querySelector(`.dropzone[data-target="${q}"]`);
+    const selectedCard = dropzone ? dropzone.querySelector('.card') : null;
+    const userAnswer = selectedCard ? selectedCard.dataset.value : '';
+    const isCorrect = userAnswer === answers[q];
+    let userDisplay = selectedCard ? selectedCard.textContent.trim() : 'None';
+    let resultLine = `${q.toUpperCase()}: ${userDisplay} ${isCorrect ? '✅' : '❌'}`;
+    if (!isCorrect) {
+      const correctText = cardValueToText[answers[q]] || answers[q];
+      resultLine += ` (Correct: ${correctText})`;
+    }
+    lines.push(resultLine);
+    if (isCorrect) correct++;
+  }
+  
+  // Check radio questions (39-40)
+  for(let n=39; n<=40; n++){
+    const q = `q${n}`;
+    total++;
+    const selected = document.querySelector(`input[name="${q}"]:checked`);
+    const userAnswer = selected ? selected.value : '';
+    const isCorrect = userAnswer === answers[q];
+    let resultLine = `${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✅' : '❌'}`;
+    if (!isCorrect) {
+      resultLine += ` (Correct: ${answers[q]})`;
+    }
+    lines.push(resultLine);
+    if (isCorrect) correct++;
+  }
+
+  // Show results
+  const acc = Math.round(100 * correct / total);
+  document.getElementById('results').innerHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p>
+    <pre>${lines.join('\n')}</pre>
+  `;
+  
+  // Show answer key
+  const answerContent = `
+    <table>
+      <thead>
+        <tr>
+          <th>Question</th>
+          <th>Answer</th>
+          <th>Location</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>27</td><td>v</td><td>Section A</td></tr>
+        <tr><td>28</td><td>vi</td><td>Section B</td></tr>
+        <tr><td>29</td><td>i</td><td>Section C</td></tr>
+        <tr><td>30</td><td>iii</td><td>Section D</td></tr>
+        <tr><td>31</td><td>vii</td><td>Section E</td></tr>
+        <tr><td>32</td><td>ii</td><td>Section F</td></tr>
+        <tr><td>33</td><td>D</td><td>Paragraph C</td></tr>
+        <tr><td>34</td><td>E</td><td>Paragraph E</td></tr>
+        <tr><td>35</td><td>B</td><td>Paragraph B</td></tr>
+        <tr><td>36</td><td>C</td><td>Paragraph C</td></tr>
+        <tr><td>37</td><td>G</td><td>Paragraph F</td></tr>
+        <tr><td>38</td><td>A</td><td>Paragraph B</td></tr>
+        <tr><td>39</td><td>B</td><td>Paragraph E</td></tr>
+        <tr><td>40</td><td>D</td><td>Paragraph F</td></tr>
+      </tbody>
+    </table>
+  `;
+  document.getElementById('answerContent').innerHTML = answerContent;
+  document.querySelector('#answerBox .badge').textContent = 'tap to view';
+}
+
+function resetForm(){
+  // Reset all dropzones
+  document.querySelectorAll('.dropzone').forEach(zone => {
+    zone.innerHTML = '<span class="droplabel">Drag answer here</span>';
+  });
+  
+  // Reset all card pools
+  document.getElementById('pool-27-32').innerHTML = initialCardHTML['pool-27-32'];
+  document.getElementById('pool-33-38').innerHTML = initialCardHTML['pool-33-38'];
+  
+  // Re-add event listeners to the cards
+  addDragListenersToCards(document.querySelectorAll('.card'));
+  
+  // Reset radio buttons
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // Reset results and answers
+  document.getElementById('results').innerHTML = '';
+  document.getElementById('answerContent').innerHTML = '';
+  document.querySelector('#answerBox .badge').textContent = 'hidden';
+  
+  // Reset answered status in nav
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+  
+  _t = 0;
+  _timerEl.textContent = '00:00';
+  startTimer();
+}
+
+function scrollToElement(id){
+  const el = document.getElementById(id);
+  if (el) { 
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' }); 
+  }
+  const navs = document.querySelectorAll('.practice-nav .q-item');
+  navs.forEach(n => n.classList.remove('active'));
+  const btn = document.getElementById(id.replace('-anchor','-nav'));
+  if (btn) { 
+    btn.classList.add('active'); 
+    setTimeout(() => btn.classList.remove('active'), 800); 
+  }
+}
+
+// Mark answered on interaction
+(function(){
+  function markAnswered(qn){
+    const nav = document.getElementById(`q${qn}-nav`);
+    if (!nav) return;
+    let answered = false;
+    
+    // Check dropzones
+    if (qn >= 27 && qn <= 38) {
+      const zone = document.querySelector(`.dropzone[data-target="q${qn}"]`);
+      answered = zone.querySelector('.card') !== null;
+    } 
+    // Check radio buttons
+    else {
+      const radios = document.querySelectorAll(`input[name="q${qn}"]:checked`);
+      answered = radios.length > 0;
+    }
+    
+    if (answered) nav.classList.add('answered');
+    else nav.classList.remove('answered');
+  }
+  
+  dropzones.forEach(zone => {
+    zone.addEventListener('drop', () => {
+      const qn = zone.dataset.target.replace('q', '');
+      markAnswered(qn);
+    });
+  });
+
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      const qn = e.target.name.replace('q', '');
+      markAnswered(qn);
+    });
+  });
+})();
+</script>
+
+<script>
+// 练习页面增强器 - 跨窗口通信功能
+(function() {
+    'use strict';
+    
+    let sessionData = null;
+    let parentWindow = null;
+    let startTime = Date.now();
+    let isSessionActive = false;
+    
+    // 初始化通信功能
+    function initializeCommunication() {
+        console.log('[PracticePageEnhancer] 初始化通信功能');
+        
+        // 监听来自父窗口的消息
+        window.addEventListener('message', function(event) {
+            console.log('[PracticePageEnhancer] 收到消息:', event.data);
+            
+            if (event.data && event.data.type === 'INIT_SESSION') {
+                sessionData = event.data.data;
+                parentWindow = event.source;
+                isSessionActive = true;
+                startTime = Date.now();
+                
+                console.log('[PracticePageEnhancer] 会话已初始化:', sessionData);
+                
+                // 发送会话初始化确认
+                sendMessage('SESSION_INITIALIZED', {
+                    sessionId: sessionData.sessionId,
+                    examId: sessionData.examId,
+                    timestamp: Date.now()
+                });
+                
+                // 设置页面关闭时的数据发送
+                setupPageUnloadHandler();
+            }
+        });
+        
+        // 检测答题完成
+        setupAnswerDetection();
+        
+        console.log('[PracticePageEnhancer] 通信功能已初始化');
+    }
+    
+    // 发送消息到父窗口
+    function sendMessage(type, data) {
+        if (parentWindow && isSessionActive) {
+            const message = {
+                type: type,
+                data: data,
+                source: 'practice_page',
+                timestamp: Date.now()
+            };
+            
+            console.log('[PracticePageEnhancer] 发送消息:', message);
+            parentWindow.postMessage(message, '*');
+        }
+    }
+    
+    // 设置答题检测
+    function setupAnswerDetection() {
+        // 检测提交按钮点击
+        document.addEventListener('click', function(event) {
+            const target = event.target;
+            
+            // 检测是否是提交相关的按钮
+            if (target.tagName === 'BUTTON' && 
+                (target.textContent.includes('提交') || 
+                 target.textContent.includes('Submit') ||
+                 target.textContent.includes('完成') ||
+                 target.textContent.includes('Check') ||
+                 target.id === 'submit-btn' ||
+                 target.className.includes('submit'))) {
+                
+                console.log('[PracticePageEnhancer] 检测到提交按钮点击');
+                
+                // 延迟收集数据，确保答案已处理
+                setTimeout(function() {
+                    collectAndSendPracticeData();
+                }, 1000);
+            }
+        });
+        
+        // 检测表单提交
+        document.addEventListener('submit', function(event) {
+            console.log('[PracticePageEnhancer] 检测到表单提交');
+            setTimeout(function() {
+                collectAndSendPracticeData();
+            }, 1000);
+        });
+    }
+    
+    // 设置页面卸载处理器
+    function setupPageUnloadHandler() {
+        window.addEventListener('beforeunload', function() {
+            if (isSessionActive) {
+                collectAndSendPracticeData();
+            }
+        });
+        
+        // 页面隐藏时也发送数据
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'hidden' && isSessionActive) {
+                collectAndSendPracticeData();
+            }
+        });
+    }
+    
+    // 收集并发送练习数据
+    function collectAndSendPracticeData() {
+        if (!isSessionActive || !sessionData) {
+            console.log('[PracticePageEnhancer] 会话未激活，跳过数据收集');
+            return;
+        }
+        
+        console.log('[PracticePageEnhancer] 开始收集练习数据');
+        
+        const endTime = Date.now();
+        const duration = endTime - startTime;
+        
+        // 收集答案数据
+        const answers = collectAnswers();
+        const score = calculateScore(answers);
+        
+        const practiceData = {
+            sessionId: sessionData.sessionId,
+            examId: sessionData.examId,
+            examTitle: sessionData.examTitle,
+            examCategory: sessionData.examCategory,
+            startTime: startTime,
+            endTime: endTime,
+            duration: duration,
+            answers: answers,
+            score: score.correct,
+            totalQuestions: score.total,
+            accuracy: score.total > 0 ? score.correct / score.total : 0,
+            percentage: score.total > 0 ? Math.round((score.correct / score.total) * 100) : 0,
+            url: window.location.href,
+            source: 'page_extraction',
+            timestamp: endTime
+        };
+        
+        console.log('[PracticePageEnhancer] 练习数据已收集:', practiceData);
+        
+        // 发送练习完成数据
+        sendMessage('PRACTICE_COMPLETE', practiceData);
+        
+        // 标记会话为非活跃状态，避免重复发送
+        isSessionActive = false;
+    }
+    
+    // 收集页面中的答案
+    function collectAnswers() {
+        const answers = [];
+        
+        // 收集输入框答案
+        const inputs = document.querySelectorAll('input[type="text"], input.blank, input.blank-input');
+        inputs.forEach(function(input, index) {
+            if (input.value.trim()) {
+                answers.push({
+                    type: 'text',
+                    question: index + 1,
+                    answer: input.value.trim(),
+                    element: input.tagName + (input.className ? '.' + input.className : '')
+                });
+            }
+        });
+        
+        // 收集选择题答案
+        const selects = document.querySelectorAll('select');
+        selects.forEach(function(select, index) {
+            if (select.value) {
+                answers.push({
+                    type: 'select',
+                    question: index + 1,
+                    answer: select.value,
+                    element: 'SELECT'
+                });
+            }
+        });
+        
+        // 收集单选按钮答案
+        const radios = document.querySelectorAll('input[type="radio"]:checked');
+        radios.forEach(function(radio, index) {
+            answers.push({
+                type: 'radio',
+                question: radio.name || index + 1,
+                answer: radio.value,
+                element: 'INPUT[type="radio"]'
+            });
+        });
+        
+        // 收集复选框答案
+        const checkboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+        checkboxes.forEach(function(checkbox, index) {
+            answers.push({
+                type: 'checkbox',
+                question: checkbox.name || index + 1,
+                answer: checkbox.value,
+                element: 'INPUT[type="checkbox"]'
+            });
+        });
+        
+        console.log('[PracticePageEnhancer] 收集到答案:', answers);
+        return answers;
+    }
+    
+    // 计算得分（简单实现）
+    function calculateScore(answers) {
+        // 这里只是简单计算有答案的题目数量
+        // 实际得分需要根据具体题目的正确答案来计算
+        const total = answers.length;
+        const correct = answers.filter(function(answer) {
+            return answer.answer && answer.answer.trim().length > 0;
+        }).length;
+        
+        return {
+            correct: correct,
+            total: total
+        };
+    }
+    
+    // 页面加载完成后初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeCommunication);
+    } else {
+        initializeCommunication();
+    }
+    
+})();
+</script>
+
+<!-- 练习页面数据传输增强脚本 -->
+<script>
+// 检查是否已经有增强脚本
+if (!window.practicePageEnhancer) {
+    // 动态加载增强脚本
+    const script = document.createElement('script');
+    script.src = '../../js/practice-page-enhancer.js';
+    script.onload = function() {
+        console.log('练习页面增强脚本已加载');
+    };
+    script.onerror = function() {
+        console.error('练习页面增强脚本加载失败');
+        // 降级到内联增强
+        loadInlineEnhancer();
+    };
+    document.head.appendChild(script);
+}
+
+// 内联增强器（降级方案）
+function loadInlineEnhancer() {
+    if (window.practicePageEnhancer) return;
+    
+    window.practicePageEnhancer = {
+        initialize: function() {
+            console.log('[InlineEnhancer] 内联增强器已初始化');
+            this.setupCommunication();
+            this.setupAnswerListeners();
+            this.interceptSubmit();
+        },
+        
+        setupCommunication: function() {
+            this.parentWindow = window.opener || window.parent;
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'INIT_SESSION') {
+                    this.sessionId = event.data.data.sessionId;
+                    this.sendMessage('SESSION_READY', {
+                        pageType: this.detectPageType(),
+                        url: window.location.href
+                    });
+                }
+            });
+        },
+        
+        detectPageType: function() {
+            const title = document.title || '';
+            if (title.includes('P1')) return 'P1';
+            if (title.includes('P2')) return 'P2';
+            if (title.includes('P3')) return 'P3';
+            return 'unknown';
+        },
+        
+        setupAnswerListeners: function() {
+            this.answers = {};
+            this.startTime = Date.now();
+            
+            document.addEventListener('change', (e) => {
+                if (e.target.name && e.target.name.startsWith('q')) {
+                    this.answers[e.target.name] = e.target.value;
+                }
+            });
+        },
+        
+        interceptSubmit: function() {
+            // 拦截grade函数
+            if (typeof window.grade === 'function') {
+                const originalGrade = window.grade;
+                window.grade = () => {
+                    const result = originalGrade();
+                    setTimeout(() => this.handleSubmit(), 200);
+                    return result;
+                };
+            }
+            
+            // 监听提交按钮
+            document.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON' && 
+                    (e.target.textContent.includes('Submit') || 
+                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+                    setTimeout(() => this.handleSubmit(), 300);
+                }
+            });
+        },
+        
+        handleSubmit: function() {
+            const results = {
+                sessionId: this.sessionId,
+                startTime: this.startTime,
+                endTime: Date.now(),
+                duration: Math.round((Date.now() - this.startTime) / 1000),
+                answers: this.answers,
+                scoreInfo: this.extractScore(),
+                pageType: this.detectPageType(),
+                url: window.location.href
+            };
+            
+            this.sendMessage('PRACTICE_COMPLETE', results);
+        },
+        
+        extractScore: function() {
+            const resultsEl = document.getElementById('results');
+            if (!resultsEl) return null;
+            
+            const text = resultsEl.textContent || '';
+            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+            if (scoreMatch) {
+                const correct = parseInt(scoreMatch[1]);
+                const total = parseInt(scoreMatch[2]);
+                return {
+                    correct: correct,
+                    total: total,
+                    accuracy: total > 0 ? correct / total : 0,
+                    percentage: Math.round((correct / total) * 100),
+                    source: 'inline_extraction'
+                };
+            }
+            return null;
+        },
+        
+        sendMessage: function(type, data) {
+            if (this.parentWindow) {
+                this.parentWindow.postMessage({
+                    type: type,
+                    data: data,
+                    source: 'practice_page'
+                }, '*');
+            }
+        }
+    };
+    
+    // 初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            window.practicePageEnhancer.initialize();
+        });
+    } else {
+        window.practicePageEnhancer.initialize();
+    }
+}
+</script>
+
+</body>
+</html>
