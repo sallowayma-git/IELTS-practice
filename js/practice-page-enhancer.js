@@ -154,8 +154,8 @@
         /**
          * 处理通信错误
          */
-        handleCommunicationError(error, context) {
-            console.error(`[PracticeEnhancer] 通信错误 (${context}):`, error);
+        handleCommunicationError(error, type, data) {
+            console.error(`[PracticeEnhancer] 通信错误:`, error);
             
             // 记录错误
             if (!this.communicationErrors) {
@@ -164,15 +164,146 @@
             
             this.communicationErrors.push({
                 error: error.message,
-                context: context,
+                type: type,
+                data: data,
                 timestamp: Date.now()
             });
 
-            // 尝试重新建立连接
-            if (context === 'message_sending' && this.parentWindow) {
+            // 限制错误记录数量
+            if (this.communicationErrors.length > 50) {
+                this.communicationErrors = this.communicationErrors.slice(-25);
+            }
+
+            // 实现自动重试逻辑（有限次数）
+            if (!this.retryCount) {
+                this.retryCount = 0;
+            }
+
+            if (this.retryCount < 3) {
+                this.retryCount++;
+                console.log(`[PracticeEnhancer] 尝试重试通信 (第${this.retryCount}次)`);
+                
                 setTimeout(() => {
-                    this.attemptReconnection();
-                }, 1000);
+                    if (this.attemptReconnection()) {
+                        // 重连成功，重置重试计数
+                        this.retryCount = 0;
+                        
+                        // 尝试重新发送失败的消息
+                        if (type && data) {
+                            console.log('[PracticeEnhancer] 重新发送失败的消息:', type);
+                            this.sendMessage(type, data, { retry: false });
+                        }
+                    }
+                }, 1000 * this.retryCount); // 递增延迟
+            } else {
+                console.warn('[PracticeEnhancer] 通信重试次数已达上限，切换到降级模式');
+                this.enterDegradedMode();
+            }
+        }
+
+        /**
+         * 进入降级模式
+         */
+        enterDegradedMode() {
+            console.log('[PracticeEnhancer] 进入降级模式');
+            this.degradedMode = true;
+            
+            // 在降级模式下，所有通信都使用备用机制
+            this.parentWindow = null;
+            
+            // 显示用户友好的提示（如果可能）
+            this.showUserFriendlyError();
+        }
+
+        /**
+         * 显示用户友好的错误提示
+         */
+        showUserFriendlyError() {
+            try {
+                // 尝试在页面上显示友好的提示信息
+                const existingNotice = document.getElementById('communication-notice');
+                if (existingNotice) {
+                    return; // 已经显示过了
+                }
+
+                const notice = document.createElement('div');
+                notice.id = 'communication-notice';
+                notice.style.cssText = `
+                    position: fixed;
+                    top: 10px;
+                    right: 10px;
+                    background: #fef3cd;
+                    border: 1px solid #fecaca;
+                    color: #92400e;
+                    padding: 12px 16px;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    z-index: 10000;
+                    max-width: 300px;
+                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                `;
+                notice.innerHTML = `
+                    <div style="font-weight: 600; margin-bottom: 4px;">通信提示</div>
+                    <div>与主窗口的连接不稳定，练习数据将自动保存到本地。</div>
+                `;
+
+                document.body.appendChild(notice);
+
+                // 5秒后自动隐藏
+                setTimeout(() => {
+                    if (notice.parentNode) {
+                        notice.parentNode.removeChild(notice);
+                    }
+                }, 5000);
+            } catch (error) {
+                console.warn('[PracticeEnhancer] 无法显示用户提示:', error);
+            }
+        }
+
+        /**
+         * 处理通信回退机制
+         */
+        handleCommunicationFallback(type, data) {
+            console.log('[PracticeEnhancer] 使用备用通信机制:', type);
+            
+            try {
+                // 使用localStorage作为备用通信方式
+                const fallbackData = {
+                    type,
+                    data,
+                    timestamp: Date.now(),
+                    sessionId: this.sessionId,
+                    source: 'practice_page_fallback'
+                };
+                
+                const storageKey = `practice_communication_fallback_${this.sessionId || 'unknown'}`;
+                localStorage.setItem(storageKey, JSON.stringify(fallbackData));
+                
+                // 触发存储事件通知主窗口
+                try {
+                    window.dispatchEvent(new StorageEvent('storage', {
+                        key: storageKey,
+                        newValue: JSON.stringify(fallbackData),
+                        oldValue: null,
+                        storageArea: localStorage
+                    }));
+                    
+                    console.log('[PracticeEnhancer] 备用通信消息已发送');
+                } catch (eventError) {
+                    console.warn('[PracticeEnhancer] 无法触发存储事件:', eventError);
+                }
+                
+                // 设置定时清理
+                setTimeout(() => {
+                    try {
+                        localStorage.removeItem(storageKey);
+                    } catch (e) {
+                        console.warn('[PracticeEnhancer] 清理备用通信数据失败:', e);
+                    }
+                }, 30000); // 30秒后清理
+                
+            } catch (error) {
+                console.error('[PracticeEnhancer] 备用通信机制失败:', error);
             }
         }
 
@@ -591,9 +722,10 @@
          * 发送消息到父窗口（增强版）
          */
         sendMessage(type, data, options = {}) {
-            if (!this.parentWindow) {
-                console.warn('[PracticeEnhancer] 无法发送消息，父窗口不存在');
-                this.handleCommunicationError(new Error('父窗口不存在'), 'message_sending');
+            // 增强的父窗口检测
+            if (!this.isParentWindowAvailable()) {
+                console.warn('[PracticeEnhancer] 父窗口不可用，尝试备用通信方式');
+                this.handleCommunicationFallback(type, data);
                 return false;
             }
             
@@ -606,11 +738,6 @@
             };
             
             try {
-                // 检查父窗口是否仍然有效
-                if (this.parentWindow.closed) {
-                    throw new Error('父窗口已关闭');
-                }
-
                 this.parentWindow.postMessage(message, '*');
                 console.log('[PracticeEnhancer] 消息已发送:', type, data);
                 
@@ -622,13 +749,45 @@
                 return true;
             } catch (error) {
                 console.error('[PracticeEnhancer] 消息发送失败:', error);
-                this.handleCommunicationError(error, 'message_sending');
+                this.handleCommunicationError(error, type, data);
                 
                 // 如果允许重试，将消息加入重试队列
                 if (options.retry !== false) {
                     this.queueMessageForRetry(message, options);
                 }
                 
+                return false;
+            }
+        }
+
+        /**
+         * 检查父窗口是否可用
+         */
+        isParentWindowAvailable() {
+            try {
+                // 检查父窗口是否存在
+                if (!this.parentWindow) {
+                    return false;
+                }
+                
+                // 检查父窗口是否已关闭
+                if (this.parentWindow.closed) {
+                    console.warn('[PracticeEnhancer] 父窗口已关闭');
+                    return false;
+                }
+                
+                // 尝试访问父窗口的location（可能会因为跨域而失败）
+                try {
+                    // 这个检查可能会抛出异常，但不影响通信
+                    const test = this.parentWindow.location;
+                } catch (e) {
+                    // 跨域情况下这是正常的，不影响postMessage通信
+                    console.debug('[PracticeEnhancer] 跨域环境，但postMessage仍可用');
+                }
+                
+                return true;
+            } catch (error) {
+                console.warn('[PracticeEnhancer] 父窗口检测失败:', error);
                 return false;
             }
         }

@@ -817,6 +817,9 @@ class PracticeHistory {
                         <button class="btn btn-primary" onclick="window.app.components.practiceHistory.retryExam(${JSON.stringify(record).replace(/"/g, '&quot;')})">
                             重新练习
                         </button>
+                        <button class="btn btn-secondary" onclick="window.app.components.practiceHistory.exportRecordAsMarkdown('${record.id}')">
+                            📄 导出Markdown
+                        </button>
                         <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">
                             关闭
                         </button>
@@ -1205,6 +1208,149 @@ class PracticeHistory {
                     </button>
                 </div>
             `;
+        }
+    }
+
+    /**
+     * 生成Markdown格式的练习记录导出
+     * @param {Object} record - 练习记录对象
+     * @returns {string} Markdown格式的文本
+     */
+    generateMarkdownExport(record) {
+        const examTitle = record.metadata.examTitle || record.examId;
+        const category = record.metadata.category || 'Unknown';
+        const frequency = record.metadata.frequency === 'high' ? '高频' : '次高频';
+        const accuracy = Math.round(record.accuracy * 100);
+        const score = `${record.correctAnswers}/${record.totalQuestions}`;
+        
+        // 格式：## Part 2 高频 Corporate Social Responsibility  11/13企业社会责任
+        let markdown = `## ${category} ${frequency} ${examTitle}  ${score}${examTitle}\n\n`;
+        
+        // 表格头部，包含错误分析列
+        markdown += `| 序号  | 正确答案              | 我的答案              | 对错  | 错误分析 |\n`;
+        markdown += `| --- | ----------------- | ----------------- | --- | ---- |\n`;
+        
+        // 处理答案数据
+        let answersData = [];
+        
+        if (record.scoreInfo && record.scoreInfo.details) {
+            // 新格式数据：包含scoreInfo.details
+            Object.entries(record.scoreInfo.details).forEach(([questionId, detail]) => {
+                answersData.push({
+                    questionId: questionId,
+                    userAnswer: detail.userAnswer || '',
+                    correctAnswer: detail.correctAnswer || '',
+                    isCorrect: detail.isCorrect
+                });
+            });
+        } else {
+            // 旧格式数据：仅包含answers对象
+            Object.entries(record.answers || {}).forEach(([questionId, userAnswer]) => {
+                answersData.push({
+                    questionId: questionId,
+                    userAnswer: userAnswer || '',
+                    correctAnswer: '', // 旧数据无正确答案
+                    isCorrect: null
+                });
+            });
+        }
+        
+        // 排序并生成表格行
+        answersData.sort((a, b) => {
+            const aNum = parseInt(a.questionId.replace(/\D/g, '')) || 0;
+            const bNum = parseInt(b.questionId.replace(/\D/g, '')) || 0;
+            return aNum - bNum;
+        });
+        
+        answersData.forEach((answer, index) => {
+            const questionNum = answer.questionId.toUpperCase();
+            const correctAnswer = answer.correctAnswer || '';
+            const userAnswer = answer.userAnswer || '';
+            const resultIcon = answer.isCorrect === true ? '✅' : 
+                              answer.isCorrect === false ? '❌' : '❓';
+            
+            // 格式化答案显示，确保对齐
+            const formattedCorrect = correctAnswer.padEnd(17, ' ');
+            const formattedUser = userAnswer.padEnd(17, ' ');
+            
+            markdown += `| ${questionNum} | ${formattedCorrect} | ${formattedUser} | ${resultIcon}   |      |\n`;
+        });
+        
+        return markdown;
+    }
+
+    /**
+     * 导出单个记录为Markdown文件
+     * @param {string} recordId - 记录ID
+     */
+    exportRecordAsMarkdown(recordId) {
+        const record = this.filteredRecords.find(r => r.id === recordId);
+        if (!record) {
+            window.showMessage('记录不存在', 'error');
+            return;
+        }
+
+        try {
+            const markdown = this.generateMarkdownExport(record);
+            const examTitle = record.metadata.examTitle || record.examId;
+            const fileName = `${examTitle}-练习记录-${new Date().toISOString().split('T')[0]}.md`;
+
+            // 下载文件
+            const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            window.showMessage('Markdown文件已导出', 'success');
+        } catch (error) {
+            console.error('Markdown导出失败:', error);
+            window.showMessage('导出失败，请重试', 'error');
+        }
+    }
+
+    /**
+     * 批量导出多个记录为Markdown文件
+     * @param {Array} recordIds - 记录ID数组
+     */
+    exportMultipleRecords(recordIds) {
+        if (!recordIds || recordIds.length === 0) {
+            window.showMessage('请选择要导出的记录', 'warning');
+            return;
+        }
+
+        try {
+            let combinedMarkdown = `# IELTS练习记录导出\n\n`;
+            combinedMarkdown += `导出时间: ${new Date().toLocaleString()}\n\n`;
+            
+            recordIds.forEach(recordId => {
+                const record = this.filteredRecords.find(r => r.id === recordId);
+                if (record) {
+                    combinedMarkdown += this.generateMarkdownExport(record) + '\n\n---\n\n';
+                }
+            });
+
+            const fileName = `IELTS练习记录批量导出-${new Date().toISOString().split('T')[0]}.md`;
+
+            // 下载文件
+            const blob = new Blob([combinedMarkdown], { type: 'text/markdown;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            window.showMessage(`已导出${recordIds.length}条记录`, 'success');
+        } catch (error) {
+            console.error('批量导出失败:', error);
+            window.showMessage('批量导出失败，请重试', 'error');
         }
     }
 

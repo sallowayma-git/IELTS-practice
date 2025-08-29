@@ -3074,3 +3074,63 @@ body:not(.reduce-motion) .modal {
         white-space: nowrap;
     }
 }
+/
+* 练习记录标题点击样式 */
+.record-title {
+    cursor: pointer;
+    transition: color 0.2s ease, text-decoration 0.2s ease;
+    position: relative;
+}
+
+.record-title:hover {
+    color: var(--primary-color);
+    text-decoration: underline;
+}
+
+.record-title:hover::after {
+    content: ' 👁️';
+    opacity: 0.7;
+    font-size: 0.8em;
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 0.7; }
+}
+
+/* 练习记录项样式增强 */
+.history-record-item {
+    transition: box-shadow 0.2s ease;
+}
+
+.history-record-item:hover {
+    box-shadow: var(--shadow-md);
+}
+
+.record-title.clickable {
+    user-select: none;
+}
+
+.record-title.clickable:active {
+    transform: translateY(1px);
+}
+
+/* 高对比度模式下的样式调整 */
+.high-contrast .record-title:hover {
+    color: var(--primary-color);
+    font-weight: 600;
+    text-decoration: underline;
+}
+
+.high-contrast .record-title:hover::after {
+    content: ' [查看]';
+    font-weight: normal;
+}
+
+/* 减少动画模式下的调整 */
+.reduce-motion .record-title,
+.reduce-motion .record-title:hover::after {
+    animation: none !important;
+    transition: none !important;
+}

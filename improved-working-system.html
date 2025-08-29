@@ -314,11 +314,6 @@
 
 
 
-        .back-btn {
-            background: linear-gradient(45deg, #6c757d, #5a6268);
-            margin-bottom: 20px;
-        }
-
         /* 练习记录样式 */
         .practice-stats {
             display: grid;
@@ -585,7 +580,7 @@
 
         <!-- 题库浏览页面 -->
         <div id="browse-view" class="view">
-            <button class="btn back-btn" onclick="showView('overview')">← 返回总览</button>
+
             <h2 id="browse-title">📚 题库浏览</h2>
 
             <div class="search-box">
@@ -656,9 +651,9 @@
             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                 <button class="btn btn-warning" onclick="clearCache()">🗑️ 清除缓存</button>
                 <button class="btn" onclick="reloadLibrary()">🔄 重新加载题库</button>
-                <button class="btn btn-info" onclick="runSystemIntegrationTest()">🔧 系统检测</button>
+
                 <button class="btn btn-secondary" onclick="showPerformanceReport()">📊 性能报告</button>
-                <button class="btn" onclick="runUserExperienceValidation()">👤 用户体验检查</button>
+
                 <button class="btn btn-success" onclick="runCompleteSystemValidation()">✅ 完整功能验证</button>
             </div>
 
@@ -706,10 +701,11 @@
     <script src="js/components/CommunicationRecovery.js"></script>
     <script src="js/components/PerformanceOptimizer.js"></script>
     <script src="js/components/DataIntegrityManager.js"></script>
-    <script src="js/components/UserExperienceValidator.js"></script>
     <script src="js/components/BrowseStateManager.js"></script>
-    <script src="js/components/SystemIntegrationTester.js"></script>
     <script src="system-validation.js"></script>
+    <script src="test-system-fixes.js"></script>
+    <script src="test-console-fixes.js"></script>
+    <script src="cleanup-floating-buttons.js"></script>
 
     <script>
         // 增强的全局错误处理器
@@ -1340,69 +1336,7 @@
                     if (lastUpdateEl) lastUpdateEl.textContent = new Date().toLocaleString();
                 }
 
-                // 优化的系统集成测试（按需加载）
-                async function runSystemIntegrationTest() {
-                    showMessage('正在准备系统检测...', 'info');
 
-                    try {
-                        // 按需加载系统集成测试器
-                        if (!window.SystemIntegrationTester) {
-                            if (window.performanceOptimizer) {
-                                showMessage('正在加载系统检测组件...', 'info');
-                                await window.performanceOptimizer.lazyLoadScript('js/components/SystemIntegrationTester.js');
-                                
-                                // 等待脚本加载完成
-                                let attempts = 0;
-                                while (!window.SystemIntegrationTester && attempts < 10) {
-                                    await new Promise(resolve => setTimeout(resolve, 100));
-                                    attempts++;
-                                }
-                            }
-                            
-                            if (!window.SystemIntegrationTester) {
-                                throw new Error('系统集成测试器加载失败');
-                            }
-                        }
-
-                        showMessage('开始运行系统集成测试...', 'info');
-
-                        const tester = new SystemIntegrationTester();
-                        const report = await tester.runFullIntegrationTest();
-
-                        const successRate = report.summary.successRate;
-                        const messageType = successRate >= 80 ? 'success' : successRate >= 60 ? 'info' : 'error';
-
-                        showMessage(
-                            `集成测试完成！成功率: ${successRate}% (${report.summary.passedTests}/${report.summary.totalTests})`,
-                            messageType
-                        );
-
-                        // 如果有失败的测试，显示建议
-                        if (report.summary.failedTests > 0) {
-                            setTimeout(() => {
-                                showMessage(`检测到 ${report.summary.failedTests} 个问题，系统仍可正常使用`, 'info');
-                            }, 2000);
-                        }
-
-                        // 显示性能报告
-                        if (window.performanceOptimizer) {
-                            const perfReport = window.performanceOptimizer.getPerformanceReport();
-                            console.log('[Performance] 性能报告:', perfReport);
-                            
-                            if (perfReport.cache.hitRate > 0) {
-                                setTimeout(() => {
-                                    showMessage(`缓存命中率: ${Math.round(perfReport.cache.hitRate)}%`, 'info');
-                                }, 3000);
-                            }
-                        }
-
-                    } catch (error) {
-                        console.error('[SystemIntegrationTest] 测试失败:', error);
-                        window.handleError(error, '系统集成测试', {
-                            userMessage: '系统检测失败，但不影响正常使用'
-                        });
-                    }
-                }
 
 
 
@@ -2207,104 +2141,7 @@
                     }
                 }
 
-                // 运行用户体验验证
-                async function runUserExperienceValidation() {
-                    if (!window.UserExperienceValidator) {
-                        showMessage('用户体验验证器未加载', 'error');
-                        return;
-                    }
 
-                    try {
-                        showMessage('正在进行用户体验检查...', 'info');
-                        
-                        const validator = new UserExperienceValidator();
-                        const report = await validator.runFullUXValidation();
-                        
-                        // 显示验证报告
-                        let reportHtml = `
-                            <div style="background: rgba(255, 255, 255, 0.1); padding: 20px; border-radius: 10px; margin: 20px 0;">
-                                <h3>👤 用户体验验证报告</h3>
-                                
-                                <div style="margin: 15px 0;">
-                                    <h4>📊 总体评分</h4>
-                                    <p><strong>成功率:</strong> ${report.summary.successRate}%</p>
-                                    <p><strong>通过检查:</strong> ${report.summary.passedChecks}/${report.summary.totalChecks}</p>
-                                    <p><strong>整体状态:</strong> ${getUXStatusText(report.overallStatus)}</p>
-                                </div>
-
-                                <div style="margin: 15px 0;">
-                                    <h4>📋 分类检查结果</h4>
-                        `;
-
-                        report.categories.forEach(category => {
-                            const percentage = Math.round((category.passed / category.total) * 100);
-                            const statusIcon = percentage >= 80 ? '✅' : percentage >= 60 ? '⚠️' : '❌';
-                            
-                            reportHtml += `
-                                <div style="margin: 10px 0; padding: 10px; border-left: 3px solid ${percentage >= 80 ? '#4ade80' : percentage >= 60 ? '#fbbf24' : '#ef4444'};">
-                                    <strong>${statusIcon} ${category.category}:</strong> ${percentage}% (${category.passed}/${category.total})
-                                </div>
-                            `;
-                        });
-
-                        reportHtml += `
-                                </div>
-
-                                <div style="margin: 15px 0;">
-                                    <h4>💡 改进建议</h4>
-                        `;
-
-                        if (report.recommendations.length > 0) {
-                            report.recommendations.forEach(rec => {
-                                const priorityIcon = rec.priority === 'high' ? '🔴' : rec.priority === 'medium' ? '🟡' : '🔵';
-                                reportHtml += `
-                                    <div style="margin: 8px 0;">
-                                        ${priorityIcon} <strong>${rec.category}:</strong> ${rec.message || rec.suggestion}
-                                    </div>
-                                `;
-                            });
-                        } else {
-                            reportHtml += '<p>暂无改进建议，用户体验良好！</p>';
-                        }
-
-                        reportHtml += `
-                                </div>
-                                
-                                <button class="btn btn-secondary" onclick="this.parentElement.parentElement.remove()">关闭</button>
-                            </div>
-                        `;
-
-                        // 显示报告
-                        const container = document.getElementById('settings-view');
-                        const existingReport = container.querySelector('.ux-report');
-                        if (existingReport) {
-                            existingReport.remove();
-                        }
-
-                        const reportDiv = document.createElement('div');
-                        reportDiv.className = 'ux-report';
-                        reportDiv.innerHTML = reportHtml;
-                        container.appendChild(reportDiv);
-
-                        const messageType = report.summary.successRate >= 80 ? 'success' : 
-                                          report.summary.successRate >= 60 ? 'info' : 'warning';
-                        showMessage(`用户体验检查完成，评分: ${report.summary.successRate}%`, messageType);
-
-                    } catch (error) {
-                        console.error('[UserExperience] 用户体验验证失败:', error);
-                        showMessage('用户体验验证失败: ' + error.message, 'error');
-                    }
-                }
-
-                // 获取用户体验状态文本
-                function getUXStatusText(status) {
-                    const statusMap = {
-                        'excellent': '🌟 优秀',
-                        'good': '👍 良好', 
-                        'needs_improvement': '⚠️ 需要改进'
-                    };
-                    return statusMap[status] || status;
-                }
 
                 // 运行完整系统验证
                 function runCompleteSystemValidation() {
