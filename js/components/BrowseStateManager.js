@@ -1,6 +1,6 @@
 /**
  * 浏览状态管理器
- * 负责管理题库浏览的状态和过滤器
+ * 负责管理题库浏览的状态和过滤器，支持完整的状态持久化和回滚
  */
 class BrowseStateManager {
     constructor() {
@@ -8,6 +8,25 @@ class BrowseStateManager {
         this.previousFilter = null;
         this.browseHistory = [];
         this.maxHistorySize = 10;
+        this.subscribers = [];
+        this.state = {
+            currentCategory: null,
+            currentFrequency: null,
+            viewMode: 'grid',
+            sortBy: 'title',
+            sortOrder: 'asc',
+            filters: {
+                frequency: 'all',
+                status: 'all',
+                difficulty: 'all'
+            },
+            searchQuery: '',
+            pagination: {
+                page: 1,
+                pageSize: 20,
+                total: 0
+            }
+        };
         
         // 绑定方法上下文
         this.handleBrowseNavigation = this.handleBrowseNavigation.bind(this);
@@ -23,10 +42,13 @@ class BrowseStateManager {
         console.log('[BrowseStateManager] 初始化浏览状态管理器');
         
         // 恢复保存的状态
-        this.restoreBrowseState();
+        this.restorePersistentState();
         
         // 设置事件监听器
         this.setupEventListeners();
+        
+        // 初始化完成后通知订阅者
+        this.notifySubscribers();
     }
 
     /**
@@ -86,6 +108,11 @@ class BrowseStateManager {
             window.currentCategory = filter;
         }
         
+        // 更新状态
+        this.setState({
+            currentCategory: filter === 'all' ? null : filter
+        });
+        
         // 更新浏览标题
         this.updateBrowseTitle(filter);
         
@@ -105,6 +132,144 @@ class BrowseStateManager {
     }
 
     /**
+     * 设置状态并通知订阅者
+     */
+    setState(newState) {
+        // 保存历史状态
+        this.browseHistory.push({
+            action: 'state_change',
+            previousState: JSON.parse(JSON.stringify(this.state)),
+            newState: JSON.parse(JSON.stringify(newState)),
+            timestamp: Date.now()
+        });
+        
+        if (this.browseHistory.length > this.maxHistorySize) {
+            this.browseHistory.shift();
+        }
+        
+        // 更新状态
+        this.state = { ...this.state, ...newState };
+        
+        // 通知订阅者
+        this.notifySubscribers();
+        
+        // 持久化状态
+        this.persistState();
+    }
+
+    /**
+     * 订阅状态变化
+     */
+    subscribe(callback) {
+        this.subscribers.push(callback);
+        
+        // 返回取消订阅的方法
+        return () => {
+            const index = this.subscribers.indexOf(callback);
+            if (index > -1) {
+                this.subscribers.splice(index, 1);
+            }
+        };
+    }
+
+    /**
+     * 通知所有订阅者
+     */
+    notifySubscribers() {
+        this.subscribers.forEach(callback => {
+            try {
+                callback(this.state);
+            } catch (error) {
+                console.error('[BrowseStateManager] 订阅者回调错误:', error);
+            }
+        });
+    }
+
+    /**
+     * 持久化状态
+     */
+    persistState() {
+        try {
+            const dataToSave = {
+                currentFilter: this.currentFilter,
+                previousFilter: this.previousFilter,
+                state: this.state,
+                browseHistory: this.browseHistory.slice(-this.maxHistorySize),
+                timestamp: Date.now()
+            };
+            
+            localStorage.setItem('browse_state', JSON.stringify(dataToSave));
+            console.log('[BrowseStateManager] 状态已持久化');
+        } catch (error) {
+            console.error('[BrowseStateManager] 持久化状态失败:', error);
+        }
+    }
+
+    /**
+     * 恢复持久化的状态
+     */
+    restorePersistentState() {
+        try {
+            const savedData = localStorage.getItem('browse_state');
+            if (savedData) {
+                const data = JSON.parse(savedData);
+                
+                // 恢复基本状态
+                this.previousFilter = data.previousFilter || null;
+                this.browseHistory = data.browseHistory || [];
+                
+                // 恢复完整状态
+                if (data.state) {
+                    this.state = { ...this.state, ...data.state };
+                }
+                
+                // 默认重置为'all'，确保主界面浏览按钮总是显示所有考试
+                this.currentFilter = 'all';
+                this.state.currentCategory = null;
+                
+                console.log('[BrowseStateManager] 持久化状态已恢复');
+            }
+        } catch (error) {
+            console.error('[BrowseStateManager] 恢复持久化状态失败:', error);
+            this.resetToDefaults();
+        }
+    }
+
+    /**
+     * 重置为默认状态
+     */
+    resetToDefaults() {
+        this.currentFilter = 'all';
+        this.previousFilter = null;
+        this.browseHistory = [];
+        this.state = {
+            currentCategory: null,
+            currentFrequency: null,
+            viewMode: 'grid',
+            sortBy: 'title',
+            sortOrder: 'asc',
+            filters: {
+                frequency: 'all',
+                status: 'all',
+                difficulty: 'all'
+            },
+            searchQuery: '',
+            pagination: {
+                page: 1,
+                pageSize: 20,
+                total: 0
+            }
+        };
+    }
+
+    /**
+     * 获取当前状态
+     */
+    getState() {
+        return { ...this.state };
+    }
+
+    /**
      * 重置到全部考试视图
      */
     resetToAllExams() {
@@ -121,6 +286,18 @@ class BrowseStateManager {
             window.currentCategory = 'all';
         }
         
+        // 更新状态
+        this.setState({
+            currentCategory: null,
+            currentFrequency: null,
+            searchQuery: '',
+            pagination: {
+                page: 1,
+                pageSize: 20,
+                total: 0
+            }
+        });
+        
         // 更新浏览标题
         this.updateBrowseTitle('all');
         
@@ -135,7 +312,7 @@ class BrowseStateManager {
         });
         
         // 保存状态
-        this.saveBrowseState();
+        this.persistState();
         
         // 触发重置事件
         this.dispatchResetEvent();
@@ -166,49 +343,17 @@ class BrowseStateManager {
     }
 
     /**
-     * 保存浏览状态
+     * 保存浏览状态（兼容性方法）
      */
     saveBrowseState() {
-        const state = {
-            currentFilter: this.currentFilter,
-            previousFilter: this.previousFilter,
-            browseHistory: this.browseHistory.slice(-this.maxHistorySize), // 只保存最近的历史
-            timestamp: Date.now()
-        };
-        
-        try {
-            localStorage.setItem('browse_state', JSON.stringify(state));
-            console.log('[BrowseStateManager] 浏览状态已保存');
-        } catch (error) {
-            console.error('[BrowseStateManager] 保存浏览状态失败:', error);
-        }
+        this.persistState();
     }
 
     /**
-     * 恢复浏览状态
+     * 恢复浏览状态（兼容性方法）
      */
     restoreBrowseState() {
-        try {
-            const savedState = localStorage.getItem('browse_state');
-            if (savedState) {
-                const state = JSON.parse(savedState);
-                
-                // 恢复过滤器状态（但不自动应用，等用户操作）
-                this.previousFilter = state.previousFilter || null;
-                this.browseHistory = state.browseHistory || [];
-                
-                // 默认重置为'all'，确保主界面浏览按钮总是显示所有考试
-                this.currentFilter = 'all';
-                
-                console.log('[BrowseStateManager] 浏览状态已恢复');
-            }
-        } catch (error) {
-            console.error('[BrowseStateManager] 恢复浏览状态失败:', error);
-            // 使用默认状态
-            this.currentFilter = 'all';
-            this.previousFilter = null;
-            this.browseHistory = [];
-        }
+        this.restorePersistentState();
     }
 
     /**

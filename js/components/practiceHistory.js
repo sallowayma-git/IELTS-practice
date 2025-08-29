@@ -43,11 +43,15 @@ class PracticeHistory {
         
         // 监听视图激活事件
         document.addEventListener('click', (e) => {
-            // 历史记录项点击
-            const recordItem = e.target.closest('.history-record-item');
-            if (recordItem) {
-                const recordId = recordItem.dataset.recordId;
-                this.showRecordDetails(recordId);
+            // 题目标题点击 - 显示详情
+            const recordTitle = e.target.closest('.record-title');
+            if (recordTitle) {
+                const recordItem = recordTitle.closest('.history-record-item');
+                if (recordItem) {
+                    const recordId = recordItem.dataset.recordId;
+                    this.showRecordDetails(recordId);
+                    return;
+                }
             }
             
             // 操作按钮点击
@@ -58,6 +62,7 @@ class PracticeHistory {
                 const action = actionBtn.dataset.historyAction;
                 const recordId = actionBtn.dataset.recordId;
                 this.handleRecordAction(action, recordId);
+                return;
             }
             
             // 分页按钮点击
@@ -65,6 +70,7 @@ class PracticeHistory {
             if (pageBtn && !pageBtn.classList.contains('disabled')) {
                 const page = parseInt(pageBtn.dataset.page);
                 this.goToPage(page);
+                return;
             }
         });
         
@@ -548,7 +554,7 @@ class PracticeHistory {
                         <div class="status-indicator ${statusClass}"></div>
                     </div>
                     <div class="record-content">
-                        <h4 class="record-title">${record.metadata.examTitle || record.examId}</h4>
+                        <h4 class="record-title clickable">${record.metadata.examTitle || record.examId}</h4>
                         <div class="record-meta">
                             <span class="record-category">${record.metadata.category || 'Unknown'}</span>
                             <span class="record-frequency">${record.metadata.frequency === 'high' ? '高频' : '次高频'}</span>
@@ -718,6 +724,9 @@ class PracticeHistory {
         const startTime = Utils.formatDate(record.startTime, 'YYYY-MM-DD HH:mm:ss');
         const endTime = Utils.formatDate(record.endTime, 'YYYY-MM-DD HH:mm:ss');
         
+        // 生成答案详情表格
+        const answersTableHtml = this.generateAnswersTable(record);
+        
         const detailsContent = `
             <div class="record-details-modal">
                 <div class="details-header">
@@ -787,6 +796,8 @@ class PracticeHistory {
                         </div>
                     </div>
                     
+                    ${answersTableHtml}
+                    
                     ${record.questionTypePerformance && Object.keys(record.questionTypePerformance).length > 0 ? `
                         <div class="details-section">
                             <h4>题型表现</h4>
@@ -818,8 +829,127 @@ class PracticeHistory {
     }
 
     /**
-     * 删除记录
+     * 生成答案详情表格
      */
+    generateAnswersTable(record) {
+        // 检查是否有答案数据
+        if (!record.answers || Object.keys(record.answers).length === 0) {
+            return `
+                <div class="details-section">
+                    <h4>答案详情</h4>
+                    <div class="no-answers-message">
+                        <p>暂无答案详情数据</p>
+                    </div>
+                </div>
+            `;
+        }
+        
+        let answersData = [];
+        
+        // 处理不同格式的答案数据
+        if (record.scoreInfo && record.scoreInfo.details) {
+            // 新格式：包含 scoreInfo.details
+            Object.entries(record.scoreInfo.details).forEach(([questionId, detail]) => {
+                answersData.push({
+                    questionId: questionId,
+                    userAnswer: detail.userAnswer || '-',
+                    correctAnswer: detail.correctAnswer || '-',
+                    isCorrect: detail.isCorrect
+                });
+            });
+        } else {
+            // 旧格式：只有用户答案
+            Object.entries(record.answers).forEach(([questionId, userAnswer]) => {
+                answersData.push({
+                    questionId: questionId,
+                    userAnswer: userAnswer || '-',
+                    correctAnswer: '-', // 旧数据没有正确答案
+                    isCorrect: null // 无法判断
+                });
+            });
+        }
+        
+        // 按题号排序
+        answersData.sort((a, b) => {
+            const aNum = parseInt(a.questionId.replace(/\D/g, '')) || 0;
+            const bNum = parseInt(b.questionId.replace(/\D/g, '')) || 0;
+            return aNum - bNum;
+        });
+        
+        // 生成表格 HTML
+        const tableRows = answersData.map((answer, index) => {
+            const correctIcon = answer.isCorrect === true ? '✓' : 
+                               answer.isCorrect === false ? '✗' : '-';
+            const correctClass = answer.isCorrect === true ? 'correct' : 
+                                answer.isCorrect === false ? 'incorrect' : 'unknown';
+            
+            return `
+                <tr class="answer-row ${correctClass}">
+                    <td class="question-number">${index + 1}</td>
+                    <td class="correct-answer">${this.formatAnswer(answer.correctAnswer)}</td>
+                    <td class="user-answer">${this.formatAnswer(answer.userAnswer)}</td>
+                    <td class="result-icon ${correctClass}">${correctIcon}</td>
+                </tr>
+            `;
+        }).join('');
+        
+        // 统计信息
+        const totalQuestions = answersData.length;
+        const correctCount = answersData.filter(a => a.isCorrect === true).length;
+        const incorrectCount = answersData.filter(a => a.isCorrect === false).length;
+        const unknownCount = answersData.filter(a => a.isCorrect === null).length;
+        
+        return `
+            <div class="details-section answers-section">
+                <h4>答案详情</h4>
+                <div class="answers-summary">
+                    <span class="summary-item">总题数：${totalQuestions}</span>
+                    ${correctCount > 0 ? `<span class="summary-item correct">正确：${correctCount}</span>` : ''}
+                    ${incorrectCount > 0 ? `<span class="summary-item incorrect">错误：${incorrectCount}</span>` : ''}
+                    ${unknownCount > 0 ? `<span class="summary-item unknown">无法判断：${unknownCount}</span>` : ''}
+                </div>
+                <div class="answers-table-container">
+                    <table class="answers-table">
+                        <thead>
+                            <tr>
+                                <th class="col-number">序号</th>
+                                <th class="col-correct">正确答案</th>
+                                <th class="col-user">我的答案</th>
+                                <th class="col-result">对错</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${tableRows}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    }
+    
+    /**
+     * 格式化答案显示
+     */
+    formatAnswer(answer) {
+        if (!answer || answer === null || answer === undefined) {
+            return '-';
+        }
+        
+        // 处理布尔值
+        if (typeof answer === 'boolean') {
+            return answer ? 'True' : 'False';
+        }
+        
+        // 处理字符串
+        const answerStr = String(answer).trim();
+        
+        // 如果答案太长，截断并显示省略号
+        if (answerStr.length > 50) {
+            return answerStr.substring(0, 47) + '...';
+        }
+        
+        return answerStr || '-';
+    }
     deleteRecord(recordId) {
         if (!confirm('确定要删除这条练习记录吗？此操作不可撤销。')) {
             return;

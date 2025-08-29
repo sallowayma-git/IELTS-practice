@@ -2880,3 +2880,197 @@ body:not(.reduce-motion) .modal {
         min-width: 0;
     }
 }
+
+/* 可点击元素样式 */
+.clickable {
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+.clickable:hover {
+    color: var(--primary-color);
+    text-decoration: underline;
+}
+
+.record-title.clickable {
+    position: relative;
+}
+
+.record-title.clickable:after {
+    content: ' 👁️';
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    font-size: 0.8em;
+}
+
+.record-title.clickable:hover:after {
+    opacity: 0.7;
+}
+
+/* 答案详情表格样式 */
+.answers-section {
+    margin-top: var(--spacing-lg);
+}
+
+.answers-summary {
+    display: flex;
+    gap: var(--spacing-lg);
+    margin-bottom: var(--spacing-md);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--bg-tertiary);
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-sm);
+}
+
+.summary-item {
+    font-weight: 500;
+}
+
+.summary-item.correct {
+    color: var(--success-color);
+}
+
+.summary-item.incorrect {
+    color: var(--error-color);
+}
+
+.summary-item.unknown {
+    color: var(--text-secondary);
+}
+
+.answers-table-container {
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+}
+
+.answers-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--bg-primary);
+}
+
+.answers-table th {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-weight: 600;
+    padding: var(--spacing-sm) var(--spacing-md);
+    text-align: left;
+    border-bottom: 2px solid var(--border-color);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.answers-table td {
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: top;
+}
+
+.answers-table .col-number {
+    width: 60px;
+    text-align: center;
+}
+
+.answers-table .col-correct {
+    width: 30%;
+}
+
+.answers-table .col-user {
+    width: 30%;
+}
+
+.answers-table .col-result {
+    width: 60px;
+    text-align: center;
+}
+
+.answer-row:hover {
+    background: var(--bg-tertiary);
+}
+
+.answer-row.correct {
+    background: var(--success-color-lighter);
+}
+
+.answer-row.incorrect {
+    background: rgba(239, 68, 68, 0.05);
+}
+
+.answer-row.unknown {
+    background: rgba(107, 114, 128, 0.05);
+}
+
+.question-number {
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.correct-answer,
+.user-answer {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: var(--font-size-sm);
+    word-break: break-word;
+}
+
+.correct-answer {
+    color: var(--text-primary);
+}
+
+.user-answer {
+    color: var(--text-secondary);
+}
+
+.result-icon {
+    font-weight: bold;
+    font-size: var(--font-size-lg);
+}
+
+.result-icon.correct {
+    color: var(--success-color);
+}
+
+.result-icon.incorrect {
+    color: var(--error-color);
+}
+
+.result-icon.unknown {
+    color: var(--text-tertiary);
+}
+
+.no-answers-message {
+    text-align: center;
+    padding: var(--spacing-xl);
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+    border-radius: var(--border-radius);
+}
+
+/* 响应式设计 - 答案表格 */
+@media (max-width: 768px) {
+    .answers-summary {
+        flex-direction: column;
+        gap: var(--spacing-sm);
+    }
+    
+    .answers-table th,
+    .answers-table td {
+        padding: var(--spacing-xs) var(--spacing-sm);
+        font-size: var(--font-size-xs);
+    }
+    
+    .answers-table .col-correct,
+    .answers-table .col-user {
+        width: 35%;
+    }
+    
+    .correct-answer,
+    .user-answer {
+        max-width: 150px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+}

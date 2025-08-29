@@ -65,9 +65,7 @@
             'ErrorFixer',
             'CommunicationRecovery',
             'PerformanceOptimizer',
-            'DataIntegrityManager',
-            'UserExperienceValidator',
-            'SystemIntegrationTester'
+            'DataIntegrityManager'
         ];
         
         const missing = requiredComponents.filter(comp => !window[comp]);

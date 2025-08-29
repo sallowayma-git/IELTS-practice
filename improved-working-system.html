@@ -1246,6 +1246,21 @@
                     const htmlCount = examIndex.filter(exam => exam.hasHtml).length;
                     const pdfCount = examIndex.filter(exam => !exam.hasHtml).length;
                     
+                    // 关键修复：将数据保存到localStorage，以便ExamBrowser组件可以读取
+                    try {
+                        localStorage.setItem('exam_index', JSON.stringify(examIndex));
+                        console.log('[System] 题库数据已保存到localStorage，数量:', examIndex.length);
+                        
+                        // 同时更新storage对象（如果存在）
+                        if (window.storage && typeof window.storage.set === 'function') {
+                            window.storage.set('exam_index', examIndex);
+                            console.log('[System] 题库数据已保存到storage对象');
+                        }
+                    } catch (error) {
+                        console.error('[System] 保存题库数据失败:', error);
+                        window.handleError(error, '数据保存');
+                    }
+                    
                     showMessage(
                         `题库加载完成！共 ${examIndex.length} 个题目 (${htmlCount} 个HTML, ${pdfCount} 个PDF) - ${Math.round(loadTime)}ms`, 
                         'success'
@@ -1253,6 +1268,14 @@
                     
                     updateOverview();
                     updateSystemInfo();
+                    
+                    // 通知ExamBrowser组件数据已更新
+                    if (window.app && window.app.components && window.app.components.examBrowser) {
+                        console.log('[System] 通知ExamBrowser组件刷新数据');
+                        setTimeout(() => {
+                            window.app.components.examBrowser.refreshExamList();
+                        }, 100);
+                    }
                 }
 
                 // 题库加载降级方案
