@@ -1,0 +1,10 @@
+# 忽略特定的文件夹
+/.kiro/
+/.qoder/
+/.vscode/
+/documents/
+/docs/
+
+# 忽略可能的系统文件
+.DS_Store
+Thumbs.db
