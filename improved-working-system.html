@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>考试总览系统 - 改进版</title>
-    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="icon" type="image/svg+xml" href="assets/images/favicon.svg">
     <style>
         * {
             margin: 0;
@@ -684,7 +684,7 @@
     </div>
 
     <!-- 加载完整题库数据 -->
-    <script src="complete-exam-data.js"></script>
+    <script src="assets/scripts/complete-exam-data.js"></script>
 
     <!-- 加载工具函数 -->
     <script src="js/utils/helpers.js"></script>
@@ -702,10 +702,11 @@
     <script src="js/components/PerformanceOptimizer.js"></script>
     <script src="js/components/DataIntegrityManager.js"></script>
     <script src="js/components/BrowseStateManager.js"></script>
-    <script src="system-validation.js"></script>
-    <script src="test-system-fixes.js"></script>
-    <script src="test-console-fixes.js"></script>
-    <script src="cleanup-floating-buttons.js"></script>
+    <script src="tests/system-validation.js"></script>
+    <script src="tests/test-system-fixes.js"></script>
+    <script src="tests/test-console-fixes.js"></script>
+    <script src="tests/cleanup-floating-buttons.js"></script>
+    <script src="tests/validate-file-paths.js"></script>
 
     <script>
         // 增强的全局错误处理器
