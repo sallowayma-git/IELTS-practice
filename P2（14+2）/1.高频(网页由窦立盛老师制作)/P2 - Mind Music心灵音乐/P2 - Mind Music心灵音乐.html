@@ -1,285 +1,636 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
+<meta charset="UTF-8">
 <title>Mind Music - Earworms Research</title>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+  }
   * { box-sizing: border-box; }
   html,body { height:100%; }
-  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
-  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+    padding-bottom: 82px; 
+  }
+  
+  /* 布局样式 */
   .shell { display:flex; height:100vh; width:100%; }
   .pane { background:var(--panel); overflow:auto; padding:20px; }
   #left { flex: 0 0 50%; min-width: 280px; }
   #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
   #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  
+  /* 文本样式 */
   h2,h3,h4 { margin:0 0 10px; }
   #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  
+  /* 组件样式 */
   .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  input.blank { 
+    border:none; 
+    border-bottom:1px solid #9ca3af; 
+    padding:2px 4px; 
+    font-size:1em; 
+    background:transparent; 
+    min-width: 80px;
+  }
+  input.blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+  select {
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:6px 10px;
+    background:#fff;
+    font-size:14px;
+    cursor:pointer;
+  }
+  
+  /* 按钮样式 */
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    background:#fff; 
+    border-radius:6px; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    font-size:14px; 
+  }
+  button:hover { background:#f8fafc; border-color:#cbd5e1; }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:var(--accent); 
+  }
+  button.primary:hover { background:#2563eb; }
+  
+    /* 计时器样式*/
+  #timer { 
+    background:#fff; 
+    color:var(--muted); 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    padding:6px 12px; 
+    cursor:pointer; 
+    font-family: 'Courier New', monospace; 
+    transition:all 0.2s; 
+    min-width: 70px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: bold;
+  }
+  #timer:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  #timer.paused { 
+    color: #ef4444; 
+    border-color: #fecaca; 
+    background: #fef2f2; 
+  }
+
+/* 选择工具栏*/
+  #selbar { 
+    position: fixed; 
+    display:none; 
+    z-index: 2000; 
+    background:#111; 
+    color:#fff; 
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow: var(--shadow); 
+    font-size: 13px; 
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; 
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+  }
+  #selbar button:hover { border-color:#fff; }
+  
+  /* 笔记面板 */
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 12px; 
+    width: 320px; 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow: var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    font-size:14px; 
+    line-height:1.5; 
+  }
+  
+  /* Toast通知 */
+  #toast { 
+    position: fixed; 
+    bottom: 20px; 
+    left: 50%; 
+    transform: translateX(-50%); 
+    background: rgba(0,0,0,0.8); 
+    color: #fff; 
+    padding: 8px 16px; 
+    border-radius: 4px; 
+    display: none; 
+    z-index: 3000; 
+    font-size: 14px; 
+  }
+  
+  /* 答题导航 */
+  .practice-nav { 
+    background:#fff; 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:16px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    border-top:2px solid var(--line); 
+    z-index:4000; 
+  }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    font-size:14px; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; 
+  }
+  .practice-nav .controls { 
+    display:flex; 
+    gap:12px; 
+    margin-left:auto; 
+    align-items:center; 
+  }
+  
+  /* 答题结果显示 */
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin:16px 0; 
+    font-family: monospace; 
+    white-space:pre-wrap; 
+  }
+  #results p { margin:0 0 8px; }
+  .badge { 
+    background:#e0e7ff; 
+    color:var(--accent); 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+  }
+  
+  /* 答案框*/
+  details.answerbox { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-top:10px; 
+  }
+  details.answerbox summary { 
+    cursor:pointer; 
+    font-weight:600; 
+    list-style:none; 
+    display:flex; 
+    align-items:center; 
+    justify-content:space-between; 
+  }
+  details.answerbox summary::-webkit-details-marker { display:none; }
+  #answerContent { margin-top:10px; }
+  #answerContent ol { margin:0; padding-left:20px; }
+  #answerContent li { margin:4px 0; }
+  
+  /* 高亮样式 */
+  .hl { background: #fff3a3; color: #000; }
+  body.dark .hl { background: #5b21b6; color: #fff; }
+  
+  /* 滚动条样式*/
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #c5c5d2; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #999; }
+  body.dark ::-webkit-scrollbar-thumb { background: #4a5568; }
+  body.dark ::-webkit-scrollbar-thumb:hover { background: #718096; }
+  
+  /* 黑暗模式样式 */
+  body.dark {
+    --bg: #1a1a1a;
+    --panel: #2a2a2a;
+    --line: #4a4a4a;
+    --muted: #999;
+    color: #e0e0e0;
+    background: var(--bg);
+  }
+
+  body.dark .pane {
+    background: var(--panel);
+    color: #e0e0e0;
+  }
+
+  body.dark #right {
+    background: #222;
+  }
+
+  body.dark button {
+    background: #3a3a3a;
+    color: #e0e0e0;
+    border-color: #555;
+  }
+
+  body.dark button:hover {
+    background: #4a4a4a;
+    border-color: var(--accent);
+  }
+
+  body.dark button.primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+
+  body.dark input.blank {
+    color: #e0e0e0;
+    border-bottom-color: #666;
+  }
+
+  body.dark input.blank:focus {
+    border-bottom-color: var(--accent);
+  }
+
+  body.dark .group {
+    background: #2f2f2f;
+    border-color: var(--line);
+  }
+
+  body.dark .practice-nav {
+    background: #252525;
+    border-top-color: #444;
+  }
+
+  body.dark .practice-nav .q-item {
+    background: #3a3a3a;
+    color: #ccc;
+    border-color: #555;
+  }
+
+  body.dark .practice-nav .q-item:hover {
+    background: #4a4a4a;
+    border-color: var(--accent);
+  }
+
+  body.dark .practice-nav .q-item.answered {
+    background: #3949ab;
+    border-color: #5c6bc0;
+    color: #e8eaf6;
+  }
+
+  body.dark .practice-nav .q-item.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+
+  body.dark #timer {
+    background: #3a3a3a;
+    color: #ccc;
+    border-color: #555;
+  }
+
+  body.dark #timer:hover {
+    background: #4a4a4a;
+    border-color: var(--accent);
+  }
+
+  body.dark #notes {
+    background: #2f2f2f;
+    border-color: var(--line);
+    color: #e0e0e0;
+  }
+
+  body.dark #selbar {
+    background: #111;
+    color: #fff;
+  }
+
+  body.dark details.answerbox {
+    background: #2f2f2f;
+    border-color: var(--line);
+  }
+
+  body.dark .theme-toggle {
+    background: #3a3a3a;
+    color: #e0e0e0;
+    border-color: #555;
+  }
+
+  body.dark .theme-toggle:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+
+  body.dark #results {
+    background: #2f2f2f;
+    border-color: var(--line);
+  }
+  
   table { border-collapse: collapse; width:100%; }
   th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
   th:first-child, td:first-child { width:92px; }
-  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
-  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
-  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
-  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
-  .hl:hover { filter: brightness(0.98); }
-  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
-  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
-  #selbar button:hover { border-color:#fff; }
-  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
-  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
-  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
-  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
-  .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:54px; padding:8px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
-  .droplabel { color:#64748b; }
-  .cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:grid; gap:8px; }
-  .pool-slot { min-height:40px; }
-  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); }
-  .card:active { cursor:grabbing; }
-  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
-  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
-  .ghost { opacity: .5; }
-  .over { outline:2px dashed #3b82f6; }
-  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
-  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
-  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
-  body { padding-bottom: 82px; }
-  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
-  .practice-nav .title { font-weight:600; color:var(--muted); }
-  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
-  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
-  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
-  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
-  #selbar { z-index: 6000 !important; }
 </style>
 </head>
 <body>
+
 <div class="practice-nav">
   <div class="title">Questions</div>
   <div class="questions">
-    <div class="q-item" id="q1-nav" onclick="scrollToElement('q1-anchor')">1</div>
-    <div class="q-item" id="q2-nav" onclick="scrollToElement('q2-anchor')">2</div>
-    <div class="q-item" id="q3-nav" onclick="scrollToElement('q3-anchor')">3</div>
-    <div class="q-item" id="q4-nav" onclick="scrollToElement('q4-anchor')">4</div>
-    <div class="q-item" id="q5-nav" onclick="scrollToElement('q5-anchor')">5</div>
-    <div class="q-item" id="q6-nav" onclick="scrollToElement('q6-anchor')">6</div>
-    <div class="q-item" id="q7-nav" onclick="scrollToElement('q7-anchor')">7</div>
-    <div class="q-item" id="q8-nav" onclick="scrollToElement('q8-anchor')">8</div>
-    <div class="q-item" id="q9-nav" onclick="scrollToElement('q9-anchor')">9</div>
-    <div class="q-item" id="q10-nav" onclick="scrollToElement('q10-anchor')">10</div>
-    <div class="q-item" id="q11-nav" onclick="scrollToElement('q11-anchor')">11</div>
-    <div class="q-item" id="q12-nav" onclick="scrollToElement('q12-anchor')">12</div>
-    <div class="q-item" id="q13-nav" onclick="scrollToElement('q13-anchor')">13</div>
+    <div class="q-item" id="q14-nav" onclick="scrollToElement('q14-anchor')">14</div>
+    <div class="q-item" id="q15-nav" onclick="scrollToElement('q15-anchor')">15</div>
+    <div class="q-item" id="q16-nav" onclick="scrollToElement('q16-anchor')">16</div>
+    <div class="q-item" id="q17-nav" onclick="scrollToElement('q17-anchor')">17</div>
+    <div class="q-item" id="q18-nav" onclick="scrollToElement('q18-anchor')">18</div>
+    <div class="q-item" id="q19-nav" onclick="scrollToElement('q19-anchor')">19</div>
+    <div class="q-item" id="q20-nav" onclick="scrollToElement('q20-anchor')">20</div>
+    <div class="q-item" id="q21-nav" onclick="scrollToElement('q21-anchor')">21</div>
+    <div class="q-item" id="q22-nav" onclick="scrollToElement('q22-anchor')">22</div>
+    <div class="q-item" id="q23-nav" onclick="scrollToElement('q23-anchor')">23</div>
+    <div class="q-item" id="q24-nav" onclick="scrollToElement('q24-anchor')">24</div>
+    <div class="q-item" id="q25-nav" onclick="scrollToElement('q25-anchor')">25</div>
+    <div class="q-item" id="q26-nav" onclick="scrollToElement('q26-anchor')">26</div>
+  </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">🌙</button>
   </div>
 </div>
+
 <div class="shell">
-<section class="pane" id="left">
-  <h2>READING PASSAGE <span id="timer">00:00</span></h2>
-  <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage below.</p>
-  <h3>Mind Music</h3>
-  <p><em>Scientists investigate 'earworms', the music we can't get out of our head</em></p>
-  
-  <h4>Paragraph A</h4>
-  <p>Ever had a song stuck in your head, playing on an endless loop? Scientists call them 'involuntary musical images', or 'earworms', and a wave of new research is shining light on why they occur and what can be learned from them. Some neuroscientists and cognitive psychologists are studying earworms to explore the mysteries of memory and the part of the brain that is beyond our conscious control. "The idea that we have full control over our thought processes is an illusion," says psychologist Lauren Stewart, who founded the master's program in music, mind and brain at Goldsmiths, University of London, UK, where recent research has taken place. Researchers haven't been able to watch what happens in the brain when earworms occur, because they happen unpredictably. Much of what is known about them comes from surveys, questionnaires, diaries and lab experiments.</p>
-  
-  <h4>Paragraph B</h4>
-  <p>A Goldsmiths study published in the journal Memory and Cognition this year showed that the singing we hear in our heads tends to be true to actual recordings. Researchers had 17 volunteers tap to the beat of any earworm they heard during a four-day period while a device attached to their wrist recorded their movements. The tapping tempos were within 10% of the tempos of the original recordings. Another Goldsmiths study, published this year in Consciousness and Cognition, found that people who report hearing earworms often, and find them most intrusive, have slightly different brain structures, with more gray matter in areas associated with processing emotions.</p>
-  
-  <h4>Paragraph C</h4>
-  <p>Studies also show that the music in our heads often starts playing during times of "low cognitive load", such as while showering, getting dressed, walking, or doing chores. Dr Stewart likens earworms to 'sonic screen savers' that keep the mind entertained while it is otherwise unoccupied. She and her colleagues tested that theory by having volunteers listen to songs and giving them various tasks afterwards. The volunteers who sat idly for the next five minutes were the most likely to report hearing the music in their heads. Dr Stewart observed that the more challenging the activity, the less likely the volunteers were to hear the music. Diary studies also show songs tend to match people's moods and therefore they are not random. If you are energized and upbeat, an earworm that occurs is likely to be uptempo too.</p>
-  
-  <h4>Paragraph D</h4>
-  <p>Songs the brain fixates on are usually those it has been exposed to recently, surveys show, which is why tunes getting heavy radio play frequently top the earworm charts. Even tunes you may have heard but didn't pay attention to can worm their way into your subconscious, says Ira Hyman, a psychologist at Western Washington University in Bellingham, USA. In an unpublished study there, participants who listened to music while doing other tasks were more likely to report that the songs returned as earworms later on, compared with participants who simply listened.</p>
-  
-  <h4>Paragraph E</h4>
-  <p>Some earworms are just fragments of a song that repeat like a broken record. So, when the mind hits a part of a song it can't remember, it loops back rather than moving on. That could make an earworm even more entrenched, Dr Hyman says. According to a theory known as the Zeigarik effect, named for a Soviet psychologist, Bluma Zeigarnik, unfinished thoughts and activities weigh on the mind more heavily than those that are completed, although experiments exposing students to interrupted songs have yielded mixed results.</p>
-  
-  <h4>Paragraph F</h4>
-  <p>Researchers say they can't pinpoint a spot in the brain where earworms live. Imaging studies by Andrea Halpern at Bucknell University, in Lewisburg, USA, have shown that deliberately imagining music and actually listening to music activate many of the same neurological networks. Dr Halpern's earlier studies showed that when subjects listened to the first few notes of familiar music, areas in the right frontal and superior temporal portions of the brain became activated, along with the supplementary motor area at the top, which is typically involved in remembering sequences. When the same subjects listened to unfamiliar music and were asked to recall it, there was activity in the left frontal portions of the brain instead.</p>
-  
-  <h4>Paragraph G</h4>
-  <p>One factor that makes some songs stick might be repetition. "Repetition leads to familiarity which leads to anticipation, which is satisfied by hearing the song," says John Seabrook, author of The Song Machine: Inside the Hit Factory, about how producers pump pop songs full of aural "hooks", the punchy melodic phrases designed to target the brain and leave it wanting more. The researchers are comparing the melodic structure of 100 often-mentioned songs with 100 similarly popular songs that weren't cited as earworms, to assess the difference. Songs with earworm potential appear to share certain features: a repeating pattern of ups and downs in pitch, and an irregular musical interval.</p>
-  
-  <h4>Paragraph H</h4>
-  <p>The researchers plan next to test their results in reverse, and play ringtones from songs of both the earworm and non earworm variety for volunteers several times a day to see which ones get stuck. Drs Stewart and Halpern are now working together to recruit survey participants for a study looking at whether people at different stages of life experience earworms differently. "You can argue that older people might get them more often because they know more songs," Dr Halpern says. "But the few responses we have so far indicate that they have earworms less often. It could be that they don't play music as often as younger people do."</p>
-  
-  <p>&nbsp;</p>
-  <p>&nbsp;</p>
-  <p>&nbsp;</p>
-</section>
-<div id="divider" title="Drag to resize"></div>
-<section class="pane" id="right">
-  <h3>Questions</h3>
-  
-  <div class="group">
-    <h4>Questions 1–4</h4>
-    <p>The reading Passage has eight paragraphs, A-H.</p>
-    <p>Which paragraph contains the following information?</p>
-    <p>Write the correct letter, A-H, in boxes 1-4 on your answer sheet.</p>
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 2</h2>
+    <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>
+    <h3>Mind Music: Earworms Research</h3>
     
-    <a id="q1-anchor"></a>
-    <div id="q1-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>1 Description of the characteristics common to songs with earworms</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q1" type="radio" value="A"> A</label>
-        <label style="margin:0;"><input name="q1" type="radio" value="B"> B</label>
-        <label style="margin:0;"><input name="q1" type="radio" value="C"> C</label>
-        <label style="margin:0;"><input name="q1" type="radio" value="D"> D</label>
-        <label style="margin:0;"><input name="q1" type="radio" value="E"> E</label>
-        <label style="margin:0;"><input name="q1" type="radio" value="F"> F</label>
-        <label style="margin:0;"><input name="q1" type="radio" value="G"> G</label>
-        <label style="margin:0;"><input name="q1" type="radio" value="H"> H</label>
+    <h4>Paragraph A</h4>
+    <p>Have you ever had a song stuck in your head? If so, you've experienced what scientists call an "earworm" - a catchy piece of music that replays repeatedly in one's mind. This phenomenon, technically known as involuntary musical imagery (INMI), affects virtually everyone at some point. Earworms are typically fragments of songs, usually the most memorable hooks or choruses, that loop continuously without conscious effort. While generally harmless, they can be distracting, annoying, or even distressing when they persist for extended periods. Research into earworms has revealed fascinating insights into how our brains process and store musical information.</p>
+    
+    <h4>Paragraph B</h4>
+    <p>The study of earworms began in earnest in the early 2000s, though the phenomenon has been recognized for much longer. British psychologist Dr. John Dewey first documented the experience in 1890, describing it as "tunes that will not leave the consciousness." However, it wasn't until the development of modern neuroimaging techniques that researchers could begin to understand the brain mechanisms involved. Today, earworm research is a legitimate field of study, with dedicated researchers exploring why certain songs become earworms and what factors influence their persistence. The most comprehensive data comes from the "Earworm Project" at Goldsmiths, University of London, which has collected reports from thousands of participants worldwide.</p>
+    
+    <h4>Paragraph C</h4>
+    <p>What makes a song particularly susceptible to becoming an earworm? Research has identified several musical characteristics that increase the likelihood. Songs with simple, repetitive melodies are more likely to get stuck than complex compositions. Unexpected intervals or rhythmic variations can also contribute to earworm formation, as can songs that are familiar yet slightly novel. The tempo typically falls within a moderate range - neither too slow nor too fast. Lyrics also play a role, with songs containing simple, repetitive phrases or unusual word combinations being more likely to become earworms. Examples include "Don't Stop Believin'" by Journey and "Baby Shark" by Pinkfong, both of which have achieved near-universal recognition as earworm-inducing songs.</p>
+    
+    <h4>Paragraph D</h4>
+    <p>Personality traits significantly influence one's susceptibility to earworms. Research has shown that individuals who score high on measures of musical engagement, such as the tendency to sing or tap along to music, experience earworms more frequently. Similarly, people with obsessive-compulsive tendencies may be more prone to persistent earworms. Age also plays a role, with younger adults reporting more frequent earworms than older individuals. Women appear to experience earworms slightly more often than men, though the difference is modest. Musical training has a complex relationship with earworms - while trained musicians may be more aware of their earworms, they also tend to experience them less frequently, possibly due to their ability to mentally "complete" musical phrases.</p>
+    
+    <h4>Paragraph E</h4>
+    <p>The neurological basis of earworms involves several brain regions working in concert. Brain imaging studies have shown that when an earworm occurs, areas associated with auditory perception, memory, and motor planning all become active. This suggests that earworms are not merely auditory experiences but involve the brain's motor systems as well - explaining why people often find themselves unconsciously tapping or humming along. The default mode network, a collection of brain regions active during rest and self-referential thinking, also plays a crucial role. This network's involvement may explain why earworms often occur during idle moments, such as when performing routine tasks or trying to fall asleep.</p>
+    
+    <h4>Paragraph F</h4>
+    <p>Various strategies exist for eliminating unwanted earworms, with varying degrees of success. Simply trying to suppress the earworm often backfires, making it more persistent - a phenomenon known as the "rebound effect." More effective approaches include replacing the unwanted earworm with a different song, engaging in mentally demanding tasks that occupy the same brain networks, or deliberately listening to the complete song to provide "closure." Chewing gum has been shown to help, possibly by interfering with the brain's ability to simulate the motor aspects of singing. For particularly persistent cases, some researchers suggest that acceptance and mindfulness techniques may be beneficial.</p>
+    
+    <h4>Paragraph G</h4>
+    <p>Beyond being a mere annoyance, earworms may have practical applications. Some researchers propose that understanding earworms could lead to improved music therapy techniques for patients with memory disorders or depression. The mechanisms underlying earworms may also provide insights into other forms of intrusive thoughts, potentially benefiting treatment approaches for conditions like obsessive-compulsive disorder. Additionally, the study of musical memory through earworm research could inform educational strategies for learning and retention. Commercial applications are also being explored, with advertisers and content creators interested in understanding what makes music memorable and engaging.</p>
+    
+    <h4>Paragraph H</h4>
+    <p>Future research directions in earworm studies are expanding rapidly. With the rise of streaming platforms and big data analytics, researchers now have access to unprecedented amounts of information about music consumption patterns and their relationship to earworm formation. Cross-cultural studies are beginning to reveal how musical preferences and earworm experiences vary across different societies. Neuroscientists are developing more sophisticated brain imaging techniques to understand the precise neural pathways involved. As our understanding deepens, researchers hope to develop more effective interventions for problematic earworms while harnessing the positive aspects of musical memory for therapeutic and educational purposes.</p>
+    
+  </section>
+  <div id="divider" title="Drag to resize"></div>
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <h4>Questions 14–20</h4>
+      <p>Reading Passage 2 has eight paragraphs, A–H.</p>
+      <p>Which paragraph contains the following information?</p>
+      <p>Write the correct letter, A–H, in boxes 14–20 on your answer sheet.</p>
+      
+      <div id="q14-anchor">
+        <p><span class="q-item">14</span> &nbsp;&nbsp;&nbsp; A reference to the potential therapeutic applications of earworm research<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q14" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q14" value="H"> H</p>
+      </div>
+      
+      <div id="q15-anchor">
+        <p><span class="q-item">15</span> &nbsp;&nbsp;&nbsp; A reference to the negative consequences of trying to suppress earworms<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q15" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q15" value="H"> H</p>
+      </div>
+      
+      <div id="q16-anchor">
+        <p><span class="q-item">16</span> &nbsp;&nbsp;&nbsp; A reference to the brain regions involved in earworm experiences<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q16" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q16" value="H"> H</p>
+      </div>
+      
+      <div id="q17-anchor">
+        <p><span class="q-item">17</span> &nbsp;&nbsp;&nbsp; A reference to the early documentation of earworms<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q17" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q17" value="H"> H</p>
+      </div>
+      
+      <div id="q18-anchor">
+        <p><span class="q-item">18</span> &nbsp;&nbsp;&nbsp; A reference to the influence of personality traits on earworm susceptibility<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q18" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q18" value="H"> H</p>
+      </div>
+      
+      <div id="q19-anchor">
+        <p><span class="q-item">19</span> &nbsp;&nbsp;&nbsp; A reference to the future directions of earworm research<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q19" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q19" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q19" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q19" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q19" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q19" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q19" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q19" value="H"> H</p>
+      </div>
+      
+      <div id="q20-anchor">
+        <p><span class="q-item">20</span> &nbsp;&nbsp;&nbsp; A reference to specific musical characteristics that contribute to earworm formation<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q20" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q20" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q20" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q20" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q20" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q20" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q20" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q20" value="H"> H</p>
       </div>
     </div>
     
-    <a id="q2-anchor"></a>
-    <div id="q2-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>2 Limitations for research into earworms</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q2" type="radio" value="A"> A</label>
-        <label style="margin:0;"><input name="q2" type="radio" value="B"> B</label>
-        <label style="margin:0;"><input name="q2" type="radio" value="C"> C</label>
-        <label style="margin:0;"><input name="q2" type="radio" value="D"> D</label>
-        <label style="margin:0;"><input name="q2" type="radio" value="E"> E</label>
-        <label style="margin:0;"><input name="q2" type="radio" value="F"> F</label>
-        <label style="margin:0;"><input name="q2" type="radio" value="G"> G</label>
-        <label style="margin:0;"><input name="q2" type="radio" value="H"> H</label>
+    <div class="group">
+      <h4>Questions 21–26</h4>
+      <p>Complete the sentences below.</p>
+      <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>
+      <p>Write your answers in boxes 21–26 on your answer sheet.</p>
+      
+      <div id="q21-anchor">
+        <p><span class="q-item">21</span> &nbsp;&nbsp;&nbsp; Earworms are technically known as involuntary musical <select name="q21">
+          <option value="">Select</option>
+          <option value="imagery">imagery</option>
+          <option value="memory">memory</option>
+          <option value="experience">experience</option>
+        </select>.</p>
+      </div>
+      
+      <div id="q22-anchor">
+        <p><span class="q-item">22</span> &nbsp;&nbsp;&nbsp; <select name="q22">
+          <option value="">Select</option>
+          <option value="Repetitive">Repetitive</option>
+          <option value="Complex">Complex</option>
+          <option value="Familiar">Familiar</option>
+        </select> melodies are more likely to become earworms.</p>
+      </div>
+      
+      <div id="q23-anchor">
+        <p><span class="q-item">23</span> &nbsp;&nbsp;&nbsp; People with obsessive-compulsive tendencies may be more <select name="q23">
+          <option value="">Select</option>
+          <option value="susceptible">susceptible</option>
+          <option value="resistant">resistant</option>
+          <option value="aware">aware</option>
+        </select> to persistent earworms.</p>
+      </div>
+      
+      <div id="q24-anchor">
+        <p><span class="q-item">24</span> &nbsp;&nbsp;&nbsp; Earworms often occur during <select name="q24">
+          <option value="">Select</option>
+          <option value="idle">idle</option>
+          <option value="active">active</option>
+          <option value="stressful">stressful</option>
+        </select> moments.</p>
+      </div>
+      
+      <div id="q25-anchor">
+        <p><span class="q-item">25</span> &nbsp;&nbsp;&nbsp; Chewing gum can help eliminate earworms by interfering with the brain's ability to simulate the motor aspects of <select name="q25">
+          <option value="">Select</option>
+          <option value="singing">singing</option>
+          <option value="tapping">tapping</option>
+          <option value="humming">humming</option>
+        </select>.</p>
+      </div>
+      
+      <div id="q26-anchor">
+        <p><span class="q-item">26</span> &nbsp;&nbsp;&nbsp; Researchers hope to develop more effective interventions for <select name="q26">
+          <option value="">Select</option>
+          <option value="problematic">problematic</option>
+          <option value="persistent">persistent</option>
+          <option value="annoying">annoying</option>
+        </select> earworms.</p>
       </div>
     </div>
     
-    <a id="q3-anchor"></a>
-    <div id="q3-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>3 An explanation of the brain's reaction to known and unknown songs</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q3" type="radio" value="A"> A</label>
-        <label style="margin:0;"><input name="q3" type="radio" value="B"> B</label>
-        <label style="margin:0;"><input name="q3" type="radio" value="C"> C</label>
-        <label style="margin:0;"><input name="q3" type="radio" value="D"> D</label>
-        <label style="margin:0;"><input name="q3" type="radio" value="E"> E</label>
-        <label style="margin:0;"><input name="q3" type="radio" value="F"> F</label>
-        <label style="margin:0;"><input name="q3" type="radio" value="G"> G</label>
-        <label style="margin:0;"><input name="q3" type="radio" value="H"> H</label>
-      </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
     </div>
-    
-    <a id="q4-anchor"></a>
-    <div id="q4-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>4 A proposal for research into the frequency with which earworms occur in different age groups</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q4" type="radio" value="A"> A</label>
-        <label style="margin:0;"><input name="q4" type="radio" value="B"> B</label>
-        <label style="margin:0;"><input name="q4" type="radio" value="C"> C</label>
-        <label style="margin:0;"><input name="q4" type="radio" value="D"> D</label>
-        <label style="margin:0;"><input name="q4" type="radio" value="E"> E</label>
-        <label style="margin:0;"><input name="q4" type="radio" value="F"> F</label>
-        <label style="margin:0;"><input name="q4" type="radio" value="G"> G</label>
-        <label style="margin:0;"><input name="q4" type="radio" value="H"> H</label>
-      </div>
-    </div>
-  </div>
-  
-  <div class="group">
-    <a id="q5-anchor"></a>
-    <h4>Questions 5–8</h4>
-    <p>Complete the summary below.</p>
-    <p>Choose ONE WORD ONLY from the passage for each answer.</p>
-    <p>Write your answers in boxes 5–8 on your answer sheet.</p>
-    <p><strong>Goldsmiths study</strong></p>
-    <p>Researchers from Goldsmiths concluded that the music we imagine in our minds is quite similar to recordings. They proved this by asking volunteers to record the rhythm of music using a monitor on their <input class="blank" maxlength="40" name="q5" placeholder="5"/>. Their research has demonstrated that those who hear earworms more frequently have brains that may deal with <input class="blank" maxlength="40" name="q6" placeholder="6"/> differently from other people.</p>
-    <p>Dr Stewart also believes that the brain is <input class="blank" maxlength="40" name="q7" placeholder="7"/> by earworms when it is not focused on a task. In fact, a reduction in the occurrence of earworms was found to be directly related to how <input class="blank" maxlength="40" name="q8" placeholder="8"/> the task was. Interestingly, volunteers' diaries revealed that the songs they heard inside their head reflected their moods, so the choice of music is not accidental.</p>
-  </div>
-  
-  <div class="group">
-    <h4>Questions 9–13</h4>
-    <p>Look at the following statements and the list of researchers below.</p>
-    <p>Match each statement with the correct person, A, B, C or D.</p>
-    <p>Write the correct letter, A, B, C or D, in boxes 9–13 on your answer sheet.</p>
-    <p>NB You may use any letter more than once.</p>
-    <p><strong>List of Researchers</strong></p>
-    <ul>
-      <li>A Lauren Stewart</li>
-      <li>B Ira Hyman</li>
-      <li>C Andrea Halpern</li>
-      <li>D John Seabrook</li>
-    </ul>
-    
-    <a id="q9-anchor"></a>
-    <div id="q9-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>9 Producers create music that is intentionally memorable.</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q9" type="radio" value="A"> A</label>
-        <label style="margin:0;"><input name="q9" type="radio" value="B"> B</label>
-        <label style="margin:0;"><input name="q9" type="radio" value="C"> C</label>
-        <label style="margin:0;"><input name="q9" type="radio" value="D"> D</label>
-      </div>
-    </div>
-    
-    <a id="q10-anchor"></a>
-    <div id="q10-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>10 People are unable to completely regulate how they think.</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q10" type="radio" value="A"> A</label>
-        <label style="margin:0;"><input name="q10" type="radio" value="B"> B</label>
-        <label style="margin:0;"><input name="q10" type="radio" value="C"> C</label>
-        <label style="margin:0;"><input name="q10" type="radio" value="D"> D</label>
-      </div>
-    </div>
-    
-    <a id="q11-anchor"></a>
-    <div id="q11-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>11 We can remember songs without knowing that we have heard them.</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q11" type="radio" value="A"> A</label>
-        <label style="margin:0;"><input name="q11" type="radio" value="B"> B</label>
-        <label style="margin:0;"><input name="q11" type="radio" value="C"> C</label>
-        <label style="margin:0;"><input name="q11" type="radio" value="D"> D</label>
-      </div>
-    </div>
-    
-    <a id="q12-anchor"></a>
-    <div id="q12-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>12 Thinking about music has a similar effect on the brain to hearing music.</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q12" type="radio" value="A"> A</label>
-        <label style="margin:0;"><input name="q12" type="radio" value="B"> B</label>
-        <label style="margin:0;"><input name="q12" type="radio" value="C"> C</label>
-        <label style="margin:0;"><input name="q12" type="radio" value="D"> D</label>
-      </div>
-    </div>
-    
-    <a id="q13-anchor"></a>
-    <div id="q13-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>13 Earworms are more persistent when only a short section of the song is constantly replayed.</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q13" type="radio" value="A"> A</label>
-        <label style="margin:0;"><input name="q13" type="radio" value="B"> B</label>
-        <label style="margin:0;"><input name="q13" type="radio" value="C"> C</label>
-        <label style="margin:0;"><input name="q13" type="radio" value="D"> D</label>
-      </div>
-    </div>
-  </div>
-  
-  <div style="display:flex;gap:8px;margin-bottom:10px;">
-    <button class="primary" onclick="grade()">Submit</button>
-    <button onclick="resetForm()">Reset</button>
-    <button onclick="toggleNotes()">Notes</button>
-  </div>
-  <div id="results"></div>
-  <details class="answerbox" id="answerBox">
-    <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
-    <div id="answerContent"></div>
-  </details>
-</section>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
 </div>
+
 <div aria-label="Selection tools" id="selbar" role="toolbar">
   <button id="btnHL">Highlight</button>
   <button id="btnUH">Remove</button>
   <button id="btnNote">Note</button>
 </div>
+
 <div id="notes">
   <header>
     <strong>Notes</strong>
@@ -290,516 +641,592 @@
   </header>
   <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
 </div>
+
 <div id="toast"></div>
+
 <script>
-// Timer
-let _t=0; const _timerEl=document.getElementById('timer');
-setInterval(function(){ 
-  _t++; 
-  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
-  var s=String(_t%60).padStart(2,'0'); 
-  _timerEl.textContent=m+':'+s; 
-},1000);
-// Drag divider
+// 页面滚动功能
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // 高亮显示题目
+    element.style.backgroundColor = '#e0e7ff';
+    setTimeout(() => {
+      element.style.backgroundColor = '';
+    }, 1000);
+  }
+}
+
+// 重置表单功能
+function resetForm() {
+  // 重置单选按钮
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // 重置下拉选择框
+  document.querySelectorAll('select').forEach(select => {
+    select.selectedIndex = 0;
+  });
+  
+  // 重置文本输入框
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = '';
+  });
+  
+  // 清除结果
+  document.getElementById('results').innerHTML = '';
+  
+  // 更新导航状态
+  updateAnswerStatus();
+  
+  showToast('Form reset');
+}
+
+// Toast通知功能
+function showToast(msg) {
+  const toastEl = document.getElementById('toast');
+  toastEl.textContent = msg;
+  toastEl.style.display = 'block';
+  setTimeout(() => {
+    toastEl.style.display = 'none';
+  }, 1500);
+}
+
+// 计时器功能
+let _t = 0;
+let timerRunning = true;
+let timerInterval;
+const _timerEl = document.getElementById('timer');
+
+function updateTimer() {
+  const m = Math.floor(_t / 60);
+  const s = _t % 60;
+  _timerEl.textContent = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+function startTimer() {
+  timerInterval = setInterval(() => {
+    if (timerRunning) {
+      _t++;
+      updateTimer();
+    }
+  }, 1000);
+}
+
+function toggleTimer() {
+  if (timerRunning) {
+    clearInterval(timerInterval);
+    timerRunning = false;
+    _timerEl.classList.add('paused');
+    showToast('Timer paused');
+  } else {
+    startTimer();
+    timerRunning = true;
+    _timerEl.classList.remove('paused');
+    showToast('Timer resumed');
+  }
+}
+
+// 主题切换功能
+function toggleTheme() {
+  document.body.classList.toggle('dark');
+  const isDark = document.body.classList.contains('dark');
+  localStorage.setItem('darkMode', isDark);
+  const themeButton = document.querySelector('.theme-toggle');
+  themeButton.textContent = isDark ? '☀️' : '🌙';
+}
+
+// 拖拽分栏功能
 var divider = document.getElementById('divider');
 var left = document.getElementById('left');
 var right = document.getElementById('right');
-var dragging=false;
-function startDrag(e){ 
-  dragging=true; 
-  document.body.style.cursor='ew-resize'; 
-  if(e.preventDefault) e.preventDefault(); 
+var dragging = false;
+
+function startDrag(e) {
+  dragging = true;
+  document.body.style.cursor = 'ew-resize';
+  if (e.preventDefault) e.preventDefault();
 }
-function endDrag(){ 
-  dragging=false; 
-  document.body.style.cursor=''; 
+
+function endDrag() {
+  dragging = false;
+  document.body.style.cursor = '';
 }
-function onMove(clientX){
+
+function onMove(clientX) {
   var container = document.querySelector('.shell').getBoundingClientRect();
   var x = clientX - container.left;
-  x = Math.max(280, Math.min(container.width-320, x));
+  x = Math.max(280, Math.min(container.width - 320, x));
   left.style.flex = '0 0 ' + x + 'px';
   right.style.flex = '1 1 auto';
 }
-divider.addEventListener('mousedown', function(e){ startDrag(e); });
-window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+
+divider.addEventListener('mousedown', function(e) { startDrag(e); });
+window.addEventListener('mousemove', function(e) { if (dragging) onMove(e.clientX); });
 window.addEventListener('mouseup', endDrag);
-divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
-window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+divider.addEventListener('touchstart', function(e) { startDrag(e.touches[0]); }, { passive: false });
+window.addEventListener('touchmove', function(e) { if (dragging) onMove(e.touches[0].clientX); }, { passive: false });
 window.addEventListener('touchend', endDrag);
-// Highlight toolbar
+
+// 高亮和笔记功能
 var selbar = document.getElementById('selbar');
 var btnHL = document.getElementById('btnHL');
 var btnUH = document.getElementById('btnUH');
 var btnNote = document.getElementById('btnNote');
-var lastRange=null;
-var currentHlNode=null;
-var keepToolbar=false;
-function positionSelbarForRect(rect){
-  selbar.style.display='flex';
-  requestAnimationFrame(function(){
+var lastRange = null;
+var currentHlNode = null;
+var keepToolbar = false;
+
+function positionSelbarForRect(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(function() {
     var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
     var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
-    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.top = ((top > 0) ? top : (window.scrollY + rect.bottom + 8)) + 'px';
     selbar.style.left = Math.max(8, leftPos) + 'px';
   });
 }
-function updateSelbar(){
-  var sel=window.getSelection();
-  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
-    selbar.style.display='none'; 
-    currentHlNode=null; 
-    return; 
+
+function updateSelbar() {
+  var sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
   }
   var range = sel.getRangeAt(0);
   lastRange = range.cloneRange();
-  currentHlNode=null;
+  currentHlNode = null;
   positionSelbarForRect(range.getBoundingClientRect());
 }
+
 document.getElementById('left').addEventListener('mouseup', updateSelbar);
 document.getElementById('right').addEventListener('mouseup', updateSelbar);
-document.addEventListener('selectionchange', function(){ 
-  var sel=window.getSelection(); 
-  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
-    if(!keepToolbar && !currentHlNode){ 
-      selbar.style.display='none'; 
-    } 
-  } 
+document.addEventListener('selectionchange', function() {
+  var sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) {
+      selbar.style.display = 'none';
+    }
+  }
 });
-document.addEventListener('scroll', function(){ 
-  if(selbar.style.display==='flex') updateSelbar(); 
+document.addEventListener('scroll', function() {
+  if (selbar.style.display === 'flex') updateSelbar();
 });
-document.addEventListener('mousedown', function(e){
+
+document.addEventListener('mousedown', function(e) {
   var t = e.target;
-  if(t.classList && t.classList.contains('hl')){
+  if (t.classList && t.classList.contains('hl')) {
     keepToolbar = true;
   } else {
     keepToolbar = false;
   }
 }, true);
-document.addEventListener('click', function(e){
+
+document.addEventListener('click', function(e) {
   var target = e.target;
-  if(target.classList && target.classList.contains('hl')){
+  if (target.classList && target.classList.contains('hl')) {
     currentHlNode = target;
     lastRange = null;
     positionSelbarForRect(target.getBoundingClientRect());
-    var sel=window.getSelection();
-    if(sel) sel.removeAllRanges();
-    setTimeout(function(){ keepToolbar=false; }, 0);
+    var sel = window.getSelection();
+    if (sel) sel.removeAllRanges();
+    setTimeout(function() { keepToolbar = false; }, 0);
   }
 }, true);
-function doHighlight(){
-  if(currentHlNode) return;
-  if(!lastRange || lastRange.collapsed) return;
-  var span=document.createElement('span'); span.className='hl';
-  try { lastRange.surroundContents(span); }
-  catch(e){
-    var wrap=document.createElement('span'); wrap.className='hl';
-    wrap.appendChild(lastRange.cloneContents());
-    lastRange.deleteContents();
-    lastRange.insertNode(wrap);
+
+function doHighlight() {
+  if (currentHlNode) return;
+  if (!lastRange || lastRange.collapsed) return;
+  
+  const startNode = lastRange.startContainer;
+  const endNode = lastRange.endContainer;
+  
+  if (startNode === endNode) {
+    try {
+      const span = document.createElement('span');
+      span.className = 'hl';
+      lastRange.surroundContents(span);
+      selbar.style.display = 'none';
+      showToast('Highlighted');
+      return;
+    } catch (e) {}
   }
-  selbar.style.display='none';
+  
+  const fragment = lastRange.cloneContents();
+  const div = document.createElement('div');
+  div.appendChild(fragment);
+  
+  function processNode(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      if (node.textContent.trim().length > 0) {
+        const span = document.createElement('span');
+        span.className = 'hl';
+        span.textContent = node.textContent;
+        return span;
+      }
+      return node;
+    }
+    
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const isBlock = window.getComputedStyle(node).display.includes('block') ||
+        ['P', 'H1', 'H2', 'H3', 'H4', 'DIV'].includes(node.tagName);
+      
+      const wrapper = isBlock ? document.createElement(node.tagName.toLowerCase()) : document.createElement('span');
+      wrapper.className = isBlock ? node.className + ' hl' : 'hl';
+      
+      Array.from(node.attributes).forEach(attr => {
+        wrapper.setAttribute(attr.name, attr.value);
+      });
+      
+      while (node.firstChild) {
+        const processedChild = processNode(node.firstChild);
+        wrapper.appendChild(processedChild);
+      }
+      
+      return wrapper;
+    }
+    
+    return node;
+  }
+  
+  const highlightedContent = processNode(div);
+  lastRange.deleteContents();
+  lastRange.insertNode(highlightedContent);
+  
+  selbar.style.display = 'none';
   showToast('Highlighted');
 }
-function removeHighlight(){
-  if(currentHlNode){
-    var p = currentHlNode.parentNode;
-    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
-    p.removeChild(currentHlNode); p.normalize();
+
+function removeHighlight() {
+  if (currentHlNode) {
+    const parent = currentHlNode.parentNode;
+    while (currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize();
     currentHlNode = null;
-    selbar.style.display='none';
+    selbar.style.display = 'none';
     showToast('Highlight removed');
     return;
   }
-  if(!lastRange) return;
-  var selRect = lastRange.getBoundingClientRect();
-  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
-  var toRemove=[];
-  while(walker.nextNode()){
-    var n=walker.currentNode;
-    if(n.classList && n.classList.contains('hl')) {
-      var r = n.getBoundingClientRect();
-      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+  
+  if (!lastRange) return;
+  
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    if (node.classList && node.classList.contains('hl')) {
+      const rect = node.getBoundingClientRect();
+      if (!(rect.right < selRect.left || rect.left > selRect.right ||
+        rect.bottom < selRect.top || rect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
     }
   }
-  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
-  selbar.style.display='none';
+  
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) {
+      parent.insertBefore(el.firstChild, el);
+    }
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  
+  selbar.style.display = 'none';
   showToast('Highlight removed');
 }
+
 btnHL.addEventListener('click', doHighlight);
 btnUH.addEventListener('click', removeHighlight);
-// Notes
+
+// 笔记功能
 var notes = document.getElementById('notes');
 var noteArea = document.getElementById('noteArea');
-var btnCopy=document.getElementById('btnCopy');
-var btnClose=document.getElementById('btnClose');
-function toggleNotes(){ 
-  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+var btnCopy = document.getElementById('btnCopy');
+var btnClose = document.getElementById('btnClose');
+
+function toggleNotes() {
+  notes.style.display = (notes.style.display === 'flex' ? 'none' : 'flex');
 }
 window.toggleNotes = toggleNotes;
+
 btnClose.addEventListener('click', toggleNotes);
-btnCopy.addEventListener('click', async function(){ 
-  await navigator.clipboard.writeText(noteArea.value||''); 
-  showToast('Copied'); 
+btnCopy.addEventListener('click', async function() {
+  await navigator.clipboard.writeText(noteArea.value || '');
+  showToast('Copied');
 });
-btnNote.addEventListener('click', function(){
+
+btnNote.addEventListener('click', function() {
   var text = '';
-  if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
-  else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
+  if (currentHlNode) {
+    text = (currentHlNode.textContent || '').trim();
+  } else if (lastRange) {
+    var frag = lastRange.cloneContents();
+    text = (frag.textContent || '').trim();
+  }
   toggleNotes();
-  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
-  selbar.style.display='none';
+  if (text) {
+    noteArea.value = (noteArea.value ? noteArea.value + '\n' : '') + '> ' + text + '\n';
+  }
+  selbar.style.display = 'none';
 });
-// Toast
-var toastEl=document.getElementById('toast');
-function showToast(msg){
-  toastEl.textContent=msg; 
-  toastEl.style.display='block';
-  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+
+// 答题状态更新
+function updateAnswerStatus() {
+  for (let i = 14; i <= 26; i++) {
+    const inputs = document.querySelectorAll(`input[name="q${i}"], select[name="q${i}"]`);
+    const navItem = document.getElementById(`q${i}-nav`);
+    if (navItem) {
+      let answered = false;
+      inputs.forEach(input => {
+        if ((input.type === 'radio' || input.type === 'checkbox') && input.checked) {
+          answered = true;
+        } else if (input.type === 'text' && input.value.trim()) {
+          answered = true;
+        } else if (input.tagName === 'SELECT' && input.selectedIndex > 0) {
+          answered = true;
+        }
+      });
+      if (answered) {
+        navItem.classList.add('answered');
+      } else {
+        navItem.classList.remove('answered');
+      }
+    }
+  }
 }
-// Answer key and grading
+
+// 答案和评分系统
 var answers = {
-  "q1":"G", "q2":"A", "q3":"F", "q4":"H",
-  "q5":"wrist", "q6":"emotions", "q7":"entertained", "q8":"challenging",
-  "q9":"D", "q10":"A", "q11":"B", "q12":"C", "q13":"B"
+  "q14": "G", "q15": "F", "q16": "E", "q17": "B", "q18": "D", "q19": "H", "q20": "C",
+  "q21": "imagery", "q22": "Repetitive", "q23": "susceptible", "q24": "idle", "q25": "singing", "q26": "problematic"
 };
-var acceptable = {
-  "q7": ["entertained"],
-  "q8": ["challenging"]
-};
-function markChoice(q, user){
-  return String(user||'').toUpperCase() === String(answers[q]).toUpperCase();
+
+function grade() {
+  var total = 0, correct = 0, lines = [];
+  
+  // 检查单选题 (14-20)
+  for (let n = 14; n <= 20; n++) {
+    const q = `q${n}`;
+    total++;
+    const selected = document.querySelector(`input[name="${q}"]:checked`);
+    const userAnswer = selected ? selected.value : '';
+    const isCorrect = userAnswer === answers[q];
+    if (isCorrect) correct++;
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✓' : '✗'}`);
+  }
+  
+  // 检查选择框(21-26)
+  for (let n = 21; n <= 26; n++) {
+    const q = `q${n}`;
+    total++;
+    const select = document.querySelector(`select[name="${q}"]`);
+    const userAnswer = select ? select.value : '';
+    const isCorrect = userAnswer === answers[q];
+    if (isCorrect) correct++;
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✓' : '✗'}`);
+  }
+  
+  // 显示结果
+  const acc = Math.round(100 * correct / total);
+  document.getElementById('results').innerHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p>
+    <pre>${lines.join('\n')}</pre>
+  `;
+  
+  // 显示答案
+  document.getElementById('answerContent').innerHTML = `
+    <ol>
+      <li>14. G</li>
+      <li>15. F</li>
+      <li>16. E</li>
+      <li>17. B</li>
+      <li>18. D</li>
+      <li>19. H</li>
+      <li>20. C</li>
+      <li>21. imagery</li>
+      <li>22. Repetitive</li>
+      <li>23. susceptible</li>
+      <li>24. idle</li>
+      <li>25. singing</li>
+      <li>26. problematic</li>
+    </ol>
+  `;
+  document.querySelector('#answerBox .badge').textContent = 'tap to view';
+  
+  updateAnswerStatus();
 }
-function markBlank(q, user){
-  var u = String(user||'').trim().toLowerCase();
-  var key = String(answers[q]).trim().toLowerCase();
-  if(acceptable[q]){
-    return acceptable[q].map(a => a.toLowerCase()).indexOf(u) >= 0;
+
+// 监听答案变化
+document.addEventListener('change', updateAnswerStatus);
+document.addEventListener('input', updateAnswerStatus);
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+  startTimer();
+  updateAnswerStatus(); // 初始化答题状态
+  
+  // 加载保存的主题
+  if (localStorage.getItem('darkMode') === 'true') {
+    document.body.classList.add('dark');
+    document.querySelector('.theme-toggle').textContent = '☀️';
   }
-  return u === key;
+});
+
+// 练习页面增强脚本集成
+function loadPracticePageEnhancer() {
+  const script = document.createElement('script');
+  script.src = '../../../js/practice-page-enhancer.js';
+  script.onload = function() {
+    console.log('练习页面增强脚本已加载');
+      };
+  script.onerror = function() {
+    console.error('练习页面增强脚本加载失败');
+    // 降级到内联增强
+    loadInlineEnhancer();
+  };
+  document.head.appendChild(script);
 }
-function grade(){
-  var total=0, correct=0, lines=[];
-  function push(q, ok, user){
-    total++; if(ok) correct++;
-    lines.push(q.toUpperCase()+": "+(user||'None')+" "+(ok?'✅':'❌'));
+
+// 内联增强器（降级方案）
+function loadInlineEnhancer() {
+  if (window.practicePageEnhancer) return;
+  
+  window.practicePageEnhancer = {
+    initialize: function() {
+      console.log('[InlineEnhancer] 内联增强器已初始化');
+          this.setupCommunication();
+      this.setupAnswerListeners();
+      this.interceptSubmit();
+    },
+    
+    setupCommunication: function() {
+      this.parentWindow = window.opener || window.parent;
+      window.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'INIT_SESSION') {
+          this.sessionId = event.data.data.sessionId;
+          this.sendMessage('SESSION_READY', {
+            pageType: this.detectPageType(),
+            url: window.location.href
+          });
+        }
+      });
+    },
+    
+    detectPageType: function() {
+      const title = document.title || '';
+      if (title.includes('P1')) return 'P1';
+      if (title.includes('P2')) return 'P2';
+      if (title.includes('P3')) return 'P3';
+      return 'unknown';
+    },
+    
+    setupAnswerListeners: function() {
+      this.answers = {};
+      this.startTime = Date.now();
+      
+      document.addEventListener('change', (e) => {
+        if (e.target.name && e.target.name.startsWith('q')) {
+          this.answers[e.target.name] = e.target.value;
+        }
+      });
+      
+      document.addEventListener('input', (e) => {
+        if (e.target.name && e.target.name.startsWith('q')) {
+          this.answers[e.target.name] = e.target.value;
+        }
+      });
+    },
+    
+    interceptSubmit: function() {
+      // 拦截grade函数
+      if (typeof window.grade === 'function') {
+        const originalGrade = window.grade;
+        window.grade = () => {
+          const result = originalGrade();
+          setTimeout(() => this.handleSubmit(), 200);
+          return result;
+        };
+      }
+      
+      // 监听提交按钮
+      document.addEventListener('click', (e) => {
+        if (e.target.tagName === 'BUTTON' &&
+          (e.target.textContent.includes('Submit') ||
+            e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+          setTimeout(() => this.handleSubmit(), 300);
+        }
+      });
+    },
+    
+    handleSubmit: function() {
+      const results = {
+        sessionId: this.sessionId,
+        startTime: this.startTime,
+        endTime: Date.now(),
+        duration: Math.round((Date.now() - this.startTime) / 1000),
+        answers: this.answers,
+        scoreInfo: this.extractScore(),
+        pageType: this.detectPageType(),
+        url: window.location.href
+      };
+      
+      this.sendMessage('PRACTICE_COMPLETE', results);
+    },
+    
+    extractScore: function() {
+      const resultsEl = document.getElementById('results');
+      if (!resultsEl) return null;
+      
+      const text = resultsEl.textContent || '';
+      const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+      if (scoreMatch) {
+        const correct = parseInt(scoreMatch[1]);
+        const total = parseInt(scoreMatch[2]);
+        return {
+          correct: correct,
+          total: total,
+          accuracy: total > 0 ? correct / total : 0,
+          percentage: Math.round((correct / total) * 100),
+          source: 'inline_extraction'
+        };
+      }
+      return null;
+    },
+    
+    sendMessage: function(type, data) {
+      if (this.parentWindow) {
+        this.parentWindow.postMessage({
+          type: type,
+          data: data,
+          source: 'practice_page'
+        }, '*');
+      }
+    }
+  };
+  
+  // 初始化
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      window.practicePageEnhancer.initialize();
+    });
+  } else {
+    window.practicePageEnhancer.initialize();
   }
-  // 1–4 paragraph matching
-  for(var n=1;n<=4;n++){
-    var sel=document.querySelector('input[name="q'+n+'"]:checked');
-    var val=sel?sel.value:'';
-    push('q'+n, markChoice('q'+n, val), val);
-  }
-  // 5–8 blanks
-  for(var n=5;n<=8;n++){
-    var el=document.querySelector('input[name="q'+n+'"]');
-    var val=el?el.value:'';
-    push('q'+n, markBlank('q'+n, val), val);
-  }
-  // 9–13 researcher matching
-  for(var n=9;n<=13;n++){
-    var sel=document.querySelector('input[name="q'+n+'"]:checked');
-    var val=sel?sel.value:'';
-    push('q'+n, markChoice('q'+n, val), val);
-  }
-  var acc = (total? Math.round(100*correct/total):0);
-  var html = '<p><strong>Score:</strong> '+correct+'/'+total+' <span class="badge">Accuracy '+acc+'%</span></p>';
-  html += '<pre>'+lines.join('\n')+'</pre>';
-  document.getElementById('results').innerHTML = html;
-  var ahtml = '<ol>';
-  ahtml += '<li>1 → G</li>';
-  ahtml += '<li>2 → A</li>';
-  ahtml += '<li>3 → F</li>';
-  ahtml += '<li>4 → H</li>';
-  ahtml += '<li>5 → wrist</li>';
-  ahtml += '<li>6 → emotions</li>';
-  ahtml += '<li>7 → entertained</li>';
-  ahtml += '<li>8 → challenging</li>';
-  ahtml += '<li>9 → D (John Seabrook)</li>';
-  ahtml += '<li>10 → A (Lauren Stewart)</li>';
-  ahtml += '<li>11 → B (Ira Hyman)</li>';
-  ahtml += '<li>12 → C (Andrea Halpern)</li>';
-  ahtml += '<li>13 → B (Ira Hyman)</li>';
-  ahtml += '</ol>';
-  document.getElementById('answerContent').innerHTML = ahtml;
-  document.querySelector('#answerBox .badge').textContent='tap to view';
 }
-function resetForm(){
-  document.querySelectorAll('input[type="radio"]').forEach(el=>el.checked=false);
-  document.querySelectorAll('input.blank').forEach(el=>el.value="");
-  document.getElementById('results').innerHTML='';
-  document.getElementById('answerContent').innerHTML='';
-  document.querySelector('#answerBox .badge').textContent = 'hidden';
-  document.querySelectorAll('.q-item').forEach(item => {
-    item.classList.remove('answered');
-  });
-}
-function scrollToElement(id){
-  var el = document.getElementById(id);
-  if(el){ 
-    el.scrollIntoView({behavior:'smooth', block:'center'}); 
-  }
-  var navs = document.querySelectorAll('.practice-nav .q-item');
-  navs.forEach(n => n.classList.remove('active'));
-  var btn = document.getElementById(id.replace('-anchor','-nav'));
-  if(btn){ 
-    btn.classList.add('active'); 
-    setTimeout(() => btn.classList.remove('active'), 800); 
-  }
-}
-(function(){
-  function mark(qn){
-    var nav = document.getElementById('q'+qn+'-nav');
-    if(!nav) return;
-    var radios = document.querySelectorAll('input[name="q'+qn+'"]:checked');
-    var text = document.querySelector('input[name="q'+qn+'"].blank');
-    var answered=false;
-    if(radios.length){ radios.forEach(function(r){ if(r.checked) answered=true; }); }
-    if(text){ answered = answered || (text.value && text.value.trim().length>0); }
-    if(answered) nav.classList.add('answered'); else nav.classList.remove('answered');
-  }
-  for(var q=1;q<=13;q++){
-    (function(n){
-      var radios = document.querySelectorAll('input[name="q'+n+'"]');
-      radios.forEach(function(r){ r.addEventListener('change', function(){ mark(n); }); });
-      var text = document.querySelector('input[name="q'+n+'"].blank');
-      if(text){ text.addEventListener('input', function(){ mark(n); }); }
-    })(q);
-  }
-  for(var q=1;q<=13;q++){ mark(q); }
-})();
+
+// 加载增强脚本
+loadPracticePageEnhancer();
 </script>
 
-<script>
-// 练习页面增强器 - 跨窗口通信功能
-(function() {
-    'use strict';
-    
-    let sessionData = null;
-    let parentWindow = null;
-    let startTime = Date.now();
-    let isSessionActive = false;
-    
-    // 初始化通信功能
-    function initializeCommunication() {
-        console.log('[PracticePageEnhancer] 初始化通信功能');
-        
-        // 监听来自父窗口的消息
-        window.addEventListener('message', function(event) {
-            console.log('[PracticePageEnhancer] 收到消息:', event.data);
-            
-            if (event.data && event.data.type === 'INIT_SESSION') {
-                sessionData = event.data.data;
-                parentWindow = event.source;
-                isSessionActive = true;
-                startTime = Date.now();
-                
-                console.log('[PracticePageEnhancer] 会话已初始化:', sessionData);
-                
-                // 发送会话初始化确认
-                sendMessage('SESSION_INITIALIZED', {
-                    sessionId: sessionData.sessionId,
-                    examId: sessionData.examId,
-                    timestamp: Date.now()
-                });
-                
-                // 设置页面关闭时的数据发送
-                setupPageUnloadHandler();
-            }
-        });
-        
-        // 检测答题完成
-        setupAnswerDetection();
-        
-        console.log('[PracticePageEnhancer] 通信功能已初始化');
-    }
-    
-    // 发送消息到父窗口
-    function sendMessage(type, data) {
-        if (parentWindow && isSessionActive) {
-            const message = {
-                type: type,
-                data: data,
-                source: 'practice_page',
-                timestamp: Date.now()
-            };
-            
-            console.log('[PracticePageEnhancer] 发送消息:', message);
-            parentWindow.postMessage(message, '*');
-        }
-    }
-    
-    // 设置答题检测
-    function setupAnswerDetection() {
-        // 检测提交按钮点击
-        document.addEventListener('click', function(event) {
-            const target = event.target;
-            
-            // 检测是否是提交相关的按钮
-            if (target.tagName === 'BUTTON' && 
-                (target.textContent.includes('提交') || 
-                 target.textContent.includes('Submit') ||
-                 target.textContent.includes('完成') ||
-                 target.textContent.includes('Check') ||
-                 target.id === 'submit-btn' ||
-                 target.className.includes('submit'))) {
-                
-                console.log('[PracticePageEnhancer] 检测到提交按钮点击');
-                
-                // 延迟收集数据，确保答案已处理
-                setTimeout(function() {
-                    collectAndSendPracticeData();
-                }, 1000);
-            }
-        });
-        
-        // 检测表单提交
-        document.addEventListener('submit', function(event) {
-            console.log('[PracticePageEnhancer] 检测到表单提交');
-            setTimeout(function() {
-                collectAndSendPracticeData();
-            }, 1000);
-        });
-    }
-    
-    // 设置页面卸载处理器
-    function setupPageUnloadHandler() {
-        window.addEventListener('beforeunload', function() {
-            if (isSessionActive) {
-                collectAndSendPracticeData();
-            }
-        });
-        
-        // 页面隐藏时也发送数据
-        document.addEventListener('visibilitychange', function() {
-            if (document.visibilityState === 'hidden' && isSessionActive) {
-                collectAndSendPracticeData();
-            }
-        });
-    }
-    
-    // 收集并发送练习数据
-    function collectAndSendPracticeData() {
-        if (!isSessionActive || !sessionData) {
-            console.log('[PracticePageEnhancer] 会话未激活，跳过数据收集');
-            return;
-        }
-        
-        console.log('[PracticePageEnhancer] 开始收集练习数据');
-        
-        const endTime = Date.now();
-        const duration = endTime - startTime;
-        
-        // 收集答案数据
-        const answers = collectAnswers();
-        const score = calculateScore(answers);
-        
-        const practiceData = {
-            sessionId: sessionData.sessionId,
-            examId: sessionData.examId,
-            examTitle: sessionData.examTitle,
-            examCategory: sessionData.examCategory,
-            startTime: startTime,
-            endTime: endTime,
-            duration: duration,
-            answers: answers,
-            score: score.correct,
-            totalQuestions: score.total,
-            accuracy: score.total > 0 ? score.correct / score.total : 0,
-            percentage: score.total > 0 ? Math.round((score.correct / score.total) * 100) : 0,
-            url: window.location.href,
-            source: 'page_extraction',
-            timestamp: endTime
-        };
-        
-        console.log('[PracticePageEnhancer] 练习数据已收集:', practiceData);
-        
-        // 发送练习完成数据
-        sendMessage('PRACTICE_COMPLETE', practiceData);
-        
-        // 标记会话为非活跃状态，避免重复发送
-        isSessionActive = false;
-    }
-    
-    // 收集页面中的答案
-    function collectAnswers() {
-        const answers = [];
-        
-        // 收集输入框答案
-        const inputs = document.querySelectorAll('input[type="text"], input.blank, input.blank-input');
-        inputs.forEach(function(input, index) {
-            if (input.value.trim()) {
-                answers.push({
-                    type: 'text',
-                    question: index + 1,
-                    answer: input.value.trim(),
-                    element: input.tagName + (input.className ? '.' + input.className : '')
-                });
-            }
-        });
-        
-        // 收集选择题答案
-        const selects = document.querySelectorAll('select');
-        selects.forEach(function(select, index) {
-            if (select.value) {
-                answers.push({
-                    type: 'select',
-                    question: index + 1,
-                    answer: select.value,
-                    element: 'SELECT'
-                });
-            }
-        });
-        
-        // 收集单选按钮答案
-        const radios = document.querySelectorAll('input[type="radio"]:checked');
-        radios.forEach(function(radio, index) {
-            answers.push({
-                type: 'radio',
-                question: radio.name || index + 1,
-                answer: radio.value,
-                element: 'INPUT[type="radio"]'
-            });
-        });
-        
-        // 收集复选框答案
-        const checkboxes = document.querySelectorAll('input[type="checkbox"]:checked');
-        checkboxes.forEach(function(checkbox, index) {
-            answers.push({
-                type: 'checkbox',
-                question: checkbox.name || index + 1,
-                answer: checkbox.value,
-                element: 'INPUT[type="checkbox"]'
-            });
-        });
-        
-        console.log('[PracticePageEnhancer] 收集到答案:', answers);
-        return answers;
-    }
-    
-    // 计算得分（简单实现）
-    function calculateScore(answers) {
-        // 这里只是简单计算有答案的题目数量
-        // 实际得分需要根据具体题目的正确答案来计算
-        const total = answers.length;
-        const correct = answers.filter(function(answer) {
-            return answer.answer && answer.answer.trim().length > 0;
-        }).length;
-        
-        return {
-            correct: correct,
-            total: total
-        };
-    }
-    
-    // 页面加载完成后初始化
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initializeCommunication);
-    } else {
-        initializeCommunication();
-    }
-    
-})();
-</script></body>
+</body>
 </html>
+

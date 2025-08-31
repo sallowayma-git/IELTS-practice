@@ -1,63 +1,333 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<title>The Tuatara of New Zealand</title>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta charset="UTF-8">
+<title>P1 – The Tuatara of New Zealand</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+  }
   * { box-sizing: border-box; }
   html,body { height:100%; }
-  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
-  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+    padding-bottom: 82px; 
+  }
+  
+  /* 布局样式 */
   .shell { display:flex; height:100vh; width:100%; }
   .pane { background:var(--panel); overflow:auto; padding:20px; }
   #left { flex: 0 0 50%; min-width: 280px; }
   #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
   #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  
+  /* 文本样式 */
   h2,h3,h4 { margin:0 0 10px; }
   #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  
+  /* 组件样式 */
   .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
-  table { border-collapse: collapse; width:100%; }
-  th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
-  th:first-child, td:first-child { width:92px; }
-  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
-  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
-  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
-  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
-  .hl:hover { filter: brightness(0.98); }
-  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size:13px; gap:6px; align-items: center; }
-  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  input.blank { 
+    border:none; 
+    border-bottom:1px solid #9ca3af; 
+    padding:2px 4px; 
+    font-size:1em; 
+    background:transparent; 
+    min-width: 80px;
+  }
+  input.blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+  
+  /* 按钮样式 */
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    background:#fff; 
+    border-radius:6px; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    font-size:14px; 
+  }
+  button:hover { background:#f8fafc; border-color:#cbd5e1; }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:var(--accent); 
+  }
+  button.primary:hover { background:#2563eb; }
+  
+  /* 计时器样式 */
+  #timer { 
+    background:#fff; 
+    color:var(--muted); 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    padding:6px 12px; 
+    cursor:pointer; 
+    font-family: 'Courier New', monospace; 
+    transition:all 0.2s; 
+    min-width: 70px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: bold;
+  }
+  #timer:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  #timer.paused { 
+    color: #ef4444; 
+    border-color: #fecaca; 
+    background: #fef2f2; 
+  }
+  
+  /* 主题切换按钮 */
+  .theme-toggle { 
+    background:#fff; 
+    color:var(--muted); 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .theme-toggle:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    transform: scale(1.05);
+  }
+  .theme-toggle:active {
+    transform: scale(0.95);
+  }
+  
+  /* 深色模式样式 */
+  body.dark { 
+    --bg: #0f172a; 
+    --panel: #1e293b; 
+    --line: #334155; 
+    --muted: #94a3b8; 
+    color: #e2e8f0; 
+  }
+  body.dark #right { background: #0f172a; }
+  body.dark .group { background: #1e293b; border-color: #334155; }
+  body.dark button { background: #1e293b; color: #e2e8f0; border-color: #334155; }
+  body.dark button:hover { background: #334155; }
+  body.dark button.primary { background: var(--accent); color: #fff; }
+  body.dark #results { background: #1e293b; border-color: #334155; }
+  body.dark #notes { background: #1e293b; border-color: #334155; color: #e2e8f0; }
+  body.dark .practice-nav { background: #1e293b; border-color: #334155; }
+  body.dark .q-item { background: #0f172a; color: #e2e8f0; border-color: #334155; }
+  body.dark .q-item:hover { background: #334155; }
+  body.dark .q-item.answered { background: #1e40af; border-color: var(--accent); color: #93c5fd; }
+  body.dark #timer { background: #1e293b; color: #e2e8f0; border-color: #334155; }
+  body.dark #timer:hover { background: #334155; border-color: var(--accent); }
+  body.dark details.answerbox { background: #1e293b; border-color: #334155; }
+  body.dark input.blank { color: #e2e8f0; border-bottom-color: #64748b; }
+  body.dark input.blank:focus { border-bottom-color: var(--accent); }
+  
+  /* 响应式设计 */
+  @media (max-width: 768px) {
+    .shell { flex-direction: column; }
+    #left, #right { flex: none; min-width: auto; }
+    #divider { display: none; }
+    .practice-nav .controls { gap: 8px; }
+    #timer { font-size: 12px; padding: 3px 8px; }
+    .theme-toggle { width: 32px; height: 32px; font-size: 14px; }
+    #notes { width: calc(100vw - 24px); right: 12px; left: 12px; }
+  }
+  
+  /* 选择工具栏 */
+  #selbar { 
+    position: fixed; 
+    display:none; 
+    z-index: 2000; 
+    background:#111; 
+    color:#fff; 
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow: var(--shadow); 
+    font-size: 13px; 
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; 
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+  }
   #selbar button:hover { border-color:#fff; }
-  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
-  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
-  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
-  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
-  .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:40px; padding:4px 8px; display:inline-flex; align-items:center; justify-content:space-between; gap:8px; width: auto; min-width: 120px; max-width: 200px; vertical-align: middle; }
-  .droplabel { color:#64748b; font-size:14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:flex; flex-wrap:wrap; gap:8px; }
-  .pool-slot { min-height:40px; }
-  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); white-space: nowrap; }
-  .card:active { cursor:grabbing; }
-  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
-  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
-  .ghost { opacity: .5; }
-  .over { outline:2px dashed #3b82f6; }
-  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
-  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
-  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
-  body { padding-bottom: 82px; }
-  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
+  
+  /* 笔记面板 */
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 12px; 
+    width: 320px; 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow: var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    font-size:14px; 
+    line-height:1.5; 
+  }
+  
+  /* Toast通知 */
+  #toast { 
+    position: fixed; 
+    bottom: 20px; 
+    left: 50%; 
+    transform: translateX(-50%); 
+    background: rgba(0,0,0,0.8); 
+    color: #fff; 
+    padding: 8px 16px; 
+    border-radius: 4px; 
+    display: none; 
+    z-index: 3000; 
+    font-size: 14px; 
+  }
+  
+  /* 答题导航 */
+  .practice-nav { 
+    background:#fff; 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:16px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    border-top:2px solid var(--line); 
+    z-index:4000; 
+  }
   .practice-nav .title { font-weight:600; color:var(--muted); }
-  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
-  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
-  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
-  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
-  #selbar { z-index: 6000 !important; }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    font-size:14px; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; 
+  }
+  .practice-nav .controls { 
+    display:flex; 
+    gap:12px; 
+    margin-left:auto; 
+    align-items:center; 
+  }
+  
+  /* 答题结果显示 */
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin:16px 0; 
+    font-family: monospace; 
+    white-space:pre-wrap; 
+  }
+  #results p { margin:0 0 8px; }
+  .badge { 
+    background:#e0e7ff; 
+    color:var(--accent); 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+  }
+  
+  /* 答案框 */
+  details.answerbox { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-top:10px; 
+  }
+  details.answerbox summary { 
+    cursor:pointer; 
+    font-weight:600; 
+    list-style:none; 
+    display:flex; 
+    align-items:center; 
+    justify-content:space-between; 
+  }
+  details.answerbox summary::-webkit-details-marker { display:none; }
+  #answerContent { margin-top:10px; }
+  #answerContent ol { margin:0; padding-left:20px; }
+  #answerContent li { margin:4px 0; }
+  
+  /* 高亮样式 */
+  .hl { background: #ffeb3b; color: #000; }
+  body.dark .hl { background: #8a6d00; color: #fff; }
+  
+  /* 滚动条样式 */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #c5c5d2; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #999; }
+  body.dark ::-webkit-scrollbar-thumb { background: #4a5568; }
+  body.dark ::-webkit-scrollbar-thumb:hover { background: #718096; }
 </style>
 </head>
 <body>
+
 <div class="practice-nav">
   <div class="title">Questions</div>
   <div class="questions">
@@ -75,31 +345,34 @@
     <div class="q-item" id="q12-nav" onclick="scrollToElement('q12-anchor')">12</div>
     <div class="q-item" id="q13-nav" onclick="scrollToElement('q13-anchor')">13</div>
   </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">🌙</button>
+  </div>
 </div>
+
 <div class="shell">
   <section class="pane" id="left">
-    <h2>READING PASSAGE 1 <span id="timer">00:00</span></h2>
+    <h2>READING PASSAGE 1</h2>
     <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>
+    
     <h3>The Tuatara of New Zealand</h3>
+    <p><em>Living fossils from the age of dinosaurs</em></p>
     
-    <p>Tuatara are lizard-like reptiles found only in New Zealand. They are representative of ancient life forms. Tuatara are the sole surviving members of an ancient lineage of reptiles called Sphenodontia, which is over 250 million years old. Because tuatara still resemble fossils of reptiles that lived during the age of dinosaurs, they are often called “living fossils”. Now only two species survive in New Zealand. One is the Brothers Island tuatara which, until recent re-introductions to sanctuaries (safe places for wildlife), survived only on North Brother Island. The other species is the common tuatara, which inhabits many other offshore islands. Although the two species appear similar, they have genetic differences. Tuatara bones have been found in many parts of New Zealand; where dated, they are usually a few hundred to 5,000 years old. It is not known whether these bones belong to the two living species or to others that are now extinct.</p>
+    <p>Fishbourne Roman Palace is in the village of Fishbourne in West Sussex, England. This large palace was built in the 1st century AD, around thirty years after the Roman conquest of Britain, on the site of Roman army grain stores that had been established after the invasion during the reign of the Roman Emperor Claudius in 43 AD. The rectangular palace was built around formal gardens, the northern half of which has been reconstructed. There were extensive alterations in the 2nd and 3rd centuries AD, with many of the original black-and-white mosaic floors being overlaid with more sophisticated coloured ones, including a perfectly preserved mosaic of a dolphin in the north wing. More alterations were in progress when the palace burnt down in around 270 AD, after which it was abandoned.</p>
     
-    <p>Many anatomical features distinguish tuatara from other living reptiles-for example, they have a distinctive pattern of openings in the skull, a unique type of haemoglobin in the blood, and males have no external reproductive organ. Adults range from 30 to 75 centimetres in length and weigh between 250 and 1,200 grams. Males are larger than females and have more developed spines in the crest along the neck, back and tail.</p>
+    <p>Local people had long believed that a Roman palace once existed in the area. However, it was not until 1960 that the archaeologist Barry Cunliffe of Oxford University first systematically excavated the site, after workmen had accidentally uncovered a wall while they were laying a water main. The Roman villa excavated by Cunliffe's team was so grand that it became known as Fishbourne Roman Palace, and a museum was erected to preserve some of the remains. This is administered by the Sussex Archaeological Society.</p>
     
-    <p>The male tuatara courts the female by approaching her with a proud walk. Tuatara mate in late summer, and the female usually lays 6–10 eggs the following spring in a shallow ground-level nest. She may guard the nest for a few nights, then return to her underground burrow. The eggs incubate for about a year, so hatchlings emerge just as new eggs are being laid the next season. Evidence indicates that the sex of hatchlings is determined by both genetic and environmental factors: warmer eggs are more likely to produce males, while cooler eggs tend to produce females. The hatchlings receive no parental care and must find their own food.</p>
+    <p>In its day, the completed palace would have comprised four large wings with colonnaded fronts. The north and east wings consisted of suites of private rooms built around courtyards, with a monumental entrance in the middle of the east wing. In the north-east corner there was an assembly hall. The west wing contained state rooms, a large ceremonial reception room and a gallery. The south wing contained the owner's private apartments. The palace included as many as fifty mosaic floors, under-floor central heating and a bathhouse. In size, Fishbourne Palace would have been approximately equivalent to some of the great Roman palaces of Italy, and was by far the largest known Roman residence north of the European Alps, at about 500 feet (150 m) square. A team of volunteers and professional archaeologists is involved in an ongoing archaeological excavation on the site of nearby, possibly military, buildings.</p>
+
+    <p>The first buildings to be erected on the site were constructed in the early part of the conquest in 43 AD. Later, two timber buildings were constructed, one with clay-and-mortar floors and plaster walls, which appears to have been a house of some comfort. These buildings were demolished in the 60s AD and replaced by a substantial stone house, which included colonnades and a bath suite. It has been suggested that the palace itself, incorporating the previous house in its south-east corner, was constructed around 73–75 AD. However, Dr Miles Russell of Bournemouth University re-interpreted the ground plan and the collection of objects found, and has suggested that, given the extremely close parallels with the imperial palace of Domitian in Rome, its construction may more plausibly date to after 92 AD.</p>
     
-    <p>Tuatara live a long time, reaching reproductive maturity at about 15 years and breeding for many decades. Their maximum lifespan is uncertain, but many individuals have lived to 80 years while still looking vigorous and healthy. Tuatara live in underground burrows and are more active at night, though they bask in the sun by day. Both sexes are territorial; males aggressively defend their range by posturing and, if necessary, fighting. Their teeth are their chief weapons, and a bite can cause serious injury. Tuatara are carnivorous, feeding on invertebrates, lizards and the baby seabirds with which they often share burrows.</p>
+    <p>With regard to who lived in Fishbourne Palace, there are a number of theories. For example, one proposed by Professor Cunliffe is that, in its early phase, the palace was the residence of Tiberius Claudius Cogidubnus, a local chieftain who supported the Romans and who may have been installed as king of a number of territories following the first stage of the conquest. Cogidubnus is known from a reference to his loyalty in Agricola, a work by the Roman writer Tacitus, and from an inscription commemorating a temple dedicated to the gods Neptune and Minerva found in the nearby city of Chichester. Another theory is that it was built for Sallustius Lucullus, a Roman governor of Britain in the late 1st century, who may have been the son of the British prince Adminius. Two inscriptions recording the presence of Lucullus have been found in Chichester, and the redating by Miles Russell suggests that, if the palace was designed for Lucullus, then it may have been in use for only a few years, as the Roman historian Suetonius records that Lucullus was executed by the Emperor Domitian in or shortly after 93 AD.</p>
     
-    <p>Tuatara were once widespread and abundant on the New Zealand mainland, but when Polynesian settlers arrived (about 1250–1300 AD) they brought Pacific rats, which killed tuatara. By the time of European settlement in the 1840s, tuatara were almost extinct on the mainland. Some islands provided temporary refuges, but these too were eventually invaded by rats and other mammalian predators.</p>
+    <p>Additional theories suggest that either Verica, a British king of the Roman Empire in the years preceding the Claudian invasion, was the owner of the palace, or Tiberius Claudius Catuarus, following the recent discovery of a gold ring belonging to him. The palace outlasted the original owner, whoever he was, and was extensively re-planned early in the 2nd century AD and subdivided into a series of smaller apartments. Further redevelopment was begun in the late 3rd century AD, but these alterations were incomplete when the north wing was destroyed in a fire in around 270 AD. The damage was too great to repair, and the palace was abandoned and later dismantled.</p>
     
-    <p>Gradually tuatara became confined to 32 near-shore islands. Many of these islands were tiny, some only one hectare in size. A few, such as the Poor Knights Islands off the northeastern coast of New Zealand and some islands in Cook Strait, still support the common tuatara. The Brothers Island tuatara survived only on North Brother Island, but new populations have been created on Titi Island in the Marlborough Sounds and on Somes Island in Wellington Harbour.</p>
+    <p>A modern museum has been built by the Sussex Archaeological Society, incorporating most of the visible remains, including one wing of the palace. The gardens have been replanted using authentic plants from the Roman period.</p>
     
-    <p>Tuatara can live in remarkably dense populations. Most tuatara islands support 50–100 individuals per hectare, so an island of just 10 hectares may hold hundreds. Larger islands rich in seabirds and invertebrates-key tuatara prey-may support even greater densities. The largest population is on Stephens Island, where numbers reach up to 2,500 per hectare in some areas, with a total of at least 30,000 individuals. Overall, the tuatara population across all islands is estimated at 50,000–100,000.</p>
-    
-    <p>Legal protection was granted to tuatara and their islands in 1895, yet the reptiles continued to decline. Since then, active conservation management has reversed the trend, and new populations have been established on predator-free islands. In the mid-1980s the New Zealand Wildlife Service (now the Department of Conservation) developed methods to eradicate rats from islands. Rats have since been removed from almost all tuatara islands, making these habitats safe for many threatened native species. Conservationists have also collected eggs for incubation, bred tuatara in captivity, and relocated them to rat-free islands off the Northland coast and to Stephens Island in Cook Strait-areas never invaded by rats and largely free of other mammalian predators. Two additional predator-free islands now host tuatara, raising the total to 37. Many more introductions are planned for islands and mainland reserves cleared of predators.</p>
-    
-    <p>&nbsp;</p>
-    <p>&nbsp;</p>
   </section>
   <div id="divider" title="Drag to resize"></div>
   <section class="pane" id="right">
@@ -110,120 +383,102 @@
       <p>Do the following statements agree with the information given in Reading Passage 1?</p>
       <p>In boxes 1–6 on your answer sheet, write</p>
       <ul>
-        <li>TRUE if the statement agrees with the information</li>
-        <li>FALSE if the statement contradicts the information</li>
-        <li>NOT GIVEN if there is no information on this</li>
+        <li><strong>TRUE</strong> if the statement agrees with the information</li>
+        <li><strong>FALSE</strong> if the statement contradicts the information</li>
+        <li><strong>NOT GIVEN</strong> if there is no information on this</li>
       </ul>
       
-      <a id="q1-anchor"></a>
-      <div id="q1-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>1 The two living species of tuatara look alike.</p>
+      <div id="q1-anchor">
+        <p><strong>1</strong> Fishbourne Palace was the first structure to be built on its site.</p>
         <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q1" type="radio" value="TRUE"> TRUE</label>
-          <label style="margin:0;"><input name="q1" type="radio" value="FALSE"> FALSE</label>
-          <label style="margin:0;"><input name="q1" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+          <label><input name="q1" type="radio" value="TRUE"> TRUE</label> 
+          <label><input name="q1" type="radio" value="FALSE"> FALSE</label> 
+          <label><input name="q1" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
         </div>
       </div>
       
-      <a id="q2-anchor"></a>
-      <div id="q2-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>2 Many tuatara bones that have been discovered are millions of years old.</p>
+      <div id="q2-anchor">
+        <p><strong>2</strong> Fishbourne Palace was renovated more than once.</p>
         <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q2" type="radio" value="TRUE"> TRUE</label>
-          <label style="margin:0;"><input name="q2" type="radio" value="FALSE"> FALSE</label>
-          <label style="margin:0;"><input name="q2" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+          <label><input name="q2" type="radio" value="TRUE"> TRUE</label> 
+          <label><input name="q2" type="radio" value="FALSE"> FALSE</label> 
+          <label><input name="q2" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
         </div>
       </div>
       
-      <a id="q3-anchor"></a>
-      <div id="q3-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>3 The tails of male tuatara are a different colour from those of female tuatara.</p>
+      <div id="q3-anchor">
+        <p><strong>3</strong> Fishbourne Palace was large in comparison with Roman palaces in Italy.</p>
         <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q3" type="radio" value="TRUE"> TRUE</label>
-          <label style="margin:0;"><input name="q3" type="radio" value="FALSE"> FALSE</label>
-          <label style="margin:0;"><input name="q3" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+          <label><input name="q3" type="radio" value="TRUE"> TRUE</label> 
+          <label><input name="q3" type="radio" value="FALSE"> FALSE</label> 
+          <label><input name="q3" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
         </div>
       </div>
-      
-      <a id="q4-anchor"></a>
-      <div id="q4-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>4 The female tuatara lays her eggs in a burrow.</p>
+
+      <div id="q4-anchor">
+        <p><strong>4</strong> Research is continuing in the area close to Fishbourne Palace.</p>
         <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q4" type="radio" value="TRUE"> TRUE</label>
-          <label style="margin:0;"><input name="q4" type="radio" value="FALSE"> FALSE</label>
-          <label style="margin:0;"><input name="q4" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+          <label><input name="q4" type="radio" value="TRUE"> TRUE</label> 
+          <label><input name="q4" type="radio" value="FALSE"> FALSE</label> 
+          <label><input name="q4" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
         </div>
       </div>
-      
-      <a id="q5-anchor"></a>
-      <div id="q5-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>5 There are more female hatchlings than male hatchlings.</p>
+
+      <div id="q5-anchor">
+        <p><strong>5</strong> Researchers agree on the identity of the person for whom Fishbourne Palace was constructed.</p>
         <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q5" type="radio" value="TRUE"> TRUE</label>
-          <label style="margin:0;"><input name="q5" type="radio" value="FALSE"> FALSE</label>
-          <label style="margin:0;"><input name="q5" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+          <label><input name="q5" type="radio" value="TRUE"> TRUE</label> 
+          <label><input name="q5" type="radio" value="FALSE"> FALSE</label> 
+          <label><input name="q5" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
         </div>
       </div>
-      
-      <a id="q6-anchor"></a>
-      <div id="q6-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>6 Once they have hatched, young tuatara have to look after themselves.</p>
+
+      <div id="q6-anchor">
+        <p><strong>6</strong> Fishbourne Palace was burnt down by local people.</p>
         <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q6" type="radio" value="TRUE"> TRUE</label>
-          <label style="margin:0;"><input name="q6" type="radio" value="FALSE"> FALSE</label>
-          <label style="margin:0;"><input name="q6" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+          <label><input name="q6" type="radio" value="TRUE"> TRUE</label> 
+          <label><input name="q6" type="radio" value="FALSE"> FALSE</label> 
+          <label><input name="q6" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
         </div>
       </div>
+
     </div>
     
     <div class="group">
       <h4>Questions 7–13</h4>
       <p>Complete the notes below.</p>
-      <p>Choose ONE WORD AND/OR A NUMBER from the passage for each answer.</p>
-      <p>Write your answers in boxes 7–13 on your answer sheet.</p>
-      <p>The tuatara</p>
+      <p>Choose <strong>NO MORE THAN TWO WORDS AND/OR A NUMBER</strong> from the passage for each answer.</p>
       
-      <a id="q7-anchor"></a>
-      <div id="q7-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>Lifespan</p>
-        <p>maximum lifespan unknown</p>
-        <p>many live to at least <input class="blank" maxlength="40" name="q7" placeholder="7"/> years</p>
-      </div>
-      
-      <a id="q8-anchor"></a>
-      <div id="q8-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>Behaviour</p>
-        <p>attack other creatures with their <input class="blank" maxlength="40" name="q8" placeholder="8"/></p>
-      </div>
-      
-      <a id="q9-anchor"></a>
-      <div id="q9-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>eat young <input class="blank" maxlength="40" name="q9" placeholder="9"/> that share the same burrows, as well as invertebrates and reptiles</p>
-      </div>
-      
-      <a id="q10-anchor"></a>
-      <div id="q10-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>Population</p>
-        <p>• abundant until rats were introduced by <input class="blank" maxlength="40" name="q10" placeholder="10"/> people</p>
-      </div>
-      
-      <a id="q11-anchor"></a>
-      <div id="q11-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>• by the 1840s, hardly any tuatara were found on the <input class="blank" maxlength="40" name="q11" placeholder="11"/></p>
-      </div>
-      
-      <a id="q12-anchor"></a>
-      <div id="q12-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>• islands off the north-eastern coast and in Cook Strait are now home to the <input class="blank" maxlength="40" name="q12" placeholder="12"/> tuatara</p>
-      </div>
-      
-      <a id="q13-anchor"></a>
-      <div id="q13-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>• Brothers Island tuatara found only on North Brother Island</p>
-        <p>• density of tuatara on Stephens Island is up to <input class="blank" maxlength="40" name="q13" placeholder="13"/> per hectare</p>
+      <div style="padding: 10px; border: 1px solid #ccc; border-radius: 8px; margin-top: 1em;">
+        <h4 style="text-align: center;">Fishbourne Palace</h4>
+        
+        <p><strong>Construction</strong></p>
+        <ul>
+            <li id="q7-anchor">The first buildings on the site contained food for the <strong>7</strong> <input name="q7" type="text" class="blank" maxlength="40"></li>
+            <li id="q8-anchor">The palace building surrounded <strong>8</strong> <input name="q8" type="text" class="blank" maxlength="40"></li>
+            <li id="q9-anchor">In the 2nd and 3rd centuries colour was added to the <strong>9</strong> <input name="q9" type="text" class="blank" maxlength="40"> of the palace.</li>
+        </ul>
+
+        <p><strong>Discovery</strong></p>
+        <ul>
+            <li id="q10-anchor">The first part of the palace to be found was part of a <strong>10</strong> <input name="q10" type="text" class="blank" maxlength="40"></li>
+        </ul>
+
+        <p><strong>Possible inhabitants</strong></p>
+        <ul>
+            <li>Cogidubnus - he is named in several writings.</li>
+            <li id="q11-anchor">Sallustius Lucullus - he may have lived there until approximately <strong>11</strong> <input name="q11" type="text" class="blank" maxlength="40"> AD.</li>
+            <li>Verica - a British king.</li>
+            <li id="q12-anchor">Catuarus - his <strong>12</strong> <input name="q12" type="text" class="blank" maxlength="40"> was found there.</li>
+        </ul>
+
+        <p><strong>Present Day</strong></p>
+        <ul>
+            <li id="q13-anchor">A <strong>13</strong> <input name="q13" type="text" class="blank" maxlength="40"> has been built on the site to help protect it.</li>
+        </ul>
       </div>
     </div>
-    
+
     <div style="display:flex;gap:8px;margin-bottom:10px;">
       <button class="primary" onclick="grade()">Submit</button>
       <button onclick="resetForm()">Reset</button>
@@ -236,11 +491,13 @@
     </details>
   </section>
 </div>
+
 <div aria-label="Selection tools" id="selbar" role="toolbar">
   <button id="btnHL">Highlight</button>
   <button id="btnUH">Remove</button>
   <button id="btnNote">Note</button>
 </div>
+
 <div id="notes">
   <header>
     <strong>Notes</strong>
@@ -251,451 +508,581 @@
   </header>
   <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
 </div>
+
 <div id="toast"></div>
+
 <script>
-// Timer
-let _t=0; const _timerEl=document.getElementById('timer');
-setInterval(function(){ 
-  _t++; 
-  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
-  var s=String(_t%60).padStart(2,'0'); 
-  _timerEl.textContent=m+':'+s; 
-},1000);
-// Drag divider
+// 页面滚动功能
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // 高亮显示题目
+    element.style.backgroundColor = '#e0e7ff';
+    setTimeout(() => {
+      element.style.backgroundColor = '';
+    }, 1000);
+  }
+}
+
+// 重置表单功能
+function resetForm() {
+  // 重置单选按钮
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // 重置文本输入框
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = '';
+  });
+  
+  // 清除结果
+  document.getElementById('results').innerHTML = '';
+  
+  // 更新导航状态
+  updateAnswerStatus();
+  
+  showToast('Form reset');
+}
+
+// Toast通知功能
+function showToast(msg) {
+  const toastEl = document.getElementById('toast');
+  toastEl.textContent = msg;
+  toastEl.style.display = 'block';
+  setTimeout(() => {
+    toastEl.style.display = 'none';
+  }, 1500);
+}
+
+// 计时器功能
+let _t = 0;
+let timerRunning = true;
+let timerInterval;
+const _timerEl = document.getElementById('timer');
+
+function updateTimer() {
+  const m = Math.floor(_t / 60);
+  const s = _t % 60;
+  _timerEl.textContent = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+function startTimer() {
+  timerInterval = setInterval(() => {
+    if (timerRunning) {
+      _t++;
+      updateTimer();
+    }
+  }, 1000);
+}
+
+function toggleTimer() {
+  if (timerRunning) {
+    clearInterval(timerInterval);
+    timerRunning = false;
+    _timerEl.classList.add('paused');
+    showToast('Timer paused');
+  } else {
+    startTimer();
+    timerRunning = true;
+    _timerEl.classList.remove('paused');
+    showToast('Timer resumed');
+  }
+}
+
+// 主题切换功能
+function toggleTheme() {
+  document.body.classList.toggle('dark');
+  const isDark = document.body.classList.contains('dark');
+  localStorage.setItem('darkMode', isDark);
+  const themeButton = document.querySelector('.theme-toggle');
+  themeButton.textContent = isDark ? '☀️' : '🌙';
+}
+
+// 拖拽分栏功能
 var divider = document.getElementById('divider');
 var left = document.getElementById('left');
 var right = document.getElementById('right');
-var dragging=false;
-function startDrag(e){ 
-  dragging=true; 
-  document.body.style.cursor='ew-resize'; 
-  if(e.preventDefault) e.preventDefault(); 
+var dragging = false;
+
+function startDrag(e) {
+  dragging = true;
+  document.body.style.cursor = 'ew-resize';
+  if (e.preventDefault) e.preventDefault();
 }
-function endDrag(){ 
-  dragging=false; 
-  document.body.style.cursor=''; 
+
+function endDrag() {
+  dragging = false;
+  document.body.style.cursor = '';
 }
-function onMove(clientX){
+
+function onMove(clientX) {
   var container = document.querySelector('.shell').getBoundingClientRect();
   var x = clientX - container.left;
-  x = Math.max(280, Math.min(container.width-320, x));
+  x = Math.max(280, Math.min(container.width - 320, x));
   left.style.flex = '0 0 ' + x + 'px';
   right.style.flex = '1 1 auto';
 }
-divider.addEventListener('mousedown', function(e){ startDrag(e); });
-window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+
+divider.addEventListener('mousedown', function(e) { startDrag(e); });
+window.addEventListener('mousemove', function(e) { if (dragging) onMove(e.clientX); });
 window.addEventListener('mouseup', endDrag);
-divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
-window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+divider.addEventListener('touchstart', function(e) { startDrag(e.touches[0]); }, { passive: false });
+window.addEventListener('touchmove', function(e) { if (dragging) onMove(e.touches[0].clientX); }, { passive: false });
 window.addEventListener('touchend', endDrag);
-</script>
-<script>
-// Highlight toolbar
+
+// 高亮和笔记功能
 var selbar = document.getElementById('selbar');
 var btnHL = document.getElementById('btnHL');
 var btnUH = document.getElementById('btnUH');
 var btnNote = document.getElementById('btnNote');
-var lastRange=null;
-var currentHlNode=null;
-var keepToolbar=false;
-function positionSelbarForRect(rect){
-  selbar.style.display='flex';
-  requestAnimationFrame(function(){
+var lastRange = null;
+var currentHlNode = null;
+var keepToolbar = false;
+
+function positionSelbarForRect(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(function() {
     var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
     var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
-    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.top = ((top > 0) ? top : (window.scrollY + rect.bottom + 8)) + 'px';
     selbar.style.left = Math.max(8, leftPos) + 'px';
   });
 }
-function updateSelbar(){
-  var sel=window.getSelection();
-  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
-    selbar.style.display='none'; 
-    currentHlNode=null; 
-    return; 
+
+function updateSelbar() {
+  var sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
   }
   var range = sel.getRangeAt(0);
   lastRange = range.cloneRange();
-  currentHlNode=null;
+  currentHlNode = null;
   positionSelbarForRect(range.getBoundingClientRect());
 }
+
 document.getElementById('left').addEventListener('mouseup', updateSelbar);
 document.getElementById('right').addEventListener('mouseup', updateSelbar);
-document.addEventListener('selectionchange', function(){ 
-  var sel=window.getSelection(); 
-  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
-    if(!keepToolbar && !currentHlNode){ 
-      selbar.style.display='none'; 
-    } 
-  } 
+document.addEventListener('selectionchange', function() {
+  var sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) {
+      selbar.style.display = 'none';
+    }
+  }
 });
-document.addEventListener('scroll', function(){ 
-  if(selbar.style.display==='flex') updateSelbar(); 
+document.addEventListener('scroll', function() {
+  if (selbar.style.display === 'flex') updateSelbar();
 });
-document.addEventListener('mousedown', function(e){
+
+document.addEventListener('mousedown', function(e) {
   var t = e.target;
-  if(t.classList && t.classList.contains('hl')){
+  if (t.classList && t.classList.contains('hl')) {
     keepToolbar = true;
   } else {
     keepToolbar = false;
   }
 }, true);
-document.addEventListener('click', function(e){
+
+document.addEventListener('click', function(e) {
   var target = e.target;
-  if(target.classList && target.classList.contains('hl')){
+  if (target.classList && target.classList.contains('hl')) {
     currentHlNode = target;
     lastRange = null;
     positionSelbarForRect(target.getBoundingClientRect());
-    var sel=window.getSelection();
-    if(sel) sel.removeAllRanges();
-    setTimeout(function(){ keepToolbar=false; }, 0);
+    var sel = window.getSelection();
+    if (sel) sel.removeAllRanges();
+    setTimeout(function() { keepToolbar = false; }, 0);
   }
 }, true);
-function doHighlight(){
-  if(currentHlNode) return;
-  if(!lastRange || lastRange.collapsed) return;
-  var span=document.createElement('span'); span.className='hl';
-  try { lastRange.surroundContents(span); }
-  catch(e){
-    var wrap=document.createElement('span'); wrap.className='hl';
-    wrap.appendChild(lastRange.cloneContents());
-    lastRange.deleteContents();
-    lastRange.insertNode(wrap);
+
+function doHighlight() {
+  if (currentHlNode) return;
+  if (!lastRange || lastRange.collapsed) return;
+  
+  const startNode = lastRange.startContainer;
+  const endNode = lastRange.endContainer;
+  
+  if (startNode === endNode) {
+    try {
+      const span = document.createElement('span');
+      span.className = 'hl';
+      lastRange.surroundContents(span);
+      selbar.style.display = 'none';
+      showToast('Highlighted');
+      return;
+    } catch (e) {}
   }
-  selbar.style.display='none';
+  
+  const fragment = lastRange.cloneContents();
+  const div = document.createElement('div');
+  div.appendChild(fragment);
+  
+  function processNode(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      if (node.textContent.trim().length > 0) {
+        const span = document.createElement('span');
+        span.className = 'hl';
+        span.textContent = node.textContent;
+        return span;
+      }
+      return node;
+    }
+    
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const isBlock = window.getComputedStyle(node).display.includes('block') ||
+        ['P', 'H1', 'H2', 'H3', 'H4', 'DIV'].includes(node.tagName);
+      
+      const wrapper = isBlock ? document.createElement(node.tagName.toLowerCase()) : document.createElement('span');
+      wrapper.className = isBlock ? node.className + ' hl' : 'hl';
+      
+      Array.from(node.attributes).forEach(attr => {
+        wrapper.setAttribute(attr.name, attr.value);
+      });
+      
+      while (node.firstChild) {
+        const processedChild = processNode(node.firstChild);
+        wrapper.appendChild(processedChild);
+      }
+      
+      return wrapper;
+    }
+    
+    return node;
+  }
+  
+  const highlightedContent = processNode(div);
+  lastRange.deleteContents();
+  lastRange.insertNode(highlightedContent);
+  
+  selbar.style.display = 'none';
   showToast('Highlighted');
 }
-function removeHighlight(){
-  if(currentHlNode){
-    var p = currentHlNode.parentNode;
-    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
-    p.removeChild(currentHlNode); p.normalize();
+
+function removeHighlight() {
+  if (currentHlNode) {
+    const parent = currentHlNode.parentNode;
+    while (currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize();
     currentHlNode = null;
-    selbar.style.display='none';
+    selbar.style.display = 'none';
     showToast('Highlight removed');
     return;
   }
-  if(!lastRange) return;
-  var selRect = lastRange.getBoundingClientRect();
-  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
-  var toRemove=[];
-  while(walker.nextNode()){
-    var n=walker.currentNode;
-    if(n.classList && n.classList.contains('hl')) {
-      var r = n.getBoundingClientRect();
-      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+  
+  if (!lastRange) return;
+  
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    if (node.classList && node.classList.contains('hl')) {
+      const rect = node.getBoundingClientRect();
+      if (!(rect.right < selRect.left || rect.left > selRect.right ||
+        rect.bottom < selRect.top || rect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
     }
   }
-  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
-  selbar.style.display='none';
+  
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) {
+      parent.insertBefore(el.firstChild, el);
+    }
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  
+  selbar.style.display = 'none';
   showToast('Highlight removed');
 }
+
 btnHL.addEventListener('click', doHighlight);
 btnUH.addEventListener('click', removeHighlight);
-</script>
-<script>
-// Notes
+
+// 笔记功能
 var notes = document.getElementById('notes');
 var noteArea = document.getElementById('noteArea');
-var btnCopy=document.getElementById('btnCopy');
-var btnClose=document.getElementById('btnClose');
-function toggleNotes(){ 
-  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+var btnCopy = document.getElementById('btnCopy');
+var btnClose = document.getElementById('btnClose');
+
+function toggleNotes() {
+  notes.style.display = (notes.style.display === 'flex' ? 'none' : 'flex');
 }
 window.toggleNotes = toggleNotes;
+
 btnClose.addEventListener('click', toggleNotes);
-btnCopy.addEventListener('click', async function(){ 
-  await navigator.clipboard.writeText(noteArea.value||''); 
-  showToast('Copied'); 
+btnCopy.addEventListener('click', async function() {
+  await navigator.clipboard.writeText(noteArea.value || '');
+  showToast('Copied');
 });
-btnNote.addEventListener('click', function(){
+
+btnNote.addEventListener('click', function() {
   var text = '';
-  if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
-  else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
+  if (currentHlNode) {
+    text = (currentHlNode.textContent || '').trim();
+  } else if (lastRange) {
+    var frag = lastRange.cloneContents();
+    text = (frag.textContent || '').trim();
+  }
   toggleNotes();
-  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
-  selbar.style.display='none';
+  if (text) {
+    noteArea.value = (noteArea.value ? noteArea.value + '\n' : '') + '> ' + text + '\n';
+  }
+  selbar.style.display = 'none';
 });
-// Toast
-var toastEl=document.getElementById('toast');
-function showToast(msg){
-  toastEl.textContent=msg; 
-  toastEl.style.display='block';
-  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+
+// 答题状态更新
+function updateAnswerStatus() {
+  for (let i = 1; i <= 13; i++) {
+    const inputs = document.querySelectorAll(`input[name="q${i}"]`);
+    const navItem = document.getElementById(`q${i}-nav`);
+    if (navItem) {
+      let answered = false;
+      inputs.forEach(input => {
+        if ((input.type === 'radio' || input.type === 'checkbox') && input.checked) {
+          answered = true;
+        } else if (input.type === 'text' && input.value.trim()) {
+          answered = true;
+        }
+      });
+      if (answered) {
+        navItem.classList.add('answered');
+      } else {
+        navItem.classList.remove('answered');
+      }
+    }
+  }
 }
-</script>
-<script>
-// Answer key and grading
+
+// 答案和评分系统
 var answers = {
-  "q1":"TRUE", "q2":"FALSE", "q3":"NOT GIVEN", "q4":"FALSE", "q5":"NOT GIVEN", "q6":"TRUE",
-  "q7":"80", "q8":"teeth", "q9":"seabirds", "q10":"Polynesian", "q11":"mainland", "q12":"common", "q13":"2,500"
+  "q1": "TRUE", "q2": "FALSE", "q3": "TRUE", "q4": "NOT GIVEN", "q5": "TRUE", "q6": "FALSE",
+  "q7": "200", "q8": "third", "q9": "temperature", "q10": "rats", "q11": "islands", "q12": "captive", "q13": "DNA"
 };
-function grade(){
-  var total=0, correct=0, lines=[];
+
+function grade() {
+  var total = 0, correct = 0, lines = [];
   
-  // Check radio questions (1-6)
-  for(let n=1; n<=6; n++){
+  // 检查单选题和文本题 (1-13)
+  for (let n = 1; n <= 13; n++) {
     const q = `q${n}`;
     total++;
     const selected = document.querySelector(`input[name="${q}"]:checked`);
-    const userAnswer = selected ? selected.value : '';
-    const isCorrect = userAnswer === answers[q];
-    if (isCorrect) correct++;
-    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? 'âœ…' : 'âŒ'}`);
-  }
-  
-  // Check blank questions (7-13)
-  for(let n=7; n<=13; n++){
-    const q = `q${n}`;
-    total++;
-    const input = document.querySelector(`input[name="${q}"]`);
-    const userAnswer = input ? input.value.trim() : '';
+    const textInput = document.querySelector(`input[name="${q}"][type="text"]`);
+    let userAnswer = '';
+    
+    if (selected) {
+      userAnswer = selected.value;
+    } else if (textInput) {
+      userAnswer = textInput.value.trim();
+    }
+    
     const isCorrect = userAnswer.toLowerCase() === answers[q].toLowerCase();
     if (isCorrect) correct++;
-    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? 'âœ…' : 'âŒ'}`);
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✓' : '✗'}`);
   }
   
-  // Show results
+  // 显示结果
   const acc = Math.round(100 * correct / total);
   document.getElementById('results').innerHTML = `
     <p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p>
     <pre>${lines.join('\n')}</pre>
   `;
   
-  // Show answer key
+  // 显示答案
   document.getElementById('answerContent').innerHTML = `
     <ol>
-      <li>1 â†’ TRUE</li>
-      <li>2 â†’ FALSE</li>
-      <li>3 â†’ NOT GIVEN</li>
-      <li>4 â†’ FALSE</li>
-      <li>5 â†’ NOT GIVEN</li>
-      <li>6 â†’ TRUE</li>
-      <li>7 â†’ 80</li>
-      <li>8 â†’ teeth</li>
-      <li>9 â†’ seabirds</li>
-      <li>10 â†’ Polynesian</li>
-      <li>11 â†’ mainland</li>
-      <li>12 â†’ common</li>
-      <li>13 â†’ 2,500</li>
+      <li>1 → TRUE</li>
+      <li>2 → FALSE</li>
+      <li>3 → TRUE</li>
+      <li>4 → NOT GIVEN</li>
+      <li>5 → TRUE</li>
+      <li>6 → FALSE</li>
+      <li>7 → 200</li>
+      <li>8 → third</li>
+      <li>9 → temperature</li>
+      <li>10 → rats</li>
+      <li>11 → islands</li>
+      <li>12 → captive</li>
+      <li>13 → DNA</li>
     </ol>
   `;
   document.querySelector('#answerBox .badge').textContent = 'tap to view';
+  
+  updateAnswerStatus();
 }
-function resetForm(){
-  // Reset radio buttons
-  document.querySelectorAll('input[type="radio"]').forEach(radio => {
-    radio.checked = false;
-  });
-  
-  // Reset text inputs
-  document.querySelectorAll('input.blank').forEach(input => {
-    input.value = '';
-  });
-  
-  // Reset results and answers
-  document.getElementById('results').innerHTML = '';
-  document.getElementById('answerContent').innerHTML = '';
-  document.querySelector('#answerBox .badge').textContent = 'hidden';
-  
-  // Reset answered status in nav
-  document.querySelectorAll('.q-item').forEach(item => {
-    item.classList.remove('answered');
-  });
-}
-// Scroll to question anchor
-function scrollToElement(id){
-  const el = document.getElementById(id);
-  if(el){ 
-    el.scrollIntoView({behavior:'smooth', block:'center'}); 
-  }
-  // Highlight nav item briefly
-  const navs = document.querySelectorAll('.practice-nav .q-item');
-  navs.forEach(n => n.classList.remove('active'));
-  const btn = document.getElementById(id.replace('-anchor','-nav'));
-  if(btn){ 
-    btn.classList.add('active'); 
-    setTimeout(() => btn.classList.remove('active'), 800); 
-  }
-}
-// Mark answered on interaction
-(function(){
-  function markAnswered(qn){
-    const nav = document.getElementById(`q${qn}-nav`);
-    if(!nav) return;
-    let answered = false;
-    
-    // Check radio buttons (1-6)
-    if(qn >=1 && qn <=6){
-      const radios = document.querySelectorAll(`input[name="q${qn}"]:checked`);
-      answered = radios.length > 0;
-    } 
-    // Check text inputs (7-13)
-    else if(qn >=7 && qn <=13){
-      const input = document.querySelector(`input[name="q${qn}"]`);
-      answered = input && input.value.trim().length > 0;
-    }
-    
-    if(answered) nav.classList.add('answered');
-    else nav.classList.remove('answered');
-  }
-  
-  // Monitor radio buttons (1-6)
-  for(let n=1; n<=6; n++){
-    document.querySelectorAll(`input[name="q${n}"]`).forEach(radio => {
-      radio.addEventListener('change', () => markAnswered(n));
-    });
-  }
-  
-  // Monitor text inputs (7-13)
-  for(let n=7; n<=13; n++){
-    const input = document.querySelector(`input[name="q${n}"]`);
-    if(input){
-      input.addEventListener('input', () => markAnswered(n));
-    }
-  }
-})();
-</script>
 
-<!-- 练习页面数据传输增强脚本 -->
-<script>
-// 检查是否已经有增强脚本
-if (!window.practicePageEnhancer) {
-    // 动态加载增强脚本
-    const script = document.createElement('script');
-    script.src = '../../js/practice-page-enhancer.js';
-    script.onload = function() {
-        console.log('练习页面增强脚本已加载');
-    };
-    script.onerror = function() {
-        console.error('练习页面增强脚本加载失败');
-        // 降级到内联增强
-        loadInlineEnhancer();
-    };
-    document.head.appendChild(script);
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+  startTimer();
+  updateAnswerStatus(); // 初始化答题状态
+  
+  // 加载保存的主题
+  if (localStorage.getItem('darkMode') === 'true') {
+    document.body.classList.add('dark');
+    document.querySelector('.theme-toggle').textContent = '☀️';
+  }
+});
+
+// 监听答案变化
+document.addEventListener('change', updateAnswerStatus);
+document.addEventListener('input', updateAnswerStatus);
+
+// 练习页面增强脚本集成
+function loadPracticePageEnhancer() {
+  const script = document.createElement('script');
+  script.src = '../../../js/practice-page-enhancer.js';
+  script.onload = function() {
+    console.log('练习页面增强脚本已加载');
+  };
+  script.onerror = function() {
+    console.error('练习页面增强脚本加载失败');
+    // 降级到内联增强
+    loadInlineEnhancer();
+  };
+  document.head.appendChild(script);
 }
 
 // 内联增强器（降级方案）
 function loadInlineEnhancer() {
-    if (window.practicePageEnhancer) return;
+  if (window.practicePageEnhancer) return;
+  
+  window.practicePageEnhancer = {
+    initialize: function() {
+      console.log('[InlineEnhancer] 内联增强器已初始化');
+      this.setupCommunication();
+      this.setupAnswerListeners();
+      this.interceptSubmit();
+    },
     
-    window.practicePageEnhancer = {
-        initialize: function() {
-            console.log('[InlineEnhancer] 内联增强器已初始化');
-            this.setupCommunication();
-            this.setupAnswerListeners();
-            this.interceptSubmit();
-        },
-        
-        setupCommunication: function() {
-            this.parentWindow = window.opener || window.parent;
-            window.addEventListener('message', (event) => {
-                if (event.data && event.data.type === 'INIT_SESSION') {
-                    this.sessionId = event.data.data.sessionId;
-                    this.sendMessage('SESSION_READY', {
-                        pageType: this.detectPageType(),
-                        url: window.location.href
-                    });
-                }
-            });
-        },
-        
-        detectPageType: function() {
-            const title = document.title || '';
-            if (title.includes('P1')) return 'P1';
-            if (title.includes('P2')) return 'P2';
-            if (title.includes('P3')) return 'P3';
-            return 'unknown';
-        },
-        
-        setupAnswerListeners: function() {
-            this.answers = {};
-            this.startTime = Date.now();
-            
-            document.addEventListener('change', (e) => {
-                if (e.target.name && e.target.name.startsWith('q')) {
-                    this.answers[e.target.name] = e.target.value;
-                }
-            });
-        },
-        
-        interceptSubmit: function() {
-            // 拦截grade函数
-            if (typeof window.grade === 'function') {
-                const originalGrade = window.grade;
-                window.grade = () => {
-                    const result = originalGrade();
-                    setTimeout(() => this.handleSubmit(), 200);
-                    return result;
-                };
-            }
-            
-            // 监听提交按钮
-            document.addEventListener('click', (e) => {
-                if (e.target.tagName === 'BUTTON' && 
-                    (e.target.textContent.includes('Submit') || 
-                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
-                    setTimeout(() => this.handleSubmit(), 300);
-                }
-            });
-        },
-        
-        handleSubmit: function() {
-            const results = {
-                sessionId: this.sessionId,
-                startTime: this.startTime,
-                endTime: Date.now(),
-                duration: Math.round((Date.now() - this.startTime) / 1000),
-                answers: this.answers,
-                scoreInfo: this.extractScore(),
-                pageType: this.detectPageType(),
-                url: window.location.href
-            };
-            
-            this.sendMessage('PRACTICE_COMPLETE', results);
-        },
-        
-        extractScore: function() {
-            const resultsEl = document.getElementById('results');
-            if (!resultsEl) return null;
-            
-            const text = resultsEl.textContent || '';
-            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
-            if (scoreMatch) {
-                const correct = parseInt(scoreMatch[1]);
-                const total = parseInt(scoreMatch[2]);
-                return {
-                    correct: correct,
-                    total: total,
-                    accuracy: total > 0 ? correct / total : 0,
-                    percentage: Math.round((correct / total) * 100),
-                    source: 'inline_extraction'
-                };
-            }
-            return null;
-        },
-        
-        sendMessage: function(type, data) {
-            if (this.parentWindow) {
-                this.parentWindow.postMessage({
-                    type: type,
-                    data: data,
-                    source: 'practice_page'
-                }, '*');
-            }
+    setupCommunication: function() {
+      this.parentWindow = window.opener || window.parent;
+      window.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'INIT_SESSION') {
+          this.sessionId = event.data.data.sessionId;
+          this.sendMessage('SESSION_READY', {
+            pageType: this.detectPageType(),
+            url: window.location.href
+          });
         }
-    };
+      });
+    },
     
-    // 初始化
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            window.practicePageEnhancer.initialize();
-        });
-    } else {
-        window.practicePageEnhancer.initialize();
+    detectPageType: function() {
+      const title = document.title || '';
+      if (title.includes('P1')) return 'P1';
+      if (title.includes('P2')) return 'P2';
+      if (title.includes('P3')) return 'P3';
+      return 'unknown';
+    },
+    
+    setupAnswerListeners: function() {
+      this.answers = {};
+      this.startTime = Date.now();
+      
+      document.addEventListener('change', (e) => {
+        if (e.target.name && e.target.name.startsWith('q')) {
+          this.answers[e.target.name] = e.target.value;
+        }
+      });
+      
+      document.addEventListener('input', (e) => {
+        if (e.target.name && e.target.name.startsWith('q')) {
+          this.answers[e.target.name] = e.target.value;
+        }
+      });
+    },
+    
+    interceptSubmit: function() {
+      // 拦截grade函数
+      if (typeof window.grade === 'function') {
+        const originalGrade = window.grade;
+        window.grade = () => {
+          const result = originalGrade();
+          setTimeout(() => this.handleSubmit(), 200);
+          return result;
+        };
+      }
+      
+      // 监听提交按钮
+      document.addEventListener('click', (e) => {
+        if (e.target.tagName === 'BUTTON' &&
+          (e.target.textContent.includes('Submit') ||
+            e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+          setTimeout(() => this.handleSubmit(), 300);
+        }
+      });
+    },
+    
+    handleSubmit: function() {
+      const results = {
+        sessionId: this.sessionId,
+        startTime: this.startTime,
+        endTime: Date.now(),
+        duration: Math.round((Date.now() - this.startTime) / 1000),
+        answers: this.answers,
+        scoreInfo: this.extractScore(),
+        pageType: this.detectPageType(),
+        url: window.location.href
+      };
+      
+      this.sendMessage('PRACTICE_COMPLETE', results);
+    },
+    
+    extractScore: function() {
+      const resultsEl = document.getElementById('results');
+      if (!resultsEl) return null;
+      
+      const text = resultsEl.textContent || '';
+      const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+      if (scoreMatch) {
+        const correct = parseInt(scoreMatch[1]);
+        const total = parseInt(scoreMatch[2]);
+        return {
+          correct: correct,
+          total: total,
+          accuracy: total > 0 ? correct / total : 0,
+          percentage: Math.round((correct / total) * 100),
+          source: 'inline_extraction'
+        };
+      }
+      return null;
+    },
+    
+    sendMessage: function(type, data) {
+      if (this.parentWindow) {
+        this.parentWindow.postMessage({
+          type: type,
+          data: data,
+          source: 'practice_page'
+        }, '*');
+      }
     }
+  };
+  
+  // 初始化
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      window.practicePageEnhancer.initialize();
+    });
+  } else {
+    window.practicePageEnhancer.initialize();
+  }
 }
+
+// 加载增强脚本
+loadPracticePageEnhancer();
 </script>
 
 </body>
-</html>s
+</html>

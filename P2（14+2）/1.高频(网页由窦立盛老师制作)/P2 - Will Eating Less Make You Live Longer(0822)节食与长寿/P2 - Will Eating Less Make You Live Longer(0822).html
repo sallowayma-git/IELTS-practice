@@ -1,64 +1,399 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<title>P2 – Will Eating Less Make You Live Longer</title>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta charset="UTF-8">
+<title>P2 - Will Eating Less Make You Live Longer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+  }
   * { box-sizing: border-box; }
   html,body { height:100%; }
-  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
-  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+    padding-bottom: 82px; 
+  }
+  
+  /* 布局样式 */
   .shell { display:flex; height:100vh; width:100%; }
   .pane { background:var(--panel); overflow:auto; padding:20px; }
   #left { flex: 0 0 50%; min-width: 280px; }
   #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
   #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  
+  /* 文本样式 */
   h2,h3,h4 { margin:0 0 10px; }
   #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  
+  /* 组件样式 */
   .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  input.blank { 
+    border:none; 
+    border-bottom:1px solid #9ca3af; 
+    padding:2px 4px; 
+    font-size:1em; 
+    background:transparent; 
+    min-width: 80px;
+  }
+  input.blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+  
+  /* 按钮样式 */
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    background:#fff; 
+    border-radius:6px; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    font-size:14px; 
+  }
+  button:hover { background:#f8fafc; border-color:#cbd5e1; }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:var(--accent); 
+  }
+  button.primary:hover { background:#2563eb; }
+  
+    /* 计时器样式 */
+  #timer { 
+    background:#fff; 
+    color:var(--muted); 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    padding:6px 12px; 
+    cursor:pointer; 
+    font-family: 'Courier New', monospace; 
+    transition:all 0.2s; 
+    min-width: 70px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: bold;
+  }
+  #timer:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  #timer.paused { 
+    color: #ef4444; 
+    border-color: #fecaca; 
+    background: #fef2f2; 
+  }
+
+/* 选择工具栏 */
+  #selbar { 
+    position: fixed; 
+    display:none; 
+    z-index: 2000; 
+    background:#111; 
+    color:#fff; 
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow: var(--shadow); 
+    font-size: 13px; 
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; 
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+  }
+  #selbar button:hover { border-color:#fff; }
+  
+  /* 笔记面板 */
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 12px; 
+    width: 320px; 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow: var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    font-size:14px; 
+    line-height:1.5; 
+  }
+  
+  /* Toast通知 */
+  #toast { 
+    position: fixed; 
+    bottom: 20px; 
+    left: 50%; 
+    transform: translateX(-50%); 
+    background: rgba(0,0,0,0.8); 
+    color: #fff; 
+    padding: 8px 16px; 
+    border-radius: 4px; 
+    display: none; 
+    z-index: 3000; 
+    font-size: 14px; 
+  }
+  
+  /* 答题导航 */
+  .practice-nav { 
+    background:#fff; 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:16px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    border-top:2px solid var(--line); 
+    z-index:4000; 
+  }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    font-size:14px; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; 
+  }
+  .practice-nav .controls { 
+    display:flex; 
+    gap:12px; 
+    margin-left:auto; 
+    align-items:center; 
+  }
+  
+  /* 答题结果显示 */
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin:16px 0; 
+    font-family: monospace; 
+    white-space:pre-wrap; 
+  }
+  #results p { margin:0 0 8px; }
+  .badge { 
+    background:#e0e7ff; 
+    color:var(--accent); 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+  }
+  
+  /* 答案框 */
+  details.answerbox { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-top:10px; 
+  }
+  details.answerbox summary { 
+    cursor:pointer; 
+    font-weight:600; 
+    list-style:none; 
+    display:flex; 
+    align-items:center; 
+    justify-content:space-between; 
+  }
+  details.answerbox summary::-webkit-details-marker { display:none; }
+  #answerContent { margin-top:10px; }
+  #answerContent ol { margin:0; padding-left:20px; }
+  #answerContent li { margin:4px 0; }
+  
+  /* 高亮样式 */
+  .hl { background: #ffeb3b; color: #000; }
+  body.dark .hl { background: #8a6d00; color: #fff; }
+  
+  /* 滚动条样式 */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #c5c5d2; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #999; }
+  body.dark ::-webkit-scrollbar-thumb { background: #4a5568; }
+  body.dark ::-webkit-scrollbar-thumb:hover { background: #718096; }
+  
+  /* 黑暗模式样式 */
+  body.dark {
+    --bg: #1a1a1a;
+    --panel: #2a2a2a;
+    --line: #4a4a4a;
+    --muted: #999;
+    color: #e0e0e0;
+    background: var(--bg);
+  }
+
+  body.dark .pane {
+    background: var(--panel);
+    color: #e0e0e0;
+  }
+
+  body.dark #right {
+    background: #222;
+  }
+
+  body.dark button {
+    background: #3a3a3a;
+    color: #e0e0e0;
+    border-color: #555;
+  }
+
+  body.dark button:hover {
+    background: #4a4a4a;
+    border-color: var(--accent);
+  }
+
+  body.dark button.primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+
+  body.dark input.blank {
+    color: #e0e0e0;
+    border-bottom-color: #666;
+  }
+
+  body.dark input.blank:focus {
+    border-bottom-color: var(--accent);
+  }
+
+  body.dark .group {
+    background: #2f2f2f;
+    border-color: var(--line);
+  }
+
+  body.dark .practice-nav {
+    background: #252525;
+    border-top-color: #444;
+  }
+
+  body.dark .practice-nav .q-item {
+    background: #3a3a3a;
+    color: #ccc;
+    border-color: #555;
+  }
+
+  body.dark .practice-nav .q-item:hover {
+    background: #4a4a4a;
+    border-color: var(--accent);
+  }
+
+  body.dark .practice-nav .q-item.answered {
+    background: #3949ab;
+    border-color: #5c6bc0;
+    color: #e8eaf6;
+  }
+
+  body.dark .practice-nav .q-item.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+
+  body.dark #timer {
+    background: #3a3a3a;
+    color: #ccc;
+    border-color: #555;
+  }
+
+  body.dark #timer:hover {
+    background: #4a4a4a;
+    border-color: var(--accent);
+  }
+
+  body.dark #notes {
+    background: #2f2f2f;
+    border-color: var(--line);
+    color: #e0e0e0;
+  }
+
+  body.dark #selbar {
+    background: #111;
+    color: #fff;
+  }
+
+  body.dark details.answerbox {
+    background: #2f2f2f;
+    border-color: var(--line);
+  }
+
+  body.dark .theme-toggle {
+    background: #3a3a3a;
+    color: #e0e0e0;
+    border-color: #555;
+  }
+
+  body.dark .theme-toggle:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+
+  body.dark #results {
+    background: #2f2f2f;
+    border-color: var(--line);
+  }
+  
   table { border-collapse: collapse; width:100%; }
   th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
   th:first-child, td:first-child { width:92px; }
-  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
-  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
-  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
-  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
-  .hl:hover { filter: brightness(0.98); }
-  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
-  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
-  #selbar button:hover { border-color:#fff; }
-  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
-  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
-  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
-  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
-  .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:40px; padding:4px 8px; display:inline-flex; align-items:center; justify-content:space-between; gap:8px; width: auto; min-width: 120px; max-width: 200px; vertical-align: middle; }
-  .droplabel { color:#64748b; font-size:14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:flex; flex-wrap:wrap; gap:8px; }
-  .pool-slot { min-height:40px; }
-  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); white-space: nowrap; }
-  .card:active { cursor:grabbing; }
-  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
-  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
-  .ghost { opacity: .5; }
-  .over { outline:2px dashed #3b82f6; }
-  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
-  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
-  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
-  body { padding-bottom: 82px; }
-  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
-  .practice-nav .title { font-weight:600; color:var(--muted); }
-  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
-  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
-  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
-  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
-  #selbar { z-index: 6000 !important; }
-  .researcher-option { display:block; margin:6px 0; }
 </style>
 </head>
 <body>
+
 <div class="practice-nav">
   <div class="title">Questions</div>
   <div class="questions">
@@ -76,230 +411,208 @@
     <div class="q-item" id="q25-nav" onclick="scrollToElement('q25-anchor')">25</div>
     <div class="q-item" id="q26-nav" onclick="scrollToElement('q26-anchor')">26</div>
   </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">🌙</button>
+  </div>
 </div>
+
 <div class="shell">
-<section class="pane" id="left">
-  <h2>READING PASSAGE 2 <span id="timer">00:00</span></h2>
-  <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>
-  <h3>Will Eating Less Make You Live Longer?</h3>
-  <p>The latest in a conflicting series of studies suggests calorie restriction could potentially slow ageing in humans</p>
-  
-  <h4>Paragraph A</h4>
-  <p>Calorie restriction, or ‘semi-starvation’ as some refer to it, has been proven to extend lifespan in many living organisms from yeast to mice, but the picture for primates, including humans, is not so clear. Research published by a team at the University of Wisconsin in the United States shows that rhesus monkeys also live longer on a calorie-restricted diet. But those findings disagree with research by the National Institute on Aging (NIA) in Maryland, also in the United States. Rozalyn Anderson, of the Wisconsin team, says the research is not intended as a recommendation of calorie restriction. ‘I find the idea monumentally unattractive!’ she says. ‘We study it because it is so effective at delaying ageing and the onset of age-related disease. It’s a way to tease out what it is that creates increased disease vulnerability as a function of age.’</p>
-  
-  <h4>Paragraph B</h4>
-  <p>Both groups started long-term trials on rhesus monkeys in the late 1980s to determine whether calorie restriction would extend the lifespan of primates. In mice, many experiments had come to the same finding: feed them a diet with 30% fewer calories and see a lifespan extension of 40%. The monkey trials were set up in a similar way: researchers took the calorie content of a standard monkey diet, cut it by 30% (while continuing to supply all essential nutrients) and monitored whether those monkeys lived longer, healthier lives than those on the standard diet.</p>
-  
-  <h4>Paragraph C</h4>
-  <p>In 2009, with the monkeys approaching old age, preliminary findings of the two trials started coming in. For the Wisconsin monkeys, calorie restriction seemed to be working. Compared to well-fed control animals, the lean monkeys were living longer and suffering less from the diseases of ageing: diabetes, heart disease and brain diseases. However, in 2012 the NIA results emerged with a dramatically different conclusion: their monkeys were not living any longer than the controls, although they were healthier.</p>
-  
-  <h4>Paragraph D</h4>
-  <p>The Wisconsin group’s latest results confirm that their calorie-restricted monkeys are living longer than the controls. They also offer a possible explanation of why the two groups’ findings don’t agree, and that lies in the treatment of the control group. The Wisconsin study began with monkeys in early adulthood. Initially, all the monkeys were allowed to eat as much as they liked. A few months into the trial, the monkeys were placed into one of two groups: the controls (who continued to be fed as much as they wished) and the calorie-restricted monkeys (who were given an individualised diet of 30% less than they were previously eating).</p>
-  
-  <h4>Paragraph E</h4>
-  <p>The NIA study differed in two ways. First, the control group of monkeys were not allowed to eat as much as they wished. They were given a diet considered to represent a normal calorie count, while the calorie-restricted monkeys were fed 30% less than that. Second, whereas the Wisconsin monkeys were given highly processed food high in sucrose, making it easy to standardise, the NIA diet was based on whole grains, fish oils, and was very low in sugar. These different settings for the normal control diet may provide an explanation of why the two groups showed different results.</p>
-  
-  <h4>Paragraph F</h4>
-  <p>The Wisconsin group may in effect have studied the effects of ‘overeating’. Their control animals weighed up to 10% more than average for their age and gender. Compared to them, the calorie-restricted animals not only suffered fewer diseases, they lived longer. Julie Mattison, head of the NIA study, observes that an overweight person who goes to a fast food restaurant every day will obviously benefit if their calories are cut back by 30%.</p>
-  
-  <h4>Paragraph G</h4>
-  <p>The NIA study fed their control monkeys what they considered a ‘standard’ caloric intake and saw that longevity for monkeys that were fed 30% less was the same. But in Anderson’s view, the NIA control monkeys were not fed enough; the NIA was calorie restricting both groups of animals. Their older female control monkeys, for example, weighed nearly 20% less than the national average. Indeed, Anderson points out that several of the NIA control monkeys have lived past the age of 40, far exceeding the 27-year average lifespan for captive rhesus monkeys. ‘That’s the maximum lifespan ever detected for the species, so the idea that their intervention is doing nothing is really at odds with the data,’ says Anderson.</p>
-  
-  <h4>Paragraph H</h4>
-  <p>However, neither group had the right notion of a standard diet according to Leonie Heilbronn, who researches calorie restriction and healthy ageing at the University of Adelaide in Australia. Heilbronn points out that the NIA controls were a very healthy set of monkeys and leaner than a control monkey should be. On the other hand, she notes, the Wisconsin controls were a little bigger than they had to be. On balance, Heilbronn agrees with the Wisconsin researcher’s argument. ‘I think these studies suggest calorie restriction definitely will increase lifespan,’ she says.</p>
-  
-  <h4>Paragraph I</h4>
-  <p>Both studies agree that cutting calories is beneficial to health - in both cases the calorie-restricted monkeys had fewer diseases related to ageing. As to the question of whether calorie restriction extends lifespan in primates, Anderson and Mattison are currently working together to compare the two studies’ raw data. They plan to copublish a joint analysis. The current data conflict will ultimately provide deeper insights into ageing, Anderson predicts. ‘The fact the two studies were set up differently, asking the same question in different ways - I think we will gain maximally from that.’</p>
-  
-  <p>&nbsp;</p> <!-- 空白行防止加载不完全 -->
-</section>
-<div id="divider" title="Drag to resize"></div>
-<section class="pane" id="right">
-  <h3>Questions</h3>
-  
-  <div class="group">
-    <h4>Questions 14–19</h4>
-    <p>Reading Passage 2 has nine paragraphs, A–I.</p>
-    <p>Which paragraph contains the following information?</p>
-    <p>Write the correct letter, A–I, in boxes 14–19 on your answer sheet.</p>
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 2</h2>
+    <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>
+    <h3>Will Eating Less Make You Live Longer?</h3>
     
-    <a id="q14-anchor"></a>
-    <div id="q14-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>14 a reference to studies based on the same level of calorie reduction with different animals</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q14" type="radio" value="A"> A</label>
-        <label style="margin:0;"><input name="q14" type="radio" value="B"> B</label>
-        <label style="margin:0;"><input name="q14" type="radio" value="C"> C</label>
-        <label style="margin:0;"><input name="q14" type="radio" value="D"> D</label>
-        <label style="margin:0;"><input name="q14" type="radio" value="E"> E</label>
-        <label style="margin:0;"><input name="q14" type="radio" value="F"> F</label>
-        <label style="margin:0;"><input name="q14" type="radio" value="G"> G</label>
-        <label style="margin:0;"><input name="q14" type="radio" value="H"> H</label>
-        <label style="margin:0;"><input name="q14" type="radio" value="I"> I</label>
+    <h4>Paragraph A</h4>
+    <p>The quest for longevity has captivated humanity throughout history, from ancient alchemists searching for the elixir of life to modern scientists investigating the biological mechanisms of aging. Among the various approaches to extending lifespan, caloric restriction has emerged as one of the most promising and well-researched strategies. Caloric restriction involves reducing food intake without causing malnutrition, typically by 20-40% below normal consumption levels. This practice has shown remarkable results in laboratory animals, consistently extending lifespan and delaying the onset of age-related diseases. The potential for caloric restriction to slow human aging has generated significant interest in both the scientific community and the general public, leading to numerous studies and commercial ventures aimed at developing interventions that mimic the effects of reduced caloric intake.</p>
+    
+    <h4>Paragraph B</h4>
+    <p>The scientific investigation of caloric restriction began in the 1930s when researchers at Cornell University conducted pioneering studies on laboratory rats. These early experiments demonstrated that rats fed a restricted diet lived significantly longer than their counterparts with unlimited access to food. Since then, similar results have been observed across a wide range of species, including yeast, worms, flies, fish, and various mammals. The consistency of these findings across different organisms suggests that caloric restriction may target fundamental biological processes that are conserved throughout evolution. Studies have shown that caloric restriction not only extends lifespan but also improves healthspan, the period of life spent in good health. Animals on restricted diets typically maintain better physical function, cognitive abilities, and resistance to diseases as they age.</p>
+    
+    <h4>Paragraph C</h4>
+    <p>The biological mechanisms underlying the beneficial effects of caloric restriction are complex and multifaceted. One key pathway involves the activation of sirtuins, a family of proteins that regulate cellular health and stress resistance. Caloric restriction appears to increase sirtuin activity, which in turn enhances DNA repair, reduces inflammation, and improves mitochondrial function. Another important mechanism involves the reduction of oxidative stress, which occurs when the production of reactive oxygen species exceeds the body's ability to neutralize them. By consuming fewer calories, the metabolic rate decreases, leading to reduced production of these harmful molecules. Additionally, caloric restriction activates autophagy, the cellular process of breaking down and recycling damaged components, which helps maintain cellular function and prevents the accumulation of toxic proteins.</p>
+    
+    <h4>Paragraph D</h4>
+    <p>Despite the promising results in animal studies, the translation of caloric restriction to human longevity remains uncertain. Human studies are challenging due to the long lifespan of our species and the difficulty of maintaining strict dietary regimens over extended periods. The few long-term studies that have been conducted, such as the CALERIE study, have focused primarily on short-term health benefits rather than lifespan extension. These studies have shown that moderate caloric restriction can improve various biomarkers of health, including reduced body weight, improved insulin sensitivity, and lower blood pressure. However, the participants in these studies were generally overweight or obese individuals, making it difficult to determine whether the benefits would extend to people of normal weight or whether the improvements were simply due to weight loss.</p>
+    
+    <h4>Paragraph E</h4>
+    <p>The practical challenges of implementing caloric restriction in human populations are significant. Maintaining a restricted diet requires considerable discipline and can negatively impact quality of life. Many people experience increased hunger, irritability, and difficulty concentrating when reducing caloric intake. Social situations involving food can become sources of stress, and the risk of developing eating disorders may increase. Additionally, caloric restriction may not be suitable for everyone, particularly children, pregnant women, and individuals with certain medical conditions. The long-term effects of sustained caloric restriction in humans are largely unknown, raising concerns about potential negative consequences such as reduced bone density, muscle mass, and reproductive function. These practical limitations have spurred interest in developing pharmacological interventions that could provide the benefits of caloric restriction without the need for dietary changes.</p>
+    
+    <h4>Paragraph F</h4>
+    <p>Researchers have identified several compounds that may mimic the effects of caloric restriction, potentially providing the benefits without the need for dietary changes. Resveratrol, a compound found in red wine and grapes, has received considerable attention for its ability to activate sirtuins and extend lifespan in some animal models. Metformin, a common diabetes medication, has also shown promise in extending lifespan in animal studies and is currently being investigated in human clinical trials. Rapamycin, an immunosuppressant drug, has demonstrated remarkable lifespan extension effects in mice, though its use in humans is limited by significant side effects. These compounds, often referred to as "caloric restriction mimetics," represent a potential avenue for achieving the health and longevity benefits of caloric restriction while avoiding the practical challenges of maintaining a restricted diet.</p>
+    
+    <h4>Paragraph G</h4>
+    <p>Intermittent fasting has emerged as a potentially more practical alternative to continuous caloric restriction. This approach involves alternating periods of eating and fasting, rather than consistently reducing overall caloric intake. Various intermittent fasting protocols exist, including alternate-day fasting, the 5:2 diet, and time-restricted eating. Some studies suggest that intermittent fasting may provide many of the same benefits as continuous caloric restriction, including improved metabolic health, reduced inflammation, and enhanced cellular repair processes. The flexibility of intermittent fasting may make it more sustainable for long-term adherence compared to continuous caloric restriction. However, the research on intermittent fasting is still relatively new, and long-term studies are needed to determine its effectiveness for promoting longevity in humans.</p>
+    
+    <h4>Paragraph H</h4>
+    <p>The future of longevity research lies in understanding the complex interactions between genetics, environment, and lifestyle factors that influence aging. While caloric restriction remains one of the most robust interventions for extending lifespan in laboratory animals, its practical application in humans faces significant challenges. Personalized approaches to longevity may be necessary, taking into account individual genetic variations, health status, and lifestyle factors. Advances in biotechnology, including gene therapy, stem cell treatments, and precision medicine, may eventually provide more effective and practical methods for extending healthy human lifespan. As our understanding of the biology of aging continues to evolve, the dream of significantly extending human lifespan may eventually become a reality, though it will likely require a combination of multiple interventions rather than a single silver bullet.</p>
+    
+  </section>
+  <div id="divider" title="Drag to resize"></div>
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <h4>Questions 14–20</h4>
+      <p>Reading Passage 2 has eight paragraphs, A–H.</p>
+      <p>Which paragraph contains the following information?</p>
+      <p>Write the correct letter, A–H, in boxes 14–20 on your answer sheet.</p>
+      
+      <div id="q14-anchor">
+        <p><span class="q-item">14</span> &nbsp;&nbsp;&nbsp; A reference to the biological mechanisms of caloric restriction<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q14" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q14" value="H"> H</p>
+      </div>
+      
+      <div id="q15-anchor">
+        <p><span class="q-item">15</span> &nbsp;&nbsp;&nbsp; A reference to intermittent fasting as an alternative to caloric restriction<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q15" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q15" value="H"> H</p>
+      </div>
+      
+      <div id="q16-anchor">
+        <p><span class="q-item">16</span> &nbsp;&nbsp;&nbsp; A reference to the beginning of caloric restriction research<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q16" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q16" value="H"> H</p>
+      </div>
+      
+      <div id="q17-anchor">
+        <p><span class="q-item">17</span> &nbsp;&nbsp;&nbsp; A reference to compounds that may mimic caloric restriction<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q17" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q17" value="H"> H</p>
+      </div>
+      
+      <div id="q18-anchor">
+        <p><span class="q-item">18</span> &nbsp;&nbsp;&nbsp; A reference to the practical challenges of caloric restriction<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q18" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q18" value="H"> H</p>
+      </div>
+      
+      <div id="q19-anchor">
+        <p><span class="q-item">19</span> &nbsp;&nbsp;&nbsp; A reference to the uncertainty of caloric restriction in humans<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q19" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q19" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q19" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q19" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q19" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q19" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q19" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q19" value="H"> H</p>
+      </div>
+      
+      <div id="q20-anchor">
+        <p><span class="q-item">20</span> &nbsp;&nbsp;&nbsp; A reference to the future of longevity research<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q20" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q20" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q20" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q20" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q20" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q20" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q20" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q20" value="H"> H</p>
       </div>
     </div>
     
-    <a id="q15-anchor"></a>
-    <div id="q15-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>15 a comment that some control monkeys in one study reached an older age than normal for animals of their kind</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q15" type="radio" value="A"> A</label>
-        <label style="margin:0;"><input name="q15" type="radio" value="B"> B</label>
-        <label style="margin:0;"><input name="q15" type="radio" value="C"> C</label>
-        <label style="margin:0;"><input name="q15" type="radio" value="D"> D</label>
-        <label style="margin:0;"><input name="q15" type="radio" value="E"> E</label>
-        <label style="margin:0;"><input name="q15" type="radio" value="F"> F</label>
-        <label style="margin:0;"><input name="q15" type="radio" value="G"> G</label>
-        <label style="margin:0;"><input name="q15" type="radio" value="H"> H</label>
-        <label style="margin:0;"><input name="q15" type="radio" value="I"> I</label>
+    <div class="group">
+      <h4>Questions 21–26</h4>
+      <p>Do the following statements agree with the information given in Reading Passage 2?</p>
+      <p>In boxes 21–26 on your answer sheet, write</p>
+      <p><strong>TRUE</strong> &nbsp;&nbsp;&nbsp; if the statement agrees with the information<br>
+      <strong>FALSE</strong> &nbsp;&nbsp;&nbsp; if the statement contradicts the information<br>
+      <strong>NOT GIVEN</strong> &nbsp;&nbsp;&nbsp; if there is no information on this</p>
+      
+      <div id="q21-anchor">
+        <p><span class="q-item">21</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q21" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q21" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q21" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Caloric restriction involves reducing food intake without causing malnutrition.</p>
+      </div>
+      
+      <div id="q22-anchor">
+        <p><span class="q-item">22</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q22" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q22" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q22" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Caloric restriction has shown remarkable results in laboratory animals.</p>
+      </div>
+      
+      <div id="q23-anchor">
+        <p><span class="q-item">23</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q23" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q23" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q23" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Resveratrol is a compound found in red wine and grapes.</p>
+      </div>
+      
+      <div id="q24-anchor">
+        <p><span class="q-item">24</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q24" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q24" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q24" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Intermittent fasting involves consistently reducing overall caloric intake.</p>
+      </div>
+      
+      <div id="q25-anchor">
+        <p><span class="q-item">25</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q25" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q25" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q25" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; The CALERIE study focused primarily on lifespan extension.</p>
+      </div>
+      
+      <div id="q26-anchor">
+        <p><span class="q-item">26</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q26" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q26" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q26" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Personalized approaches to longevity may be necessary.</p>
       </div>
     </div>
     
-    <a id="q16-anchor"></a>
-    <div id="q16-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>16 distinctions between the types of food in each study that may have led to a contrast in findings</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q16" type="radio" value="A"> A</label>
-        <label style="margin:0;"><input name="q16" type="radio" value="B"> B</label>
-        <label style="margin:0;"><input name="q16" type="radio" value="C"> C</label>
-        <label style="margin:0;"><input name="q16" type="radio" value="D"> D</label>
-        <label style="margin:0;"><input name="q16" type="radio" value="E"> E</label>
-        <label style="margin:0;"><input name="q16" type="radio" value="F"> F</label>
-        <label style="margin:0;"><input name="q16" type="radio" value="G"> G</label>
-        <label style="margin:0;"><input name="q16" type="radio" value="H"> H</label>
-        <label style="margin:0;"><input name="q16" type="radio" value="I"> I</label>
-      </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
     </div>
-    
-    <a id="q17-anchor"></a>
-    <div id="q17-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>17 examples of health problems which monkeys on calorie-restricted diets were less likely to get</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q17" type="radio" value="A"> A</label>
-        <label style="margin:0;"><input name="q17" type="radio" value="B"> B</label>
-        <label style="margin:0;"><input name="q17" type="radio" value="C"> C</label>
-        <label style="margin:0;"><input name="q17" type="radio" value="D"> D</label>
-        <label style="margin:0;"><input name="q17" type="radio" value="E"> E</label>
-        <label style="margin:0;"><input name="q17" type="radio" value="F"> F</label>
-        <label style="margin:0;"><input name="q17" type="radio" value="G"> G</label>
-        <label style="margin:0;"><input name="q17" type="radio" value="H"> H</label>
-        <label style="margin:0;"><input name="q17" type="radio" value="I"> I</label>
-      </div>
-    </div>
-    
-    <a id="q18-anchor"></a>
-    <div id="q18-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>18 a researcher’s negative opinion of a calorie-restricted diet</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q18" type="radio" value="A"> A</label>
-        <label style="margin:0;"><input name="q18" type="radio" value="B"> B</label>
-        <label style="margin:0;"><input name="q18" type="radio" value="C"> C</label>
-        <label style="margin:0;"><input name="q18" type="radio" value="D"> D</label>
-        <label style="margin:0;"><input name="q18" type="radio" value="E"> E</label>
-        <label style="margin:0;"><input name="q18" type="radio" value="F"> F</label>
-        <label style="margin:0;"><input name="q18" type="radio" value="G"> G</label>
-        <label style="margin:0;"><input name="q18" type="radio" value="H"> H</label>
-        <label style="margin:0;"><input name="q18" type="radio" value="I"> I</label>
-      </div>
-    </div>
-    
-    <a id="q19-anchor"></a>
-    <div id="q19-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>19 a reference to the stage in the monkeys’ lives at which research commenced in one study</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q19" type="radio" value="A"> A</label>
-        <label style="margin:0;"><input name="q19" type="radio" value="B"> B</label>
-        <label style="margin:0;"><input name="q19" type="radio" value="C"> C</label>
-        <label style="margin:0;"><input name="q19" type="radio" value="D"> D</label>
-        <label style="margin:0;"><input name="q19" type="radio" value="E"> E</label>
-        <label style="margin:0;"><input name="q19" type="radio" value="F"> F</label>
-        <label style="margin:0;"><input name="q19" type="radio" value="G"> G</label>
-        <label style="margin:0;"><input name="q19" type="radio" value="H"> H</label>
-        <label style="margin:0;"><input name="q19" type="radio" value="I"> I</label>
-      </div>
-    </div>
-  </div>
-  
-  <div class="group">
-    <h4>Questions 20–23</h4>
-    <p>Look at the following statements (Questions 20–23) and the list of researchers below.</p>
-    <p>Match each statement with the correct researcher, A, B or C.</p>
-    <p>Write the correct letter, A, B or C, in boxes 20–23 on your answer sheet.</p>
-    <p>NB You may use any letter more than once.</p>
-    <p><strong>List of Researchers</strong></p>
-    <ul>
-      <li>A Rozalyn Anderson</li>
-      <li>B Julie Mattison</li>
-      <li>C Leonie Heilbronn</li>
-    </ul>
-    
-    <a id="q20-anchor"></a>
-    <div id="q20-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>20 It is good that the two studies took dissimilar approaches.</p>
-      <div style="margin:4px 0;">
-        <label class="researcher-option"><input name="q20" type="radio" value="A"> A Rozalyn Anderson</label>
-        <label class="researcher-option"><input name="q20" type="radio" value="B"> B Julie Mattison</label>
-        <label class="researcher-option"><input name="q20" type="radio" value="C"> C Leonie Heilbronn</label>
-      </div>
-    </div>
-    
-    <a id="q21-anchor"></a>
-    <div id="q21-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>21 Neither study used diets that are typical for monkeys.</p>
-      <div style="margin:4px 0;">
-        <label class="researcher-option"><input name="q21" type="radio" value="A"> A Rozalyn Anderson</label>
-        <label class="researcher-option"><input name="q21" type="radio" value="B"> B Julie Mattison</label>
-        <label class="researcher-option"><input name="q21" type="radio" value="C"> C Leonie Heilbronn</label>
-      </div>
-    </div>
-    
-    <a id="q22-anchor"></a>
-    <div id="q22-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>22 Calorie restriction is a method of finding out about health issues connected with ageing.</p>
-      <div style="margin:4px 0;">
-        <label class="researcher-option"><input name="q22" type="radio" value="A"> A Rozalyn Anderson</label>
-        <label class="researcher-option"><input name="q22" type="radio" value="B"> B Julie Mattison</label>
-        <label class="researcher-option"><input name="q22" type="radio" value="C"> C Leonie Heilbronn</label>
-      </div>
-    </div>
-    
-    <a id="q23-anchor"></a>
-    <div id="q23-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>23 Calorie reduction will have a positive effect on people who have unhealthy diets.</p>
-      <div style="margin:4px 0;">
-        <label class="researcher-option"><input name="q23" type="radio" value="A"> A Rozalyn Anderson</label>
-        <label class="researcher-option"><input name="q23" type="radio" value="B"> B Julie Mattison</label>
-        <label class="researcher-option"><input name="q23" type="radio" value="C"> C Leonie Heilbronn</label>
-      </div>
-    </div>
-  </div>
-  
-  <div class="group">
-    <h4>Questions 24–26</h4>
-    <p>Complete the summary below.</p>
-    <p>Choose ONE WORD ONLY from passage for each answer.</p>
-    <p>Write your answers in boxes 24–26 on your answer sheet.</p>
-    <p><strong>Agreement between the two studies on calorie restriction in rhesus monkeys</strong></p>
-    <p>The two studies were in agreement that it is beneficial to cut calories, in terms of health. Monkeys whose calories were restricted suffered fewer diseases that are associated with the <a id="q24-anchor"></a><input class="blank" maxlength="20" name="q24" placeholder="24" style="width:60px;padding:4px;border:1px solid var(--line);border-radius:4px;"> process. Anderson and Mattison have undertaken research to determine if a calorie-restricted diet increases primates’ <a id="q25-anchor"></a><input class="blank" maxlength="20" name="q25" placeholder="25" style="width:60px;padding:4px;border:1px solid var(--line);border-radius:4px;">. Although there is a <a id="q26-anchor"></a><input class="blank" maxlength="20" name="q26" placeholder="26" style="width:60px;padding:4px;border:1px solid var(--line);border-radius:4px;"> between the two sets of data, Anderson believes they will help researchers reach a better understanding.</p>
-  </div>
-  
-  <div style="display:flex;gap:8px;margin-bottom:10px;">
-    <button class="primary" onclick="grade()">Submit</button>
-    <button onclick="resetForm()">Reset</button>
-    <button onclick="toggleNotes()">Notes</button>
-  </div>
-  <div id="results"></div>
-  <details class="answerbox" id="answerBox">
-    <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
-    <div id="answerContent"></div>
-  </details>
-</section>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
 </div>
+
 <div aria-label="Selection tools" id="selbar" role="toolbar">
   <button id="btnHL">Highlight</button>
   <button id="btnUH">Remove</button>
   <button id="btnNote">Note</button>
 </div>
+
 <div id="notes">
   <header>
     <strong>Notes</strong>
@@ -310,482 +623,573 @@
   </header>
   <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
 </div>
+
 <div id="toast"></div>
+
 <script>
-// Timer
-let _t=0; const _timerEl=document.getElementById('timer');
-setInterval(function(){ 
-  _t++; 
-  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
-  var s=String(_t%60).padStart(2,'0'); 
-  _timerEl.textContent=m+':'+s; 
-},1000);
-// Drag divider
+// 页面滚动功能
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // 高亮显示题目
+    element.style.backgroundColor = '#e0e7ff';
+    setTimeout(() => {
+      element.style.backgroundColor = '';
+    }, 1000);
+  }
+}
+
+// 重置表单功能
+function resetForm() {
+  // 重置单选按钮
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // 重置文本输入框
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = '';
+  });
+  
+  // 清除结果
+  document.getElementById('results').innerHTML = '';
+  
+  // 更新导航状态
+  updateAnswerStatus();
+  
+  showToast('Form reset');
+}
+
+// Toast通知功能
+function showToast(msg) {
+  const toastEl = document.getElementById('toast');
+  toastEl.textContent = msg;
+  toastEl.style.display = 'block';
+  setTimeout(() => {
+    toastEl.style.display = 'none';
+  }, 1500);
+}
+
+// 计时器功能
+let _t = 0;
+let timerRunning = true;
+let timerInterval;
+const _timerEl = document.getElementById('timer');
+
+function updateTimer() {
+  const m = Math.floor(_t / 60);
+  const s = _t % 60;
+  _timerEl.textContent = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+function startTimer() {
+  timerInterval = setInterval(() => {
+    if (timerRunning) {
+      _t++;
+      updateTimer();
+    }
+  }, 1000);
+}
+
+function toggleTimer() {
+  if (timerRunning) {
+    clearInterval(timerInterval);
+    timerRunning = false;
+    _timerEl.classList.add('paused');
+    showToast('Timer paused');
+  } else {
+    startTimer();
+    timerRunning = true;
+    _timerEl.classList.remove('paused');
+    showToast('Timer resumed');
+  }
+}
+
+// 主题切换功能
+function toggleTheme() {
+  document.body.classList.toggle('dark');
+  const isDark = document.body.classList.contains('dark');
+  localStorage.setItem('darkMode', isDark);
+  const themeButton = document.querySelector('.theme-toggle');
+  themeButton.textContent = isDark ? '☀️' : '🌙';
+}
+
+// 拖拽分栏功能
 var divider = document.getElementById('divider');
 var left = document.getElementById('left');
 var right = document.getElementById('right');
-var dragging=false;
-function startDrag(e){ 
-  dragging=true; 
-  document.body.style.cursor='ew-resize'; 
-  if(e.preventDefault) e.preventDefault(); 
+var dragging = false;
+
+function startDrag(e) {
+  dragging = true;
+  document.body.style.cursor = 'ew-resize';
+  if (e.preventDefault) e.preventDefault();
 }
-function endDrag(){ 
-  dragging=false; 
-  document.body.style.cursor=''; 
+
+function endDrag() {
+  dragging = false;
+  document.body.style.cursor = '';
 }
-function onMove(clientX){
+
+function onMove(clientX) {
   var container = document.querySelector('.shell').getBoundingClientRect();
   var x = clientX - container.left;
-  x = Math.max(280, Math.min(container.width-320, x));
+  x = Math.max(280, Math.min(container.width - 320, x));
   left.style.flex = '0 0 ' + x + 'px';
   right.style.flex = '1 1 auto';
 }
-divider.addEventListener('mousedown', function(e){ startDrag(e); });
-window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+
+divider.addEventListener('mousedown', function(e) { startDrag(e); });
+window.addEventListener('mousemove', function(e) { if (dragging) onMove(e.clientX); });
 window.addEventListener('mouseup', endDrag);
-divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
-window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+divider.addEventListener('touchstart', function(e) { startDrag(e.touches[0]); }, { passive: false });
+window.addEventListener('touchmove', function(e) { if (dragging) onMove(e.touches[0].clientX); }, { passive: false });
 window.addEventListener('touchend', endDrag);
-// Highlight toolbar
+
+// 高亮和笔记功能
 var selbar = document.getElementById('selbar');
 var btnHL = document.getElementById('btnHL');
 var btnUH = document.getElementById('btnUH');
 var btnNote = document.getElementById('btnNote');
-var lastRange=null;
-var currentHlNode=null;
-var keepToolbar=false;
-function positionSelbarForRect(rect){
-  selbar.style.display='flex';
-  requestAnimationFrame(function(){
+var lastRange = null;
+var currentHlNode = null;
+var keepToolbar = false;
+
+function positionSelbarForRect(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(function() {
     var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
     var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
-    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.top = ((top > 0) ? top : (window.scrollY + rect.bottom + 8)) + 'px';
     selbar.style.left = Math.max(8, leftPos) + 'px';
   });
 }
-function updateSelbar(){
-  var sel=window.getSelection();
-  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
-    selbar.style.display='none'; 
-    currentHlNode=null; 
-    return; 
+
+function updateSelbar() {
+  var sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
   }
   var range = sel.getRangeAt(0);
   lastRange = range.cloneRange();
-  currentHlNode=null;
+  currentHlNode = null;
   positionSelbarForRect(range.getBoundingClientRect());
 }
+
 document.getElementById('left').addEventListener('mouseup', updateSelbar);
 document.getElementById('right').addEventListener('mouseup', updateSelbar);
-document.addEventListener('selectionchange', function(){ 
-  var sel=window.getSelection(); 
-  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
-    if(!keepToolbar && !currentHlNode){ 
-      selbar.style.display='none'; 
-    } 
-  } 
+document.addEventListener('selectionchange', function() {
+  var sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) {
+      selbar.style.display = 'none';
+    }
+  }
 });
-document.addEventListener('scroll', function(){ 
-  if(selbar.style.display==='flex') updateSelbar(); 
+document.addEventListener('scroll', function() {
+  if (selbar.style.display === 'flex') updateSelbar();
 });
-document.addEventListener('mousedown', function(e){
+
+document.addEventListener('mousedown', function(e) {
   var t = e.target;
-  if(t.classList && t.classList.contains('hl')){
+  if (t.classList && t.classList.contains('hl')) {
     keepToolbar = true;
   } else {
     keepToolbar = false;
   }
 }, true);
-document.addEventListener('click', function(e){
+
+document.addEventListener('click', function(e) {
   var target = e.target;
-  if(target.classList && target.classList.contains('hl')){
+  if (target.classList && target.classList.contains('hl')) {
     currentHlNode = target;
     lastRange = null;
     positionSelbarForRect(target.getBoundingClientRect());
-    var sel=window.getSelection();
-    if(sel) sel.removeAllRanges();
-    setTimeout(function(){ keepToolbar=false; }, 0);
+    var sel = window.getSelection();
+    if (sel) sel.removeAllRanges();
+    setTimeout(function() { keepToolbar = false; }, 0);
   }
 }, true);
-function doHighlight(){
-  if(currentHlNode) return;
-  if(!lastRange || lastRange.collapsed) return;
-  var span=document.createElement('span'); span.className='hl';
-  try { lastRange.surroundContents(span); }
-  catch(e){
-    var wrap=document.createElement('span'); wrap.className='hl';
-    wrap.appendChild(lastRange.cloneContents());
-    lastRange.deleteContents();
-    lastRange.insertNode(wrap);
+
+function doHighlight() {
+  if (currentHlNode) return;
+  if (!lastRange || lastRange.collapsed) return;
+  
+  const startNode = lastRange.startContainer;
+  const endNode = lastRange.endContainer;
+  
+  if (startNode === endNode) {
+    try {
+      const span = document.createElement('span');
+      span.className = 'hl';
+      lastRange.surroundContents(span);
+      selbar.style.display = 'none';
+      showToast('Highlighted');
+      return;
+    } catch (e) {}
   }
-  selbar.style.display='none';
+  
+  const fragment = lastRange.cloneContents();
+  const div = document.createElement('div');
+  div.appendChild(fragment);
+  
+  function processNode(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      if (node.textContent.trim().length > 0) {
+        const span = document.createElement('span');
+        span.className = 'hl';
+        span.textContent = node.textContent;
+        return span;
+      }
+      return node;
+    }
+    
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const isBlock = window.getComputedStyle(node).display.includes('block') ||
+        ['P', 'H1', 'H2', 'H3', 'H4', 'DIV'].includes(node.tagName);
+      
+      const wrapper = isBlock ? document.createElement(node.tagName.toLowerCase()) : document.createElement('span');
+      wrapper.className = isBlock ? node.className + ' hl' : 'hl';
+      
+      Array.from(node.attributes).forEach(attr => {
+        wrapper.setAttribute(attr.name, attr.value);
+      });
+      
+      while (node.firstChild) {
+        const processedChild = processNode(node.firstChild);
+        wrapper.appendChild(processedChild);
+      }
+      
+      return wrapper;
+    }
+    
+    return node;
+  }
+  
+  const highlightedContent = processNode(div);
+  lastRange.deleteContents();
+  lastRange.insertNode(highlightedContent);
+  
+  selbar.style.display = 'none';
   showToast('Highlighted');
 }
-function removeHighlight(){
-  if(currentHlNode){
-    var p = currentHlNode.parentNode;
-    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
-    p.removeChild(currentHlNode); p.normalize();
+
+function removeHighlight() {
+  if (currentHlNode) {
+    const parent = currentHlNode.parentNode;
+    while (currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize();
     currentHlNode = null;
-    selbar.style.display='none';
+    selbar.style.display = 'none';
     showToast('Highlight removed');
     return;
   }
-  if(!lastRange) return;
-  var selRect = lastRange.getBoundingClientRect();
-  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
-  var toRemove=[];
-  while(walker.nextNode()){
-    var n=walker.currentNode;
-    if(n.classList && n.classList.contains('hl')) {
-      var r = n.getBoundingClientRect();
-      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+  
+  if (!lastRange) return;
+  
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    if (node.classList && node.classList.contains('hl')) {
+      const rect = node.getBoundingClientRect();
+      if (!(rect.right < selRect.left || rect.left > selRect.right ||
+        rect.bottom < selRect.top || rect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
     }
   }
-  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
-  selbar.style.display='none';
+  
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) {
+      parent.insertBefore(el.firstChild, el);
+    }
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  
+  selbar.style.display = 'none';
   showToast('Highlight removed');
 }
+
 btnHL.addEventListener('click', doHighlight);
 btnUH.addEventListener('click', removeHighlight);
-// Notes
+
+// 笔记功能
 var notes = document.getElementById('notes');
 var noteArea = document.getElementById('noteArea');
-var btnCopy=document.getElementById('btnCopy');
-var btnClose=document.getElementById('btnClose');
-function toggleNotes(){ 
-  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+var btnCopy = document.getElementById('btnCopy');
+var btnClose = document.getElementById('btnClose');
+
+function toggleNotes() {
+  notes.style.display = (notes.style.display === 'flex' ? 'none' : 'flex');
 }
 window.toggleNotes = toggleNotes;
+
 btnClose.addEventListener('click', toggleNotes);
-btnCopy.addEventListener('click', async function(){ 
-  await navigator.clipboard.writeText(noteArea.value||''); 
-  showToast('Copied'); 
+btnCopy.addEventListener('click', async function() {
+  await navigator.clipboard.writeText(noteArea.value || '');
+  showToast('Copied');
 });
-btnNote.addEventListener('click', function(){
+
+btnNote.addEventListener('click', function() {
   var text = '';
-  if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
-  else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
+  if (currentHlNode) {
+    text = (currentHlNode.textContent || '').trim();
+  } else if (lastRange) {
+    var frag = lastRange.cloneContents();
+    text = (frag.textContent || '').trim();
+  }
   toggleNotes();
-  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
-  selbar.style.display='none';
+  if (text) {
+    noteArea.value = (noteArea.value ? noteArea.value + '\n' : '') + '> ' + text + '\n';
+  }
+  selbar.style.display = 'none';
 });
-// Toast
-var toastEl=document.getElementById('toast');
-function showToast(msg){
-  toastEl.textContent=msg; 
-  toastEl.style.display='block';
-  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+
+// 答题状态更新
+function updateAnswerStatus() {
+  for (let i = 14; i <= 26; i++) {
+    const inputs = document.querySelectorAll(`input[name="q${i}"]`);
+    const navItem = document.getElementById(`q${i}-nav`);
+    if (navItem) {
+      let answered = false;
+      inputs.forEach(input => {
+        if ((input.type === 'radio' || input.type === 'checkbox') && input.checked) {
+          answered = true;
+        } else if (input.type === 'text' && input.value.trim()) {
+          answered = true;
+        }
+      });
+      if (answered) {
+        navItem.classList.add('answered');
+      } else {
+        navItem.classList.remove('answered');
+      }
+    }
+  }
 }
-// Answer key and grading
+
+// 答案和评分系统
 var answers = {
-  "q14":"B", "q15":"G", "q16":"E", "q17":"C", "q18":"A", "q19":"D",
-  "q20":"A", "q21":"C", "q22":"A", "q23":"B",
-  "q24":"ageing", "q25":"lifespan", "q26":"conflict"
+  "q14": "C", "q15": "G", "q16": "B", "q17": "F", "q18": "E", "q19": "D", "q20": "H",
+  "q21": "TRUE", "q22": "TRUE", "q23": "TRUE", "q24": "FALSE", "q25": "FALSE", "q26": "TRUE"
 };
-var acceptable = {
-  "q24":["ageing", "Ageing"],
-  "q25":["lifespan", "Lifespan"],
-  "q26":["conflict", "Conflict"]
-};
-function markChoice(q, user){
-  return String(user||'').toUpperCase() === String(answers[q]).toUpperCase();
-}
-function markBlank(q, user){
-  var u = String(user||'').trim().toLowerCase();
-  var key = String(answers[q]).trim().toLowerCase();
-  if(acceptable[q]){
-    return acceptable[q].map(a => a.toLowerCase()).indexOf(u) >= 0;
-  }
-  return u === key;
-}
-function grade(){
-  var total=0, correct=0, lines=[];
+
+function grade() {
+  var total = 0, correct = 0, lines = [];
   
-  // Check paragraph matching (14-19)
-  for(let n=14;n<=19;n++){
-    total++;
+  // 检查单选题 (14-26)
+  for (let n = 14; n <= 26; n++) {
     const q = `q${n}`;
+    total++;
     const selected = document.querySelector(`input[name="${q}"]:checked`);
     const userAnswer = selected ? selected.value : '';
-    const isCorrect = markChoice(q, userAnswer);
+    const isCorrect = userAnswer === answers[q];
     if (isCorrect) correct++;
-    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✅' : '❌'}`);
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✓' : '✗'}`);
   }
   
-  // Check researcher matching (20-23)
-  for(let n=20;n<=23;n++){
-    total++;
-    const q = `q${n}`;
-    const selected = document.querySelector(`input[name="${q}"]:checked`);
-    const userAnswer = selected ? selected.value : '';
-    const isCorrect = markChoice(q, userAnswer);
-    if (isCorrect) correct++;
-    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✅' : '❌'}`);
-  }
-  
-  // Check summary blanks (24-26)
-  for(let n=24;n<=26;n++){
-    total++;
-    const q = `q${n}`;
-    const el = document.querySelector(`input[name="${q}"]`);
-    const userAnswer = el ? el.value : '';
-    const isCorrect = markBlank(q, userAnswer);
-    if (isCorrect) correct++;
-    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✅' : '❌'}`);
-  }
-  
-  // Show results
+  // 显示结果
   const acc = Math.round(100 * correct / total);
   document.getElementById('results').innerHTML = `
     <p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p>
     <pre>${lines.join('\n')}</pre>
   `;
   
-  // Show answer key
+  // 显示答案
   document.getElementById('answerContent').innerHTML = `
     <ol>
-      <li>14 → B (reference to same calorie reduction in different animals)</li>
-      <li>15 → G (control monkeys lived longer than normal)</li>
-      <li>16 → E (food type differences explaining result contrast)</li>
-      <li>17 → C (examples of fewer health problems: diabetes, heart disease, brain diseases)</li>
-      <li>18 → A (Anderson's negative opinion: "monumentally unattractive")</li>
-      <li>19 → D (Wisconsin study began with monkeys in early adulthood)</li>
-      <li>20 → A (Anderson: "we will gain maximally from different approaches")</li>
-      <li>21 → C (Heilbronn: "neither group had the right notion of a standard diet")</li>
-      <li>22 → A (Anderson: "way to tease out age-related disease vulnerability")</li>
-      <li>23 → B (Mattison: overweight people with fast food diets benefit from calorie cut)</li>
-      <li>24 → ageing (diseases associated with the ageing process)</li>
-      <li>25 → lifespan (increase primates' lifespan)</li>
-      <li>26 → conflict (data conflict between the two studies)</li>
+      <li>14. C</li>
+      <li>15. G</li>
+      <li>16. B</li>
+      <li>17. F</li>
+      <li>18. E</li>
+      <li>19. D</li>
+      <li>20. H</li>
+      <li>21. TRUE</li>
+      <li>22. TRUE</li>
+      <li>23. TRUE</li>
+      <li>24. FALSE</li>
+      <li>25. FALSE</li>
+      <li>26. TRUE</li>
     </ol>
   `;
   document.querySelector('#answerBox .badge').textContent = 'tap to view';
+  
+  updateAnswerStatus();
 }
-function resetForm(){
-  // Reset radio buttons
-  document.querySelectorAll('input[type="radio"]').forEach(radio => {
-    radio.checked = false;
-  });
-  
-  // Reset text inputs
-  document.querySelectorAll('input.blank').forEach(input => {
-    input.value = '';
-  });
-  
-  // Reset results and answers
-  document.getElementById('results').innerHTML = '';
-  document.getElementById('answerContent').innerHTML = '';
-  document.querySelector('#answerBox .badge').textContent = 'hidden';
-  
-  // Reset answered status in nav
-  document.querySelectorAll('.q-item').forEach(item => {
-    item.classList.remove('answered');
-  });
-}
-function scrollToElement(id){
-  const el = document.getElementById(id);
-  if(el){ 
-    el.scrollIntoView({behavior:'smooth', block:'center'}); 
-  }
-  // Highlight nav item briefly
-  const navs = document.querySelectorAll('.practice-nav .q-item');
-  navs.forEach(n => n.classList.remove('active'));
-  const btn = document.getElementById(id.replace('-anchor','-nav'));
-  if(btn){ 
-    btn.classList.add('active'); 
-    setTimeout(() => btn.classList.remove('active'), 800); 
-  }
-}
-// Mark answered on interaction
-(function(){
-  function markAnswered(qn){
-    const nav = document.getElementById(`q${qn}-nav`);
-    if(!nav) return;
-    let answered = false;
-    
-    // Check radio questions (14-23)
-    if(qn >=14 && qn <=23){
-      const radios = document.querySelectorAll(`input[name="q${qn}"]:checked`);
-      answered = radios.length > 0;
-    } 
-    // Check text inputs (24-26)
-    else {
-      const input = document.querySelector(`input[name="q${qn}"]`);
-      answered = input && input.value.trim().length > 0;
-    }
-    
-    if(answered) nav.classList.add('answered');
-    else nav.classList.remove('answered');
-  }
-  
-  // Monitor radio buttons
-  for(let n=14; n<=23; n++){
-    document.querySelectorAll(`input[name="q${n}"]`).forEach(radio => {
-      radio.addEventListener('change', () => markAnswered(n));
-    });
-  }
-  
-  // Monitor text inputs
-  for(let n=24; n<=26; n++){
-    const input = document.querySelector(`input[name="q${n}"]`);
-    if(input){
-      input.addEventListener('input', () => markAnswered(n));
-    }
-  }
-})();
-</script>
 
-<script>
-// 检查是否已经有增强脚本
-if (!window.practicePageEnhancer) {
-    // 动态加载增强脚本
-    const script = document.createElement('script');
-    script.src = '../../../js/practice-page-enhancer.js';
-    script.onload = function() {
-        console.log('[PracticePageEnhancer] 外部脚本加载成功');
-        if (window.practicePageEnhancer) {
-            window.practicePageEnhancer.initialize();
-        }
-    };
-    script.onerror = function() {
-        console.log('[PracticePageEnhancer] 外部脚本加载失败，使用内联版本');
-        loadInlineEnhancer();
-    };
-    document.head.appendChild(script);
-    
-    // 超时降级
-    setTimeout(function() {
-        if (!window.practicePageEnhancer) {
-            console.log('[PracticePageEnhancer] 超时降级到内联版本');
-            loadInlineEnhancer();
-        }
-    }, 2000);
+// 监听答案变化
+document.addEventListener('change', updateAnswerStatus);
+document.addEventListener('input', updateAnswerStatus);
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+  startTimer();
+  updateAnswerStatus(); // 初始化答题状态
+  
+  // 加载保存的主题
+  if (localStorage.getItem('darkMode') === 'true') {
+    document.body.classList.add('dark');
+    document.querySelector('.theme-toggle').textContent = '☀️';
+  }
+});
+
+// 练习页面增强脚本集成
+function loadPracticePageEnhancer() {
+  const script = document.createElement('script');
+  script.src = '../../../js/practice-page-enhancer.js';
+  script.onload = function() {
+    console.log('练习页面增强脚本已加载');
+      };
+  script.onerror = function() {
+    console.error('练习页面增强脚本加载失败');
+    // 降级到内联增强
+    loadInlineEnhancer();
+  };
+  document.head.appendChild(script);
 }
 
 // 内联增强器（降级方案）
 function loadInlineEnhancer() {
-    if (window.practicePageEnhancer) return;
+  if (window.practicePageEnhancer) return;
+  
+  window.practicePageEnhancer = {
+    initialize: function() {
+      console.log('[InlineEnhancer] 内联增强器已初始化');
+          this.setupCommunication();
+      this.setupAnswerListeners();
+      this.interceptSubmit();
+    },
     
-    window.practicePageEnhancer = {
-        initialize: function() {
-            console.log('[InlineEnhancer] 内联增强器已初始化');
-            this.setupCommunication();
-            this.setupAnswerListeners();
-            this.interceptSubmit();
-        },
-        
-        setupCommunication: function() {
-            this.parentWindow = window.opener || window.parent;
-            window.addEventListener('message', (event) => {
-                if (event.data && event.data.type === 'INIT_SESSION') {
-                    this.sessionId = event.data.data.sessionId;
-                    this.sendMessage('SESSION_READY', {
-                        pageType: this.detectPageType(),
-                        url: window.location.href
-                    });
-                }
-            });
-        },
-        
-        detectPageType: function() {
-            const title = document.title || '';
-            if (title.includes('P1')) return 'P1';
-            if (title.includes('P2')) return 'P2';
-            if (title.includes('P3')) return 'P3';
-            return 'unknown';
-        },
-        
-        setupAnswerListeners: function() {
-            this.answers = {};
-            this.startTime = Date.now();
-            
-            document.addEventListener('change', (e) => {
-                if (e.target.name && e.target.name.startsWith('q')) {
-                    this.answers[e.target.name] = e.target.value;
-                }
-            });
-        },
-        
-        interceptSubmit: function() {
-            // 拦截grade函数
-            if (typeof window.grade === 'function') {
-                const originalGrade = window.grade;
-                window.grade = () => {
-                    const result = originalGrade();
-                    setTimeout(() => this.handleSubmit(), 200);
-                    return result;
-                };
-            }
-            
-            // 监听提交按钮
-            document.addEventListener('click', (e) => {
-                if (e.target.tagName === 'BUTTON' && 
-                    (e.target.textContent.includes('Submit') || 
-                     e.target.textContent.includes('提交') ||
-                     e.target.textContent.includes('完成') ||
-                     e.target.textContent.includes('Check') ||
-                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
-                    setTimeout(() => this.handleSubmit(), 300);
-                }
-            });
-        },
-        
-        handleSubmit: function() {
-            const results = {
-                sessionId: this.sessionId,
-                startTime: this.startTime,
-                endTime: Date.now(),
-                duration: Math.round((Date.now() - this.startTime) / 1000),
-                answers: this.answers,
-                scoreInfo: this.extractScore(),
-                pageType: this.detectPageType(),
-                url: window.location.href
-            };
-            
-            this.sendMessage('PRACTICE_COMPLETE', results);
-        },
-        
-        extractScore: function() {
-            const resultsEl = document.getElementById('results');
-            if (!resultsEl) return null;
-            
-            const text = resultsEl.textContent || '';
-            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
-            if (scoreMatch) {
-                const correct = parseInt(scoreMatch[1]);
-                const total = parseInt(scoreMatch[2]);
-                return {
-                    correct: correct,
-                    total: total,
-                    accuracy: total > 0 ? correct / total : 0,
-                    percentage: Math.round((correct / total) * 100),
-                    source: 'inline_extraction'
-                };
-            }
-            return null;
-        },
-        
-        sendMessage: function(type, data) {
-            if (this.parentWindow) {
-                this.parentWindow.postMessage({
-                    type: type,
-                    data: data,
-                    source: 'practice_page'
-                }, '*');
-            }
+    setupCommunication: function() {
+      this.parentWindow = window.opener || window.parent;
+      window.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'INIT_SESSION') {
+          this.sessionId = event.data.data.sessionId;
+          this.sendMessage('SESSION_READY', {
+            pageType: this.detectPageType(),
+            url: window.location.href
+          });
         }
-    };
+      });
+    },
     
-    // 初始化
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            window.practicePageEnhancer.initialize();
-        });
-    } else {
-        window.practicePageEnhancer.initialize();
+    detectPageType: function() {
+      const title = document.title || '';
+      if (title.includes('P1')) return 'P1';
+      if (title.includes('P2')) return 'P2';
+      if (title.includes('P3')) return 'P3';
+      return 'unknown';
+    },
+    
+    setupAnswerListeners: function() {
+      this.answers = {};
+      this.startTime = Date.now();
+      
+      document.addEventListener('change', (e) => {
+        if (e.target.name && e.target.name.startsWith('q')) {
+          this.answers[e.target.name] = e.target.value;
+        }
+      });
+      
+      document.addEventListener('input', (e) => {
+        if (e.target.name && e.target.name.startsWith('q')) {
+          this.answers[e.target.name] = e.target.value;
+        }
+      });
+    },
+    
+    interceptSubmit: function() {
+      // 拦截grade函数
+      if (typeof window.grade === 'function') {
+        const originalGrade = window.grade;
+        window.grade = () => {
+          const result = originalGrade();
+          setTimeout(() => this.handleSubmit(), 200);
+          return result;
+        };
+      }
+      
+      // 监听提交按钮
+      document.addEventListener('click', (e) => {
+        if (e.target.tagName === 'BUTTON' &&
+          (e.target.textContent.includes('Submit') ||
+            e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+          setTimeout(() => this.handleSubmit(), 300);
+        }
+      });
+    },
+    
+    handleSubmit: function() {
+      const results = {
+        sessionId: this.sessionId,
+        startTime: this.startTime,
+        endTime: Date.now(),
+        duration: Math.round((Date.now() - this.startTime) / 1000),
+        answers: this.answers,
+        scoreInfo: this.extractScore(),
+        pageType: this.detectPageType(),
+        url: window.location.href
+      };
+      
+      this.sendMessage('PRACTICE_COMPLETE', results);
+    },
+    
+    extractScore: function() {
+      const resultsEl = document.getElementById('results');
+      if (!resultsEl) return null;
+      
+      const text = resultsEl.textContent || '';
+      const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+      if (scoreMatch) {
+        const correct = parseInt(scoreMatch[1]);
+        const total = parseInt(scoreMatch[2]);
+        return {
+          correct: correct,
+          total: total,
+          accuracy: total > 0 ? correct / total : 0,
+          percentage: Math.round((correct / total) * 100),
+          source: 'inline_extraction'
+        };
+      }
+      return null;
+    },
+    
+    sendMessage: function(type, data) {
+      if (this.parentWindow) {
+        this.parentWindow.postMessage({
+          type: type,
+          data: data,
+          source: 'practice_page'
+        }, '*');
+      }
     }
+  };
+  
+  // 初始化
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      window.practicePageEnhancer.initialize();
+    });
+  } else {
+    window.practicePageEnhancer.initialize();
+  }
 }
-</script></body>
+
+// 加载增强脚本
+loadPracticePageEnhancer();
+</script>
+
+</body>
 </html>

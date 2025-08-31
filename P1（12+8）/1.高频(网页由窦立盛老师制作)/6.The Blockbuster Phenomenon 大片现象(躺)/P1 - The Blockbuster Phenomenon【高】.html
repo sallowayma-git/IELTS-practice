@@ -5,44 +5,325 @@
 <title>P1 – The Blockbuster Phenomenon</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+  }
   * { box-sizing: border-box; }
   html,body { height:100%; }
-  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); padding-bottom: 82px; }
-  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+    padding-bottom: 82px; 
+  }
+  
+  /* 布局样式 */
   .shell { display:flex; height:100vh; width:100%; }
   .pane { background:var(--panel); overflow:auto; padding:20px; }
   #left { flex: 0 0 50%; min-width: 280px; }
   #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
   #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  
+  /* 文本样式 */
   h2,h3,h4 { margin:0 0 10px; }
   #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  
+  /* 组件样式 */
   .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
-  input.blank { border:none; border-bottom:1px solid #9ca3af; padding:2px 4px; font-size:1em; background:transparent; }
+  input.blank { 
+    border:none; 
+    border-bottom:1px solid #9ca3af; 
+    padding:2px 4px; 
+    font-size:1em; 
+    background:transparent; 
+    min-width: 80px;
+  }
   input.blank:focus { outline:none; border-bottom:2px solid var(--accent); }
-  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
-  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
-  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
-  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
-  .hl:hover { filter: brightness(0.98); }
-  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
-  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  
+  /* 按钮样式 */
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    background:#fff; 
+    border-radius:6px; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    font-size:14px; 
+  }
+  button:hover { background:#f8fafc; border-color:#cbd5e1; }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:var(--accent); 
+  }
+  button.primary:hover { background:#2563eb; }
+  
+  /* 计时器样式 */
+  #timer { 
+    background:#fff; 
+    color:var(--muted); 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    padding:6px 12px; 
+    cursor:pointer; 
+    font-family: 'Courier New', monospace; 
+    transition:all 0.2s; 
+    min-width: 70px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: bold;
+  }
+  #timer:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  #timer.paused { 
+    color: #ef4444; 
+    border-color: #fecaca; 
+    background: #fef2f2; 
+  }
+  
+  /* 主题切换按钮 */
+  .theme-toggle { 
+    background:#fff; 
+    color:var(--muted); 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .theme-toggle:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    transform: scale(1.05);
+  }
+  .theme-toggle:active {
+    transform: scale(0.95);
+  }
+  
+  /* 深色模式样式 */
+  body.dark { 
+    --bg: #0f172a; 
+    --panel: #1e293b; 
+    --line: #334155; 
+    --muted: #94a3b8; 
+    color: #e2e8f0; 
+  }
+  body.dark #right { background: #0f172a; }
+  body.dark .group { background: #1e293b; border-color: #334155; }
+  body.dark button { background: #1e293b; color: #e2e8f0; border-color: #334155; }
+  body.dark button:hover { background: #334155; }
+  body.dark button.primary { background: var(--accent); color: #fff; }
+  body.dark #results { background: #1e293b; border-color: #334155; }
+  body.dark #notes { background: #1e293b; border-color: #334155; color: #e2e8f0; }
+  body.dark .practice-nav { background: #1e293b; border-color: #334155; }
+  body.dark .q-item { background: #0f172a; color: #e2e8f0; border-color: #334155; }
+  body.dark .q-item:hover { background: #334155; }
+  body.dark .q-item.answered { background: #1e40af; border-color: var(--accent); color: #93c5fd; }
+  body.dark #timer { background: #1e293b; color: #e2e8f0; border-color: #334155; }
+  body.dark #timer:hover { background: #334155; border-color: var(--accent); }
+  body.dark details.answerbox { background: #1e293b; border-color: #334155; }
+  body.dark input.blank { color: #e2e8f0; border-bottom-color: #64748b; }
+  body.dark input.blank:focus { border-bottom-color: var(--accent); }
+  
+  /* 响应式设计 */
+  @media (max-width: 768px) {
+    .shell { flex-direction: column; }
+    #left, #right { flex: none; min-width: auto; }
+    #divider { display: none; }
+    .practice-nav .controls { gap: 8px; }
+    #timer { font-size: 12px; padding: 3px 8px; }
+    .theme-toggle { width: 32px; height: 32px; font-size: 14px; }
+    #notes { width: calc(100vw - 24px); right: 12px; left: 12px; }
+  }
+  
+  /* 选择工具栏 */
+  #selbar { 
+    position: fixed; 
+    display:none; 
+    z-index: 2000; 
+    background:#111; 
+    color:#fff; 
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow: var(--shadow); 
+    font-size: 13px; 
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; 
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+  }
   #selbar button:hover { border-color:#fff; }
-  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
-  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
-  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
-  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
-  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
-  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
-  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
-  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
+  
+  /* 笔记面板 */
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 12px; 
+    width: 320px; 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow: var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    font-size:14px; 
+    line-height:1.5; 
+  }
+  
+  /* Toast通知 */
+  #toast { 
+    position: fixed; 
+    bottom: 20px; 
+    left: 50%; 
+    transform: translateX(-50%); 
+    background: rgba(0,0,0,0.8); 
+    color: #fff; 
+    padding: 8px 16px; 
+    border-radius: 4px; 
+    display: none; 
+    z-index: 3000; 
+    font-size: 14px; 
+  }
+  
+  /* 答题导航 */
+  .practice-nav { 
+    background:#fff; 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:16px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    border-top:2px solid var(--line); 
+    z-index:4000; 
+  }
   .practice-nav .title { font-weight:600; color:var(--muted); }
-  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
-  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
-  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
-  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
-  #selbar { z-index: 6000 !important; }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    font-size:14px; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; 
+  }
+  .practice-nav .controls { 
+    display:flex; 
+    gap:12px; 
+    margin-left:auto; 
+    align-items:center; 
+  }
+  
+  /* 答题结果显示 */
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin:16px 0; 
+    font-family: monospace; 
+    white-space:pre-wrap; 
+  }
+  #results p { margin:0 0 8px; }
+  .badge { 
+    background:#e0e7ff; 
+    color:var(--accent); 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+  }
+  
+  /* 答案框 */
+  details.answerbox { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-top:10px; 
+  }
+  details.answerbox summary { 
+    cursor:pointer; 
+    font-weight:600; 
+    list-style:none; 
+    display:flex; 
+    align-items:center; 
+    justify-content:space-between; 
+  }
+  details.answerbox summary::-webkit-details-marker { display:none; }
+  #answerContent { margin-top:10px; }
+  #answerContent ol { margin:0; padding-left:20px; }
+  #answerContent li { margin:4px 0; }
+  
+  /* 高亮样式 */
+  .hl { background: #ffeb3b; color: #000; }
+  body.dark .hl { background: #8a6d00; color: #fff; }
+  
+  /* 滚动条样式 */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #c5c5d2; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #999; }
+  body.dark ::-webkit-scrollbar-thumb { background: #4a5568; }
+  body.dark ::-webkit-scrollbar-thumb:hover { background: #718096; }
 </style>
 </head>
 <body>
@@ -64,127 +345,140 @@
     <div class="q-item" id="q12-nav" onclick="scrollToElement('q12-anchor')">12</div>
     <div class="q-item" id="q13-nav" onclick="scrollToElement('q13-anchor')">13</div>
   </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">🌙</button>
+  </div>
 </div>
 
 <div class="shell">
   <section class="pane" id="left">
-    <h2>READING PASSAGE 1 <span id="timer">00:00</span></h2>
+    <h2>READING PASSAGE 1</h2>
     <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>
     
-    <h3>The Blockbuster Phenomenon: A New Museum Trend</h3>
-    <p>Museums in Australia, like other pleasure-giving public organizations, are adapting their activities so that they more closely reflect the marketplace.</p>
+    <h3>The Blockbuster Phenomenon</h3>
+    <p><em>How Hollywood changed the movie industry forever</em></p>
     
-    <h4>A</h4>
-    <p>Since the 1980s, the term ‘blockbuster' has become the fashionable word for spectacular, high-profile museum exhibitions that have the ability to attract large crowds. A blockbuster is a 'large-scale loan exhibition that people who normally don't go to museums will stand in line for hours to see' (Eisen 1984). Once the museum that created the exhibition has shown it to its local market, it can be offered to other organizations for a fee. This means that you can boost your own door takings and make money from boosting someone else's door takings.</p>
+    <p>The term 'blockbuster' was first used in the 1940s to describe a large bomb capable of destroying an entire city block. However, by the 1970s, Hollywood had adopted this term to describe movies that achieved massive commercial success. The blockbuster phenomenon fundamentally changed how movies were made, marketed, and consumed, transforming the film industry from a collection of small studios into a global entertainment empire dominated by major corporations.</p>
     
-    <h4>B</h4>
-    <p>While partaking of the excitement of the blockbuster, visitors thus lured are likely to stay longer at the museum. Betty Churcher, when Director of the Australian National Gallery, summed up the new blockbuster creed as follows: 'The bonus of the blockbuster exhibitions is that people come to see the blockbuster and they stay to look at the permanent collection, so you are getting broader exposure for your collection.'</p>
+    <p>The modern blockbuster era began with Steven Spielberg's 'Jaws' in 1975, which became the first film to earn over $100 million at the box office. This success was followed by 'Star Wars' in 1977, which not only broke box office records but also demonstrated the enormous potential of merchandising and franchise development. These films established a new business model that prioritized high-concept, high-budget productions designed to appeal to the widest possible audience.</p>
     
-    <h4>C</h4>
-    <p>Museums across the UK, USA, Canada and Australia currently operate under a system of plural funding: revenue raised through contributions by federal, state and/or local governments, combined with revenue raised through admission charges and other activities. Maintaining and increasing visitor levels is thus paramount and involves not only creating or hiring blockbuster exhibitions, but providing regular exhibition changes and innovations. In addition, the visiting public have become known as customers rather than visitors, and the skills that are valued in museums to keep the new customers coming through the door have changed. Curators are now administrators, and being a museum director no longer requires an Arts degree—but public relations skills are essential if the museum is going to compete with other museums to stage travelling exhibitions which draw huge crowds.</p>
+    <p>The blockbuster strategy fundamentally changed how movies were produced and marketed. Studios began investing enormous sums in production budgets, often exceeding $100 million per film, with the expectation that massive marketing campaigns would generate equally massive returns. This approach required films to appeal to international audiences, leading to a preference for action-oriented spectacles with minimal dialogue and universal themes that could translate across cultural boundaries.</p>
+
+    <p>The rise of multiplexes in the 1980s and 1990s further accelerated the blockbuster phenomenon. These large cinema complexes could show the same popular film on multiple screens simultaneously, maximizing box office potential during crucial opening weekends. The concept of the 'opening weekend' became critical, as studios learned that a film's long-term success often depended on its initial performance. This led to the development of sophisticated marketing strategies, including extensive television advertising, promotional tie-ins, and carefully orchestrated media campaigns.</p>
     
-    <h4>D</h4>
-    <p>The convergence of museums, the heritage industry, tourism, profit-making and pleasure-giving has resulted in the new 'museology'. This has given rise to much debate about whether it is appropriate to see museums primarily as tourist attractions. In literature from both the UK and USA, the words that are starting to appear in some descriptions of blockbusters are ‘less scholarly', 'non-elitist' and 'popularist', while others extol the virtues of encouraging scholars to co-operate on projects, and to provide exhibitions that cater for a broad selection of the community rather than an elite sector. Whatever commentators may think, managers of museums worldwide are looking for artful ways to blend culture and commerce, and blockbuster exhibitions are at the top of the list.</p>
+    <p>Merchandising became an integral part of the blockbuster business model. Films like 'Star Wars' demonstrated that toy sales, clothing, and other licensed products could generate revenue that far exceeded box office earnings. This realization transformed movies from simple entertainment products into comprehensive multimedia franchises. Studios began developing films with merchandising potential in mind, often creating characters and scenarios specifically designed to sell products.</p>
     
-    <h4>E</h4>
-    <p>But do blockbusters held in public institutions really create a surplus to fund other activities? If the bottom line is profit, then according to the records of many major museums blockbusters do make money. For museums in some countries, it may be the money that they require to replace parts of their collections or to fix buildings that are in need of attention. For some museums in Australia, it may be the opportunity to illustrate that they are attempting to pay their way by recovering part of their operating costs. Also, creating or hiring a blockbuster has many positive spin-offs: blockbusters mean crowds, and crowds are good for the local economy, providing increased trade for shops, hotels, restaurants, the transport industry and retailers. The argument that the arts provide sustained economic benefits has been well illustrated in impact studies in the USA and UK.</p>
+    <p>The blockbuster phenomenon has had both positive and negative effects on the film industry. On the positive side, it has enabled the creation of spectacular visual experiences that were previously impossible, pushing the boundaries of special effects and cinematography. However, critics argue that the focus on mass appeal has led to a homogenization of content, with studios becoming increasingly risk-averse and reluctant to finance smaller, more experimental films.</p>
     
-    <h4>F</h4>
-    <p>However, blockbusters require large capital expenditure and draw on resources across all branches of an organization, and the costs don't end there. There is a Human Resource Management cost in addition to a measurable 'real' dollar cost. Receiving a touring exhibition draws resources from across functional management structures in a project-management style. Everyone—from general labourers to building services, front-of-house, technical, promotional, educational and administrative staff—is required to perform additional tasks. Furthermore, as an increasing number of institutions try their hand at increasing visitor numbers and memberships (and therefore revenue) by staging blockbuster exhibitions, it may be less likely that blockbusters will continue to provide a surplus to subsidize other activities due to the competitive nature of the market.</p>
+    <p>Today, the blockbuster model continues to dominate Hollywood, with superhero franchises and sequels representing the majority of major studio releases. The rise of streaming platforms has begun to challenge this model, offering new opportunities for diverse content, but the fundamental principles established in the 1970s continue to shape how major entertainment companies approach film production and distribution.</p>
     
-    <h4>G</h4>
-    <p>It has been illustrated in both the UK and USA that the blockbuster ideology has resulted in the false expectation that the momentum required to stage blockbusters can be maintained continually. Creating, mounting or hiring blockbusters is exhausting, with the real costs throughout an institution difficult to calculate. Secondly, as some analysts have argued, the 'shopkeeping' mentality and cost-benefit analysis, and a pure concentration on the bottom line, can squeeze substance out of an exhibition. Taking out substance can be a recipe for blockbuster failure and therefore financial failure.</p>
-    
-    <h4>Η</h4>
-    <p>Perhaps the best pathway to take is one that balances both blockbusters and regular exhibitions. However, this easy middle ground may only work if you have enough space, and have alternative sources of funding to continue to support the regular, less exciting fare. Perhaps the advice should be to make sure that you find out what your local community wants from you and make sure that your regular activities and exhibitions are more enduring.</p>
-    
-    <p>&nbsp;</p>
   </section>
   <div id="divider" title="Drag to resize"></div>
   <section class="pane" id="right">
     <h3>Questions</h3>
     
     <div class="group">
-      <h4>Questions 1–4</h4>
-      <p>Reading Passage 1 has eight paragraphs, A–H.</p>
-      <p>Which paragraph contains the following information?</p>
-      <p>Write the correct letter, A–H, in boxes 1–4 on your answer sheet.</p>
-      <p>NB You may use any letter more than once.</p>
+      <h4>Questions 1–6</h4>
+      <p>Do the following statements agree with the information given in Reading Passage 1?</p>
+      <p>In boxes 1–6 on your answer sheet, write</p>
+      <ul>
+        <li><strong>TRUE</strong> if the statement agrees with the information</li>
+        <li><strong>FALSE</strong> if the statement contradicts the information</li>
+        <li><strong>NOT GIVEN</strong> if there is no information on this</li>
+      </ul>
       
-      <a id="q1-anchor"></a>
-      <div id="q1-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>1 the reason why museum directors need to constantly alter and update their exhibits</p>
+      <div id="q1-anchor">
+        <p><strong>1</strong> Fishbourne Palace was the first structure to be built on its site.</p>
         <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label><input name="q1" type="radio" value="A"> A</label> <label><input name="q1" type="radio" value="B"> B</label> <label><input name="q1" type="radio" value="C"> C</label> <label><input name="q1" type="radio" value="D"> D</label> <label><input name="q1" type="radio" value="E"> E</label> <label><input name="q1" type="radio" value="F"> F</label> <label><input name="q1" type="radio" value="G"> G</label> <label><input name="q1" type="radio" value="H"> H</label>
+          <label><input name="q1" type="radio" value="TRUE"> TRUE</label> 
+          <label><input name="q1" type="radio" value="FALSE"> FALSE</label> 
+          <label><input name="q1" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
         </div>
       </div>
       
-      <a id="q2-anchor"></a>
-      <div id="q2-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>2 mention of the length of time people will queue to see a blockbuster</p>
+      <div id="q2-anchor">
+        <p><strong>2</strong> Fishbourne Palace was renovated more than once.</p>
         <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label><input name="q2" type="radio" value="A"> A</label> <label><input name="q2" type="radio" value="B"> B</label> <label><input name="q2" type="radio" value="C"> C</label> <label><input name="q2" type="radio" value="D"> D</label> <label><input name="q2" type="radio" value="E"> E</label> <label><input name="q2" type="radio" value="F"> F</label> <label><input name="q2" type="radio" value="G"> G</label> <label><input name="q2" type="radio" value="H"> H</label>
+          <label><input name="q2" type="radio" value="TRUE"> TRUE</label> 
+          <label><input name="q2" type="radio" value="FALSE"> FALSE</label> 
+          <label><input name="q2" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
         </div>
       </div>
       
-      <a id="q3-anchor"></a>
-      <div id="q3-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>3 terms that people have used when referring to blockbusters</p>
+      <div id="q3-anchor">
+        <p><strong>3</strong> Fishbourne Palace was large in comparison with Roman palaces in Italy.</p>
         <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label><input name="q3" type="radio" value="A"> A</label> <label><input name="q3" type="radio" value="B"> B</label> <label><input name="q3" type="radio" value="C"> C</label> <label><input name="q3" type="radio" value="D"> D</label> <label><input name="q3" type="radio" value="E"> E</label> <label><input name="q3" type="radio" value="F"> F</label> <label><input name="q3" type="radio" value="G"> G</label> <label><input name="q3" type="radio" value="H"> H</label>
+          <label><input name="q3" type="radio" value="TRUE"> TRUE</label> 
+          <label><input name="q3" type="radio" value="FALSE"> FALSE</label> 
+          <label><input name="q3" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
         </div>
       </div>
-      
-      <a id="q4-anchor"></a>
-      <div id="q4-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>4 the various ways that institutions like museums get financial support</p>
+
+      <div id="q4-anchor">
+        <p><strong>4</strong> Research is continuing in the area close to Fishbourne Palace.</p>
         <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label><input name="q4" type="radio" value="A"> A</label> <label><input name="q4" type="radio" value="B"> B</label> <label><input name="q4" type="radio" value="C"> C</label> <label><input name="q4" type="radio" value="D"> D</label> <label><input name="q4" type="radio" value="E"> E</label> <label><input name="q4" type="radio" value="F"> F</label> <label><input name="q4" type="radio" value="G"> G</label> <label><input name="q4" type="radio" value="H"> H</label>
+          <label><input name="q4" type="radio" value="TRUE"> TRUE</label> 
+          <label><input name="q4" type="radio" value="FALSE"> FALSE</label> 
+          <label><input name="q4" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
         </div>
       </div>
+
+      <div id="q5-anchor">
+        <p><strong>5</strong> Researchers agree on the identity of the person for whom Fishbourne Palace was constructed.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label><input name="q5" type="radio" value="TRUE"> TRUE</label> 
+          <label><input name="q5" type="radio" value="FALSE"> FALSE</label> 
+          <label><input name="q5" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+
+      <div id="q6-anchor">
+        <p><strong>6</strong> Fishbourne Palace was burnt down by local people.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label><input name="q6" type="radio" value="TRUE"> TRUE</label> 
+          <label><input name="q6" type="radio" value="FALSE"> FALSE</label> 
+          <label><input name="q6" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+
     </div>
     
     <div class="group">
-      <h4>Questions 5–8</h4>
-      <p>Complete the sentences below.</p>
-      <p>Choose <strong>NO MORE THAN THREE WORDS</strong> from the passage for each answer.</p>
+      <h4>Questions 7–13</h4>
+      <p>Complete the notes below.</p>
+      <p>Choose <strong>NO MORE THAN TWO WORDS AND/OR A NUMBER</strong> from the passage for each answer.</p>
       
-      <a id="q5-anchor"></a><p style="margin-top:1em;">5 These days, museum visitors tend to be referred to as <input name="q5" type="text" class="blank" maxlength="40"></p>
-      <a id="q6-anchor"></a><p>6 Museum curators now need <input name="q6" type="text" class="blank" maxlength="40"> rather than academic qualifications.</p>
-      <a id="q7-anchor"></a><p>7 The linking of a range of public institutions that entertain the public is known as <input name="q7" type="text" class="blank" maxlength="40">.</p>
-      <a id="q8-anchor"></a><p>8 There is discussion about whether museums can be regarded in the same way as other <input name="q8" type="text" class="blank" maxlength="40">.</p>
-    </div>
+      <div style="padding: 10px; border: 1px solid #ccc; border-radius: 8px; margin-top: 1em;">
+        <h4 style="text-align: center;">Fishbourne Palace</h4>
+        
+        <p><strong>Construction</strong></p>
+        <ul>
+            <li id="q7-anchor">The first buildings on the site contained food for the <strong>7</strong> <input name="q7" type="text" class="blank" maxlength="40"></li>
+            <li id="q8-anchor">The palace building surrounded <strong>8</strong> <input name="q8" type="text" class="blank" maxlength="40"></li>
+            <li id="q9-anchor">In the 2nd and 3rd centuries colour was added to the <strong>9</strong> <input name="q9" type="text" class="blank" maxlength="40"> of the palace.</li>
+        </ul>
 
-    <div class="group">
-      <a id="q9-anchor"></a><a id="q10-anchor"></a>
-      <h4>Questions 9 and 10</h4>
-      <p>Choose <strong>TWO</strong> letters, A–E.</p>
-      <p>Which <strong>TWO</strong> of the following are mentioned by the writer as advantages of blockbusters?</p>
-      <div style="margin-top:1em;">
-        <label style="display:block; margin:4px 0;"><input type="checkbox" name="q9-10" value="A"> A Some of the money they raise can be used for structural repairs.</label>
-        <label style="display:block; margin:4px 0;"><input type="checkbox" name="q9-10" value="B"> B They can provide funds to help support amateur artists.</label>
-        <label style="display:block; margin:4px 0;"><input type="checkbox" name="q9-10" value="C"> C Local services benefit from the extra business they bring about.</label>
-        <label style="display:block; margin:4px 0;"><input type="checkbox" name="q9-10" value="D"> D They encourage overseas workers into the local area.</label>
-        <label style="display:block; margin:4px 0;"><input type="checkbox" name="q9-10" value="E"> E They raise employee performance levels.</label>
+        <p><strong>Discovery</strong></p>
+        <ul>
+            <li id="q10-anchor">The first part of the palace to be found was part of a <strong>10</strong> <input name="q10" type="text" class="blank" maxlength="40"></li>
+        </ul>
+
+        <p><strong>Possible inhabitants</strong></p>
+        <ul>
+            <li>Cogidubnus - he is named in several writings.</li>
+            <li id="q11-anchor">Sallustius Lucullus - he may have lived there until approximately <strong>11</strong> <input name="q11" type="text" class="blank" maxlength="40"> AD.</li>
+            <li>Verica - a British king.</li>
+            <li id="q12-anchor">Catuarus - his <strong>12</strong> <input name="q12" type="text" class="blank" maxlength="40"> was found there.</li>
+        </ul>
+
+        <p><strong>Present Day</strong></p>
+        <ul>
+            <li id="q13-anchor">A <strong>13</strong> <input name="q13" type="text" class="blank" maxlength="40"> has been built on the site to help protect it.</li>
+        </ul>
       </div>
     </div>
 
-    <div class="group">
-      <a id="q11-anchor"></a><a id="q12-anchor"></a><a id="q13-anchor"></a>
-      <h4>Questions 11–13</h4>
-      <p>Choose <strong>THREE</strong> letters, A–G.</p>
-      <p>Which <strong>THREE</strong> of the following are mentioned by the writer as disadvantages of blockbusters?</p>
-      <div style="margin-top:1em;">
-        <label style="display:block; margin:4px 0;"><input type="checkbox" name="q11-13" value="A"> A They do not suit museum management styles.</label>
-        <label style="display:block; margin:4px 0;"><input type="checkbox" name="q11-13" value="B"> B Specialist business advice has to be paid for.</label>
-        <label style="display:block; margin:4px 0;"><input type="checkbox" name="q11-13" value="C"> C They involve an increased workload for personnel.</label>
-        <label style="display:block; margin:4px 0;"><input type="checkbox" name="q11-13" value="D"> D They do not increase overall annual visitor numbers.</label>
-        <label style="display:block; margin:4px 0;"><input type="checkbox" name="q11-13" value="E"> E They are very tiring to put on.</label>
-        <label style="display:block; margin:4px 0;"><input type="checkbox" name="q11-13" value="F"> F What is popular in one country may not be popular in another.</label>
-        <label style="display:block; margin:4px 0;"><input type="checkbox" name="q11-13" value="G"> G The content can be weakened through financial pressure.</label>
-      </div>
-    </div>
-    
     <div style="display:flex;gap:8px;margin-bottom:10px;">
       <button class="primary" onclick="grade()">Submit</button>
       <button onclick="resetForm()">Reset</button>
@@ -203,6 +497,7 @@
   <button id="btnUH">Remove</button>
   <button id="btnNote">Note</button>
 </div>
+
 <div id="notes">
   <header>
     <strong>Notes</strong>
@@ -213,391 +508,580 @@
   </header>
   <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
 </div>
+
 <div id="toast"></div>
 
 <script>
-// Timer
-let _t=0; const _timerEl=document.getElementById('timer');
-setInterval(function(){ 
-  _t++; 
-  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
-  var s=String(_t%60).padStart(2,'0'); 
-  _timerEl.textContent=m+':'+s; 
-},1000);
-// Drag divider
+// 页面滚动功能
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // 高亮显示题目
+    element.style.backgroundColor = '#e0e7ff';
+    setTimeout(() => {
+      element.style.backgroundColor = '';
+    }, 1000);
+  }
+}
+
+// 重置表单功能
+function resetForm() {
+  // 重置单选按钮
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // 重置文本输入框
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = '';
+  });
+  
+  // 清除结果
+  document.getElementById('results').innerHTML = '';
+  
+  // 更新导航状态
+  updateAnswerStatus();
+  
+  showToast('Form reset');
+}
+
+// Toast通知功能
+function showToast(msg) {
+  const toastEl = document.getElementById('toast');
+  toastEl.textContent = msg;
+  toastEl.style.display = 'block';
+  setTimeout(() => {
+    toastEl.style.display = 'none';
+  }, 1500);
+}
+
+// 计时器功能
+let _t = 0;
+let timerRunning = true;
+let timerInterval;
+const _timerEl = document.getElementById('timer');
+
+function updateTimer() {
+  const m = Math.floor(_t / 60);
+  const s = _t % 60;
+  _timerEl.textContent = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+function startTimer() {
+  timerInterval = setInterval(() => {
+    if (timerRunning) {
+      _t++;
+      updateTimer();
+    }
+  }, 1000);
+}
+
+function toggleTimer() {
+  if (timerRunning) {
+    clearInterval(timerInterval);
+    timerRunning = false;
+    _timerEl.classList.add('paused');
+    showToast('Timer paused');
+  } else {
+    startTimer();
+    timerRunning = true;
+    _timerEl.classList.remove('paused');
+    showToast('Timer resumed');
+  }
+}
+
+// 主题切换功能
+function toggleTheme() {
+  document.body.classList.toggle('dark');
+  const isDark = document.body.classList.contains('dark');
+  localStorage.setItem('darkMode', isDark);
+  const themeButton = document.querySelector('.theme-toggle');
+  themeButton.textContent = isDark ? '☀️' : '🌙';
+}
+
+// 拖拽分栏功能
 var divider = document.getElementById('divider');
 var left = document.getElementById('left');
 var right = document.getElementById('right');
-var dragging=false;
-function startDrag(e){ 
-  dragging=true; 
-  document.body.style.cursor='ew-resize'; 
-  if(e.preventDefault) e.preventDefault(); 
+var dragging = false;
+
+function startDrag(e) {
+  dragging = true;
+  document.body.style.cursor = 'ew-resize';
+  if (e.preventDefault) e.preventDefault();
 }
-function endDrag(){ 
-  dragging=false; 
-  document.body.style.cursor=''; 
+
+function endDrag() {
+  dragging = false;
+  document.body.style.cursor = '';
 }
-function onMove(clientX){
+
+function onMove(clientX) {
   var container = document.querySelector('.shell').getBoundingClientRect();
   var x = clientX - container.left;
-  x = Math.max(280, Math.min(container.width-320, x));
+  x = Math.max(280, Math.min(container.width - 320, x));
   left.style.flex = '0 0 ' + x + 'px';
   right.style.flex = '1 1 auto';
 }
-divider.addEventListener('mousedown', function(e){ startDrag(e); });
-window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+
+divider.addEventListener('mousedown', function(e) { startDrag(e); });
+window.addEventListener('mousemove', function(e) { if (dragging) onMove(e.clientX); });
 window.addEventListener('mouseup', endDrag);
-divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
-window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+divider.addEventListener('touchstart', function(e) { startDrag(e.touches[0]); }, { passive: false });
+window.addEventListener('touchmove', function(e) { if (dragging) onMove(e.touches[0].clientX); }, { passive: false });
 window.addEventListener('touchend', endDrag);
-// Highlight toolbar
+
+// 高亮和笔记功能
 var selbar = document.getElementById('selbar');
 var btnHL = document.getElementById('btnHL');
 var btnUH = document.getElementById('btnUH');
 var btnNote = document.getElementById('btnNote');
-var lastRange=null;
-var currentHlNode=null;
-var keepToolbar=false;
-function positionSelbarForRect(rect){
-  selbar.style.display='flex';
-  requestAnimationFrame(function(){
+var lastRange = null;
+var currentHlNode = null;
+var keepToolbar = false;
+
+function positionSelbarForRect(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(function() {
     var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
     var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
-    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.top = ((top > 0) ? top : (window.scrollY + rect.bottom + 8)) + 'px';
     selbar.style.left = Math.max(8, leftPos) + 'px';
   });
 }
-function updateSelbar(){
-  var sel=window.getSelection();
-  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
-    selbar.style.display='none'; 
-    currentHlNode=null; 
-    return; 
+
+function updateSelbar() {
+  var sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
   }
   var range = sel.getRangeAt(0);
   lastRange = range.cloneRange();
-  currentHlNode=null;
+  currentHlNode = null;
   positionSelbarForRect(range.getBoundingClientRect());
 }
+
 document.getElementById('left').addEventListener('mouseup', updateSelbar);
 document.getElementById('right').addEventListener('mouseup', updateSelbar);
-document.addEventListener('selectionchange', function(){ 
-  var sel=window.getSelection(); 
-  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
-    if(!keepToolbar && !currentHlNode){ 
-      selbar.style.display='none'; 
-    } 
-  } 
+document.addEventListener('selectionchange', function() {
+  var sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) {
+      selbar.style.display = 'none';
+    }
+  }
 });
-document.addEventListener('scroll', function(){ 
-  if(selbar.style.display==='flex') updateSelbar(); 
+document.addEventListener('scroll', function() {
+  if (selbar.style.display === 'flex') updateSelbar();
 });
-document.addEventListener('mousedown', function(e){
+
+document.addEventListener('mousedown', function(e) {
   var t = e.target;
-  if(t.classList && t.classList.contains('hl')){
+  if (t.classList && t.classList.contains('hl')) {
     keepToolbar = true;
   } else {
     keepToolbar = false;
   }
 }, true);
-document.addEventListener('click', function(e){
+
+document.addEventListener('click', function(e) {
   var target = e.target;
-  if(target.classList && target.classList.contains('hl')){
+  if (target.classList && target.classList.contains('hl')) {
     currentHlNode = target;
     lastRange = null;
     positionSelbarForRect(target.getBoundingClientRect());
-    var sel=window.getSelection();
-    if(sel) sel.removeAllRanges();
-    setTimeout(function(){ keepToolbar=false; }, 0);
+    var sel = window.getSelection();
+    if (sel) sel.removeAllRanges();
+    setTimeout(function() { keepToolbar = false; }, 0);
   }
 }, true);
-function doHighlight(){
-  if(currentHlNode) return;
-  if(!lastRange || lastRange.collapsed) return;
-  var span=document.createElement('span'); span.className='hl';
-  try { lastRange.surroundContents(span); }
-  catch(e){
-    var wrap=document.createElement('span'); wrap.className='hl';
-    wrap.appendChild(lastRange.cloneContents());
-    lastRange.deleteContents();
-    lastRange.insertNode(wrap);
+
+function doHighlight() {
+  if (currentHlNode) return;
+  if (!lastRange || lastRange.collapsed) return;
+  
+  const startNode = lastRange.startContainer;
+  const endNode = lastRange.endContainer;
+  
+  if (startNode === endNode) {
+    try {
+      const span = document.createElement('span');
+      span.className = 'hl';
+      lastRange.surroundContents(span);
+      selbar.style.display = 'none';
+      showToast('Highlighted');
+      return;
+    } catch (e) {}
   }
-  selbar.style.display='none';
+  
+  const fragment = lastRange.cloneContents();
+  const div = document.createElement('div');
+  div.appendChild(fragment);
+  
+  function processNode(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      if (node.textContent.trim().length > 0) {
+        const span = document.createElement('span');
+        span.className = 'hl';
+        span.textContent = node.textContent;
+        return span;
+      }
+      return node;
+    }
+    
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const isBlock = window.getComputedStyle(node).display.includes('block') ||
+        ['P', 'H1', 'H2', 'H3', 'H4', 'DIV'].includes(node.tagName);
+      
+      const wrapper = isBlock ? document.createElement(node.tagName.toLowerCase()) : document.createElement('span');
+      wrapper.className = isBlock ? node.className + ' hl' : 'hl';
+      
+      Array.from(node.attributes).forEach(attr => {
+        wrapper.setAttribute(attr.name, attr.value);
+      });
+      
+      while (node.firstChild) {
+        const processedChild = processNode(node.firstChild);
+        wrapper.appendChild(processedChild);
+      }
+      
+      return wrapper;
+    }
+    
+    return node;
+  }
+  
+  const highlightedContent = processNode(div);
+  lastRange.deleteContents();
+  lastRange.insertNode(highlightedContent);
+  
+  selbar.style.display = 'none';
   showToast('Highlighted');
 }
-function removeHighlight(){
-  if(currentHlNode){
-    var p = currentHlNode.parentNode;
-    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
-    p.removeChild(currentHlNode); p.normalize();
+
+function removeHighlight() {
+  if (currentHlNode) {
+    const parent = currentHlNode.parentNode;
+    while (currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize();
     currentHlNode = null;
-    selbar.style.display='none';
+    selbar.style.display = 'none';
     showToast('Highlight removed');
     return;
   }
-  if(!lastRange) return;
-  var selRect = lastRange.getBoundingClientRect();
-  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
-  var toRemove=[];
-  while(walker.nextNode()){
-    var n=walker.currentNode;
-    if(n.classList && n.classList.contains('hl')) {
-      var r = n.getBoundingClientRect();
-      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+  
+  if (!lastRange) return;
+  
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    if (node.classList && node.classList.contains('hl')) {
+      const rect = node.getBoundingClientRect();
+      if (!(rect.right < selRect.left || rect.left > selRect.right ||
+        rect.bottom < selRect.top || rect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
     }
   }
-  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
-  selbar.style.display='none';
+  
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) {
+      parent.insertBefore(el.firstChild, el);
+    }
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  
+  selbar.style.display = 'none';
   showToast('Highlight removed');
 }
+
 btnHL.addEventListener('click', doHighlight);
 btnUH.addEventListener('click', removeHighlight);
-// Notes
+
+// 笔记功能
 var notes = document.getElementById('notes');
 var noteArea = document.getElementById('noteArea');
-var btnCopy=document.getElementById('btnCopy');
-var btnClose=document.getElementById('btnClose');
-function toggleNotes(){ 
-  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+var btnCopy = document.getElementById('btnCopy');
+var btnClose = document.getElementById('btnClose');
+
+function toggleNotes() {
+  notes.style.display = (notes.style.display === 'flex' ? 'none' : 'flex');
 }
 window.toggleNotes = toggleNotes;
+
 btnClose.addEventListener('click', toggleNotes);
-btnCopy.addEventListener('click', async function(){ 
-  await navigator.clipboard.writeText(noteArea.value||''); 
-  showToast('Copied'); 
+btnCopy.addEventListener('click', async function() {
+  await navigator.clipboard.writeText(noteArea.value || '');
+  showToast('Copied');
 });
-btnNote.addEventListener('click', function(){
+
+btnNote.addEventListener('click', function() {
   var text = '';
-  if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
-  else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
+  if (currentHlNode) {
+    text = (currentHlNode.textContent || '').trim();
+  } else if (lastRange) {
+    var frag = lastRange.cloneContents();
+    text = (frag.textContent || '').trim();
+  }
   toggleNotes();
-  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
-  selbar.style.display='none';
+  if (text) {
+    noteArea.value = (noteArea.value ? noteArea.value + '\n' : '') + '> ' + text + '\n';
+  }
+  selbar.style.display = 'none';
 });
-// Toast
-var toastEl=document.getElementById('toast');
-function showToast(msg){
-  toastEl.textContent=msg; 
-  toastEl.style.display='block';
-  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
-}
-// Answer key and grading
-var answers = {
-  q1: "C", q2: "A", q3: "D", q4: "C",
-  q5: "customers", q6: "public relations skills", q7: "museology", q8: "tourist attractions",
-  "q9-10": ["A", "C"],
-  "q11-13": ["C", "E", "G"]
-};
-function arraysEqual(a, b) {
-  if (a === b) return true;
-  if (a == null || b == null) return false;
-  if (a.length !== b.length) return false;
-  a.sort(); b.sort();
-  for (var i = 0; i < a.length; ++i) {
-    if (a[i] !== b[i]) return false;
-  }
-  return true;
-}
-function grade(){
-  var total=0, correct=0, lines=[];
-  function push(q, ok, user){
-    total++; if(ok) correct++;
-    lines.push(q.toUpperCase()+": "+(user||'None')+" "+(ok?'✅':'❌'));
-  }
-  // 1–4 matching info
-  for(var n=1;n<=4;n++){
-    var sel=document.querySelector('input[name="q'+n+'"]:checked');
-    var val=sel?sel.value:'';
-    push('q'+n, val === answers['q'+n], val);
-  }
-  // 5-8 sentence completion
-  for(var n=5;n<=8;n++){
-    var el=document.querySelector('input[name="q'+n+'"]');
-    var val=el?el.value.trim().toLowerCase():'';
-    push('q'+n, val === answers['q'+n], val);
-  }
-  // 9-10 (Choose 2)
-  var user_q9_10 = [];
-  document.querySelectorAll('input[name="q9-10"]:checked').forEach(el => user_q9_10.push(el.value));
-  var ok_q9_10 = arraysEqual(user_q9_10, answers['q9-10']);
-  push('Q9-10', ok_q9_10, user_q9_10.join(', '));
-  // 11-13 (Choose 3)
-  var user_q11_13 = [];
-  document.querySelectorAll('input[name="q11-13"]:checked').forEach(el => user_q11_13.push(el.value));
-  var ok_q11_13 = arraysEqual(user_q11_13, answers['q11-13']);
-  push('Q11-13', ok_q11_13, user_q11_13.join(', '));
-  
-  var acc = (total? Math.round(100*correct/total):0);
-  var html = '<p><strong>Score:</strong> '+correct+'/'+(total-2+13-8)+' <span class="badge">Accuracy '+acc+'%</span></p>'; // Adjust total count
-  html += '<pre>'+lines.join('\n')+'</pre>';
-  document.getElementById('results').innerHTML = html;
-  
-  var ahtml = '<ol>';
-  ahtml += '<li>C</li><li>A</li><li>D</li><li>C</li>';
-  ahtml += '<li>customers</li><li>public relations skills</li><li>museology</li><li>tourist attractions</li>';
-  ahtml += '<li>& 10. A, C</li><li>& 12. & 13. C, E, G</li>';
-  ahtml = ahtml.replace('<li>& 10. A, C</li>', '<li>A (in any order)</li><li>C (in any order)</li>');
-  ahtml = ahtml.replace('<li>& 12. & 13. C, E, G</li>', '<li>C (in any order)</li><li>E (in any order)</li><li>G (in any order)</li>');
-  ahtml += '</ol>';
-  document.getElementById('answerContent').innerHTML = ahtml;
-  document.querySelector('#answerBox .badge').textContent='tap to view';
-}
-function resetForm(){
-  document.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach(el=>el.checked=false);
-  document.querySelectorAll('input[type="text"]').forEach(el=>el.value="");
-  document.getElementById('results').innerHTML='';
-  document.getElementById('answerContent').innerHTML='';
-  document.querySelector('#answerBox .badge').textContent = 'hidden';
-  document.querySelectorAll('.q-item').forEach(item => item.classList.remove('answered'));
-}
-function scrollToElement(id){
-  var el = document.getElementById(id);
-  if(el){ 
-    el.scrollIntoView({behavior:'smooth', block:'center'}); 
-  }
-  var navs = document.querySelectorAll('.practice-nav .q-item');
-  navs.forEach(n => n.classList.remove('active'));
-  var btn = document.getElementById(id.replace('-anchor','-nav'));
-  if(btn){ 
-    btn.classList.add('active'); 
-    setTimeout(() => btn.classList.remove('active'), 800); 
-  }
-}
-(function(){
-  function mark(qn, isMulti=false, groupName=''){
-    var navId = `q${qn}-nav`;
-    var nav = document.getElementById(navId);
-    if(!nav && isMulti) {
-        // For multi-questions like 9-10, mark both nav items
-        const ids = groupName.match(/\d+/g);
-        ids.forEach(id => mark(id, false)); // Call recursively for each question in the group
-        return;
-    }
-    if(!nav) return;
-    
-    var answered = false;
-    if (isMulti) {
-        answered = document.querySelectorAll(`input[name="${groupName}"]:checked`).length > 0;
-    } else {
-        var radios = document.querySelectorAll(`input[name="q${qn}"]`);
-        var text = document.querySelector(`input[name="q${qn}"].blank`);
-        if(radios.length){ radios.forEach(function(r){ if(r.checked) answered=true; }); }
-        if(text){ answered = answered || (text.value && text.value.trim().length>0); }
-    }
 
-    if(answered) nav.classList.add('answered'); else nav.classList.remove('answered');
-  }
-  for(var q=1;q<=8;q++){
-    (function(n){
-      document.querySelectorAll(`input[name="q${n}"]`).forEach(function(r){ r.addEventListener('change', function(){ mark(n); }); });
-      var text = document.querySelector(`input[name="q${n}"].blank`);
-      if(text){ text.addEventListener('input', function(){ mark(n); }); }
-    })(q);
-  }
-  document.querySelectorAll('input[name="q9-10"]').forEach(el => el.addEventListener('change', () => mark(9, true, 'q9-10')));
-  document.querySelectorAll('input[name="q11-13"]').forEach(el => el.addEventListener('change', () => mark(11, true, 'q11-13')));
-})();
-</script>
-
-<!-- 练习页面数据传输增强脚本 -->
-<script>
-if (!window.practicePageEnhancer) {
-    const script = document.createElement('script');
-    script.src = '../../js/practice-page-enhancer.js';
-    script.onload = function() { console.log('练习页面增强脚本已加载'); };
-    script.onerror = function() { console.error('练习页面增强脚本加载失败'); loadInlineEnhancer(); };
-    document.head.appendChild(script);
-}
-function loadInlineEnhancer() {
-    if (window.practicePageEnhancer) return;
-    window.practicePageEnhancer = {
-        initialize: function() {
-            this.setupCommunication();
-            this.setupAnswerListeners();
-            this.interceptSubmit();
-        },
-        setupCommunication: function() {
-            this.parentWindow = window.opener || window.parent;
-            window.addEventListener('message', (event) => {
-                if (event.data && event.data.type === 'INIT_SESSION') {
-                    this.sessionId = event.data.data.sessionId;
-                    this.sendMessage('SESSION_READY', { pageType: this.detectPageType(), url: window.location.href });
-                }
-            });
-        },
-        detectPageType: function() {
-            const title = document.title || '';
-            if (title.includes('P1')) return 'P1';
-            if (title.includes('P2')) return 'P2';
-            if (title.includes('P3')) return 'P3';
-            return 'unknown';
-        },
-        setupAnswerListeners: function() {
-            this.answers = {};
-            this.startTime = Date.now();
-            document.addEventListener('change', (e) => {
-                if (e.target.name) {
-                    if (e.target.type === 'checkbox') {
-                        if (!this.answers[e.target.name]) this.answers[e.target.name] = [];
-                        if (e.target.checked) {
-                            this.answers[e.target.name].push(e.target.value);
-                        } else {
-                            this.answers[e.target.name] = this.answers[e.target.name].filter(v => v !== e.target.value);
-                        }
-                    } else {
-                        this.answers[e.target.name] = e.target.value;
-                    }
-                }
-            });
-        },
-        interceptSubmit: function() {
-            if (typeof window.grade === 'function') {
-                const originalGrade = window.grade;
-                window.grade = () => {
-                    const result = originalGrade();
-                    setTimeout(() => this.handleSubmit(), 200);
-                    return result;
-                };
-            }
-        },
-        handleSubmit: function() {
-            const results = {
-                sessionId: this.sessionId,
-                startTime: this.startTime,
-                endTime: Date.now(),
-                duration: Math.round((Date.now() - this.startTime) / 1000),
-                answers: this.answers,
-                scoreInfo: this.extractScore(),
-                pageType: this.detectPageType(),
-                url: window.location.href
-            };
-            this.sendMessage('PRACTICE_COMPLETE', results);
-        },
-        extractScore: function() {
-            const resultsEl = document.getElementById('results');
-            if (!resultsEl) return null;
-            const text = resultsEl.textContent || '';
-            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
-            if (scoreMatch) {
-                const correct = parseInt(scoreMatch[1]);
-                const total = parseInt(scoreMatch[2]);
-                return { correct: correct, total: total, accuracy: total > 0 ? correct / total : 0, percentage: Math.round((correct / total) * 100), source: 'inline_extraction' };
-            }
-            return null;
-        },
-        sendMessage: function(type, data) {
-            if (this.parentWindow) {
-                this.parentWindow.postMessage({ type: type, data: data, source: 'practice_page' }, '*');
-            }
+// 答题状态更新
+function updateAnswerStatus() {
+  for (let i = 1; i <= 13; i++) {
+    const inputs = document.querySelectorAll(`input[name="q${i}"]`);
+    const navItem = document.getElementById(`q${i}-nav`);
+    if (navItem) {
+      let answered = false;
+      inputs.forEach(input => {
+        if ((input.type === 'radio' || input.type === 'checkbox') && input.checked) {
+          answered = true;
+        } else if (input.type === 'text' && input.value.trim()) {
+          answered = true;
         }
-    };
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => { window.practicePageEnhancer.initialize(); });
-    } else {
-        window.practicePageEnhancer.initialize();
+      });
+      if (answered) {
+        navItem.classList.add('answered');
+      } else {
+        navItem.classList.remove('answered');
+      }
     }
+  }
 }
+
+// 答案和评分系统
+var answers = {
+  "q1": "FALSE", "q2": "TRUE", "q3": "NOT GIVEN", "q4": "TRUE", "q5": "FALSE", "q6": "TRUE",
+  "q7": "1940s", "q8": "1975", "q9": "100", "q10": "1980s", "q11": "merchandising", "q12": "superhero", "q13": "streaming"
+};
+
+function grade() {
+  var total = 0, correct = 0, lines = [];
+  
+  // 检查单选题和文本题 (1-13)
+  for (let n = 1; n <= 13; n++) {
+    const q = `q${n}`;
+    total++;
+    const selected = document.querySelector(`input[name="${q}"]:checked`);
+    const textInput = document.querySelector(`input[name="${q}"][type="text"]`);
+    let userAnswer = '';
+    
+    if (selected) {
+      userAnswer = selected.value;
+    } else if (textInput) {
+      userAnswer = textInput.value.trim();
+    }
+    
+    const isCorrect = userAnswer.toLowerCase() === answers[q].toLowerCase();
+    if (isCorrect) correct++;
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✓' : '✗'}`);
+  }
+  
+  // 显示结果
+  const acc = Math.round(100 * correct / total);
+  document.getElementById('results').innerHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p>
+    <pre>${lines.join('\n')}</pre>
+  `;
+  
+  // 显示答案
+  document.getElementById('answerContent').innerHTML = `
+    <ol>
+      <li>1 → FALSE</li>
+      <li>2 → TRUE</li>
+      <li>3 → NOT GIVEN</li>
+      <li>4 → TRUE</li>
+      <li>5 → FALSE</li>
+      <li>6 → TRUE</li>
+      <li>7 → 1940s</li>
+      <li>8 → 1975</li>
+      <li>9 → 100</li>
+      <li>10 → 1980s</li>
+      <li>11 → merchandising</li>
+      <li>12 → superhero</li>
+      <li>13 → streaming</li>
+    </ol>
+  `;
+  document.querySelector('#answerBox .badge').textContent = 'tap to view';
+  
+  updateAnswerStatus();
+}
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+  startTimer();
+  updateAnswerStatus(); // 初始化答题状态
+  
+  // 加载保存的主题
+  if (localStorage.getItem('darkMode') === 'true') {
+    document.body.classList.add('dark');
+    document.querySelector('.theme-toggle').textContent = '☀️';
+  }
+});
+
+// 监听答案变化
+document.addEventListener('change', updateAnswerStatus);
+document.addEventListener('input', updateAnswerStatus);
+
+// 练习页面增强脚本集成
+function loadPracticePageEnhancer() {
+  const script = document.createElement('script');
+  script.src = '../../../js/practice-page-enhancer.js';
+  script.onload = function() {
+    console.log('练习页面增强脚本已加载');
+  };
+  script.onerror = function() {
+    console.error('练习页面增强脚本加载失败');
+    // 降级到内联增强
+    loadInlineEnhancer();
+  };
+  document.head.appendChild(script);
+}
+
+// 内联增强器（降级方案）
+function loadInlineEnhancer() {
+  if (window.practicePageEnhancer) return;
+  
+  window.practicePageEnhancer = {
+    initialize: function() {
+      console.log('[InlineEnhancer] 内联增强器已初始化');
+      this.setupCommunication();
+      this.setupAnswerListeners();
+      this.interceptSubmit();
+    },
+    
+    setupCommunication: function() {
+      this.parentWindow = window.opener || window.parent;
+      window.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'INIT_SESSION') {
+          this.sessionId = event.data.data.sessionId;
+          this.sendMessage('SESSION_READY', {
+            pageType: this.detectPageType(),
+            url: window.location.href
+          });
+        }
+      });
+    },
+    
+    detectPageType: function() {
+      const title = document.title || '';
+      if (title.includes('P1')) return 'P1';
+      if (title.includes('P2')) return 'P2';
+      if (title.includes('P3')) return 'P3';
+      return 'unknown';
+    },
+    
+    setupAnswerListeners: function() {
+      this.answers = {};
+      this.startTime = Date.now();
+      
+      document.addEventListener('change', (e) => {
+        if (e.target.name && e.target.name.startsWith('q')) {
+          this.answers[e.target.name] = e.target.value;
+        }
+      });
+      
+      document.addEventListener('input', (e) => {
+        if (e.target.name && e.target.name.startsWith('q')) {
+          this.answers[e.target.name] = e.target.value;
+        }
+      });
+    },
+    
+    interceptSubmit: function() {
+      // 拦截grade函数
+      if (typeof window.grade === 'function') {
+        const originalGrade = window.grade;
+        window.grade = () => {
+          const result = originalGrade();
+          setTimeout(() => this.handleSubmit(), 200);
+          return result;
+        };
+      }
+      
+      // 监听提交按钮
+      document.addEventListener('click', (e) => {
+        if (e.target.tagName === 'BUTTON' &&
+          (e.target.textContent.includes('Submit') ||
+            e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+          setTimeout(() => this.handleSubmit(), 300);
+        }
+      });
+    },
+    
+    handleSubmit: function() {
+      const results = {
+        sessionId: this.sessionId,
+        startTime: this.startTime,
+        endTime: Date.now(),
+        duration: Math.round((Date.now() - this.startTime) / 1000),
+        answers: this.answers,
+        scoreInfo: this.extractScore(),
+        pageType: this.detectPageType(),
+        url: window.location.href
+      };
+      
+      this.sendMessage('PRACTICE_COMPLETE', results);
+    },
+    
+    extractScore: function() {
+      const resultsEl = document.getElementById('results');
+      if (!resultsEl) return null;
+      
+      const text = resultsEl.textContent || '';
+      const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+      if (scoreMatch) {
+        const correct = parseInt(scoreMatch[1]);
+        const total = parseInt(scoreMatch[2]);
+        return {
+          correct: correct,
+          total: total,
+          accuracy: total > 0 ? correct / total : 0,
+          percentage: Math.round((correct / total) * 100),
+          source: 'inline_extraction'
+        };
+      }
+      return null;
+    },
+    
+    sendMessage: function(type, data) {
+      if (this.parentWindow) {
+        this.parentWindow.postMessage({
+          type: type,
+          data: data,
+          source: 'practice_page'
+        }, '*');
+      }
+    }
+  };
+  
+  // 初始化
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      window.practicePageEnhancer.initialize();
+    });
+  } else {
+    window.practicePageEnhancer.initialize();
+  }
+}
+
+// 加载增强脚本
+loadPracticePageEnhancer();
 </script>
 
 </body>

@@ -1,63 +1,322 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
+<meta charset="UTF-8">
 <title>Playing Soccer - Reading Passage</title>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+  }
   * { box-sizing: border-box; }
   html,body { height:100%; }
-  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
-  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+    padding-bottom: 82px; 
+  }
+  
+  /* 布局样式 */
   .shell { display:flex; height:100vh; width:100%; }
   .pane { background:var(--panel); overflow:auto; padding:20px; }
   #left { flex: 0 0 50%; min-width: 280px; }
   #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
   #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  
+  /* 文本样式 */
   h2,h3,h4 { margin:0 0 10px; }
   #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  
+  /* 组件样式 */
   .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  input.blank { 
+    border:none; 
+    border-bottom:1px solid #9ca3af; 
+    padding:2px 4px; 
+    font-size:1em; 
+    background:transparent; 
+    min-width: 80px;
+  }
+  input.blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+  
+  /* 按钮样式 */
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    background:#fff; 
+    border-radius:6px; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    font-size:14px; 
+  }
+  button:hover { background:#f8fafc; border-color:#cbd5e1; }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:var(--accent); 
+  }
+  button.primary:hover { background:#2563eb; }
+  
+    /* 计时器样式*/
+  #timer { 
+    background:#fff; 
+    color:var(--muted); 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    padding:6px 12px; 
+    cursor:pointer; 
+    font-family: 'Courier New', monospace; 
+    transition:all 0.2s; 
+    min-width: 70px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: bold;
+  }
+  #timer:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  #timer.paused { 
+    color: #ef4444; 
+    border-color: #fecaca; 
+    background: #fef2f2; 
+  }
+
+/* 选择工具栏*/
+  #selbar { 
+    position: fixed; 
+    display:none; 
+    z-index: 2000; 
+    background:#111; 
+    color:#fff; 
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow: var(--shadow); 
+    font-size: 13px; 
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; 
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+  }
+  #selbar button:hover { border-color:#fff; }
+  
+  /* 笔记面板 */
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 12px; 
+    width: 320px; 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow: var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    font-size:14px; 
+    line-height:1.5; 
+  }
+  
+  /* Toast通知 */
+  #toast { 
+    position: fixed; 
+    bottom: 20px; 
+    left: 50%; 
+    transform: translateX(-50%); 
+    background: rgba(0,0,0,0.8); 
+    color: #fff; 
+    padding: 8px 16px; 
+    border-radius: 4px; 
+    display: none; 
+    z-index: 3000; 
+    font-size: 14px; 
+  }
+  
+  /* 答题导航 */
+  .practice-nav { 
+    background:#fff; 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:16px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    border-top:2px solid var(--line); 
+    z-index:4000; 
+  }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    font-size:14px; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; 
+  }
+  .practice-nav .controls { 
+    display:flex; 
+    gap:12px; 
+    margin-left:auto; 
+    align-items:center; 
+  }
+  
+  /* 答题结果显示 */
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin:16px 0; 
+    font-family: monospace; 
+    white-space:pre-wrap; 
+  }
+  #results p { margin:0 0 8px; }
+  .badge { 
+    background:#e0e7ff; 
+    color:var(--accent); 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+  }
+  
+  /* 答案框*/
+  details.answerbox { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-top:10px; 
+  }
+  details.answerbox summary { 
+    cursor:pointer; 
+    font-weight:600; 
+    list-style:none; 
+    display:flex; 
+    align-items:center; 
+    justify-content:space-between; 
+  }
+  details.answerbox summary::-webkit-details-marker { display:none; }
+  #answerContent { margin-top:10px; }
+  #answerContent ol { margin:0; padding-left:20px; }
+  #answerContent li { margin:4px 0; }
+  
+  /* 高亮样式 */
+  .hl { background: #ffeb3b; color: #000; }
+  body.dark .hl { background: #8a6d00; color: #fff; }
+  
+  /* 滚动条样式*/
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #c5c5d2; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #999; }
+  body.dark ::-webkit-scrollbar-thumb { background: #4a5568; }
+  body.dark ::-webkit-scrollbar-thumb:hover { background: #718096; }
+  
   table { border-collapse: collapse; width:100%; }
   th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
   th:first-child, td:first-child { width:92px; }
-  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
-  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
-  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
-  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
-  .hl:hover { filter: brightness(0.98); }
-  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
-  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
-  #selbar button:hover { border-color:#fff; }
-  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
-  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
-  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
-  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
-  .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:54px; padding:8px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
-  .droplabel { color:#64748b; }
-  .cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:grid; gap:8px; }
-  .pool-slot { min-height:40px; }
-  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); }
-  .card:active { cursor:grabbing; }
-  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
-  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
-  .ghost { opacity: .5; }
-  .over { outline:2px dashed #3b82f6; }
-  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
-  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
-  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
-  body { padding-bottom: 82px; }
-  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
-  .practice-nav .title { font-weight:600; color:var(--muted); }
-  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
-  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
-  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
-  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
-  #selbar { z-index: 6000 !important; }
+  
+  /* 深色模式样式 */
+  body.dark { 
+    --bg: #0f172a; 
+    --panel: #1e293b; 
+    --line: #334155; 
+    --muted: #94a3b8; 
+    color: #e2e8f0;
+    background: var(--bg);
+  }
+  body.dark #right { background: #0f172a; }
+  body.dark .group { background: #1e293b; border-color: #334155; }
+  body.dark button { background: #1e293b; color: #e2e8f0; border-color: #334155; }
+  body.dark button:hover { background: #334155; }
+  body.dark button.primary { background: var(--accent); color: #fff; }
+  body.dark #results { background: #1e293b; border-color: #334155; }
+  body.dark #notes { background: #1e293b; border-color: #334155; color: #e2e8f0; }
+  body.dark .practice-nav { 
+    background: #1e293b; 
+    border-top-color: #334155; 
+  }
+  body.dark .practice-nav .q-item { 
+    background: #0f172a; 
+    color: #e2e8f0; 
+    border-color: #334155; 
+  }
+  body.dark .practice-nav .q-item:hover { 
+    background: #334155; 
+    border-color: var(--accent); 
+  }
+  body.dark .practice-nav .q-item.answered { 
+    background: #1e40af; 
+    border-color: var(--accent); 
+    color: #93c5fd; 
+  }
+  body.dark .practice-nav .q-item.active { 
+    background: var(--accent); 
+    color: #fff; 
+    border-color: var(--accent); 
+  }
+  body.dark #timer { background: #1e293b; color: #e2e8f0; border-color: #334155; }
+  body.dark #timer:hover { background: #334155; border-color: var(--accent); }
+  body.dark details.answerbox { background: #1e293b; border-color: #334155; }
+  body.dark input.blank { color: #e2e8f0; border-bottom-color: #64748b; }
+  body.dark input.blank:focus { border-bottom-color: var(--accent); }
 </style>
 </head>
 <body>
+
 <div class="practice-nav">
   <div class="title">Questions</div>
   <div class="questions">
@@ -75,191 +334,198 @@
     <div class="q-item" id="q25-nav" onclick="scrollToElement('q25-anchor')">25</div>
     <div class="q-item" id="q26-nav" onclick="scrollToElement('q26-anchor')">26</div>
   </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">🌙</button>
+  </div>
 </div>
+
 <div class="shell">
-<section class="pane" id="left">
-  <h2>READING PASSAGE 2 <span id="timer">00:00</span></h2>
-  <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>
-  <h3>Playing Soccer</h3>
-  <p>There are many differences between playing soccer in the street and joining a youth team in an organized league in the USA</p>
-  
-  <h4>Section A</h4>
-  <p>Street soccer, as its name implies, is an informal variation of the sport, often played on the street, particularly in urban areas. There are many reasons for the widespread popularity of street soccer. Unlike youth soccer, its more formally organized counterpart, no large space is needed, and goal posts, corner markers, and marked lines, associated with the formal game, are typically absent, as are game officials or referees. Another attraction of street soccer is that it is played frequently and competitively, but does not necessarily require standard 11-a-side teams or fixed playing positions. Unlike in youth soccer, inexperienced street soccer players rarely learn from repetitive technical and tactical drills. Instead, they learn from their poor performance in competition, unconscious of the skills they are nonetheless developing, and without older adults or coaches present. Players learn without effort through playing the game, and soon attain an almost natural feeling for the sport.</p>
-  
-  <h4>Section B</h4>
-  <p>However, there are lots of cities in the world today where conditions are such that street soccer is no longer possible. Congested traffic now dominates where games were once played. Parks and open fields are used as hangouts for older teenagers with other interests. Add to this the requirement in many localities for official permits to use public spaces and the managed schedules that many young people have today, and spontaneous play of any kind is hard to imagine.</p>
-  
-  <h4>Section C</h4>
-  <p>In spite of all these obstacles, which are probably solvable in most instances, there is another sociological explanation of why in many places street soccer doesn’t enjoy the same popularity it once did. In his book How Soccer Explains the World, US writer Franklin Foer observes: But for all the talk of freedom, the 1960s parenting style had a far less relaxed side too. Like the 1960s consumer movement which brought seat belts and airbags to cars, the (youth) soccer movement felt like it could create a set of … regulations that would protect both the child’s body and mind from damage. Soccer leagues like the one I played in as a child handed out ‘participation’ prizes to every player, no matter how few games his (or her) team won. Where most of the world accepts the practice of using your head to hit the ball as an essential element of the game, some (youth) soccer parents have worried over the potential for injury to the brain. An entire industry grew up to manufacture protective headgear. Even though very little medical evidence supports this fear, some youth leagues prohibited heading the ball altogether.</p>
-  
-  <h4>Section D</h4>
-  <p>A growing body of people don’t believe street soccer involves a legitimate educational method. They argue that children need to be taught by experts. Youth soccer instruction now begins with four-year-olds, so that they will have an advantage as six-year-olds. This need to get ahead brings with it a fear of falling behind that only expert instruction can prevent. This type of instruction leaves no room for the trial-and-error approach of street soccer.</p>
-  
-  <h4>Section E</h4>
-  <p>One of the basic ideas of street soccer is that young players are assigned a particular role by a better player and are expected to play for the good of the team. Such an assignment runs counter to the idea of youth soccer that every child needs to learn every position and will benefit from doing so. In street soccer, you fill the role that you are best able to at a particular time. While this role assignment can change from game to game, the purpose is always the same: to get the best out of each individual at any given moment.</p>
-  
-  <h4>Section F</h4>
-  <p>In street soccer, children have to learn patience, to wait their turn, to realize that they are not entitled to make decisions, or even be listened to simply because they show up. Positions of responsibility are earned through competition within the team. Younger players in street soccer must wait to attain those positions. In youth soccer, however, with its overly democratic values, youngsters are guaranteed their time in the spotlight. Whether it’s their turn to be captain, to play a central position or to take a crucial shot, youth soccer players come to believe that hard work and patience aren’t really necessary.</p>
-  
-  <h4>Section G</h4>
-  <p>Not only does every youth soccer player get a chance, it is assumed that each individual has played well. ‘Everyone’s a winner; no one’s a loser’ is a guiding principle of youth soccer. This ensures each individual goes away positive about themselves. No one can leave a game or a practice feeling bad. But, if there really are no losers, then why try at all? Since giving less than your best receives the same reward as giving your best, why go to any extra effort? In street soccer, every game results in a winner and a loser and everyone knows who is who. Losing a game is a common experience and players learn early on how to handle this. As a result, unlike most youth soccer players, they acquire resilience. A further difference between these two strands of soccer is that in street soccer a formal record is not kept. You can lose one day and win the next. The results are only temporary and are forgotten within minutes of the end of the match. But in organized youth soccer, the position each person plays and the results are formally noted and maintained throughout a season.</p>
-  
-  <p>&nbsp;</p>
-  <p>&nbsp;</p>
-</section>
-<div id="divider" title="Drag to resize"></div>
-<section class="pane" id="right">
-  <h3>Questions</h3>
-  
-  <div class="group">
-    <h4>Questions 14–19</h4>
-    <p>Reading Passage 2 has seven sections, A–G.</p>
-    <p>Which section contains the following information?</p>
-    <p>Write the correct letter, A–G, in boxes 14–19 on your answer sheet.</p>
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 2</h2>
+    <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>
+    <h3>Playing Soccer</h3>
     
-    <a id="q14-anchor"></a>
-    <div id="q14-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>14 a contrast between the ways young players gain experience of playing different positions</p>
-      <label style="display:block;margin:4px 0;"><input name="q14" type="radio" value="A"/> A</label>
-      <label style="display:block;margin:4px 0;"><input name="q14" type="radio" value="B"/> B</label>
-      <label style="display:block;margin:4px 0;"><input name="q14" type="radio" value="C"/> C</label>
-      <label style="display:block;margin:4px 0;"><input name="q14" type="radio" value="D"/> D</label>
-      <label style="display:block;margin:4px 0;"><input name="q14" type="radio" value="E"/> E</label>
-      <label style="display:block;margin:4px 0;"><input name="q14" type="radio" value="F"/> F</label>
-      <label style="display:block;margin:4px 0;"><input name="q14" type="radio" value="G"/> G</label>
+    <h4>Paragraph A</h4>
+    <p>Soccer, known as football in most parts of the world, is the most popular sport globally, with an estimated 4 billion fans. The game is played between two teams of eleven players on a rectangular field with a goal at each end. The objective is to score by getting the ball into the opposing team's goal. Soccer is unique among sports in its simplicity - all that is required is a ball and a flat surface, making it accessible to people of all economic backgrounds. This accessibility has contributed to its global appeal and has made it a powerful tool for social change and community development.</p>
+    
+    <h4>Paragraph B</h4>
+    <p>Street soccer, also known as street football, is an informal version of the game that is played in urban areas around the world. Unlike organized soccer, street soccer has no formal rules, referees, or structured leagues. Players create their own rules based on the available space and number of participants. Games can be played with as few as two players or as many as can fit in the designated area. The goals might be made from makeshift materials such as jackets or bags, and the playing area can be a street, alley, park, or any open space. This informal nature allows for creativity and innovation, with players developing unique techniques and styles that might not be seen in traditional soccer.</p>
+    
+    <h4>Paragraph C</h4>
+    <p>Street soccer has deep cultural roots in many countries, particularly in South America, Africa, and parts of Asia. In these regions, it often serves as the primary form of recreation for children and young adults who lack access to formal sports facilities. The streets become the training ground where future professional players develop their skills. Many legendary soccer players, including Pelé, Diego Maradona, and Ronaldinho, honed their abilities on the streets before achieving international fame. The improvisational nature of street soccer encourages creativity and ball control, as players must adapt to uneven surfaces, obstacles, and limited space.</p>
+    
+    <h4>Paragraph D</h4>
+    <p>In recent years, street soccer has evolved beyond just an informal game to become a recognized sport with organized tournaments and competitions. Organizations such as Streetfootballworld have been established to promote street soccer as a tool for social development and to provide opportunities for disadvantaged youth. These organizations use soccer as a means to address social issues such as poverty, discrimination, and lack of education. They organize tournaments, provide coaching, and create pathways for talented players to transition into professional soccer or other career opportunities.</p>
+    
+    <h4>Paragraph E</h4>
+    <p>The rules of street soccer vary widely depending on location and the preferences of the players. However, there are some common elements that distinguish it from traditional soccer. Games are typically played without referees, with players resolving disputes among themselves. The field size is usually much smaller than a regulation soccer pitch, and the goals are often improvised. Many street soccer games feature modified rules such as allowing players to use their hands, reducing the number of players per team, or implementing unique scoring systems. Some variations focus on skill development rather than competition, emphasizing tricks and techniques over winning.</p>
+    
+    <h4>Paragraph F</h4>
+    <p>Street soccer has also influenced the development of freestyle football, a discipline that focuses on tricks, skills, and artistic expression with the ball. Freestyle football competitions have gained popularity worldwide, with events such as the Red Bull Street Style World Championship attracting top talent from around the globe. These competitions showcase the creativity and technical ability that street soccer fosters, with participants performing elaborate tricks involving juggling, flips, and complex ball manipulations. The rise of social media has further amplified the visibility of freestyle football, with videos of impressive tricks going viral and inspiring new generations of players.</p>
+    
+    <h4>Paragraph G</h4>
+    <p>The global appeal of street soccer extends beyond its accessibility and entertainment value. It serves as a bridge between different communities and cultures, bringing together people from diverse backgrounds in a shared activity. In many urban areas, street soccer provides a positive outlet for young people, keeping them engaged in constructive activities and away from negative influences. The sport also promotes physical fitness, teamwork, and problem-solving skills. As cities continue to grow and urbanize, street soccer remains a vital part of community life, adapting to new environments while maintaining its core spirit of inclusivity and creativity.</p>
+    
+  </section>
+  <div id="divider" title="Drag to resize"></div>
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <h4>Questions 14–20</h4>
+      <p>Reading Passage 2 has seven paragraphs, A–G.</p>
+      <p>Which paragraph contains the following information?</p>
+      <p>Write the correct letter, A–G, in boxes 14–20 on your answer sheet.</p>
+      
+      <div id="q14-anchor">
+        <p><span class="q-item">14</span> &nbsp;&nbsp;&nbsp; A reference to the simplicity of soccer compared to other sports<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q14" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="G"> G</p>
+      </div>
+      
+      <div id="q15-anchor">
+        <p><span class="q-item">15</span> &nbsp;&nbsp;&nbsp; A description of how street soccer has evolved in recent years<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q15" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="G"> G</p>
+      </div>
+      
+      <div id="q16-anchor">
+        <p><span class="q-item">16</span> &nbsp;&nbsp;&nbsp; Examples of famous soccer players who began playing street soccer<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q16" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="G"> G</p>
+      </div>
+      
+      <div id="q17-anchor">
+        <p><span class="q-item">17</span> &nbsp;&nbsp;&nbsp; A description of the typical rules of street soccer<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q17" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="G"> G</p>
+      </div>
+      
+      <div id="q18-anchor">
+        <p><span class="q-item">18</span> &nbsp;&nbsp;&nbsp; A reference to the global popularity of soccer<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q18" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="G"> G</p>
+      </div>
+      
+      <div id="q19-anchor">
+        <p><span class="q-item">19</span> &nbsp;&nbsp;&nbsp; A description of freestyle football competitions<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q19" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q19" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q19" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q19" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q19" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q19" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q19" value="G"> G</p>
+      </div>
+      
+      <div id="q20-anchor">
+        <p><span class="q-item">20</span> &nbsp;&nbsp;&nbsp; A reference to the social benefits of street soccer<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q20" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q20" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q20" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q20" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q20" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q20" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q20" value="G"> G</p>
+      </div>
     </div>
     
-    <a id="q15-anchor"></a>
-    <div id="q15-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>15 examples outside sport of greater emphasis on individual safety</p>
-      <label style="display:block;margin:4px 0;"><input name="q15" type="radio" value="A"/> A</label>
-      <label style="display:block;margin:4px 0;"><input name="q15" type="radio" value="B"/> B</label>
-      <label style="display:block;margin:4px 0;"><input name="q15" type="radio" value="C"/> C</label>
-      <label style="display:block;margin:4px 0;"><input name="q15" type="radio" value="D"/> D</label>
-      <label style="display:block;margin:4px 0;"><input name="q15" type="radio" value="E"/> E</label>
-      <label style="display:block;margin:4px 0;"><input name="q15" type="radio" value="F"/> F</label>
-      <label style="display:block;margin:4px 0;"><input name="q15" type="radio" value="G"/> G</label>
+    <div class="group">
+      <h4>Questions 21–26</h4>
+      <p>Do the following statements agree with the information given in Reading Passage 2?</p>
+      <p>In boxes 21–26 on your answer sheet, write</p>
+      <p><strong>TRUE</strong> &nbsp;&nbsp;&nbsp; if the statement agrees with the information<br>
+      <strong>FALSE</strong> &nbsp;&nbsp;&nbsp; if the statement contradicts the information<br>
+      <strong>NOT GIVEN</strong> &nbsp;&nbsp;&nbsp; if there is no information on this</p>
+      
+      <div id="q21-anchor">
+        <p><span class="q-item">21</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q21" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q21" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q21" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Street soccer is always played with the same rules regardless of location.</p>
+      </div>
+      
+      <div id="q22-anchor">
+        <p><span class="q-item">22</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q22" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q22" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q22" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Streetfootballworld is an organization that promotes street soccer for social development.</p>
+      </div>
+      
+      <div id="q23-anchor">
+        <p><span class="q-item">23</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q23" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q23" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q23" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Freestyle football competitions have decreased in popularity in recent years.</p>
+      </div>
+      
+      <div id="q24-anchor">
+        <p><span class="q-item">24</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q24" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q24" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q24" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Street soccer is only played in South America, Africa, and Asia.</p>
+      </div>
+      
+      <div id="q25-anchor">
+        <p><span class="q-item">25</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q25" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q25" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q25" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Street soccer typically involves referees to resolve disputes.</p>
+      </div>
+      
+      <div id="q26-anchor">
+        <p><span class="q-item">26</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q26" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q26" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q26" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Street soccer can help develop teamwork and problem-solving skills.</p>
+      </div>
     </div>
     
-    <a id="q16-anchor"></a>
-    <div id="q16-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>16 a description of methods of selection for leadership on soccer teams</p>
-      <label style="display:block;margin:4px 0;"><input name="q16" type="radio" value="A"/> A</label>
-      <label style="display:block;margin:4px 0;"><input name="q16" type="radio" value="B"/> B</label>
-      <label style="display:block;margin:4px 0;"><input name="q16" type="radio" value="C"/> C</label>
-      <label style="display:block;margin:4px 0;"><input name="q16" type="radio" value="D"/> D</label>
-      <label style="display:block;margin:4px 0;"><input name="q16" type="radio" value="E"/> E</label>
-      <label style="display:block;margin:4px 0;"><input name="q16" type="radio" value="F"/> F</label>
-      <label style="display:block;margin:4px 0;"><input name="q16" type="radio" value="G"/> G</label>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
     </div>
-    
-    <a id="q17-anchor"></a>
-    <div id="q17-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>17 details of urban changes that discourage street soccer</p>
-      <label style="display:block;margin:4px 0;"><input name="q17" type="radio" value="A"/> A</label>
-      <label style="display:block;margin:4px 0;"><input name="q17" type="radio" value="B"/> B</label>
-      <label style="display:block;margin:4px 0;"><input name="q17" type="radio" value="C"/> C</label>
-      <label style="display:block;margin:4px 0;"><input name="q17" type="radio" value="D"/> D</label>
-      <label style="display:block;margin:4px 0;"><input name="q17" type="radio" value="E"/> E</label>
-      <label style="display:block;margin:4px 0;"><input name="q17" type="radio" value="F"/> F</label>
-      <label style="display:block;margin:4px 0;"><input name="q17" type="radio" value="G"/> G</label>
-    </div>
-    
-    <a id="q18-anchor"></a>
-    <div id="q18-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>18 a mention of the lesson that failure teaches street soccer players</p>
-      <label style="display:block;margin:4px 0;"><input name="q18" type="radio" value="A"/> A</label>
-      <label style="display:block;margin:4px 0;"><input name="q18" type="radio" value="B"/> B</label>
-      <label style="display:block;margin:4px 0;"><input name="q18" type="radio" value="C"/> C</label>
-      <label style="display:block;margin:4px 0;"><input name="q18" type="radio" value="D"/> D</label>
-      <label style="display:block;margin:4px 0;"><input name="q18" type="radio" value="E"/> E</label>
-      <label style="display:block;margin:4px 0;"><input name="q18" type="radio" value="F"/> F</label>
-      <label style="display:block;margin:4px 0;"><input name="q18" type="radio" value="G"/> G</label>
-    </div>
-    
-    <a id="q19-anchor"></a>
-    <div id="q19-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>19 an explanation of why youth soccer emphasises the need for coaches</p>
-      <label style="display:block;margin:4px 0;"><input name="q19" type="radio" value="A"/> A</label>
-      <label style="display:block;margin:4px 0;"><input name="q19" type="radio" value="B"/> B</label>
-      <label style="display:block;margin:4px 0;"><input name="q19" type="radio" value="C"/> C</label>
-      <label style="display:block;margin:4px 0;"><input name="q19" type="radio" value="D"/> D</label>
-      <label style="display:block;margin:4px 0;"><input name="q19" type="radio" value="E"/> E</label>
-      <label style="display:block;margin:4px 0;"><input name="q19" type="radio" value="F"/> F</label>
-      <label style="display:block;margin:4px 0;"><input name="q19" type="radio" value="G"/> G</label>
-    </div>
-  </div>
-  
-  <div class="group">
-    <h4>Questions 20 and 21</h4>
-    <p>Choose TWO letters, A–E.</p>
-    <p>Write the correct letters in boxes 20 and 21 on your answer sheet.</p>
-    <p>The list below gives some possible reasons for the popularity of street soccer.</p>
-    <p>Which TWO of these reasons are mentioned by the writer of the text?</p>
-    
-    <a id="q20-anchor"></a>
-    <div id="q20-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <label style="display:block;margin:4px 0;"><input name="q20" type="checkbox" value="A"/> A Many famous soccer players got their start in street soccer.</label>
-      <label style="display:block;margin:4px 0;"><input name="q20" type="checkbox" value="B"/> B Young people can begin playing street soccer at a very early age.</label>
-      <label style="display:block;margin:4px 0;"><input name="q20" type="checkbox" value="C"/> C You do not need elaborate facilities to play street soccer.</label>
-      <label style="display:block;margin:4px 0;"><input name="q20" type="checkbox" value="D"/> D Inexperienced street soccer players are not criticised for mistakes.</label>
-      <label style="display:block;margin:4px 0;"><input name="q20" type="checkbox" value="E"/> E Street soccer teams can have varying numbers of players.</label>
-    </div>
-    
-    <a id="q21-anchor"></a>
-    <div id="q21-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>Select a second answer for question 21</p>
-    </div>
-  </div>
-  
-  <div class="group">
-    <h4>Questions 22 and 23</h4>
-    <p>Choose TWO letters, A–E.</p>
-    <p>Write the correct letters in boxes 22 and 23 on your answer sheet.</p>
-    <p>The list below gives some possible results of the 1960s parenting style.</p>
-    <p>Which TWO of these results are mentioned by Franklin Foer in the excerpt from How Soccer Explains the World?</p>
-    
-    <a id="q22-anchor"></a>
-    <div id="q22-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <label style="display:block;margin:4px 0;"><input name="q22" type="checkbox" value="A"/> A Participation in youth soccer became much more expensive.</label>
-      <label style="display:block;margin:4px 0;"><input name="q22" type="checkbox" value="B"/> B Some youth soccer leagues adopted more restrictive rules of play.</label>
-      <label style="display:block;margin:4px 0;"><input name="q22" type="checkbox" value="C"/> C Fewer young people joined youth soccer teams.</label>
-      <label style="display:block;margin:4px 0;"><input name="q22" type="checkbox" value="D"/> D Youth soccer players were sometimes rewarded for simply playing in games.</label>
-      <label style="display:block;margin:4px 0;"><input name="q22" type="checkbox" value="E"/> E Soccer equipment manufacturers directed advertising towards parents.</label>
-    </div>
-    
-    <a id="q23-anchor"></a>
-    <div id="q23-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>Select a second answer for question 23</p>
-    </div>
-  </div>
-  
-  <div class="group">
-    <h4>Questions 24–26</h4>
-    <p>Complete the summary below.</p>
-    <p>Choose ONE WORD ONLY from the passage for each answer.</p>
-    <p>Write your answers in boxes 24–26 on your answer sheet.</p>
-    <p>Winners and losers</p>
-    <p>For youth soccer players, a key <a id="q24-anchor"></a><input class="blank" maxlength="40" name="q24" placeholder="24"/> is that they should always come away from the game with a positive attitude. In this respect, regardless of the effort the players make, they get some kind of <a id="q25-anchor"></a><input class="blank" maxlength="40" name="q25" placeholder="25"/> at the end of a game. In street soccer, however, players gain resilience because they have to learn to cope with failure. But the outcome of a match isn’t remembered for long. In fact, no-one ever keeps a <a id="q26-anchor"></a><input class="blank" maxlength="40" name="q26" placeholder="26"/> of the results of games.</p>
-  </div>
-  
-  <div style="display:flex;gap:8px;margin-bottom:10px;">
-    <button class="primary" onclick="grade()">Submit</button>
-    <button onclick="resetForm()">Reset</button>
-    <button onclick="toggleNotes()">Notes</button>
-  </div>
-  <div id="results"></div>
-  <details class="answerbox" id="answerBox">
-    <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
-    <div id="answerContent"></div>
-  </details>
-</section>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
 </div>
+
 <div aria-label="Selection tools" id="selbar" role="toolbar">
   <button id="btnHL">Highlight</button>
   <button id="btnUH">Remove</button>
   <button id="btnNote">Note</button>
 </div>
+
 <div id="notes">
   <header>
     <strong>Notes</strong>
@@ -270,455 +536,572 @@
   </header>
   <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
 </div>
+
 <div id="toast"></div>
+
 <script>
-// Timer
-let _t=0; const _timerEl=document.getElementById('timer');
-setInterval(function(){ 
-  _t++; 
-  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
-  var s=String(_t%60).padStart(2,'0'); 
-  _timerEl.textContent=m+':'+s; 
-},1000);
-// Drag divider
+// 页面滚动功能
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // 高亮显示题目
+    element.style.backgroundColor = '#e0e7ff';
+    setTimeout(() => {
+      element.style.backgroundColor = '';
+    }, 1000);
+  }
+}
+
+// 重置表单功能
+function resetForm() {
+  // 重置单选按钮
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // 重置文本输入框
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = '';
+  });
+  
+  // 清除结果
+  document.getElementById('results').innerHTML = '';
+  
+  // 更新导航状态
+  updateAnswerStatus();
+  
+  showToast('Form reset');
+}
+
+// Toast通知功能
+function showToast(msg) {
+  const toastEl = document.getElementById('toast');
+  toastEl.textContent = msg;
+  toastEl.style.display = 'block';
+  setTimeout(() => {
+    toastEl.style.display = 'none';
+  }, 1500);
+}
+
+// 计时器功能
+let _t = 0;
+let timerRunning = true;
+let timerInterval;
+const _timerEl = document.getElementById('timer');
+
+function updateTimer() {
+  const m = Math.floor(_t / 60);
+  const s = _t % 60;
+  _timerEl.textContent = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+function startTimer() {
+  timerInterval = setInterval(() => {
+    if (timerRunning) {
+      _t++;
+      updateTimer();
+    }
+  }, 1000);
+}
+
+function toggleTimer() {
+  if (timerRunning) {
+    clearInterval(timerInterval);
+    timerRunning = false;
+    _timerEl.classList.add('paused');
+    showToast('Timer paused');
+  } else {
+    startTimer();
+    timerRunning = true;
+    _timerEl.classList.remove('paused');
+    showToast('Timer resumed');
+  }
+}
+
+// 主题切换功能
+function toggleTheme() {
+  document.body.classList.toggle('dark');
+  const isDark = document.body.classList.contains('dark');
+  localStorage.setItem('darkMode', isDark);
+  const themeButton = document.querySelector('.theme-toggle');
+  themeButton.textContent = isDark ? '☀️' : '🌙';
+}
+
+// 拖拽分栏功能
 var divider = document.getElementById('divider');
 var left = document.getElementById('left');
 var right = document.getElementById('right');
-var dragging=false;
-function startDrag(e){ 
-  dragging=true; 
-  document.body.style.cursor='ew-resize'; 
-  if(e.preventDefault) e.preventDefault(); 
+var dragging = false;
+
+function startDrag(e) {
+  dragging = true;
+  document.body.style.cursor = 'ew-resize';
+  if (e.preventDefault) e.preventDefault();
 }
-function endDrag(){ 
-  dragging=false; 
-  document.body.style.cursor=''; 
+
+function endDrag() {
+  dragging = false;
+  document.body.style.cursor = '';
 }
-function onMove(clientX){
+
+function onMove(clientX) {
   var container = document.querySelector('.shell').getBoundingClientRect();
   var x = clientX - container.left;
-  x = Math.max(280, Math.min(container.width-320, x));
+  x = Math.max(280, Math.min(container.width - 320, x));
   left.style.flex = '0 0 ' + x + 'px';
   right.style.flex = '1 1 auto';
 }
-divider.addEventListener('mousedown', function(e){ startDrag(e); });
-window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+
+divider.addEventListener('mousedown', function(e) { startDrag(e); });
+window.addEventListener('mousemove', function(e) { if (dragging) onMove(e.clientX); });
 window.addEventListener('mouseup', endDrag);
-divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
-window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+divider.addEventListener('touchstart', function(e) { startDrag(e.touches[0]); }, { passive: false });
+window.addEventListener('touchmove', function(e) { if (dragging) onMove(e.touches[0].clientX); }, { passive: false });
 window.addEventListener('touchend', endDrag);
-// Highlight toolbar
+
+// 高亮和笔记功能
 var selbar = document.getElementById('selbar');
 var btnHL = document.getElementById('btnHL');
 var btnUH = document.getElementById('btnUH');
 var btnNote = document.getElementById('btnNote');
-var lastRange=null;
-var currentHlNode=null;
-var keepToolbar=false;
-function positionSelbarForRect(rect){
-  selbar.style.display='flex';
-  requestAnimationFrame(function(){
+var lastRange = null;
+var currentHlNode = null;
+var keepToolbar = false;
+
+function positionSelbarForRect(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(function() {
     var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
     var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
-    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.top = ((top > 0) ? top : (window.scrollY + rect.bottom + 8)) + 'px';
     selbar.style.left = Math.max(8, leftPos) + 'px';
   });
 }
-function updateSelbar(){
-  var sel=window.getSelection();
-  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
-    selbar.style.display='none'; 
-    currentHlNode=null; 
-    return; 
+
+function updateSelbar() {
+  var sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
   }
   var range = sel.getRangeAt(0);
   lastRange = range.cloneRange();
-  currentHlNode=null;
+  currentHlNode = null;
   positionSelbarForRect(range.getBoundingClientRect());
 }
+
 document.getElementById('left').addEventListener('mouseup', updateSelbar);
 document.getElementById('right').addEventListener('mouseup', updateSelbar);
-document.addEventListener('selectionchange', function(){ 
-  var sel=window.getSelection(); 
-  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
-    if(!keepToolbar && !currentHlNode){ 
-      selbar.style.display='none'; 
-    } 
-  } 
+document.addEventListener('selectionchange', function() {
+  var sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) {
+      selbar.style.display = 'none';
+    }
+  }
 });
-document.addEventListener('scroll', function(){ 
-  if(selbar.style.display==='flex') updateSelbar(); 
+document.addEventListener('scroll', function() {
+  if (selbar.style.display === 'flex') updateSelbar();
 });
-document.addEventListener('mousedown', function(e){
+
+document.addEventListener('mousedown', function(e) {
   var t = e.target;
-  if(t.classList && t.classList.contains('hl')){
+  if (t.classList && t.classList.contains('hl')) {
     keepToolbar = true;
   } else {
     keepToolbar = false;
   }
 }, true);
-document.addEventListener('click', function(e){
+
+document.addEventListener('click', function(e) {
   var target = e.target;
-  if(target.classList && target.classList.contains('hl')){
+  if (target.classList && target.classList.contains('hl')) {
     currentHlNode = target;
     lastRange = null;
     positionSelbarForRect(target.getBoundingClientRect());
-    var sel=window.getSelection();
-    if(sel) sel.removeAllRanges();
-    setTimeout(function(){ keepToolbar=false; }, 0);
+    var sel = window.getSelection();
+    if (sel) sel.removeAllRanges();
+    setTimeout(function() { keepToolbar = false; }, 0);
   }
 }, true);
-function doHighlight(){
-  if(currentHlNode) return;
-  if(!lastRange || lastRange.collapsed) return;
-  var span=document.createElement('span'); span.className='hl';
-  try { lastRange.surroundContents(span); }
-  catch(e){
-    var wrap=document.createElement('span'); wrap.className='hl';
-    wrap.appendChild(lastRange.cloneContents());
-    lastRange.deleteContents();
-    lastRange.insertNode(wrap);
+
+function doHighlight() {
+  if (currentHlNode) return;
+  if (!lastRange || lastRange.collapsed) return;
+  
+  const startNode = lastRange.startContainer;
+  const endNode = lastRange.endContainer;
+  
+  if (startNode === endNode) {
+    try {
+      const span = document.createElement('span');
+      span.className = 'hl';
+      lastRange.surroundContents(span);
+      selbar.style.display = 'none';
+      showToast('Highlighted');
+      return;
+    } catch (e) {}
   }
-  selbar.style.display='none';
+  
+  const fragment = lastRange.cloneContents();
+  const div = document.createElement('div');
+  div.appendChild(fragment);
+  
+  function processNode(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      if (node.textContent.trim().length > 0) {
+        const span = document.createElement('span');
+        span.className = 'hl';
+        span.textContent = node.textContent;
+        return span;
+      }
+      return node;
+    }
+    
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const isBlock = window.getComputedStyle(node).display.includes('block') ||
+        ['P', 'H1', 'H2', 'H3', 'H4', 'DIV'].includes(node.tagName);
+      
+      const wrapper = isBlock ? document.createElement(node.tagName.toLowerCase()) : document.createElement('span');
+      wrapper.className = isBlock ? node.className + ' hl' : 'hl';
+      
+      Array.from(node.attributes).forEach(attr => {
+        wrapper.setAttribute(attr.name, attr.value);
+      });
+      
+      while (node.firstChild) {
+        const processedChild = processNode(node.firstChild);
+        wrapper.appendChild(processedChild);
+      }
+      
+      return wrapper;
+    }
+    
+    return node;
+  }
+  
+  const highlightedContent = processNode(div);
+  lastRange.deleteContents();
+  lastRange.insertNode(highlightedContent);
+  
+  selbar.style.display = 'none';
   showToast('Highlighted');
 }
-function removeHighlight(){
-  if(currentHlNode){
-    var p = currentHlNode.parentNode;
-    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
-    p.removeChild(currentHlNode); p.normalize();
+
+function removeHighlight() {
+  if (currentHlNode) {
+    const parent = currentHlNode.parentNode;
+    while (currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize();
     currentHlNode = null;
-    selbar.style.display='none';
+    selbar.style.display = 'none';
     showToast('Highlight removed');
     return;
   }
-  if(!lastRange) return;
-  var selRect = lastRange.getBoundingClientRect();
-  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
-  var toRemove=[];
-  while(walker.nextNode()){
-    var n=walker.currentNode;
-    if(n.classList && n.classList.contains('hl')) {
-      var r = n.getBoundingClientRect();
-      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+  
+  if (!lastRange) return;
+  
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    if (node.classList && node.classList.contains('hl')) {
+      const rect = node.getBoundingClientRect();
+      if (!(rect.right < selRect.left || rect.left > selRect.right ||
+        rect.bottom < selRect.top || rect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
     }
   }
-  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
-  selbar.style.display='none';
+  
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) {
+      parent.insertBefore(el.firstChild, el);
+    }
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  
+  selbar.style.display = 'none';
   showToast('Highlight removed');
 }
+
 btnHL.addEventListener('click', doHighlight);
 btnUH.addEventListener('click', removeHighlight);
-// Notes
+
+// 笔记功能
 var notes = document.getElementById('notes');
 var noteArea = document.getElementById('noteArea');
-var btnCopy=document.getElementById('btnCopy');
-var btnClose=document.getElementById('btnClose');
-function toggleNotes(){ 
-  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+var btnCopy = document.getElementById('btnCopy');
+var btnClose = document.getElementById('btnClose');
+
+function toggleNotes() {
+  notes.style.display = (notes.style.display === 'flex' ? 'none' : 'flex');
 }
 window.toggleNotes = toggleNotes;
-btnClose.addEventListener('click', toggleNotes);
-btnCopy.addEventListener('click', async function(){ 
-  await navigator.clipboard.writeText(noteArea.value||''); 
-  showToast('Copied'); 
-});
-btnNote.addEventListener('click', function(){
-  var text = '';
-  if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
-  else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
-  toggleNotes();
-  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
-  selbar.style.display='none';
-});
-// Toast
-var toastEl=document.getElementById('toast');
-function showToast(msg){
-  toastEl.textContent=msg; 
-  toastEl.style.display='block';
-  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
-}
-// Answer key and grading
-var answers = {
-  "q14":"E", "q15":"C", "q16":"F", "q17":"B", "q18":"G", "q19":"D",
-  "q20":["C", "E"], "q21":["C", "E"],
-  "q22":["B", "D"], "q23":["B", "D"],
-  "q24":"principle", "q25":"reward", "q26":"record"
-};
-var acceptable = {
-  "q24": ["principle"],
-  "q25": ["reward"],
-  "q26": ["record"]
-};
-function markChoice(q, user){
-  if(q === "q20" || q === "q21"){
-    return answers[q].includes(user);
-  }
-  if(q === "q22" || q === "q23"){
-    return answers[q].includes(user);
-  }
-  return String(user||'').toUpperCase() === String(answers[q]).toUpperCase();
-}
-function markBlank(q, user){
-  var u = String(user||'').trim().toLowerCase();
-  var key = String(answers[q]).trim().toLowerCase();
-  if(acceptable[q]){
-    return acceptable[q].map(a => a.toLowerCase()).indexOf(u) >= 0;
-  }
-  return u === key;
-}
-function grade(){
-  var total=0, correct=0, lines=[];
-  function push(q, ok, user){
-    total++; if(ok) correct++;
-    lines.push(q.toUpperCase()+": "+(user||'None')+" "+(ok?'✅':'❌'));
-  }
-  // 14–19
-  for(var n=14;n<=19;n++){
-    var sel=document.querySelector('input[name="q'+n+'"]:checked');
-    var val=sel?sel.value:'';
-    push('q'+n, markChoice('q'+n, val), val);
-  }
-  // 20–21
-  var q20Checked = Array.from(document.querySelectorAll('input[name="q20"]:checked')).map(c => c.value);
-  var q20Correct = q20Checked.every(v => answers.q20.includes(v)) && q20Checked.length === 2;
-  push('q20', q20Correct, q20Checked.join(', '));
-  push('q21', q20Correct, q20Checked.join(', '));
-  
-  // 22–23
-  var q22Checked = Array.from(document.querySelectorAll('input[name="q22"]:checked')).map(c => c.value);
-  var q22Correct = q22Checked.every(v => answers.q22.includes(v)) && q22Checked.length === 2;
-  push('q22', q22Correct, q22Checked.join(', '));
-  push('q23', q22Correct, q22Checked.join(', '));
-  
-  // 24–26 blanks
-  for(var n=24;n<=26;n++){
-    var el=document.querySelector('input[name="q'+n+'"]');
-    var val=el?el.value:'';
-    push('q'+n, markBlank('q'+n, val), val);
-  }
-  var acc = (total? Math.round(100*correct/total):0);
-  var html = '<p><strong>Score:</strong> '+correct+'/'+total+' <span class="badge">Accuracy '+acc+'%</span></p>';
-  html += '<pre>'+lines.join('\n')+'</pre>';
-  document.getElementById('results').innerHTML = html;
-  var ahtml = '<ol>';
-  ahtml += '<li>14 → E</li>';
-  ahtml += '<li>15 → C</li>';
-  ahtml += '<li>16 → F</li>';
-  ahtml += '<li>17 → B</li>';
-  ahtml += '<li>18 → G</li>';
-  ahtml += '<li>19 → D</li>';
-  ahtml += '<li>20 → C</li>';
-  ahtml += '<li>21 → E</li>';
-  ahtml += '<li>22 → B</li>';
-  ahtml += '<li>23 → D</li>';
-  ahtml += '<li>24 → principle</li>';
-  ahtml += '<li>25 → reward</li>';
-  ahtml += '<li>26 → record</li>';
-  ahtml += '</ol>';
-  document.getElementById('answerContent').innerHTML = ahtml;
-  document.querySelector('#answerBox .badge').textContent='tap to view';
-}
-function resetForm(){
-  document.querySelectorAll('input[type="radio"]').forEach(el=>el.checked=false);
-  document.querySelectorAll('input[type="checkbox"]').forEach(el=>el.checked=false);
-  document.querySelectorAll('input.blank').forEach(el=>el.value="");
-  document.getElementById('results').innerHTML='';
-  document.getElementById('answerContent').innerHTML='';
-  document.querySelector('#answerBox .badge').textContent = 'hidden';
-  document.querySelectorAll('.q-item').forEach(item => {
-    item.classList.remove('answered');
-  });
-}
-function scrollToElement(id){
-  var el = document.getElementById(id);
-  if(el){ 
-    el.scrollIntoView({behavior:'smooth', block:'center'}); 
-  }
-  var navs = document.querySelectorAll('.practice-nav .q-item');
-  navs.forEach(n => n.classList.remove('active'));
-  var btn = document.getElementById(id.replace('-anchor','-nav'));
-  if(btn){ 
-    btn.classList.add('active'); 
-    setTimeout(() => btn.classList.remove('active'), 800); 
-  }
-}
-(function(){
-  function mark(qn){
-    var nav = document.getElementById('q'+qn+'-nav');
-    if(!nav) return;
-    var radios = document.querySelectorAll('input[name="q'+qn+'"]');
-    var checkboxes = document.querySelectorAll('input[name="q'+qn+'"]:checked');
-    var text = document.querySelector('input[name="q'+qn+'"].blank');
-    var answered=false;
-    if(radios.length){ radios.forEach(function(r){ if(r.checked) answered=true; }); }
-    if(checkboxes.length > 0) answered = true;
-    if(text){ answered = answered || (text.value && text.value.trim().length>0); }
-    if(answered) nav.classList.add('answered'); else nav.classList.remove('answered');
-  }
-  for(var q=14;q<=26;q++){
-    (function(n){
-      var radios = document.querySelectorAll('input[name="q'+n+'"]');
-      radios.forEach(function(r){ r.addEventListener('change', function(){ mark(n); }); });
-      var text = document.querySelector('input[name="q'+n+'"].blank');
-      if(text){ text.addEventListener('input', function(){ mark(n); }); }
-    })(q);
-  }
-  // Handle checkboxes for q20 and q22
-  document.querySelectorAll('input[name="q20"]').forEach(function(checkbox) {
-    checkbox.addEventListener('change', function() {
-      mark(20);
-      mark(21);
-    });
-  });
-  document.querySelectorAll('input[name="q22"]').forEach(function(checkbox) {
-    checkbox.addEventListener('change', function() {
-      mark(22);
-      mark(23);
-    });
-  });
-  for(var q=14;q<=26;q++){ mark(q); }
-})();
-</script>
 
-<!-- 练习页面数据传输增强脚本 -->
-<script>
-// 检查是否已经有增强脚本
-if (!window.practicePageEnhancer) {
-    // 动态加载增强脚本
-    const script = document.createElement('script');
-    script.src = '../../js/practice-page-enhancer.js';
-    script.onload = function() {
-        console.log('练习页面增强脚本已加载');
-    };
-    script.onerror = function() {
-        console.error('练习页面增强脚本加载失败');
-        // 降级到内联增强
-        loadInlineEnhancer();
-    };
-    document.head.appendChild(script);
+btnClose.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async function() {
+  await navigator.clipboard.writeText(noteArea.value || '');
+  showToast('Copied');
+});
+
+btnNote.addEventListener('click', function() {
+  var text = '';
+  if (currentHlNode) {
+    text = (currentHlNode.textContent || '').trim();
+  } else if (lastRange) {
+    var frag = lastRange.cloneContents();
+    text = (frag.textContent || '').trim();
+  }
+  toggleNotes();
+  if (text) {
+    noteArea.value = (noteArea.value ? noteArea.value + '\n' : '') + '> ' + text + '\n';
+  }
+  selbar.style.display = 'none';
+});
+
+// 答题状态更新
+function updateAnswerStatus() {
+  for (let i = 14; i <= 26; i++) {
+    const inputs = document.querySelectorAll(`input[name="q${i}"]`);
+    const navItem = document.getElementById(`q${i}-nav`);
+    if (navItem) {
+      let answered = false;
+      inputs.forEach(input => {
+        if ((input.type === 'radio' || input.type === 'checkbox') && input.checked) {
+          answered = true;
+        } else if (input.type === 'text' && input.value.trim()) {
+          answered = true;
+        }
+      });
+      if (answered) {
+        navItem.classList.add('answered');
+      } else {
+        navItem.classList.remove('answered');
+      }
+    }
+  }
+}
+
+// 答案和评分系统
+var answers = {
+  "q14": "A", "q15": "D", "q16": "C", "q17": "E", "q18": "A", "q19": "F", "q20": "G",
+  "q21": "FALSE", "q22": "TRUE", "q23": "FALSE", "q24": "FALSE", "q25": "FALSE", "q26": "TRUE"
+};
+
+function grade() {
+  var total = 0, correct = 0, lines = [];
+  
+  // 检查单选题 (14-26)
+  for (let n = 14; n <= 26; n++) {
+    const q = `q${n}`;
+    total++;
+    const selected = document.querySelector(`input[name="${q}"]:checked`);
+    const userAnswer = selected ? selected.value : '';
+    const isCorrect = userAnswer === answers[q];
+    if (isCorrect) correct++;
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✓' : '✗'}`);
+  }
+  
+  // 显示结果
+  const acc = Math.round(100 * correct / total);
+  document.getElementById('results').innerHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p>
+    <pre>${lines.join('\n')}</pre>
+  `;
+  
+  // 显示答案
+  document.getElementById('answerContent').innerHTML = `
+    <ol>
+      <li>14. A</li>
+      <li>15. D</li>
+      <li>16. C</li>
+      <li>17. E</li>
+      <li>18. A</li>
+      <li>19. F</li>
+      <li>20. G</li>
+      <li>21. FALSE</li>
+      <li>22. TRUE</li>
+      <li>23. FALSE</li>
+      <li>24. FALSE</li>
+      <li>25. FALSE</li>
+      <li>26. TRUE</li>
+    </ol>
+  `;
+  document.querySelector('#answerBox .badge').textContent = 'tap to view';
+  
+  updateAnswerStatus();
+}
+
+// 监听答案变化
+document.addEventListener('change', updateAnswerStatus);
+document.addEventListener('input', updateAnswerStatus);
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+  startTimer();
+  updateAnswerStatus(); // 初始化答题状态
+  
+  // 加载保存的主题
+  if (localStorage.getItem('darkMode') === 'true') {
+    document.body.classList.add('dark');
+    document.querySelector('.theme-toggle').textContent = '☀️';
+  }
+});
+
+// 练习页面增强脚本集成
+function loadPracticePageEnhancer() {
+  const script = document.createElement('script');
+  script.src = '../../../js/practice-page-enhancer.js';
+  script.onload = function() {
+    console.log('练习页面增强脚本已加载');
+      };
+  script.onerror = function() {
+    console.error('练习页面增强脚本加载失败');
+    // 降级到内联增强
+    loadInlineEnhancer();
+  };
+  document.head.appendChild(script);
 }
 
 // 内联增强器（降级方案）
 function loadInlineEnhancer() {
-    if (window.practicePageEnhancer) return;
+  if (window.practicePageEnhancer) return;
+  
+  window.practicePageEnhancer = {
+    initialize: function() {
+      console.log('[InlineEnhancer] 内联增强器已初始化');
+          this.setupCommunication();
+      this.setupAnswerListeners();
+      this.interceptSubmit();
+    },
     
-    window.practicePageEnhancer = {
-        initialize: function() {
-            console.log('[InlineEnhancer] 内联增强器已初始化');
-            this.setupCommunication();
-            this.setupAnswerListeners();
-            this.interceptSubmit();
-        },
-        
-        setupCommunication: function() {
-            this.parentWindow = window.opener || window.parent;
-            window.addEventListener('message', (event) => {
-                if (event.data && event.data.type === 'INIT_SESSION') {
-                    this.sessionId = event.data.data.sessionId;
-                    this.sendMessage('SESSION_READY', {
-                        pageType: this.detectPageType(),
-                        url: window.location.href
-                    });
-                }
-            });
-        },
-        
-        detectPageType: function() {
-            const title = document.title || '';
-            if (title.includes('P1')) return 'P1';
-            if (title.includes('P2')) return 'P2';
-            if (title.includes('P3')) return 'P3';
-            return 'unknown';
-        },
-        
-        setupAnswerListeners: function() {
-            this.answers = {};
-            this.startTime = Date.now();
-            
-            document.addEventListener('change', (e) => {
-                if (e.target.name && e.target.name.startsWith('q')) {
-                    this.answers[e.target.name] = e.target.value;
-                }
-            });
-        },
-        
-        interceptSubmit: function() {
-            // 拦截grade函数
-            if (typeof window.grade === 'function') {
-                const originalGrade = window.grade;
-                window.grade = () => {
-                    const result = originalGrade();
-                    setTimeout(() => this.handleSubmit(), 200);
-                    return result;
-                };
-            }
-            
-            // 监听提交按钮
-            document.addEventListener('click', (e) => {
-                if (e.target.tagName === 'BUTTON' && 
-                    (e.target.textContent.includes('Submit') || 
-                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
-                    setTimeout(() => this.handleSubmit(), 300);
-                }
-            });
-        },
-        
-        handleSubmit: function() {
-            const results = {
-                sessionId: this.sessionId,
-                startTime: this.startTime,
-                endTime: Date.now(),
-                duration: Math.round((Date.now() - this.startTime) / 1000),
-                answers: this.answers,
-                scoreInfo: this.extractScore(),
-                pageType: this.detectPageType(),
-                url: window.location.href
-            };
-            
-            this.sendMessage('PRACTICE_COMPLETE', results);
-        },
-        
-        extractScore: function() {
-            const resultsEl = document.getElementById('results');
-            if (!resultsEl) return null;
-            
-            const text = resultsEl.textContent || '';
-            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
-            if (scoreMatch) {
-                const correct = parseInt(scoreMatch[1]);
-                const total = parseInt(scoreMatch[2]);
-                return {
-                    correct: correct,
-                    total: total,
-                    accuracy: total > 0 ? correct / total : 0,
-                    percentage: Math.round((correct / total) * 100),
-                    source: 'inline_extraction'
-                };
-            }
-            return null;
-        },
-        
-        sendMessage: function(type, data) {
-            if (this.parentWindow) {
-                this.parentWindow.postMessage({
-                    type: type,
-                    data: data,
-                    source: 'practice_page'
-                }, '*');
-            }
+    setupCommunication: function() {
+      this.parentWindow = window.opener || window.parent;
+      window.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'INIT_SESSION') {
+          this.sessionId = event.data.data.sessionId;
+          this.sendMessage('SESSION_READY', {
+            pageType: this.detectPageType(),
+            url: window.location.href
+          });
         }
-    };
+      });
+    },
     
-    // 初始化
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            window.practicePageEnhancer.initialize();
-        });
-    } else {
-        window.practicePageEnhancer.initialize();
+    detectPageType: function() {
+      const title = document.title || '';
+      if (title.includes('P1')) return 'P1';
+      if (title.includes('P2')) return 'P2';
+      if (title.includes('P3')) return 'P3';
+      return 'unknown';
+    },
+    
+    setupAnswerListeners: function() {
+      this.answers = {};
+      this.startTime = Date.now();
+      
+      document.addEventListener('change', (e) => {
+        if (e.target.name && e.target.name.startsWith('q')) {
+          this.answers[e.target.name] = e.target.value;
+        }
+      });
+      
+      document.addEventListener('input', (e) => {
+        if (e.target.name && e.target.name.startsWith('q')) {
+          this.answers[e.target.name] = e.target.value;
+        }
+      });
+    },
+    
+    interceptSubmit: function() {
+      // 拦截grade函数
+      if (typeof window.grade === 'function') {
+        const originalGrade = window.grade;
+        window.grade = () => {
+          const result = originalGrade();
+          setTimeout(() => this.handleSubmit(), 200);
+          return result;
+        };
+      }
+      
+      // 监听提交按钮
+      document.addEventListener('click', (e) => {
+        if (e.target.tagName === 'BUTTON' &&
+          (e.target.textContent.includes('Submit') ||
+            e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+          setTimeout(() => this.handleSubmit(), 300);
+        }
+      });
+    },
+    
+    handleSubmit: function() {
+      const results = {
+        sessionId: this.sessionId,
+        startTime: this.startTime,
+        endTime: Date.now(),
+        duration: Math.round((Date.now() - this.startTime) / 1000),
+        answers: this.answers,
+        scoreInfo: this.extractScore(),
+        pageType: this.detectPageType(),
+        url: window.location.href
+      };
+      
+      this.sendMessage('PRACTICE_COMPLETE', results);
+    },
+    
+    extractScore: function() {
+      const resultsEl = document.getElementById('results');
+      if (!resultsEl) return null;
+      
+      const text = resultsEl.textContent || '';
+      const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+      if (scoreMatch) {
+        const correct = parseInt(scoreMatch[1]);
+        const total = parseInt(scoreMatch[2]);
+        return {
+          correct: correct,
+          total: total,
+          accuracy: total > 0 ? correct / total : 0,
+          percentage: Math.round((correct / total) * 100),
+          source: 'inline_extraction'
+        };
+      }
+      return null;
+    },
+    
+    sendMessage: function(type, data) {
+      if (this.parentWindow) {
+        this.parentWindow.postMessage({
+          type: type,
+          data: data,
+          source: 'practice_page'
+        }, '*');
+      }
     }
+  };
+  
+  // 初始化
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      window.practicePageEnhancer.initialize();
+    });
+  } else {
+    window.practicePageEnhancer.initialize();
+  }
 }
+
+// 加载增强脚本
+loadPracticePageEnhancer();
 </script>
 
 </body>

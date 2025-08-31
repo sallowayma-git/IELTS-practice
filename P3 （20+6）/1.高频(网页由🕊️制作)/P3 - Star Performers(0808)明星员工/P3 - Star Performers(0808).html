@@ -6,6 +6,182 @@
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <style>
   :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  
+    --line: #374151;
+    --bg: #111827;
+    --panel: #1f2937;
+    --accent: #60a5fa;
+    --muted: #9ca3af;
+    --shadow: 0 6px 20px rgba(0,0,0,.3);
+  }
+  
+  body {
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+  
+  
+  
+    color: #f9fafb;
+  }
+  
+  
+    background: var(--panel);
+    border-color: var(--line);
+  }
+  
+  
+    background: var(--panel);
+    color: #f9fafb;
+    border-color: var(--line);
+  }
+  
+  
+    background: #374151;
+    border-color: var(--accent);
+  }
+  
+  
+    background: #1e40af;
+    color: #93c5fd;
+  }
+  
+  
+    background: var(--panel);
+    border-color: var(--line);
+  }
+  
+  
+    background: var(--panel);
+    color: #f9fafb;
+    border-color: var(--line);
+  }
+  
+  
+    background: #374151;
+    border-color: var(--accent);
+  }
+  
+  
+    background: var(--accent);
+    color: white;
+  }
+  
+  
+    background: var(--panel);
+    color: #f9fafb;
+    border-color: var(--line);
+  }
+  
+  
+    background: var(--panel);
+    border-color: var(--line);
+    color: #f9fafb;
+  }
+  
+  
+    background: #fbbf24;
+    color: #1f2937;
+  }
+  
+  
+    background: #374151;
+    border-color: var(--line);
+  }
+  
+  
+    background: var(--panel);
+    border-color: var(--line);
+    color: #f9fafb;
+  }
+  
+  
+    background: #374151;
+  }
+  
+  
+    background: var(--panel);
+    border-color: var(--line);
+  }
+  
+  
+    color: #f9fafb;
+    border-color: var(--line);
+  }
+  
+  
+    background: var(--panel);
+    color: #f9fafb;
+  }
+  
+  /* Timer enhancements */
+  #timer {
+    cursor: pointer !important;
+    transition: all 0.2s ease;
+    user-select: none;
+  }
+  
+  #timer:hover {
+    background: #f8fafc;
+    border-color: var(--accent);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+  }
+  
+  
+    background: #1e293b;
+    color: #e2e8f0;
+    border-color: #334155;
+  }
+  
+  
+    background: #334155;
+    border-color: var(--accent);
+  }
+  
+  #timer.paused {
+    background: #fef3c7 !important;
+    color: #92400e !important;
+    border-color: #f59e0b !important;
+    animation: pulse 2s infinite;
+  }
+  
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+  
+  /* Controls layout */
+  .practice-nav .controls {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  
+  /* Theme toggle button */
+  .theme-toggle {
+    border: none;
+    cursor: pointer;
+    background: transparent;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    transition: all 0.2s ease;
+  }
+  
+  .theme-toggle:hover {
+    background: var(--accent);
+    color: #fff;
+    transform: scale(1.05);
+  }
+  
+  .theme-toggle:active {
+    transform: scale(0.95);
+  }
+
   * { box-sizing: border-box; }
   html,body { height:100%; }
   body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
@@ -55,6 +231,200 @@
   .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
   .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
   #selbar { z-index: 6000 !important; }
+
+/* 强力黑暗模式修复 - 使用!important确保优先级 */
+body.dark {
+  background: #111827 !important;
+  color: #f9fafb !important;
+}
+
+body.dark * {
+  border-color: #374151 !important;
+}
+
+body.dark .shell {
+  background: #111827 !important;
+}
+
+body.dark .pane {
+  background: #1f2937 !important;
+  color: #f9fafb !important;
+}
+
+body.dark #left {
+  background: #1f2937 !important;
+}
+
+body.dark #right {
+  background: #1f2937 !important;
+}
+
+body.dark h1, body.dark h2, body.dark h3, body.dark h4, body.dark h5, body.dark h6 {
+  color: #f9fafb !important;
+}
+
+body.dark p, body.dark li, body.dark td, body.dark th, body.dark label, body.dark span, body.dark div {
+  color: #e5e7eb !important;
+}
+
+body.dark .group {
+  background: #1f2937 !important;
+  border: 1px solid #374151 !important;
+  color: #f9fafb !important;
+}
+
+body.dark button {
+  background: #374151 !important;
+  color: #f9fafb !important;
+  border: 1px solid #4b5563 !important;
+}
+
+body.dark button:hover {
+  background: #4b5563 !important;
+  border-color: #60a5fa !important;
+}
+
+body.dark button.primary {
+  background: #3b82f6 !important;
+  color: white !important;
+}
+
+body.dark #results {
+  background: #1f2937 !important;
+  color: #f9fafb !important;
+  border: 1px solid #374151 !important;
+}
+
+body.dark details.answerbox {
+  background: #1f2937 !important;
+  border: 1px solid #374151 !important;
+  color: #f9fafb !important;
+}
+
+body.dark details.answerbox summary {
+  color: #f9fafb !important;
+}
+
+body.dark .practice-nav {
+  background: #1f2937 !important;
+  border: 1px solid #374151 !important;
+}
+
+body.dark .practice-nav .q-item {
+  background: #374151 !important;
+  color: #f9fafb !important;
+  border: 1px solid #4b5563 !important;
+}
+
+body.dark .practice-nav .q-item:hover {
+  background: #4b5563 !important;
+  border-color: #60a5fa !important;
+}
+
+body.dark .practice-nav .q-item.answered {
+  background: #1e40af !important;
+  color: #93c5fd !important;
+}
+
+body.dark .practice-nav .q-item.active {
+  background: #3b82f6 !important;
+  color: white !important;
+}
+
+body.dark #timer {
+  background: #374151 !important;
+  color: #f9fafb !important;
+  border: 1px solid #4b5563 !important;
+}
+
+body.dark #timer:hover {
+  background: #4b5563 !important;
+  border-color: #60a5fa !important;
+}
+
+body.dark .dropzone {
+  background: #374151 !important;
+  border: 2px dashed #4b5563 !important;
+  color: #f9fafb !important;
+}
+
+body.dark .card {
+  background: #374151 !important;
+  border: 1px solid #4b5563 !important;
+  color: #f9fafb !important;
+}
+
+body.dark .cardpool {
+  background: #4b5563 !important;
+}
+
+body.dark .hl {
+  background: #fbbf24 !important;
+  color: #1f2937 !important;
+}
+
+body.dark input[type="radio"] {
+  accent-color: #60a5fa !important;
+}
+
+body.dark input.blank {
+  color: #f9fafb !important;
+  border-bottom: 2px solid #4b5563 !important;
+  background: transparent !important;
+}
+
+body.dark input.blank:focus {
+  border-bottom-color: #60a5fa !important;
+}
+
+body.dark #notes {
+  background: #1f2937 !important;
+  border: 1px solid #374151 !important;
+}
+
+body.dark #notes header {
+  color: #f9fafb !important;
+  border-bottom: 1px solid #374151 !important;
+}
+
+body.dark #notes textarea {
+  background: #1f2937 !important;
+  color: #f9fafb !important;
+  border: 1px solid #374151 !important;
+}
+
+body.dark table {
+  border-color: #374151 !important;
+}
+
+body.dark th, body.dark td {
+  border-color: #374151 !important;
+  color: #e5e7eb !important;
+}
+
+body.dark #divider {
+  background: linear-gradient(90deg, #374151, #4b5563) !important;
+}
+
+/* 修复选择器和其他元素 */
+body.dark select, body.dark option {
+  background: #374151 !important;
+  color: #f9fafb !important;
+  border: 1px solid #4b5563 !important;
+}
+
+body.dark textarea {
+  background: #1f2937 !important;
+  color: #f9fafb !important;
+  border: 1px solid #374151 !important;
+}
+
+body.dark input[type="text"], body.dark input[type="number"] {
+  background: #1f2937 !important;
+  color: #f9fafb !important;
+  border: 1px solid #374151 !important;
+}
+
 </style>
 </head>
 <body>
@@ -75,6 +445,10 @@
     <div class="q-item" id="q38-nav" onclick="scrollToElement('q38-anchor')">38</div>
     <div class="q-item" id="q39-nav" onclick="scrollToElement('q39-anchor')">39</div>
     <div class="q-item" id="q40-nav" onclick="scrollToElement('q40-anchor')">40</div>
+  </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">🌙</button>
   </div>
 </div>
 <div class="shell">
@@ -310,14 +684,125 @@
 </div>
 <div id="toast"></div>
 <script>
-// Timer
-let _t=0; const _timerEl=document.getElementById('timer');
-setInterval(function(){ 
-  _t++; 
-  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
-  var s=String(_t%60).padStart(2,'0'); 
-  _timerEl.textContent=m+':'+s; 
-},1000);
+
+// Enhanced Timer
+let timerSeconds = 0;
+let timerInterval = null;
+let timerPaused = false;
+
+function startTimer() {
+  if (timerInterval) return;
+  timerInterval = setInterval(() => {
+    if (!timerPaused) {
+      timerSeconds++;
+      updateTimerDisplay();
+    }
+  }, 1000);
+}
+
+function updateTimerDisplay() {
+  const minutes = Math.floor(timerSeconds / 60);
+  const seconds = timerSeconds % 60;
+  const timerEl = document.getElementById('timer');
+  if (timerEl) {
+    timerEl.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }
+}
+
+function toggleTimer() {
+  timerPaused = !timerPaused;
+  const timerEl = document.getElementById('timer');
+  if (timerEl) {
+    timerEl.classList.toggle('paused', timerPaused);
+  }
+  
+  if (!timerInterval) {
+    startTimer();
+  }
+  
+  showToast(timerPaused ? 'Timer paused' : 'Timer resumed');
+}
+
+// Theme functionality
+function toggleTheme() {
+  const body = document.body;
+  const themeButton = document.querySelector('.theme-toggle');
+  
+  body.classList.toggle('dark');
+  const isDark = body.classList.contains('dark');
+  
+  if (themeButton) {
+    themeButton.textContent = isDark ? '☀️' : '🌙';
+  }
+  localStorage.setItem('theme', isDark ? 'dark' : 'light');
+  
+  showToast(`Switched to ${isDark ? 'dark' : 'light'} theme`);
+}
+
+function loadTheme() {
+  const savedTheme = localStorage.getItem('theme');
+  const body = document.body;
+  const themeButton = document.querySelector('.theme-toggle');
+  
+  if (savedTheme === 'dark') {
+    body.classList.add('dark');
+    if (themeButton) themeButton.textContent = '☀️';
+  } else {
+    if (themeButton) themeButton.textContent = '🌙';
+  }
+}
+
+// Toast notifications
+function showToast(message) {
+  let toast = document.getElementById('toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'toast';
+    toast.style.cssText = `
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 100px;
+      background: #111;
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 8px;
+      display: none;
+      z-index: 2500;
+      font-weight: 500;
+    `;
+    document.body.appendChild(toast);
+  }
+  
+  toast.textContent = message;
+  toast.style.display = 'block';
+  
+  setTimeout(() => {
+    toast.style.display = 'none';
+  }, 2000);
+}
+
+// Initialize modern features
+function initModernFeatures() {
+  loadTheme();
+  startTimer();
+  
+  // Make timer clickable
+  const timer = document.getElementById('timer');
+  if (timer && !timer.onclick) {
+    timer.onclick = toggleTimer;
+  }
+  
+  showToast('Modern features loaded');
+}
+
+// Auto-initialize when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initModernFeatures);
+} else {
+  initModernFeatures();
+}
+
 // Drag divider
 var divider = document.getElementById('divider');
 var left = document.getElementById('left');
@@ -789,5 +1274,251 @@ function loadInlineEnhancer() {
         window.practicePageEnhancer.initialize();
     }
 }
-</script></body>
+</script><script>
+// 全面修复的JavaScript功能
+(function() {
+  // 防止重复加载
+  if (window.comprehensiveFixLoaded) return;
+  window.comprehensiveFixLoaded = true;
+  
+  console.log('Loading comprehensive P3 fixes...');
+  
+  // 计时器变量
+  let timerSeconds = 0;
+  let timerInterval = null;
+  let timerPaused = false;
+  
+  // 强制覆盖计时器函数
+  window.startTimer = function() {
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+      if (!timerPaused) {
+        timerSeconds++;
+        updateTimerDisplay();
+      }
+    }, 1000);
+    console.log('Timer started');
+  };
+  
+  window.updateTimerDisplay = function() {
+    const minutes = Math.floor(timerSeconds / 60);
+    const seconds = timerSeconds % 60;
+    const timerEl = document.getElementById('timer');
+    if (timerEl) {
+      timerEl.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
+  };
+  
+  window.toggleTimer = function() {
+    timerPaused = !timerPaused;
+    const timerEl = document.getElementById('timer');
+    if (timerEl) {
+      timerEl.classList.toggle('paused', timerPaused);
+      timerEl.style.background = timerPaused ? '#fef3c7' : '';
+      timerEl.style.color = timerPaused ? '#92400e' : '';
+    }
+    
+    if (!timerInterval) {
+      window.startTimer();
+    }
+    
+    showToast(timerPaused ? 'Timer paused ⏸️' : 'Timer resumed ▶️');
+  };
+  
+  // 强制覆盖主题切换函数
+  window.toggleTheme = function() {
+    const body = document.body;
+    const themeButton = document.querySelector('.theme-toggle');
+    
+    body.classList.toggle('dark');
+    const isDark = body.classList.contains('dark');
+    
+    if (themeButton) {
+      themeButton.textContent = isDark ? '☀️' : '🌙';
+    }
+    
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    showToast(`Switched to ${isDark ? 'dark' : 'light'} theme`);
+    
+    console.log('Theme toggled to:', isDark ? 'dark' : 'light');
+  };
+  
+  window.loadTheme = function() {
+    const savedTheme = localStorage.getItem('theme');
+    const body = document.body;
+    const themeButton = document.querySelector('.theme-toggle');
+    
+    if (savedTheme === 'dark') {
+      body.classList.add('dark');
+      if (themeButton) themeButton.textContent = '☀️';
+    } else {
+      body.classList.remove('dark');
+      if (themeButton) themeButton.textContent = '🌙';
+    }
+    
+    console.log('Theme loaded:', savedTheme || 'light');
+  };
+  
+  // Toast通知系统
+  window.showToast = function(message) {
+    let toast = document.getElementById('toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'toast';
+      toast.style.cssText = `
+        position: fixed;
+        left: 50%;
+        transform: translateX(-50%);
+        bottom: 100px;
+        background: #111;
+        color: #fff;
+        padding: 12px 20px;
+        border-radius: 8px;
+        display: none;
+        z-index: 2500;
+        font-weight: 500;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      `;
+      document.body.appendChild(toast);
+    }
+    
+    toast.textContent = message;
+    toast.style.display = 'block';
+    
+    setTimeout(() => {
+      toast.style.display = 'none';
+    }, 2500);
+  };
+  
+  // 高亮功能修复
+  window.doHighlight = function(color) {
+    const selection = window.getSelection();
+    if (selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      const span = document.createElement('span');
+      span.className = 'hl';
+      span.style.backgroundColor = color || '#fbbf24';
+      span.style.color = document.body.classList.contains('dark') ? '#1f2937' : 'inherit';
+      
+      try {
+        range.surroundContents(span);
+        selection.removeAllRanges();
+        showToast('Text highlighted');
+      } catch (e) {
+        console.log('Highlight failed:', e);
+      }
+    }
+  };
+  
+  window.removeHighlight = function() {
+    const highlights = document.querySelectorAll('.hl');
+    highlights.forEach(hl => {
+      const parent = hl.parentNode;
+      parent.insertBefore(document.createTextNode(hl.textContent), hl);
+      parent.removeChild(hl);
+    });
+    showToast('Highlights removed');
+  };
+  
+  // 笔记功能修复
+  window.toggleNotes = function() {
+    const notes = document.getElementById('notes');
+    if (notes) {
+      const isVisible = notes.style.display !== 'none';
+      notes.style.display = isVisible ? 'none' : 'block';
+      showToast(isVisible ? 'Notes hidden' : 'Notes shown');
+    }
+  };
+  
+  // 滚动到元素
+  window.scrollToElement = function(id) {
+    const element = document.getElementById(id);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      showToast(`Scrolled to question ${id.replace('q', '')}`);
+    }
+  };
+  
+  // 答案状态更新
+  window.updateAnswerStatus = function() {
+    const questions = document.querySelectorAll('[id^="q"]');
+    questions.forEach(q => {
+      const qNum = q.id.replace('q', '');
+      const navItem = document.querySelector(`.q-item[onclick*="q${qNum}"]`);
+      if (navItem) {
+        const hasAnswer = q.querySelector('input:checked, input.blank[value!=""]');
+        navItem.classList.toggle('answered', !!hasAnswer);
+      }
+    });
+  };
+  
+  // 表单重置
+  window.resetForm = function() {
+    const form = document.querySelector('form');
+    if (form) {
+      form.reset();
+      document.querySelectorAll('.hl').forEach(hl => {
+        const parent = hl.parentNode;
+        parent.insertBefore(document.createTextNode(hl.textContent), hl);
+        parent.removeChild(hl);
+      });
+      updateAnswerStatus();
+      showToast('Form reset');
+    }
+  };
+  
+  // 初始化函数
+  function initComprehensiveFixes() {
+    console.log('Initializing comprehensive fixes...');
+    
+    // 加载主题
+    loadTheme();
+    
+    // 启动计时器
+    startTimer();
+    
+    // 绑定计时器点击事件
+    const timer = document.getElementById('timer');
+    if (timer) {
+      timer.onclick = toggleTimer;
+      timer.style.cursor = 'pointer';
+      timer.title = 'Click to pause/resume timer';
+    }
+    
+    // 绑定主题切换按钮
+    const themeButton = document.querySelector('.theme-toggle');
+    if (themeButton) {
+      themeButton.onclick = toggleTheme;
+      themeButton.title = 'Toggle dark/light theme';
+    }
+    
+    // 绑定答案变化监听
+    document.addEventListener('change', updateAnswerStatus);
+    document.addEventListener('input', updateAnswerStatus);
+    
+    // 绑定高亮选择事件
+    document.addEventListener('mouseup', function() {
+      const selection = window.getSelection();
+      if (selection.toString().length > 0) {
+        // 可以在这里添加高亮工具栏显示逻辑
+      }
+    });
+    
+    // 初始化答案状态
+    setTimeout(updateAnswerStatus, 500);
+    
+    showToast('All features loaded successfully! ✅');
+    console.log('Comprehensive fixes initialized successfully');
+  }
+  
+  // 页面加载完成后初始化
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initComprehensiveFixes);
+  } else {
+    initComprehensiveFixes();
+  }
+  
+})();
+</script>
+</body>
 </html>

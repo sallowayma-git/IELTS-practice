@@ -1,65 +1,419 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<title>Bird Migration - Reading Passage 2</title>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta charset="UTF-8">
+<title>P2. Bird Migration</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+  }
   * { box-sizing: border-box; }
   html,body { height:100%; }
-  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
-  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+    padding-bottom: 82px; 
+  }
+  
+  /* 布局样式 */
   .shell { display:flex; height:100vh; width:100%; }
   .pane { background:var(--panel); overflow:auto; padding:20px; }
   #left { flex: 0 0 50%; min-width: 280px; }
   #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
   #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  
+  /* 文本样式 */
   h2,h3,h4 { margin:0 0 10px; }
   #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  
+  /* 组件样式 */
   .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
-  table { border-collapse: collapse; width:100%; }
-  th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
-  th:first-child, td:first-child { width:92px; }
-  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
-  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
-  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
-  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
-  .hl:hover { filter: brightness(0.98); }
-  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
-  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  input.blank { 
+    border:none; 
+    border-bottom:1px solid #9ca3af; 
+    padding:2px 4px; 
+    font-size:1em; 
+    background:transparent; 
+    min-width: 80px;
+  }
+  input.blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+  
+  /* 按钮样式 */
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    background:#fff; 
+    border-radius:6px; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    font-size:14px; 
+  }
+  button:hover { background:#f8fafc; border-color:#cbd5e1; }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:var(--accent); 
+  }
+  button.primary:hover { background:#2563eb; }
+  
+    /* 计时器样式*/
+  #timer { 
+    background:#fff; 
+    color:var(--muted); 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    padding:6px 12px; 
+    cursor:pointer; 
+    font-family: 'Courier New', monospace; 
+    transition:all 0.2s; 
+    min-width: 70px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: bold;
+  }
+  #timer:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  #timer.paused { 
+    color: #ef4444; 
+    border-color: #fecaca; 
+    background: #fef2f2; 
+  }
+
+/* 选择工具栏*/
+  #selbar { 
+    position: fixed; 
+    display:none; 
+    z-index: 2000; 
+    background:#111; 
+    color:#fff; 
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow: var(--shadow); 
+    font-size: 13px; 
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; 
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+  }
   #selbar button:hover { border-color:#fff; }
-  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
-  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
-  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
-  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
-  /* DnD styles */
-  .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:40px; padding:4px 8px; display:inline-flex; align-items:center; justify-content:space-between; gap:8px; width: auto; min-width: 120px; max-width: 200px; vertical-align: middle; }
-  .droplabel { color:#64748b; font-size:14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:flex; flex-wrap:wrap; gap:8px; }
-  .pool-slot { min-height:40px; }
-  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); white-space: nowrap; }
-  .card:active { cursor:grabbing; }
-  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
-  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
-  .ghost { opacity: .5; }
-  .over { outline:2px dashed #3b82f6; }
-  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
-  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
-  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
-/* bottom question nav */
-body { padding-bottom: 82px; }
-.practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
-.practice-nav .title { font-weight:600; color:var(--muted); }
-.practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-.practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
-.practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
-.practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
-.practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
-#selbar { z-index: 6000 !important; } /* ensure toolbar sits above bottom nav */
+  
+  /* 笔记面板 */
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 12px; 
+    width: 320px; 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow: var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    font-size:14px; 
+    line-height:1.5; 
+  }
+  
+  /* Toast通知 */
+  #toast { 
+    position: fixed; 
+    bottom: 20px; 
+    left: 50%; 
+    transform: translateX(-50%); 
+    background: rgba(0,0,0,0.8); 
+    color: #fff; 
+    padding: 8px 16px; 
+    border-radius: 4px; 
+    display: none; 
+    z-index: 3000; 
+    font-size: 14px; 
+  }
+  
+  /* 答题导航 */
+  .practice-nav { 
+    background:#fff; 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:16px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    border-top:2px solid var(--line); 
+    z-index:4000; 
+  }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    font-size:14px; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; 
+  }
+  .practice-nav .controls { 
+    display:flex; 
+    gap:12px; 
+    margin-left:auto; 
+    align-items:center; 
+  }
+  
+  /* 答题结果显示 */
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin:16px 0; 
+    font-family: monospace; 
+    white-space:pre-wrap; 
+  }
+  #results p { margin:0 0 8px; }
+  .badge { 
+    background:#e0e7ff; 
+    color:var(--accent); 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+  }
+  
+  /* 答案框*/
+  details.answerbox { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-top:10px; 
+  }
+  details.answerbox summary { 
+    cursor:pointer; 
+    font-weight:600; 
+    list-style:none; 
+    display:flex; 
+    align-items:center; 
+    justify-content:space-between; 
+  }
+  details.answerbox summary::-webkit-details-marker { display:none; }
+  #answerContent { margin-top:10px; }
+  #answerContent ol { margin:0; padding-left:20px; }
+  #answerContent li { margin:4px 0; }
+  
+  /* 高亮样式 */
+  .hl {
+    background: #fff3a3;
+    box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .05);
+    cursor: pointer;
+  }
+  body.dark .hl { background-color: #5b21b6; color: #f5f3ff; }
+  
+  /* 滚动条样式*/
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #c5c5d2; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #999; }
+  body.dark ::-webkit-scrollbar-thumb { background: #4a5568; }
+  body.dark ::-webkit-scrollbar-thumb:hover { background: #718096; }
+
+  /* 黑暗模式样式 */
+  body.dark {
+    --bg: #1a1a1a;
+    --panel: #2a2a2a;
+    --line: #4a4a4a;
+    --muted: #999;
+    color: #e0e0e0;
+    background: var(--bg);
+  }
+
+  body.dark .pane {
+    background: var(--panel);
+    color: #e0e0e0;
+  }
+
+  body.dark #right {
+    background: #222;
+  }
+
+  body.dark button {
+    background: #3a3a3a;
+    color: #e0e0e0;
+    border-color: #555;
+  }
+
+  body.dark button:hover {
+    background: #4a4a4a;
+    border-color: var(--accent);
+  }
+
+  body.dark button.primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+
+  body.dark input.blank {
+    color: #e0e0e0;
+    border-bottom-color: #666;
+  }
+
+  body.dark input.blank:focus {
+    border-bottom-color: var(--accent);
+  }
+
+  body.dark .group {
+    background: #2f2f2f;
+    border-color: var(--line);
+  }
+
+  body.dark .practice-nav {
+    background: #252525;
+    border-top-color: #444;
+  }
+
+  body.dark .practice-nav .q-item {
+    background: #3a3a3a;
+    color: #ccc;
+    border-color: #555;
+  }
+
+  body.dark .practice-nav .q-item:hover {
+    background: #4a4a4a;
+    border-color: var(--accent);
+  }
+
+  body.dark .practice-nav .q-item.answered {
+    background: #3949ab;
+    border-color: #5c6bc0;
+    color: #e8eaf6;
+  }
+
+  body.dark .practice-nav .q-item.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+
+  body.dark #timer {
+    background: #3a3a3a;
+    color: #ccc;
+    border-color: #555;
+  }
+
+  body.dark #timer:hover {
+    background: #4a4a4a;
+    border-color: var(--accent);
+  }
+
+  body.dark #notes {
+    background: #2f2f2f;
+    border-color: var(--line);
+    color: #e0e0e0;
+  }
+
+  body.dark #selbar {
+    background: #111;
+    color: #fff;
+  }
+
+  body.dark details.answerbox {
+    background: #2f2f2f;
+    border-color: var(--line);
+  }
+
+  /* 主题切换按钮 */
+  .theme-toggle { 
+    cursor: pointer; 
+    background: transparent; 
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+    transition: all 0.2s ease;
+  }
+  .theme-toggle:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    transform: scale(1.05);
+  }
+  .theme-toggle:active {
+    transform: scale(0.95);
+  }
+
+  body.dark .theme-toggle {
+    background: #3a3a3a;
+    color: #e0e0e0;
+    border-color: #555;
+  }
+
+  body.dark .theme-toggle:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
 </style>
 </head>
 <body>
+
 <div class="practice-nav">
   <div class="title">Questions</div>
   <div class="questions">
@@ -77,10 +431,15 @@ body { padding-bottom: 82px; }
     <div class="q-item" id="q25-nav" onclick="scrollToElement('q25-anchor')">25</div>
     <div class="q-item" id="q26-nav" onclick="scrollToElement('q26-anchor')">26</div>
   </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">🌙</button>
+  </div>
 </div>
+
 <div class="shell">
   <section class="pane" id="left">
-    <h2>READING PASSAGE 2 <span id="timer">00:00</span></h2>
+    <h2>READING PASSAGE 2</h2>
     <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>
     <h3>Bird Migration</h3>
     
@@ -91,13 +450,13 @@ body { padding-bottom: 82px; }
     <p>The fundamental reason that birds migrate is to find adequate food during the winter months when it is in short supply. This particularly applies to birds that breed in the temperate and Arctic regions of the Northern Hemisphere, where food is abundant during the short growing season. Many species can tolerate cold temperatures if food is plentiful, but when food is not available, they must migrate. However, intriguing questions remain.</p>
     
     <h4>Paragraph C</h4>
-    <p>One puzzling fact is that many birds journey much further than would be necessary just to find food and good weather. Nobody knows, for instance, why British swallows, which could presumably survive equally well if they spent the winter in equatorial Africa, instead of flying several thousand miles further to their preferred winter home in South Africa’s Cape Province. Another mystery involves the huge migrations performed by arctic terns and mudflat-feeding shorebirds that breed close to Polar Regions. In general, the further north a migrant species breeds, the further south it spends the winter. For arctic terns, this necessitates an annual round trip of 25,000 miles. Yet, en route to their final destination in far-flung southern latitudes, all these individuals overfly other areas of seemingly suitable habitat spanning two hemispheres. While we may not fully understand birds’ reasons for going to particular places, we can marvel at their feats.</p>
+    <p>One puzzling fact is that many birds journey much further than would be necessary just to find food and good weather. Nobody knows, for instance, why British swallows, which could presumably survive equally well if they spent the winter in equatorial Africa, instead of flying several thousand miles further to their preferred winter home in South Africa’s Cape Province. Another mystery involves the huge migrations performed by arctic terns and mudflat-feeding shorebirds that breed close to Polar Regions. In general, the further north a migrant species breeds, the further south it spends the winter. For arctic terns, this necessitates an annual round trip of 25,000 miles. Yet, en route to their final destination in far-flung southern latitudes, all these individuals overfly other areas of seemingly suitable habitat spanning two hemispheres. While we may not fully understand birds'reasons for going to particular places, we can marvel at their feats.</p>
     
     <h4>Paragraph D</h4>
-    <p>One of the greatest mysteries is how young birds know how to find the traditional wintering areas without parental guidance. Very few adults migrate with juveniles in tow, and youngsters may even have little or no inkling of their parents’ appearance. A familiar example is that of the cuckoo, which lays its eggs in another species’ nest and never re-encounters its young. It is mind-boggling to consider that, once raised by its host species, the young cuckoo makes its way to ancestral wintering grounds in the tropics before returning single-handedly to northern Europe the next season to seek out a mate among its kind. The obvious implication is that it inherits from its parents an inbuilt route map and direction-finding capability, as well as a mental image of what another cuckoo looks like. Yet nobody has the slightest idea as to how this is possible.</p>
+    <p>One of the greatest mysteries is how young birds know how to find the traditional wintering areas without parental guidance. Very few adults migrate with juveniles in tow, and youngsters may even have little or no inkling of their parents'appearance. A familiar example is that of the cuckoo, which lays its eggs in another species'nest and never re-encounters its young. It is mind-boggling to consider that, once raised by its host species, the young cuckoo makes its way to ancestral wintering grounds in the tropics before returning single-handedly to northern Europe the next season to seek out a mate among its kind. The obvious implication is that it inherits from its parents an inbuilt route map and direction-finding capability, as well as a mental image of what another cuckoo looks like. Yet nobody has the slightest idea as to how this is possible.</p>
     
     <h4>Paragraph E</h4>
-    <p>Mounting evidence has confirmed that birds use the positions of the sun and stars to obtain compass directions. They also seem to be able to detect the earth’s magnetic field, probably due to having minute crystals of magnetite in the region of their brains. However, accurate navigation also requires an awareness of position and time, especially when lost. Experiments have shown that after being taken thousands of miles over an unfamiliar landmass, birds are still capable of returning rapidly to nest sites. Such phenomenal powers are the product of computing several sophisticated cues, including an inborn map of the night sky and the pull of the earth’s magnetic field. How the birds use their ‘instruments’ remains unknown, but one thing is clear: they see the world with a superior sensory perception to ours. Most small birds migrate at night and take their direction from the position of the setting sun. However, as well as seeing the sun go down, they also seem to see the plane of polarized light caused by it, which calibrates their compass. Travelling at night provides other benefits. Daytime predators are avoided and the danger of dehydration due to flying for long periods in warm, sunlit skies is reduced. Furthermore, at night the air is generally cool and less turbulent and so conducive to sustained, stable flight.</p>
+    <p>Mounting evidence has confirmed that birds use the positions of the sun and stars to obtain compass directions. They also seem to be able to detect the earth’s magnetic field, probably due to having minute crystals of magnetite in the region of their brains. However, accurate navigation also requires an awareness of position and time, especially when lost. Experiments have shown that after being taken thousands of miles over an unfamiliar landmass, birds are still capable of returning rapidly to nest sites. Such phenomenal powers are the product of computing several sophisticated cues, including an inborn map of the night sky and the pull of the earth’s magnetic field. How the birds use their ‘instruments'remains unknown, but one thing is clear: they see the world with a superior sensory perception to ours. Most small birds migrate at night and take their direction from the position of the setting sun. However, as well as seeing the sun go down, they also seem to see the plane of polarized light caused by it, which calibrates their compass. Travelling at night provides other benefits. Daytime predators are avoided and the danger of dehydration due to flying for long periods in warm, sunlit skies is reduced. Furthermore, at night the air is generally cool and less turbulent and so conducive to sustained, stable flight.</p>
     
     <h4>Paragraph F</h4>
     <p>Nevertheless, all journeys involve considerable risk, and part of the skill in arriving safely is setting off at the right time. This means accurate weather forecasting and utilizing favourable winds. Birds are adept at both, and, in laboratory tests, some have been shown to detect the minute difference in barometric pressure between the floor and ceiling of a room. Often birds react to weather changes before there is any visible sign of them. Lapwings, which feed on grassland, flee west from the Netherlands to the British Isles, France, and Spain at the onset of a cold snap. When the ground surface freezes, the birds could starve. Yet they return to Holland ahead of a thaw, their arrival linked to a pressure change presaging an improvement in the weather.</p>
@@ -105,7 +464,6 @@ body { padding-bottom: 82px; }
     <h4>Paragraph G</h4>
     <p>In one instance a Welsh Manx shearwater carried to America and released was back in its burrow on Skokholm Island, off the Pembrokeshire coast, one day before a letter announcing its release! Conversely, each autumn a small number of North American birds are blown across the Atlantic by fast-moving westerly tailwinds. Not only do they arrive safely in Europe, but, based on ringing evidence, some make it back to North America the following spring, after probably spending the winter with European migrants in sunny African climes.</p>
     
-    <p>&nbsp;</p> <!-- 额外添加的空白行 -->
   </section>
   <div id="divider" title="Drag to resize"></div>
   <section class="pane" id="right">
@@ -113,211 +471,112 @@ body { padding-bottom: 82px; }
     
     <div class="group">
       <h4>Questions 14–20</h4>
-      <p>Reading Passage 2 has seven paragraphs, A–G.</p>
-      <p>Choose the correct heading for each paragraph from the list of headings below.</p>
-      <p>Write the correct number, i–x, in boxes 14–20 on your answer sheet.</p>
+      <p>Reading Passage 2 has eight paragraphs, A–H.</p>
+      <p>Which paragraph contains the following information?</p>
+      <p>Write the correct letter, A–H, in boxes 14–20 on your answer sheet.</p>
       
-      <p><strong>List of headings</strong></p>
-      <ul>
-        <li>i The best moment to migrate</li>
-        <li>ii The unexplained rejection of closer feeding grounds</li>
-        <li>iii The influence of weather on the migration route</li>
-        <li>iv Physical characteristics that allow birds to migrate</li>
-        <li>v The main reason why birds migrate</li>
-        <li>vi The best wintering grounds for birds</li>
-        <li>vii Research findings on how birds migrate</li>
-        <li>viii Successful migration despite the trouble of wind</li>
-        <li>ix The contrast between long-distance migration and short-distance migration</li>
-        <li>x Mysterious migration despite lack of teaching</li>
-      </ul>
-      
-      <a id="q14-anchor"></a>
-      <div id="q14-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>14 Paragraph A</p>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q14" type="radio" value="i"> i</label>
-          <label style="margin:0;"><input name="q14" type="radio" value="ii"> ii</label>
-          <label style="margin:0;"><input name="q14" type="radio" value="iii"> iii</label>
-          <label style="margin:0;"><input name="q14" type="radio" value="iv"> iv</label>
-          <label style="margin:0;"><input name="q14" type="radio" value="v"> v</label>
-          <label style="margin:0;"><input name="q14" type="radio" value="vi"> vi</label>
-          <label style="margin:0;"><input name="q14" type="radio" value="vii"> vii</label>
-          <label style="margin:0;"><input name="q14" type="radio" value="viii"> viii</label>
-          <label style="margin:0;"><input name="q14" type="radio" value="ix"> ix</label>
-          <label style="margin:0;"><input name="q14" type="radio" value="x"> x</label>
-        </div>
+      <div id="q14-anchor">
+        <p><span class="q-item">14</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q14" value="i"> i &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="ii"> ii &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="iii"> iii &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="iv"> iv &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="v"> v</p>
       </div>
       
-      <a id="q15-anchor"></a>
-      <div id="q15-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>15 Paragraph B</p>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q15" type="radio" value="i"> i</label>
-          <label style="margin:0;"><input name="q15" type="radio" value="ii"> ii</label>
-          <label style="margin:0;"><input name="q15" type="radio" value="iii"> iii</label>
-          <label style="margin:0;"><input name="q15" type="radio" value="iv"> iv</label>
-          <label style="margin:0;"><input name="q15" type="radio" value="v"> v</label>
-          <label style="margin:0;"><input name="q15" type="radio" value="vi"> vi</label>
-          <label style="margin:0;"><input name="q15" type="radio" value="vii"> vii</label>
-          <label style="margin:0;"><input name="q15" type="radio" value="viii"> viii</label>
-          <label style="margin:0;"><input name="q15" type="radio" value="ix"> ix</label>
-          <label style="margin:0;"><input name="q15" type="radio" value="x"> x</label>
-        </div>
+      <div id="q15-anchor">
+        <p><span class="q-item">15</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q15" value="i"> i &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="ii"> ii &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="iii"> iii &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="iv"> iv &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="v"> v</p>
       </div>
       
-      <a id="q16-anchor"></a>
-      <div id="q16-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>16 Paragraph C</p>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q16" type="radio" value="i"> i</label>
-          <label style="margin:0;"><input name="q16" type="radio" value="ii"> ii</label>
-          <label style="margin:0;"><input name="q16" type="radio" value="iii"> iii</label>
-          <label style="margin:0;"><input name="q16" type="radio" value="iv"> iv</label>
-          <label style="margin:0;"><input name="q16" type="radio" value="v"> v</label>
-          <label style="margin:0;"><input name="q16" type="radio" value="vi"> vi</label>
-          <label style="margin:0;"><input name="q16" type="radio" value="vii"> vii</label>
-          <label style="margin:0;"><input name="q16" type="radio" value="viii"> viii</label>
-          <label style="margin:0;"><input name="q16" type="radio" value="ix"> ix</label>
-          <label style="margin:0;"><input name="q16" type="radio" value="x"> x</label>
-        </div>
+      <div id="q16-anchor">
+        <p><span class="q-item">16</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q16" value="i"> i &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="ii"> ii &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="iii"> iii &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="iv"> iv &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="v"> v</p>
       </div>
       
-      <a id="q17-anchor"></a>
-      <div id="q17-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>17 Paragraph D</p>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q17" type="radio" value="i"> i</label>
-          <label style="margin:0;"><input name="q17" type="radio" value="ii"> ii</label>
-          <label style="margin:0;"><input name="q17" type="radio" value="iii"> iii</label>
-          <label style="margin:0;"><input name="q17" type="radio" value="iv"> iv</label>
-          <label style="margin:0;"><input name="q17" type="radio" value="v"> v</label>
-          <label style="margin:0;"><input name="q17" type="radio" value="vi"> vi</label>
-          <label style="margin:0;"><input name="q17" type="radio" value="vii"> vii</label>
-          <label style="margin:0;"><input name="q17" type="radio" value="viii"> viii</label>
-          <label style="margin:0;"><input name="q17" type="radio" value="ix"> ix</label>
-          <label style="margin:0;"><input name="q17" type="radio" value="x"> x</label>
-        </div>
+      <div id="q17-anchor">
+        <p><span class="q-item">17</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q17" value="vi"> vi &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="vii"> vii &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="viii"> viii &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="ix"> ix &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="x"> x</p>
       </div>
       
-      <a id="q18-anchor"></a>
-      <div id="q18-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>18 Paragraph E</p>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q18" type="radio" value="i"> i</label>
-          <label style="margin:0;"><input name="q18" type="radio" value="ii"> ii</label>
-          <label style="margin:0;"><input name="q18" type="radio" value="iii"> iii</label>
-          <label style="margin:0;"><input name="q18" type="radio" value="iv"> iv</label>
-          <label style="margin:0;"><input name="q18" type="radio" value="v"> v</label>
-          <label style="margin:0;"><input name="q18" type="radio" value="vi"> vi</label>
-          <label style="margin:0;"><input name="q18" type="radio" value="vii"> vii</label>
-          <label style="margin:0;"><input name="q18" type="radio" value="viii"> viii</label>
-          <label style="margin:0;"><input name="q18" type="radio" value="ix"> ix</label>
-          <label style="margin:0;"><input name="q18" type="radio" value="x"> x</label>
-        </div>
+      <div id="q18-anchor">
+        <p><span class="q-item">18</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q18" value="iv"> iv &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="v"> v &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="vi"> vi &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="vii"> vii &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="viii"> viii</p>
       </div>
       
-      <a id="q19-anchor"></a>
-      <div id="q19-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>19 Paragraph F</p>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q19" type="radio" value="i"> i</label>
-          <label style="margin:0;"><input name="q19" type="radio" value="ii"> ii</label>
-          <label style="margin:0;"><input name="q19" type="radio" value="iii"> iii</label>
-          <label style="margin:0;"><input name="q19" type="radio" value="iv"> iv</label>
-          <label style="margin:0;"><input name="q19" type="radio" value="v"> v</label>
-          <label style="margin:0;"><input name="q19" type="radio" value="vi"> vi</label>
-          <label style="margin:0;"><input name="q19" type="radio" value="vii"> vii</label>
-          <label style="margin:0;"><input name="q19" type="radio" value="viii"> viii</label>
-          <label style="margin:0;"><input name="q19" type="radio" value="ix"> ix</label>
-          <label style="margin:0;"><input name="q19" type="radio" value="x"> x</label>
-        </div>
+      <div id="q19-anchor">
+        <p><span class="q-item">19</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q19" value="i"> i &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q19" value="ii"> ii &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q19" value="iii"> iii &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q19" value="iv"> iv &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q19" value="v"> v</p>
       </div>
       
-      <a id="q20-anchor"></a>
-      <div id="q20-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>20 Paragraph G</p>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q20" type="radio" value="i"> i</label>
-          <label style="margin:0;"><input name="q20" type="radio" value="ii"> ii</label>
-          <label style="margin:0;"><input name="q20" type="radio" value="iii"> iii</label>
-          <label style="margin:0;"><input name="q20" type="radio" value="iv"> iv</label>
-          <label style="margin:0;"><input name="q20" type="radio" value="v"> v</label>
-          <label style="margin:0;"><input name="q20" type="radio" value="vi"> vi</label>
-          <label style="margin:0;"><input name="q20" type="radio" value="vii"> vii</label>
-          <label style="margin:0;"><input name="q20" type="radio" value="viii"> viii</label>
-          <label style="margin:0;"><input name="q20" type="radio" value="ix"> ix</label>
-          <label style="margin:0;"><input name="q20" type="radio" value="x"> x</label>
-        </div>
+      <div id="q20-anchor">
+        <p><span class="q-item">20</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q20" value="iv"> iv &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q20" value="v"> v &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q20" value="vii"> vii &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q20" value="viii"> viii &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q20" value="ix"> ix</p>
       </div>
+      
+      <p>Example:&nbsp;&nbsp;&nbsp;Answer: Paragraph A: iii</p>
     </div>
     
     <div class="group">
-      <h4>Questions 21 and 22</h4>
-      <p>Choose TWO letters, A–E.</p>
-      <p>Write the correct letters in boxes 21 and 22 on your answer sheet.</p>
+      <h4>Questions 21–22</h4>
+      <p>Do the following statements agree with the information given in Reading Passage 2?</p>
+      <p>In boxes 21–22 on your answer sheet, write</p>
+      <p><strong>TRUE</strong> &nbsp;&nbsp;&nbsp; if the statement agrees with the information<br>
+      <strong>FALSE</strong> &nbsp;&nbsp;&nbsp; if the statement contradicts the information<br>
+      <strong>NOT GIVEN</strong> &nbsp;&nbsp;&nbsp; if there is no information on this</p>
       
-      <p>Which TWO of the following statements are true of bird migration?</p>
-      <ul>
-        <li>A Birds often fly further than they need to.</li>
-        <li>B Birds travelling in family groups are safe.</li>
-        <li>C Birds flying at night need less water.</li>
-        <li>D Birds have much sharper eyesight than humans.</li>
-        <li>E Only shorebirds are resistant to strong winds.</li>
-      </ul>
-      
-      <a id="q21-anchor"></a>
-      <div id="q21-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>21 First correct letter</p>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q21" type="radio" value="A"> A</label>
-          <label style="margin:0;"><input name="q21" type="radio" value="B"> B</label>
-          <label style="margin:0;"><input name="q21" type="radio" value="C"> C</label>
-          <label style="margin:0;"><input name="q21" type="radio" value="D"> D</label>
-          <label style="margin:0;"><input name="q21" type="radio" value="E"> E</label>
-        </div>
+      <div id="q21-anchor">
+        <p><span class="q-item">21</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q21" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q21" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q21" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; It is clear from the passage that the results of one bird’s long-distance migration are not always predictable.</p>
       </div>
       
-      <a id="q22-anchor"></a>
-      <div id="q22-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>22 Second correct letter</p>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q22" type="radio" value="A"> A</label>
-          <label style="margin:0;"><input name="q22" type="radio" value="B"> B</label>
-          <label style="margin:0;"><input name="q22" type="radio" value="C"> C</label>
-          <label style="margin:0;"><input name="q22" type="radio" value="D"> D</label>
-          <label style="margin:0;"><input name="q22" type="radio" value="E"> E</label>
-        </div>
+      <div id="q22-anchor">
+        <p><span class="q-item">22</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q22" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q22" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q22" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; It is only in recent years that ornithologists have reached some understanding of the navigational ability of birds.</p>
       </div>
     </div>
     
     <div class="group">
       <h4>Questions 23–26</h4>
       <p>Complete the sentences below.</p>
-      <p>Choose NO MORE THAN TWO WORDS from the passage for each answer.</p>
+      <p>Choose <strong>NO MORE THAN THREE WORDS</strong> from the passage for each answer.</p>
       <p>Write your answers in boxes 23–26 on your answer sheet.</p>
       
-      <a id="q23-anchor"></a>
-      <div id="q23-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>23 It is a great mystery that young birds like cuckoos can find their wintering grounds without __________.</p>
-        <input class="blank" maxlength="40" name="q23" placeholder="Write your answer here">
+      <div id="q23-anchor">
+        <p><span class="q-item">23</span> &nbsp;&nbsp;&nbsp; Young birds are guided by their parents when migrating, but cuckoos have to rely on their own <input type="text" name="q23" class="blank">.</p>
       </div>
       
-      <a id="q24-anchor"></a>
-      <div id="q24-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>24 Evidence shows birds can tell directions like a __________ by observing the sun and the stars.</p>
-        <input class="blank" maxlength="40" name="q24" placeholder="Write your answer here">
+      <div id="q24-anchor">
+        <p><span class="q-item">24</span> &nbsp;&nbsp;&nbsp; Experiments have shown that birds can find their way home using their internal <input type="text" name="q24" class="blank">.</p>
       </div>
       
-      <a id="q25-anchor"></a>
-      <div id="q25-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>25 One advantage for birds flying at night is that they can avoid contact with __________.</p>
-        <input class="blank" maxlength="40" name="q25" placeholder="Write your answer here">
+      <div id="q25-anchor">
+        <p><span class="q-item">25</span> &nbsp;&nbsp;&nbsp; Birds often migrate at night to avoid <input type="text" name="q25" class="blank"> and the risk of dehydration.</p>
       </div>
       
-      <a id="q26-anchor"></a>
-      <div id="q26-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>26 Laboratory tests show that birds can detect weather without __________ signs.</p>
-        <input class="blank" maxlength="40" name="q26" placeholder="Write your answer here">
+      <div id="q26-anchor">
+        <p><span class="q-item">26</span> &nbsp;&nbsp;&nbsp; Birds flying at night benefit from the fact that the air is cooler and less <input type="text" name="q26" class="blank">.</p>
       </div>
     </div>
     
@@ -333,11 +592,13 @@ body { padding-bottom: 82px; }
     </details>
   </section>
 </div>
+
 <div aria-label="Selection tools" id="selbar" role="toolbar">
   <button id="btnHL">Highlight</button>
   <button id="btnUH">Remove</button>
   <button id="btnNote">Note</button>
 </div>
+
 <div id="notes">
   <header>
     <strong>Notes</strong>
@@ -348,118 +609,204 @@ body { padding-bottom: 82px; }
   </header>
   <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
 </div>
+
 <div id="toast"></div>
+
 <script>
-// Timer
-let _t=0; const _timerEl=document.getElementById('timer');
-setInterval(function(){ 
-  _t++; 
-  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
-  var s=String(_t%60).padStart(2,'0'); 
-  _timerEl.textContent=m+':'+s; 
-},1000);
-// Drag divider
+// 页面滚动功能
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // 高亮显示题目
+    element.style.backgroundColor = '#e0e7ff';
+    setTimeout(() => {
+      element.style.backgroundColor = '';
+    }, 1000);
+  }
+}
+
+// 重置表单功能
+function resetForm() {
+  // 重置单选按钮
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // 重置文本输入框
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = '';
+  });
+  
+  // 清除结果
+  document.getElementById('results').innerHTML = '';
+  
+  // 更新导航状态
+  updateAnswerStatus();
+  
+  showToast('Form reset');
+}
+
+// Toast通知功能
+function showToast(msg) {
+  const toastEl = document.getElementById('toast');
+  toastEl.textContent = msg;
+  toastEl.style.display = 'block';
+  setTimeout(() => {
+    toastEl.style.display = 'none';
+  }, 1500);
+}
+
+// 计时器功能
+let _t = 0;
+let timerRunning = true;
+let timerInterval;
+const _timerEl = document.getElementById('timer');
+
+function updateTimer() {
+  const m = Math.floor(_t / 60);
+  const s = _t % 60;
+  _timerEl.textContent = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+function startTimer() {
+  timerInterval = setInterval(() => {
+    if (timerRunning) {
+      _t++;
+      updateTimer();
+    }
+  }, 1000);
+}
+
+function toggleTimer() {
+  if (timerRunning) {
+    clearInterval(timerInterval);
+    timerRunning = false;
+    _timerEl.classList.add('paused');
+    showToast('Timer paused');
+  } else {
+    startTimer();
+    timerRunning = true;
+    _timerEl.classList.remove('paused');
+    showToast('Timer resumed');
+  }
+}
+
+// 主题切换功能
+function toggleTheme() {
+  document.body.classList.toggle('dark');
+  const isDark = document.body.classList.contains('dark');
+  localStorage.setItem('darkMode', isDark);
+  const themeButton = document.querySelector('.theme-toggle');
+  themeButton.textContent = isDark ? '☀️' : '🌙';
+}
+
+// 拖拽分栏功能
 var divider = document.getElementById('divider');
 var left = document.getElementById('left');
 var right = document.getElementById('right');
-var dragging=false;
-function startDrag(e){ 
-  dragging=true; 
-  document.body.style.cursor='ew-resize'; 
-  if(e.preventDefault) e.preventDefault(); 
+var dragging = false;
+
+function startDrag(e) {
+  dragging = true;
+  document.body.style.cursor = 'ew-resize';
+  if (e.preventDefault) e.preventDefault();
 }
-function endDrag(){ 
-  dragging=false; 
-  document.body.style.cursor=''; 
+
+function endDrag() {
+  dragging = false;
+  document.body.style.cursor = '';
 }
-function onMove(clientX){
+
+function onMove(clientX) {
   var container = document.querySelector('.shell').getBoundingClientRect();
   var x = clientX - container.left;
-  x = Math.max(280, Math.min(container.width-320, x));
+  x = Math.max(280, Math.min(container.width - 320, x));
   left.style.flex = '0 0 ' + x + 'px';
   right.style.flex = '1 1 auto';
 }
-divider.addEventListener('mousedown', function(e){ startDrag(e); });
-window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+
+divider.addEventListener('mousedown', function(e) { startDrag(e); });
+window.addEventListener('mousemove', function(e) { if (dragging) onMove(e.clientX); });
 window.addEventListener('mouseup', endDrag);
-divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
-window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+divider.addEventListener('touchstart', function(e) { startDrag(e.touches[0]); }, { passive: false });
+window.addEventListener('touchmove', function(e) { if (dragging) onMove(e.touches[0].clientX); }, { passive: false });
 window.addEventListener('touchend', endDrag);
-</script>
-<script>
-// Highlight toolbar (fixed for multi-line highlighting)
+
+// 高亮和笔记功能
 var selbar = document.getElementById('selbar');
 var btnHL = document.getElementById('btnHL');
 var btnUH = document.getElementById('btnUH');
 var btnNote = document.getElementById('btnNote');
-var lastRange=null;
-var currentHlNode=null;
-var keepToolbar=false; // prevent selectionchange from hiding toolbar during HL click
-function positionSelbarForRect(rect){
-  selbar.style.display='flex';
-  requestAnimationFrame(function(){
+var lastRange = null;
+var currentHlNode = null;
+var keepToolbar = false;
+
+function positionSelbarForRect(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(function() {
     var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
     var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
-    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.top = ((top > 0) ? top : (window.scrollY + rect.bottom + 8)) + 'px';
     selbar.style.left = Math.max(8, leftPos) + 'px';
   });
 }
-function updateSelbar(){
-  var sel=window.getSelection();
-  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
-    selbar.style.display='none'; 
-    currentHlNode=null; 
-    return; 
+
+function updateSelbar() {
+  var sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
   }
   var range = sel.getRangeAt(0);
   lastRange = range.cloneRange();
-  currentHlNode=null;
+  currentHlNode = null;
   positionSelbarForRect(range.getBoundingClientRect());
 }
+
 document.getElementById('left').addEventListener('mouseup', updateSelbar);
 document.getElementById('right').addEventListener('mouseup', updateSelbar);
-document.addEventListener('selectionchange', function(){ 
-  var sel=window.getSelection(); 
-  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
-    if(!keepToolbar && !currentHlNode){ 
-      selbar.style.display='none'; 
-    } 
-  } 
+document.addEventListener('selectionchange', function() {
+  var sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) {
+      selbar.style.display = 'none';
+    }
+  }
 });
-document.addEventListener('scroll', function(){ 
-  if(selbar.style.display==='flex') updateSelbar(); 
+document.addEventListener('scroll', function() {
+  if (selbar.style.display === 'flex') updateSelbar();
 });
-// Pre-flag on mousedown to avoid selectionchange hiding the toolbar
-document.addEventListener('mousedown', function(e){
+
+document.addEventListener('mousedown', function(e) {
   var t = e.target;
-  if(t.classList && t.classList.contains('hl')){
+  if (t.classList && t.classList.contains('hl')) {
     keepToolbar = true;
   } else {
     keepToolbar = false;
   }
 }, true);
-// Click a highlight -> show toolbar (capture but do not block)
-document.addEventListener('click', function(e){
+
+document.addEventListener('click', function(e) {
   var target = e.target;
-  if(target.classList && target.classList.contains('hl')){
+  if (target.classList && target.classList.contains('hl')) {
     currentHlNode = target;
     lastRange = null;
     positionSelbarForRect(target.getBoundingClientRect());
-    var sel=window.getSelection();
-    if(sel) sel.removeAllRanges();
-    setTimeout(function(){ keepToolbar=false; }, 0);
+    var sel = window.getSelection();
+    if (sel) sel.removeAllRanges();
+    setTimeout(function() { keepToolbar = false; }, 0);
   }
 }, true);
-// Highlight function supporting multi-line and multi-paragraph selection
-function doHighlight(){
-  if(currentHlNode) return;
-  if(!lastRange || lastRange.collapsed) return;
+
+function doHighlight() {
+  if (currentHlNode) return;
+  if (!lastRange || lastRange.collapsed) return;
   
-  // Check if selection spans multiple nodes
   const startNode = lastRange.startContainer;
   const endNode = lastRange.endContainer;
   
-  // Simple selection within a single node
   if (startNode === endNode) {
     try {
       const span = document.createElement('span');
@@ -468,18 +815,14 @@ function doHighlight(){
       selbar.style.display = 'none';
       showToast('Highlighted');
       return;
-    } catch (e) {
-      // Handle edge cases
-    }
+    } catch (e) {}
   }
   
-  // Complex selection across multiple nodes
   const fragment = lastRange.cloneContents();
   const div = document.createElement('div');
   div.appendChild(fragment);
   
-  // Recursively process nodes and add highlights
-  function processNode(node, parentHighlight) {
+  function processNode(node) {
     if (node.nodeType === Node.TEXT_NODE) {
       if (node.textContent.trim().length > 0) {
         const span = document.createElement('span');
@@ -491,21 +834,18 @@ function doHighlight(){
     }
     
     if (node.nodeType === Node.ELEMENT_NODE) {
-      // For block elements, create a new block highlight container
-      const isBlock = window.getComputedStyle(node).display.includes('block') || 
-                     ['P', 'H1', 'H2', 'H3', 'H4', 'DIV'].includes(node.tagName);
+      const isBlock = window.getComputedStyle(node).display.includes('block') ||
+        ['P', 'H1', 'H2', 'H3', 'H4', 'DIV'].includes(node.tagName);
       
       const wrapper = isBlock ? document.createElement(node.tagName.toLowerCase()) : document.createElement('span');
       wrapper.className = isBlock ? node.className + ' hl' : 'hl';
       
-      // Copy other attributes
       Array.from(node.attributes).forEach(attr => {
         wrapper.setAttribute(attr.name, attr.value);
       });
       
-      // Process child nodes
       while (node.firstChild) {
-        const processedChild = processNode(node.firstChild, wrapper);
+        const processedChild = processNode(node.firstChild);
         wrapper.appendChild(processedChild);
       }
       
@@ -515,115 +855,128 @@ function doHighlight(){
     return node;
   }
   
-  // Process all content
-  const highlightedContent = processNode(div, null);
-  
-  // Replace original content with highlighted content
+  const highlightedContent = processNode(div);
   lastRange.deleteContents();
   lastRange.insertNode(highlightedContent);
   
   selbar.style.display = 'none';
   showToast('Highlighted');
 }
-function removeHighlight(){
-  if(currentHlNode){
-    // Remove single highlight node
+
+function removeHighlight() {
+  if (currentHlNode) {
     const parent = currentHlNode.parentNode;
-    while(currentHlNode.firstChild) {
+    while (currentHlNode.firstChild) {
       parent.insertBefore(currentHlNode.firstChild, currentHlNode);
     }
     parent.removeChild(currentHlNode);
-    parent.normalize(); // Merge adjacent text nodes
+    parent.normalize();
     currentHlNode = null;
-    selbar.style.display='none';
+    selbar.style.display = 'none';
     showToast('Highlight removed');
     return;
   }
   
-  if(!lastRange) return;
+  if (!lastRange) return;
   
-  // Remove all highlights in selection range
   const selRect = lastRange.getBoundingClientRect();
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
   const toRemove = [];
   
-  while(walker.nextNode()){
+  while (walker.nextNode()) {
     const node = walker.currentNode;
-    if(node.classList && node.classList.contains('hl')) {
+    if (node.classList && node.classList.contains('hl')) {
       const rect = node.getBoundingClientRect();
-      // Check if node overlaps with selection range
-      if(!(rect.right < selRect.left || rect.left > selRect.right || 
-          rect.bottom < selRect.top || rect.top > selRect.bottom)) {
+      if (!(rect.right < selRect.left || rect.left > selRect.right ||
+        rect.bottom < selRect.top || rect.top > selRect.bottom)) {
         toRemove.push(node);
       }
     }
   }
   
-  // Remove all found highlight nodes
   toRemove.forEach(el => {
     const parent = el.parentNode;
-    while(el.firstChild) {
+    while (el.firstChild) {
       parent.insertBefore(el.firstChild, el);
     }
     parent.removeChild(el);
-    parent.normalize(); // Merge adjacent text nodes
+    parent.normalize();
   });
   
-  selbar.style.display='none';
+  selbar.style.display = 'none';
   showToast('Highlight removed');
 }
+
 btnHL.addEventListener('click', doHighlight);
 btnUH.addEventListener('click', removeHighlight);
-</script>
-<script>
-// Notes functionality
+
+// 笔记功能
 var notes = document.getElementById('notes');
 var noteArea = document.getElementById('noteArea');
-var btnCopy=document.getElementById('btnCopy');
-var btnClose=document.getElementById('btnClose');
-function toggleNotes(){ 
-  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+var btnCopy = document.getElementById('btnCopy');
+var btnClose = document.getElementById('btnClose');
+
+function toggleNotes() {
+  notes.style.display = (notes.style.display === 'flex' ? 'none' : 'flex');
 }
 window.toggleNotes = toggleNotes;
+
 btnClose.addEventListener('click', toggleNotes);
-btnCopy.addEventListener('click', async function(){ 
-  await navigator.clipboard.writeText(noteArea.value||''); 
-  showToast('Copied'); 
+btnCopy.addEventListener('click', async function() {
+  await navigator.clipboard.writeText(noteArea.value || '');
+  showToast('Copied');
 });
-btnNote.addEventListener('click', function(){
+
+btnNote.addEventListener('click', function() {
   var text = '';
-  if(currentHlNode){ 
-    text = (currentHlNode.textContent||'').trim(); 
-  } else if(lastRange){ 
-    var frag = lastRange.cloneContents(); 
-    text = (frag.textContent||'').trim(); 
+  if (currentHlNode) {
+    text = (currentHlNode.textContent || '').trim();
+  } else if (lastRange) {
+    var frag = lastRange.cloneContents();
+    text = (frag.textContent || '').trim();
   }
   toggleNotes();
-  if(text) {
-    noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
+  if (text) {
+    noteArea.value = (noteArea.value ? noteArea.value + '\n' : '') + '> ' + text + '\n';
   }
-  selbar.style.display='none';
+  selbar.style.display = 'none';
 });
-// Toast notifications
-var toastEl=document.getElementById('toast');
-function showToast(msg){
-  toastEl.textContent=msg; 
-  toastEl.style.display='block';
-  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+
+// 答题状态更新
+function updateAnswerStatus() {
+  for (let i = 14; i <= 26; i++) {
+    const inputs = document.querySelectorAll(`input[name="q${i}"]`);
+    const navItem = document.getElementById(`q${i}-nav`);
+    if (navItem) {
+      let answered = false;
+      inputs.forEach(input => {
+        if ((input.type === 'radio' || input.type === 'checkbox') && input.checked) {
+          answered = true;
+        } else if (input.type === 'text' && input.value.trim()) {
+          answered = true;
+        }
+      });
+      if (answered) {
+        navItem.classList.add('answered');
+      } else {
+        navItem.classList.remove('answered');
+      }
+    }
+  }
 }
-</script>
-<script>
-// Answer key and grading system
+
+// 答案和评分系统
 var answers = {
-  "q14":"iv", "q15":"v", "q16":"ii", "q17":"x", "q18":"vii", "q19":"i", "q20":"viii",
-  "q21":"A", "q22":"C",
-  "q23":"parental guidance", "q24":"compass", "q25":"(daytime) predators", "q26":"visible"
+  "q14": "iv", "q15": "v", "q16": "ii", "q17": "x", "q18": "vii", "q19": "i", "q20": "viii",
+  "q21": "A", "q22": "C",
+  "q23": "parental guidance", "q24": "compass", "q25": "(daytime) predators", "q26": "visible"
 };
-function grade(){
-  var total=0, correct=0, lines=[];
+
+function grade() {
+  var total = 0, correct = 0, lines = [];
   
-  // Check radio questions (14-22)
-  for(let n=14; n<=22; n++){
+  // 检查单选题 (14-22)
+  for (let n = 14; n <= 22; n++) {
     const q = `q${n}`;
     total++;
     const selected = document.querySelector(`input[name="${q}"]:checked`);
@@ -633,260 +986,209 @@ function grade(){
     lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✓' : '✗'}`);
   }
   
-  // Check text input questions (23-26)
-  for(let n=23; n<=26; n++){
+  // 检查文本输入题 (23-26)
+  for (let n = 23; n <= 26; n++) {
     const q = `q${n}`;
     total++;
     const input = document.querySelector(`input[name="${q}"]`);
     const userAnswer = input ? input.value.trim().toLowerCase() : '';
-    // Handle possible variations for q25
+    // 处理q25的可能变体
     const correctAnswers = q === "q25" ? ["predators", "daytime predators"] : [answers[q].toLowerCase()];
     const isCorrect = correctAnswers.includes(userAnswer);
     if (isCorrect) correct++;
     lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✓' : '✗'}`);
   }
   
-  // Show results
+  // 显示结果
   const acc = Math.round(100 * correct / total);
   document.getElementById('results').innerHTML = `
     <p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p>
     <pre>${lines.join('\n')}</pre>
   `;
   
-  // Show answer key
+  // 显示答案
   document.getElementById('answerContent').innerHTML = `
     <ol>
-      <li>14 → iv</li>
-      <li>15 → v</li>
-      <li>16 → ii</li>
-      <li>17 → x</li>
-      <li>18 → vii</li>
-      <li>19 → i</li>
-      <li>20 → viii</li>
-      <li>21 → A</li>
-      <li>22 → C</li>
-      <li>23 → parental guidance</li>
-      <li>24 → compass</li>
-      <li>25 → (daytime) predators</li>
-      <li>26 → visible</li>
+      <li>14. iv</li>
+      <li>15. v</li>
+      <li>16. ii</li>
+      <li>17. x</li>
+      <li>18. vii</li>
+      <li>19. i</li>
+      <li>20. viii</li>
+      <li>21. A</li>
+      <li>22. C</li>
+      <li>23. parental guidance</li>
+      <li>24. compass</li>
+      <li>25. (daytime) predators</li>
+      <li>26. visible</li>
     </ol>
   `;
   document.querySelector('#answerBox .badge').textContent = 'tap to view';
+  
+  updateAnswerStatus();
 }
-function resetForm(){
-  // Reset radio buttons
-  document.querySelectorAll('input[type="radio"]').forEach(radio => {
-    radio.checked = false;
-  });
-  
-  // Reset text inputs
-  document.querySelectorAll('input.blank').forEach(input => {
-    input.value = '';
-  });
-  
-  // Reset results and answers
-  document.getElementById('results').innerHTML = '';
-  document.getElementById('answerContent').innerHTML = '';
-  document.querySelector('#answerBox .badge').textContent = 'hidden';
-  
-  // Reset answered status in nav
-  document.querySelectorAll('.q-item').forEach(item => {
-    item.classList.remove('answered');
-  });
-}
-// Scroll to question anchor
-function scrollToElement(id){
-  const el = document.getElementById(id);
-  if(el){ 
-    el.scrollIntoView({behavior:'smooth', block:'center'}); 
-  }
-  // Highlight nav item briefly
-  const navs = document.querySelectorAll('.practice-nav .q-item');
-  navs.forEach(n => n.classList.remove('active'));
-  const btn = document.getElementById(id.replace('-anchor','-nav'));
-  if(btn){ 
-    btn.classList.add('active'); 
-    setTimeout(() => btn.classList.remove('active'), 800); 
-  }
-}
-// Mark answered on interaction
-(function(){
-  function markAnswered(qn){
-    const nav = document.getElementById(`q${qn}-nav`);
-    if(!nav) return;
-    let answered = false;
-    
-    // Check radio buttons
-    const radios = document.querySelectorAll(`input[name="q${qn}"]:checked`);
-    answered = radios.length > 0;
-    
-    // Check text inputs
-    if(!answered) {
-      const input = document.querySelector(`input[name="q${qn}"].blank`);
-      if(input) {
-        answered = input.value.trim().length > 0;
-      }
-    }
-    
-    if(answered) nav.classList.add('answered');
-    else nav.classList.remove('answered');
-  }
-  
-  // Monitor radio buttons
-  for(let n=14; n<=22; n++){
-    document.querySelectorAll(`input[name="q${n}"]`).forEach(radio => {
-      radio.addEventListener('change', () => markAnswered(n));
-    });
-  }
-  
-  // Monitor text inputs
-  for(let n=23; n<=26; n++){
-    const input = document.querySelector(`input[name="q${n}"].blank`);
-    if(input) {
-      input.addEventListener('input', () => markAnswered(n));
-    }
-  }
-})();
-</script>
 
-<!-- 练习页面数据传输增强脚本 -->
-<script>
-// 检查是否已经有增强脚本
-if (!window.practicePageEnhancer) {
-    // 动态加载增强脚本
-    const script = document.createElement('script');
-    script.src = '../../js/practice-page-enhancer.js';
-    script.onload = function() {
-        console.log('练习页面增强脚本已加载');
-    };
-    script.onerror = function() {
-        console.error('练习页面增强脚本加载失败');
-        // 降级到内联增强
-        loadInlineEnhancer();
-    };
-    document.head.appendChild(script);
+// 监听答案变化
+document.addEventListener('change', updateAnswerStatus);
+document.addEventListener('input', updateAnswerStatus);
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+  startTimer();
+  updateAnswerStatus(); // 初始化答题状态
+  
+  // 加载保存的主题
+  if (localStorage.getItem('darkMode') === 'true') {
+    document.body.classList.add('dark');
+    document.querySelector('.theme-toggle').textContent = '☀️';
+  }
+});
+
+// 练习页面增强脚本集成
+function loadPracticePageEnhancer() {
+  const script = document.createElement('script');
+  script.src = '../../../js/practice-page-enhancer.js';
+  script.onload = function() {
+    console.log('练习页面增强脚本已加载');
+      };
+  script.onerror = function() {
+    console.error('练习页面增强脚本加载失败');
+    // 降级到内联增强
+    loadInlineEnhancer();
+  };
+  document.head.appendChild(script);
 }
 
 // 内联增强器（降级方案）
 function loadInlineEnhancer() {
-    if (window.practicePageEnhancer) return;
+  if (window.practicePageEnhancer) return;
+  
+  window.practicePageEnhancer = {
+    initialize: function() {
+      console.log('[InlineEnhancer] 内联增强器已初始化');
+          this.setupCommunication();
+      this.setupAnswerListeners();
+      this.interceptSubmit();
+    },
     
-    window.practicePageEnhancer = {
-        initialize: function() {
-            console.log('[InlineEnhancer] 内联增强器已初始化');
-            this.setupCommunication();
-            this.setupAnswerListeners();
-            this.interceptSubmit();
-        },
-        
-        setupCommunication: function() {
-            this.parentWindow = window.opener || window.parent;
-            window.addEventListener('message', (event) => {
-                if (event.data && event.data.type === 'INIT_SESSION') {
-                    this.sessionId = event.data.data.sessionId;
-                    this.sendMessage('SESSION_READY', {
-                        pageType: this.detectPageType(),
-                        url: window.location.href
-                    });
-                }
-            });
-        },
-        
-        detectPageType: function() {
-            const title = document.title || '';
-            if (title.includes('P1')) return 'P1';
-            if (title.includes('P2')) return 'P2';
-            if (title.includes('P3')) return 'P3';
-            return 'unknown';
-        },
-        
-        setupAnswerListeners: function() {
-            this.answers = {};
-            this.startTime = Date.now();
-            
-            document.addEventListener('change', (e) => {
-                if (e.target.name && e.target.name.startsWith('q')) {
-                    this.answers[e.target.name] = e.target.value;
-                }
-            });
-        },
-        
-        interceptSubmit: function() {
-            // 拦截grade函数
-            if (typeof window.grade === 'function') {
-                const originalGrade = window.grade;
-                window.grade = () => {
-                    const result = originalGrade();
-                    setTimeout(() => this.handleSubmit(), 200);
-                    return result;
-                };
-            }
-            
-            // 监听提交按钮
-            document.addEventListener('click', (e) => {
-                if (e.target.tagName === 'BUTTON' && 
-                    (e.target.textContent.includes('Submit') || 
-                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
-                    setTimeout(() => this.handleSubmit(), 300);
-                }
-            });
-        },
-        
-        handleSubmit: function() {
-            const results = {
-                sessionId: this.sessionId,
-                startTime: this.startTime,
-                endTime: Date.now(),
-                duration: Math.round((Date.now() - this.startTime) / 1000),
-                answers: this.answers,
-                scoreInfo: this.extractScore(),
-                pageType: this.detectPageType(),
-                url: window.location.href
-            };
-            
-            this.sendMessage('PRACTICE_COMPLETE', results);
-        },
-        
-        extractScore: function() {
-            const resultsEl = document.getElementById('results');
-            if (!resultsEl) return null;
-            
-            const text = resultsEl.textContent || '';
-            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
-            if (scoreMatch) {
-                const correct = parseInt(scoreMatch[1]);
-                const total = parseInt(scoreMatch[2]);
-                return {
-                    correct: correct,
-                    total: total,
-                    accuracy: total > 0 ? correct / total : 0,
-                    percentage: Math.round((correct / total) * 100),
-                    source: 'inline_extraction'
-                };
-            }
-            return null;
-        },
-        
-        sendMessage: function(type, data) {
-            if (this.parentWindow) {
-                this.parentWindow.postMessage({
-                    type: type,
-                    data: data,
-                    source: 'practice_page'
-                }, '*');
-            }
+    setupCommunication: function() {
+      this.parentWindow = window.opener || window.parent;
+      window.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'INIT_SESSION') {
+          this.sessionId = event.data.data.sessionId;
+          this.sendMessage('SESSION_READY', {
+            pageType: this.detectPageType(),
+            url: window.location.href
+          });
         }
-    };
+      });
+    },
     
-    // 初始化
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            window.practicePageEnhancer.initialize();
-        });
-    } else {
-        window.practicePageEnhancer.initialize();
+    detectPageType: function() {
+      const title = document.title || '';
+      if (title.includes('P1')) return 'P1';
+      if (title.includes('P2')) return 'P2';
+      if (title.includes('P3')) return 'P3';
+      return 'unknown';
+    },
+    
+    setupAnswerListeners: function() {
+      this.answers = {};
+      this.startTime = Date.now();
+      
+      document.addEventListener('change', (e) => {
+        if (e.target.name && e.target.name.startsWith('q')) {
+          this.answers[e.target.name] = e.target.value;
+        }
+      });
+      
+      document.addEventListener('input', (e) => {
+        if (e.target.name && e.target.name.startsWith('q')) {
+          this.answers[e.target.name] = e.target.value;
+        }
+      });
+    },
+    
+    interceptSubmit: function() {
+      // 拦截grade函数
+      if (typeof window.grade === 'function') {
+        const originalGrade = window.grade;
+        window.grade = () => {
+          const result = originalGrade();
+          setTimeout(() => this.handleSubmit(), 200);
+          return result;
+        };
+      }
+      
+      // 监听提交按钮
+      document.addEventListener('click', (e) => {
+        if (e.target.tagName === 'BUTTON' &&
+          (e.target.textContent.includes('Submit') ||
+            e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+          setTimeout(() => this.handleSubmit(), 300);
+        }
+      });
+    },
+    
+    handleSubmit: function() {
+      const results = {
+        sessionId: this.sessionId,
+        startTime: this.startTime,
+        endTime: Date.now(),
+        duration: Math.round((Date.now() - this.startTime) / 1000),
+        answers: this.answers,
+        scoreInfo: this.extractScore(),
+        pageType: this.detectPageType(),
+        url: window.location.href
+      };
+      
+      this.sendMessage('PRACTICE_COMPLETE', results);
+    },
+    
+    extractScore: function() {
+      const resultsEl = document.getElementById('results');
+      if (!resultsEl) return null;
+      
+      const text = resultsEl.textContent || '';
+      const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+      if (scoreMatch) {
+        const correct = parseInt(scoreMatch[1]);
+        const total = parseInt(scoreMatch[2]);
+        return {
+          correct: correct,
+          total: total,
+          accuracy: total > 0 ? correct / total : 0,
+          percentage: Math.round((correct / total) * 100),
+          source: 'inline_extraction'
+        };
+      }
+      return null;
+    },
+    
+    sendMessage: function(type, data) {
+      if (this.parentWindow) {
+        this.parentWindow.postMessage({
+          type: type,
+          data: data,
+          source: 'practice_page'
+        }, '*');
+      }
     }
+  };
+  
+  // 初始化
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      window.practicePageEnhancer.initialize();
+    });
+  } else {
+    window.practicePageEnhancer.initialize();
+  }
 }
+
+// 加载增强脚本
+loadPracticePageEnhancer();
 </script>
 
 </body>

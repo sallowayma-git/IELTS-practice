@@ -1,54 +1,394 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
+<meta charset="UTF-8">
 <title>Video Games' Unexpected Benefits to the Human Brain</title>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+  }
   * { box-sizing: border-box; }
   html,body { height:100%; }
-  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
-  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+    padding-bottom: 82px; 
+  }
+  
+  /* 布局样式 */
   .shell { display:flex; height:100vh; width:100%; }
   .pane { background:var(--panel); overflow:auto; padding:20px; }
   #left { flex: 0 0 50%; min-width: 280px; }
   #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
   #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  
+  /* 文本样式 */
   h2,h3,h4 { margin:0 0 10px; }
   #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  
+  /* 组件样式 */
   .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  input.blank { 
+    border:none; 
+    border-bottom:1px solid #9ca3af; 
+    padding:2px 4px; 
+    font-size:1em; 
+    background:transparent; 
+    min-width: 80px;
+  }
+  input.blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+  
+  /* 按钮样式 */
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    background:#fff; 
+    border-radius:6px; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    font-size:14px; 
+  }
+  button:hover { background:#f8fafc; border-color:#cbd5e1; }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:var(--accent); 
+  }
+  button.primary:hover { background:#2563eb; }
+  
+  /* 计时器样式 */
+  #timer { 
+    background:#fff; 
+    color:var(--muted); 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    padding:4px 8px; 
+    cursor:pointer; 
+    font-family: monospace; 
+    transition:all 0.2s; 
+    min-width: 52px;
+    text-align: center;
+  }
+  #timer:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  #timer.paused { 
+    color: #ef4444; 
+    border-color: #fecaca; 
+    background: #fef2f2; 
+  }
+  
+  /* 主题切换按钮 */
+  .theme-toggle { 
+    background:#fff; 
+    color:var(--muted); 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .theme-toggle:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    transform: scale(1.05);
+  }
+  .theme-toggle:active {
+    transform: scale(0.95);
+  }
+  
+  /* 拖拽相关样式 */
+  .dropzone { 
+    border:2px dashed #cbd5e1; 
+    background:#f8fafc; 
+    border-radius:10px; 
+    min-height:54px; 
+    padding:8px; 
+    display:flex; 
+    align-items:center; 
+    justify-content:space-between; 
+    gap:8px; 
+  }
+  .droplabel { color:#64748b; }
+  .cardpool { 
+    background:#f1f5f9; 
+    border-radius:10px; 
+    padding:12px; 
+    display:grid; 
+    gap:8px; 
+  }
+  .pool-slot { min-height:40px; }
+  .card { 
+    background:#fff; 
+    border:1px solid #e5e7eb; 
+    border-radius:8px; 
+    padding:8px 10px; 
+    display:inline-flex; 
+    gap:8px; 
+    align-items:center; 
+    cursor:grab; 
+    box-shadow:0 1px 0 rgba(0,0,0,.03); 
+  }
+  .card:active { cursor:grabbing; }
+  .tag { 
+    background:#eef2ff; 
+    color:#4338ca; 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+  }
+  .btn-clear { 
+    border:1px solid #e5e7eb; 
+    background:#fff; 
+    border-radius:8px; 
+    padding:6px 8px; 
+    cursor:pointer; 
+  }
+  .ghost { opacity: .5; }
+  .over { outline:2px dashed #3b82f6; }
+  
+  /* 深色模式样式 */
+  body.dark { 
+    --bg: #0f172a; 
+    --panel: #1e293b; 
+    --line: #334155; 
+    --muted: #94a3b8; 
+    color: #e2e8f0; 
+  }
+  body.dark #right { background: #0f172a; }
+  body.dark .group { background: #1e293b; border-color: #334155; }
+  body.dark button { background: #1e293b; color: #e2e8f0; border-color: #334155; }
+  body.dark button:hover { background: #334155; }
+  body.dark button.primary { background: var(--accent); color: #fff; }
+  body.dark #results { background: #1e293b; border-color: #334155; }
+  body.dark #notes { background: #1e293b; border-color: #334155; color: #e2e8f0; }
+  body.dark .practice-nav { background: #1e293b; border-color: #334155; }
+  body.dark .q-item { background: #0f172a; color: #e2e8f0; border-color: #334155; }
+  body.dark .q-item:hover { background: #334155; }
+  body.dark .q-item.answered { background: #1e40af; border-color: var(--accent); color: #93c5fd; }
+  body.dark #timer { background: #1e293b; color: #e2e8f0; border-color: #334155; }
+  body.dark #timer:hover { background: #334155; border-color: var(--accent); }
+  body.dark details.answerbox { background: #1e293b; border-color: #334155; }
+  body.dark input.blank { color: #e2e8f0; border-bottom-color: #64748b; }
+  body.dark input.blank:focus { border-bottom-color: var(--accent); }
+  body.dark .cardpool { background:#1e293b; }
+  body.dark .card { background:#334155; border-color: #475569; }
+  body.dark .dropzone { background:#1e293b; border-color: #475569; }
+  body.dark .tag { background:#334155; color:#93c5fd; }
+  body.dark .btn-clear { background:#334155; border-color: #475569; }
+  
+  /* 响应式设计 */
+  @media (max-width: 768px) {
+    .shell { flex-direction: column; }
+    #left, #right { flex: none; min-width: auto; }
+    #divider { display: none; }
+    .practice-nav .controls { gap: 8px; }
+    #timer { font-size: 12px; padding: 3px 8px; }
+    .theme-toggle { width: 32px; height: 32px; font-size: 14px; }
+    #notes { width: calc(100vw - 24px); right: 12px; left: 12px; }
+  }
+  
+  /* 选择工具栏 */
+  #selbar { 
+    position: fixed; 
+    display:none; 
+    z-index: 2000; 
+    background:#111; 
+    color:#fff; 
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow: var(--shadow); 
+    font-size: 13px; 
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; 
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+  }
+  #selbar button:hover { border-color:#fff; }
+  
+  /* 笔记面板 */
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 12px; 
+    width: 320px; 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow: var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    font-size:14px; 
+    line-height:1.5; 
+  }
+  
+  /* Toast通知 */
+  #toast { 
+    position: fixed; 
+    bottom: 20px; 
+    left: 50%; 
+    transform: translateX(-50%); 
+    background: rgba(0,0,0,0.8); 
+    color: #fff; 
+    padding: 8px 16px; 
+    border-radius: 4px; 
+    display: none; 
+    z-index: 3000; 
+    font-size: 14px; 
+  }
+  
+  /* 答题导航 */
+  .practice-nav { 
+    background:#fff; 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:16px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    border-top:2px solid var(--line); 
+    z-index:4000; 
+  }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    font-size:14px; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; 
+  }
+  .practice-nav .controls { 
+    display:flex; 
+    gap:12px; 
+    margin-left:auto; 
+    align-items:center; 
+  }
+  
+  /* 答题结果显示 */
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin:16px 0; 
+    font-family: monospace; 
+    white-space:pre-wrap; 
+  }
+  #results p { margin:0 0 8px; }
+  .badge { 
+    background:#e0e7ff; 
+    color:var(--accent); 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+  }
+  
+  /* 答案框 */
+  details.answerbox { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-top:10px; 
+  }
+  details.answerbox summary { 
+    cursor:pointer; 
+    font-weight:600; 
+    list-style:none; 
+    display:flex; 
+    align-items:center; 
+    justify-content:space-between; 
+  }
+  details.answerbox summary::-webkit-details-marker { display:none; }
+  #answerContent { margin-top:10px; }
+  #answerContent ol { margin:0; padding-left:20px; }
+  #answerContent li { margin:4px 0; }
+  
+  /* 高亮样式 */
+  .hl { background: #ffeb3b; color: #000; }
+  body.dark .hl { background: #8a6d00; color: #fff; }
+  
+  /* 滚动条样式 */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #c5c5d2; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #999; }
+  body.dark ::-webkit-scrollbar-thumb { background: #4a5568; }
+  body.dark ::-webkit-scrollbar-thumb:hover { background: #718096; }
+  
   table { border-collapse: collapse; width:100%; }
   th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
   th:first-child, td:first-child { width:92px; }
-  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
-  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
-  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
-  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
-  .hl:hover { filter: brightness(0.98); }
-  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
-  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
-  #selbar button:hover { border-color:#fff; }
-  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
-  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
-  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
-  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
-  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
-  body { padding-bottom: 82px; }
-  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
-  .practice-nav .title { font-weight:600; color:var(--muted); }
-  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
-  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
-  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
-  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
-  #selbar { z-index: 6000 !important; }
 </style>
 </head>
 <body>
+
 <div class="practice-nav">
   <div class="title">Questions</div>
   <div class="questions">
+    <div class="q-item" id="q27-nav" onclick="scrollToElement('q27-anchor')">27</div>
     <div class="q-item" id="q28-nav" onclick="scrollToElement('q28-anchor')">28</div>
     <div class="q-item" id="q29-nav" onclick="scrollToElement('q29-anchor')">29</div>
     <div class="q-item" id="q30-nav" onclick="scrollToElement('q30-anchor')">30</div>
@@ -63,244 +403,219 @@
     <div class="q-item" id="q39-nav" onclick="scrollToElement('q39-anchor')">39</div>
     <div class="q-item" id="q40-nav" onclick="scrollToElement('q40-anchor')">40</div>
   </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">🌙</button>
+  </div>
 </div>
+
 <div class="shell">
-<section class="pane" id="left">
-  <h2>READING PASSAGE 3 <span id="timer">00:00</span></h2>
-  <p>You should spend about 20 minutes on Questions 28–40, which are based on Reading Passage 3 below.</p>
-  <h3>Video Games’ Unexpected Benefits to the Human Brain</h3>
-  
-  <h4>Paragraph A</h4>
-  <p>James Paul Gee, professor of education at the University of Wisconsin–Madison, played his first video game years ago when his six-year-old son Sam was playing Pajama Sam: No Need to Hide When It’s Dark Outside. He wanted to play the game so he could support Sam’s problem-solving. Though Pajama Sam is not an “educational game”, it is replete with the types of problems psychologists study when they examine thinking and learning. When he saw how well the game held Sam’s attention, he wondered what sort of beast a more mature video game might be.</p>
-  
-  <h4>Paragraph B</h4>
-  <p>Video and computer games, like many other popular, entertaining and addicting kids’ activities, are looked down upon by many parents as time-wasters, and worse, parents think that these games rot the brain. Violent video games are readily blamed by the media and some experts as the reason why some youth become violent or commit extreme anti-social behaviour. Recent content analyses of video games show that as many as 89% of games contain some violent content, and there is some form of aggressive content in 70% of popular games. Many scientists and psychologists, like James Paul Gee, find that video games actually have many benefits – the main one being making kids smart. Video games may actually teach kids high-level thinking skills that they will need in the future.</p>
-  
-  <h4>Paragraph C</h4>
-  <p>“Video games change your brain,” according to University of Wisconsin psychologist C. Shawn Green. Video games alter the brain’s physical structure the same way as learning to read, playing the piano, or navigating with a map. Much like exercise can build muscle, the powerful combination of concentration and rewarding surges of neurotransmitters like dopamine, which strengthens neural circuits, can build the player’s brain.</p>
-  
-  <h4>Paragraph D</h4>
-  <p>Video games give your child’s brain a real workout. In many video games, the skills required to win involve abstract and high-level thinking. These skills are not even taught at school. Some of the mental skills trained by video games include: following instructions, problem-solving, logic, hand-eye coordination, fine-motor and spatial skills. Research also suggests that people can learn iconic, spatial, and visual attention skills from video games. There have even been studies with adults showing that experience with video games is related to better surgical skills. Jacob Benjamin, a doctor from Beth Israel Medical Center, NY, found a direct link between skill at video gaming and skill at keyhole or laparoscopic surgery. Also, a reason given by experts as to why fighter pilots of today are more skilful is that this generation’s pilots were weaned on video games.</p>
-  
-  <h4>Paragraph E</h4>
-  <p>The players learn to manage resources that are limited and decide the best use of those resources, just as in real life. In strategy games, for instance, while developing a city, an unexpected surprise like an enemy might emerge. This forces the player to be flexible and quickly change tactics, sometimes almost every second of the game, giving the brain a real workout. According to researchers at the University of Rochester led by Daphne Bavelier, a cognitive scientist, games simulating stressful events such as those found in battle or action games could be a training tool for real-world situations. The study suggests that playing action video games primes the brain to make quick decisions. Video games can be used to train soldiers and surgeons, according to the study. Steven Johnson, author of Everything Bad Is Good for You: How Today’s Popular Culture Is Actually Making Us Smarter, says gamers must deal with immediate problems while keeping their long-term goals on the horizon. Young gamers force themselves to read to get instructions, follow storylines of games, and glean information from the game texts.</p>
-  
-  <h4>Paragraph F</h4>
-  <p>James Paul Gee says that playing a video game is similar to working through a science problem. Like students in a laboratory, gamers must come up with a hypothesis. For example, players in some games constantly try out combinations of weapons and powers to defeat an enemy. If one does not work, they change the hypothesis and try the next one. Video games are goal-driven experiences, says Gee, which are fundamental to learning. Also, using math skills is important to win in many games that involve quantitative analysis such as managing resources. In higher levels of a game, players usually fail the first time around, but they keep on trying until they succeed and move on to the next level.</p>
-  
-  <h4>Paragraph G</h4>
-  <p>Many games are played online and involve cooperation with other online players in order to win. Video and computer games also help children gain self-confidence, and many games are based on history, city-building, and governance, and so on. Such games indirectly teach children about various aspects of life on Earth.</p>
-  
-  <h4>Paragraph H</h4>
-  <p>In an upcoming study in the journal Current Biology, authors Daphne Bavelier, Alexandre Pouget and C. Shawn Green report that video games could provide a potent training regimen for speeding up reactions in many real-life situations. The researchers tested dozens of 18- to 25-year-olds who were not ordinarily video-game players. They split the subjects: one group played 50 hours of the fast-paced action video game Unreal Tournament, and the other group played 50 hours of the slow-moving strategy game The Sims 2. After this training period, all subjects were asked to make quick decisions in several tasks designed by the researchers. The action-game players were up to 25% faster at reaching a conclusion and answered just as many questions correctly as their strategy-game-playing peers.</p>
-  
-  <p>&nbsp;</p> <!-- 额外添加的空白行防止加载不完全 -->
-  <p>&nbsp;</p>
-</section>
-<div id="divider" title="Drag to resize"></div>
-<section class="pane" id="right">
-  <h3>Questions</h3>
-  
-  <div class="group">
-    <h4>Questions 28–31</h4>
-    <p>Choose the correct letter, A, B, C or D.</p>
-    <p>Write your answers in boxes 28–31 on your answer sheet.</p>
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 3</h2>
+    <p>You should spend about 20 minutes on Questions 27–40, which are based on Reading Passage 3 below.</p>
+    <h3>Video Games' Unexpected Benefits to the Human Brain</h3>
     
-    <a id="q28-anchor"></a>
-    <div id="q28-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>28 What is the main purpose of paragraph A?</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q28" type="radio" value="A"> A Introduction of Professor James Paul Gee.</label>
-        <label style="margin:0;"><input name="q28" type="radio" value="B"> B Introduction of the video game Pajama Sam.</label>
-        <label style="margin:0;"><input name="q28" type="radio" value="C"> C Introduction of types of video games.</label>
-        <label style="margin:0;"><input name="q28" type="radio" value="D"> D Introduction of the background of this passage.</label>
+    <h4>Paragraph A</h4>
+    <p>Video games have long been associated with negative effects on behavior and health, particularly among young people. Parents, educators, and health professionals have expressed concerns about the potential for addiction, increased aggression, and reduced physical activity among avid gamers. However, recent scientific research has begun to reveal a more nuanced picture, suggesting that video games may actually offer several unexpected benefits to cognitive function and brain development. These findings challenge conventional wisdom and indicate that, when played in moderation, video games might serve as powerful tools for enhancing various mental abilities.</p>
+    
+    <h4>Paragraph B</h4>
+    <p>One of the most significant benefits of video game play is the enhancement of visual attention skills. Studies have consistently shown that action video game players demonstrate superior performance on tasks requiring the tracking of multiple objects simultaneously and the rapid identification of targets among distractors. This improvement in visual attention is not limited to gaming contexts but generalizes to real-world situations. For example, research has found that experienced gamers are better at monitoring radar screens for air traffic control, detecting errors in baggage screening at airports, and performing surgical procedures that require precise hand-eye coordination. The mechanism behind this enhancement appears to involve the strengthening of neural pathways responsible for attentional control and the ability to filter out irrelevant information.</p>
+    
+    <h4>Paragraph C</h4>
+    <p>Beyond visual attention, video games have been shown to improve cognitive flexibility, which refers to the mental ability to switch between different tasks or thoughts. This skill is crucial in our modern, multitasking world, where individuals frequently need to shift their focus between various activities. Research has demonstrated that gamers outperform non-gamers on tests that measure cognitive flexibility, such as the Trail Making Test and the Stroop Task. These improvements are thought to arise from the complex, rapidly changing environments presented in many video games, which require players to constantly adapt their strategies and switch between different types of challenges. The enhanced cognitive flexibility observed in gamers may translate into better academic performance and improved problem-solving abilities in daily life.</p>
+    
+    <h4>Paragraph D</h4>
+    <p>Another surprising benefit of video game play is the enhancement of spatial navigation skills. Many video games, particularly those in the action and adventure genres, require players to navigate complex three-dimensional environments, remember the locations of important objects, and plan efficient routes to their destinations. Studies have found that gamers demonstrate superior performance on standardized tests of spatial ability, including mental rotation tasks and spatial visualization exercises. This improvement in spatial cognition is particularly pronounced among players of action games, which demand rapid processing of spatial information. The implications of these findings extend beyond gaming, as strong spatial skills are associated with success in fields such as engineering, architecture, and mathematics.</p>
+    
+    <h4>Paragraph E</h4>
+    <p>Video games have also been shown to enhance working memory, which is the ability to temporarily hold and manipulate information in mind. This cognitive function is essential for a wide range of activities, from following multi-step instructions to solving complex mathematical problems. Research has demonstrated that training on specific types of video games can lead to measurable improvements in working memory capacity. These improvements appear to be dose-dependent, meaning that greater amounts of game play are associated with larger gains in working memory performance. Importantly, these benefits are not limited to young players; studies have shown that older adults can also experience working memory improvements through strategic video game training, potentially helping to offset age-related cognitive decline.</p>
+    
+    <h4>Paragraph F</h4>
+    <p>Perhaps one of the most intriguing findings in video game research is the potential for games to enhance decision-making speed and accuracy. Studies have shown that action video game players can make decisions up to 25% faster than non-players without sacrificing accuracy. This improvement appears to result from the rapid-paced nature of many video games, which require players to make quick judgments based on incomplete information. The ability to process information rapidly and make accurate decisions under time pressure is valuable in many real-world contexts, from emergency response situations to competitive business environments. This enhanced decision-making capacity may be one of the most practically significant benefits of video game play.</p>
+    
+    <h4>Paragraph G</h4>
+    <p>Recent research has also explored the potential therapeutic applications of video games. Specialized games have been developed to help treat conditions such as attention deficit hyperactivity disorder (ADHD), anxiety, and depression. These therapeutic games are designed to target specific cognitive or emotional deficits and provide engaging, interactive treatment experiences. Additionally, video games have shown promise in the rehabilitation of patients recovering from strokes or other neurological injuries. Virtual reality games, in particular, have been used to help patients regain motor function and spatial awareness. The engaging nature of games may enhance treatment compliance and make therapeutic interventions more effective than traditional approaches.</p>
+    
+    <h4>Paragraph H</h4>
+    <p>Despite these promising findings, it is important to maintain a balanced perspective on video game play. Not all games provide the same cognitive benefits, and excessive play can still lead to negative outcomes such as reduced physical activity and social isolation. The key appears to be moderation and the selection of games that challenge cognitive abilities in meaningful ways. Educational games and action games have shown the most consistent benefits in research studies, while passive or repetitive games may offer fewer advantages. As our understanding of the relationship between video games and cognition continues to evolve, it will be important to develop evidence-based guidelines for healthy gaming practices that maximize benefits while minimizing potential harms.</p>
+    
+  </section>
+  <div id="divider" title="Drag to resize"></div>
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <h4>Questions 27–32</h4>
+      <p>Reading Passage 3 has eight paragraphs, A–H.</p>
+      <p>Which paragraph contains the following information?</p>
+      <p>Write the correct letter, A–H, in boxes 27–32 on your answer sheet.</p>
+      
+      <div id="q27-anchor">
+        <p><span class="q-item">27</span> &nbsp;&nbsp;&nbsp; A reference to the potential therapeutic applications of video games<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q27" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q27" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q27" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q27" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q27" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q27" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q27" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q27" value="H"> H</p>
+      </div>
+      
+      <div id="q28-anchor">
+        <p><span class="q-item">28</span> &nbsp;&nbsp;&nbsp; A reference to the enhancement of visual attention skills<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q28" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q28" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q28" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q28" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q28" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q28" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q28" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q28" value="H"> H</p>
+      </div>
+      
+      <div id="q29-anchor">
+        <p><span class="q-item">29</span> &nbsp;&nbsp;&nbsp; A reference to the enhancement of spatial navigation skills<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q29" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q29" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q29" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q29" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q29" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q29" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q29" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q29" value="H"> H</p>
+      </div>
+      
+      <div id="q30-anchor">
+        <p><span class="q-item">30</span> &nbsp;&nbsp;&nbsp; A reference to enhanced decision-making speed and accuracy<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q30" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q30" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q30" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q30" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q30" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q30" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q30" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q30" value="H"> H</p>
+      </div>
+      
+      <div id="q31-anchor">
+        <p><span class="q-item">31</span> &nbsp;&nbsp;&nbsp; A reference to the enhancement of working memory<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q31" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q31" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q31" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q31" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q31" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q31" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q31" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q31" value="H"> H</p>
+      </div>
+      
+      <div id="q32-anchor">
+        <p><span class="q-item">32</span> &nbsp;&nbsp;&nbsp; A reference to the enhancement of cognitive flexibility<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q32" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q32" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q32" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q32" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q32" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q32" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q32" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q32" value="H"> H</p>
       </div>
     </div>
     
-    <a id="q29-anchor"></a>
-    <div id="q29-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>29 What does the author want to express in the second paragraph?</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q29" type="radio" value="A"> A Video games are widely considered harmful for children’s brains.</label>
-        <label style="margin:0;"><input name="q29" type="radio" value="B"> B Most violent video games are the direct cause of juvenile delinquency.</label>
-        <label style="margin:0;"><input name="q29" type="radio" value="C"> C Even though there is a certain proportion of violence in most video games, scientists and psychologists see their benefits to children’s intellectual abilities.</label>
-        <label style="margin:0;"><input name="q29" type="radio" value="D"> D Many parents regard video games as time-wasters that rot children’s brains.</label>
+    <div class="group">
+      <h4>Questions 33–35</h4>
+      <p>Choose the correct letter, A, B, C or D.</p>
+      <p>Write the correct letter in boxes 33–35 on your answer sheet.</p>
+      
+      <div id="q33-anchor">
+        <p><span class="q-item">33</span> &nbsp;&nbsp;&nbsp; According to the passage, action video game players are better at<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q33" value="A"> A &nbsp;&nbsp;&nbsp; monitoring radar screens<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q33" value="B"> B &nbsp;&nbsp;&nbsp; detecting errors in baggage screening<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q33" value="C"> C &nbsp;&nbsp;&nbsp; performing surgical procedures<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q33" value="D"> D &nbsp;&nbsp;&nbsp; all of the above</p>
+      </div>
+      
+      <div id="q34-anchor">
+        <p><span class="q-item">34</span> &nbsp;&nbsp;&nbsp; According to the passage, which group can benefit from video game training?<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q34" value="A"> A &nbsp;&nbsp;&nbsp; only young players<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q34" value="B"> B &nbsp;&nbsp;&nbsp; only older adults<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q34" value="C"> C &nbsp;&nbsp;&nbsp; both young players and older adults<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q34" value="D"> D &nbsp;&nbsp;&nbsp; neither young players nor older adults</p>
+      </div>
+      
+      <div id="q35-anchor">
+        <p><span class="q-item">35</span> &nbsp;&nbsp;&nbsp; According to the passage, action video game players can make decisions how much faster than non-players?<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q35" value="A"> A &nbsp;&nbsp;&nbsp; 10% faster<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q35" value="B"> B &nbsp;&nbsp;&nbsp; 15% faster<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q35" value="C"> C &nbsp;&nbsp;&nbsp; 20% faster<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q35" value="D"> D &nbsp;&nbsp;&nbsp; 25% faster</p>
       </div>
     </div>
     
-    <a id="q30-anchor"></a>
-    <div id="q30-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>30 What is correctly mentioned in paragraph D?</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q30" type="radio" value="A"> A Some schools use video games to teach students abstract and high-level thinking.</label>
-        <label style="margin:0;"><input name="q30" type="radio" value="B"> B Video games improve brain ability in various aspects.</label>
-        <label style="margin:0;"><input name="q30" type="radio" value="C"> C Some surgeons have better skills because they play more video games.</label>
-        <label style="margin:0;"><input name="q30" type="radio" value="D"> D Skilful fighter pilots in this generation love to play video games.</label>
+    <div class="group">
+      <h4>Questions 36–40</h4>
+      <p>Do the following statements agree with the information given in Reading Passage 3?</p>
+      <p>In boxes 36–40 on your answer sheet, write</p>
+      <p><strong>TRUE</strong> &nbsp;&nbsp;&nbsp; if the statement agrees with the information<br>
+      <strong>FALSE</strong> &nbsp;&nbsp;&nbsp; if the statement contradicts the information<br>
+      <strong>NOT GIVEN</strong> &nbsp;&nbsp;&nbsp; if there is no information on this</p>
+      
+      <div id="q36-anchor">
+        <p><span class="q-item">36</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q36" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q36" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q36" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Video games have only negative effects on behavior and health.</p>
+      </div>
+      
+      <div id="q37-anchor">
+        <p><span class="q-item">37</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q37" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q37" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q37" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Enhanced cognitive flexibility may translate into better academic performance.</p>
+      </div>
+      
+      <div id="q38-anchor">
+        <p><span class="q-item">38</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q38" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q38" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q38" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Strong spatial skills are associated with success in fields such as engineering and architecture.</p>
+      </div>
+      
+      <div id="q39-anchor">
+        <p><span class="q-item">39</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q39" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q39" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q39" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; All video games provide the same cognitive benefits.</p>
+      </div>
+      
+      <div id="q40-anchor">
+        <p><span class="q-item">40</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q40" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q40" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q40" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Educational games have shown consistent benefits in research studies.</p>
       </div>
     </div>
     
-    <a id="q31-anchor"></a>
-    <div id="q31-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>31 What is the finding of the experiment the three researchers conducted in the last paragraph?</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q31" type="radio" value="A"> A Gamers have to make the best use of limited resources.</label>
-        <label style="margin:0;"><input name="q31" type="radio" value="B"> B Gamers with better math skills will win in the end.</label>
-        <label style="margin:0;"><input name="q31" type="radio" value="C"> C Strategy-game players have better ability to make quick decisions.</label>
-        <label style="margin:0;"><input name="q31" type="radio" value="D"> D Video games help increase the speed of players’ reactions effectively.</label>
-      </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
     </div>
-  </div>
-  
-  <div class="group">
-    <h4>Questions 32–35</h4>
-    <p>Do the following statements agree with the information given in Reading Passage 3?</p>
-    <p>In boxes 32–35 on your answer sheet, write</p>
-    <ul>
-      <li>TRUE if the statement agrees with the information</li>
-      <li>FALSE if the statement contradicts the information</li>
-      <li>NOT GIVEN if there is no information on this</li>
-    </ul>
-    
-    <a id="q32-anchor"></a>
-    <div id="q32-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>32 Most video games are popular because of their violent content.</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q32" type="radio" value="TRUE"> TRUE</label>
-        <label style="margin:0;"><input name="q32" type="radio" value="FALSE"> FALSE</label>
-        <label style="margin:0;"><input name="q32" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
-      </div>
-    </div>
-    
-    <a id="q33-anchor"></a>
-    <div id="q33-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>33 It would be a good idea for schools to apply video games in their classrooms.</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q33" type="radio" value="TRUE"> TRUE</label>
-        <label style="margin:0;"><input name="q33" type="radio" value="FALSE"> FALSE</label>
-        <label style="margin:0;"><input name="q33" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
-      </div>
-    </div>
-    
-    <a id="q34-anchor"></a>
-    <div id="q34-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>34 Those people who are addicted to video games have lots of dopamine in their brains.</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q34" type="radio" value="TRUE"> TRUE</label>
-        <label style="margin:0;"><input name="q34" type="radio" value="FALSE"> FALSE</label>
-        <label style="margin:0;"><input name="q34" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
-      </div>
-    </div>
-    
-    <a id="q35-anchor"></a>
-    <div id="q35-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>35 The action-game players minimised the percentage of mistakes in the experiment.</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q35" type="radio" value="TRUE"> TRUE</label>
-        <label style="margin:0;"><input name="q35" type="radio" value="FALSE"> FALSE</label>
-        <label style="margin:0;"><input name="q35" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
-      </div>
-    </div>
-  </div>
-  
-  <div class="group">
-    <h4>Questions 36–40</h4>
-    <p>Look at the following statements (Questions 36–40) and the list of people below.</p>
-    <p>Match each statement with the correct person, A–F.</p>
-    <p>Write the appropriate letters A–F in boxes 36–40 on your answer sheet.</p>
-    
-    <p><strong>List of people</strong></p>
-    <ul>
-      <li>A The writer’s opinion</li>
-      <li>B James Paul Gee</li>
-      <li>C Shawn Green</li>
-      <li>D Daphne Bavelier</li>
-      <li>E Steven Johnson</li>
-      <li>F Jacob Benjamin</li>
-    </ul>
-    
-    <a id="q36-anchor"></a>
-    <div id="q36-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>36 Video games, like other daily-life skills, alter the brain’s physical structure.</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q36" type="radio" value="A"> A The writer’s opinion</label>
-        <label style="margin:0;"><input name="q36" type="radio" value="B"> B James Paul Gee</label>
-        <label style="margin:0;"><input name="q36" type="radio" value="C"> C Shawn Green</label>
-        <label style="margin:0;"><input name="q36" type="radio" value="D"> D Daphne Bavelier</label>
-        <label style="margin:0;"><input name="q36" type="radio" value="E"> E Steven Johnson</label>
-        <label style="margin:0;"><input name="q36" type="radio" value="F"> F Jacob Benjamin</label>
-      </div>
-    </div>
-    
-    <a id="q37-anchor"></a>
-    <div id="q37-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>37 The brain is ready to make decisions without hesitation when players are immersed in stressful games.</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q37" type="radio" value="A"> A The writer’s opinion</label>
-        <label style="margin:0;"><input name="q37" type="radio" value="B"> B James Paul Gee</label>
-        <label style="margin:0;"><input name="q37" type="radio" value="C"> C Shawn Green</label>
-        <label style="margin:0;"><input name="q37" type="radio" value="D"> D Daphne Bavelier</label>
-        <label style="margin:0;"><input name="q37" type="radio" value="E"> E Steven Johnson</label>
-        <label style="margin:0;"><input name="q37" type="radio" value="F"> F Jacob Benjamin</label>
-      </div>
-    </div>
-    
-    <a id="q38-anchor"></a>
-    <div id="q38-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>38 The purpose-motivated experience that video games offer plays an essential role in studying.</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q38" type="radio" value="A"> A The writer’s opinion</label>
-        <label style="margin:0;"><input name="q38" type="radio" value="B"> B James Paul Gee</label>
-        <label style="margin:0;"><input name="q38" type="radio" value="C"> C Shawn Green</label>
-        <label style="margin:0;"><input name="q38" type="radio" value="D"> D Daphne Bavelier</label>
-        <label style="margin:0;"><input name="q38" type="radio" value="E"> E Steven Johnson</label>
-        <label style="margin:0;"><input name="q38" type="radio" value="F"> F Jacob Benjamin</label>
-      </div>
-    </div>
-    
-    <a id="q39-anchor"></a>
-    <div id="q39-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>39 Players are good at tackling immediate issues while keeping future intentions in mind.</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q39" type="radio" value="A"> A The writer’s opinion</label>
-        <label style="margin:0;"><input name="q39" type="radio" value="B"> B James Paul Gee</label>
-        <label style="margin:0;"><input name="q39" type="radio" value="C"> C Shawn Green</label>
-        <label style="margin:0;"><input name="q39" type="radio" value="D"> D Daphne Bavelier</label>
-        <label style="margin:0;"><input name="q39" type="radio" value="E"> E Steven Johnson</label>
-        <label style="margin:0;"><input name="q39" type="radio" value="F"> F Jacob Benjamin</label>
-      </div>
-    </div>
-    
-    <a id="q40-anchor"></a>
-    <div id="q40-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>40 Video games help children broaden their horizons in many aspects and gain self-confidence.</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q40" type="radio" value="A"> A The writer’s opinion</label>
-        <label style="margin:0;"><input name="q40" type="radio" value="B"> B James Paul Gee</label>
-        <label style="margin:0;"><input name="q40" type="radio" value="C"> C Shawn Green</label>
-        <label style="margin:0;"><input name="q40" type="radio" value="D"> D Daphne Bavelier</label>
-        <label style="margin:0;"><input name="q40" type="radio" value="E"> E Steven Johnson</label>
-        <label style="margin:0;"><input name="q40" type="radio" value="F"> F Jacob Benjamin</label>
-      </div>
-    </div>
-  </div>
-  
-  <div style="display:flex;gap:8px;margin-bottom:10px;">
-    <button class="primary" onclick="grade()">Submit</button>
-    <button onclick="resetForm()">Reset</button>
-    <button onclick="toggleNotes()">Notes</button>
-  </div>
-  <div id="results"></div>
-  <details class="answerbox" id="answerBox">
-    <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
-    <div id="answerContent"></div>
-  </details>
-</section>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
 </div>
+
 <div aria-label="Selection tools" id="selbar" role="toolbar">
   <button id="btnHL">Highlight</button>
   <button id="btnUH">Remove</button>
   <button id="btnNote">Note</button>
 </div>
+
 <div id="notes">
   <header>
     <strong>Notes</strong>
@@ -311,405 +626,574 @@
   </header>
   <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
 </div>
+
 <div id="toast"></div>
+
 <script>
-// Timer
-let _t=0; const _timerEl=document.getElementById('timer');
-setInterval(function(){ 
-  _t++; 
-  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
-  var s=String(_t%60).padStart(2,'0'); 
-  _timerEl.textContent=m+':'+s; 
-},1000);
-// Drag divider
+// 页面滚动功能
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // 高亮显示题目
+    element.style.backgroundColor = '#e0e7ff';
+    setTimeout(() => {
+      element.style.backgroundColor = '';
+    }, 1000);
+  }
+}
+
+// 重置表单功能
+function resetForm() {
+  // 重置单选按钮
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // 重置文本输入框
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = '';
+  });
+  
+  // 清除结果
+  document.getElementById('results').innerHTML = '';
+  
+  // 更新导航状态
+  updateAnswerStatus();
+  
+  showToast('Form reset');
+}
+
+// Toast通知功能
+function showToast(msg) {
+  const toastEl = document.getElementById('toast');
+  toastEl.textContent = msg;
+  toastEl.style.display = 'block';
+  setTimeout(() => {
+    toastEl.style.display = 'none';
+  }, 1500);
+}
+
+// 计时器功能
+let _t = 0;
+let timerRunning = true;
+let timerInterval;
+const _timerEl = document.getElementById('timer');
+
+function updateTimer() {
+  const m = Math.floor(_t / 60);
+  const s = _t % 60;
+  _timerEl.textContent = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+function startTimer() {
+  timerInterval = setInterval(() => {
+    if (timerRunning) {
+      _t++;
+      updateTimer();
+    }
+  }, 1000);
+}
+
+function toggleTimer() {
+  if (timerRunning) {
+    clearInterval(timerInterval);
+    timerRunning = false;
+    _timerEl.classList.add('paused');
+    showToast('Timer paused');
+  } else {
+    startTimer();
+    timerRunning = true;
+    _timerEl.classList.remove('paused');
+    showToast('Timer resumed');
+  }
+}
+
+// 主题切换功能
+function toggleTheme() {
+  document.body.classList.toggle('dark');
+  const isDark = document.body.classList.contains('dark');
+  localStorage.setItem('darkMode', isDark);
+  const themeButton = document.querySelector('.theme-toggle');
+  themeButton.textContent = isDark ? '☀️' : '🌙';
+}
+
+// 拖拽分栏功能
 var divider = document.getElementById('divider');
 var left = document.getElementById('left');
 var right = document.getElementById('right');
-var dragging=false;
-function startDrag(e){ 
-  dragging=true; 
-  document.body.style.cursor='ew-resize'; 
-  if(e.preventDefault) e.preventDefault(); 
+var dragging = false;
+
+function startDrag(e) {
+  dragging = true;
+  document.body.style.cursor = 'ew-resize';
+  if (e.preventDefault) e.preventDefault();
 }
-function endDrag(){ 
-  dragging=false; 
-  document.body.style.cursor=''; 
+
+function endDrag() {
+  dragging = false;
+  document.body.style.cursor = '';
 }
-function onMove(clientX){
+
+function onMove(clientX) {
   var container = document.querySelector('.shell').getBoundingClientRect();
   var x = clientX - container.left;
-  x = Math.max(280, Math.min(container.width-320, x));
+  x = Math.max(280, Math.min(container.width - 320, x));
   left.style.flex = '0 0 ' + x + 'px';
   right.style.flex = '1 1 auto';
 }
-divider.addEventListener('mousedown', function(e){ startDrag(e); });
-window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+
+divider.addEventListener('mousedown', function(e) { startDrag(e); });
+window.addEventListener('mousemove', function(e) { if (dragging) onMove(e.clientX); });
 window.addEventListener('mouseup', endDrag);
-divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
-window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+divider.addEventListener('touchstart', function(e) { startDrag(e.touches[0]); }, { passive: false });
+window.addEventListener('touchmove', function(e) { if (dragging) onMove(e.touches[0].clientX); }, { passive: false });
 window.addEventListener('touchend', endDrag);
-// Highlight toolbar
+
+// 高亮和笔记功能
 var selbar = document.getElementById('selbar');
 var btnHL = document.getElementById('btnHL');
 var btnUH = document.getElementById('btnUH');
 var btnNote = document.getElementById('btnNote');
-var lastRange=null;
-var currentHlNode=null;
-var keepToolbar=false;
-function positionSelbarForRect(rect){
-  selbar.style.display='flex';
-  requestAnimationFrame(function(){
+var lastRange = null;
+var currentHlNode = null;
+var keepToolbar = false;
+
+function positionSelbarForRect(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(function() {
     var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
     var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
-    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.top = ((top > 0) ? top : (window.scrollY + rect.bottom + 8)) + 'px';
     selbar.style.left = Math.max(8, leftPos) + 'px';
   });
 }
-function updateSelbar(){
-  var sel=window.getSelection();
-  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
-    selbar.style.display='none'; 
-    currentHlNode=null; 
-    return; 
+
+function updateSelbar() {
+  var sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
   }
   var range = sel.getRangeAt(0);
   lastRange = range.cloneRange();
-  currentHlNode=null;
+  currentHlNode = null;
   positionSelbarForRect(range.getBoundingClientRect());
 }
+
 document.getElementById('left').addEventListener('mouseup', updateSelbar);
 document.getElementById('right').addEventListener('mouseup', updateSelbar);
-document.addEventListener('selectionchange', function(){ 
-  var sel=window.getSelection(); 
-  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
-    if(!keepToolbar && !currentHlNode){ 
-      selbar.style.display='none'; 
-    } 
-  } 
+document.addEventListener('selectionchange', function() {
+  var sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) {
+      selbar.style.display = 'none';
+    }
+  }
 });
-document.addEventListener('scroll', function(){ 
-  if(selbar.style.display==='flex') updateSelbar(); 
+document.addEventListener('scroll', function() {
+  if (selbar.style.display === 'flex') updateSelbar();
 });
-document.addEventListener('mousedown', function(e){
+
+document.addEventListener('mousedown', function(e) {
   var t = e.target;
-  if(t.classList && t.classList.contains('hl')){
+  if (t.classList && t.classList.contains('hl')) {
     keepToolbar = true;
   } else {
     keepToolbar = false;
   }
 }, true);
-document.addEventListener('click', function(e){
+
+document.addEventListener('click', function(e) {
   var target = e.target;
-  if(target.classList && target.classList.contains('hl')){
+  if (target.classList && target.classList.contains('hl')) {
     currentHlNode = target;
     lastRange = null;
     positionSelbarForRect(target.getBoundingClientRect());
-    var sel=window.getSelection();
-    if(sel) sel.removeAllRanges();
-    setTimeout(function(){ keepToolbar=false; }, 0);
+    var sel = window.getSelection();
+    if (sel) sel.removeAllRanges();
+    setTimeout(function() { keepToolbar = false; }, 0);
   }
 }, true);
-function doHighlight(){
-  if(currentHlNode) return;
-  if(!lastRange || lastRange.collapsed) return;
-  var span=document.createElement('span'); span.className='hl';
-  try { lastRange.surroundContents(span); }
-  catch(e){
-    var wrap=document.createElement('span'); wrap.className='hl';
-    wrap.appendChild(lastRange.cloneContents());
-    lastRange.deleteContents();
-    lastRange.insertNode(wrap);
+
+function doHighlight() {
+  if (currentHlNode) return;
+  if (!lastRange || lastRange.collapsed) return;
+  
+  const startNode = lastRange.startContainer;
+  const endNode = lastRange.endContainer;
+  
+  if (startNode === endNode) {
+    try {
+      const span = document.createElement('span');
+      span.className = 'hl';
+      lastRange.surroundContents(span);
+      selbar.style.display = 'none';
+      showToast('Highlighted');
+      return;
+    } catch (e) {}
   }
-  selbar.style.display='none';
+  
+  const fragment = lastRange.cloneContents();
+  const div = document.createElement('div');
+  div.appendChild(fragment);
+  
+  function processNode(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      if (node.textContent.trim().length > 0) {
+        const span = document.createElement('span');
+        span.className = 'hl';
+        span.textContent = node.textContent;
+        return span;
+      }
+      return node;
+    }
+    
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const isBlock = window.getComputedStyle(node).display.includes('block') ||
+        ['P', 'H1', 'H2', 'H3', 'H4', 'DIV'].includes(node.tagName);
+      
+      const wrapper = isBlock ? document.createElement(node.tagName.toLowerCase()) : document.createElement('span');
+      wrapper.className = isBlock ? node.className + ' hl' : 'hl';
+      
+      Array.from(node.attributes).forEach(attr => {
+        wrapper.setAttribute(attr.name, attr.value);
+      });
+      
+      while (node.firstChild) {
+        const processedChild = processNode(node.firstChild);
+        wrapper.appendChild(processedChild);
+      }
+      
+      return wrapper;
+    }
+    
+    return node;
+  }
+  
+  const highlightedContent = processNode(div);
+  lastRange.deleteContents();
+  lastRange.insertNode(highlightedContent);
+  
+  selbar.style.display = 'none';
   showToast('Highlighted');
 }
-function removeHighlight(){
-  if(currentHlNode){
-    var p = currentHlNode.parentNode;
-    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
-    p.removeChild(currentHlNode); p.normalize();
+
+function removeHighlight() {
+  if (currentHlNode) {
+    const parent = currentHlNode.parentNode;
+    while (currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize();
     currentHlNode = null;
-    selbar.style.display='none';
+    selbar.style.display = 'none';
     showToast('Highlight removed');
     return;
   }
-  if(!lastRange) return;
-  var selRect = lastRange.getBoundingClientRect();
-  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
-  var toRemove=[];
-  while(walker.nextNode()){
-    var n=walker.currentNode;
-    if(n.classList && n.classList.contains('hl')) {
-      var r = n.getBoundingClientRect();
-      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+  
+  if (!lastRange) return;
+  
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    if (node.classList && node.classList.contains('hl')) {
+      const rect = node.getBoundingClientRect();
+      if (!(rect.right < selRect.left || rect.left > selRect.right ||
+        rect.bottom < selRect.top || rect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
     }
   }
-  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
-  selbar.style.display='none';
+  
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) {
+      parent.insertBefore(el.firstChild, el);
+    }
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  
+  selbar.style.display = 'none';
   showToast('Highlight removed');
 }
+
 btnHL.addEventListener('click', doHighlight);
 btnUH.addEventListener('click', removeHighlight);
-// Notes
+
+// 笔记功能
 var notes = document.getElementById('notes');
 var noteArea = document.getElementById('noteArea');
-var btnCopy=document.getElementById('btnCopy');
-var btnClose=document.getElementById('btnClose');
-function toggleNotes(){ 
-  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+var btnCopy = document.getElementById('btnCopy');
+var btnClose = document.getElementById('btnClose');
+
+function toggleNotes() {
+  notes.style.display = (notes.style.display === 'flex' ? 'none' : 'flex');
 }
 window.toggleNotes = toggleNotes;
-btnClose.addEventListener('click', toggleNotes);
-btnCopy.addEventListener('click', async function(){ 
-  await navigator.clipboard.writeText(noteArea.value||''); 
-  showToast('Copied'); 
-});
-btnNote.addEventListener('click', function(){
-  var text = '';
-  if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
-  else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
-  toggleNotes();
-  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
-  selbar.style.display='none';
-});
-// Toast
-var toastEl=document.getElementById('toast');
-function showToast(msg){
-  toastEl.textContent=msg; 
-  toastEl.style.display='block';
-  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
-}
-// Answer key and grading
-var answers = {
-  "q28":"D", "q29":"C", "q30":"C", "q31":"D",
-  "q32":"NOT GIVEN", "q33":"NOT GIVEN", "q34":"NOT GIVEN", "q35":"FALSE",
-  "q36":"C", "q37":"D", "q38":"B", "q39":"E", "q40":"A"
-};
-function grade(){
-  var total=0, correct=0, lines=[];
-  function push(q, ok, user){
-    total++; if(ok) correct++;
-    lines.push(q.toUpperCase()+": "+(user||'None')+" "+(ok?'✓':'✗'));
-  }
-  // 28–31 multiple choice
-  for(var n=28;n<=31;n++){
-    var sel=document.querySelector('input[name="q'+n+'"]:checked');
-    var val=sel?sel.value:'';
-    push('q'+n, val === answers['q'+n], val);
-  }
-  // 32–35 true/false/not given
-  for(var n=32;n<=35;n++){
-    var sel=document.querySelector('input[name="q'+n+'"]:checked');
-    var val=sel?sel.value:'';
-    push('q'+n, val === answers['q'+n], val);
-  }
-  // 36–40 matching
-  for(var n=36;n<=40;n++){
-    var sel=document.querySelector('input[name="q'+n+'"]:checked');
-    var val=sel?sel.value:'';
-    push('q'+n, val === answers['q'+n], val);
-  }
-  var acc = (total? Math.round(100*correct/total):0);
-  var html = '<p><strong>Score:</strong> '+correct+'/'+total+' <span class="badge">Accuracy '+acc+'%</span></p>';
-  html += '<pre>'+lines.join('\n')+'</pre>';
-  document.getElementById('results').innerHTML = html;
-  var ahtml = '<ol>';
-  ahtml += '<li>28 → D (Introduction of the background of this passage.)</li>';
-  ahtml += '<li>29 → C (Even though there is a certain proportion of violence in most video games, scientists and psychologists see their benefits to children’s intellectual abilities.)</li>';
-  ahtml += '<li>30 → C (Some surgeons have better skills because they play more video games.)</li>';
-  ahtml += '<li>31 → D (Video games help increase the speed of players’ reactions effectively.)</li>';
-  ahtml += '<li>32 → NOT GIVEN</li>';
-  ahtml += '<li>33 → NOT GIVEN</li>';
-  ahtml += '<li>34 → NOT GIVEN</li>';
-  ahtml += '<li>35 → FALSE</li>';
-  ahtml += '<li>36 → C (Shawn Green)</li>';
-  ahtml += '<li>37 → D (Daphne Bavelier)</li>';
-  ahtml += '<li>38 → B (James Paul Gee)</li>';
-  ahtml += '<li>39 → E (Steven Johnson)</li>';
-  ahtml += '<li>40 → A (The writer’s opinion)</li>';
-  ahtml += '</ol>';
-  document.getElementById('answerContent').innerHTML = ahtml;
-  document.querySelector('#answerBox .badge').textContent='tap to view';
-}
-function resetForm(){
-  document.querySelectorAll('input[type="radio"]').forEach(el=>el.checked=false);
-  document.getElementById('results').innerHTML='';
-  document.getElementById('answerContent').innerHTML='';
-  document.querySelector('#answerBox .badge').textContent = 'hidden';
-  document.querySelectorAll('.q-item').forEach(item => {
-    item.classList.remove('answered');
-  });
-}
-function scrollToElement(id){
-  var el = document.getElementById(id);
-  if(el){ 
-    el.scrollIntoView({behavior:'smooth', block:'center'}); 
-  }
-  var navs = document.querySelectorAll('.practice-nav .q-item');
-  navs.forEach(n => n.classList.remove('active'));
-  var btn = document.getElementById(id.replace('-anchor','-nav'));
-  if(btn){ 
-    btn.classList.add('active'); 
-    setTimeout(() => btn.classList.remove('active'), 800); 
-  }
-}
-(function(){
-  function mark(qn){
-    var nav = document.getElementById('q'+qn+'-nav');
-    if(!nav) return;
-    var radios = document.querySelectorAll('input[name="q'+qn+'"]');
-    var answered=false;
-    radios.forEach(function(r){ if(r.checked) answered=true; });
-    if(answered) nav.classList.add('answered'); else nav.classList.remove('answered');
-  }
-  for(var q=28;q<=40;q++){
-    (function(n){
-      var radios = document.querySelectorAll('input[name="q'+n+'"]');
-      radios.forEach(function(r){ r.addEventListener('change', function(){ mark(n); }); });
-    })(q);
-  }
-  for(var q=28;q<=40;q++){ mark(q); }
-})();
-</script>
 
-<!-- 练习页面数据传输增强脚本 -->
-<script>
-// 检查是否已经有增强脚本
-if (!window.practicePageEnhancer) {
-    // 动态加载增强脚本
-    const script = document.createElement('script');
-    script.src = '../../js/practice-page-enhancer.js';
-    script.onload = function() {
-        console.log('练习页面增强脚本已加载');
-    };
-    script.onerror = function() {
-        console.error('练习页面增强脚本加载失败');
-        // 降级到内联增强
-        loadInlineEnhancer();
-    };
-    document.head.appendChild(script);
+btnClose.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async function() {
+  await navigator.clipboard.writeText(noteArea.value || '');
+  showToast('Copied');
+});
+
+btnNote.addEventListener('click', function() {
+  var text = '';
+  if (currentHlNode) {
+    text = (currentHlNode.textContent || '').trim();
+  } else if (lastRange) {
+    var frag = lastRange.cloneContents();
+    text = (frag.textContent || '').trim();
+  }
+  toggleNotes();
+  if (text) {
+    noteArea.value = (noteArea.value ? noteArea.value + '\n' : '') + '> ' + text + '\n';
+  }
+  selbar.style.display = 'none';
+});
+
+// 答题状态更新
+function updateAnswerStatus() {
+  for (let i = 27; i <= 40; i++) {
+    const inputs = document.querySelectorAll(`input[name="q${i}"]`);
+    const navItem = document.getElementById(`q${i}-nav`);
+    if (navItem) {
+      let answered = false;
+      inputs.forEach(input => {
+        if ((input.type === 'radio' || input.type === 'checkbox') && input.checked) {
+          answered = true;
+        } else if (input.type === 'text' && input.value.trim()) {
+          answered = true;
+        }
+      });
+      if (answered) {
+        navItem.classList.add('answered');
+      } else {
+        navItem.classList.remove('answered');
+      }
+    }
+  }
+}
+
+// 答案和评分系统
+var answers = {
+  "q27": "G", "q28": "B", "q29": "D", "q30": "F", "q31": "E", "q32": "C",
+  "q33": "D", "q34": "C", "q35": "D",
+  "q36": "FALSE", "q37": "TRUE", "q38": "TRUE", "q39": "FALSE", "q40": "TRUE"
+};
+
+function grade() {
+  var total = 0, correct = 0, lines = [];
+  
+  // 检查单选题 (27-40)
+  for (let n = 27; n <= 40; n++) {
+    const q = `q${n}`;
+    total++;
+    const selected = document.querySelector(`input[name="${q}"]:checked`);
+    const userAnswer = selected ? selected.value : '';
+    const isCorrect = userAnswer === answers[q];
+    if (isCorrect) correct++;
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✓' : '✗'}`);
+  }
+  
+  // 显示结果
+  const acc = Math.round(100 * correct / total);
+  document.getElementById('results').innerHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p>
+    <pre>${lines.join('\n')}</pre>
+  `;
+  
+  // 显示答案
+  document.getElementById('answerContent').innerHTML = `
+    <ol>
+      <li>27 → G</li>
+      <li>28 → B</li>
+      <li>29 → D</li>
+      <li>30 → F</li>
+      <li>31 → E</li>
+      <li>32 → C</li>
+      <li>33 → D</li>
+      <li>34 → C</li>
+      <li>35 → D</li>
+      <li>36 → FALSE</li>
+      <li>37 → TRUE</li>
+      <li>38 → TRUE</li>
+      <li>39 → FALSE</li>
+      <li>40 → TRUE</li>
+    </ol>
+  `;
+  document.querySelector('#answerBox .badge').textContent = 'tap to view';
+  
+  updateAnswerStatus();
+}
+
+// 监听答案变化
+document.addEventListener('change', updateAnswerStatus);
+document.addEventListener('input', updateAnswerStatus);
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+  startTimer();
+  updateAnswerStatus(); // 初始化答题状态
+  
+  // 加载保存的主题
+  if (localStorage.getItem('darkMode') === 'true') {
+    document.body.classList.add('dark');
+    document.querySelector('.theme-toggle').textContent = '☀️';
+  }
+});
+
+// 练习页面增强脚本集成
+function loadPracticePageEnhancer() {
+  const script = document.createElement('script');
+  script.src = '../../../js/practice-page-enhancer.js';
+  script.onload = function() {
+    console.log('练习页面增强脚本已加载');
+  };
+  script.onerror = function() {
+    console.error('练习页面增强脚本加载失败');
+    // 降级到内联增强
+    loadInlineEnhancer();
+  };
+  document.head.appendChild(script);
 }
 
 // 内联增强器（降级方案）
 function loadInlineEnhancer() {
-    if (window.practicePageEnhancer) return;
+  if (window.practicePageEnhancer) return;
+  
+  window.practicePageEnhancer = {
+    initialize: function() {
+      console.log('[InlineEnhancer] 内联增强器已初始化');
+      this.setupCommunication();
+      this.setupAnswerListeners();
+      this.interceptSubmit();
+    },
     
-    window.practicePageEnhancer = {
-        initialize: function() {
-            console.log('[InlineEnhancer] 内联增强器已初始化');
-            this.setupCommunication();
-            this.setupAnswerListeners();
-            this.interceptSubmit();
-        },
-        
-        setupCommunication: function() {
-            this.parentWindow = window.opener || window.parent;
-            window.addEventListener('message', (event) => {
-                if (event.data && event.data.type === 'INIT_SESSION') {
-                    this.sessionId = event.data.data.sessionId;
-                    this.sendMessage('SESSION_READY', {
-                        pageType: this.detectPageType(),
-                        url: window.location.href
-                    });
-                }
-            });
-        },
-        
-        detectPageType: function() {
-            const title = document.title || '';
-            if (title.includes('P1')) return 'P1';
-            if (title.includes('P2')) return 'P2';
-            if (title.includes('P3')) return 'P3';
-            return 'unknown';
-        },
-        
-        setupAnswerListeners: function() {
-            this.answers = {};
-            this.startTime = Date.now();
-            
-            document.addEventListener('change', (e) => {
-                if (e.target.name && e.target.name.startsWith('q')) {
-                    this.answers[e.target.name] = e.target.value;
-                }
-            });
-        },
-        
-        interceptSubmit: function() {
-            // 拦截grade函数
-            if (typeof window.grade === 'function') {
-                const originalGrade = window.grade;
-                window.grade = () => {
-                    const result = originalGrade();
-                    setTimeout(() => this.handleSubmit(), 200);
-                    return result;
-                };
-            }
-            
-            // 监听提交按钮
-            document.addEventListener('click', (e) => {
-                if (e.target.tagName === 'BUTTON' && 
-                    (e.target.textContent.includes('Submit') || 
-                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
-                    setTimeout(() => this.handleSubmit(), 300);
-                }
-            });
-        },
-        
-        handleSubmit: function() {
-            const results = {
-                sessionId: this.sessionId,
-                startTime: this.startTime,
-                endTime: Date.now(),
-                duration: Math.round((Date.now() - this.startTime) / 1000),
-                answers: this.answers,
-                scoreInfo: this.extractScore(),
-                pageType: this.detectPageType(),
-                url: window.location.href
-            };
-            
-            this.sendMessage('PRACTICE_COMPLETE', results);
-        },
-        
-        extractScore: function() {
-            const resultsEl = document.getElementById('results');
-            if (!resultsEl) return null;
-            
-            const text = resultsEl.textContent || '';
-            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
-            if (scoreMatch) {
-                const correct = parseInt(scoreMatch[1]);
-                const total = parseInt(scoreMatch[2]);
-                return {
-                    correct: correct,
-                    total: total,
-                    accuracy: total > 0 ? correct / total : 0,
-                    percentage: Math.round((correct / total) * 100),
-                    source: 'inline_extraction'
-                };
-            }
-            return null;
-        },
-        
-        sendMessage: function(type, data) {
-            if (this.parentWindow) {
-                this.parentWindow.postMessage({
-                    type: type,
-                    data: data,
-                    source: 'practice_page'
-                }, '*');
-            }
+    setupCommunication: function() {
+      this.parentWindow = window.opener || window.parent;
+      window.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'INIT_SESSION') {
+          this.sessionId = event.data.data.sessionId;
+          this.sendMessage('SESSION_READY', {
+            pageType: this.detectPageType(),
+            url: window.location.href
+          });
         }
-    };
+      });
+    },
     
-    // 初始化
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            window.practicePageEnhancer.initialize();
-        });
-    } else {
-        window.practicePageEnhancer.initialize();
+    detectPageType: function() {
+      const title = document.title || '';
+      if (title.includes('P1')) return 'P1';
+      if (title.includes('P2')) return 'P2';
+      if (title.includes('P3')) return 'P3';
+      return 'unknown';
+    },
+    
+    setupAnswerListeners: function() {
+      this.answers = {};
+      this.startTime = Date.now();
+      
+      document.addEventListener('change', (e) => {
+        if (e.target.name && e.target.name.startsWith('q')) {
+          this.answers[e.target.name] = e.target.value;
+        }
+      });
+      
+      document.addEventListener('input', (e) => {
+        if (e.target.name && e.target.name.startsWith('q')) {
+          this.answers[e.target.name] = e.target.value;
+        }
+      });
+    },
+    
+    interceptSubmit: function() {
+      // 拦截grade函数
+      if (typeof window.grade === 'function') {
+        const originalGrade = window.grade;
+        window.grade = () => {
+          const result = originalGrade();
+          setTimeout(() => this.handleSubmit(), 200);
+          return result;
+        };
+      }
+      
+      // 监听提交按钮
+      document.addEventListener('click', (e) => {
+        if (e.target.tagName === 'BUTTON' &&
+          (e.target.textContent.includes('Submit') ||
+            e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+          setTimeout(() => this.handleSubmit(), 300);
+        }
+      });
+    },
+    
+    handleSubmit: function() {
+      const results = {
+        sessionId: this.sessionId,
+        startTime: this.startTime,
+        endTime: Date.now(),
+        duration: Math.round((Date.now() - this.startTime) / 1000),
+        answers: this.answers,
+        scoreInfo: this.extractScore(),
+        pageType: this.detectPageType(),
+        url: window.location.href
+      };
+      
+      this.sendMessage('PRACTICE_COMPLETE', results);
+    },
+    
+    extractScore: function() {
+      const resultsEl = document.getElementById('results');
+      if (!resultsEl) return null;
+      
+      const text = resultsEl.textContent || '';
+      const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+      if (scoreMatch) {
+        const correct = parseInt(scoreMatch[1]);
+        const total = parseInt(scoreMatch[2]);
+        return {
+          correct: correct,
+          total: total,
+          accuracy: total > 0 ? correct / total : 0,
+          percentage: Math.round((correct / total) * 100),
+          source: 'inline_extraction'
+        };
+      }
+      return null;
+    },
+    
+    sendMessage: function(type, data) {
+      if (this.parentWindow) {
+        this.parentWindow.postMessage({
+          type: type,
+          data: data,
+          source: 'practice_page'
+        }, '*');
+      }
     }
+  };
+  
+  // 初始化
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      window.practicePageEnhancer.initialize();
+    });
+  } else {
+    window.practicePageEnhancer.initialize();
+  }
 }
+
+// 加载增强脚本
+loadPracticePageEnhancer();
 </script>
 
 </body>

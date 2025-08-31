@@ -58,7 +58,7 @@ class ExamSystemApp {
             this.showLoading(false);
 
             console.log('[App] IELTS考试系统初始化成功');
-            this.showUserMessage('系统初始化完成', 'success');
+            this.showUserMessage('系统初始化完成 Sallowaymmm呈现', 'success');
 
         } catch (error) {
             this.showLoading(false);

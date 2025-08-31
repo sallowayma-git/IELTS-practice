@@ -1,63 +1,333 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<title>The Pearls</title>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta charset="UTF-8">
+<title>P1 – The Pearls</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+  }
   * { box-sizing: border-box; }
   html,body { height:100%; }
-  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
-  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+    padding-bottom: 82px; 
+  }
+  
+  /* 布局样式 */
   .shell { display:flex; height:100vh; width:100%; }
   .pane { background:var(--panel); overflow:auto; padding:20px; }
   #left { flex: 0 0 50%; min-width: 280px; }
   #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
   #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  
+  /* 文本样式 */
   h2,h3,h4 { margin:0 0 10px; }
   #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  
+  /* 组件样式 */
   .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
-  table { border-collapse: collapse; width:100%; }
-  th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
-  th:first-child, td:first-child { width:92px; }
-  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
-  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
-  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
-  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
-  .hl:hover { filter: brightness(0.98); }
-  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
-  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  input.blank { 
+    border:none; 
+    border-bottom:1px solid #9ca3af; 
+    padding:2px 4px; 
+    font-size:1em; 
+    background:transparent; 
+    min-width: 80px;
+  }
+  input.blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+  
+  /* 按钮样式 */
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    background:#fff; 
+    border-radius:6px; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    font-size:14px; 
+  }
+  button:hover { background:#f8fafc; border-color:#cbd5e1; }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:var(--accent); 
+  }
+  button.primary:hover { background:#2563eb; }
+  
+  /* 计时器样式 */
+  #timer { 
+    background:#fff; 
+    color:var(--muted); 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    padding:6px 12px; 
+    cursor:pointer; 
+    font-family: 'Courier New', monospace; 
+    transition:all 0.2s; 
+    min-width: 70px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: bold;
+  }
+  #timer:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  #timer.paused { 
+    color: #ef4444; 
+    border-color: #fecaca; 
+    background: #fef2f2; 
+  }
+  
+  /* 主题切换按钮 */
+  .theme-toggle { 
+    background:#fff; 
+    color:var(--muted); 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .theme-toggle:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    transform: scale(1.05);
+  }
+  .theme-toggle:active {
+    transform: scale(0.95);
+  }
+  
+  /* 深色模式样式 */
+  body.dark { 
+    --bg: #0f172a; 
+    --panel: #1e293b; 
+    --line: #334155; 
+    --muted: #94a3b8; 
+    color: #e2e8f0; 
+  }
+  body.dark #right { background: #0f172a; }
+  body.dark .group { background: #1e293b; border-color: #334155; }
+  body.dark button { background: #1e293b; color: #e2e8f0; border-color: #334155; }
+  body.dark button:hover { background: #334155; }
+  body.dark button.primary { background: var(--accent); color: #fff; }
+  body.dark #results { background: #1e293b; border-color: #334155; }
+  body.dark #notes { background: #1e293b; border-color: #334155; color: #e2e8f0; }
+  body.dark .practice-nav { background: #1e293b; border-color: #334155; }
+  body.dark .q-item { background: #0f172a; color: #e2e8f0; border-color: #334155; }
+  body.dark .q-item:hover { background: #334155; }
+  body.dark .q-item.answered { background: #1e40af; border-color: var(--accent); color: #93c5fd; }
+  body.dark #timer { background: #1e293b; color: #e2e8f0; border-color: #334155; }
+  body.dark #timer:hover { background: #334155; border-color: var(--accent); }
+  body.dark details.answerbox { background: #1e293b; border-color: #334155; }
+  body.dark input.blank { color: #e2e8f0; border-bottom-color: #64748b; }
+  body.dark input.blank:focus { border-bottom-color: var(--accent); }
+  
+  /* 响应式设计 */
+  @media (max-width: 768px) {
+    .shell { flex-direction: column; }
+    #left, #right { flex: none; min-width: auto; }
+    #divider { display: none; }
+    .practice-nav .controls { gap: 8px; }
+    #timer { font-size: 12px; padding: 3px 8px; }
+    .theme-toggle { width: 32px; height: 32px; font-size: 14px; }
+    #notes { width: calc(100vw - 24px); right: 12px; left: 12px; }
+  }
+  
+  /* 选择工具栏 */
+  #selbar { 
+    position: fixed; 
+    display:none; 
+    z-index: 2000; 
+    background:#111; 
+    color:#fff; 
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow: var(--shadow); 
+    font-size: 13px; 
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; 
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+  }
   #selbar button:hover { border-color:#fff; }
-  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
-  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
-  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
-  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
-  .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:40px; padding:4px 8px; display:inline-flex; align-items:center; justify-content:space-between; gap:8px; width: auto; min-width: 120px; max-width: 200px; vertical-align: middle; }
-  .droplabel { color:#64748b; font-size:14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:flex; flex-wrap:wrap; gap:8px; }
-  .pool-slot { min-height:40px; }
-  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); white-space: nowrap; }
-  .card:active { cursor:grabbing; }
-  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
-  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
-  .ghost { opacity: .5; }
-  .over { outline:2px dashed #3b82f6; }
-  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
-  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
-  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
-  body { padding-bottom: 82px; }
-  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
+  
+  /* 笔记面板 */
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 12px; 
+    width: 320px; 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow: var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    font-size:14px; 
+    line-height:1.5; 
+  }
+  
+  /* Toast通知 */
+  #toast { 
+    position: fixed; 
+    bottom: 20px; 
+    left: 50%; 
+    transform: translateX(-50%); 
+    background: rgba(0,0,0,0.8); 
+    color: #fff; 
+    padding: 8px 16px; 
+    border-radius: 4px; 
+    display: none; 
+    z-index: 3000; 
+    font-size: 14px; 
+  }
+  
+  /* 答题导航 */
+  .practice-nav { 
+    background:#fff; 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:16px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    border-top:2px solid var(--line); 
+    z-index:4000; 
+  }
   .practice-nav .title { font-weight:600; color:var(--muted); }
-  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
-  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
-  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
-  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
-  #selbar { z-index: 6000 !important; }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    font-size:14px; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; 
+  }
+  .practice-nav .controls { 
+    display:flex; 
+    gap:12px; 
+    margin-left:auto; 
+    align-items:center; 
+  }
+  
+  /* 答题结果显示 */
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin:16px 0; 
+    font-family: monospace; 
+    white-space:pre-wrap; 
+  }
+  #results p { margin:0 0 8px; }
+  .badge { 
+    background:#e0e7ff; 
+    color:var(--accent); 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+  }
+  
+  /* 答案框 */
+  details.answerbox { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-top:10px; 
+  }
+  details.answerbox summary { 
+    cursor:pointer; 
+    font-weight:600; 
+    list-style:none; 
+    display:flex; 
+    align-items:center; 
+    justify-content:space-between; 
+  }
+  details.answerbox summary::-webkit-details-marker { display:none; }
+  #answerContent { margin-top:10px; }
+  #answerContent ol { margin:0; padding-left:20px; }
+  #answerContent li { margin:4px 0; }
+  
+  /* 高亮样式 */
+  .hl { background: #ffeb3b; color: #000; }
+  body.dark .hl { background: #8a6d00; color: #fff; }
+  
+  /* 滚动条样式 */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #c5c5d2; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #999; }
+  body.dark ::-webkit-scrollbar-thumb { background: #4a5568; }
+  body.dark ::-webkit-scrollbar-thumb:hover { background: #718096; }
 </style>
 </head>
 <body>
+
 <div class="practice-nav">
   <div class="title">Questions</div>
   <div class="questions">
@@ -75,155 +345,140 @@
     <div class="q-item" id="q12-nav" onclick="scrollToElement('q12-anchor')">12</div>
     <div class="q-item" id="q13-nav" onclick="scrollToElement('q13-anchor')">13</div>
   </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">🌙</button>
+  </div>
 </div>
+
 <div class="shell">
   <section class="pane" id="left">
-    <h2>READING PASSAGE 1 <span id="timer">00:00</span></h2>
+    <h2>READING PASSAGE 1</h2>
     <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>
-    <h3>Pearls</h3>
     
-    <p><strong>A</strong> Long known as the “Queen of Gems”, pearls possess a history and allure far beyond what today’s wearer may recognize. Throughout much of recorded history, a natural pearl necklace comprised of matched spheres was a treasure of almost incomparable value, in fact, the most expensive jewelry in the world. Before the creation of cultured pearls in the early 1900s, natural pearls were so rare and expensive that they were reserved almost exclusively for the noble and very rich. The ancient Egyptians were particularly fond of their pearls. Many Egyptian leaders treasured pearls so much that they were often buried along with their cherished pearl collection. In the Orient and Persian Empire, pearls were ground into costly powders to cure anything from heart disease to epilepsy, with possible aphrodisiac uses as well. China’s long recorded history also provides ample evidence of the importance of pearls.</p>
+    <h3>The Pearls</h3>
+    <p><em>Nature's precious gems from the ocean depths</em></p>
     
-    <p><strong>B</strong> Pearls usually fall into three categories-natural pearls, cultured pearls and simulated pearls. A natural pearl forms when an irritant, such as a piece of sand, works its way into a particular species of oyster, mussel, or clam. As a defense mechanism, the mollusk secretes a fluid to coat the irritant. Layer upon layer of this coating is deposited on the irritant until a lustrous pearl is formed. A cultured pearl undergoes the same process. The only difference between natural pearls and cultured pearls is that the irritant is a surgically implanted bead or piece of shell called Mother of Pearl. Often, these shells are ground oyster shells that are worth significant amounts of money in their own right as irritant-catalysts for quality pearls. The resulting core is much larger than in a natural pearl. Imitation pearls are a different story altogether. In most cases, a glass bead is dipped into a solution made from fish scales. This coating is thin and may eventually wear off. One can usually tell an imitation by biting on it. The island of Mallorca in Spain is known for its imitation pearl industry.</p>
+    <p>Fishbourne Roman Palace is in the village of Fishbourne in West Sussex, England. This large palace was built in the 1st century AD, around thirty years after the Roman conquest of Britain, on the site of Roman army grain stores that had been established after the invasion during the reign of the Roman Emperor Claudius in 43 AD. The rectangular palace was built around formal gardens, the northern half of which has been reconstructed. There were extensive alterations in the 2nd and 3rd centuries AD, with many of the original black-and-white mosaic floors being overlaid with more sophisticated coloured ones, including a perfectly preserved mosaic of a dolphin in the north wing. More alterations were in progress when the palace burnt down in around 270 AD, after which it was abandoned.</p>
     
-    <p><strong>C</strong> Regardless of the method used to acquire a pearl, the process usually takes several years. Mussels must reach a mature age, which can take up to 3 years, and then be implanted or naturally receive an irritant. Once the irritant is in place, it can take up to another 3 years for the pearl to reach its full size. Often, the irritant may be rejected, the pearl will be terrifically misshapen, or the oyster may simply die from disease or countless other complications. By the end of a 5 to 10 year cycle, only 50% of the oysters will have survived. And of the pearls produced, only approximately 5% are of a quality substantial enough for top jewelry makers.</p>
+    <p>Local people had long believed that a Roman palace once existed in the area. However, it was not until 1960 that the archaeologist Barry Cunliffe of Oxford University first systematically excavated the site, after workmen had accidentally uncovered a wall while they were laying a water main. The Roman villa excavated by Cunliffe's team was so grand that it became known as Fishbourne Roman Palace, and a museum was erected to preserve some of the remains. This is administered by the Sussex Archaeological Society.</p>
     
-    <p><strong>D</strong> How can untrained eyes determine a pearl’s worth? Luster and size are generally considered the two main factors to look for. Luster, for instance, depends on the fineness and evenness of the layers. The deeper the glow, the more perfect the shape and surface, the more valuable they are. Size, on the other hand, has to do with the age of the oyster that created the pearl (the more mature oysters produce larger pearls) and the location in which the pearl was cultured. The South Sea waters of Australia tend to produce the larger pearls; probably because the water along the coastline is supplied with rich nutrients from the ocean floor. Also, the type of mussel being common to the area seems to possess a predilection for producing comparatively large pearls.</p>
+    <p>In its day, the completed palace would have comprised four large wings with colonnaded fronts. The north and east wings consisted of suites of private rooms built around courtyards, with a monumental entrance in the middle of the east wing. In the north-east corner there was an assembly hall. The west wing contained state rooms, a large ceremonial reception room and a gallery. The south wing contained the owner's private apartments. The palace included as many as fifty mosaic floors, under-floor central heating and a bathhouse. In size, Fishbourne Palace would have been approximately equivalent to some of the great Roman palaces of Italy, and was by far the largest known Roman residence north of the European Alps, at about 500 feet (150 m) square. A team of volunteers and professional archaeologists is involved in an ongoing archaeological excavation on the site of nearby, possibly military, buildings.</p>
+
+    <p>The first buildings to be erected on the site were constructed in the early part of the conquest in 43 AD. Later, two timber buildings were constructed, one with clay-and-mortar floors and plaster walls, which appears to have been a house of some comfort. These buildings were demolished in the 60s AD and replaced by a substantial stone house, which included colonnades and a bath suite. It has been suggested that the palace itself, incorporating the previous house in its south-east corner, was constructed around 73–75 AD. However, Dr Miles Russell of Bournemouth University re-interpreted the ground plan and the collection of objects found, and has suggested that, given the extremely close parallels with the imperial palace of Domitian in Rome, its construction may more plausibly date to after 92 AD.</p>
     
-    <p><strong>E</strong> In general, cultured pearls are less valuable than natural pearls, whereas imitation pearls have almost no value. One way that jewelers can determine whether a pearl is cultured or natural is to have a gem lab perform an X-ray of the pearl. If the X-ray reveals a nucleus, the pearl is likely a bead nucleated saltwater pearl. If no nucleus is present, but irregular and small dark inner spots indicating a cavity are visible, combined with concentric rings of organic substance, the pearl is likely a cultured freshwater pearl. Among cultured pearls, Akoya pearls from Japan are some of the most lustrous. Although imitation pearls look the part, they do not have the same weight or smoothness as real pearls, and their luster will also dim greatly.</p>
+    <p>With regard to who lived in Fishbourne Palace, there are a number of theories. For example, one proposed by Professor Cunliffe is that, in its early phase, the palace was the residence of Tiberius Claudius Cogidubnus, a local chieftain who supported the Romans and who may have been installed as king of a number of territories following the first stage of the conquest. Cogidubnus is known from a reference to his loyalty in Agricola, a work by the Roman writer Tacitus, and from an inscription commemorating a temple dedicated to the gods Neptune and Minerva found in the nearby city of Chichester. Another theory is that it was built for Sallustius Lucullus, a Roman governor of Britain in the late 1st century, who may have been the son of the British prince Adminius. Two inscriptions recording the presence of Lucullus have been found in Chichester, and the redating by Miles Russell suggests that, if the palace was designed for Lucullus, then it may have been in use for only a few years, as the Roman historian Suetonius records that Lucullus was executed by the Emperor Domitian in or shortly after 93 AD.</p>
     
-    <p><strong>F</strong> Historically, the world’s best pearls came from the Persian Gulf, especially around what is now Bahrain. The pearls of the Persian Gulf were naturally created and collected by breath-hold divers. Unfortunately, the natural pearl industry of the Persian Gulf ended abruptly in the early 1930s with the discovery of large deposits of oil. The water pollution resulting from spilled oil and indiscriminate overfishing of oysters essentially ruined the pristine waters of the Gulf that once produced pearls. Still, Bahrain remains one of the foremost trading centers for high quality pearls. In fact, cultured pearls are banned from the Bahrain pearl market, in an effort to preserve the location’s heritage. Nowadays, the largest stock of natural pearls probably resides in India. Ironically, much of India’s stock of natural pearls came originally from Bahrain. Unlike Bahrain, which has essentially lost its pearl resource, traditional pearl fishing is still practiced on a small scale in India.</p>
+    <p>Additional theories suggest that either Verica, a British king of the Roman Empire in the years preceding the Claudian invasion, was the owner of the palace, or Tiberius Claudius Catuarus, following the recent discovery of a gold ring belonging to him. The palace outlasted the original owner, whoever he was, and was extensively re-planned early in the 2nd century AD and subdivided into a series of smaller apartments. Further redevelopment was begun in the late 3rd century AD, but these alterations were incomplete when the north wing was destroyed in a fire in around 270 AD. The damage was too great to repair, and the palace was abandoned and later dismantled.</p>
     
-    <p><strong>G</strong> Pearls also come in many colours. The most popular colours are white, cream, and pink. Silver, black, and gold are also gaining interest. In fact, a deep lustrous black pearl is one of the rarest finds in the pearling industry, usually only being found in the South Sea near Australia. Thus, they can be one of the more costly items. Nowadays, pearls predominantly come from Japan, Australia, Indonesia, Myanmar, China, India, the Philippines, and Tahiti. Japan, however, controls roughly 80% of the world pearl market, with Australia and China coming in second and third, respectively.</p>
+    <p>A modern museum has been built by the Sussex Archaeological Society, incorporating most of the visible remains, including one wing of the palace. The gardens have been replanted using authentic plants from the Roman period.</p>
     
-    <p>&nbsp;</p> <!-- 额外添加的空白行防止加载不完全 -->
   </section>
   <div id="divider" title="Drag to resize"></div>
   <section class="pane" id="right">
     <h3>Questions</h3>
     
     <div class="group">
-      <h4>Questions 1–4</h4>
-      <p>Reading Passage 1 has seven paragraphs, A–G.<br>Which paragraph contains the following information?<br>Write the correct letter, A–G, in boxes 1–4 on your answer sheet.</p>
-      
-      <a id="q1-anchor"></a>
-      <div id="q1-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>1 difficulties in the cultivation process</p>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q1" type="radio" value="A"> A</label>
-          <label style="margin:0;"><input name="q1" type="radio" value="B"> B</label>
-          <label style="margin:0;"><input name="q1" type="radio" value="C"> C</label>
-          <label style="margin:0;"><input name="q1" type="radio" value="D"> D</label>
-          <label style="margin:0;"><input name="q1" type="radio" value="E"> E</label>
-          <label style="margin:0;"><input name="q1" type="radio" value="F"> F</label>
-          <label style="margin:0;"><input name="q1" type="radio" value="G"> G</label>
-        </div>
-      </div>
-      
-      <a id="q2-anchor"></a>
-      <div id="q2-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>2 causes affecting the size of natural pearls</p>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q2" type="radio" value="A"> A</label>
-          <label style="margin:0;"><input name="q2" type="radio" value="B"> B</label>
-          <label style="margin:0;"><input name="q2" type="radio" value="C"> C</label>
-          <label style="margin:0;"><input name="q2" type="radio" value="D"> D</label>
-          <label style="margin:0;"><input name="q2" type="radio" value="E"> E</label>
-          <label style="margin:0;"><input name="q2" type="radio" value="F"> F</label>
-          <label style="margin:0;"><input name="q2" type="radio" value="G"> G</label>
-        </div>
-      </div>
-      
-      <a id="q3-anchor"></a>
-      <div id="q3-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>3 ancient customs around pearls</p>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q3" type="radio" value="A"> A</label>
-          <label style="margin:0;"><input name="q3" type="radio" value="B"> B</label>
-          <label style="margin:0;"><input name="q3" type="radio" value="C"> C</label>
-          <label style="margin:0;"><input name="q3" type="radio" value="D"> D</label>
-          <label style="margin:0;"><input name="q3" type="radio" value="E"> E</label>
-          <label style="margin:0;"><input name="q3" type="radio" value="F"> F</label>
-          <label style="margin:0;"><input name="q3" type="radio" value="G"> G</label>
-        </div>
-      </div>
-      
-      <a id="q4-anchor"></a>
-      <div id="q4-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>4 distinctions between cultured pearls and natural ones</p>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q4" type="radio" value="A"> A</label>
-          <label style="margin:0;"><input name="q4" type="radio" value="B"> B</label>
-          <label style="margin:0;"><input name="q4" type="radio" value="C"> C</label>
-          <label style="margin:0;"><input name="q4" type="radio" value="D"> D</label>
-          <label style="margin:0;"><input name="q4" type="radio" value="E"> E</label>
-          <label style="margin:0;"><input name="q4" type="radio" value="F"> F</label>
-          <label style="margin:0;"><input name="q4" type="radio" value="G"> G</label>
-        </div>
-      </div>
-    </div>
-    
-    <div class="group">
-      <h4>Questions 5–10</h4>
-      <p>Complete the summary using the list of words, A–K, below.<br>Write the correct letter, A–K, in boxes 5–10 on your answer sheet.</p>
-      
-      <p>Throughout history, people in <a id="q5-anchor"></a><div class="dropzone" data-target="q5"><span class="droplabel">Drag answer here</span></div> used pearls for medicine and philtres. There are essentially three types of pearls: natural, cultured and imitation. Natural and cultured pearls share a similar growing process, while imitation pearls are different. And <a id="q6-anchor"></a><div class="dropzone" data-target="q6"><span class="droplabel">Drag answer here</span></div> owns the reputation for its imitation pearl industry. The country <a id="q7-anchor"></a><div class="dropzone" data-target="q7"><span class="droplabel">Drag answer here</span></div> usually produces the larger pearls due to the favourable environment along the coastline, while the nation of <a id="q8-anchor"></a><div class="dropzone" data-target="q8"><span class="droplabel">Drag answer here</span></div> manufactures some of the most glistening cultured pearls. In the past, the country <a id="q9-anchor"></a><div class="dropzone" data-target="q9"><span class="droplabel">Drag answer here</span></div> in the Persian Gulf produced the world’s best pearls. At present, the major remaining suppliers of natural pearls are in <a id="q10-anchor"></a><div class="dropzone" data-target="q10"><span class="droplabel">Drag answer here</span></div>.</p>
-      
-      <div class="cardpool">
-        <div class="card" draggable="true" data-value="A">A America</div>
-        <div class="card" draggable="true" data-value="B">B Philippines</div>
-        <div class="card" draggable="true" data-value="C">C Australia</div>
-        <div class="card" draggable="true" data-value="D">D Bahrain</div>
-        <div class="card" draggable="true" data-value="E">E China</div>
-        <div class="card" draggable="true" data-value="F">F Japan</div>
-        <div class="card" draggable="true" data-value="G">G India</div>
-        <div class="card" draggable="true" data-value="H">H Egypt</div>
-        <div class="card" draggable="true" data-value="I">I Myanmar</div>
-        <div class="card" draggable="true" data-value="J">J Persia</div>
-        <div class="card" draggable="true" data-value="K">K Mallorca</div>
-      </div>
-    </div>
-    
-    <div class="group">
-      <h4>Questions 11–13</h4>
-      <p>Do the following statements agree with the information given in Reading Passage 1?<br>In boxes 11–13 on your answer sheet, write</p>
+      <h4>Questions 1–6</h4>
+      <p>Do the following statements agree with the information given in Reading Passage 1?</p>
+      <p>In boxes 1–6 on your answer sheet, write</p>
       <ul>
-        <li>TRUE if the statement agrees with the information</li>
-        <li>FALSE if the statement contradicts the information</li>
-        <li>NOT GIVEN if there is no information on this</li>
+        <li><strong>TRUE</strong> if the statement agrees with the information</li>
+        <li><strong>FALSE</strong> if the statement contradicts the information</li>
+        <li><strong>NOT GIVEN</strong> if there is no information on this</li>
       </ul>
       
-      <a id="q11-anchor"></a>
-      <div id="q11-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>11 A cultured pearl’s centre is often significantly larger than that in a natural pearl.</p>
+      <div id="q1-anchor">
+        <p><strong>1</strong> Fishbourne Palace was the first structure to be built on its site.</p>
         <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q11" type="radio" value="TRUE"> TRUE</label>
-          <label style="margin:0;"><input name="q11" type="radio" value="FALSE"> FALSE</label>
-          <label style="margin:0;"><input name="q11" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+          <label><input name="q1" type="radio" value="TRUE"> TRUE</label> 
+          <label><input name="q1" type="radio" value="FALSE"> FALSE</label> 
+          <label><input name="q1" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
         </div>
       </div>
       
-      <a id="q12-anchor"></a>
-      <div id="q12-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>12 Imitation pearls are usually the same price as natural ones.</p>
+      <div id="q2-anchor">
+        <p><strong>2</strong> Fishbourne Palace was renovated more than once.</p>
         <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q12" type="radio" value="TRUE"> TRUE</label>
-          <label style="margin:0;"><input name="q12" type="radio" value="FALSE"> FALSE</label>
-          <label style="margin:0;"><input name="q12" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+          <label><input name="q2" type="radio" value="TRUE"> TRUE</label> 
+          <label><input name="q2" type="radio" value="FALSE"> FALSE</label> 
+          <label><input name="q2" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
         </div>
       </div>
       
-      <a id="q13-anchor"></a>
-      <div id="q13-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>13 Akoya pearls from Japan glow more deeply than South Sea pearls from Australia.</p>
+      <div id="q3-anchor">
+        <p><strong>3</strong> Fishbourne Palace was large in comparison with Roman palaces in Italy.</p>
         <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q13" type="radio" value="TRUE"> TRUE</label>
-          <label style="margin:0;"><input name="q13" type="radio" value="FALSE"> FALSE</label>
-          <label style="margin:0;"><input name="q13" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+          <label><input name="q3" type="radio" value="TRUE"> TRUE</label> 
+          <label><input name="q3" type="radio" value="FALSE"> FALSE</label> 
+          <label><input name="q3" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
         </div>
       </div>
+
+      <div id="q4-anchor">
+        <p><strong>4</strong> Research is continuing in the area close to Fishbourne Palace.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label><input name="q4" type="radio" value="TRUE"> TRUE</label> 
+          <label><input name="q4" type="radio" value="FALSE"> FALSE</label> 
+          <label><input name="q4" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+
+      <div id="q5-anchor">
+        <p><strong>5</strong> Researchers agree on the identity of the person for whom Fishbourne Palace was constructed.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label><input name="q5" type="radio" value="TRUE"> TRUE</label> 
+          <label><input name="q5" type="radio" value="FALSE"> FALSE</label> 
+          <label><input name="q5" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+
+      <div id="q6-anchor">
+        <p><strong>6</strong> Fishbourne Palace was burnt down by local people.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
+          <label><input name="q6" type="radio" value="TRUE"> TRUE</label> 
+          <label><input name="q6" type="radio" value="FALSE"> FALSE</label> 
+          <label><input name="q6" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+
     </div>
     
+    <div class="group">
+      <h4>Questions 7–13</h4>
+      <p>Complete the notes below.</p>
+      <p>Choose <strong>NO MORE THAN TWO WORDS AND/OR A NUMBER</strong> from the passage for each answer.</p>
+      
+      <div style="padding: 10px; border: 1px solid #ccc; border-radius: 8px; margin-top: 1em;">
+        <h4 style="text-align: center;">Fishbourne Palace</h4>
+        
+        <p><strong>Construction</strong></p>
+        <ul>
+            <li id="q7-anchor">The first buildings on the site contained food for the <strong>7</strong> <input name="q7" type="text" class="blank" maxlength="40"></li>
+            <li id="q8-anchor">The palace building surrounded <strong>8</strong> <input name="q8" type="text" class="blank" maxlength="40"></li>
+            <li id="q9-anchor">In the 2nd and 3rd centuries colour was added to the <strong>9</strong> <input name="q9" type="text" class="blank" maxlength="40"> of the palace.</li>
+        </ul>
+
+        <p><strong>Discovery</strong></p>
+        <ul>
+            <li id="q10-anchor">The first part of the palace to be found was part of a <strong>10</strong> <input name="q10" type="text" class="blank" maxlength="40"></li>
+        </ul>
+
+        <p><strong>Possible inhabitants</strong></p>
+        <ul>
+            <li>Cogidubnus - he is named in several writings.</li>
+            <li id="q11-anchor">Sallustius Lucullus - he may have lived there until approximately <strong>11</strong> <input name="q11" type="text" class="blank" maxlength="40"> AD.</li>
+            <li>Verica - a British king.</li>
+            <li id="q12-anchor">Catuarus - his <strong>12</strong> <input name="q12" type="text" class="blank" maxlength="40"> was found there.</li>
+        </ul>
+
+        <p><strong>Present Day</strong></p>
+        <ul>
+            <li id="q13-anchor">A <strong>13</strong> <input name="q13" type="text" class="blank" maxlength="40"> has been built on the site to help protect it.</li>
+        </ul>
+      </div>
+    </div>
+
     <div style="display:flex;gap:8px;margin-bottom:10px;">
       <button class="primary" onclick="grade()">Submit</button>
       <button onclick="resetForm()">Reset</button>
@@ -236,11 +491,13 @@
     </details>
   </section>
 </div>
+
 <div aria-label="Selection tools" id="selbar" role="toolbar">
   <button id="btnHL">Highlight</button>
   <button id="btnUH">Remove</button>
   <button id="btnNote">Note</button>
 </div>
+
 <div id="notes">
   <header>
     <strong>Notes</strong>
@@ -251,508 +508,581 @@
   </header>
   <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
 </div>
+
 <div id="toast"></div>
+
 <script>
-// Timer
-let _t=0; const _timerEl=document.getElementById('timer');
-setInterval(function(){ 
-  _t++; 
-  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
-  var s=String(_t%60).padStart(2,'0'); 
-  _timerEl.textContent=m+':'+s; 
-},1000);
-// Drag divider
+// 页面滚动功能
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // 高亮显示题目
+    element.style.backgroundColor = '#e0e7ff';
+    setTimeout(() => {
+      element.style.backgroundColor = '';
+    }, 1000);
+  }
+}
+
+// 重置表单功能
+function resetForm() {
+  // 重置单选按钮
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // 重置文本输入框
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = '';
+  });
+  
+  // 清除结果
+  document.getElementById('results').innerHTML = '';
+  
+  // 更新导航状态
+  updateAnswerStatus();
+  
+  showToast('Form reset');
+}
+
+// Toast通知功能
+function showToast(msg) {
+  const toastEl = document.getElementById('toast');
+  toastEl.textContent = msg;
+  toastEl.style.display = 'block';
+  setTimeout(() => {
+    toastEl.style.display = 'none';
+  }, 1500);
+}
+
+// 计时器功能
+let _t = 0;
+let timerRunning = true;
+let timerInterval;
+const _timerEl = document.getElementById('timer');
+
+function updateTimer() {
+  const m = Math.floor(_t / 60);
+  const s = _t % 60;
+  _timerEl.textContent = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+function startTimer() {
+  timerInterval = setInterval(() => {
+    if (timerRunning) {
+      _t++;
+      updateTimer();
+    }
+  }, 1000);
+}
+
+function toggleTimer() {
+  if (timerRunning) {
+    clearInterval(timerInterval);
+    timerRunning = false;
+    _timerEl.classList.add('paused');
+    showToast('Timer paused');
+  } else {
+    startTimer();
+    timerRunning = true;
+    _timerEl.classList.remove('paused');
+    showToast('Timer resumed');
+  }
+}
+
+// 主题切换功能
+function toggleTheme() {
+  document.body.classList.toggle('dark');
+  const isDark = document.body.classList.contains('dark');
+  localStorage.setItem('darkMode', isDark);
+  const themeButton = document.querySelector('.theme-toggle');
+  themeButton.textContent = isDark ? '☀️' : '🌙';
+}
+
+// 拖拽分栏功能
 var divider = document.getElementById('divider');
 var left = document.getElementById('left');
 var right = document.getElementById('right');
-var dragging=false;
-function startDrag(e){ 
-  dragging=true; 
-  document.body.style.cursor='ew-resize'; 
-  if(e.preventDefault) e.preventDefault(); 
+var dragging = false;
+
+function startDrag(e) {
+  dragging = true;
+  document.body.style.cursor = 'ew-resize';
+  if (e.preventDefault) e.preventDefault();
 }
-function endDrag(){ 
-  dragging=false; 
-  document.body.style.cursor=''; 
+
+function endDrag() {
+  dragging = false;
+  document.body.style.cursor = '';
 }
-function onMove(clientX){
+
+function onMove(clientX) {
   var container = document.querySelector('.shell').getBoundingClientRect();
   var x = clientX - container.left;
-  x = Math.max(280, Math.min(container.width-320, x));
+  x = Math.max(280, Math.min(container.width - 320, x));
   left.style.flex = '0 0 ' + x + 'px';
   right.style.flex = '1 1 auto';
 }
-divider.addEventListener('mousedown', function(e){ startDrag(e); });
-window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+
+divider.addEventListener('mousedown', function(e) { startDrag(e); });
+window.addEventListener('mousemove', function(e) { if (dragging) onMove(e.clientX); });
 window.addEventListener('mouseup', endDrag);
-divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
-window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+divider.addEventListener('touchstart', function(e) { startDrag(e.touches[0]); }, { passive: false });
+window.addEventListener('touchmove', function(e) { if (dragging) onMove(e.touches[0].clientX); }, { passive: false });
 window.addEventListener('touchend', endDrag);
-</script>
-<script>
-// Highlight toolbar
+
+// 高亮和笔记功能
 var selbar = document.getElementById('selbar');
 var btnHL = document.getElementById('btnHL');
 var btnUH = document.getElementById('btnUH');
 var btnNote = document.getElementById('btnNote');
-var lastRange=null;
-var currentHlNode=null;
-var keepToolbar=false;
-function positionSelbarForRect(rect){
-  selbar.style.display='flex';
-  requestAnimationFrame(function(){
+var lastRange = null;
+var currentHlNode = null;
+var keepToolbar = false;
+
+function positionSelbarForRect(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(function() {
     var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
     var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
-    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.top = ((top > 0) ? top : (window.scrollY + rect.bottom + 8)) + 'px';
     selbar.style.left = Math.max(8, leftPos) + 'px';
   });
 }
-function updateSelbar(){
-  var sel=window.getSelection();
-  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
-    selbar.style.display='none'; 
-    currentHlNode=null; 
-    return; 
+
+function updateSelbar() {
+  var sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
   }
   var range = sel.getRangeAt(0);
   lastRange = range.cloneRange();
-  currentHlNode=null;
+  currentHlNode = null;
   positionSelbarForRect(range.getBoundingClientRect());
 }
+
 document.getElementById('left').addEventListener('mouseup', updateSelbar);
 document.getElementById('right').addEventListener('mouseup', updateSelbar);
-document.addEventListener('selectionchange', function(){ 
-  var sel=window.getSelection(); 
-  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
-    if(!keepToolbar && !currentHlNode){ 
-      selbar.style.display='none'; 
-    } 
-  } 
+document.addEventListener('selectionchange', function() {
+  var sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) {
+      selbar.style.display = 'none';
+    }
+  }
 });
-document.addEventListener('scroll', function(){ 
-  if(selbar.style.display==='flex') updateSelbar(); 
+document.addEventListener('scroll', function() {
+  if (selbar.style.display === 'flex') updateSelbar();
 });
-document.addEventListener('mousedown', function(e){
+
+document.addEventListener('mousedown', function(e) {
   var t = e.target;
-  if(t.classList && t.classList.contains('hl')){
+  if (t.classList && t.classList.contains('hl')) {
     keepToolbar = true;
   } else {
     keepToolbar = false;
   }
 }, true);
-document.addEventListener('click', function(e){
+
+document.addEventListener('click', function(e) {
   var target = e.target;
-  if(target.classList && target.classList.contains('hl')){
+  if (target.classList && target.classList.contains('hl')) {
     currentHlNode = target;
     lastRange = null;
     positionSelbarForRect(target.getBoundingClientRect());
-    var sel=window.getSelection();
-    if(sel) sel.removeAllRanges();
-    setTimeout(function(){ keepToolbar=false; }, 0);
+    var sel = window.getSelection();
+    if (sel) sel.removeAllRanges();
+    setTimeout(function() { keepToolbar = false; }, 0);
   }
 }, true);
-function doHighlight(){
-  if(currentHlNode) return;
-  if(!lastRange || lastRange.collapsed) return;
-  var span=document.createElement('span'); span.className='hl';
-  try { lastRange.surroundContents(span); }
-  catch(e){
-    var wrap=document.createElement('span'); wrap.className='hl';
-    wrap.appendChild(lastRange.cloneContents());
-    lastRange.deleteContents();
-    lastRange.insertNode(wrap);
+
+function doHighlight() {
+  if (currentHlNode) return;
+  if (!lastRange || lastRange.collapsed) return;
+  
+  const startNode = lastRange.startContainer;
+  const endNode = lastRange.endContainer;
+  
+  if (startNode === endNode) {
+    try {
+      const span = document.createElement('span');
+      span.className = 'hl';
+      lastRange.surroundContents(span);
+      selbar.style.display = 'none';
+      showToast('Highlighted');
+      return;
+    } catch (e) {}
   }
-  selbar.style.display='none';
+  
+  const fragment = lastRange.cloneContents();
+  const div = document.createElement('div');
+  div.appendChild(fragment);
+  
+  function processNode(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      if (node.textContent.trim().length > 0) {
+        const span = document.createElement('span');
+        span.className = 'hl';
+        span.textContent = node.textContent;
+        return span;
+      }
+      return node;
+    }
+    
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const isBlock = window.getComputedStyle(node).display.includes('block') ||
+        ['P', 'H1', 'H2', 'H3', 'H4', 'DIV'].includes(node.tagName);
+      
+      const wrapper = isBlock ? document.createElement(node.tagName.toLowerCase()) : document.createElement('span');
+      wrapper.className = isBlock ? node.className + ' hl' : 'hl';
+      
+      Array.from(node.attributes).forEach(attr => {
+        wrapper.setAttribute(attr.name, attr.value);
+      });
+      
+      while (node.firstChild) {
+        const processedChild = processNode(node.firstChild);
+        wrapper.appendChild(processedChild);
+      }
+      
+      return wrapper;
+    }
+    
+    return node;
+  }
+  
+  const highlightedContent = processNode(div);
+  lastRange.deleteContents();
+  lastRange.insertNode(highlightedContent);
+  
+  selbar.style.display = 'none';
   showToast('Highlighted');
 }
-function removeHighlight(){
-  if(currentHlNode){
-    var p = currentHlNode.parentNode;
-    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
-    p.removeChild(currentHlNode); p.normalize();
+
+function removeHighlight() {
+  if (currentHlNode) {
+    const parent = currentHlNode.parentNode;
+    while (currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize();
     currentHlNode = null;
-    selbar.style.display='none';
+    selbar.style.display = 'none';
     showToast('Highlight removed');
     return;
   }
-  if(!lastRange) return;
-  var selRect = lastRange.getBoundingClientRect();
-  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
-  var toRemove=[];
-  while(walker.nextNode()){
-    var n=walker.currentNode;
-    if(n.classList && n.classList.contains('hl')) {
-      var r = n.getBoundingClientRect();
-      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+  
+  if (!lastRange) return;
+  
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    if (node.classList && node.classList.contains('hl')) {
+      const rect = node.getBoundingClientRect();
+      if (!(rect.right < selRect.left || rect.left > selRect.right ||
+        rect.bottom < selRect.top || rect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
     }
   }
-  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
-  selbar.style.display='none';
+  
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) {
+      parent.insertBefore(el.firstChild, el);
+    }
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  
+  selbar.style.display = 'none';
   showToast('Highlight removed');
 }
+
 btnHL.addEventListener('click', doHighlight);
 btnUH.addEventListener('click', removeHighlight);
-</script>
-<script>
-// Notes
+
+// 笔记功能
 var notes = document.getElementById('notes');
 var noteArea = document.getElementById('noteArea');
-var btnCopy=document.getElementById('btnCopy');
-var btnClose=document.getElementById('btnClose');
-function toggleNotes(){ 
-  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+var btnCopy = document.getElementById('btnCopy');
+var btnClose = document.getElementById('btnClose');
+
+function toggleNotes() {
+  notes.style.display = (notes.style.display === 'flex' ? 'none' : 'flex');
 }
 window.toggleNotes = toggleNotes;
+
 btnClose.addEventListener('click', toggleNotes);
-btnCopy.addEventListener('click', async function(){ 
-  await navigator.clipboard.writeText(noteArea.value||''); 
-  showToast('Copied'); 
+btnCopy.addEventListener('click', async function() {
+  await navigator.clipboard.writeText(noteArea.value || '');
+  showToast('Copied');
 });
-btnNote.addEventListener('click', function(){
+
+btnNote.addEventListener('click', function() {
   var text = '';
-  if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
-  else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
+  if (currentHlNode) {
+    text = (currentHlNode.textContent || '').trim();
+  } else if (lastRange) {
+    var frag = lastRange.cloneContents();
+    text = (frag.textContent || '').trim();
+  }
   toggleNotes();
-  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
-  selbar.style.display='none';
+  if (text) {
+    noteArea.value = (noteArea.value ? noteArea.value + '\n' : '') + '> ' + text + '\n';
+  }
+  selbar.style.display = 'none';
 });
-// Toast
-var toastEl=document.getElementById('toast');
-function showToast(msg){
-  toastEl.textContent=msg; 
-  toastEl.style.display='block';
-  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
-}
-</script>
-<script>
-// Drag and drop for questions 5-10
-const cards = document.querySelectorAll('.card');
-const dropzones = document.querySelectorAll('.dropzone');
-cards.forEach(card => {
-  card.addEventListener('dragstart', () => {
-    card.classList.add('dragging');
-  });
-  card.addEventListener('dragend', () => {
-    card.classList.remove('dragging');
-  });
-});
-dropzones.forEach(zone => {
-  zone.addEventListener('dragover', e => {
-    e.preventDefault();
-    zone.classList.add('over');
-  });
-  
-  zone.addEventListener('dragleave', () => {
-    zone.classList.remove('over');
-  });
-  
-  zone.addEventListener('drop', e => {
-    e.preventDefault();
-    zone.classList.remove('over');
-    const draggingCard = document.querySelector('.dragging');
-    if (draggingCard) {
-      // Clear existing content
-      zone.innerHTML = '';
-      zone.appendChild(draggingCard);
-      // Mark as answered
-      const targetQ = zone.dataset.target;
-      document.getElementById(targetQ + '-nav').classList.add('answered');
+
+// 答题状态更新
+function updateAnswerStatus() {
+  for (let i = 1; i <= 13; i++) {
+    const inputs = document.querySelectorAll(`input[name="q${i}"]`);
+    const navItem = document.getElementById(`q${i}-nav`);
+    if (navItem) {
+      let answered = false;
+      inputs.forEach(input => {
+        if ((input.type === 'radio' || input.type === 'checkbox') && input.checked) {
+          answered = true;
+        } else if (input.type === 'text' && input.value.trim()) {
+          answered = true;
+        }
+      });
+      if (answered) {
+        navItem.classList.add('answered');
+      } else {
+        navItem.classList.remove('answered');
+      }
     }
-  });
-});
-</script>
-<script>
-// Answer key and grading
+  }
+}
+
+// 答案和评分系统
 var answers = {
-  "q1":"C", "q2":"D", "q3":"A", "q4":"B",
-  "q5":"J", "q6":"K", "q7":"C", "q8":"F", "q9":"D", "q10":"G",
-  "q11":"TRUE", "q12":"FALSE", "q13":"NOT GIVEN"
+  "q1": "FALSE", "q2": "TRUE", "q3": "TRUE", "q4": "NOT GIVEN", "q5": "FALSE", "q6": "TRUE",
+  "q7": "irritant", "q8": "nacre", "q9": "cultured", "q10": "1893", "q11": "saltwater", "q12": "diving", "q13": "X-ray"
 };
-function grade(){
-  var total=0, correct=0, lines=[];
+
+function grade() {
+  var total = 0, correct = 0, lines = [];
   
-  // Check radio questions (1-4)
-  for(let n=1; n<=4; n++){
+  // 检查单选题和文本题 (1-13)
+  for (let n = 1; n <= 13; n++) {
     const q = `q${n}`;
     total++;
     const selected = document.querySelector(`input[name="${q}"]:checked`);
-    const userAnswer = selected ? selected.value : '';
-    const isCorrect = userAnswer === answers[q];
+    const textInput = document.querySelector(`input[name="${q}"][type="text"]`);
+    let userAnswer = '';
+    
+    if (selected) {
+      userAnswer = selected.value;
+    } else if (textInput) {
+      userAnswer = textInput.value.trim();
+    }
+    
+    const isCorrect = userAnswer.toLowerCase() === answers[q].toLowerCase();
     if (isCorrect) correct++;
-    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✅' : '❌'}`);
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✓' : '✗'}`);
   }
   
-  // Check drag-and-drop questions (5-10)
-  dropzones.forEach(zone => {
-    const q = zone.dataset.target;
-    total++;
-    const selectedCard = zone.querySelector('.card');
-    const userAnswer = selectedCard ? selectedCard.dataset.value : '';
-    const isCorrect = userAnswer === answers[q];
-    if (isCorrect) correct++;
-    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✅' : '❌'}`);
-  });
-  
-  // Check radio questions (11-13)
-  for(let n=11; n<=13; n++){
-    const q = `q${n}`;
-    total++;
-    const selected = document.querySelector(`input[name="${q}"]:checked`);
-    const userAnswer = selected ? selected.value : '';
-    const isCorrect = userAnswer === answers[q];
-    if (isCorrect) correct++;
-    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✅' : '❌'}`);
-  }
-  
-  // Show results
+  // 显示结果
   const acc = Math.round(100 * correct / total);
   document.getElementById('results').innerHTML = `
     <p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p>
     <pre>${lines.join('\n')}</pre>
   `;
   
-  // Show answer key
+  // 显示答案
   document.getElementById('answerContent').innerHTML = `
     <ol>
-      <li>1 → C</li>
-      <li>2 → D</li>
-      <li>3 → A</li>
-      <li>4 → B</li>
-      <li>5 → J (Persia)</li>
-      <li>6 → K (Mallorca)</li>
-      <li>7 → C (Australia)</li>
-      <li>8 → F (Japan)</li>
-      <li>9 → D (Bahrain)</li>
-      <li>10 → G (India)</li>
-      <li>11 → TRUE</li>
-      <li>12 → FALSE</li>
-      <li>13 → NOT GIVEN</li>
+      <li>1 → FALSE</li>
+      <li>2 → TRUE</li>
+      <li>3 → TRUE</li>
+      <li>4 → NOT GIVEN</li>
+      <li>5 → FALSE</li>
+      <li>6 → TRUE</li>
+      <li>7 → irritant</li>
+      <li>8 → nacre</li>
+      <li>9 → cultured</li>
+      <li>10 → 1893</li>
+      <li>11 → saltwater</li>
+      <li>12 → diving</li>
+      <li>13 → X-ray</li>
     </ol>
   `;
   document.querySelector('#answerBox .badge').textContent = 'tap to view';
+  
+  updateAnswerStatus();
 }
-function resetForm(){
-  // Reset drag-and-drop
-  dropzones.forEach(zone => {
-    const card = zone.querySelector('.card');
-    if (card) {
-      document.querySelector('.cardpool').appendChild(card);
-      zone.innerHTML = '<span class="droplabel">Drag answer here</span>';
-    }
-  });
-  
-  // Reset radio buttons
-  document.querySelectorAll('input[type="radio"]').forEach(radio => {
-    radio.checked = false;
-  });
-  
-  // Reset results and answers
-  document.getElementById('results').innerHTML = '';
-  document.getElementById('answerContent').innerHTML = '';
-  document.querySelector('#answerBox .badge').textContent = 'hidden';
-  
-  // Reset answered status in nav
-  document.querySelectorAll('.q-item').forEach(item => {
-    item.classList.remove('answered');
-  });
-}
-// Scroll to question anchor
-function scrollToElement(id){
-  const el = document.getElementById(id);
-  if(el){ 
-    el.scrollIntoView({behavior:'smooth', block:'center'}); 
-  }
-  // Highlight nav item briefly
-  const navs = document.querySelectorAll('.practice-nav .q-item');
-  navs.forEach(n => n.classList.remove('active'));
-  const btn = document.getElementById(id.replace('-anchor','-nav'));
-  if(btn){ 
-    btn.classList.add('active'); 
-    setTimeout(() => btn.classList.remove('active'), 800); 
-  }
-}
-// Mark answered on interaction
-(function(){
-  function markAnswered(qn){
-    const nav = document.getElementById(`q${qn}-nav`);
-    if(!nav) return;
-    let answered = false;
-    
-    // Check dropzones (5-10)
-    if(qn >=5 && qn <=10){
-      const zone = document.querySelector(`.dropzone[data-target="q${qn}"]`);
-      answered = zone.querySelector('.card') !== null;
-    } 
-    // Check radio buttons (1-4, 11-13)
-    else {
-      const radios = document.querySelectorAll(`input[name="q${qn}"]:checked`);
-      answered = radios.length > 0;
-    }
-    
-    if(answered) nav.classList.add('answered');
-    else nav.classList.remove('answered');
-  }
-  
-  // Monitor dropzones
-  dropzones.forEach(zone => {
-    zone.addEventListener('drop', () => {
-      const qn = zone.dataset.target.replace('q', '');
-      markAnswered(qn);
-    });
-  });
-  
-  // Monitor radio buttons
-  for(let n=1; n<=4; n++){
-    document.querySelectorAll(`input[name="q${n}"]`).forEach(radio => {
-      radio.addEventListener('change', () => markAnswered(n));
-    });
-  }
-  for(let n=11; n<=13; n++){
-    document.querySelectorAll(`input[name="q${n}"]`).forEach(radio => {
-      radio.addEventListener('change', () => markAnswered(n));
-    });
-  }
-})();
-</script>
 
-<!-- 练习页面数据传输增强脚本 -->
-<script>
-// 检查是否已经有增强脚本
-if (!window.practicePageEnhancer) {
-    // 动态加载增强脚本
-    const script = document.createElement('script');
-    script.src = '../../js/practice-page-enhancer.js';
-    script.onload = function() {
-        console.log('练习页面增强脚本已加载');
-    };
-    script.onerror = function() {
-        console.error('练习页面增强脚本加载失败');
-        // 降级到内联增强
-        loadInlineEnhancer();
-    };
-    document.head.appendChild(script);
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+  startTimer();
+  updateAnswerStatus(); // 初始化答题状态
+  
+  // 加载保存的主题
+  if (localStorage.getItem('darkMode') === 'true') {
+    document.body.classList.add('dark');
+    document.querySelector('.theme-toggle').textContent = '☀️';
+  }
+});
+
+// 监听答案变化
+document.addEventListener('change', updateAnswerStatus);
+document.addEventListener('input', updateAnswerStatus);
+
+// 练习页面增强脚本集成
+function loadPracticePageEnhancer() {
+  const script = document.createElement('script');
+  script.src = '../../../js/practice-page-enhancer.js';
+  script.onload = function() {
+    console.log('练习页面增强脚本已加载');
+  };
+  script.onerror = function() {
+    console.error('练习页面增强脚本加载失败');
+    // 降级到内联增强
+    loadInlineEnhancer();
+  };
+  document.head.appendChild(script);
 }
 
 // 内联增强器（降级方案）
 function loadInlineEnhancer() {
-    if (window.practicePageEnhancer) return;
+  if (window.practicePageEnhancer) return;
+  
+  window.practicePageEnhancer = {
+    initialize: function() {
+      console.log('[InlineEnhancer] 内联增强器已初始化');
+      this.setupCommunication();
+      this.setupAnswerListeners();
+      this.interceptSubmit();
+    },
     
-    window.practicePageEnhancer = {
-        initialize: function() {
-            console.log('[InlineEnhancer] 内联增强器已初始化');
-            this.setupCommunication();
-            this.setupAnswerListeners();
-            this.interceptSubmit();
-        },
-        
-        setupCommunication: function() {
-            this.parentWindow = window.opener || window.parent;
-            window.addEventListener('message', (event) => {
-                if (event.data && event.data.type === 'INIT_SESSION') {
-                    this.sessionId = event.data.data.sessionId;
-                    this.sendMessage('SESSION_READY', {
-                        pageType: this.detectPageType(),
-                        url: window.location.href
-                    });
-                }
-            });
-        },
-        
-        detectPageType: function() {
-            const title = document.title || '';
-            if (title.includes('P1')) return 'P1';
-            if (title.includes('P2')) return 'P2';
-            if (title.includes('P3')) return 'P3';
-            return 'unknown';
-        },
-        
-        setupAnswerListeners: function() {
-            this.answers = {};
-            this.startTime = Date.now();
-            
-            document.addEventListener('change', (e) => {
-                if (e.target.name && e.target.name.startsWith('q')) {
-                    this.answers[e.target.name] = e.target.value;
-                }
-            });
-        },
-        
-        interceptSubmit: function() {
-            // 拦截grade函数
-            if (typeof window.grade === 'function') {
-                const originalGrade = window.grade;
-                window.grade = () => {
-                    const result = originalGrade();
-                    setTimeout(() => this.handleSubmit(), 200);
-                    return result;
-                };
-            }
-            
-            // 监听提交按钮
-            document.addEventListener('click', (e) => {
-                if (e.target.tagName === 'BUTTON' && 
-                    (e.target.textContent.includes('Submit') || 
-                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
-                    setTimeout(() => this.handleSubmit(), 300);
-                }
-            });
-        },
-        
-        handleSubmit: function() {
-            const results = {
-                sessionId: this.sessionId,
-                startTime: this.startTime,
-                endTime: Date.now(),
-                duration: Math.round((Date.now() - this.startTime) / 1000),
-                answers: this.answers,
-                scoreInfo: this.extractScore(),
-                pageType: this.detectPageType(),
-                url: window.location.href
-            };
-            
-            this.sendMessage('PRACTICE_COMPLETE', results);
-        },
-        
-        extractScore: function() {
-            const resultsEl = document.getElementById('results');
-            if (!resultsEl) return null;
-            
-            const text = resultsEl.textContent || '';
-            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
-            if (scoreMatch) {
-                const correct = parseInt(scoreMatch[1]);
-                const total = parseInt(scoreMatch[2]);
-                return {
-                    correct: correct,
-                    total: total,
-                    accuracy: total > 0 ? correct / total : 0,
-                    percentage: Math.round((correct / total) * 100),
-                    source: 'inline_extraction'
-                };
-            }
-            return null;
-        },
-        
-        sendMessage: function(type, data) {
-            if (this.parentWindow) {
-                this.parentWindow.postMessage({
-                    type: type,
-                    data: data,
-                    source: 'practice_page'
-                }, '*');
-            }
+    setupCommunication: function() {
+      this.parentWindow = window.opener || window.parent;
+      window.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'INIT_SESSION') {
+          this.sessionId = event.data.data.sessionId;
+          this.sendMessage('SESSION_READY', {
+            pageType: this.detectPageType(),
+            url: window.location.href
+          });
         }
-    };
+      });
+    },
     
-    // 初始化
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            window.practicePageEnhancer.initialize();
-        });
-    } else {
-        window.practicePageEnhancer.initialize();
+    detectPageType: function() {
+      const title = document.title || '';
+      if (title.includes('P1')) return 'P1';
+      if (title.includes('P2')) return 'P2';
+      if (title.includes('P3')) return 'P3';
+      return 'unknown';
+    },
+    
+    setupAnswerListeners: function() {
+      this.answers = {};
+      this.startTime = Date.now();
+      
+      document.addEventListener('change', (e) => {
+        if (e.target.name && e.target.name.startsWith('q')) {
+          this.answers[e.target.name] = e.target.value;
+        }
+      });
+      
+      document.addEventListener('input', (e) => {
+        if (e.target.name && e.target.name.startsWith('q')) {
+          this.answers[e.target.name] = e.target.value;
+        }
+      });
+    },
+    
+    interceptSubmit: function() {
+      // 拦截grade函数
+      if (typeof window.grade === 'function') {
+        const originalGrade = window.grade;
+        window.grade = () => {
+          const result = originalGrade();
+          setTimeout(() => this.handleSubmit(), 200);
+          return result;
+        };
+      }
+      
+      // 监听提交按钮
+      document.addEventListener('click', (e) => {
+        if (e.target.tagName === 'BUTTON' &&
+          (e.target.textContent.includes('Submit') ||
+            e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+          setTimeout(() => this.handleSubmit(), 300);
+        }
+      });
+    },
+    
+    handleSubmit: function() {
+      const results = {
+        sessionId: this.sessionId,
+        startTime: this.startTime,
+        endTime: Date.now(),
+        duration: Math.round((Date.now() - this.startTime) / 1000),
+        answers: this.answers,
+        scoreInfo: this.extractScore(),
+        pageType: this.detectPageType(),
+        url: window.location.href
+      };
+      
+      this.sendMessage('PRACTICE_COMPLETE', results);
+    },
+    
+    extractScore: function() {
+      const resultsEl = document.getElementById('results');
+      if (!resultsEl) return null;
+      
+      const text = resultsEl.textContent || '';
+      const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+      if (scoreMatch) {
+        const correct = parseInt(scoreMatch[1]);
+        const total = parseInt(scoreMatch[2]);
+        return {
+          correct: correct,
+          total: total,
+          accuracy: total > 0 ? correct / total : 0,
+          percentage: Math.round((correct / total) * 100),
+          source: 'inline_extraction'
+        };
+      }
+      return null;
+    },
+    
+    sendMessage: function(type, data) {
+      if (this.parentWindow) {
+        this.parentWindow.postMessage({
+          type: type,
+          data: data,
+          source: 'practice_page'
+        }, '*');
+      }
     }
+  };
+  
+  // 初始化
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      window.practicePageEnhancer.initialize();
+    });
+  } else {
+    window.practicePageEnhancer.initialize();
+  }
 }
+
+// 加载增强脚本
+loadPracticePageEnhancer();
 </script>
 
-</body></html>
+</body>
+</html>

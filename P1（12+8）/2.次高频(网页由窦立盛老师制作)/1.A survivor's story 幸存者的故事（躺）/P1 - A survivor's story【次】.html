@@ -9,7 +9,6 @@
   * { box-sizing: border-box; }
   html,body { height:100%; }
   body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); padding-bottom: 82px; }
-  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
   .shell { display:flex; height:100vh; width:100%; }
   .pane { background:var(--panel); overflow:auto; padding:20px; }
   #left { flex: 0 0 50%; min-width: 280px; }
@@ -37,18 +36,45 @@
   .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
   .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
   .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .controls { display:flex; align-items:center; gap:12px; }
   .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
   .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
   .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
   .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #timer { display: inline-block; background:#fff; border:1px solid var(--line); border-radius:10px; padding:4px 10px; font-size:14px; vertical-align: middle; }
+  .theme-toggle { cursor: pointer; background: transparent; border: none; font-size: 18px; padding: 4px; }
   #selbar { z-index: 6000 !important; }
+
+  /* Dark Mode Styles */
+  body.dark-mode { --bg: #1a1a1a; --panel: #2a2a2a; --line: #4a4a4a; --muted: #999; color: #e0e0e0; }
+  body.dark-mode .pane { background: var(--panel); color: #e0e0e0; }
+  body.dark-mode #right { background: #222; }
+  body.dark-mode button { background: #3a3a3a; color: #e0e0e0; border-color: #555; }
+  body.dark-mode button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  body.dark-mode input.blank, body.dark-mode input[type="text"] { background: #2a2a2a; color: #e0e0e0; border-bottom-color: #666; }
+  body.dark-mode input.blank:focus, body.dark-mode input[type="text"]:focus { border-bottom-color: var(--accent); }
+  body.dark-mode .group, body.dark-mode #results, body.dark-mode details.answerbox { background: #2f2f2f; border-color: var(--line); }
+  body.dark-mode .practice-nav { background: #252525; border-top-color: #444; }
+  body.dark-mode .practice-nav .q-item { background: #3a3a3a; color: #ccc; border-color: #555; }
+  body.dark-mode .practice-nav .q-item:hover { background: #4a4a4a; border-color: var(--accent); }
+  body.dark-mode .practice-nav .q-item.answered { background: #3949ab; border-color: #5c6bc0; color: #e8eaf6; }
+  body.dark-mode .practice-nav .q-item.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  body.dark-mode #timer { background: #3a3a3a; color: #ccc; border-color: #555; }
+  body.dark-mode .hl { background-color: #5b21b6; color: #f5f3ff; }
+  body.dark-mode table, body.dark-mode th, body.dark-mode td { border-color: var(--line); }
+  body.dark-mode th { background: #333; color: #e0e0e0; }
+  body.dark-mode td { background: #2a2a2a; color: #ccc; }
 </style>
 </head>
 <body>
 
 <div class="practice-nav">
   <div class="title">Questions</div>
+  <div class="controls">
+    <span id="timer">00:00</span>
+    <button class="theme-toggle" onclick="toggleDarkMode()" title="Toggle dark/light mode">☀️</button>
+  </div>
   <div class="questions">
     <div class="q-item" id="q1-nav" onclick="scrollToElement('q1-anchor')">1</div>
     <div class="q-item" id="q2-nav" onclick="scrollToElement('q2-anchor')">2</div>
@@ -68,29 +94,25 @@
 
 <div class="shell">
   <section class="pane" id="left">
-    <h2>READING PASSAGE 1 <span id="timer">00:00</span></h2>
+    <h2>READING PASSAGE 1</h2>
     <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>
     
     <h3>A survivor's story</h3>
     <p><em>One native bird in New Zealand that has managed to survive the introduction of non-native species</em></p>
     
-    <p>As an island country with a fauna dominated by birds, New Zealand was once home to an owl species which is now extinct, the laughing owl, named for its distinctive cry. This bird was widespread throughout the islands when European settlers arrived in the middle of the 19th century and it remained in good numbers for some years thereafter. Where other native birds suffered from predation by the Polynesian rat, the laughing owl turned the tables and adapted its diet to include the rodent. It was also capable of catching and killing the other New Zealand owl, the morepork, and even larger birds, such as the weka. However, the laughing owl was wiped out around the beginning of the 20th century, its demise caused by specimen collectors, habitat changes, and non-native predators including cats and stoats. Surprisingly, it is the smaller owl, the morepork, that has managed to survive until this day.</p>
+    <p>The little spotted kiwi has found ways to cope with the threat to its survival and its numbers are now beginning to increase. But this is only because many people have made considerable efforts to save this unique bird.</p>
     
-    <p>Speckled dark brown, with yellow eyes and long tails, they are around 29 centimetres long from head to tail and 175 grams in weight. Moreporks have fringes on the edge of their feathers, so they can fly almost silently and not alert potential prey. They have acute hearing and their large eyes are very sensitive to light.</p>
+    <p>New Zealand was the last country to be settled by humans. For millions of years, a number of bird species had evolved and lived safely there. In particular, many of these birds, including the little spotted kiwi, were flightless. They could afford to be flightless because until the arrival of humans there were no mammals in New Zealand to hunt them. When mammals were introduced by European settlers, bird life changed forever.</p>
     
-    <p>Moreporks nest in tree hollows, in clumps of plants, or in cavities among rocks and roots. In the wild, moreporks usually start nesting in October, although two specimens have been recorded nesting in mid-winter, possibly stimulated by an ample food supply. The female lays up to three white eggs, which she incubates for 20 to 30 days. During this time, she rarely hunts, and the male brings food to her.</p>
+    <p>At the time when humans first arrived in New Zealand, there were three different kiwi species, and the little spotted kiwi was the most common. The birds were about the size of chickens and lived in forests throughout the North and South Islands. Before the Europeans arrived in 1840s, the Maori people hunted the kiwi, but not excessively. In the late 1800s, museums and collectors became interested in the kiwi, and many birds were captured for scientific purposes. Even more devastating to the kiwi population was the clearing of its habitat. As European settlers cleared forests to make farms, the birds had less and less area in which to live. Even worse for the little spotted kiwi was the impact of the mammals that were introduced to New Zealand by Europeans. Cats attacked the kiwi chicks and stoats (small carnivorous mammals) killed both young and adult birds.</p>
     
-    <p>Once the chicks hatch, she stays mainly on the nest until the young owls are fully feathered. When hatched, chicks are covered in light grey down and have their eyes closed. The eyes do not open until the eighth day after hatching. They can fly at around 35 days.</p>
+    <p>Things had become so bad for the little spotted kiwi that, by 1900, it was believed to be extinct on the North Island, and almost extinct elsewhere. What saved it from total extinction was the transfer of five birds to Kapiti Island by a government minister, Richard Seddon, in 1913. Kapiti Island is a nature reserve about 5 km from the New Zealand coast. The island was special because it had no mammals that would attack the kiwi. In fact, the island's native wildlife was so special that visitors required official permission to land on the island.</p>
     
-    <p>By day, moreporks sleep in roosts. By night, they hunt a variety of animals – mainly large invertebrates including scarab and huhu beetles, moths, caterpillars and spiders. They also take small birds and mice. They can find suitable food in pine forest as well as native forest. A morepork uses its sharp talons to catch or stun its prey, which it then carries away in its bill. Moreporks are clever hunters, and birds such as robins, grey warblers and fantails can end up as their prey. In the day, these small birds sometimes mob drowsy moreporks and chase them away from their roosts; they force the sleepy predators to search for a more peaceful spot.</p>
+    <p>For a number of years, it was not certain whether the little spotted kiwi would survive, even on Kapiti Island. By 1980, the population was estimated to be around 100 birds. People who wanted to ensure the birds' survival thought that one small population was very vulnerable. If a natural disaster, disease or fire wiped out the population on Kapiti Island, the little spotted kiwi would become extinct. So, a decision was made to establish other populations on predator-free islands.</p>
     
-    <p>Moreporks have proved to be ungracious hosts. Scientists trying to establish a population of plovers on Motuora Island in New Zealand's Hauraki Gulf were mystified as to why only two birds survived out of the 75 placed there. The culprits turned out to be five pairs of moreporks that ate or chased away the new arrivals.</p>
+    <p>The first additional population was established in 1982, when the first two little spotted kiwi were taken from Kapiti Island to Red Mercury Island. This transfer was unsuccessful, however, because stoats later swam to the island and killed the birds. In 1983, three birds were moved to Hen Island, which is also predator-free. This population has been much more successful, and the Hen Island population is now estimated to be more than 100. A third population of little spotted kiwi was later established on Tiritiri Matangi Island.</p>
     
-    <p>Although moreporks are still considered to be relatively common, it is likely that numbers are in gradual decline due to predation and loss of habitat. As the female is a hole-nester, she is vulnerable to predators such as stoats and possums during the breeding season, and eggs and chicks will also be at risk from rats. The use of pesticides is another possible threat to the owls, though not a direct one. As moreporks are at the top of the food chain, they could be affected by an accumulative poison by consuming prey that has ingested poison.</p>
-    
-    <p>The New Zealand Department of Conservation is taking steps to ensure the preservation of New Zealand's only native owl. The department is involved in measuring the population of moreporks and has put transmitters on a number of birds to determine survival and mortality. As well as being New Zealand's only native owl, the morepork has symbolic and spiritual importance, so in monitoring the birds it is hoped that the morepork will continue to survive and thrive.</p>
-    
-    <p>At dusk, the melancholy sound of the morepork can be heard in forests and parks as it calls to other moreporks and claims territory. Its Māori name (ruru) echoes its two-part cry. In the tradition of the Māori people of New Zealand, the morepork, or ruru, was often seen as a careful guardian. A number of sayings referred to the bird's alertness. As a bird of the night, it was associated with the spirit world. Moreporks were believed to act as messengers to the gods in the heavens, flying along spiritual paths in the sky. They were the mediums used to communicate with the gods. The occasional high, piercing call of the morepork signified bad news, but the lower-pitched and more common “ruru” call heralded good news.</p>
+    <p>Today, the little spotted kiwi population is estimated to be around 1,500 birds. This is much higher than the tiny population of 100 that existed in 1980, but is still much lower than the thousands of little spotted kiwi that existed before the arrival of the Europeans. Maintaining the present population depends entirely on keeping the three island populations free from predators. This is expensive and requires constant effort. It is too dangerous to reintroduce little spotted kiwi to mainland New Zealand because of the large number of introduced mammals that live there.</p>
 
     <p>&nbsp;</p>
   </section>
@@ -100,106 +122,124 @@
     
     <div class="group">
       <h4>Questions 1–7</h4>
-      <p>Do the following statements agree with the information given in Reading Passage 1?</p>
+      <p>Do the following statements agree with the information in Reading Passage 1?</p>
       <p>In boxes 1–7 on your answer sheet, write</p>
       <ul>
-        <li><strong>TRUE</strong> if the statement agrees with the information</li>
-        <li><strong>FALSE</strong> if the statement contradicts the information</li>
-        <li><strong>NOT GIVEN</strong> if there is no information on this</li>
+        <li>TRUE if the statement agrees with the information</li>
+        <li>FALSE if the statement contradicts the information</li>
+        <li>NOT GIVEN if there is no information about this</li>
       </ul>
       
       <a id="q1-anchor"></a>
       <div id="q1-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>1 Early European settlers made detailed studies of the morepork.</p>
+        <p>1 Humans were the first mammals to live in New Zealand.</p>
         <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label><input name="q1" type="radio" value="TRUE"> TRUE</label> <label><input name="q1" type="radio" value="FALSE"> FALSE</label> <label><input name="q1" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+          <label style="margin:0;"><input name="q1" type="radio" value="TRUE"> TRUE</label>
+          <label style="margin:0;"><input name="q1" type="radio" value="FALSE"> FALSE</label>
+          <label style="margin:0;"><input name="q1" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
         </div>
       </div>
       
       <a id="q2-anchor"></a>
       <div id="q2-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>2 The Polynesian rat had a negative effect on the number of laughing owls.</p>
+        <p>2 The little spotted kiwi was the largest of the three kiwi species.</p>
         <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label><input name="q2" type="radio" value="TRUE"> TRUE</label> <label><input name="q2" type="radio" value="FALSE"> FALSE</label> <label><input name="q2" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+          <label style="margin:0;"><input name="q2" type="radio" value="TRUE"> TRUE</label>
+          <label style="margin:0;"><input name="q2" type="radio" value="FALSE"> FALSE</label>
+          <label style="margin:0;"><input name="q2" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
         </div>
       </div>
       
       <a id="q3-anchor"></a>
       <div id="q3-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>3 The laughing owl was larger than the morepork.</p>
+        <p>3 Museums played a role in the decline of the little spotted kiwi population.</p>
         <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label><input name="q3" type="radio" value="TRUE"> TRUE</label> <label><input name="q3" type="radio" value="FALSE"> FALSE</label> <label><input name="q3" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+          <label style="margin:0;"><input name="q3" type="radio" value="TRUE"> TRUE</label>
+          <label style="margin:0;"><input name="q3" type="radio" value="FALSE"> FALSE</label>
+          <label style="margin:0;"><input name="q3" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
         </div>
       </div>
-
+      
       <a id="q4-anchor"></a>
       <div id="q4-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>4 Rats pose a risk to young moreporks.</p>
+        <p>4 Richard Seddon moved the kiwi to Kapiti Island to prevent their extinction.</p>
         <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label><input name="q4" type="radio" value="TRUE"> TRUE</label> <label><input name="q4" type="radio" value="FALSE"> FALSE</label> <label><input name="q4" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+          <label style="margin:0;"><input name="q4" type="radio" value="TRUE"> TRUE</label>
+          <label style="margin:0;"><input name="q4" type="radio" value="FALSE"> FALSE</label>
+          <label style="margin:0;"><input name="q4" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
         </div>
       </div>
-
+      
       <a id="q5-anchor"></a>
       <div id="q5-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>5 The New Zealand Department of Conservation is hoping to limit the population of moreporks.</p>
+        <p>5 Permission was required to visit Kapiti Island because there were so few kiwi there.</p>
         <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label><input name="q5" type="radio" value="TRUE"> TRUE</label> <label><input name="q5" type="radio" value="FALSE"> FALSE</label> <label><input name="q5" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+          <label style="margin:0;"><input name="q5" type="radio" value="TRUE"> TRUE</label>
+          <label style="margin:0;"><input name="q5" type="radio" value="FALSE"> FALSE</label>
+          <label style="margin:0;"><input name="q5" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
         </div>
       </div>
-
+      
       <a id="q6-anchor"></a>
       <div id="q6-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>6 Other bird species are frightened away when they hear the morepork's cry.</p>
+        <p>6 Diseases have threatened the survival of the kiwi.</p>
         <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label><input name="q6" type="radio" value="TRUE"> TRUE</label> <label><input name="q6" type="radio" value="FALSE"> FALSE</label> <label><input name="q6" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+          <label style="margin:0;"><input name="q6" type="radio" value="TRUE"> TRUE</label>
+          <label style="margin:0;"><input name="q6" type="radio" value="FALSE"> FALSE</label>
+          <label style="margin:0;"><input name="q6" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
         </div>
       </div>
-
+      
       <a id="q7-anchor"></a>
       <div id="q7-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>7 In Māori tradition, the low call of the morepork had negative associations.</p>
+        <p>7 The transfer of kiwi to Red Mercury Island was successful.</p>
         <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label><input name="q7" type="radio" value="TRUE"> TRUE</label> <label><input name="q7" type="radio" value="FALSE"> FALSE</label> <label><input name="q7" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+          <label style="margin:0;"><input name="q7" type="radio" value="TRUE"> TRUE</label>
+          <label style="margin:0;"><input name="q7" type="radio" value="FALSE"> FALSE</label>
+          <label style="margin:0;"><input name="q7" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
         </div>
       </div>
-
     </div>
     
     <div class="group">
       <h4>Questions 8–13</h4>
       <p>Complete the notes below.</p>
-      <p>Choose <strong>ONE WORD AND/OR A NUMBER</strong> from the passage for each answer.</p>
+      <p>Choose ONE WORD ONLY from the passage for each answer.</p>
+      <p>Write your answers in boxes 8–13 on your answer sheet.</p>
       
-      <div style="padding: 10px; border: 1px solid #ccc; border-radius: 8px; margin-top: 1em;">
-        <h4 style="text-align: center;">The Morepork</h4>
-        
-        <p><strong>Appearance</strong></p>
-        <ul>
-            <a id="q8-anchor"></a><li>approximately 8 <input name="q8" type="text" class="blank" maxlength="40"> in length</li>
-            <li>feathers with fringes to enable quiet flight</li>
-        </ul>
-
-        <p><strong>Nesting</strong></p>
-        <ul>
-            <a id="q9-anchor"></a><li>nests in trees, plants or spaces in roots and 9 <input name="q9" type="text" class="blank" maxlength="40"></li>
-            <li>after about 35 days, baby moreporks are capable of leaving the nest</li>
-        </ul>
-
-        <p><strong>Hunting</strong></p>
-        <ul>
-            <a id="q10-anchor"></a><li>transports its prey using its 10 <input name="q10" type="text" class="blank" maxlength="40"></li>
-            <a id="q11-anchor"></a><li>can be chased away by other birds during the 11 <input name="q11" type="text" class="blank" maxlength="40"></li>
-            <a id="q12-anchor"></a><li>attacked 12 <input name="q12" type="text" class="blank" maxlength="40"> that had been introduced to Motuora Island</li>
-        </ul>
-
-        <p><strong>Threats</strong></p>
-        <ul>
-            <a id="q13-anchor"></a><li>may be exposed to 13 <input name="q13" type="text" class="blank" maxlength="40"> in their prey</li>
-        </ul>
+      <p><strong>Notes on the little spotted kiwi</strong></p>
+      
+      <a id="q8-anchor"></a>
+      <div id="q8-section" style="padding:4px 0;">
+        <p>8 The bird was about <input class="blank" maxlength="20" name="q8" placeholder="Answer here"/> long.</p>
+      </div>
+      
+      <a id="q9-anchor"></a>
+      <div id="q9-section" style="padding:4px 0;">
+        <p>9 In New Zealand it lived on <input class="blank" maxlength="20" name="q9" placeholder="Answer here"/>.</p>
+      </div>
+      
+      <a id="q10-anchor"></a>
+      <div id="q10-section" style="padding:4px 0;">
+        <p>10 Its <input class="blank" maxlength="20" name="q10" placeholder="Answer here"/> was one particular physical feature that made it different from other birds.</p>
+      </div>
+      
+      <a id="q11-anchor"></a>
+      <div id="q11-section" style="padding:4px 0;">
+        <p>11 This bird mainly feeds during the <input class="blank" maxlength="20" name="q11" placeholder="Answer here"/>.</p>
+      </div>
+      
+      <a id="q12-anchor"></a>
+      <div id="q12-section" style="padding:4px 0;">
+        <p>12 The decline of the kiwi was partly due to introduced <input class="blank" maxlength="20" name="q12" placeholder="Answer here"/>.</p>
+      </div>
+      
+      <a id="q13-anchor"></a>
+      <div id="q13-section" style="padding:4px 0;">
+        <p>13 There is now a danger of <input class="blank" maxlength="20" name="q13" placeholder="Answer here"/> affecting kiwi numbers.</p>
       </div>
     </div>
-
+    
     <div style="display:flex;gap:8px;margin-bottom:10px;">
       <button class="primary" onclick="grade()">Submit</button>
       <button onclick="resetForm()">Reset</button>
@@ -229,7 +269,6 @@
   <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
 </div>
 <div id="toast"></div>
-
 <script>
 // Timer
 let _t=0; const _timerEl=document.getElementById('timer');
@@ -239,20 +278,24 @@ setInterval(function(){
   var s=String(_t%60).padStart(2,'0'); 
   _timerEl.textContent=m+':'+s; 
 },1000);
+
 // Drag divider
 var divider = document.getElementById('divider');
 var left = document.getElementById('left');
 var right = document.getElementById('right');
 var dragging=false;
+
 function startDrag(e){ 
   dragging=true; 
   document.body.style.cursor='ew-resize'; 
   if(e.preventDefault) e.preventDefault(); 
 }
+
 function endDrag(){ 
   dragging=false; 
   document.body.style.cursor=''; 
 }
+
 function onMove(clientX){
   var container = document.querySelector('.shell').getBoundingClientRect();
   var x = clientX - container.left;
@@ -260,12 +303,15 @@ function onMove(clientX){
   left.style.flex = '0 0 ' + x + 'px';
   right.style.flex = '1 1 auto';
 }
+
 divider.addEventListener('mousedown', function(e){ startDrag(e); });
 window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
 window.addEventListener('mouseup', endDrag);
 divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
 window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
 window.addEventListener('touchend', endDrag);
+</script>
+<script>
 // Highlight toolbar
 var selbar = document.getElementById('selbar');
 var btnHL = document.getElementById('btnHL');
@@ -274,6 +320,7 @@ var btnNote = document.getElementById('btnNote');
 var lastRange=null;
 var currentHlNode=null;
 var keepToolbar=false;
+
 function positionSelbarForRect(rect){
   selbar.style.display='flex';
   requestAnimationFrame(function(){
@@ -283,6 +330,7 @@ function positionSelbarForRect(rect){
     selbar.style.left = Math.max(8, leftPos) + 'px';
   });
 }
+
 function updateSelbar(){
   var sel=window.getSelection();
   if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
@@ -295,6 +343,7 @@ function updateSelbar(){
   currentHlNode=null;
   positionSelbarForRect(range.getBoundingClientRect());
 }
+
 document.getElementById('left').addEventListener('mouseup', updateSelbar);
 document.getElementById('right').addEventListener('mouseup', updateSelbar);
 document.addEventListener('selectionchange', function(){ 
@@ -308,6 +357,7 @@ document.addEventListener('selectionchange', function(){
 document.addEventListener('scroll', function(){ 
   if(selbar.style.display==='flex') updateSelbar(); 
 });
+
 document.addEventListener('mousedown', function(e){
   var t = e.target;
   if(t.classList && t.classList.contains('hl')){
@@ -316,6 +366,7 @@ document.addEventListener('mousedown', function(e){
     keepToolbar = false;
   }
 }, true);
+
 document.addEventListener('click', function(e){
   var target = e.target;
   if(target.classList && target.classList.contains('hl')){
@@ -327,6 +378,7 @@ document.addEventListener('click', function(e){
     setTimeout(function(){ keepToolbar=false; }, 0);
   }
 }, true);
+
 function doHighlight(){
   if(currentHlNode) return;
   if(!lastRange || lastRange.collapsed) return;
@@ -341,6 +393,7 @@ function doHighlight(){
   selbar.style.display='none';
   showToast('Highlighted');
 }
+
 function removeHighlight(){
   if(currentHlNode){
     var p = currentHlNode.parentNode;
@@ -366,22 +419,29 @@ function removeHighlight(){
   selbar.style.display='none';
   showToast('Highlight removed');
 }
+
 btnHL.addEventListener('click', doHighlight);
 btnUH.addEventListener('click', removeHighlight);
+</script>
+<script>
 // Notes
 var notes = document.getElementById('notes');
 var noteArea = document.getElementById('noteArea');
 var btnCopy=document.getElementById('btnCopy');
 var btnClose=document.getElementById('btnClose');
+
 function toggleNotes(){ 
   notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
 }
+
 window.toggleNotes = toggleNotes;
+
 btnClose.addEventListener('click', toggleNotes);
 btnCopy.addEventListener('click', async function(){ 
   await navigator.clipboard.writeText(noteArea.value||''); 
   showToast('Copied'); 
 });
+
 btnNote.addEventListener('click', function(){
   var text = '';
   if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
@@ -390,6 +450,7 @@ btnNote.addEventListener('click', function(){
   if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
   selbar.style.display='none';
 });
+
 // Toast
 var toastEl=document.getElementById('toast');
 function showToast(msg){
@@ -397,119 +458,221 @@ function showToast(msg){
   toastEl.style.display='block';
   setTimeout(function(){ toastEl.style.display='none'; }, 1200);
 }
+
+// Dark Mode Toggle
+function toggleDarkMode() {
+  document.body.classList.toggle('dark-mode');
+  const isDarkMode = document.body.classList.contains('dark-mode');
+  localStorage.setItem('darkMode', isDarkMode ? 'enabled' : 'disabled');
+  document.querySelector('.theme-toggle').textContent = isDarkMode ? '🌙' : '☀️';
+}
+
+// Initialize dark mode from localStorage
+if (localStorage.getItem('darkMode') === 'enabled') {
+  document.body.classList.add('dark-mode');
+  document.querySelector('.theme-toggle').textContent = '🌙';
+}
+</script>
+<script>
 // Answer key and grading
 var answers = {
-  q1: "NOT GIVEN", q2: "FALSE", q3: "TRUE", q4: "TRUE", q5: "FALSE", q6: "NOT GIVEN", q7: "FALSE",
-  q8: "29 centimetres", q9: "rocks", q10: "bill", q11: "day",
-  q12: "plovers", q13: "poison"
+  "q1":"NOT GIVEN", "q2":"FALSE", "q3":"TRUE", "q4":"TRUE", "q5":"FALSE", "q6":"NOT GIVEN", "q7":"FALSE",
+  "q8":"29 centimetres", "q9":"rocks", "q10":"bill", "q11":"day",
+  "q12":"plovers", "q13":"poison"
 };
+
+var acceptable = {
+  // No acceptable alternatives specified
+};
+
+function markChoice(q, user){
+  return String(user||'').toUpperCase() === String(answers[q]).toUpperCase();
+}
+
+function markBlank(q, user){
+  var u = String(user||'').trim().toLowerCase();
+  var key = String(answers[q]).trim().toLowerCase();
+  if(acceptable[q]){
+    return acceptable[q].map(a => a.toLowerCase()).indexOf(u) >= 0;
+  }
+  return u === key;
+}
+
 function grade(){
   var total=0, correct=0, lines=[];
+  
   function push(q, ok, user){
     total++; if(ok) correct++;
     lines.push(q.toUpperCase()+": "+(user||'None')+" "+(ok?'✅':'❌'));
   }
-  // 1–7 T/F/NG
-  for(var n=1;n<=7;n++){
-    var sel=document.querySelector('input[name="q'+n+'"]:checked');
-    var val=sel?sel.value:'';
-    push('q'+n, val === answers['q'+n], val);
-  }
-  // 8-13 note completion
-  for(var n=8;n<=13;n++){
-    var el=document.querySelector('input[name="q'+n+'"]');
-    var val=el?el.value.trim().toLowerCase():'';
-    push('q'+n, val === answers['q'+n], val);
+  
+  // Check radio questions (1-7)
+  for(let n=1; n<=7; n++){
+    const q = `q${n}`;
+    const selected = document.querySelector(`input[name="${q}"]:checked`);
+    const userAnswer = selected ? selected.value : '';
+    const isCorrect = markChoice(q, userAnswer);
+    push(q, isCorrect, userAnswer);
   }
   
-  var acc = (total? Math.round(100*correct/total):0);
-  var html = '<p><strong>Score:</strong> '+correct+'/'+total+' <span class="badge">Accuracy '+acc+'%</span></p>';
-  html += '<pre>'+lines.join('\n')+'</pre>';
-  document.getElementById('results').innerHTML = html;
-  
-  var ahtml = '<ol>';
-  for(var i=1; i<=13; i++){
-    ahtml += '<li>' + answers['q'+i] + '</li>';
+  // Check blank questions (8-13)
+  for(let n=8; n<=13; n++){
+    const q = `q${n}`;
+    const input = document.querySelector(`input[name="${q}"]`);
+    const userAnswer = input ? input.value : '';
+    const isCorrect = markBlank(q, userAnswer);
+    push(q, isCorrect, userAnswer);
   }
-  ahtml += '</ol>';
-  document.getElementById('answerContent').innerHTML = ahtml;
-  document.querySelector('#answerBox .badge').textContent='tap to view';
+  
+  // Show results
+  const acc = Math.round(100 * correct / total);
+  document.getElementById('results').innerHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p>
+    <pre>${lines.join('\n')}</pre>
+  `;
+  
+  // Show answer key
+  document.getElementById('answerContent').innerHTML = `
+    <ol>
+      <li>1 → NOT GIVEN</li>
+      <li>2 → FALSE</li>
+      <li>3 → TRUE</li>
+      <li>4 → TRUE</li>
+      <li>5 → FALSE</li>
+      <li>6 → NOT GIVEN</li>
+      <li>7 → FALSE</li>
+      <li>8 → 29 centimetres</li>
+      <li>9 → rocks</li>
+      <li>10 → bill</li>
+      <li>11 → day</li>
+      <li>12 → plovers</li>
+      <li>13 → poison</li>
+    </ol>
+  `;
+  document.querySelector('#answerBox .badge').textContent = 'tap to view';
 }
+
 function resetForm(){
-  document.querySelectorAll('input[type="radio"]').forEach(el=>el.checked=false);
-  document.querySelectorAll('input[type="text"]').forEach(el=>el.value="");
-  document.getElementById('results').innerHTML='';
-  document.getElementById('answerContent').innerHTML='';
+  // Reset radio buttons
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // Reset text inputs
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = '';
+  });
+  
+  // Reset results and answers
+  document.getElementById('results').innerHTML = '';
+  document.getElementById('answerContent').innerHTML = '';
   document.querySelector('#answerBox .badge').textContent = 'hidden';
-  document.querySelectorAll('.q-item').forEach(item => item.classList.remove('answered'));
+  
+  // Reset answered status in nav
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
 }
+
+// Scroll to question anchor
 function scrollToElement(id){
-  var el = document.getElementById(id);
+  const el = document.getElementById(id);
   if(el){ 
     el.scrollIntoView({behavior:'smooth', block:'center'}); 
   }
-  var navs = document.querySelectorAll('.practice-nav .q-item');
+  // Highlight nav item briefly
+  const navs = document.querySelectorAll('.practice-nav .q-item');
   navs.forEach(n => n.classList.remove('active'));
-  var btn = document.getElementById(id.replace('-anchor','-nav'));
+  const btn = document.getElementById(id.replace('-anchor','-nav'));
   if(btn){ 
     btn.classList.add('active'); 
     setTimeout(() => btn.classList.remove('active'), 800); 
   }
 }
-(function(){
-  function mark(qn){
-    var nav = document.getElementById('q'+qn+'-nav');
-    if(!nav) return;
-    
-    var answered = false;
-    var radios = document.querySelectorAll(`input[name="q${qn}"]`);
-    var text = document.querySelector(`input[name="q${qn}"].blank`);
-    
-    if (radios.length > 0) {
-      radios.forEach(function(r){ if(r.checked) answered=true; });
-    }
-    if (text) {
-      answered = answered || (text.value && text.value.trim().length > 0);
-    }
 
-    if(answered) nav.classList.add('answered'); else nav.classList.remove('answered');
+// Mark answered on interaction
+(function(){
+  function markAnswered(qn){
+    const nav = document.getElementById(`q${qn}-nav`);
+    if(!nav) return;
+    let answered = false;
+    
+    // Check radio buttons (1-7)
+    if(qn >= 1 && qn <=7){
+      const radios = document.querySelectorAll(`input[name="q${qn}"]:checked`);
+      answered = radios.length > 0;
+    } 
+    // Check text inputs (8-13)
+    else if(qn >=8 && qn <=13){
+      const input = document.querySelector(`input[name="q${qn}"]`);
+      answered = input && input.value.trim().length > 0;
+    }
+    
+    if(answered) nav.classList.add('answered');
+    else nav.classList.remove('answered');
   }
-  for(var q=1;q<=13;q++){
-    (function(n){
-      document.querySelectorAll(`input[name="q${n}"]`).forEach(function(r){ r.addEventListener('change', function(){ mark(n); }); });
-      var text = document.querySelector(`input[name="q${n}"].blank`);
-      if(text){ text.addEventListener('input', function(){ mark(n); }); }
-    })(q);
+  
+  // Monitor radio buttons
+  for(let n=1; n<=7; n++){
+    document.querySelectorAll(`input[name="q${n}"]`).forEach(radio => {
+      radio.addEventListener('change', () => markAnswered(n));
+    });
+  }
+  
+  // Monitor text inputs
+  for(let n=8; n<=13; n++){
+    const input = document.querySelector(`input[name="q${n}"]`);
+    if(input){
+      input.addEventListener('input', () => markAnswered(n));
+      input.addEventListener('blur', () => markAnswered(n));
+    }
   }
 })();
 </script>
 
 <!-- 练习页面数据传输增强脚本 -->
 <script>
+// 检查是否已经有增强脚本
 if (!window.practicePageEnhancer) {
+    // 动态加载增强脚本
     const script = document.createElement('script');
     script.src = '../../js/practice-page-enhancer.js';
-    script.onload = function() { console.log('练习页面增强脚本已加载'); };
-    script.onerror = function() { console.error('练习页面增强脚本加载失败'); loadInlineEnhancer(); };
+    script.onload = function() {
+        console.log('练习页面增强脚本已加载');
+    };
+    script.onerror = function() {
+        console.error('练习页面增强脚本加载失败');
+        // 降级到内联增强
+        loadInlineEnhancer();
+    };
     document.head.appendChild(script);
 }
+
+// 内联增强器（降级方案）
 function loadInlineEnhancer() {
     if (window.practicePageEnhancer) return;
+    
     window.practicePageEnhancer = {
         initialize: function() {
+            console.log('[InlineEnhancer] 内联增强器已初始化');
             this.setupCommunication();
             this.setupAnswerListeners();
             this.interceptSubmit();
         },
+        
         setupCommunication: function() {
             this.parentWindow = window.opener || window.parent;
             window.addEventListener('message', (event) => {
                 if (event.data && event.data.type === 'INIT_SESSION') {
                     this.sessionId = event.data.data.sessionId;
-                    this.sendMessage('SESSION_READY', { pageType: this.detectPageType(), url: window.location.href });
+                    this.sendMessage('SESSION_READY', {
+                        pageType: this.detectPageType(),
+                        url: window.location.href
+                    });
                 }
             });
         },
+        
         detectPageType: function() {
             const title = document.title || '';
             if (title.includes('P1')) return 'P1';
@@ -517,21 +680,20 @@ function loadInlineEnhancer() {
             if (title.includes('P3')) return 'P3';
             return 'unknown';
         },
+        
         setupAnswerListeners: function() {
             this.answers = {};
             this.startTime = Date.now();
+            
             document.addEventListener('change', (e) => {
-                if (e.target.name) {
-                    this.answers[e.target.name] = e.target.value;
-                }
-            });
-             document.addEventListener('input', (e) => {
-                if (e.target.name && e.target.classList.contains('blank')) {
+                if (e.target.name && e.target.name.startsWith('q')) {
                     this.answers[e.target.name] = e.target.value;
                 }
             });
         },
+        
         interceptSubmit: function() {
+            // 拦截grade函数
             if (typeof window.grade === 'function') {
                 const originalGrade = window.grade;
                 window.grade = () => {
@@ -540,7 +702,17 @@ function loadInlineEnhancer() {
                     return result;
                 };
             }
+            
+            // 监听提交按钮
+            document.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON' && 
+                    (e.target.textContent.includes('Submit') || 
+                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+                    setTimeout(() => this.handleSubmit(), 300);
+                }
+            });
         },
+        
         handleSubmit: function() {
             const results = {
                 sessionId: this.sessionId,
@@ -552,31 +724,56 @@ function loadInlineEnhancer() {
                 pageType: this.detectPageType(),
                 url: window.location.href
             };
+            
             this.sendMessage('PRACTICE_COMPLETE', results);
         },
+        
         extractScore: function() {
             const resultsEl = document.getElementById('results');
             if (!resultsEl) return null;
+            
             const text = resultsEl.textContent || '';
-            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
-            if (scoreMatch) {
-                const correct = parseInt(scoreMatch[1]);
-                const total = parseInt(scoreMatch[2]);
-                return { correct: correct, total: total, accuracy: total > 0 ? correct / total : 0, percentage: Math.round((correct / total) * 100), source: 'inline_extraction' };
-            }
-            return null;
+            const scoreMatch = text.match(/(\d+)\/(\d+)/);
+            const accuracyMatch = text.match(/Accuracy\s+(\d+)%/);
+            
+            return scoreMatch ? {
+                score: parseInt(scoreMatch[1]),
+                total: parseInt(scoreMatch[2]),
+                accuracy: accuracyMatch ? parseInt(accuracyMatch[1]) : 0
+            } : null;
         },
+        
         sendMessage: function(type, data) {
-            if (this.parentWindow) {
-                this.parentWindow.postMessage({ type: type, data: data, source: 'practice_page' }, '*');
+            if (this.parentWindow && this.parentWindow !== window) {
+                this.parentWindow.postMessage({
+                    type: type,
+                    data: data,
+                    source: 'practicePageEnhancer'
+                }, '*');
             }
         }
     };
+    
+    // 自动初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        window.practicePageEnhancer.initialize();
+    });
+    
+    // 如果DOM已经加载完成
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => { window.practicePageEnhancer.initialize(); });
+        document.addEventListener('DOMContentLoaded', function() {
+            window.practicePageEnhancer.initialize();
+        });
     } else {
         window.practicePageEnhancer.initialize();
     }
+}
+
+// 页面加载完成后尝试加载增强器
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', loadInlineEnhancer);
+} else {
+    loadInlineEnhancer();
 }
 </script>
 

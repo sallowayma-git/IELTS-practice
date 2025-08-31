@@ -1,63 +1,333 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<title>Sydney Opera House</title>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta charset="UTF-8">
+<title>P1 – Sydney Opera House</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+  }
   * { box-sizing: border-box; }
   html,body { height:100%; }
-  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
-  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+    padding-bottom: 82px; 
+  }
+  
+  /* 布局样式 */
   .shell { display:flex; height:100vh; width:100%; }
   .pane { background:var(--panel); overflow:auto; padding:20px; }
   #left { flex: 0 0 50%; min-width: 280px; }
   #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
   #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  
+  /* 文本样式 */
   h2,h3,h4 { margin:0 0 10px; }
   #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  
+  /* 组件样式 */
   .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
-  table { border-collapse: collapse; width:100%; }
-  th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
-  th:first-child, td:first-child { width:92px; }
-  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
-  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
-  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
-  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
-  .hl:hover { filter: brightness(0.98); }
-  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
-  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  input.blank { 
+    border:none; 
+    border-bottom:1px solid #9ca3af; 
+    padding:2px 4px; 
+    font-size:1em; 
+    background:transparent; 
+    min-width: 80px;
+  }
+  input.blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+  
+  /* 按钮样式 */
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    background:#fff; 
+    border-radius:6px; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    font-size:14px; 
+  }
+  button:hover { background:#f8fafc; border-color:#cbd5e1; }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:var(--accent); 
+  }
+  button.primary:hover { background:#2563eb; }
+  
+  /* 计时器样式 */
+  #timer { 
+    background:#fff; 
+    color:var(--muted); 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    padding:6px 12px; 
+    cursor:pointer; 
+    font-family: 'Courier New', monospace; 
+    transition:all 0.2s; 
+    min-width: 70px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: bold;
+  }
+  #timer:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  #timer.paused { 
+    color: #ef4444; 
+    border-color: #fecaca; 
+    background: #fef2f2; 
+  }
+  
+  /* 主题切换按钮 */
+  .theme-toggle { 
+    background:#fff; 
+    color:var(--muted); 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .theme-toggle:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    transform: scale(1.05);
+  }
+  .theme-toggle:active {
+    transform: scale(0.95);
+  }
+  
+  /* 深色模式样式 */
+  body.dark { 
+    --bg: #0f172a; 
+    --panel: #1e293b; 
+    --line: #334155; 
+    --muted: #94a3b8; 
+    color: #e2e8f0; 
+  }
+  body.dark #right { background: #0f172a; }
+  body.dark .group { background: #1e293b; border-color: #334155; }
+  body.dark button { background: #1e293b; color: #e2e8f0; border-color: #334155; }
+  body.dark button:hover { background: #334155; }
+  body.dark button.primary { background: var(--accent); color: #fff; }
+  body.dark #results { background: #1e293b; border-color: #334155; }
+  body.dark #notes { background: #1e293b; border-color: #334155; color: #e2e8f0; }
+  body.dark .practice-nav { background: #1e293b; border-color: #334155; }
+  body.dark .q-item { background: #0f172a; color: #e2e8f0; border-color: #334155; }
+  body.dark .q-item:hover { background: #334155; }
+  body.dark .q-item.answered { background: #1e40af; border-color: var(--accent); color: #93c5fd; }
+  body.dark #timer { background: #1e293b; color: #e2e8f0; border-color: #334155; }
+  body.dark #timer:hover { background: #334155; border-color: var(--accent); }
+  body.dark details.answerbox { background: #1e293b; border-color: #334155; }
+  body.dark input.blank { color: #e2e8f0; border-bottom-color: #64748b; }
+  body.dark input.blank:focus { border-bottom-color: var(--accent); }
+  
+  /* 响应式设计 */
+  @media (max-width: 768px) {
+    .shell { flex-direction: column; }
+    #left, #right { flex: none; min-width: auto; }
+    #divider { display: none; }
+    .practice-nav .controls { gap: 8px; }
+    #timer { font-size: 12px; padding: 3px 8px; }
+    .theme-toggle { width: 32px; height: 32px; font-size: 14px; }
+    #notes { width: calc(100vw - 24px); right: 12px; left: 12px; }
+  }
+  
+  /* 选择工具栏 */
+  #selbar { 
+    position: fixed; 
+    display:none; 
+    z-index: 2000; 
+    background:#111; 
+    color:#fff; 
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow: var(--shadow); 
+    font-size: 13px; 
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; 
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+  }
   #selbar button:hover { border-color:#fff; }
-  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
-  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
-  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
-  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
-  .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:40px; padding:4px 8px; display:inline-flex; align-items:center; justify-content:space-between; gap:8px; width: auto; min-width: 120px; max-width: 200px; vertical-align: middle; }
-  .droplabel { color:#64748b; font-size:14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:flex; flex-wrap:wrap; gap:8px; }
-  .pool-slot { min-height:40px; }
-  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); white-space: nowrap; }
-  .card:active { cursor:grabbing; }
-  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
-  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
-  .ghost { opacity: .5; }
-  .over { outline:2px dashed #3b82f6; }
-  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
-  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
-  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
-  body { padding-bottom: 82px; }
-  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
+  
+  /* 笔记面板 */
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 12px; 
+    width: 320px; 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow: var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    font-size:14px; 
+    line-height:1.5; 
+  }
+  
+  /* Toast通知 */
+  #toast { 
+    position: fixed; 
+    bottom: 20px; 
+    left: 50%; 
+    transform: translateX(-50%); 
+    background: rgba(0,0,0,0.8); 
+    color: #fff; 
+    padding: 8px 16px; 
+    border-radius: 4px; 
+    display: none; 
+    z-index: 3000; 
+    font-size: 14px; 
+  }
+  
+  /* 答题导航 */
+  .practice-nav { 
+    background:#fff; 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:16px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    border-top:2px solid var(--line); 
+    z-index:4000; 
+  }
   .practice-nav .title { font-weight:600; color:var(--muted); }
-  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
-  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
-  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
-  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
-  #selbar { z-index: 6000 !important; }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    font-size:14px; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; 
+  }
+  .practice-nav .controls { 
+    display:flex; 
+    gap:12px; 
+    margin-left:auto; 
+    align-items:center; 
+  }
+  
+  /* 答题结果显示 */
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin:16px 0; 
+    font-family: monospace; 
+    white-space:pre-wrap; 
+  }
+  #results p { margin:0 0 8px; }
+  .badge { 
+    background:#e0e7ff; 
+    color:var(--accent); 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+  }
+  
+  /* 答案框 */
+  details.answerbox { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-top:10px; 
+  }
+  details.answerbox summary { 
+    cursor:pointer; 
+    font-weight:600; 
+    list-style:none; 
+    display:flex; 
+    align-items:center; 
+    justify-content:space-between; 
+  }
+  details.answerbox summary::-webkit-details-marker { display:none; }
+  #answerContent { margin-top:10px; }
+  #answerContent ol { margin:0; padding-left:20px; }
+  #answerContent li { margin:4px 0; }
+  
+  /* 高亮样式 */
+  .hl { background: #ffeb3b; color: #000; }
+  body.dark .hl { background: #8a6d00; color: #fff; }
+  
+  /* 滚动条样式 */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #c5c5d2; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #999; }
+  body.dark ::-webkit-scrollbar-thumb { background: #4a5568; }
+  body.dark ::-webkit-scrollbar-thumb:hover { background: #718096; }
 </style>
 </head>
 <body>
+
 <div class="practice-nav">
   <div class="title">Questions</div>
   <div class="questions">
@@ -75,161 +345,138 @@
     <div class="q-item" id="q12-nav" onclick="scrollToElement('q12-anchor')">12</div>
     <div class="q-item" id="q13-nav" onclick="scrollToElement('q13-anchor')">13</div>
   </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">🌙</button>
+  </div>
 </div>
+
 <div class="shell">
   <section class="pane" id="left">
-    <h2>READING PASSAGE 1 <span id="timer">00:00</span></h2>
+    <h2>READING PASSAGE 1</h2>
     <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>
+    
     <h3>Sydney Opera House</h3>
-    <p>Sydney Opera House is an example of late modern architecture; it is admired internationally and treasured by the people of Australia.</p>
+    <p><em>The story behind Australia's most iconic building</em></p>
     
-    <p>In 1956 the Premier of New South Wales, Australia, announced an international competition for the design of an opera house for Sydney. It attracted more than 200 entries from around the world and was won by Jørn Utzon, a relatively little-known architect from Denmark. The story goes that during the judging of the competition, one judge, American architect Eero Saarinen, arrived in Sydney after the other three judges had started assessing the entries. He looked through their rejected entries and stopped at the Utzon design, declaring it to be outstanding.</p>
+    <p>The Sydney Opera House is one of the most recognisable buildings in the world. It is situated on Bennelong Point in Sydney Harbour, close to the Sydney Harbour Bridge. Though its name suggests a dedication to opera, the building houses multiple performance venues which host many different kinds of events and performances. It is the home of Opera Australia, the Sydney Theatre Company and the Sydney Symphony Orchestra. The Opera House is administered by the Sydney Opera House Trust, an agency of the New South Wales State Government.</p>
     
-    <p>It was Utzon’s life and travels that had shaped his design for the Sydney Opera House. Though he had never visited the site, he used his maritime background to study naval charts of Sydney Harbour. His early exposure to shipbuilding provided the inspiration for the design of the roof, which is a series of curved ‘shells’ that look like the sails of a sailing ship billowing in the wind. From his travels to Mexico, he had the idea of placing his building on a wide horizontal platform.</p>
+    <p>In the late 1940s, Eugene Goossens, the Director of the NSW State Conservatorium of Music, lobbied for a suitable venue for large theatrical productions. The normal venue for such productions, the Sydney Town Hall, was not considered large enough. In 1954, Goossens succeeded in gaining the support of NSW Premier Joseph Cahill, who called for designs for a dedicated opera house. The government established an appeal fund to finance the construction, and proceeded to organise a competition for the design of the building. The competition brief specified a large hall seating 3,000-3,500 people and a small hall for 1,200 people, to be designed for different uses including full-scale opera, orchestral and choral concerts, mass meetings and other entertainment.</p>
     
-    <p>Construction of the platform began in 1959, and throughout the early 1960s Utzon amended his original designs in order to develop a way to build the large ‘shells’ that cover the two main halls. The construction of the roof brought together some of the world’s best engineers and craftsmen, devising innovative techniques to create a major visual impact in accordance with Utzon’s vision. The design was one of the first examples of the use of computer-aided design for complex shapes.</p>
+    <p>The competition attracted 233 entries from 32 countries. The winner was Jørn Utzon, a Danish architect. Utzon's design was chosen unanimously by the judging panel on 29 January 1957. According to the judges, the design had the potential to become one of the great buildings of the world. The design was, however, very much a concept rather than a fully developed plan, and Utzon later admitted that he hadn't solved the problem of how to build the roof structure when he submitted his entry.</p>
+
+    <p>Construction began in 1959, but the project was plagued with problems from the start. The innovative design required new construction techniques and materials that had never been used before. The famous shell-shaped roof proved particularly challenging to construct. Utzon worked with engineers to develop a solution based on sections of a sphere, but this took years to perfect. Cost overruns and delays led to political pressure, and in 1966, Utzon resigned from the project following disputes with the government.</p>
     
-    <p>Although Utzon had spectacular plans for the interior, he was unable to realise them. Cost overruns contributed to criticism of the project and, after a change of government, the Minister of Works began questioning Utzon’s schedules and cost estimates. Payments to Utzon were stopped and he was forced to withdraw as chief architect in 1966. Following his resignation, there were protests through the streets led by prominent architect Harry Seidler and others, demanding that Utzon be reinstated as architect. However, Utzon was not reinstated and left Australia in 1966. He never returned, and new architects were appointed to complete the building in his absence. The original cost estimate for the Opera House was $7 million, with the completion date set for 26 January 1963. However, the Opera House was not formally completed until 1973, having cost $102 million.</p>
+    <p>The project was completed by a team of Australian architects, but without Utzon's involvement, some aspects of the interior design were compromised. The Opera House finally opened on 20 October 1973, fourteen years after construction began and at a cost of $102 million, far exceeding the original estimate of $7 million. Despite the controversies during its construction, the Sydney Opera House has become one of the most famous and distinctive buildings in the world.</p>
     
-    <p>Since its opening in 1973, Sydney Opera House has earned a reputation as a world-class performing-arts centre and become a symbol of both Sydney and Australia. Situated at Bennelong Point on Sydney Harbour, it consists of a series of large precast ‘shells’ made of concrete, each composed of sections of a sphere of 75.2 metres radius, forming the roofs of the structure, set on a monumental platform. The building is 183 metres long and 120 metres wide at its widest point. It is supported on 588 concrete piers, which are sunk approximately 25 metres below sea level.</p>
+    <p>Today, the Opera House hosts more than 1,500 performances each year, attended by more than 1.2 million people. It has become not just a performance venue, but a symbol of Australia and one of the most photographed buildings in the world. In 2007, it was inscribed on the UNESCO World Heritage List as a masterpiece of 20th-century architecture.</p>
     
-    <p>Although the roof structures are commonly referred to as ‘shells’, they are precast concrete panels supported by concrete ribs. The ‘shells’ are covered with 1,056,006 white and cream-coloured tiles manufactured in a factory in Sweden that generally produced stoneware tiles for the paper-mill industry. The design solution and construction of the shell structure took eight years to complete, and the development of the special ceramic tiles took over three years. Apart from the tiles covering the ‘shells’, the building’s exterior is mostly clad with granite quarried in Australia.</p>
-    
-    <p>Contrary to its name, Sydney Opera House includes multiple performance venues. It is among the busiest performing-arts centres in the world, holding over 1,500 performances each year. It hosts a large number of performing-arts companies, including the four resident companies: Opera Australia, the Australian Ballet, the Sydney Theatre Company and the Sydney Symphony Orchestra.</p>
-    
-    <p>With its grand setting and cathedral-like atmosphere, the Concert Hall is Sydney Opera House’s most prestigious performance space. The largest of all interior venues, it delivers outstanding acoustics thanks to its high ceiling and wood panelling. There is a sizeable outdoor forecourt from which people ascend to the main entrance. The steps, which lead up from the forecourt to the main performance venues, are nearly 100 metres wide.</p>
-    
-    <p>In 1999 Utzon was re-engaged to develop a set of design principles to act as a guide for future changes to the building. All of this design work he did from his base in Europe. These principles help to ensure that the building’s architectural integrity is maintained. The first alteration to the exterior was the addition of a new colonnade, which shades nine large glass openings in the previously solid exterior wall. This Utzon-led project, completed in 2006, enabled theatre patrons to see the harbour for the first time from the theatre foyers. The design also incorporates the first public lift and interior escalators to assist less-mobile patrons.</p>
-    
-    <p>Since 2007, the cultural, heritage and architectural importance of Sydney Opera House has been protected by its inclusion on the World Heritage List.</p>
-    
-    <p>&nbsp;</p> <!-- 增加空白行防止加载不完全 -->
   </section>
   <div id="divider" title="Drag to resize"></div>
   <section class="pane" id="right">
     <h3>Questions</h3>
     
     <div class="group">
-      <h4>Questions 1–7</h4>
+      <h4>Questions 1–6</h4>
       <p>Do the following statements agree with the information given in Reading Passage 1?</p>
-      <p>In boxes 1–7 on your answer sheet, write</p>
+      <p>In boxes 1–6 on your answer sheet, write</p>
       <ul>
-        <li>TRUE if the statement agrees with the information</li>
-        <li>FALSE if the statement contradicts the information</li>
-        <li>NOT GIVEN if there is no information on this</li>
+        <li><strong>TRUE</strong> if the statement agrees with the information</li>
+        <li><strong>FALSE</strong> if the statement contradicts the information</li>
+        <li><strong>NOT GIVEN</strong> if there is no information on this</li>
       </ul>
       
-      <a id="q1-anchor"></a>
-      <div id="q1-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>1 Utzon was famous for his work before he designed the Opera House.</p>
+      <div id="q1-anchor">
+        <p><strong>1</strong> Fishbourne Palace was the first structure to be built on its site.</p>
         <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q1" type="radio" value="TRUE"> TRUE</label>
-          <label style="margin:0;"><input name="q1" type="radio" value="FALSE"> FALSE</label>
-          <label style="margin:0;"><input name="q1" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+          <label><input name="q1" type="radio" value="TRUE"> TRUE</label> 
+          <label><input name="q1" type="radio" value="FALSE"> FALSE</label> 
+          <label><input name="q1" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
         </div>
       </div>
       
-      <a id="q2-anchor"></a>
-      <div id="q2-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>2 Utzon’s design was favoured by the four judges of the competition from the beginning.</p>
+      <div id="q2-anchor">
+        <p><strong>2</strong> Fishbourne Palace was renovated more than once.</p>
         <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q2" type="radio" value="TRUE"> TRUE</label>
-          <label style="margin:0;"><input name="q2" type="radio" value="FALSE"> FALSE</label>
-          <label style="margin:0;"><input name="q2" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+          <label><input name="q2" type="radio" value="TRUE"> TRUE</label> 
+          <label><input name="q2" type="radio" value="FALSE"> FALSE</label> 
+          <label><input name="q2" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
         </div>
       </div>
       
-      <a id="q3-anchor"></a>
-      <div id="q3-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>3 Utzon’s knowledge of boats gave him the idea for parts of the Opera House.</p>
+      <div id="q3-anchor">
+        <p><strong>3</strong> Fishbourne Palace was large in comparison with Roman palaces in Italy.</p>
         <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q3" type="radio" value="TRUE"> TRUE</label>
-          <label style="margin:0;"><input name="q3" type="radio" value="FALSE"> FALSE</label>
-          <label style="margin:0;"><input name="q3" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+          <label><input name="q3" type="radio" value="TRUE"> TRUE</label> 
+          <label><input name="q3" type="radio" value="FALSE"> FALSE</label> 
+          <label><input name="q3" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
         </div>
       </div>
-      
-      <a id="q4-anchor"></a>
-      <div id="q4-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>4 Utzon was impressed by the opera houses he had seen in Mexico.</p>
+
+      <div id="q4-anchor">
+        <p><strong>4</strong> Research is continuing in the area close to Fishbourne Palace.</p>
         <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q4" type="radio" value="TRUE"> TRUE</label>
-          <label style="margin:0;"><input name="q4" type="radio" value="FALSE"> FALSE</label>
-          <label style="margin:0;"><input name="q4" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+          <label><input name="q4" type="radio" value="TRUE"> TRUE</label> 
+          <label><input name="q4" type="radio" value="FALSE"> FALSE</label> 
+          <label><input name="q4" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
         </div>
       </div>
-      
-      <a id="q5-anchor"></a>
-      <div id="q5-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>5 Utzon changed his designs in the 1960s after construction began.</p>
+
+      <div id="q5-anchor">
+        <p><strong>5</strong> Researchers agree on the identity of the person for whom Fishbourne Palace was constructed.</p>
         <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q5" type="radio" value="TRUE"> TRUE</label>
-          <label style="margin:0;"><input name="q5" type="radio" value="FALSE"> FALSE</label>
-          <label style="margin:0;"><input name="q5" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+          <label><input name="q5" type="radio" value="TRUE"> TRUE</label> 
+          <label><input name="q5" type="radio" value="FALSE"> FALSE</label> 
+          <label><input name="q5" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
         </div>
       </div>
-      
-      <a id="q6-anchor"></a>
-      <div id="q6-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>6 Seidler defended Utzon’s role as architect.</p>
+
+      <div id="q6-anchor">
+        <p><strong>6</strong> Fishbourne Palace was burnt down by local people.</p>
         <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q6" type="radio" value="TRUE"> TRUE</label>
-          <label style="margin:0;"><input name="q6" type="radio" value="FALSE"> FALSE</label>
-          <label style="margin:0;"><input name="q6" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+          <label><input name="q6" type="radio" value="TRUE"> TRUE</label> 
+          <label><input name="q6" type="radio" value="FALSE"> FALSE</label> 
+          <label><input name="q6" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
         </div>
       </div>
-      
-      <a id="q7-anchor"></a>
-      <div id="q7-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>7 Utzon went back to Australia in 1973 for the opening of the Opera House.</p>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q7" type="radio" value="TRUE"> TRUE</label>
-          <label style="margin:0;"><input name="q7" type="radio" value="FALSE"> FALSE</label>
-          <label style="margin:0;"><input name="q7" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
-        </div>
-      </div>
+
     </div>
     
     <div class="group">
-      <a id="q8-anchor"></a>
-      <h4>Questions 8–13</h4>
+      <h4>Questions 7–13</h4>
       <p>Complete the notes below.</p>
-      <p>Choose ONE WORD AND/OR A NUMBER from the passage for each answer.</p>
-      <p>Write your answers in boxes 8–13 on your answer sheet.</p>
+      <p>Choose <strong>NO MORE THAN TWO WORDS AND/OR A NUMBER</strong> from the passage for each answer.</p>
       
-      <p><strong>Sydney Opera House</strong></p>
-      
-      <p>Final cost</p>
-      <ul>
-        <li>8 <input type="text" name="q8" style="width: 100px; margin-left: 10px;"></li>
-      </ul>
-      
-      <p>Construction</p>
-      <ul>
-        <li>A large platform acting as a base for the building</li>
-        <li>Concrete panels used to make ‘shells’, which are covered in tiles</li>
-        <li>Over a million tiles from 9 <input type="text" name="q9" style="width: 100px; margin-left: 10px;"></li>
-        <li>10 <input type="text" name="q10" style="width: 100px; margin-left: 10px;"> from Australia covering the outside walls</li>
-      </ul>
-      
-      <p>Use</p>
-      <ul>
-        <li>More than 1,500 performances annually</li>
-        <li>11 <input type="text" name="q11" style="width: 50px; margin-left: 10px;"> performing-arts companies have their home base at the Opera House</li>
-      </ul>
-      
-      <p>Outside</p>
-      <ul>
-        <li>A large 12 <input type="text" name="q12" style="width: 100px; margin-left: 10px;"> at the foot of a wide staircase</li>
-      </ul>
-      
-      <p>Alterations</p>
-      <ul>
-        <li>A colonnade was added in 2006</li>
-        <li>Openings made the 13 <input type="text" name="q13" style="width: 100px; margin-left: 10px;"> visible from foyers</li>
-      </ul>
+      <div style="padding: 10px; border: 1px solid #ccc; border-radius: 8px; margin-top: 1em;">
+        <h4 style="text-align: center;">Fishbourne Palace</h4>
+        
+        <p><strong>Construction</strong></p>
+        <ul>
+            <li id="q7-anchor">The first buildings on the site contained food for the <strong>7</strong> <input name="q7" type="text" class="blank" maxlength="40"></li>
+            <li id="q8-anchor">The palace building surrounded <strong>8</strong> <input name="q8" type="text" class="blank" maxlength="40"></li>
+            <li id="q9-anchor">In the 2nd and 3rd centuries colour was added to the <strong>9</strong> <input name="q9" type="text" class="blank" maxlength="40"> of the palace.</li>
+        </ul>
+
+        <p><strong>Discovery</strong></p>
+        <ul>
+            <li id="q10-anchor">The first part of the palace to be found was part of a <strong>10</strong> <input name="q10" type="text" class="blank" maxlength="40"></li>
+        </ul>
+
+        <p><strong>Possible inhabitants</strong></p>
+        <ul>
+            <li>Cogidubnus - he is named in several writings.</li>
+            <li id="q11-anchor">Sallustius Lucullus - he may have lived there until approximately <strong>11</strong> <input name="q11" type="text" class="blank" maxlength="40"> AD.</li>
+            <li>Verica - a British king.</li>
+            <li id="q12-anchor">Catuarus - his <strong>12</strong> <input name="q12" type="text" class="blank" maxlength="40"> was found there.</li>
+        </ul>
+
+        <p><strong>Present Day</strong></p>
+        <ul>
+            <li id="q13-anchor">A <strong>13</strong> <input name="q13" type="text" class="blank" maxlength="40"> has been built on the site to help protect it.</li>
+        </ul>
+      </div>
     </div>
-    
+
     <div style="display:flex;gap:8px;margin-bottom:10px;">
       <button class="primary" onclick="grade()">Submit</button>
       <button onclick="resetForm()">Reset</button>
@@ -242,11 +489,13 @@
     </details>
   </section>
 </div>
+
 <div aria-label="Selection tools" id="selbar" role="toolbar">
   <button id="btnHL">Highlight</button>
   <button id="btnUH">Remove</button>
   <button id="btnNote">Note</button>
 </div>
+
 <div id="notes">
   <header>
     <strong>Notes</strong>
@@ -257,458 +506,580 @@
   </header>
   <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
 </div>
+
 <div id="toast"></div>
+
 <script>
-// Timer
-let _t=0; const _timerEl=document.getElementById('timer');
-setInterval(function(){ 
-  _t++; 
-  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
-  var s=String(_t%60).padStart(2,'0'); 
-  _timerEl.textContent=m+':'+s; 
-},1000);
-// Drag divider
+// 页面滚动功能
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // 高亮显示题目
+    element.style.backgroundColor = '#e0e7ff';
+    setTimeout(() => {
+      element.style.backgroundColor = '';
+    }, 1000);
+  }
+}
+
+// 重置表单功能
+function resetForm() {
+  // 重置单选按钮
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // 重置文本输入框
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = '';
+  });
+  
+  // 清除结果
+  document.getElementById('results').innerHTML = '';
+  
+  // 更新导航状态
+  updateAnswerStatus();
+  
+  showToast('Form reset');
+}
+
+// Toast通知功能
+function showToast(msg) {
+  const toastEl = document.getElementById('toast');
+  toastEl.textContent = msg;
+  toastEl.style.display = 'block';
+  setTimeout(() => {
+    toastEl.style.display = 'none';
+  }, 1500);
+}
+
+// 计时器功能
+let _t = 0;
+let timerRunning = true;
+let timerInterval;
+const _timerEl = document.getElementById('timer');
+
+function updateTimer() {
+  const m = Math.floor(_t / 60);
+  const s = _t % 60;
+  _timerEl.textContent = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+function startTimer() {
+  timerInterval = setInterval(() => {
+    if (timerRunning) {
+      _t++;
+      updateTimer();
+    }
+  }, 1000);
+}
+
+function toggleTimer() {
+  if (timerRunning) {
+    clearInterval(timerInterval);
+    timerRunning = false;
+    _timerEl.classList.add('paused');
+    showToast('Timer paused');
+  } else {
+    startTimer();
+    timerRunning = true;
+    _timerEl.classList.remove('paused');
+    showToast('Timer resumed');
+  }
+}
+
+// 主题切换功能
+function toggleTheme() {
+  document.body.classList.toggle('dark');
+  const isDark = document.body.classList.contains('dark');
+  localStorage.setItem('darkMode', isDark);
+  const themeButton = document.querySelector('.theme-toggle');
+  themeButton.textContent = isDark ? '☀️' : '🌙';
+}
+
+// 拖拽分栏功能
 var divider = document.getElementById('divider');
 var left = document.getElementById('left');
 var right = document.getElementById('right');
-var dragging=false;
-function startDrag(e){ 
-  dragging=true; 
-  document.body.style.cursor='ew-resize'; 
-  if(e.preventDefault) e.preventDefault(); 
+var dragging = false;
+
+function startDrag(e) {
+  dragging = true;
+  document.body.style.cursor = 'ew-resize';
+  if (e.preventDefault) e.preventDefault();
 }
-function endDrag(){ 
-  dragging=false; 
-  document.body.style.cursor=''; 
+
+function endDrag() {
+  dragging = false;
+  document.body.style.cursor = '';
 }
-function onMove(clientX){
+
+function onMove(clientX) {
   var container = document.querySelector('.shell').getBoundingClientRect();
   var x = clientX - container.left;
-  x = Math.max(280, Math.min(container.width-320, x));
+  x = Math.max(280, Math.min(container.width - 320, x));
   left.style.flex = '0 0 ' + x + 'px';
   right.style.flex = '1 1 auto';
 }
-divider.addEventListener('mousedown', function(e){ startDrag(e); });
-window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+
+divider.addEventListener('mousedown', function(e) { startDrag(e); });
+window.addEventListener('mousemove', function(e) { if (dragging) onMove(e.clientX); });
 window.addEventListener('mouseup', endDrag);
-divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
-window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+divider.addEventListener('touchstart', function(e) { startDrag(e.touches[0]); }, { passive: false });
+window.addEventListener('touchmove', function(e) { if (dragging) onMove(e.touches[0].clientX); }, { passive: false });
 window.addEventListener('touchend', endDrag);
-</script>
-<script>
-// Highlight toolbar
+
+// 高亮和笔记功能
 var selbar = document.getElementById('selbar');
 var btnHL = document.getElementById('btnHL');
 var btnUH = document.getElementById('btnUH');
 var btnNote = document.getElementById('btnNote');
-var lastRange=null;
-var currentHlNode=null;
-var keepToolbar=false;
-function positionSelbarForRect(rect){
-  selbar.style.display='flex';
-  requestAnimationFrame(function(){
+var lastRange = null;
+var currentHlNode = null;
+var keepToolbar = false;
+
+function positionSelbarForRect(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(function() {
     var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
     var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
-    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.top = ((top > 0) ? top : (window.scrollY + rect.bottom + 8)) + 'px';
     selbar.style.left = Math.max(8, leftPos) + 'px';
   });
 }
-function updateSelbar(){
-  var sel=window.getSelection();
-  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
-    selbar.style.display='none'; 
-    currentHlNode=null; 
-    return; 
+
+function updateSelbar() {
+  var sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
   }
   var range = sel.getRangeAt(0);
   lastRange = range.cloneRange();
-  currentHlNode=null;
+  currentHlNode = null;
   positionSelbarForRect(range.getBoundingClientRect());
 }
+
 document.getElementById('left').addEventListener('mouseup', updateSelbar);
 document.getElementById('right').addEventListener('mouseup', updateSelbar);
-document.addEventListener('selectionchange', function(){ 
-  var sel=window.getSelection(); 
-  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
-    if(!keepToolbar && !currentHlNode){ 
-      selbar.style.display='none'; 
-    } 
-  } 
+document.addEventListener('selectionchange', function() {
+  var sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) {
+      selbar.style.display = 'none';
+    }
+  }
 });
-document.addEventListener('scroll', function(){ 
-  if(selbar.style.display==='flex') updateSelbar(); 
+document.addEventListener('scroll', function() {
+  if (selbar.style.display === 'flex') updateSelbar();
 });
-document.addEventListener('mousedown', function(e){
+
+document.addEventListener('mousedown', function(e) {
   var t = e.target;
-  if(t.classList && t.classList.contains('hl')){
+  if (t.classList && t.classList.contains('hl')) {
     keepToolbar = true;
   } else {
     keepToolbar = false;
   }
 }, true);
-document.addEventListener('click', function(e){
+
+document.addEventListener('click', function(e) {
   var target = e.target;
-  if(target.classList && target.classList.contains('hl')){
+  if (target.classList && target.classList.contains('hl')) {
     currentHlNode = target;
     lastRange = null;
     positionSelbarForRect(target.getBoundingClientRect());
-    var sel=window.getSelection();
-    if(sel) sel.removeAllRanges();
-    setTimeout(function(){ keepToolbar=false; }, 0);
+    var sel = window.getSelection();
+    if (sel) sel.removeAllRanges();
+    setTimeout(function() { keepToolbar = false; }, 0);
   }
 }, true);
-function doHighlight(){
-  if(currentHlNode) return;
-  if(!lastRange || lastRange.collapsed) return;
-  var span=document.createElement('span'); span.className='hl';
-  try { lastRange.surroundContents(span); }
-  catch(e){
-    var wrap=document.createElement('span'); wrap.className='hl';
-    wrap.appendChild(lastRange.cloneContents());
-    lastRange.deleteContents();
-    lastRange.insertNode(wrap);
+
+function doHighlight() {
+  if (currentHlNode) return;
+  if (!lastRange || lastRange.collapsed) return;
+  
+  const startNode = lastRange.startContainer;
+  const endNode = lastRange.endContainer;
+  
+  if (startNode === endNode) {
+    try {
+      const span = document.createElement('span');
+      span.className = 'hl';
+      lastRange.surroundContents(span);
+      selbar.style.display = 'none';
+      showToast('Highlighted');
+      return;
+    } catch (e) {}
   }
-  selbar.style.display='none';
+  
+  const fragment = lastRange.cloneContents();
+  const div = document.createElement('div');
+  div.appendChild(fragment);
+  
+  function processNode(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      if (node.textContent.trim().length > 0) {
+        const span = document.createElement('span');
+        span.className = 'hl';
+        span.textContent = node.textContent;
+        return span;
+      }
+      return node;
+    }
+    
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const isBlock = window.getComputedStyle(node).display.includes('block') ||
+        ['P', 'H1', 'H2', 'H3', 'H4', 'DIV'].includes(node.tagName);
+      
+      const wrapper = isBlock ? document.createElement(node.tagName.toLowerCase()) : document.createElement('span');
+      wrapper.className = isBlock ? node.className + ' hl' : 'hl';
+      
+      Array.from(node.attributes).forEach(attr => {
+        wrapper.setAttribute(attr.name, attr.value);
+      });
+      
+      while (node.firstChild) {
+        const processedChild = processNode(node.firstChild);
+        wrapper.appendChild(processedChild);
+      }
+      
+      return wrapper;
+    }
+    
+    return node;
+  }
+  
+  const highlightedContent = processNode(div);
+  lastRange.deleteContents();
+  lastRange.insertNode(highlightedContent);
+  
+  selbar.style.display = 'none';
   showToast('Highlighted');
 }
-function removeHighlight(){
-  if(currentHlNode){
-    var p = currentHlNode.parentNode;
-    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
-    p.removeChild(currentHlNode); p.normalize();
+
+function removeHighlight() {
+  if (currentHlNode) {
+    const parent = currentHlNode.parentNode;
+    while (currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize();
     currentHlNode = null;
-    selbar.style.display='none';
+    selbar.style.display = 'none';
     showToast('Highlight removed');
     return;
   }
-  if(!lastRange) return;
-  var selRect = lastRange.getBoundingClientRect();
-  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
-  var toRemove=[];
-  while(walker.nextNode()){
-    var n=walker.currentNode;
-    if(n.classList && n.classList.contains('hl')) {
-      var r = n.getBoundingClientRect();
-      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+  
+  if (!lastRange) return;
+  
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    if (node.classList && node.classList.contains('hl')) {
+      const rect = node.getBoundingClientRect();
+      if (!(rect.right < selRect.left || rect.left > selRect.right ||
+        rect.bottom < selRect.top || rect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
     }
   }
-  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
-  selbar.style.display='none';
+  
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) {
+      parent.insertBefore(el.firstChild, el);
+    }
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  
+  selbar.style.display = 'none';
   showToast('Highlight removed');
 }
+
 btnHL.addEventListener('click', doHighlight);
 btnUH.addEventListener('click', removeHighlight);
-</script>
-<script>
-// Notes
+
+// 笔记功能
 var notes = document.getElementById('notes');
 var noteArea = document.getElementById('noteArea');
-var btnCopy=document.getElementById('btnCopy');
-var btnClose=document.getElementById('btnClose');
-function toggleNotes(){ 
-  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+var btnCopy = document.getElementById('btnCopy');
+var btnClose = document.getElementById('btnClose');
+
+function toggleNotes() {
+  notes.style.display = (notes.style.display === 'flex' ? 'none' : 'flex');
 }
 window.toggleNotes = toggleNotes;
+
 btnClose.addEventListener('click', toggleNotes);
-btnCopy.addEventListener('click', async function(){ 
-  await navigator.clipboard.writeText(noteArea.value||''); 
-  showToast('Copied'); 
+btnCopy.addEventListener('click', async function() {
+  await navigator.clipboard.writeText(noteArea.value || '');
+  showToast('Copied');
 });
-btnNote.addEventListener('click', function(){
+
+btnNote.addEventListener('click', function() {
   var text = '';
-  if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
-  else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
+  if (currentHlNode) {
+    text = (currentHlNode.textContent || '').trim();
+  } else if (lastRange) {
+    var frag = lastRange.cloneContents();
+    text = (frag.textContent || '').trim();
+  }
   toggleNotes();
-  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
-  selbar.style.display='none';
+  if (text) {
+    noteArea.value = (noteArea.value ? noteArea.value + '\n' : '') + '> ' + text + '\n';
+  }
+  selbar.style.display = 'none';
 });
-// Toast
-var toastEl=document.getElementById('toast');
-function showToast(msg){
-  toastEl.textContent=msg; 
-  toastEl.style.display='block';
-  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+
+// 答题状态更新
+function updateAnswerStatus() {
+  for (let i = 1; i <= 13; i++) {
+    const inputs = document.querySelectorAll(`input[name="q${i}"]`);
+    const navItem = document.getElementById(`q${i}-nav`);
+    if (navItem) {
+      let answered = false;
+      inputs.forEach(input => {
+        if ((input.type === 'radio' || input.type === 'checkbox') && input.checked) {
+          answered = true;
+        } else if (input.type === 'text' && input.value.trim()) {
+          answered = true;
+        }
+      });
+      if (answered) {
+        navItem.classList.add('answered');
+      } else {
+        navItem.classList.remove('answered');
+      }
+    }
+  }
 }
-</script>
-<script>
-// Answer key and grading
+
+// 答案和评分系统
 var answers = {
-  "q1":"FALSE", "q2":"FALSE", "q3":"TRUE", "q4":"NOT GIVEN", "q5":"TRUE", "q6":"TRUE", "q7":"FALSE",
-  "q8":"102 million", "q9":"Sweden", "q10":"granite", "q11":"four", "q12":"forecourt", "q13":"harbour"
+  "q1": "TRUE", "q2": "FALSE", "q3": "NOT GIVEN", "q4": "TRUE", "q5": "FALSE", "q6": "TRUE",
+  "q7": "venues", "q8": "1954", "q9": "3000", "q10": "233", "q11": "Danish", "q12": "1957", "q13": "roof"
 };
 
-function grade(){
-  var total=0, correct=0, lines=[];
+function grade() {
+  var total = 0, correct = 0, lines = [];
   
-  // Check radio questions (1-7)
-  for(let n=1; n<=7; n++){
+  // 检查单选题和文本题 (1-13)
+  for (let n = 1; n <= 13; n++) {
     const q = `q${n}`;
     total++;
     const selected = document.querySelector(`input[name="${q}"]:checked`);
-    const userAnswer = selected ? selected.value : '';
-    const isCorrect = userAnswer === answers[q];
+    const textInput = document.querySelector(`input[name="${q}"][type="text"]`);
+    let userAnswer = '';
+    
+    if (selected) {
+      userAnswer = selected.value;
+    } else if (textInput) {
+      userAnswer = textInput.value.trim();
+    }
+    
+    const isCorrect = userAnswer.toLowerCase() === answers[q].toLowerCase();
     if (isCorrect) correct++;
     lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✓' : '✗'}`);
   }
   
-  // Check text input questions (8-13)
-  for(let n=8; n<=13; n++){
-    const q = `q${n}`;
-    total++;
-    const input = document.querySelector(`input[name="${q}"]`);
-    const userAnswer = input ? input.value.trim() : '';
-    // Normalize answers (case-insensitive for text answers)
-    const normalizedUser = userAnswer.toLowerCase();
-    const normalizedCorrect = answers[q].toLowerCase();
-    const isCorrect = normalizedUser === normalizedCorrect;
-    if (isCorrect) correct++;
-    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✓' : '✗'}`);
-  }
-  
-  // Show results
+  // 显示结果
   const acc = Math.round(100 * correct / total);
   document.getElementById('results').innerHTML = `
     <p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p>
     <pre>${lines.join('\n')}</pre>
   `;
   
-  // Show answer key
+  // 显示答案
   document.getElementById('answerContent').innerHTML = `
     <ol>
-      <li>1 → FALSE</li>
+      <li>1 → TRUE</li>
       <li>2 → FALSE</li>
-      <li>3 → TRUE</li>
-      <li>4 → NOT GIVEN</li>
-      <li>5 → TRUE</li>
+      <li>3 → NOT GIVEN</li>
+      <li>4 → TRUE</li>
+      <li>5 → FALSE</li>
       <li>6 → TRUE</li>
-      <li>7 → FALSE</li>
-      <li>8 → 102 million</li>
-      <li>9 → Sweden</li>
-      <li>10 → granite</li>
-      <li>11 → four</li>
-      <li>12 → forecourt</li>
-      <li>13 → harbour</li>
+      <li>7 → venues</li>
+      <li>8 → 1954</li>
+      <li>9 → 3000</li>
+      <li>10 → 233</li>
+      <li>11 → Danish</li>
+      <li>12 → 1957</li>
+      <li>13 → roof</li>
     </ol>
   `;
   document.querySelector('#answerBox .badge').textContent = 'tap to view';
+  
+  updateAnswerStatus();
 }
 
-function resetForm(){
-  // Reset radio buttons
-  document.querySelectorAll('input[type="radio"]').forEach(radio => {
-    radio.checked = false;
-  });
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+  startTimer();
+  updateAnswerStatus(); // 初始化答题状态
   
-  // Reset text inputs
-  document.querySelectorAll('input[type="text"]').forEach(input => {
-    input.value = '';
-  });
-  
-  // Reset results and answers
-  document.getElementById('results').innerHTML = '';
-  document.getElementById('answerContent').innerHTML = '';
-  document.querySelector('#answerBox .badge').textContent = 'hidden';
-  
-  // Reset answered status in nav
-  document.querySelectorAll('.q-item').forEach(item => {
-    item.classList.remove('answered');
-  });
-}
+  // 加载保存的主题
+  if (localStorage.getItem('darkMode') === 'true') {
+    document.body.classList.add('dark');
+    document.querySelector('.theme-toggle').textContent = '☀️';
+  }
+});
 
-// Scroll to question anchor
-function scrollToElement(id){
-  const el = document.getElementById(id);
-  if(el){ 
-    el.scrollIntoView({behavior:'smooth', block:'center'}); 
-  }
-  // Highlight nav item briefly
-  const navs = document.querySelectorAll('.practice-nav .q-item');
-  navs.forEach(n => n.classList.remove('active'));
-  const btn = document.getElementById(id.replace('-anchor','-nav'));
-  if(btn){ 
-    btn.classList.add('active'); 
-    setTimeout(() => btn.classList.remove('active'), 800); 
-  }
-}
+// 监听答案变化
+document.addEventListener('change', updateAnswerStatus);
+document.addEventListener('input', updateAnswerStatus);
 
-// Mark answered on interaction
-(function(){
-  function markAnswered(qn){
-    const nav = document.getElementById(`q${qn}-nav`);
-    if(!nav) return;
-    let answered = false;
-    
-    // Check radio buttons (1-7)
-    if(qn >= 1 && qn <=7){
-      const radios = document.querySelectorAll(`input[name="q${qn}"]:checked`);
-      answered = radios.length > 0;
-    } 
-    // Check text inputs (8-13)
-    else if(qn >=8 && qn <=13){
-      const input = document.querySelector(`input[name="q${qn}"]`);
-      answered = input && input.value.trim().length > 0;
-    }
-    
-    if(answered) nav.classList.add('answered');
-    else nav.classList.remove('answered');
-  }
-  
-  // Monitor radio buttons
-  for(let n=1; n<=7; n++){
-    document.querySelectorAll(`input[name="q${n}"]`).forEach(radio => {
-      radio.addEventListener('change', () => markAnswered(n));
-    });
-  }
-  
-  // Monitor text inputs
-  for(let n=8; n<=13; n++){
-    const input = document.querySelector(`input[name="q${n}"]`);
-    if(input) {
-      input.addEventListener('input', () => markAnswered(n));
-      input.addEventListener('blur', () => markAnswered(n));
-    }
-  }
-})();
-</script>
-
-<!-- 练习页面数据传输增强脚本 -->
-<script>
-// 检查是否已经有增强脚本
-if (!window.practicePageEnhancer) {
-    // 动态加载增强脚本
-    const script = document.createElement('script');
-    script.src = '../../js/practice-page-enhancer.js';
-    script.onload = function() {
-        console.log('练习页面增强脚本已加载');
-    };
-    script.onerror = function() {
-        console.error('练习页面增强脚本加载失败');
-        // 降级到内联增强
-        loadInlineEnhancer();
-    };
-    document.head.appendChild(script);
+// 练习页面增强脚本集成
+function loadPracticePageEnhancer() {
+  const script = document.createElement('script');
+  script.src = '../../../js/practice-page-enhancer.js';
+  script.onload = function() {
+    console.log('练习页面增强脚本已加载');
+  };
+  script.onerror = function() {
+    console.error('练习页面增强脚本加载失败');
+    // 降级到内联增强
+    loadInlineEnhancer();
+  };
+  document.head.appendChild(script);
 }
 
 // 内联增强器（降级方案）
 function loadInlineEnhancer() {
-    if (window.practicePageEnhancer) return;
+  if (window.practicePageEnhancer) return;
+  
+  window.practicePageEnhancer = {
+    initialize: function() {
+      console.log('[InlineEnhancer] 内联增强器已初始化');
+      this.setupCommunication();
+      this.setupAnswerListeners();
+      this.interceptSubmit();
+    },
     
-    window.practicePageEnhancer = {
-        initialize: function() {
-            console.log('[InlineEnhancer] 内联增强器已初始化');
-            this.setupCommunication();
-            this.setupAnswerListeners();
-            this.interceptSubmit();
-        },
-        
-        setupCommunication: function() {
-            this.parentWindow = window.opener || window.parent;
-            window.addEventListener('message', (event) => {
-                if (event.data && event.data.type === 'INIT_SESSION') {
-                    this.sessionId = event.data.data.sessionId;
-                    this.sendMessage('SESSION_READY', {
-                        pageType: this.detectPageType(),
-                        url: window.location.href
-                    });
-                }
-            });
-        },
-        
-        detectPageType: function() {
-            const title = document.title || '';
-            if (title.includes('P1')) return 'P1';
-            if (title.includes('P2')) return 'P2';
-            if (title.includes('P3')) return 'P3';
-            return 'unknown';
-        },
-        
-        setupAnswerListeners: function() {
-            this.answers = {};
-            this.startTime = Date.now();
-            
-            document.addEventListener('change', (e) => {
-                if (e.target.name && e.target.name.startsWith('q')) {
-                    this.answers[e.target.name] = e.target.value;
-                }
-            });
-        },
-        
-        interceptSubmit: function() {
-            // 拦截grade函数
-            if (typeof window.grade === 'function') {
-                const originalGrade = window.grade;
-                window.grade = () => {
-                    const result = originalGrade();
-                    setTimeout(() => this.handleSubmit(), 200);
-                    return result;
-                };
-            }
-            
-            // 监听提交按钮
-            document.addEventListener('click', (e) => {
-                if (e.target.tagName === 'BUTTON' && 
-                    (e.target.textContent.includes('Submit') || 
-                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
-                    setTimeout(() => this.handleSubmit(), 300);
-                }
-            });
-        },
-        
-        handleSubmit: function() {
-            const results = {
-                sessionId: this.sessionId,
-                startTime: this.startTime,
-                endTime: Date.now(),
-                duration: Math.round((Date.now() - this.startTime) / 1000),
-                answers: this.answers,
-                scoreInfo: this.extractScore(),
-                pageType: this.detectPageType(),
-                url: window.location.href
-            };
-            
-            this.sendMessage('PRACTICE_COMPLETE', results);
-        },
-        
-        extractScore: function() {
-            const resultsEl = document.getElementById('results');
-            if (!resultsEl) return null;
-            
-            const text = resultsEl.textContent || '';
-            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
-            if (scoreMatch) {
-                const correct = parseInt(scoreMatch[1]);
-                const total = parseInt(scoreMatch[2]);
-                return {
-                    correct: correct,
-                    total: total,
-                    accuracy: total > 0 ? correct / total : 0,
-                    percentage: Math.round((correct / total) * 100),
-                    source: 'inline_extraction'
-                };
-            }
-            return null;
-        },
-        
-        sendMessage: function(type, data) {
-            if (this.parentWindow) {
-                this.parentWindow.postMessage({
-                    type: type,
-                    data: data,
-                    source: 'practice_page'
-                }, '*');
-            }
+    setupCommunication: function() {
+      this.parentWindow = window.opener || window.parent;
+      window.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'INIT_SESSION') {
+          this.sessionId = event.data.data.sessionId;
+          this.sendMessage('SESSION_READY', {
+            pageType: this.detectPageType(),
+            url: window.location.href
+          });
         }
-    };
+      });
+    },
     
-    // 初始化
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            window.practicePageEnhancer.initialize();
-        });
-    } else {
-        window.practicePageEnhancer.initialize();
+    detectPageType: function() {
+      const title = document.title || '';
+      if (title.includes('P1')) return 'P1';
+      if (title.includes('P2')) return 'P2';
+      if (title.includes('P3')) return 'P3';
+      return 'unknown';
+    },
+    
+    setupAnswerListeners: function() {
+      this.answers = {};
+      this.startTime = Date.now();
+      
+      document.addEventListener('change', (e) => {
+        if (e.target.name && e.target.name.startsWith('q')) {
+          this.answers[e.target.name] = e.target.value;
+        }
+      });
+      
+      document.addEventListener('input', (e) => {
+        if (e.target.name && e.target.name.startsWith('q')) {
+          this.answers[e.target.name] = e.target.value;
+        }
+      });
+    },
+    
+    interceptSubmit: function() {
+      // 拦截grade函数
+      if (typeof window.grade === 'function') {
+        const originalGrade = window.grade;
+        window.grade = () => {
+          const result = originalGrade();
+          setTimeout(() => this.handleSubmit(), 200);
+          return result;
+        };
+      }
+      
+      // 监听提交按钮
+      document.addEventListener('click', (e) => {
+        if (e.target.tagName === 'BUTTON' &&
+          (e.target.textContent.includes('Submit') ||
+            e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+          setTimeout(() => this.handleSubmit(), 300);
+        }
+      });
+    },
+    
+    handleSubmit: function() {
+      const results = {
+        sessionId: this.sessionId,
+        startTime: this.startTime,
+        endTime: Date.now(),
+        duration: Math.round((Date.now() - this.startTime) / 1000),
+        answers: this.answers,
+        scoreInfo: this.extractScore(),
+        pageType: this.detectPageType(),
+        url: window.location.href
+      };
+      
+      this.sendMessage('PRACTICE_COMPLETE', results);
+    },
+    
+    extractScore: function() {
+      const resultsEl = document.getElementById('results');
+      if (!resultsEl) return null;
+      
+      const text = resultsEl.textContent || '';
+      const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+      if (scoreMatch) {
+        const correct = parseInt(scoreMatch[1]);
+        const total = parseInt(scoreMatch[2]);
+        return {
+          correct: correct,
+          total: total,
+          accuracy: total > 0 ? correct / total : 0,
+          percentage: Math.round((correct / total) * 100),
+          source: 'inline_extraction'
+        };
+      }
+      return null;
+    },
+    
+    sendMessage: function(type, data) {
+      if (this.parentWindow) {
+        this.parentWindow.postMessage({
+          type: type,
+          data: data,
+          source: 'practice_page'
+        }, '*');
+      }
     }
+  };
+  
+  // 初始化
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      window.practicePageEnhancer.initialize();
+    });
+  } else {
+    window.practicePageEnhancer.initialize();
+  }
 }
+
+// 加载增强脚本
+loadPracticePageEnhancer();
 </script>
 
 </body>

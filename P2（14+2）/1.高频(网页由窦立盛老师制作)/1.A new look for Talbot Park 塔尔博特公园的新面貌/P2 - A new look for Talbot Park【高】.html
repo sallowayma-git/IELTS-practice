@@ -1,63 +1,439 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<title>P2 – A new look for Talbot Park</title>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta charset="UTF-8">
+<title>P2 - A new look for Talbot Park</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+  }
   * { box-sizing: border-box; }
   html,body { height:100%; }
-  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
-  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+    padding-bottom: 82px; 
+  }
+  
+  /* 布局样式 */
   .shell { display:flex; height:100vh; width:100%; }
   .pane { background:var(--panel); overflow:auto; padding:20px; }
   #left { flex: 0 0 50%; min-width: 280px; }
   #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
   #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  
+  /* 文本样式 */
   h2,h3,h4 { margin:0 0 10px; }
   #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  
+  /* 组件样式 */
   .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  input.blank { 
+    border:none; 
+    border-bottom:1px solid #9ca3af; 
+    padding:2px 4px; 
+    font-size:1em; 
+    background:transparent; 
+    min-width: 80px;
+  }
+  input.blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+  
+  /* 按钮样式 */
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    background:#fff; 
+    cursor:pointer; 
+    transition: all 0.2s;
+  }
+  button:hover { background:#f1f5f9; border-color:var(--accent); }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  button.primary:hover { background: #2563eb; }
+  
+    /* 计时器样式*/
+  #timer { 
+    background:#fff; 
+    color:var(--muted); 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    padding:6px 12px; 
+    cursor:pointer; 
+    font-family: 'Courier New', monospace; 
+    transition:all 0.2s; 
+    min-width: 70px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: bold;
+  }
+  #timer:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  #timer.paused { 
+    color: #ef4444; 
+    border-color: #fecaca; 
+    background: #fef2f2; 
+  }
+  
+  /* 结果显示 */
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  
+  /* 高亮样式 */
+  .hl {
+    background: #fff3a3;
+    box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .05);
+    cursor: pointer;
+  }
+
+  body.dark .hl {
+    background-color: #5b21b6;
+    color: #f5f3ff;
+  }
+  
+  /* 选择工具栏*/
+  #selbar { 
+    position: absolute; 
+    display:none; 
+    z-index: 2000; 
+    background:#111; 
+    color:#fff; 
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow: var(--shadow); 
+    font-size: 13px; 
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; 
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+  }
+  #selbar button:hover { border-color:#fff; }
+  
+  /* 笔记面板 */
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 12px; 
+    width: 320px; 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow: var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    font-size:14px; 
+    line-height:1.5; 
+  }
+  
+  /* 提示消息 */
+  #toast { 
+    position: fixed; 
+    left:50%; 
+    transform: translateX(-50%); 
+    bottom: 24px; 
+    background:#111; 
+    color:#fff; 
+    padding:8px 12px; 
+    border-radius: 8px; 
+    display:none; 
+    z-index:2500; 
+  }
+  
+  /* 答案框*/
+  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
+  details.answerbox { 
+    border:1px dashed var(--line); 
+    border-radius:10px; 
+    padding:8px 10px; 
+    background:#fff; 
+  }
+  .badge { 
+    display:inline-block; 
+    background:#eef2ff; 
+    color:#4338ca; 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+    margin-left:6px; 
+  }
+  
+  /* 底部导航栏*/
+  .practice-nav { 
+    background:#fff; 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:16px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    border-top:2px solid var(--line); 
+    z-index:4000; 
+  }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    font-size:14px; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:var(--accent); 
+  }
+  .practice-nav .controls { 
+    margin-left: auto; 
+    display: flex; 
+    align-items: center; 
+    gap: 12px; 
+  }
+  
+    /* 计时器样式*/
+  #timer { 
+    background:#fff; 
+    color:var(--muted); 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    padding:6px 12px; 
+    cursor:pointer; 
+    font-family: 'Courier New', monospace; 
+    transition:all 0.2s; 
+    min-width: 70px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: bold;
+  }
+  #timer:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  #timer.paused { 
+    color: #ef4444; 
+    border-color: #fecaca; 
+    background: #fef2f2; 
+  }
+
+  
+  /* 主题切换按钮 */
+  .theme-toggle { 
+    cursor: pointer; 
+    background: transparent; 
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+    transition: all 0.2s ease;
+  }
+  .theme-toggle:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    transform: scale(1.05);
+  }
+  .theme-toggle:active {
+    transform: scale(0.95);
+  }
+  
+  /* 拖拽相关样式 */
+  .dropzone { 
+    border:2px dashed #cbd5e1; 
+    background:#f8fafc; 
+    border-radius:10px; 
+    min-height:40px; 
+    padding:4px 8px; 
+    display:inline-flex; 
+    align-items:center; 
+    justify-content:center; 
+    gap:8px; 
+    width: 220px; 
+    vertical-align: middle; 
+  }
+  .droplabel { color:#64748b; font-size:14px; }
+  .cardpool { 
+    background:#f1f5f9; 
+    border-radius:10px; 
+    padding:12px; 
+    display:flex; 
+    flex-wrap:wrap; 
+    gap:8px; 
+  }
+  .pool-slot { min-height:40px; }
+  .card { 
+    background:#fff; 
+    border:1px solid #e5e7eb; 
+    border-radius:8px; 
+    padding:8px 10px; 
+    display:inline-flex; 
+    gap:8px; 
+    align-items:center; 
+    cursor:grab; 
+    box-shadow:0 1px 0 rgba(0,0,0,.03); 
+    white-space: nowrap; 
+  }
+  .card:active { cursor:grabbing; }
+  .tag { 
+    background:#eef2ff; 
+    color:#4338ca; 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+  }
+  .btn-clear { 
+    border:1px solid #e5e7eb; 
+    background:#fff; 
+    border-radius:8px; 
+    padding:6px 8px; 
+    cursor:pointer; 
+  }
+  .ghost { opacity: .5; }
+  .over { outline:2px dashed #3b82f6; }
+  
+  /* 深色模式样式 */
+  body.dark { 
+    --bg: #0f172a; 
+    --panel: #1e293b; 
+    --line: #334155; 
+    --muted: #94a3b8; 
+    color: #e2e8f0;
+    background: var(--bg);
+  }
+  body.dark #right { background: #0f172a; }
+  body.dark .group { background: #1e293b; border-color: #334155; }
+  body.dark button { background: #1e293b; color: #e2e8f0; border-color: #334155; }
+  body.dark button:hover { background: #334155; }
+  body.dark button.primary { background: var(--accent); color: #fff; }
+  body.dark #results { background: #1e293b; border-color: #334155; }
+  body.dark #notes { background: #1e293b; border-color: #334155; color: #e2e8f0; }
+  body.dark .practice-nav { 
+    background: #1e293b; 
+    border-top-color: #334155; 
+  }
+  body.dark .practice-nav .q-item { 
+    background: #0f172a; 
+    color: #e2e8f0; 
+    border-color: #334155; 
+  }
+  body.dark .practice-nav .q-item:hover { 
+    background: #334155; 
+    border-color: var(--accent); 
+  }
+  body.dark .practice-nav .q-item.answered { 
+    background: #1e40af; 
+    border-color: var(--accent); 
+    color: #93c5fd; 
+  }
+  body.dark .practice-nav .q-item.active { 
+    background: var(--accent); 
+    color: #fff; 
+    border-color: var(--accent); 
+  }
+  body.dark #timer { background: #1e293b; color: #e2e8f0; border-color: #334155; }
+  body.dark #timer:hover { background: #334155; border-color: var(--accent); }
+  body.dark details.answerbox { background: #1e293b; border-color: #334155; }
+  body.dark input.blank { color: #e2e8f0; border-bottom-color: #64748b; }
+  body.dark input.blank:focus { border-bottom-color: var(--accent); }
+  body.dark .cardpool { background:#1e293b; }
+  body.dark .card { background:#334155; border-color: #475569; }
+  body.dark .dropzone { background:#1e293b; border-color: #475569; }
+  body.dark .tag { background:#334155; color:#93c5fd; }
+  body.dark .btn-clear { background:#334155; border-color: #475569; }
+  
+  /* 高亮样式 */
+  .hl {
+    background: #fff3a3;
+    box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .05);
+    cursor: pointer;
+  }
+
+  body.dark .hl {
+    background-color: #5b21b6;
+    color: #f5f3ff;
+  }
+  
+  /* 滚动条样式*/
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #c5c5d2; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #999; }
+  body.dark ::-webkit-scrollbar-thumb { background: #4a5568; }
+  body.dark ::-webkit-scrollbar-thumb:hover { background: #718096; }
+  
   table { border-collapse: collapse; width:100%; }
   th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
   th:first-child, td:first-child { width:92px; }
-  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
-  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
-  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
-  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
-  .hl:hover { filter: brightness(0.98); }
-  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
-  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
-  #selbar button:hover { border-color:#fff; }
-  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
-  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
-  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
-  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
-  .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:54px; padding:8px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
-  .droplabel { color:#64748b; }
-  .cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:grid; gap:8px; }
-  .pool-slot { min-height:40px; }
-  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); }
-  .card:active { cursor:grabbing; }
-  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
-  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
-  .ghost { opacity: .5; }
-  .over { outline:2px dashed #3b82f6; }
-  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
-  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
-  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
-  body { padding-bottom: 82px; }
-  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
-  .practice-nav .title { font-weight:600; color:var(--muted); }
-  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
-  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
-  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
-  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
-  #selbar { z-index: 6000 !important; }
+  
+  /* 响应式设计*/
+  @media (max-width: 768px) {
+    .shell { flex-direction: column; }
+    #left, #right { flex: none; min-width: auto; }
+    #divider { display: none; }
+    .practice-nav .controls { gap: 8px; }
+    #timer { font-size: 12px; padding: 3px 8px; }
+    .theme-toggle { width: 32px; height: 32px; font-size: 14px; }
+    #notes { width: calc(100vw - 24px); right: 12px; left: 12px; }
+  }
 </style>
 </head>
 <body>
+
 <div class="practice-nav">
   <div class="title">Questions</div>
   <div class="questions">
@@ -75,37 +451,42 @@
     <div class="q-item" id="q25-nav" onclick="scrollToElement('q25-anchor')">25</div>
     <div class="q-item" id="q26-nav" onclick="scrollToElement('q26-anchor')">26</div>
   </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">🌙</button>
+  </div>
 </div>
+
 <div class="shell">
 <section class="pane" id="left">
-  <h2>READING PASSAGE 2 <span id="timer">00:00</span></h2>
+  <h2>READING PASSAGE 2</h2>
   <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>
   <h3>A new look for Talbot Park</h3>
   
   <p>Talbot Park, a housing project in Auckland, New Zealand, was once described as a ghetto, troubled by high rates of crime and vandalism. However, it has just been rebuilt at a cost of $48 m and the project reflects some new thinking about urban design.</p>
   
   <h4>Paragraph A</h4>
-  <p>The new Talbot Park is immediately eye-catching because the buildings look quite different to other state-housing projects in Auckland. ‘There is no reason why state housing should look cheap in my view,’ says architect Neil Cotton, one of the design team. ‘In fact, I was anticipating a backlash by those who objected to the quality of what is provided with government money.’ The tidy brick and wood apartments and townhouses would not look out of place in some of the city’s most affluent suburbs, and this is a central theme of the Talbot Park philosophy.</p>
+  <p>The new Talbot Park is immediately eye-catching because the buildings look quite different to other state-housing projects in Auckland. ‘There is no reason why state housing should look cheap in my view,'says architect Neil Cotton, one of the design team. ‘In fact, I was anticipating a backlash by those who objected to the quality of what is provided with government money.'The tidy brick and wood apartments and townhouses would not look out of place in some of the city’s most affluent suburbs, and this is a central theme of the Talbot Park philosophy.</p>
   
   <h4>Paragraph B</h4>
-  <p>Talbot Park is a triangle of government-owned land, which in the early 1960s was developed for state housing built around a linear garden that ran through the middle. Initially, there was a strong sense of neighbourliness. Former residents recall how the garden played a big part in their childhoods — a place where kids came together to play softball, cricket and bullrush. ‘We had respect for our neighbours and addressed them by title — Mr and Mrs so-and-so,’ recalls Georgie Thompson, who grew up there in the 1960s.</p>
+  <p>Talbot Park is a triangle of government-owned land, which in the early 1960s was developed for state housing built around a linear garden that ran through the middle. Initially, there was a strong sense of neighbourliness. Former residents recall how the garden played a big part in their childhoods 'a place where kids came together to play softball, cricket and bullrush. ‘We had respect for our neighbours and addressed them by title 'Mr and Mrs so-and-so,'recalls Georgie Thompson, who grew up there in the 1960s.</p>
   
   <h4>Paragraph C</h4>
-  <p>Exactly what went wrong with Talbot Park is unclear. The community began to change in the late 1970s as more immigrants moved in. The new arrivals didn’t always integrate with the community and a ‘them and us’ mentality developed. In the process, standards dropped and the neighbourhood began to look shabbier. The buildings themselves were also deteriorating and becoming run-down, petty crime was on the rise and the garden was considered unsafe. In 2002, Housing New Zealand decided the properties needed upgrading. The question was, how to avoid repeating the mistakes of the past?</p>
+  <p>Exactly what went wrong with Talbot Park is unclear. The community began to change in the late 1970s as more immigrants moved in. The new arrivals didn’t always integrate with the community and a ‘them and us'mentality developed. In the process, standards dropped and the neighbourhood began to look shabbier. The buildings themselves were also deteriorating and becoming run-down, petty crime was on the rise and the garden was considered unsafe. In 2002, Housing New Zealand decided the properties needed upgrading. The question was, how to avoid repeating the mistakes of the past?</p>
   
   <h4>Paragraph D</h4>
-  <p>One controversial aspect of the upgrade is that the new development has actually made the density of housing in Talbot Park greater, putting 52 more homes on the same site. Doing this required a fresh approach that can be summed up as ‘mix and match’. The first priority was to mix up the housing by employing a variety of plans by different architects: some of the accommodation is free-standing houses, some semi-detached, some low-level, multiapartment blocks. By doing this, the development avoids the uniform appearance of so many state-housing projects, which residents complain denies them any sense of individual identity. The next goal was to prevent overspending by using efficient designs to maximise the sense of space from minimum room sizes. There was also a no-frills, industrial approach to kitchens, bathrooms and flooring, to optimise durability and ensure the project did not go over budget. Architecturally, the buildings are relatively conservative: fairly plain houses standing in a small garden. There’s a slight reflection of the traditional Pacific beach house (a fale) but it’s not over-played. ‘It seems to us that low-cost housing is about getting as much amenity as you can for the money,’ says architect Michael Thompson. Another key aspect of the ‘mix and match’ approach is openness: one that not only lets residents see what is going on but also lets them know they are seen. The plan ensures there are no cul-de-sacs or properties hidden from view, that the gardens are not enclosed by trees and that most boundary fences are seethrough — a community contained but without walls.</p>
+  <p>One controversial aspect of the upgrade is that the new development has actually made the density of housing in Talbot Park greater, putting 52 more homes on the same site. Doing this required a fresh approach that can be summed up as ‘mix and match' The first priority was to mix up the housing by employing a variety of plans by different architects: some of the accommodation is free-standing houses, some semi-detached, some low-level, multiapartment blocks. By doing this, the development avoids the uniform appearance of so many state-housing projects, which residents complain denies them any sense of individual identity. The next goal was to prevent overspending by using efficient designs to maximise the sense of space from minimum room sizes. There was also a no-frills, industrial approach to kitchens, bathrooms and flooring, to optimise durability and ensure the project did not go over budget. Architecturally, the buildings are relatively conservative: fairly plain houses standing in a small garden. There’s a slight reflection of the traditional Pacific beach house (a fale) but it’s not over-played. ‘It seems to us that low-cost housing is about getting as much amenity as you can for the money,'says architect Michael Thompson. Another key aspect of the ‘mix and match'approach is openness: one that not only lets residents see what is going on but also lets them know they are seen. The plan ensures there are no cul-de-sacs or properties hidden from view, that the gardens are not enclosed by trees and that most boundary fences are seethrough 'a community contained but without walls.</p>
   
   <h4>Paragraph E</h4>
-  <p>The population today is cosmopolitan: 50% Pacific Islanders, 20% Māori, 15% Asian, 10% New Zealand European and the rest composed of immigrants from Russia, Ukraine and Iran. ‘It was important that the buildings were sufficiently flexible to cater for the needs of people from a wide variety of cultural backgrounds,’ explains designer James Lundy.</p>
+  <p>The population today is cosmopolitan: 50% Pacific Islanders, 20% Māori, 15% Asian, 10% New Zealand European and the rest composed of immigrants from Russia, Ukraine and Iran. ‘It was important that the buildings were sufficiently flexible to cater for the needs of people from a wide variety of cultural backgrounds,'explains designer James Lundy.</p>
   
   <h4>Paragraph F</h4>
   <p>Despite the quality of the buildings, however, there should be no doubt that Talbot Park and its surrounding suburb of Tāmaki are low socio-economic areas. Of the 5,000 houses there, 55% are state houses, 28% privately owned (compared to about 65% nationally) and 17% private rental. The area has a high density of households with incomes in the $5,000 to $15,000 range and very few with an income over $70,000. That’s in sharp contrast to the more affluent suburbs in Auckland.</p>
   
   <h4>Paragraph G</h4>
-  <p>Another important part of the new development is what Housing New Zealand calls ‘intensive tenancy management’. Opponents of the project call it social control. ‘The focus is on frequent inspections and setting clear guidelines and boundaries regarding the sort of behaviour we expect from tenants,’ says Graham Bodman, Housing New Zealand’s regional manager. The result is a code of sometimes strict rules: no loud parties after 10 pm; no washing hung over balcony rails; and a requirement to mow lawns and keep the property tidy. The Tenancy Manager walks the site every day, knows everyone by name and deals with problems quickly. ‘It’s all based on the intensification,’ says project manager Stuart Bracey. ‘We acknowledge that if you are going to ask people to live in these quite tightly-packed communities, you have to actually help them to get to know each other by organising morning teas and street barbecues.’ So far it seems to be working and many involved in the project believe Talbot Park represents the way forward for state housing.</p>
+  <p>Another important part of the new development is what Housing New Zealand calls ‘intensive tenancy management' Opponents of the project call it social control. ‘The focus is on frequent inspections and setting clear guidelines and boundaries regarding the sort of behaviour we expect from tenants,'says Graham Bodman, Housing New Zealand’s regional manager. The result is a code of sometimes strict rules: no loud parties after 10 pm; no washing hung over balcony rails; and a requirement to mow lawns and keep the property tidy. The Tenancy Manager walks the site every day, knows everyone by name and deals with problems quickly. ‘It’s all based on the intensification,'says project manager Stuart Bracey. ‘We acknowledge that if you are going to ask people to live in these quite tightly-packed communities, you have to actually help them to get to know each other by organising morning teas and street barbecues.'So far it seems to be working and many involved in the project believe Talbot Park represents the way forward for state housing.</p>
   
-  <p>&nbsp;</p> <!-- 添加空白行防止加载不完全 -->
+  <p>&nbsp;</p>
 </section>
 <div id="divider" title="Drag to resize"></div>
 <section class="pane" id="right">
@@ -145,7 +526,6 @@
         <th>ix</th>
         <th>x</th>
       </tr>
-      <a id="q14-anchor"></a>
       <tr id="q14-row">
         <td>A (14)</td>
         <td><label><input name="q14" type="radio" value="i"/></label></td>
@@ -159,7 +539,6 @@
         <td><label><input name="q14" type="radio" value="ix"/></label></td>
         <td><label><input name="q14" type="radio" value="x"/></label></td>
       </tr>
-      <a id="q15-anchor"></a>
       <tr id="q15-row">
         <td>B (15)</td>
         <td><label><input name="q15" type="radio" value="i"/></label></td>
@@ -173,7 +552,6 @@
         <td><label><input name="q15" type="radio" value="ix"/></label></td>
         <td><label><input name="q15" type="radio" value="x"/></label></td>
       </tr>
-      <a id="q16-anchor"></a>
       <tr id="q16-row">
         <td>C (16)</td>
         <td><label><input name="q16" type="radio" value="i"/></label></td>
@@ -187,7 +565,6 @@
         <td><label><input name="q16" type="radio" value="ix"/></label></td>
         <td><label><input name="q16" type="radio" value="x"/></label></td>
       </tr>
-      <a id="q17-anchor"></a>
       <tr id="q17-row">
         <td>D (17)</td>
         <td><label><input name="q17" type="radio" value="i"/></label></td>
@@ -201,7 +578,6 @@
         <td><label><input name="q17" type="radio" value="ix"/></label></td>
         <td><label><input name="q17" type="radio" value="x"/></label></td>
       </tr>
-      <a id="q18-anchor"></a>
       <tr id="q18-row">
         <td>E (18)</td>
         <td><label><input name="q18" type="radio" value="i"/></label></td>
@@ -215,7 +591,6 @@
         <td><label><input name="q18" type="radio" value="ix"/></label></td>
         <td><label><input name="q18" type="radio" value="x"/></label></td>
       </tr>
-      <a id="q19-anchor"></a>
       <tr id="q19-row">
         <td>F (19)</td>
         <td><label><input name="q19" type="radio" value="i"/></label></td>
@@ -229,7 +604,6 @@
         <td><label><input name="q19" type="radio" value="ix"/></label></td>
         <td><label><input name="q19" type="radio" value="x"/></label></td>
       </tr>
-      <a id="q20-anchor"></a>
       <tr id="q20-row">
         <td>G (20)</td>
         <td><label><input name="q20" type="radio" value="i"/></label></td>
@@ -245,531 +619,590 @@
       </tr>
     </table>
   </div>
-  
+
   <div class="group">
-    <h4>Questions 21–23</h4>
-    <p>Look at the following people (Questions 21–23) and the list of ideas below.</p>
-    <p>Match each person with the correct idea, A–F.</p>
-    <p>Write the correct letter, A–F, in boxes 21–23 on your answer sheet.</p>
+    <h4>Questions 21'3</h4>
+    <p>Do the following statements agree with the information given in Reading Passage 2?</p>
+    <p>In boxes 21'3 on your answer sheet, write</p>
+    <p><strong>TRUE</strong> &nbsp; if the statement agrees with the information<br/><strong>FALSE</strong> &nbsp; if the statement contradicts the information<br/><strong>NOT GIVEN</strong> &nbsp;if there is no information on this</p>
     
-    <a id="q21-anchor"></a>
-    <div id="q21-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>21 James Lundy</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q21" type="radio" value="A"> A Good tenant management involves supervision and regulation.</label>
-        <label style="margin:0;"><input name="q21" type="radio" value="B"> B State housing must be built at minimum expense to the public.</label>
-        <label style="margin:0;"><input name="q21" type="radio" value="C"> C Organising social events helps tenants to live close together.</label>
-        <label style="margin:0;"><input name="q21" type="radio" value="D"> D Mixed-race communities require adaptable and responsive designs.</label>
-        <label style="margin:0;"><input name="q21" type="radio" value="E"> E Complaints were expected about the high standard of the development.</label>
-        <label style="margin:0;"><input name="q21" type="radio" value="F"> F Too many rules and regulations will cause resentment from tenants.</label>
-      </div>
+    <div id="q21-anchor">
+      <p><strong>21</strong> Some people were unhappy with the new housing.</p>
+      <label><input name="q21" type="radio" value="TRUE"/> TRUE</label>
+      <label><input name="q21" type="radio" value="FALSE"/> FALSE</label>
+      <label><input name="q21" type="radio" value="NOT GIVEN"/> NOT GIVEN</label>
     </div>
     
-    <a id="q22-anchor"></a>
-    <div id="q22-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>22 Graham Bodman</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q22" type="radio" value="A"> A Good tenant management involves supervision and regulation.</label>
-        <label style="margin:0;"><input name="q22" type="radio" value="B"> B State housing must be built at minimum expense to the public.</label>
-        <label style="margin:0;"><input name="q22" type="radio" value="C"> C Organising social events helps tenants to live close together.</label>
-        <label style="margin:0;"><input name="q22" type="radio" value="D"> D Mixed-race communities require adaptable and responsive designs.</label>
-        <label style="margin:0;"><input name="q22" type="radio" value="E"> E Complaints were expected about the high standard of the development.</label>
-        <label style="margin:0;"><input name="q22" type="radio" value="F"> F Too many rules and regulations will cause resentment from tenants.</label>
-      </div>
+    <div id="q22-anchor">
+      <p><strong>22</strong> The new housing is more expensive than other housing in the area.</p>
+      <label><input name="q22" type="radio" value="TRUE"/> TRUE</label>
+      <label><input name="q22" type="radio" value="FALSE"/> FALSE</label>
+      <label><input name="q22" type="radio" value="NOT GIVEN"/> NOT GIVEN</label>
     </div>
     
-    <a id="q23-anchor"></a>
-    <div id="q23-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>23 Stuart Bracey</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q23" type="radio" value="A"> A Good tenant management involves supervision and regulation.</label>
-        <label style="margin:0;"><input name="q23" type="radio" value="B"> B State housing must be built at minimum expense to the public.</label>
-        <label style="margin:0;"><input name="q23" type="radio" value="C"> C Organising social events helps tenants to live close together.</label>
-        <label style="margin:0;"><input name="q23" type="radio" value="D"> D Mixed-race communities require adaptable and responsive designs.</label>
-        <label style="margin:0;"><input name="q23" type="radio" value="E"> E Complaints were expected about the high standard of the development.</label>
-        <label style="margin:0;"><input name="q23" type="radio" value="F"> F Too many rules and regulations will cause resentment from tenants.</label>
-      </div>
+    <div id="q23-anchor">
+      <p><strong>23</strong> Some people have to move out during the redevelopment.</p>
+      <label><input name="q23" type="radio" value="TRUE"/> TRUE</label>
+      <label><input name="q23" type="radio" value="FALSE"/> FALSE</label>
+      <label><input name="q23" type="radio" value="NOT GIVEN"/> NOT GIVEN</label>
     </div>
   </div>
   
   <div class="group">
-    <a id="q24-anchor"></a>
     <h4>Questions 24–26</h4>
     <p>Complete the summary below.</p>
     <p>Choose ONE WORD ONLY from the passage for each answer.</p>
     <p>Write your answers in boxes 24–26 on your answer sheet.</p>
-    <p><strong>The ‘mix and match’ strategy</strong></p>
-    <p>One aspect of the Talbot Park project that some critics are concerned about is that the higher 24 _____ of accommodation would lead to the old social problems returning. To prevent this, a team of various 25 _____ worked on the project to ensure the buildings were not uniform. Further, they created pleasant, functional interiors that could still be built within their 26 _____ Finally, the absence of walls means Talbot Park is characterised by openness, making it easier to regulate behaviour within the community.</p>
-    
-    <div id="q24-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>24 <input name="q24" type="text" style="width:100px;padding:6px;margin-top:4px;border:1px solid var(--line);border-radius:6px;" maxlength="20"></p>
-    </div>
-    
-    <a id="q25-anchor"></a>
-    <div id="q25-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>25 <input name="q25" type="text" style="width:100px;padding:6px;margin-top:4px;border:1px solid var(--line);border-radius:6px;" maxlength="20"></p>
-    </div>
-    
-    <a id="q26-anchor"></a>
-    <div id="q26-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>26 <input name="q26" type="text" style="width:100px;padding:6px;margin-top:4px;border:1px solid var(--line);border-radius:6px;" maxlength="20"></p>
-    </div>
+    <p><strong>The ‘mix and match'strategy</strong></p>
+    <p>One aspect of the Talbot Park project that some critics are concerned about is that the higher 24 <input class="blank" name="q24" type="text"/> of accommodation would lead to the old social problems returning. To prevent this, a team of various 25 <input class="blank" name="q25" type="text"/> worked on the project to ensure the buildings were not uniform. Further, they created pleasant, functional interiors that could still be built within their 26 <input class="blank" name="q26" type="text"/> Finally, the absence of walls means Talbot Park is characterised by openness, making it easier to regulate behaviour within the community.</p>
   </div>
   
-  <div style="display:flex;gap:8px;margin-bottom:10px;">
-    <button class="primary" onclick="grade()">Submit</button>
-    <button onclick="resetForm()">Reset</button>
-    <button onclick="toggleNotes()">Notes</button>
+  <div class="group">
+    <button class="primary" onclick="grade()">Submit Answers</button>
+    <button onclick="toggleNotes()">📝 Notes</button>
   </div>
+
   <div id="results"></div>
-  <details class="answerbox" id="answerBox">
+
+  <details class="answerbox">
     <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
     <div id="answerContent"></div>
   </details>
 </section>
 </div>
-<div aria-label="Selection tools" id="selbar" role="toolbar">
-  <button id="btnHL">Highlight</button>
-  <button id="btnUH">Remove</button>
-  <button id="btnNote">Note</button>
+
+<!-- 高亮工具'-->
+<div id="selbar">
+  <button id="btnHL">🖍'Highlight</button>
+  <button id="btnUH">'Remove</button>
+  <button id="btnNote">📝 Note</button>
 </div>
+
+<!-- 笔记面板 -->
 <div id="notes">
   <header>
-    <strong>Notes</strong>
+    <span>📝 Notes</span>
     <div>
-      <button id="btnCopy">Copy</button>
-      <button id="btnClose">Close</button>
+      <button id="btnCopy">📋</button>
+      <button id="btnClose">'/button>
     </div>
   </header>
-  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+  <textarea id="noteArea" placeholder="Write your notes here..."></textarea>
 </div>
+
+<!-- 提示消息 -->
 <div id="toast"></div>
+
 <script>
-// Timer
-let _t=0; const _timerEl=document.getElementById('timer');
-setInterval(function(){ 
-  _t++; 
-  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
-  var s=String(_t%60).padStart(2,'0'); 
-  _timerEl.textContent=m+':'+s; 
-},1000);
-// Drag divider
-var divider = document.getElementById('divider');
-var left = document.getElementById('left');
-var right = document.getElementById('right');
-var dragging=false;
-function startDrag(e){ 
-  dragging=true; 
-  document.body.style.cursor='ew-resize'; 
-  if(e.preventDefault) e.preventDefault(); 
-}
-function endDrag(){ 
-  dragging=false; 
-  document.body.style.cursor=''; 
-}
-function onMove(clientX){
-  var container = document.querySelector('.shell').getBoundingClientRect();
-  var x = clientX - container.left;
-  x = Math.max(280, Math.min(container.width-320, x));
-  left.style.flex = '0 0 ' + x + 'px';
-  right.style.flex = '1 1 auto';
-}
-divider.addEventListener('mousedown', function(e){ startDrag(e); });
-window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
-window.addEventListener('mouseup', endDrag);
-divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
-window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
-window.addEventListener('touchend', endDrag);
-// Highlight toolbar
-var selbar = document.getElementById('selbar');
-var btnHL = document.getElementById('btnHL');
-var btnUH = document.getElementById('btnUH');
-var btnNote = document.getElementById('btnNote');
-var lastRange=null;
-var currentHlNode=null;
-var keepToolbar=false;
-function positionSelbarForRect(rect){
-  selbar.style.display='flex';
-  requestAnimationFrame(function(){
-    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
-    var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
-    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
-    selbar.style.left = Math.max(8, leftPos) + 'px';
-  });
-}
-function updateSelbar(){
-  var sel=window.getSelection();
-  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
-    selbar.style.display='none'; 
-    currentHlNode=null; 
-    return; 
+  // 计时器功能
+  let _t = 0;
+  let timerRunning = true;
+  let timerInterval;
+  const _timerEl = document.getElementById('timer');
+
+  function updateTimer() {
+    const m = Math.floor(_t / 60);
+    const s = _t % 60;
+    _timerEl.textContent = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   }
-  var range = sel.getRangeAt(0);
-  lastRange = range.cloneRange();
-  currentHlNode=null;
-  positionSelbarForRect(range.getBoundingClientRect());
-}
-document.getElementById('left').addEventListener('mouseup', updateSelbar);
-document.getElementById('right').addEventListener('mouseup', updateSelbar);
-document.addEventListener('selectionchange', function(){ 
-  var sel=window.getSelection(); 
-  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
-    if(!keepToolbar && !currentHlNode){ 
-      selbar.style.display='none'; 
-    } 
-  } 
-});
-document.addEventListener('scroll', function(){ 
-  if(selbar.style.display==='flex') updateSelbar(); 
-});
-document.addEventListener('mousedown', function(e){
-  var t = e.target;
-  if(t.classList && t.classList.contains('hl')){
-    keepToolbar = true;
-  } else {
-    keepToolbar = false;
+
+  function startTimer() {
+    timerInterval = setInterval(() => {
+      if (timerRunning) {
+        _t++;
+        updateTimer();
+      }
+    }, 1000);
   }
-}, true);
-document.addEventListener('click', function(e){
-  var target = e.target;
-  if(target.classList && target.classList.contains('hl')){
-    currentHlNode = target;
-    lastRange = null;
-    positionSelbarForRect(target.getBoundingClientRect());
-    var sel=window.getSelection();
-    if(sel) sel.removeAllRanges();
-    setTimeout(function(){ keepToolbar=false; }, 0);
-  }
-}, true);
-function doHighlight(){
-  if(currentHlNode) return;
-  if(!lastRange || lastRange.collapsed) return;
-  var span=document.createElement('span'); span.className='hl';
-  try { lastRange.surroundContents(span); }
-  catch(e){
-    var wrap=document.createElement('span'); wrap.className='hl';
-    wrap.appendChild(lastRange.cloneContents());
-    lastRange.deleteContents();
-    lastRange.insertNode(wrap);
-  }
-  selbar.style.display='none';
-  showToast('Highlighted');
-}
-function removeHighlight(){
-  if(currentHlNode){
-    var p = currentHlNode.parentNode;
-    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
-    p.removeChild(currentHlNode); p.normalize();
-    currentHlNode = null;
-    selbar.style.display='none';
-    showToast('Highlight removed');
-    return;
-  }
-  if(!lastRange) return;
-  var selRect = lastRange.getBoundingClientRect();
-  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
-  var toRemove=[];
-  while(walker.nextNode()){
-    var n=walker.currentNode;
-    if(n.classList && n.classList.contains('hl')) {
-      var r = n.getBoundingClientRect();
-      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+
+  function toggleTimer() {
+    if (timerRunning) {
+      clearInterval(timerInterval);
+      timerRunning = false;
+      _timerEl.classList.add('paused');
+      showToast('Timer paused');
+    } else {
+      startTimer();
+      timerRunning = true;
+      _timerEl.classList.remove('paused');
+      showToast('Timer resumed');
     }
   }
-  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
-  selbar.style.display='none';
-  showToast('Highlight removed');
-}
-btnHL.addEventListener('click', doHighlight);
-btnUH.addEventListener('click', removeHighlight);
-// Notes
-var notes = document.getElementById('notes');
-var noteArea = document.getElementById('noteArea');
-var btnCopy=document.getElementById('btnCopy');
-var btnClose=document.getElementById('btnClose');
-function toggleNotes(){ 
-  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
-}
-window.toggleNotes = toggleNotes;
-btnClose.addEventListener('click', toggleNotes);
-btnCopy.addEventListener('click', async function(){ 
-  await navigator.clipboard.writeText(noteArea.value||''); 
-  showToast('Copied'); 
-});
-btnNote.addEventListener('click', function(){
-  var text = '';
-  if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
-  else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
-  toggleNotes();
-  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
-  selbar.style.display='none';
-});
-// Toast
-var toastEl=document.getElementById('toast');
-function showToast(msg){
-  toastEl.textContent=msg; 
-  toastEl.style.display='block';
-  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
-}
-// Answer key and grading
-var answers = {
-  "q14":"iv", "q15":"ix", "q16":"i", "q17":"x", "q18":"iii", "q19":"v", "q20":"vii",
-  "q21":"D", "q22":"A", "q23":"C",
-  "q24":"density", "q25":"architects", "q26":"budget"
-};
-var acceptable = {
-  "q24": ["density"],
-  "q25": ["architects"],
-  "q26": ["budget"]
-};
-function markHeading(q, user){
-  return String(user||'').toLowerCase() === String(answers[q]).toLowerCase();
-}
-function markChoice(q, user){
-  return String(user||'').toUpperCase() === String(answers[q]).toUpperCase();
-}
-function markBlank(q, user){
-  var u = String(user||'').trim().toLowerCase();
-  var key = String(answers[q]).trim().toLowerCase();
-  if(acceptable[q]){
-    return acceptable[q].map(a => a.toLowerCase()).indexOf(u) >= 0;
+
+  // 主题切换功能
+  function toggleTheme() {
+    document.body.classList.toggle('dark');
+    const isDark = document.body.classList.contains('dark');
+    localStorage.setItem('darkMode', isDark);
+    const themeButton = document.querySelector('.theme-toggle');
+    themeButton.textContent = isDark ? '☀️' : '🌙';
   }
-  return u === key;
-}
-function grade(){
-  var total=0, correct=0, lines=[];
-  function push(q, ok, user){
-    total++; if(ok) correct++;
-    lines.push(q.toUpperCase()+": "+(user||'None')+" "+(ok?'✅':'❌'));
+
+  // 加载保存的主题
+  if (localStorage.getItem('darkMode') === 'true') {
+    document.body.classList.add('dark');
+    document.querySelector('.theme-toggle').textContent = '☀️';
   }
-  // 14–20 headings
-  for(var n=14;n<=20;n++){
-    var sel=document.querySelector('input[name="q'+n+'"]:checked');
-    var val=sel?sel.value:'';
-    push('q'+n, markHeading('q'+n, val), val);
+
+  // 导航功能
+  function scrollToElement(id) {
+    const element = document.getElementById(id);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      
+      // 更新导航状态
+      document.querySelectorAll('.q-item').forEach(item => item.classList.remove('active'));
+      const navItem = document.querySelector(`[onclick="scrollToElement('${id}')"]`);
+      if (navItem) navItem.classList.add('active');
+    }
   }
-  // 21–23 matching
-  for(var n=21;n<=23;n++){
-    var sel=document.querySelector('input[name="q'+n+'"]:checked');
-    var val=sel?sel.value:'';
-    push('q'+n, markChoice('q'+n, val), val);
+
+  // 答题状态更新
+  function updateAnswerStatus() {
+    for (let i = 14; i <= 26; i++) {
+      const inputs = document.querySelectorAll(`input[name="q${i}"]`);
+      const navItem = document.getElementById(`q${i}-nav`);
+      if (navItem) {
+        let answered = false;
+        inputs.forEach(input => {
+          if ((input.type === 'radio' || input.type === 'checkbox') && input.checked) {
+            answered = true;
+          } else if (input.type === 'text' && input.value.trim()) {
+            answered = true;
+          }
+        });
+        if (answered) {
+          navItem.classList.add('answered');
+        } else {
+          navItem.classList.remove('answered');
+        }
+      }
+    }
   }
-  // 24–26 blanks
-  for(var n=24;n<=26;n++){
-    var el=document.querySelector('input[name="q'+n+'"]');
-    var val=el?el.value:'';
-    push('q'+n, markBlank('q'+n, val), val);
-  }
-  var acc = (total? Math.round(100*correct/total):0);
-  var html = '<p><strong>Score:</strong> '+correct+'/'+total+' <span class="badge">Accuracy '+acc+'%</span></p>';
-  html += '<pre>'+lines.join('\n')+'</pre>';
-  document.getElementById('results').innerHTML = html;
-  
-  // Show answer key
-  document.getElementById('answerContent').innerHTML = `
-    <ol>
-      <li>14 → iv (The unexpectedly high standard of the housing)</li>
-      <li>15 → ix (A close community in the original Talbot Park development)</li>
-      <li>16 → i (Some of the problems that developed at Talbot Park)</li>
-      <li>17 → x (Details of the style of buildings used in the makeover)</li>
-      <li>18 → iii (The ethnic makeup of the new Talbot Park)</li>
-      <li>19 → v (Financial hardship in Talbot Park and a neighbouring community)</li>
-      <li>20 → vii (How to co-ordinate and assist the people who live at Talbot Park)</li>
-      <li>21 → D (Mixed-race communities require adaptable and responsive designs)</li>
-      <li>22 → A (Good tenant management involves supervision and regulation)</li>
-      <li>23 → C (Organising social events helps tenants to live close together)</li>
-      <li>24 → density</li>
-      <li>25 → architects</li>
-      <li>26 → budget</li>
-    </ol>
-  `;
-  document.querySelector('#answerBox .badge').textContent='tap to view';
-}
-function resetForm(){
-  document.querySelectorAll('input[type="radio"]').forEach(el=>el.checked=false);
-  document.querySelectorAll('input[type="text"]').forEach(el=>el.value="");
-  document.getElementById('results').innerHTML='';
-  document.getElementById('answerContent').innerHTML='';
-  document.querySelector('#answerBox .badge').textContent = 'hidden';
-  document.querySelectorAll('.q-item').forEach(item => {
-    item.classList.remove('answered');
+
+  // 监听答案变化
+  document.addEventListener('change', updateAnswerStatus);
+  document.addEventListener('input', updateAnswerStatus);
+
+  // 高亮功能
+  let lastRange = null;
+  let currentHlNode = null;
+  const selbar = document.getElementById('selbar');
+  const btnHL = document.getElementById('btnHL');
+  const btnUH = document.getElementById('btnUH');
+  const btnNote = document.getElementById('btnNote');
+
+  document.addEventListener('mouseup', function (e) {
+    const sel = window.getSelection();
+    if (sel.rangeCount && !sel.isCollapsed) {
+      lastRange = sel.getRangeAt(0);
+      const rect = lastRange.getBoundingClientRect();
+      selbar.style.left = rect.left + 'px';
+      selbar.style.top = (rect.top - 40) + 'px';
+      selbar.style.display = 'flex';
+    }
   });
-}
-function scrollToElement(id){
-  var el = document.getElementById(id);
-  if(el){ 
-    el.scrollIntoView({behavior:'smooth', block:'center'}); 
+
+  document.addEventListener('click', function (e) {
+    if (e.target.classList && e.target.classList.contains('hl')) {
+      currentHlNode = e.target;
+      const rect = e.target.getBoundingClientRect();
+      selbar.style.left = rect.left + 'px';
+      selbar.style.top = (rect.top - 40) + 'px';
+      selbar.style.display = 'flex';
+    } else if (!selbar.contains(e.target)) {
+      selbar.style.display = 'none';
+      currentHlNode = null;
+    }
+  });
+
+  function doHighlight() {
+    if (currentHlNode) return;
+    if (!lastRange) return;
+    try {
+      const wrap = document.createElement('span');
+      wrap.className = 'hl';
+      wrap.appendChild(lastRange.cloneContents());
+      lastRange.deleteContents();
+      lastRange.insertNode(wrap);
+    } catch (e) {
+      console.error('Highlight failed:', e);
+    }
+    selbar.style.display = 'none';
+    showToast('Highlighted');
   }
-  var navs = document.querySelectorAll('.practice-nav .q-item');
-  navs.forEach(n => n.classList.remove('active'));
-  var btn = document.getElementById(id.replace('-anchor','-nav'));
-  if(btn){ 
-    btn.classList.add('active'); 
-    setTimeout(() => btn.classList.remove('active'), 800); 
+
+  function removeHighlight() {
+    if (currentHlNode) {
+      const p = currentHlNode.parentNode;
+      while (currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
+      p.removeChild(currentHlNode);
+      p.normalize();
+      currentHlNode = null;
+      selbar.style.display = 'none';
+      showToast('Highlight removed');
+      return;
+    }
+    
+    if (!lastRange) return;
+    const selRect = lastRange.getBoundingClientRect();
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+    const toRemove = [];
+    
+    while (walker.nextNode()) {
+      const n = walker.currentNode;
+      if (n.classList && n.classList.contains('hl')) {
+        const r = n.getBoundingClientRect();
+        if (!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) {
+          toRemove.push(n);
+        }
+      }
+    }
+    
+    toRemove.forEach(function (el) {
+      const p = el.parentNode;
+      while (el.firstChild) p.insertBefore(el.firstChild, el);
+      p.removeChild(el);
+      p.normalize();
+    });
+    
+    selbar.style.display = 'none';
+    showToast('Highlight removed');
   }
-}
-(function(){
-  function mark(qn){
-    var nav = document.getElementById(`q${qn}-nav`);
-    if(!nav) return;
-    var radios = document.querySelectorAll('input[name="q'+qn+'"]:checked');
-    var text = document.querySelector('input[name="q'+qn+'"]');
-    var answered=false;
-    if(radios.length){ radios.forEach(function(r){ if(r.checked) answered=true; }); }
-    if(text && text.type === 'text'){ answered = answered || (text.value && text.value.trim().length>0); }
-    if(answered) nav.classList.add('answered'); else nav.classList.remove('answered');
+
+  btnHL.addEventListener('click', doHighlight);
+  btnUH.addEventListener('click', removeHighlight);
+
+  // 笔记功能
+  const notes = document.getElementById('notes');
+  const noteArea = document.getElementById('noteArea');
+  const btnCopy = document.getElementById('btnCopy');
+  const btnClose = document.getElementById('btnClose');
+
+  function toggleNotes() {
+    notes.style.display = (notes.style.display === 'flex' ? 'none' : 'flex');
   }
-  for(var q=14;q<=26;q++){
-    (function(n){
-      document.querySelectorAll(`input[name="q${n}"]`).forEach(input => {
-        input.addEventListener('change', () => mark(n));
-        if(input.type === 'text'){
-          input.addEventListener('input', () => mark(n));
+
+  btnClose.addEventListener('click', toggleNotes);
+  btnCopy.addEventListener('click', async function () {
+    await navigator.clipboard.writeText(noteArea.value || '');
+    showToast('Copied');
+  });
+
+  btnNote.addEventListener('click', function () {
+    let text = '';
+    if (currentHlNode) {
+      text = (currentHlNode.textContent || '').trim();
+    } else if (lastRange) {
+      const frag = lastRange.cloneContents();
+      text = (frag.textContent || '').trim();
+    }
+    toggleNotes();
+    if (text) {
+      noteArea.value = (noteArea.value ? noteArea.value + '\n' : '') + '> ' + text + '\n';
+    }
+    selbar.style.display = 'none';
+  });
+
+  // Toast提示功能
+  const toastEl = document.getElementById('toast');
+  function showToast(msg) {
+    toastEl.textContent = msg;
+    toastEl.style.display = 'block';
+    setTimeout(function () { toastEl.style.display = 'none'; }, 1200);
+  }
+
+  // 拖拽功能初始化
+  function initDragAndDrop() {
+    const cards = document.querySelectorAll('.card');
+    const dropzones = document.querySelectorAll('.dropzone');
+    let draggedCard = null;
+
+    cards.forEach(card => {
+      card.addEventListener('dragstart', (e) => {
+        draggedCard = e.target;
+        setTimeout(() => e.target.classList.add('ghost'), 0);
+      });
+      card.addEventListener('dragend', (e) => {
+        e.target.classList.remove('ghost');
+      });
+    });
+
+    dropzones.forEach(zone => {
+      zone.addEventListener('dragover', e => {
+        e.preventDefault();
+        zone.classList.add('over');
+      });
+      zone.addEventListener('dragleave', () => {
+        zone.classList.remove('over');
+      });
+      zone.addEventListener('drop', e => {
+        e.preventDefault();
+        zone.classList.remove('over');
+        if (draggedCard) {
+          if(zone.children.length > 0 && zone.children[0].classList.contains('card')) {
+            document.querySelector('.cardpool').appendChild(zone.children[0]);
+          }
+          zone.innerHTML = '';
+          zone.appendChild(draggedCard);
+          draggedCard = null;
         }
       });
-    })(q);
+    });
   }
-})();
-</script>
 
-<!-- 练习页面数据传输增强脚本 -->
-<script>
-// 检查是否已经有增强脚本
-if (!window.practicePageEnhancer) {
-    // 动态加载增强脚本
-    const script = document.createElement('script');
-    script.src = '../../js/practice-page-enhancer.js';
-    script.onload = function() {
-        console.log('练习页面增强脚本已加载');
+  // 页面加载完成后初始化
+  document.addEventListener('DOMContentLoaded', function() {
+    startTimer();
+    initDragAndDrop();
+    updateAnswerStatus(); // 初始化答题状态
+  });
+
+  // 答题功能
+  function grade() {
+    let correct = 0;
+    let total = 0;
+    let results = [];
+    
+    const answers = {
+      "q14": "iv",
+      "q15": "ix",
+      "q16": "i",
+      "q17": "x",
+      "q18": "iii",
+      "q19": "v",
+      "q20": "vii",
+      "q21": "TRUE",
+      "q22": "FALSE",
+      "q23": "NOT GIVEN",
+      "q24": "density",
+      "q25": "architects",
+      "q26": "budget"
     };
+    
+    for (let i = 14; i <= 26; i++) {
+      total++;
+      const input = document.querySelector(`input[name="q${i}"]:checked`) || 
+                   document.querySelector(`input[name="q${i}"]`);
+      
+      let userAnswer = '';
+      if (input) {
+        userAnswer = input.type === 'radio' ? input.value : input.value.trim().toLowerCase();
+      }
+      
+      const correctAnswer = answers[`q${i}`];
+      const isCorrect = userAnswer.toLowerCase() === correctAnswer.toLowerCase();
+      if (isCorrect) correct++;
+      
+      results.push(`${i}: ${userAnswer || '(blank)'} ${isCorrect ? '' : ''(' + correctAnswer + ')'}`);
+    }
+    
+    const acc = Math.round(100 * correct / total);
+    document.getElementById('results').innerHTML = `
+      <p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p>
+      <pre>${results.join('\n')}</pre>
+    `;
+    
+    // 显示答案
+    const answerContent = document.getElementById('answerContent');
+    answerContent.innerHTML = `
+      <ol>
+        <li>14. iv (The unexpectedly high standard of the housing)</li>
+        <li>15. ix (A close community in the original Talbot Park development)</li>
+        <li>16. i (Some of the problems that developed at Talbot Park)</li>
+        <li>17. x (Details of the style of buildings used in the makeover)</li>
+        <li>18. iii (The ethnic makeup of the new Talbot Park)</li>
+        <li>19. v (Financial hardship in Talbot Park and a neighbouring community)</li>
+        <li>20. vii (How to co-ordinate and assist the people who live at Talbot Park)</li>
+        <li>21. TRUE</li>
+        <li>22. FALSE</li>
+        <li>23. NOT GIVEN</li>
+        <li>24. density</li>
+        <li>25. architects</li>
+        <li>26. budget</li>
+      </ol>
+    `;
+    document.querySelector('.answerbox .badge').textContent = 'tap to view';
+    
+    updateAnswerStatus();
+  }
+
+  // 拖拽分栏功能
+  var divider = document.getElementById('divider');
+  var left = document.getElementById('left');
+  var right = document.getElementById('right');
+  var dragging = false;
+  
+  function startDrag(e) {
+    dragging = true;
+    document.body.style.cursor = 'ew-resize';
+    if (e.preventDefault) e.preventDefault();
+  }
+  
+  function endDrag() {
+    dragging = false;
+    document.body.style.cursor = '';
+  }
+  
+  function onMove(clientX) {
+    var container = document.querySelector('.shell').getBoundingClientRect();
+    var x = clientX - container.left;
+    x = Math.max(280, Math.min(container.width - 320, x));
+    left.style.flex = '0 0 ' + x + 'px';
+    right.style.flex = '1 1 auto';
+  }
+  
+  divider.addEventListener('mousedown', function(e) { startDrag(e); });
+  window.addEventListener('mousemove', function(e) { if (dragging) onMove(e.clientX); });
+  window.addEventListener('mouseup', endDrag);
+  divider.addEventListener('touchstart', function(e) { startDrag(e.touches[0]); }, { passive: false });
+  window.addEventListener('touchmove', function(e) { if (dragging) onMove(e.touches[0].clientX); }, { passive: false });
+  window.addEventListener('touchend', endDrag);
+
+  // 练习页面增强脚本集成
+  function loadPracticePageEnhancer() {
+    const script = document.createElement('script');
+    script.src = '../../../js/practice-page-enhancer.js';
+    script.onload = function() {
+      console.log('练习页面增强脚本已加载');
+      };
     script.onerror = function() {
-        console.error('练习页面增强脚本加载失败');
-        // 降级到内联增强
-        loadInlineEnhancer();
+      console.error('练习页面增强脚本加载失败');
+      // 降级到内联增强
+      loadInlineEnhancer();
     };
     document.head.appendChild(script);
-}
+  }
 
-// 内联增强器（降级方案）
-function loadInlineEnhancer() {
+  // 内联增强器（降级方案）
+  function loadInlineEnhancer() {
     if (window.practicePageEnhancer) return;
     
     window.practicePageEnhancer = {
-        initialize: function() {
-            console.log('[InlineEnhancer] 内联增强器已初始化');
-            this.setupCommunication();
-            this.setupAnswerListeners();
-            this.interceptSubmit();
-        },
-        
-        setupCommunication: function() {
-            this.parentWindow = window.opener || window.parent;
-            window.addEventListener('message', (event) => {
-                if (event.data && event.data.type === 'INIT_SESSION') {
-                    this.sessionId = event.data.data.sessionId;
-                    this.sendMessage('SESSION_READY', {
-                        pageType: this.detectPageType(),
-                        url: window.location.href
-                    });
-                }
+      initialize: function() {
+        console.log('[InlineEnhancer] 内联增强器已初始化');
+          this.setupCommunication();
+        this.setupAnswerListeners();
+        this.interceptSubmit();
+      },
+      
+      setupCommunication: function() {
+        this.parentWindow = window.opener || window.parent;
+        window.addEventListener('message', (event) => {
+          if (event.data && event.data.type === 'INIT_SESSION') {
+            this.sessionId = event.data.data.sessionId;
+            this.sendMessage('SESSION_READY', {
+              pageType: this.detectPageType(),
+              url: window.location.href
             });
-        },
+          }
+        });
+      },
+      
+      detectPageType: function() {
+        const title = document.title || '';
+        if (title.includes('P1')) return 'P1';
+        if (title.includes('P2')) return 'P2';
+        if (title.includes('P3')) return 'P3';
+        return 'unknown';
+      },
+      
+      setupAnswerListeners: function() {
+        this.answers = {};
+        this.startTime = Date.now();
         
-        detectPageType: function() {
-            const title = document.title || '';
-            if (title.includes('P1')) return 'P1';
-            if (title.includes('P2')) return 'P2';
-            if (title.includes('P3')) return 'P3';
-            return 'unknown';
-        },
+        document.addEventListener('change', (e) => {
+          if (e.target.name && e.target.name.startsWith('q')) {
+            this.answers[e.target.name] = e.target.value;
+          }
+        });
         
-        setupAnswerListeners: function() {
-            this.answers = {};
-            this.startTime = Date.now();
-            
-            document.addEventListener('change', (e) => {
-                if (e.target.name && e.target.name.startsWith('q')) {
-                    this.answers[e.target.name] = e.target.value;
-                }
-            });
-        },
-        
-        interceptSubmit: function() {
-            // 拦截grade函数
-            if (typeof window.grade === 'function') {
-                const originalGrade = window.grade;
-                window.grade = () => {
-                    const result = originalGrade();
-                    setTimeout(() => this.handleSubmit(), 200);
-                    return result;
-                };
-            }
-            
-            // 监听提交按钮
-            document.addEventListener('click', (e) => {
-                if (e.target.tagName === 'BUTTON' && 
-                    (e.target.textContent.includes('Submit') || 
-                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
-                    setTimeout(() => this.handleSubmit(), 300);
-                }
-            });
-        },
-        
-        handleSubmit: function() {
-            const results = {
-                sessionId: this.sessionId,
-                startTime: this.startTime,
-                endTime: Date.now(),
-                duration: Math.round((Date.now() - this.startTime) / 1000),
-                answers: this.answers,
-                scoreInfo: this.extractScore(),
-                pageType: this.detectPageType(),
-                url: window.location.href
-            };
-            
-            this.sendMessage('PRACTICE_COMPLETE', results);
-        },
-        
-        extractScore: function() {
-            const resultsEl = document.getElementById('results');
-            if (!resultsEl) return null;
-            
-            const text = resultsEl.textContent || '';
-            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
-            if (scoreMatch) {
-                const correct = parseInt(scoreMatch[1]);
-                const total = parseInt(scoreMatch[2]);
-                return {
-                    correct: correct,
-                    total: total,
-                    accuracy: total > 0 ? correct / total : 0,
-                    percentage: Math.round((correct / total) * 100),
-                    source: 'inline_extraction'
-                };
-            }
-            return null;
-        },
-        
-        sendMessage: function(type, data) {
-            if (this.parentWindow) {
-                this.parentWindow.postMessage({
-                    type: type,
-                    data: data,
-                    source: 'practice_page'
-                }, '*');
-            }
+        document.addEventListener('input', (e) => {
+          if (e.target.name && e.target.name.startsWith('q')) {
+            this.answers[e.target.name] = e.target.value;
+          }
+        });
+      },
+      
+      interceptSubmit: function() {
+        // 拦截grade函数
+        if (typeof window.grade === 'function') {
+          const originalGrade = window.grade;
+          window.grade = () => {
+            const result = originalGrade();
+            setTimeout(() => this.handleSubmit(), 200);
+            return result;
+          };
         }
+        
+        // 监听提交按钮
+        document.addEventListener('click', (e) => {
+          if (e.target.tagName === 'BUTTON' && 
+              (e.target.textContent.includes('Submit') || 
+               e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+            setTimeout(() => this.handleSubmit(), 300);
+          }
+        });
+      },
+      
+      handleSubmit: function() {
+        const results = {
+          sessionId: this.sessionId,
+          startTime: this.startTime,
+          endTime: Date.now(),
+          duration: Math.round((Date.now() - this.startTime) / 1000),
+          answers: this.answers,
+          scoreInfo: this.extractScore(),
+          pageType: this.detectPageType(),
+          url: window.location.href
+        };
+        
+        this.sendMessage('PRACTICE_COMPLETE', results);
+      },
+      
+      extractScore: function() {
+        const resultsEl = document.getElementById('results');
+        if (!resultsEl) return null;
+        
+        const text = resultsEl.textContent || '';
+        const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+        if (scoreMatch) {
+          const correct = parseInt(scoreMatch[1]);
+          const total = parseInt(scoreMatch[2]);
+          return {
+            correct: correct,
+            total: total,
+            accuracy: total > 0 ? correct / total : 0,
+            percentage: Math.round((correct / total) * 100),
+            source: 'inline_extraction'
+          };
+        }
+        return null;
+      },
+      
+      sendMessage: function(type, data) {
+        if (this.parentWindow) {
+          this.parentWindow.postMessage({
+            type: type,
+            data: data,
+            source: 'practice_page'
+          }, '*');
+        }
+      }
     };
     
     // 初始化
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            window.practicePageEnhancer.initialize();
-        });
-    } else {
+      document.addEventListener('DOMContentLoaded', () => {
         window.practicePageEnhancer.initialize();
+      });
+    } else {
+      window.practicePageEnhancer.initialize();
     }
-}
+  }
+
+  // 加载增强脚本
+  loadPracticePageEnhancer();
 </script>
 
 </body>
