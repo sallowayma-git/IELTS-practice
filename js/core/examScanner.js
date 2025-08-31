@@ -140,7 +140,9 @@ class ExamScanner {
                 { path: `${frequencyPath}/(网页由窦立盛老师制作)/9.The Pearls 珍珠`, name: 'The Pearls 珍珠' },
                 { path: `${frequencyPath}/(网页由窦立盛老师制作)/10.The Tuatara of New Zealand 新西兰的喙头蜥`, name: 'The Tuatara of New Zealand 新西兰的喙头蜥' },
                 { path: `${frequencyPath}/(网页由窦立盛老师制作)/11.William Gilbert and Magnetism 威廉・吉尔伯特与磁学`, name: 'William Gilbert and Magnetism 威廉・吉尔伯特与磁学' },
-                { path: `${frequencyPath}/(网页由窦立盛老师制作)/12.Wood a valuable resource in New Zealand's economy 木材：新西兰经济中的宝贵资源(躺)`, name: 'Wood a valuable resource in New Zealand\'s economy 木材：新西兰经济中的宝贵资源' }
+                { path: `${frequencyPath}/(网页由窦立盛老师制作)/12.Wood a valuable resource in New Zealand's economy 木材：新西兰经济中的宝贵资源(躺)`, name: 'Wood a valuable resource in New Zealand\'s economy 木材：新西兰经济中的宝贵资源' },
+                { path: `${frequencyPath}/(网页由窦立盛老师制作)/P1 - The Development of Plastics塑料发展`, name: 'The Development of Plastics 塑料发展' },
+                { path: `${frequencyPath}/(网页由窦立盛老师制作)/P1- Katherine Mansfield 新西兰作家`, name: 'Katherine Mansfield 新西兰作家' }
             );
         } else if (category === 'P1' && frequency === 'low') {
             examDirs.push(
@@ -199,7 +201,12 @@ class ExamScanner {
                 { path: `${frequencyPath}/(网页由🕊️制作)/18.Voynich Manuscript 伏尼契手稿(躺)`, name: 'Voynich Manuscript 伏尼契手稿' },
                 { path: `${frequencyPath}/(网页由🕊️制作)/19.What makes a musical expert_ 是什么造就了音乐专家？`, name: 'What makes a musical expert? 是什么造就了音乐专家？' },
                 { path: `${frequencyPath}/(网页由🕊️制作)/20.Yawning 打哈欠`, name: 'Yawning 打哈欠' },
-                { path: `${frequencyPath}/(网页由🕊️制作)/21.Neanderthal Technology`, name: 'Neanderthal Technology' }
+                { path: `${frequencyPath}/(网页由🕊️制作)/21.Neanderthal Technology`, name: 'Neanderthal Technology' },
+                { path: `${frequencyPath}/(网页由🕊️制作)/P3 - Science and Filmmaking 电影科学`, name: 'Science and Filmmaking 电影科学' },
+                { path: `${frequencyPath}/(网页由🕊️制作)/P3 - Humanities and the health professional(0811)人文医学`, name: 'Humanities and the health professional 人文医学' },
+                { path: `${frequencyPath}/(网页由🕊️制作)/P3 - Star Performers(0808)明星员工`, name: 'Star Performers 明星员工' },
+                { path: `${frequencyPath}/(网页由🕊️制作)/P3 - Unlocking the mystery of dreams 梦的解析`, name: 'Unlocking the mystery of dreams 梦的解析' },
+                { path: `${frequencyPath}/(网页由🕊️制作)/P3 - Whale Culture 虎鲸文化`, name: 'Whale Culture 虎鲸文化' }
             );
         } else if (category === 'P3' && frequency === 'low') {
             examDirs.push(
@@ -208,7 +215,9 @@ class ExamScanner {
                 { path: `${frequencyPath}/(网页由🕊️制作)/3.Does class size matter_ 班级规模重要吗？`, name: 'Does class size matter? 班级规模重要吗？' },
                 { path: `${frequencyPath}/(网页由🕊️制作)/4.Marketing and the information age 营销与信息时代(躺)`, name: 'Marketing and the information age 营销与信息时代' },
                 { path: `${frequencyPath}/(网页由🕊️制作)/5.The fluoridation controversy 氟化争议（躺）`, name: 'The fluoridation controversy 氟化争议' },
-                { path: `${frequencyPath}/(网页由🕊️制作)/6.Video Games' Unexpected Benefits to the Human Brain 电子游戏对人类大脑的意外益处`, name: 'Video Games\' Unexpected Benefits to the Human Brain 电子游戏对人类大脑的意外益处' }
+                { path: `${frequencyPath}/(网页由🕊️制作)/6.Video Games' Unexpected Benefits to the Human Brain 电子游戏对人类大脑的意外益处`, name: 'Video Games\' Unexpected Benefits to the Human Brain 电子游戏对人类大脑的意外益处' },
+                { path: `${frequencyPath}/(网页由🕊️制作)/7.Images and Places`, name: 'Images and Places' },
+                { path: `${frequencyPath}/(网页由🕊️制作)/P3 - Images and Places(8.24)风景与印记`, name: 'Images and Places 风景与印记' }
             );
         }
         
@@ -244,23 +253,28 @@ class ExamScanner {
         // 基于命名规律构造HTML文件路径
         const freqLabel = frequency === 'high' ? '高' : '次';
         
-        // 清理路径中的特殊字符
-        const actualPath = examPath.replace('/(网页由窦立盛老师制作)/', '/1.高频(网页由窦立盛老师制作)/')
-                                  .replace('/(网页由🕊️制作)/', '/1.高频(网页由🕊️制作)/');
-        
         // 从examName中提取英文标题部分
         const englishTitle = this.extractEnglishTitle(examName);
         
-        // 尝试不同的文件名格式
+        // 尝试不同的文件名格式，基于实际观察到的命名模式
         const possibleNames = [
             `${category} - ${englishTitle}【${freqLabel}】.html`,
             `${category} - ${examName}【${freqLabel}】.html`,
             `${englishTitle}.html`,
-            `${examName}.html`
+            `${examName}.html`,
+            // 特殊命名格式
+            `0828 ${category} - ${englishTitle}.html`, // Science and Filmmaking格式
+            `${category} - ${englishTitle}【${freqLabel}】(SEVEN老师制作).html`, // Grimm's Fairy Tales格式
+            `${category} - ${englishTitle}(0811).html`, // Humanities格式
+            `${category} - ${englishTitle}(0808).html`, // Star Performers格式
+            `${category} - ${englishTitle} 梦的解析.html`, // Dreams格式
+            `${category} - ${englishTitle} 虎鲸文化.html`, // Whale Culture格式
+            `${category} - ${englishTitle}（0824）.html`, // Images and Places格式
+            `Images and Places.html` // 简化格式
         ];
         
         for (const fileName of possibleNames) {
-            const fullPath = `${actualPath}/${fileName}`;
+            const fullPath = `${examPath}/${fileName}`;
             if (await this.fileExists(fullPath)) {
                 return fullPath;
             }
@@ -451,7 +465,7 @@ class ExamScanner {
                 category: 'P3',
                 frequency: 'high',
                 path: 'P3 （20+6）/1.高频(网页由🕊️制作)/1.A closer examination of a study on verbal and non - verbal messages 语言与非语言信息研究审视/',
-                filename: 'P3 - Verbal and non-verbal messages【高】.html',
+                filename: 'P3 - A closer examination of a study on verbal and non-verbal messages【高】.html',
                 questionTypes: ['heading-matching', 'multiple-choice', 'summary-completion'],
                 totalQuestions: 14,
                 estimatedTime: 20,
@@ -472,10 +486,457 @@ class ExamScanner {
                 difficulty: 'hard',
                 tags: ['biology', 'ecology'],
                 description: '关于植物生态作用的生物学文章'
+            },
+            {
+                id: 'p3-high-grimms-fairy-tales',
+                title: 'Grimm\'s Fairy Tales 格林童话',
+                category: 'P3',
+                frequency: 'high',
+                path: 'P3 （20+6）/1.高频(网页由🕊️制作)/3.Grimm\'s Fairy Tales 格林童话(网页由SEVEN老师制作)/',
+                filename: 'P3 - Grimm\'s Fairy Tales【高】(SEVEN老师制作).html',
+                questionTypes: ['heading-matching', 'multiple-choice'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['literature', 'culture'],
+                description: '关于格林童话的文学研究'
+            },
+            {
+                id: 'p3-high-insect-robots',
+                title: 'Insect-inspired robots 受昆虫启发的机器人',
+                category: 'P3',
+                frequency: 'high',
+                path: 'P3 （20+6）/1.高频(网页由🕊️制作)/4.Insect - inspired robots 受昆虫启发的机器人/',
+                filename: 'P3 - Insect-inspired robots【高】.html',
+                questionTypes: ['heading-matching', 'summary-completion'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['technology', 'robotics'],
+                description: '关于仿生机器人技术的科学文章'
+            },
+            {
+                id: 'p3-high-jean-piaget',
+                title: 'Jean Piaget (1896-1980) 让・皮亚杰',
+                category: 'P3',
+                frequency: 'high',
+                path: 'P3 （20+6）/1.高频(网页由🕊️制作)/5.Jean Piaget (1896 - 1980) 让・皮亚杰（1896 - 1980）/',
+                filename: 'P3 - Jean Piaget (1896–1980)【高】.html',
+                questionTypes: ['heading-matching', 'true-false-not-given'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['psychology', 'education'],
+                description: '关于心理学家让・皮亚杰的传记文章'
+            },
+            {
+                id: 'p3-high-music-language',
+                title: 'Music Language We All Speak 音乐语言',
+                category: 'P3',
+                frequency: 'high',
+                path: 'P3 （20+6）/1.高频(网页由🕊️制作)/6.Music Language We All Speak 音乐语言/',
+                filename: 'P3 - Music Language We All Speak【高】.html',
+                questionTypes: ['heading-matching', 'multiple-choice'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['music', 'psychology'],
+                description: '关于音乐作为通用语言的研究'
+            },
+            {
+                id: 'p3-high-pacific-navigation',
+                title: 'Pacific Navigation and Voyaging 太平洋导航与航海',
+                category: 'P3',
+                frequency: 'high',
+                path: 'P3 （20+6）/1.高频(网页由🕊️制作)/7.Pacific Navigation and Voyaging 太平洋导航与航海(躺)/',
+                filename: 'P3 - Pacific Navigation and Voyaging【高】.html',
+                questionTypes: ['heading-matching', 'summary-completion'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['history', 'navigation'],
+                description: '关于太平洋航海技术的历史文章'
+            },
+            {
+                id: 'p3-high-robert-stevenson',
+                title: 'Robert Louis Stevenson 罗伯特・路易斯・史蒂文森',
+                category: 'P3',
+                frequency: 'high',
+                path: 'P3 （20+6）/1.高频(网页由🕊️制作)/8.Robert Louis Stevenson罗伯特・路易斯・史蒂文森(苏格兰作家)/',
+                filename: 'P3 - Robert Louis Stevenson【高】.html',
+                questionTypes: ['heading-matching', 'multiple-choice'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['literature', 'biography'],
+                description: '关于苏格兰作家史蒂文森的传记'
+            },
+            {
+                id: 'p3-high-analysis-fear',
+                title: 'The Analysis of Fear 恐惧分析',
+                category: 'P3',
+                frequency: 'high',
+                path: 'P3 （20+6）/1.高频(网页由🕊️制作)/9.The Analysis of Fear 恐惧分析(躺)/',
+                filename: 'P3 - The Analysis of Fear【高】.html',
+                questionTypes: ['heading-matching', 'yes-no-not-given'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['psychology', 'emotion'],
+                description: '关于恐惧心理的科学分析'
+            },
+            {
+                id: 'p3-high-art-deception',
+                title: 'The Art of Deception 欺骗的艺术',
+                category: 'P3',
+                frequency: 'high',
+                path: 'P3 （20+6）/1.高频(网页由🕊️制作)/10.The Art of Deception 欺骗的艺术/',
+                filename: 'P3 - The Art of Deception【高】.html',
+                questionTypes: ['heading-matching', 'multiple-choice'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['psychology', 'behavior'],
+                description: '关于欺骗行为的心理学研究'
+            },
+            {
+                id: 'p3-high-learning-instrument',
+                title: 'The benefits of learning an instrument 学习乐器的益处',
+                category: 'P3',
+                frequency: 'high',
+                path: 'P3 （20+6）/1.高频(网页由🕊️制作)/11.The benefits of learning an instrument 学习乐器的益处/',
+                filename: 'P3 - The benefits of learning an instrument【高】.html',
+                questionTypes: ['heading-matching', 'summary-completion'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['education', 'music'],
+                description: '关于学习乐器对大脑发展益处的研究'
+            },
+            {
+                id: 'p3-high-fruit-book',
+                title: 'The Fruit Book 水果之书',
+                category: 'P3',
+                frequency: 'high',
+                path: 'P3 （20+6）/1.高频(网页由🕊️制作)/12.The Fruit Book 水果之书/',
+                filename: 'P3 - The Fruit Book【高】.html',
+                questionTypes: ['heading-matching', 'multiple-choice'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['biology', 'agriculture'],
+                description: '关于水果种类和营养的科学文章'
+            },
+            {
+                id: 'p3-high-margaret-mahy',
+                title: 'The New Zealand writer Margaret Mahy 新西兰作家玛格丽特・梅希',
+                category: 'P3',
+                frequency: 'high',
+                path: 'P3 （20+6）/1.高频(网页由🕊️制作)/13.The New Zealand writer Margaret Mahy 新西兰作家玛格丽特・梅希/',
+                filename: 'P3 - The New Zealand writer Margaret Mahy【高】.html',
+                questionTypes: ['heading-matching', 'true-false-not-given'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['literature', 'biography'],
+                description: '关于新西兰儿童文学作家的传记'
+            },
+            {
+                id: 'p3-high-piraha-people',
+                title: 'The Pirahã people of Brazil 巴西的皮拉哈人',
+                category: 'P3',
+                frequency: 'high',
+                path: 'P3 （20+6）/1.高频(网页由🕊️制作)/14.The Pirahã people of Brazil 巴西的皮拉哈人(躺)/',
+                filename: 'P3 - The Pirahã people of Brazil【高】.html',
+                questionTypes: ['heading-matching', 'multiple-choice'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['anthropology', 'culture'],
+                description: '关于巴西原住民文化的人类学研究'
+            },
+            {
+                id: 'p3-high-robbers-cave',
+                title: 'The Robbers Cave Study 罗伯斯洞穴研究',
+                category: 'P3',
+                frequency: 'high',
+                path: 'P3 （20+6）/1.高频(网页由🕊️制作)/15.The Robbers Cave Study 罗伯斯洞穴研究/',
+                filename: 'P3 - The Robbers Cave Study【高】.html',
+                questionTypes: ['heading-matching', 'summary-completion'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['psychology', 'social-science'],
+                description: '关于群体冲突的经典心理学实验'
+            },
+            {
+                id: 'p3-high-mother-tongue',
+                title: 'The Significant Role of Mother Tongue in Education 母语在教育中的作用',
+                category: 'P3',
+                frequency: 'high',
+                path: 'P3 （20+6）/1.高频(网页由🕊️制作)/16.The Significant Role of Mother Tongue in Education 母语在教育中的作用(躺)/',
+                filename: 'P3 - The Significant Role of Mother Tongue in Education【高】.html',
+                questionTypes: ['heading-matching', 'yes-no-not-given'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['education', 'linguistics'],
+                description: '关于母语教育重要性的研究'
+            },
+            {
+                id: 'p3-high-tuatara',
+                title: 'The tuatara – past and future 喙头蜥 —— 过去与未来',
+                category: 'P3',
+                frequency: 'high',
+                path: 'P3 （20+6）/1.高频(网页由🕊️制作)/17.The tuatara – past and future 喙头蜥 —— 过去与未来/',
+                filename: 'P3 - The tuatara – past and future【高】.html',
+                questionTypes: ['heading-matching', 'multiple-choice'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['biology', 'conservation'],
+                description: '关于新西兰喙头蜥保护的生物学文章'
+            },
+            {
+                id: 'p3-high-voynich-manuscript',
+                title: 'Voynich Manuscript 伏尼契手稿',
+                category: 'P3',
+                frequency: 'high',
+                path: 'P3 （20+6）/1.高频(网页由🕊️制作)/18.Voynich Manuscript 伏尼契手稿(躺)/',
+                filename: 'P3 - Voynich Manuscript【高】.html',
+                questionTypes: ['heading-matching', 'summary-completion'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['history', 'mystery'],
+                description: '关于神秘古代手稿的历史研究'
+            },
+            {
+                id: 'p3-high-musical-expert',
+                title: 'What makes a musical expert? 是什么造就了音乐专家？',
+                category: 'P3',
+                frequency: 'high',
+                path: 'P3 （20+6）/1.高频(网页由🕊️制作)/19.What makes a musical expert_ 是什么造就了音乐专家？/',
+                filename: 'P3 - What makes a musical expert_【高】.html',
+                questionTypes: ['heading-matching', 'multiple-choice'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['music', 'psychology'],
+                description: '关于音乐专业技能发展的研究'
+            },
+            {
+                id: 'p3-high-yawning',
+                title: 'Yawning 打哈欠',
+                category: 'P3',
+                frequency: 'high',
+                path: 'P3 （20+6）/1.高频(网页由🕊️制作)/20.Yawning 打哈欠/',
+                filename: 'P3 - Yawning【高】.html',
+                questionTypes: ['heading-matching', 'true-false-not-given'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['biology', 'behavior'],
+                description: '关于打哈欠现象的生物学研究'
+            },
+            {
+                id: 'p3-high-neanderthal-technology',
+                title: 'Neanderthal Technology',
+                category: 'P3',
+                frequency: 'high',
+                path: 'P3 （20+6）/1.高频(网页由🕊️制作)/21.Neanderthal Technology/',
+                filename: 'P3 - Neanderthal Technology.html',
+                questionTypes: ['heading-matching', 'multiple-choice'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['archaeology', 'technology'],
+                description: '关于尼安德特人技术的考古研究'
+            },
+            {
+                id: 'p3-high-science-filmmaking',
+                title: 'Science and Filmmaking 电影科学',
+                category: 'P3',
+                frequency: 'high',
+                path: 'P3 （20+6）/1.高频(网页由🕊️制作)/P3 - Science and Filmmaking 电影科学/',
+                filename: '0828 P3 - Science and Filmmaking.html',
+                questionTypes: ['multiple-choice', 'yes-no-not-given', 'summary-completion'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['technology', 'film'],
+                description: '关于电影制作中科学技术应用的文章'
+            },
+            {
+                id: 'p3-high-humanities-health',
+                title: 'Humanities and the health professional 人文医学',
+                category: 'P3',
+                frequency: 'high',
+                path: 'P3 （20+6）/1.高频(网页由🕊️制作)/P3 - Humanities and the health professional(0811)人文医学/',
+                filename: 'P3 - Humanities and the health professional(0811).html',
+                questionTypes: ['heading-matching', 'multiple-choice'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['medicine', 'humanities'],
+                description: '关于医学教育中人文学科重要性的研究'
+            },
+            {
+                id: 'p3-high-star-performers',
+                title: 'Star Performers 明星员工',
+                category: 'P3',
+                frequency: 'high',
+                path: 'P3 （20+6）/1.高频(网页由🕊️制作)/P3 - Star Performers(0808)明星员工/',
+                filename: 'P3 - Star Performers(0808).html',
+                questionTypes: ['heading-matching', 'summary-completion'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['business', 'management'],
+                description: '关于职场明星员工特质的管理学研究'
+            },
+            {
+                id: 'p3-high-dreams-mystery',
+                title: 'Unlocking the mystery of dreams 梦的解析',
+                category: 'P3',
+                frequency: 'high',
+                path: 'P3 （20+6）/1.高频(网页由🕊️制作)/P3 - Unlocking the mystery of dreams 梦的解析/',
+                filename: 'P3 - Unlocking the mystery of dreams 梦的解析.html',
+                questionTypes: ['heading-matching', 'multiple-choice'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['psychology', 'neuroscience'],
+                description: '关于梦境机制的神经科学研究'
+            },
+            {
+                id: 'p3-high-whale-culture',
+                title: 'Whale Culture 虎鲸文化',
+                category: 'P3',
+                frequency: 'high',
+                path: 'P3 （20+6）/1.高频(网页由🕊️制作)/P3 - Whale Culture 虎鲸文化/',
+                filename: 'P3 - Whale Culture 虎鲸文化.html',
+                questionTypes: ['heading-matching', 'true-false-not-given'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['biology', 'marine-life'],
+                description: '关于虎鲸社会行为的海洋生物学研究'
+            },
+
+            // P3 次高频题目
+            {
+                id: 'p3-low-discovery-slowness',
+                title: 'Book Review The Discovery of Slowness 书评 慢的发现',
+                category: 'P3',
+                frequency: 'low',
+                path: 'P3 （20+6）/2.次高频(网页由🕊️制作)/1.Book Review The Discovery of Slowness 书评 _慢的发现_/',
+                filename: 'P3 - Book Review The Discovery of Slowness【次】.html',
+                questionTypes: ['heading-matching', 'summary-completion', 'multiple-choice'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['literature', 'biography'],
+                description: '关于《慢的发现》一书的文学评论'
+            },
+            {
+                id: 'p3-low-darwin-psychology',
+                title: 'Charles Darwin and Evolutionary Psychology 查尔斯・达尔文与进化心理学',
+                category: 'P3',
+                frequency: 'low',
+                path: 'P3 （20+6）/2.次高频(网页由🕊️制作)/2.Charles Darwin and Evolutionary Psychology 查尔斯・达尔文与进化心理学/',
+                filename: 'P3 - Charles Darwin and Evolutionary Psychology【次】.html',
+                questionTypes: ['heading-matching', 'multiple-choice'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['psychology', 'evolution'],
+                description: '关于达尔文对心理学影响的学术文章'
+            },
+            {
+                id: 'p3-low-class-size',
+                title: 'Does class size matter? 班级规模重要吗？',
+                category: 'P3',
+                frequency: 'low',
+                path: 'P3 （20+6）/2.次高频(网页由🕊️制作)/3.Does class size matter_ 班级规模重要吗？/',
+                filename: 'P3 - Does class size matter_【次】.html',
+                questionTypes: ['heading-matching', 'yes-no-not-given'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['education', 'research'],
+                description: '关于班级规模对教学效果影响的教育研究'
+            },
+            {
+                id: 'p3-low-marketing-information',
+                title: 'Marketing and the information age 营销与信息时代',
+                category: 'P3',
+                frequency: 'low',
+                path: 'P3 （20+6）/2.次高频(网页由🕊️制作)/4.Marketing and the information age 营销与信息时代(躺)/',
+                filename: 'P3 - Marketing and the information age【次】.html',
+                questionTypes: ['heading-matching', 'summary-completion'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['business', 'technology'],
+                description: '关于信息时代营销策略变化的商业文章'
+            },
+            {
+                id: 'p3-low-fluoridation-controversy',
+                title: 'The fluoridation controversy 氟化争议',
+                category: 'P3',
+                frequency: 'low',
+                path: 'P3 （20+6）/2.次高频(网页由🕊️制作)/5.The fluoridation controversy 氟化争议（躺）/',
+                filename: 'P3 - The fluoridation controversy【次】.html',
+                questionTypes: ['heading-matching', 'multiple-choice'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['health', 'public-policy'],
+                description: '关于饮用水氟化政策争议的公共卫生文章'
+            },
+            {
+                id: 'p3-low-video-games-brain',
+                title: 'Video Games\' Unexpected Benefits to the Human Brain 电子游戏对人类大脑的意外益处',
+                category: 'P3',
+                frequency: 'low',
+                path: 'P3 （20+6）/2.次高频(网页由🕊️制作)/6.Video Games\' Unexpected Benefits to the Human Brain 电子游戏对人类大脑的意外益处/',
+                filename: 'P3 - Video Games\' Unexpected Benefits to the Human Brain【次】.html',
+                questionTypes: ['heading-matching', 'true-false-not-given'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['neuroscience', 'technology'],
+                description: '关于电子游戏对大脑积极影响的神经科学研究'
+            },
+            {
+                id: 'p3-low-images-places-1',
+                title: 'Images and Places',
+                category: 'P3',
+                frequency: 'low',
+                path: 'P3 （20+6）/2.次高频(网页由🕊️制作)/7.Images and Places/',
+                filename: 'Images and Places.html',
+                questionTypes: ['heading-matching', 'multiple-choice'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['psychology', 'memory'],
+                description: '关于图像与地点记忆关系的心理学研究'
+            },
+            {
+                id: 'p3-low-images-places-2',
+                title: 'Images and Places 风景与印记',
+                category: 'P3',
+                frequency: 'low',
+                path: 'P3 （20+6）/2.次高频(网页由🕊️制作)/P3 - Images and Places(8.24)风景与印记/',
+                filename: 'P3 - Images and Places（0824）.html',
+                questionTypes: ['heading-matching', 'summary-completion'],
+                totalQuestions: 14,
+                estimatedTime: 20,
+                difficulty: 'hard',
+                tags: ['psychology', 'memory'],
+                description: '关于风景印象与记忆形成的心理学研究'
             }
-            
-            // 注意：这里只列出了部分题目作为示例
-            // 在实际实现中，需要包含所有题目的完整信息
         ];
     }
 

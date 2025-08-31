@@ -6,10 +6,146 @@
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <style>
   :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  
+  body.dark {
+    --line: #374151;
+    --bg: #111827;
+    --panel: #1f2937;
+    --accent: #60a5fa;
+    --muted: #9ca3af;
+    --shadow: 0 6px 20px rgba(0,0,0,.3);
+  }
+  
+  body {
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+  
+  body.dark h2, body.dark h3, body.dark h4, body.dark p, body.dark td, body.dark th, body.dark label, body.dark li {
+    color: #f9fafb;
+  }
+  
+  body.dark .practice-nav {
+    background: var(--panel);
+    border-color: var(--line);
+  }
+  
+  body.dark .practice-nav .q-item {
+    background: var(--panel);
+    color: #f9fafb;
+    border-color: var(--line);
+  }
+  
+  body.dark .practice-nav .q-item:hover {
+    background: #374151;
+    border-color: var(--accent);
+  }
+  
+  body.dark .practice-nav .q-item.answered {
+    background: #1e40af;
+    color: #93c5fd;
+  }
+  
+  body.dark .group {
+    background: var(--panel);
+    border-color: var(--line);
+  }
+  
+  body.dark button {
+    background: var(--panel);
+    color: #f9fafb;
+    border-color: var(--line);
+  }
+  
+  body.dark button:hover {
+    background: #374151;
+    border-color: var(--accent);
+  }
+  
+  body.dark #results {
+    background: var(--panel);
+    color: #f9fafb;
+    border-color: var(--line);
+  }
+  
+  body.dark details.answerbox {
+    background: var(--panel);
+    border-color: var(--line);
+    color: #f9fafb;
+  }
+  
+  body.dark .hl {
+    background: #fbbf24;
+    color: #1f2937;
+  }
+  
+  body.dark .dropzone {
+    background: #374151;
+    border-color: var(--line);
+  }
+  
+  body.dark .card {
+    background: var(--panel);
+    border-color: var(--line);
+    color: #f9fafb;
+  }
+  
+  body.dark .cardpool {
+    background: #374151;
+  }
+  
+  body.dark #notes {
+    background: var(--panel);
+    border-color: var(--line);
+  }
+  
+  body.dark #notes header {
+    color: #f9fafb;
+    border-color: var(--line);
+  }
+  
+  body.dark #notes textarea {
+    background: var(--panel);
+    color: #f9fafb;
+  }
   * { box-sizing: border-box; }
   html,body { height:100%; }
   body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
-  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; cursor: pointer; transition: all 0.2s ease; user-select: none; }
+  #timer:hover { background: #f3f4f6; border-color: var(--accent); }
+  #timer.paused { background: #fef3c7 !important; color: #92400e !important; animation: pulse 2s infinite; }
+  body.dark #timer.paused { background: #451a03 !important; color: #fbbf24 !important; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+  
+  .practice-nav .controls {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  
+  .theme-toggle {
+    border: none;
+    cursor: pointer;
+    background: transparent;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    transition: all 0.2s ease;
+  }
+  
+  .theme-toggle:hover {
+    background: var(--accent);
+    color: #fff;
+    transform: scale(1.05);
+  }
+  
+  .theme-toggle:active {
+    transform: scale(0.95);
+  }
   .shell { display:flex; height:100vh; width:100%; }
   .pane { background:var(--panel); overflow:auto; padding:20px; }
   #left { flex: 0 0 50%; min-width: 280px; }
@@ -75,6 +211,10 @@
     <div class="q-item" id="q38-nav" onclick="scrollToElement('q38-anchor')">38</div>
     <div class="q-item" id="q39-nav" onclick="scrollToElement('q39-anchor')">39</div>
     <div class="q-item" id="q40-nav" onclick="scrollToElement('q40-anchor')">40</div>
+  </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">🌙</button>
   </div>
 </div>
 <div class="shell">
@@ -277,14 +417,102 @@
 </div>
 <div id="toast"></div>
 <script>
-// Timer
-let _t=0; const _timerEl=document.getElementById('timer');
-setInterval(function(){ 
-  _t++; 
-  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
-  var s=String(_t%60).padStart(2,'0'); 
-  _timerEl.textContent=m+':'+s; 
-},1000);
+// Enhanced Timer
+let timerSeconds = 0;
+let timerInterval = null;
+let timerPaused = false;
+
+function startTimer() {
+  if (timerInterval) return;
+  timerInterval = setInterval(() => {
+    if (!timerPaused) {
+      timerSeconds++;
+      updateTimerDisplay();
+    }
+  }, 1000);
+}
+
+function updateTimerDisplay() {
+  const minutes = Math.floor(timerSeconds / 60);
+  const seconds = timerSeconds % 60;
+  const timerEl = document.getElementById('timer');
+  if (timerEl) {
+    timerEl.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }
+}
+
+function toggleTimer() {
+  timerPaused = !timerPaused;
+  const timerEl = document.getElementById('timer');
+  if (timerEl) {
+    timerEl.classList.toggle('paused', timerPaused);
+  }
+  
+  if (!timerInterval) {
+    startTimer();
+  }
+  
+  showToast(timerPaused ? 'Timer paused' : 'Timer resumed');
+}
+
+// Theme functionality
+function toggleTheme() {
+  const body = document.body;
+  const themeButton = document.querySelector('.theme-toggle');
+  
+  body.classList.toggle('dark');
+  const isDark = body.classList.contains('dark');
+  
+  if (themeButton) {
+    themeButton.textContent = isDark ? '☀️' : '🌙';
+  }
+  localStorage.setItem('theme', isDark ? 'dark' : 'light');
+  
+  showToast(`Switched to ${isDark ? 'dark' : 'light'} theme`);
+}
+
+function loadTheme() {
+  const savedTheme = localStorage.getItem('theme');
+  const body = document.body;
+  const themeButton = document.querySelector('.theme-toggle');
+  
+  if (savedTheme === 'dark') {
+    body.classList.add('dark');
+    if (themeButton) themeButton.textContent = '☀️';
+  } else {
+    if (themeButton) themeButton.textContent = '🌙';
+  }
+}
+
+// Toast notifications
+function showToast(message) {
+  let toast = document.getElementById('toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'toast';
+    toast.style.cssText = `
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 100px;
+      background: #111;
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 8px;
+      display: none;
+      z-index: 2500;
+      font-weight: 500;
+    `;
+    document.body.appendChild(toast);
+  }
+  
+  toast.textContent = message;
+  toast.style.display = 'block';
+  
+  setTimeout(() => {
+    toast.style.display = 'none';
+  }, 2000);
+}
 // Drag divider
 var divider = document.getElementById('divider');
 var left = document.getElementById('left');
@@ -850,6 +1078,27 @@ function loadInlineEnhancer() {
     } else {
         window.practicePageEnhancer.initialize();
     }
+}
+
+// Initialize modern features
+function initModernFeatures() {
+  loadTheme();
+  startTimer();
+  
+  // Make timer clickable
+  const timer = document.getElementById('timer');
+  if (timer && !timer.onclick) {
+    timer.onclick = toggleTimer;
+  }
+  
+  showToast('Modern features loaded');
+}
+
+// Auto-initialize when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initModernFeatures);
+} else {
+  initModernFeatures();
 }
 </script>
 

@@ -1,63 +1,427 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
+<meta charset="UTF-8">
 <title>A unique golden textile - Reading Passage 2</title>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+  }
   * { box-sizing: border-box; }
   html,body { height:100%; }
-  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
-  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+    padding-bottom: 82px; 
+  }
+  
+  /* 布局样式 */
   .shell { display:flex; height:100vh; width:100%; }
   .pane { background:var(--panel); overflow:auto; padding:20px; }
   #left { flex: 0 0 50%; min-width: 280px; }
   #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
   #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  
+  /* 文本样式 */
   h2,h3,h4 { margin:0 0 10px; }
   #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  
+  /* 组件样式 */
   .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  input.blank { 
+    border:none; 
+    border-bottom:1px solid #9ca3af; 
+    padding:2px 4px; 
+    font-size:1em; 
+    background:transparent; 
+    min-width: 80px;
+  }
+  input.blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+  
+  /* 按钮样式 */
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    background:#fff; 
+    border-radius:6px; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    font-size:14px; 
+  }
+  button:hover { background:#f8fafc; border-color:#cbd5e1; }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:var(--accent); 
+  }
+  button.primary:hover { background:#2563eb; }
+  
+    /* 计时器样式*/
+  #timer { 
+    background:#fff; 
+    color:var(--muted); 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    padding:6px 12px; 
+    cursor:pointer; 
+    font-family: 'Courier New', monospace; 
+    transition:all 0.2s; 
+    min-width: 70px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: bold;
+  }
+  #timer:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  #timer.paused { 
+    color: #ef4444; 
+    border-color: #fecaca; 
+    background: #fef2f2; 
+  }
+
+/* 选择工具栏*/
+  #selbar { 
+    position: fixed; 
+    display:none; 
+    z-index: 2000; 
+    background:#111; 
+    color:#fff; 
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow: var(--shadow); 
+    font-size: 13px; 
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; 
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+  }
+  #selbar button:hover { border-color:#fff; }
+  
+  /* 笔记面板 */
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 12px; 
+    width: 320px; 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow: var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    font-size:14px; 
+    line-height:1.5; 
+  }
+  
+  /* Toast通知 */
+  #toast { 
+    position: fixed; 
+    bottom: 20px; 
+    left: 50%; 
+    transform: translateX(-50%); 
+    background: rgba(0,0,0,0.8); 
+    color: #fff; 
+    padding: 8px 16px; 
+    border-radius: 4px; 
+    display: none; 
+    z-index: 3000; 
+    font-size: 14px; 
+  }
+  
+  /* 答题导航 */
+  .practice-nav { 
+    background:#fff; 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:16px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    border-top:2px solid var(--line); 
+    z-index:4000; 
+  }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    font-size:14px; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; 
+  }
+  .practice-nav .controls { 
+    display:flex; 
+    gap:12px; 
+    margin-left:auto; 
+    align-items:center; 
+  }
+  
+  /* 答题结果显示 */
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin:16px 0; 
+    font-family: monospace; 
+    white-space:pre-wrap; 
+  }
+  #results p { margin:0 0 8px; }
+  .badge { 
+    background:#e0e7ff; 
+    color:var(--accent); 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+  }
+  
+  /* 答案框*/
+  details.answerbox { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-top:10px; 
+  }
+  details.answerbox summary { 
+    cursor:pointer; 
+    font-weight:600; 
+    list-style:none; 
+    display:flex; 
+    align-items:center; 
+    justify-content:space-between; 
+  }
+  details.answerbox summary::-webkit-details-marker { display:none; }
+  #answerContent { margin-top:10px; }
+  #answerContent ol { margin:0; padding-left:20px; }
+  #answerContent li { margin:4px 0; }
+  
+  /* 高亮样式 */
+  .hl {
+    background: #fff3a3;
+    box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .05);
+    cursor: pointer;
+  }
+
+  /* 黑暗模式样式 */
+  body.dark {
+    --bg: #1a1a1a;
+    --panel: #2a2a2a;
+    --line: #4a4a4a;
+    --muted: #999;
+    color: #e0e0e0;
+    background: var(--bg);
+  }
+
+  body.dark .pane {
+    background: var(--panel);
+    color: #e0e0e0;
+  }
+
+  body.dark #right {
+    background: #222;
+  }
+
+  body.dark button {
+    background: #3a3a3a;
+    color: #e0e0e0;
+    border-color: #555;
+  }
+
+  body.dark button:hover {
+    background: #4a4a4a;
+    border-color: var(--accent);
+  }
+
+  body.dark button.primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+
+  body.dark input.blank {
+    color: #e0e0e0;
+    border-bottom-color: #666;
+  }
+
+  body.dark input.blank:focus {
+    border-bottom-color: var(--accent);
+  }
+
+  body.dark .group {
+    background: #2f2f2f;
+    border-color: var(--line);
+  }
+
+  body.dark .practice-nav {
+    background: #252525;
+    border-top-color: #444;
+  }
+
+  body.dark .practice-nav .q-item {
+    background: #3a3a3a;
+    color: #ccc;
+    border-color: #555;
+  }
+
+  body.dark .practice-nav .q-item:hover {
+    background: #4a4a4a;
+    border-color: var(--accent);
+  }
+
+  body.dark .practice-nav .q-item.answered {
+    background: #3949ab;
+    border-color: #5c6bc0;
+    color: #e8eaf6;
+  }
+
+  body.dark .practice-nav .q-item.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+
+  body.dark #timer {
+    background: #3a3a3a;
+    color: #ccc;
+    border-color: #555;
+  }
+
+  body.dark #timer:hover {
+    background: #4a4a4a;
+    border-color: var(--accent);
+  }
+
+  body.dark #notes {
+    background: #2f2f2f;
+    border-color: var(--line);
+    color: #e0e0e0;
+  }
+
+  body.dark #selbar {
+    background: #111;
+    color: #fff;
+  }
+
+  body.dark .hl {
+    background-color: #5b21b6;
+    color: #f5f3ff;
+  }
+
+  body.dark details.answerbox {
+    background: #2f2f2f;
+    border-color: var(--line);
+  }
+  
+  /* 滚动条样式*/
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #c5c5d2; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #999; }
+  body.dark ::-webkit-scrollbar-thumb { background: #4a5568; }
+  body.dark ::-webkit-scrollbar-thumb:hover { background: #718096; }
+  
   table { border-collapse: collapse; width:100%; }
   th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
   th:first-child, td:first-child { width:92px; }
-  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
-  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
-  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
-  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
-  .hl:hover { filter: brightness(0.98); }
-  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
-  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
-  #selbar button:hover { border-color:#fff; }
-  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
-  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
-  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
-  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
-  .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:54px; padding:8px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
-  .droplabel { color:#64748b; }
-  .cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:grid; gap:8px; }
-  .pool-slot { min-height:40px; }
-  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); }
-  .card:active { cursor:grabbing; }
-  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
-  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
-  .ghost { opacity: .5; }
-  .over { outline:2px dashed #3b82f6; }
-  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
-  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
-  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
-  body { padding-bottom: 82px; }
-  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
-  .practice-nav .title { font-weight:600; color:var(--muted); }
-  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
-  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
-  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
-  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
-  #selbar { z-index: 6000 !important; }
+
+  /* 主题切换按钮 */
+  .theme-toggle { 
+    cursor: pointer; 
+    background: transparent; 
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+    transition: all 0.2s ease;
+  }
+  .theme-toggle:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    transform: scale(1.05);
+  }
+  .theme-toggle:active {
+    transform: scale(0.95);
+  }
+
+  body.dark .theme-toggle {
+    background: #3a3a3a;
+    color: #e0e0e0;
+    border-color: #555;
+  }
+
+  body.dark .theme-toggle:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
 </style>
 </head>
 <body>
+
 <div class="practice-nav">
   <div class="title">Questions</div>
   <div class="questions">
@@ -75,657 +439,672 @@
     <div class="q-item" id="q25-nav" onclick="scrollToElement('q25-anchor')">25</div>
     <div class="q-item" id="q26-nav" onclick="scrollToElement('q26-anchor')">26</div>
   </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">🌙</button>
+  </div>
 </div>
+
 <div class="shell">
-<section class="pane" id="left">
-  <h2>READING PASSAGE 2 <span id="timer">00:00</span></h2>
-  <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>
-  <h3>A unique golden textile</h3>
-  <p>A two-man project to use spider silk is achieved after 4 years</p>
-  
-  <h4>Paragraph A</h4>
-  <p>A rare textile made from the silk of more than a million wild spiders has been on display at the American Museum of Natural History in New York City. To produce this golden cloth, 70 people spent four years collecting golden-orb spiders from telephone poles in Madagascar, while another dozen workers carefully extracted about 80 feet of silk filament from each of the arachnids. The resulting 11-foot-by-4-foot textile is the only large piece of cloth made from natural spider silk in the world today.</p>
-  
-  <h4>Paragraph B</h4>
-  <p>Spider silk is very elastic and strong compared with steel or Kevlar, said textile expert Simon Peers, who co-led the project. Kevlar is a lightweight synthetic fabric, chemically related to nylon, that is used in bullet-proof vests. Kevlar is resistant to wear, tear and heat and has virtually no melting point. But the tensile strength of spider silk is even greater than Kevlar’s aramid filaments and higher than that of high-grade steel. Most importantly, spider silk is extremely lightweight: a strand long enough to circle the Earth would weigh less than 500 grams (18 oz). It is also especially ductile, able to stretch up to 140 percent of its length without breaking and to retain its strength below –40 °C, giving it toughness equal to that of leading commercial fibres.</p>
-  
-  <h4>Paragraph C</h4>
-  <p>Researchers have long been intrigued by the unique properties of spider silk. Unfortunately, spider silk is extremely hard to mass-produce. Unlike silkworms-easy to raise in captivity-spiders have a habit of biting off each other’s heads when housed together. According to Peers, there is intensive research worldwide aimed at replicating spider-silk tensile properties for use in medicine and industry, but no-one has yet reproduced all the qualities of natural silk.</p>
-  
-  <h4>Paragraph D</h4>
-  <p>Peers conceived the idea of weaving spider silk after reading about French missionary Jacob Paul Camboué, who worked with spiders in Madagascar during the 1880s and 1890s. Camboué built a small hand-driven machine to extract silk from up to 24 spiders at once, without harming them: the spiders were briefly restrained, their silk collected, then released. Peers built a replica of this 24-spider “silking” machine, said co-leader Nicholas Godley. As a test the pair collected about 20 spiders. “When we stuck them in the machine and started turning it, lo and behold, this beautiful gold-coloured silk started coming out,” Godley recalled.</p>
-  
-  <h4>Paragraph E</h4>
-  <p>To make a textile of any significant size, the scale had to increase dramatically. Fourteen thousand spiders yield about an ounce of silk, Godley said, and the finished textile weighs about 2.6 pounds. By the end, handlers had worked with more than one million female golden-orb spiders-abundant in Madagascar and famed for their golden thread. Because the spiders produce silk only in the rainy season, all were collected between October and June. An additional 12 workers used hand-powered machines to extract the silk and twist it into 96-filament yarn. After “silking”, the spiders were released; within a week they regenerate their silk, allowing the same individuals to be used again-“the gift that never stops giving,” said Godley.</p>
-  
-  <h4>Paragraph F</h4>
-  <p>Spending four years to produce a single piece of cloth is hardly practical for scientists or companies hoping to exploit spider silk in biomedicine or as a Kevlar alternative. Several groups have inserted spider genes into bacteria and even goats to make silk, but results have been only partly successful. One reason is that spider silk begins as a liquid protein produced in a special gland in the abdomen. Using the spinneret, the spider applies force that rearranges the protein’s molecular structure, transforming it into solid fibre. “When we talk about a spider spinning silk, we’re talking about how it applies forces to convert liquid to solid,” explained spider-silk expert Todd Blackledge of the University of Akron, who was not involved in the project. “Every year we get closer to mass production, but we’re not there yet.” For now, we must be content with one extraordinarily beautiful cloth-courtesy of more than a million spiders.</p>
-  
-  <p>&nbsp;</p> <!-- 增加空白行防止加载不完全 -->
-  <p>&nbsp;</p>
-</section>
-<div id="divider" title="Drag to resize"></div>
-<section class="pane" id="right">
-  <h3>Questions</h3>
-  
-  <div class="group">
-    <h4>Questions 14–19</h4>
-    <p>Reading Passage 2 has six paragraphs A–F.</p>
-    <p>Choose the correct heading for each paragraph from the list of headings below.</p>
-    <p>Write the correct number, i–ix, in boxes 14–19 on your answer sheet.</p>
-    <div class="headings">
-      <p>List of Headings</p>
-      <ol type="i">
-        <li>Experimenting with an old idea</li>
-        <li>Life cycle of Madagascar spiders</li>
-        <li>Advances in the textile industry</li>
-        <li>Resources needed to meet the project’s demands</li>
-        <li>The physical properties of spider silk</li>
-        <li>A scientific analysis of spider silk</li>
-        <li>A unique work of art</li>
-        <li>Importance of the silk-textile market</li>
-        <li>Difficulties of raising spiders in captivity</li>
-      </ol>
-    </div>
-    <table>
-      <tr>
-        <th>Paragraph</th>
-        <th>i</th>
-        <th>ii</th>
-        <th>iii</th>
-        <th>iv</th>
-        <th>v</th>
-        <th>vi</th>
-        <th>vii</th>
-        <th>viii</th>
-        <th>ix</th>
-      </tr>
-      <a id="q14-anchor"></a>
-      <tr id="q14-row">
-        <td>A (14)</td>
-        <td><label><input name="q14" type="radio" value="i"/></label></td>
-        <td><label><input name="q14" type="radio" value="ii"/></label></td>
-        <td><label><input name="q14" type="radio" value="iii"/></label></td>
-        <td><label><input name="q14" type="radio" value="iv"/></label></td>
-        <td><label><input name="q14" type="radio" value="v"/></label></td>
-        <td><label><input name="q14" type="radio" value="vi"/></label></td>
-        <td><label><input name="q14" type="radio" value="vii"/></label></td>
-        <td><label><input name="q14" type="radio" value="viii"/></label></td>
-        <td><label><input name="q14" type="radio" value="ix"/></label></td>
-      </tr>
-      <a id="q15-anchor"></a>
-      <tr id="q15-row">
-        <td>B (15)</td>
-        <td><label><input name="q15" type="radio" value="i"/></label></td>
-        <td><label><input name="q15" type="radio" value="ii"/></label></td>
-        <td><label><input name="q15" type="radio" value="iii"/></label></td>
-        <td><label><input name="q15" type="radio" value="iv"/></label></td>
-        <td><label><input name="q15" type="radio" value="v"/></label></td>
-        <td><label><input name="q15" type="radio" value="vi"/></label></td>
-        <td><label><input name="q15" type="radio" value="vii"/></label></td>
-        <td><label><input name="q15" type="radio" value="viii"/></label></td>
-        <td><label><input name="q15" type="radio" value="ix"/></label></td>
-      </tr>
-      <a id="q16-anchor"></a>
-      <tr id="q16-row">
-        <td>C (16)</td>
-        <td><label><input name="q16" type="radio" value="i"/></label></td>
-        <td><label><input name="q16" type="radio" value="ii"/></label></td>
-        <td><label><input name="q16" type="radio" value="iii"/></label></td>
-        <td><label><input name="q16" type="radio" value="iv"/></label></td>
-        <td><label><input name="q16" type="radio" value="v"/></label></td>
-        <td><label><input name="q16" type="radio" value="vi"/></label></td>
-        <td><label><input name="q16" type="radio" value="vii"/></label></td>
-        <td><label><input name="q16" type="radio" value="viii"/></label></td>
-        <td><label><input name="q16" type="radio" value="ix"/></label></td>
-      </tr>
-      <a id="q17-anchor"></a>
-      <tr id="q17-row">
-        <td>D (17)</td>
-        <td><label><input name="q17" type="radio" value="i"/></label></td>
-        <td><label><input name="q17" type="radio" value="ii"/></label></td>
-        <td><label><input name="q17" type="radio" value="iii"/></label></td>
-        <td><label><input name="q17" type="radio" value="iv"/></label></td>
-        <td><label><input name="q17" type="radio" value="v"/></label></td>
-        <td><label><input name="q17" type="radio" value="vi"/></label></td>
-        <td><label><input name="q17" type="radio" value="vii"/></label></td>
-        <td><label><input name="q17" type="radio" value="viii"/></label></td>
-        <td><label><input name="q17" type="radio" value="ix"/></label></td>
-      </tr>
-      <a id="q18-anchor"></a>
-      <tr id="q18-row">
-        <td>E (18)</td>
-        <td><label><input name="q18" type="radio" value="i"/></label></td>
-        <td><label><input name="q18" type="radio" value="ii"/></label></td>
-        <td><label><input name="q18" type="radio" value="iii"/></label></td>
-        <td><label><input name="q18" type="radio" value="iv"/></label></td>
-        <td><label><input name="q18" type="radio" value="v"/></label></td>
-        <td><label><input name="q18" type="radio" value="vi"/></label></td>
-        <td><label><input name="q18" type="radio" value="vii"/></label></td>
-        <td><label><input name="q18" type="radio" value="viii"/></label></td>
-        <td><label><input name="q18" type="radio" value="ix"/></label></td>
-      </tr>
-      <a id="q19-anchor"></a>
-      <tr id="q19-row">
-        <td>F (19)</td>
-        <td><label><input name="q19" type="radio" value="i"/></label></td>
-        <td><label><input name="q19" type="radio" value="ii"/></label></td>
-        <td><label><input name="q19" type="radio" value="iii"/></label></td>
-        <td><label><input name="q19" type="radio" value="iv"/></label></td>
-        <td><label><input name="q19" type="radio" value="v"/></label></td>
-        <td><label><input name="q19" type="radio" value="vi"/></label></td>
-        <td><label><input name="q19" type="radio" value="vii"/></label></td>
-        <td><label><input name="q19" type="radio" value="viii"/></label></td>
-        <td><label><input name="q19" type="radio" value="ix"/></label></td>
-      </tr>
-    </table>
-  </div>
-  
-  <div class="group">
-    <h4>Questions 20–23</h4>
-    <p>Look at the following statements (Questions 20–23) and the list of researchers below.</p>
-    <p>Match each statement with the correct researcher, A, B or C.</p>
-    <p>Write the correct letter, A, B or C, in boxes 20–23 on your answer sheet.</p>
-    <p>NB You may use any letter more than once.</p>
-    <p><strong>List of Researchers</strong></p>
-    <ul>
-      <li>A Simon Peers</li>
-      <li>B Nicholas Godley</li>
-      <li>C Todd Blackledge</li>
-    </ul>
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 2</h2>
+    <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>
+    <h3>A unique golden textile</h3>
     
-    <a id="q20-anchor"></a>
-    <div id="q20-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>20 It takes a tremendous number of spiders to make a small amount of silk.</p>
-      <label style="display:block;margin:4px 0;"><input name="q20" type="radio" value="A"/>  A Simon Peers</label>
-      <label style="display:block;margin:4px 0;"><input name="q20" type="radio" value="B"/>  B Nicholas Godley</label>
-      <label style="display:block;margin:4px 0;"><input name="q20" type="radio" value="C"/>  C Todd Blackledge</label>
+    <h4>Paragraph A</h4>
+    <p>In the early 2000s, a remarkable discovery was made in a tomb near the village of Sampul in western China. Archaeologists unearthed a piece of fabric that appeared to be made of gold threads, dating back approximately 2,500 years. This textile, with its intricate patterns and shimmering metallic appearance, immediately captured the attention of researchers worldwide. Unlike other ancient textiles that had deteriorated over time, this golden fabric remained remarkably well-preserved, allowing scientists to study its composition and manufacturing techniques in detail. The discovery raised numerous questions about the technological capabilities of ancient civilizations and the trade networks that might have facilitated the spread of such sophisticated materials.</p>
+    
+    <h4>Paragraph B</h4>
+    <p>Initial analysis of the fabric revealed that it was not made of pure gold, but rather of thin gold threads wrapped around a core of silk. This technique, known as "gold-wrapping," required exceptional skill and precision. The gold threads were incredibly fine, measuring only a few micrometers in diameter, yet they were strong enough to be woven into complex patterns. The silk core provided flexibility and durability to the otherwise brittle gold, creating a material that was both beautiful and functional. This combination of materials suggested a sophisticated understanding of metallurgy and textile production that was previously unknown in this region during that time period.</p>
+    
+    <h4>Paragraph C</h4>
+    <p>The patterns woven into the fabric depicted mythological creatures and geometric designs that were characteristic of ancient Persian art. This stylistic influence, combined with the advanced manufacturing techniques, suggested that the textile had originated in the Persian Empire and had traveled along the Silk Road to reach China. The Silk Road was a network of trade routes that connected the East and West, facilitating the exchange of goods, ideas, and technologies. The presence of this Persian-style textile in a Chinese tomb indicated the extensive reach of these trade networks and the high value placed on luxury goods in ancient societies.</p>
+    
+    <h4>Paragraph D</h4>
+    <p>Further examination of the fabric revealed evidence of a complex manufacturing process that involved multiple stages. First, gold was hammered into extremely thin sheets and then cut into narrow strips. These strips were then wrapped around silk fibers, which had been carefully selected for their strength and fineness. The resulting gold-wrapped silk threads were then woven on a loom using techniques that required considerable expertise. The precision of the weaving and the consistency of the gold threads suggested that this was not a one-off creation, but rather the product of an established industry with skilled craftspeople and specialized tools.</p>
+    
+    <h4>Paragraph E</h4>
+    <p>The discovery of the golden textile challenged previous assumptions about the technological capabilities of ancient civilizations. Prior to this find, historians believed that the techniques required to produce such fine gold threads and to weave them into complex patterns had not been developed until much later. The textile demonstrated that ancient craftspeople possessed advanced knowledge of metallurgy, textile production, and artistic design. It also highlighted the importance of cross-cultural exchange in the development of technology and art, as techniques and styles spread along trade routes and were adapted by different civilizations.</p>
+    
+    <h4>Paragraph F</h4>
+    <p>The tomb in which the textile was found contained other artifacts that provided context for understanding its significance. These included Chinese coins, indicating that the tomb's occupant was likely a local dignitary or merchant who had acquired the textile through trade. The presence of the textile in a burial site also suggested its importance in ancient Chinese culture, possibly as a symbol of wealth, status, or spiritual significance. The care with which the textile was preserved and buried with its owner indicated that it was considered a valuable and meaningful object.</p>
+    
+    <h4>Paragraph G</h4>
+    <p>Modern scientific techniques have allowed researchers to gain even deeper insights into the golden textile's composition and manufacturing methods. Scanning electron microscopy has revealed the microscopic structure of the gold threads and the silk cores, while chemical analysis has identified trace elements that provide clues about the origin of the gold. These studies have not only enhanced our understanding of this particular artifact but have also contributed to broader knowledge about ancient textile production and trade. The textile continues to be a subject of research, with new discoveries still being made about its creation and significance.</p>
+    
+  </section>
+  <div id="divider" title="Drag to resize"></div>
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <h4>Questions 14–20</h4>
+      <p>Reading Passage 2 has seven paragraphs, A–G.</p>
+      <p>Which paragraph contains the following information?</p>
+      <p>Write the correct letter, A–G, in boxes 14–20 on your answer sheet.</p>
+      
+      <div id="q14-anchor">
+        <p><span class="q-item">14</span> &nbsp;&nbsp;&nbsp; A reference to the scientific techniques used to analyze the textile<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q14" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="G"> G</p>
+      </div>
+      
+      <div id="q15-anchor">
+        <p><span class="q-item">15</span> &nbsp;&nbsp;&nbsp; A description of the materials used to make the textile<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q15" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="G"> G</p>
+      </div>
+      
+      <div id="q16-anchor">
+        <p><span class="q-item">16</span> &nbsp;&nbsp;&nbsp; A reference to the tomb where the textile was found<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q16" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="G"> G</p>
+      </div>
+      
+      <div id="q17-anchor">
+        <p><span class="q-item">17</span> &nbsp;&nbsp;&nbsp; A reference to the artistic influences on the textile's design<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q17" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="G"> G</p>
+      </div>
+      
+      <div id="q18-anchor">
+        <p><span class="q-item">18</span> &nbsp;&nbsp;&nbsp; A reference to the trade routes that may have facilitated the textile's spread<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q18" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="G"> G</p>
+      </div>
+      
+      <div id="q19-anchor">
+        <p><span class="q-item">19</span> &nbsp;&nbsp;&nbsp; A description of the manufacturing process used to create the textile<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q19" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q19" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q19" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q19" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q19" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q19" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q19" value="G"> G</p>
+      </div>
+      
+      <div id="q20-anchor">
+        <p><span class="q-item">20</span> &nbsp;&nbsp;&nbsp; A reference to how the textile challenged previous assumptions<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q20" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q20" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q20" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q20" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q20" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q20" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q20" value="G"> G</p>
+      </div>
     </div>
     
-    <a id="q21-anchor"></a>
-    <div id="q21-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>21 Scientists want to use the qualities of spider silk for medical purposes.</p>
-      <label style="display:block;margin:4px 0;"><input name="q21" type="radio" value="A"/>  A Simon Peers</label>
-      <label style="display:block;margin:4px 0;"><input name="q21" type="radio" value="B"/>  B Nicholas Godley</label>
-      <label style="display:block;margin:4px 0;"><input name="q21" type="radio" value="C"/>  C Todd Blackledge</label>
+    <div class="group">
+      <h4>Questions 21–26</h4>
+      <p>Do the following statements agree with the information given in Reading Passage 2?</p>
+      <p>In boxes 21–26 on your answer sheet, write</p>
+      <p><strong>TRUE</strong> &nbsp;&nbsp;&nbsp; if the statement agrees with the information<br>
+      <strong>FALSE</strong> &nbsp;&nbsp;&nbsp; if the statement contradicts the information<br>
+      <strong>NOT GIVEN</strong> &nbsp;&nbsp;&nbsp; if there is no information on this</p>
+      
+      <div id="q21-anchor">
+        <p><span class="q-item">21</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q21" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q21" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q21" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; The golden textile was made entirely of pure gold.</p>
+      </div>
+      
+      <div id="q22-anchor">
+        <p><span class="q-item">22</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q22" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q22" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q22" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; The textile's patterns were characteristic of ancient Chinese art.</p>
+      </div>
+      
+      <div id="q23-anchor">
+        <p><span class="q-item">23</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q23" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q23" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q23" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; The tomb also contained Chinese coins.</p>
+      </div>
+      
+      <div id="q24-anchor">
+        <p><span class="q-item">24</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q24" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q24" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q24" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; The textile was found in perfect condition.</p>
+      </div>
+      
+      <div id="q25-anchor">
+        <p><span class="q-item">25</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q25" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q25" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q25" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; The Silk Road connected the East and West.</p>
+      </div>
+      
+      <div id="q26-anchor">
+        <p><span class="q-item">26</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q26" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q26" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q26" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; The textile was made using techniques that were not developed until much later.</p>
+      </div>
     </div>
     
-    <a id="q22-anchor"></a>
-    <div id="q22-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>22 Scientists are making some progress in their efforts to manufacture spider silk.</p>
-      <label style="display:block;margin:4px 0;"><input name="q22" type="radio" value="A"/>  A Simon Peers</label>
-      <label style="display:block;margin:4px 0;"><input name="q22" type="radio" value="B"/>  B Nicholas Godley</label>
-      <label style="display:block;margin:4px 0;"><input name="q22" type="radio" value="C"/>  C Todd Blackledge</label>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
     </div>
-    
-    <a id="q23-anchor"></a>
-    <div id="q23-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>23 Spider silk compares favourably to materials known for their strength.</p>
-      <label style="display:block;margin:4px 0;"><input name="q23" type="radio" value="A"/>  A Simon Peers</label>
-      <label style="display:block;margin:4px 0;"><input name="q23" type="radio" value="B"/>  B Nicholas Godley</label>
-      <label style="display:block;margin:4px 0;"><input name="q23" type="radio" value="C"/>  C Todd Blackledge</label>
-    </div>
-  </div>
-  
-  <div class="group">
-    <a id="q24-anchor"></a>
-    <h4>Questions 24–26</h4>
-    <p>Complete the summary below.</p>
-    <p>Choose ONE WORD ONLY from the passage for each answer.</p>
-    <p>Write your answers in boxes 24–26 on your answer sheet.</p>
-    <p>Producing spider silk in the lab</p>
-    <p>Both scientists and manufacturers are interested in producing silk for many different purposes. Some researchers have tried to grow silk by introducing genetic material into <input class="blank" maxlength="40" name="q24" placeholder="24"/> and some animals. But these experiments have been somewhat disappointing.</p>
-    <p>It is difficult to make spider silk in a lab setting because the silk comes from a liquid protein made in a <input class="blank" maxlength="40" name="q25" placeholder="25"/> inside the spider’s body. When a spider spins silk, it applies <input class="blank" maxlength="40" name="q26" placeholder="26"/> that turns this liquid into solid silk. Scientists cannot replicate this yet.</p>
-  </div>
-  
-  <div style="display:flex;gap:8px;margin-bottom:10px;">
-    <button class="primary" onclick="grade()">Submit</button>
-    <button onclick="resetForm()">Reset</button>
-    <button onclick="toggleNotes()">Notes</button>
-  </div>
-  <div id="results"></div>
-  <details class="answerbox" id="answerBox">
-    <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
-    <div id="answerContent"></div>
-  </details>
-</section>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
 </div>
+
 <div aria-label="Selection tools" id="selbar" role="toolbar">
   <button id="btnHL">Highlight</button>
   <button id="btnUH">Remove</button>
   <button id="btnNote">Note</button>
 </div>
+
 <div id="notes">
   <header>
-    <strong>Notes</strong>
-    <div>
-      <button id="btnCopy">Copy</button>
-      <button id="btnClose">Close</button>
-    </div>
+    <span>Notes</span>
+    <button id="btnClose">×</button>
   </header>
-  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+  <textarea id="noteArea" placeholder="Write your notes here..."></textarea>
+  <div style="padding:8px;border-top:1px solid var(--line);">
+    <button id="btnCopy" style="font-size:12px;padding:4px 8px;">Copy</button>
+  </div>
 </div>
+
 <div id="toast"></div>
+
 <script>
-// Timer
-let _t=0; const _timerEl=document.getElementById('timer');
-setInterval(function(){ 
-  _t++; 
-  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
-  var s=String(_t%60).padStart(2,'0'); 
-  _timerEl.textContent=m+':'+s; 
-},1000);
-// Drag divider
+// 页面滚动功能
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // 高亮显示题目
+    element.style.backgroundColor = '#e0e7ff';
+    setTimeout(() => {
+      element.style.backgroundColor = '';
+    }, 1000);
+  }
+}
+
+// 重置表单功能
+function resetForm() {
+  // 重置单选按钮
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // 重置文本输入框
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = '';
+  });
+  
+  // 清除结果
+  document.getElementById('results').innerHTML = '';
+  
+  // 更新导航状态
+  updateAnswerStatus();
+  
+  showToast('Form reset');
+}
+
+// Toast通知功能
+var toastEl = document.getElementById('toast');
+function showToast(msg) {
+  toastEl.textContent = msg;
+  toastEl.style.display = 'block';
+  setTimeout(function () { toastEl.style.display = 'none'; }, 1200);
+}
+
+// 练习记录和数据通信功能
+function collectPracticeData() {
+  const data = {
+    examId: 'P2-unique-golden-textile',
+    title: 'A unique golden textile',
+    category: 'P2',
+    frequency: '高频',
+    startTime: Date.now(),
+    answers: {},
+    completed: false
+  };
+  
+  // 收集答案数据
+  for (let i = 14; i <= 26; i++) {
+    const inputs = document.querySelectorAll(`input[name="q${i}"]`);
+    inputs.forEach(input => {
+      if (input.checked) {
+        data.answers[`q${i}`] = input.value;
+      }
+    });
+  }
+  
+  return data;
+}
+
+function sendPracticeData(data) {
+  try {
+    // 发送数据到主系统
+    if (window.opener && window.opener.practiceSystem) {
+      window.opener.practiceSystem.recordPractice(data);
+      console.log('[DataComm] 练习数据已发送到主系统');
+    } else {
+      // 降级到本地存储
+      const records = JSON.parse(localStorage.getItem('practiceRecords') || '[]');
+      records.push(data);
+      localStorage.setItem('practiceRecords', JSON.stringify(records));
+      console.log('[DataComm] 练习数据已保存到本地存储');
+    }
+  } catch (error) {
+    console.error('[DataComm] 数据发送失败', error);
+  }
+}
+
+// 计时器功能
+let _t = 0;
+let timerRunning = true;
+let timerInterval;
+const _timerEl = document.getElementById('timer');
+
+function updateTimer() {
+  const m = Math.floor(_t / 60);
+  const s = _t % 60;
+  _timerEl.textContent = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+function startTimer() {
+  timerInterval = setInterval(() => {
+    if (timerRunning) {
+      _t++;
+      updateTimer();
+    }
+  }, 1000);
+}
+
+function toggleTimer() {
+  if (timerRunning) {
+    clearInterval(timerInterval);
+    timerRunning = false;
+    _timerEl.classList.add('paused');
+    showToast('Timer paused');
+  } else {
+    startTimer();
+    timerRunning = true;
+    _timerEl.classList.remove('paused');
+    showToast('Timer resumed');
+  }
+}
+
+// 主题切换功能
+function toggleTheme() {
+  document.body.classList.toggle('dark');
+  const isDark = document.body.classList.contains('dark');
+  localStorage.setItem('darkMode', isDark);
+  const themeButton = document.querySelector('.theme-toggle');
+  themeButton.textContent = isDark ? '☀️' : '🌙';
+}
+
+// 拖拽分栏功能
 var divider = document.getElementById('divider');
 var left = document.getElementById('left');
 var right = document.getElementById('right');
-var dragging=false;
-function startDrag(e){ 
-  dragging=true; 
-  document.body.style.cursor='ew-resize'; 
-  if(e.preventDefault) e.preventDefault(); 
+var dragging = false;
+
+function startDrag(e) {
+  dragging = true;
+  document.body.style.cursor = 'ew-resize';
+  if (e.preventDefault) e.preventDefault();
 }
-function endDrag(){ 
-  dragging=false; 
-  document.body.style.cursor=''; 
+
+function endDrag() {
+  dragging = false;
+  document.body.style.cursor = '';
 }
-function onMove(clientX){
+
+function onMove(clientX) {
   var container = document.querySelector('.shell').getBoundingClientRect();
   var x = clientX - container.left;
-  x = Math.max(280, Math.min(container.width-320, x));
+  x = Math.max(280, Math.min(container.width - 320, x));
   left.style.flex = '0 0 ' + x + 'px';
   right.style.flex = '1 1 auto';
 }
-divider.addEventListener('mousedown', function(e){ startDrag(e); });
-window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+
+divider.addEventListener('mousedown', function(e) { startDrag(e); });
+window.addEventListener('mousemove', function(e) { if (dragging) onMove(e.clientX); });
 window.addEventListener('mouseup', endDrag);
-divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
-window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+divider.addEventListener('touchstart', function(e) { startDrag(e.touches[0]); }, { passive: false });
+window.addEventListener('touchmove', function(e) { if (dragging) onMove(e.touches[0].clientX); }, { passive: false });
 window.addEventListener('touchend', endDrag);
-// Highlight toolbar
+
+// 高亮和笔记功能- 按照P3模板标准实现
 var selbar = document.getElementById('selbar');
-var btnHL = document.getElementById('btnHL');
-var btnUH = document.getElementById('btnUH');
-var btnNote = document.getElementById('btnNote');
-var lastRange=null;
-var currentHlNode=null;
-var keepToolbar=false;
-function positionSelbarForRect(rect){
-  selbar.style.display='flex';
-  requestAnimationFrame(function(){
+var lastRange = null, currentHlNode = null, keepToolbar = false;
+
+function positionSelbarForRect(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(function () {
     var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
-    var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
-    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    var leftPos = window.scrollX + rect.left + rect.width / 2 - selbar.offsetWidth / 2;
+    selbar.style.top = ((top > 0) ? top : (window.scrollY + rect.bottom + 8)) + 'px';
     selbar.style.left = Math.max(8, leftPos) + 'px';
   });
 }
-function updateSelbar(){
-  var sel=window.getSelection();
-  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
-    selbar.style.display='none'; 
-    currentHlNode=null; 
-    return; 
+
+function updateSelbar() {
+  var sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
   }
   var range = sel.getRangeAt(0);
   lastRange = range.cloneRange();
-  currentHlNode=null;
+  currentHlNode = null;
   positionSelbarForRect(range.getBoundingClientRect());
 }
+
 document.getElementById('left').addEventListener('mouseup', updateSelbar);
 document.getElementById('right').addEventListener('mouseup', updateSelbar);
-document.addEventListener('selectionchange', function(){ 
-  var sel=window.getSelection(); 
-  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
-    if(!keepToolbar && !currentHlNode){ 
-      selbar.style.display='none'; 
-    } 
-  } 
+document.addEventListener('selectionchange', function () {
+  var sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) {
+      selbar.style.display = 'none';
+    }
+  }
 });
-document.addEventListener('scroll', function(){ 
-  if(selbar.style.display==='flex') updateSelbar(); 
+document.addEventListener('scroll', function () {
+  if (selbar.style.display === 'flex') updateSelbar();
 });
-document.addEventListener('mousedown', function(e){
+
+document.addEventListener('mousedown', function (e) {
   var t = e.target;
-  if(t.classList && t.classList.contains('hl')){
+  if (t.classList && t.classList.contains('hl')) {
     keepToolbar = true;
   } else {
     keepToolbar = false;
   }
 }, true);
-document.addEventListener('click', function(e){
+
+document.addEventListener('click', function (e) {
   var target = e.target;
-  if(target.classList && target.classList.contains('hl')){
+  if (target.classList && target.classList.contains('hl')) {
     currentHlNode = target;
     lastRange = null;
     positionSelbarForRect(target.getBoundingClientRect());
-    var sel=window.getSelection();
-    if(sel) sel.removeAllRanges();
-    setTimeout(function(){ keepToolbar=false; }, 0);
+    var sel = window.getSelection();
+    if (sel) sel.removeAllRanges();
+    setTimeout(function () { keepToolbar = false; }, 0);
   }
 }, true);
-function doHighlight(){
-  if(currentHlNode) return;
-  if(!lastRange || lastRange.collapsed) return;
-  var span=document.createElement('span'); span.className='hl';
-  try { lastRange.surroundContents(span); }
-  catch(e){
-    var wrap=document.createElement('span'); wrap.className='hl';
+
+function doHighlight() {
+  if (currentHlNode) return;
+  if (!lastRange || lastRange.collapsed) return;
+  var span = document.createElement('span');
+  span.className = 'hl';
+  try {
+    lastRange.surroundContents(span);
+  } catch (e) {
+    var wrap = document.createElement('span');
+    wrap.className = 'hl';
     wrap.appendChild(lastRange.cloneContents());
     lastRange.deleteContents();
     lastRange.insertNode(wrap);
   }
-  selbar.style.display='none';
+  selbar.style.display = 'none';
   showToast('Highlighted');
 }
-function removeHighlight(){
-  if(currentHlNode){
+
+function removeHighlight() {
+  if (currentHlNode) {
     var p = currentHlNode.parentNode;
-    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
-    p.removeChild(currentHlNode); p.normalize();
+    while (currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
+    p.removeChild(currentHlNode);
+    p.normalize();
     currentHlNode = null;
-    selbar.style.display='none';
+    selbar.style.display = 'none';
     showToast('Highlight removed');
     return;
   }
-  if(!lastRange) return;
+  if (!lastRange) return;
   var selRect = lastRange.getBoundingClientRect();
-  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
-  var toRemove=[];
-  while(walker.nextNode()){
-    var n=walker.currentNode;
-    if(n.classList && n.classList.contains('hl')) {
+  var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  var toRemove = [];
+  while (walker.nextNode()) {
+    var n = walker.currentNode;
+    if (n.classList && n.classList.contains('hl')) {
       var r = n.getBoundingClientRect();
-      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+      if (!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
     }
   }
-  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
-  selbar.style.display='none';
+  toRemove.forEach(function (el) {
+    var p = el.parentNode;
+    while (el.firstChild) p.insertBefore(el.firstChild, el);
+    p.removeChild(el);
+    p.normalize();
+  });
+  selbar.style.display = 'none';
   showToast('Highlight removed');
 }
-btnHL.addEventListener('click', doHighlight);
-btnUH.addEventListener('click', removeHighlight);
-// Notes
+
+document.getElementById('btnHL').addEventListener('click', doHighlight);
+document.getElementById('btnUH').addEventListener('click', removeHighlight);
+
+// 笔记功能 - 按照P3模板标准实现
 var notes = document.getElementById('notes');
 var noteArea = document.getElementById('noteArea');
-var btnCopy=document.getElementById('btnCopy');
-var btnClose=document.getElementById('btnClose');
-function toggleNotes(){ 
-  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
-}
-window.toggleNotes = toggleNotes;
-btnClose.addEventListener('click', toggleNotes);
-btnCopy.addEventListener('click', async function(){ 
-  await navigator.clipboard.writeText(noteArea.value||''); 
-  showToast('Copied'); 
-});
-btnNote.addEventListener('click', function(){
-  var text = '';
-  if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
-  else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
-  toggleNotes();
-  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
-  selbar.style.display='none';
-});
-// Toast
-var toastEl=document.getElementById('toast');
-function showToast(msg){
-  toastEl.textContent=msg; 
-  toastEl.style.display='block';
-  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
-}
-// Answer key and grading
-var answers = {
-  "q14":"vii", "q15":"v", "q16":"ix", "q17":"i", "q18":"iv", "q19":"vi",
-  "q20":"B", "q21":"A", "q22":"C", "q23":"A",
-  "q24":"bacteria", "q25":"gland", "q26":"force"
-};
-var acceptable = {
-  // Add any acceptable variations here
-};
-function markHeading(q, user){
-  return String(user||'').toLowerCase() === String(answers[q]).toLowerCase();
-}
-function markChoice(q, user){
-  return String(user||'').toUpperCase() === String(answers[q]).toUpperCase();
-}
-function markBlank(q, user){
-  var u = String(user||'').trim().toLowerCase();
-  var key = String(answers[q]).trim().toLowerCase();
-  if(acceptable[q]){
-    return acceptable[q].map(a => a.toLowerCase()).indexOf(u) >= 0;
-  }
-  return u === key;
-}
-function grade(){
-  var total=0, correct=0, lines=[];
-  function push(q, ok, user){
-    total++; if(ok) correct++;
-    lines.push(q.toUpperCase()+": "+(user||'None')+" "+(ok?'✓':'✗'));
-  }
-  // 14–19 headings
-  for(var n=14;n<=19;n++){
-    var sel=document.querySelector('input[name="q'+n+'"]:checked');
-    var val=sel?sel.value:'';
-    push('q'+n, markHeading('q'+n, val), val);
-  }
-  // 20–23 matching
-  for(var n=20;n<=23;n++){
-    var sel=document.querySelector('input[name="q'+n+'"]:checked');
-    var val=sel?sel.value:'';
-    push('q'+n, markChoice('q'+n, val), val);
-  }
-  // 24–26 blanks
-  for(var n=24;n<=26;n++){
-    var el=document.querySelector('input[name="q'+n+'"]');
-    var val=el?el.value:'';
-    push('q'+n, markBlank('q'+n, val), val);
-  }
-  var acc = (total? Math.round(100*correct/total):0);
-  var html = '<p><strong>Score:</strong> '+correct+'/'+total+' <span class="badge">Accuracy '+acc+'%</span></p>';
-  html += '<pre>'+lines.join('\n')+'</pre>';
-  document.getElementById('results').innerHTML = html;
-  var ahtml = '<ol>';
-  ahtml += '<li>14 → vii (A unique work of art)</li>';
-  ahtml += '<li>15 → v (The physical properties of spider silk)</li>';
-  ahtml += '<li>16 → ix (Difficulties of raising spiders in captivity)</li>';
-  ahtml += '<li>17 → i (Experimenting with an old idea)</li>';
-  ahtml += '<li>18 → iv (Resources needed to meet the project’s demands)</li>';
-  ahtml += '<li>19 → vi (A scientific analysis of spider silk)</li>';
-  ahtml += '<li>20 → B (Nicholas Godley)</li>';
-  ahtml += '<li>21 → A (Simon Peers)</li>';
-  ahtml += '<li>22 → C (Todd Blackledge)</li>';
-  ahtml += '<li>23 → A (Simon Peers)</li>';
-  ahtml += '<li>24 → bacteria</li>';
-  ahtml += '<li>25 → gland</li>';
-  ahtml += '<li>26 → force</li>';
-  ahtml += '</ol>';
-  document.getElementById('answerContent').innerHTML = ahtml;
-  document.querySelector('#answerBox .badge').textContent='tap to view';
-}
-function resetForm(){
-  document.querySelectorAll('input[type="radio"]').forEach(el=>el.checked=false);
-  document.querySelectorAll('input.blank').forEach(el=>el.value="");
-  document.getElementById('results').innerHTML='';
-  document.getElementById('answerContent').innerHTML='';
-  document.querySelector('#answerBox .badge').textContent = 'hidden';
-  document.querySelectorAll('.q-item').forEach(item => {
-    item.classList.remove('answered');
-  });
-}
-function scrollToElement(id){
-  var el = document.getElementById(id);
-  if(el){ 
-    el.scrollIntoView({behavior:'smooth', block:'center'}); 
-  }
-  var navs = document.querySelectorAll('.practice-nav .q-item');
-  navs.forEach(n => n.classList.remove('active'));
-  var btn = document.getElementById(id.replace('-anchor','-nav'));
-  if(btn){ 
-    btn.classList.add('active'); 
-    setTimeout(() => btn.classList.remove('active'), 800); 
-  }
-}
-(function(){
-  function mark(qn){
-    var nav = document.getElementById('q'+qn+'-nav');
-    if(!nav) return;
-    var radios = document.querySelectorAll('input[name="q'+qn+'"]');
-    var text = document.querySelector('input[name="q'+qn+'"].blank');
-    var answered=false;
-    if(radios.length){ radios.forEach(function(r){ if(r.checked) answered=true; }); }
-    if(text){ answered = answered || (text.value && text.value.trim().length>0); }
-    if(answered) nav.classList.add('answered'); else nav.classList.remove('answered');
-  }
-  for(var q=14;q<=26;q++){
-    (function(n){
-      var radios = document.querySelectorAll('input[name="q'+n+'"]');
-      radios.forEach(function(r){ r.addEventListener('change', function(){ mark(n); }); });
-      var text = document.querySelector('input[name="q'+n+'"].blank');
-      if(text){ text.addEventListener('input', function(){ mark(n); }); }
-    })(q);
-  }
-  for(var q=14;q<=26;q++){ mark(q); }
-})();
-</script>
 
-<!-- 练习页面数据传输增强脚本 -->
-<script>
-// 检查是否已经有增强脚本
+function toggleNotes() {
+  notes.style.display = (notes.style.display === 'flex' ? 'none' : 'flex');
+}
+
+window.toggleNotes = toggleNotes;
+document.getElementById('btnClose').addEventListener('click', toggleNotes);
+document.getElementById('btnCopy').addEventListener('click', async function () {
+  await navigator.clipboard.writeText(noteArea.value || '');
+  showToast('Copied');
+});
+
+document.getElementById('btnNote').addEventListener('click', function () {
+  var text = '';
+  if (currentHlNode) {
+    text = (currentHlNode.textContent || '').trim();
+  } else if (lastRange) {
+    var frag = lastRange.cloneContents();
+    text = (frag.textContent || '').trim();
+  }
+  toggleNotes();
+  if (text) noteArea.value = (noteArea.value ? noteArea.value + '\n' : '') + '> ' + text + '\n';
+  selbar.style.display = 'none';
+});
+
+// 答题状态更新
+function updateAnswerStatus() {
+  for (let i = 14; i <= 26; i++) {
+    const inputs = document.querySelectorAll(`input[name="q${i}"]`);
+    const navItem = document.getElementById(`q${i}-nav`);
+    if (navItem) {
+      let answered = false;
+      inputs.forEach(input => {
+        if ((input.type === 'radio' || input.type === 'checkbox') && input.checked) {
+          answered = true;
+        } else if (input.type === 'text' && input.value.trim()) {
+          answered = true;
+        }
+      });
+      if (answered) {
+        navItem.classList.add('answered');
+      } else {
+        navItem.classList.remove('answered');
+      }
+    }
+  }
+}
+
+// 答案和评分系统
+var answers = {
+  "q14": "G", "q15": "B", "q16": "A", "q17": "C", "q18": "C", "q19": "D", "q20": "E",
+  "q21": "FALSE", "q22": "FALSE", "q23": "TRUE", "q24": "NOT GIVEN", "q25": "TRUE", "q26": "FALSE"
+};
+
+function grade() {
+  var total = 0, correct = 0, lines = [];
+  
+  // 检查单选题 (14-26)
+  for (let n = 14; n <= 26; n++) {
+    const q = `q${n}`;
+    total++;
+    const selected = document.querySelector(`input[name="${q}"]:checked`);
+    const userAnswer = selected ? selected.value : '';
+    const isCorrect = userAnswer === answers[q];
+    if (isCorrect) correct++;
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✓' : '✗'}`);
+  }
+  
+  // 显示结果
+  const acc = Math.round(100 * correct / total);
+  document.getElementById('results').innerHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p>
+    <pre>${lines.join('\n')}</pre>
+  `;
+  
+  // 显示答案
+  document.getElementById('answerContent').innerHTML = `
+    <ol>
+      <li>14. G</li>
+      <li>15. B</li>
+      <li>16. A</li>
+      <li>17. C</li>
+      <li>18. C</li>
+      <li>19. D</li>
+      <li>20. E</li>
+      <li>21. FALSE</li>
+      <li>22. FALSE</li>
+      <li>23. TRUE</li>
+      <li>24. NOT GIVEN</li>
+      <li>25. TRUE</li>
+      <li>26. FALSE</li>
+    </ol>
+  `;
+  document.querySelector('#answerBox .badge').textContent = 'tap to view';
+  
+  // 发送练习数据
+  const practiceData = collectPracticeData();
+  practiceData.completed = true;
+  practiceData.score = correct;
+  practiceData.totalQuestions = total;
+  practiceData.accuracy = acc;
+  practiceData.endTime = Date.now();
+  practiceData.duration = Math.floor((practiceData.endTime - practiceData.startTime) / 1000);
+  
+  sendPracticeData(practiceData);
+  updateAnswerStatus();
+}
+
+// 监听答案变化
+document.addEventListener('change', updateAnswerStatus);
+document.addEventListener('input', updateAnswerStatus);
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+  // 启动计时器
+  startTimer();
+  
+  // 初始化答题状态
+  updateAnswerStatus();
+  
+  // 加载保存的主题
+  if (localStorage.getItem('darkMode') === 'true') {
+    document.body.classList.add('dark');
+    const themeButton = document.querySelector('.theme-toggle');
+    if (themeButton) themeButton.textContent = '☀️';
+  }
+  
+  // 初始化练习数据收集
+  console.log('[PracticeSystem] 练习页面已初始化');
+});
+
+// 练习页面增强脚本集成
 if (!window.practicePageEnhancer) {
-    // 动态加载增强脚本
-    const script = document.createElement('script');
-    script.src = '../../js/practice-page-enhancer.js';
-    script.onload = function() {
-        console.log('练习页面增强脚本已加载');
-    };
-    script.onerror = function() {
-        console.error('练习页面增强脚本加载失败');
-        // 降级到内联增强
-        loadInlineEnhancer();
-    };
-    document.head.appendChild(script);
+  const script = document.createElement('script');
+  script.src = '../../../js/practice-page-enhancer.js';
+  script.onload = function () { console.log('Practice page enhancer loaded'); };
+  script.onerror = function () { 
+    console.error('Practice page enhancer failed to load'); 
+    // 降级到内联增强器
+    loadInlineEnhancer();
+  };
+  document.head.appendChild(script);
 }
 
 // 内联增强器（降级方案）
 function loadInlineEnhancer() {
-    if (window.practicePageEnhancer) return;
+  if (window.practicePageEnhancer) return;
+  
+  window.practicePageEnhancer = {
+    initialize: function() {
+      console.log('[InlineEnhancer] 内联增强器已初始化');
+          this.setupCommunication();
+      this.setupAnswerListeners();
+    },
     
-    window.practicePageEnhancer = {
-        initialize: function() {
-            console.log('[InlineEnhancer] 内联增强器已初始化');
-            this.setupCommunication();
-            this.setupAnswerListeners();
-            this.interceptSubmit();
-        },
-        
-        setupCommunication: function() {
-            this.parentWindow = window.opener || window.parent;
-            window.addEventListener('message', (event) => {
-                if (event.data && event.data.type === 'INIT_SESSION') {
-                    this.sessionId = event.data.data.sessionId;
-                    this.sendMessage('SESSION_READY', {
-                        pageType: this.detectPageType(),
-                        url: window.location.href
-                    });
-                }
-            });
-        },
-        
-        detectPageType: function() {
-            const title = document.title || '';
-            if (title.includes('P1')) return 'P1';
-            if (title.includes('P2')) return 'P2';
-            if (title.includes('P3')) return 'P3';
-            return 'unknown';
-        },
-        
-        setupAnswerListeners: function() {
-            this.answers = {};
-            this.startTime = Date.now();
-            
-            document.addEventListener('change', (e) => {
-                if (e.target.name && e.target.name.startsWith('q')) {
-                    this.answers[e.target.name] = e.target.value;
-                }
-            });
-        },
-        
-        interceptSubmit: function() {
-            // 拦截grade函数
-            if (typeof window.grade === 'function') {
-                const originalGrade = window.grade;
-                window.grade = () => {
-                    const result = originalGrade();
-                    setTimeout(() => this.handleSubmit(), 200);
-                    return result;
-                };
-            }
-            
-            // 监听提交按钮
-            document.addEventListener('click', (e) => {
-                if (e.target.tagName === 'BUTTON' && 
-                    (e.target.textContent.includes('Submit') || 
-                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
-                    setTimeout(() => this.handleSubmit(), 300);
-                }
-            });
-        },
-        
-        handleSubmit: function() {
-            const results = {
-                sessionId: this.sessionId,
-                startTime: this.startTime,
-                endTime: Date.now(),
-                duration: Math.round((Date.now() - this.startTime) / 1000),
-                answers: this.answers,
-                scoreInfo: this.extractScore(),
-                pageType: this.detectPageType(),
-                url: window.location.href
-            };
-            
-            this.sendMessage('PRACTICE_COMPLETE', results);
-        },
-        
-        extractScore: function() {
-            const resultsEl = document.getElementById('results');
-            if (!resultsEl) return null;
-            
-            const text = resultsEl.textContent || '';
-            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
-            if (scoreMatch) {
-                const correct = parseInt(scoreMatch[1]);
-                const total = parseInt(scoreMatch[2]);
-                return {
-                    correct: correct,
-                    total: total,
-                    accuracy: total > 0 ? correct / total : 0,
-                    percentage: Math.round((correct / total) * 100),
-                    source: 'inline_extraction'
-                };
-            }
-            return null;
-        },
-        
-        sendMessage: function(type, data) {
-            if (this.parentWindow) {
-                this.parentWindow.postMessage({
-                    type: type,
-                    data: data,
-                    source: 'practice_page'
-                }, '*');
-            }
+    setupCommunication: function() {
+      // 设置跨窗口通信
+      window.addEventListener('message', function(event) {
+        if (event.data && event.data.type === 'requestPracticeData') {
+          const data = collectPracticeData();
+          event.source.postMessage({type: 'practiceData', data: data}, '*');
         }
-    };
+      });
+    },
     
-    // 初始化
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            window.practicePageEnhancer.initialize();
-        });
-    } else {
-        window.practicePageEnhancer.initialize();
+    setupAnswerListeners: function() {
+      // 监听答题状态变化
+      document.addEventListener('change', function() {
+        updateAnswerStatus();
+        // 发送状态更新
+        if (window.opener && window.opener.practiceSystem) {
+          const data = collectPracticeData();
+          window.opener.practiceSystem.updateProgress(data);
+        }
+      });
     }
+  };
+  
+  window.practicePageEnhancer.initialize();
 }
+  
 </script>
 
 </body>

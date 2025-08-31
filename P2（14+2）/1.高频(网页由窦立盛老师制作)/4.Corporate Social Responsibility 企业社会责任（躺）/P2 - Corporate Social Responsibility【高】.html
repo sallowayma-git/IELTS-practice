@@ -1,54 +1,423 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
+<meta charset="UTF-8">
 <title>P2 - Corporate Social Responsibility</title>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+  }
   * { box-sizing: border-box; }
   html,body { height:100%; }
-  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
-  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+    padding-bottom: 82px; 
+  }
+  
+  /* 布局样式 */
   .shell { display:flex; height:100vh; width:100%; }
   .pane { background:var(--panel); overflow:auto; padding:20px; }
   #left { flex: 0 0 50%; min-width: 280px; }
   #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
   #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  
+  /* 文本样式 */
   h2,h3,h4 { margin:0 0 10px; }
   #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  
+  /* 组件样式 */
   .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  input.blank { 
+    border:none; 
+    border-bottom:1px solid #9ca3af; 
+    padding:2px 4px; 
+    font-size:1em; 
+    background:transparent; 
+    min-width: 80px;
+  }
+  input.blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+  
+  /* 按钮样式 */
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    background:#fff; 
+    border-radius:6px; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    font-size:14px; 
+  }
+  button:hover { background:#f8fafc; border-color:#cbd5e1; }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:var(--accent); 
+  }
+  button.primary:hover { background:#2563eb; }
+  
+    /* 计时器样式*/
+  #timer { 
+    background:#fff; 
+    color:var(--muted); 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    padding:6px 12px; 
+    cursor:pointer; 
+    font-family: 'Courier New', monospace; 
+    transition:all 0.2s; 
+    min-width: 70px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: bold;
+  }
+  #timer:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  #timer.paused { 
+    color: #ef4444; 
+    border-color: #fecaca; 
+    background: #fef2f2; 
+  }
+
+/* 选择工具栏*/
+  #selbar { 
+    position: fixed; 
+    display:none; 
+    z-index: 2000; 
+    background:#111; 
+    color:#fff; 
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow: var(--shadow); 
+    font-size: 13px; 
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; 
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+  }
+  #selbar button:hover { border-color:#fff; }
+  
+  /* 笔记面板 */
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 12px; 
+    width: 320px; 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow: var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    font-size:14px; 
+    line-height:1.5; 
+  }
+  
+  /* Toast通知 */
+  #toast { 
+    position: fixed; 
+    bottom: 20px; 
+    left: 50%; 
+    transform: translateX(-50%); 
+    background: rgba(0,0,0,0.8); 
+    color: #fff; 
+    padding: 8px 16px; 
+    border-radius: 4px; 
+    display: none; 
+    z-index: 3000; 
+    font-size: 14px; 
+  }
+  
+  /* 答题导航 */
+  .practice-nav { 
+    background:#fff; 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:16px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    border-top:2px solid var(--line); 
+    z-index:4000; 
+  }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    font-size:14px; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; 
+  }
+  .practice-nav .controls { 
+    display:flex; 
+    gap:12px; 
+    margin-left:auto; 
+    align-items:center; 
+  }
+  
+  /* 答题结果显示 */
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin:16px 0; 
+    font-family: monospace; 
+    white-space:pre-wrap; 
+  }
+  #results p { margin:0 0 8px; }
+  .badge { 
+    background:#e0e7ff; 
+    color:var(--accent); 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+  }
+  
+  /* 答案框*/
+  details.answerbox { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-top:10px; 
+  }
+  details.answerbox summary { 
+    cursor:pointer; 
+    font-weight:600; 
+    list-style:none; 
+    display:flex; 
+    align-items:center; 
+    justify-content:space-between; 
+  }
+  details.answerbox summary::-webkit-details-marker { display:none; }
+  #answerContent { margin-top:10px; }
+  #answerContent ol { margin:0; padding-left:20px; }
+  #answerContent li { margin:4px 0; }
+  
+  /* 高亮样式 */
+  .hl {
+    background: #fff3a3;
+    box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .05);
+    cursor: pointer;
+  }
+  body.dark .hl { background-color: #5b21b6; color: #f5f3ff; }
+  
+  /* 滚动条样式*/
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #c5c5d2; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #999; }
+  body.dark ::-webkit-scrollbar-thumb { background: #4a5568; }
+  body.dark ::-webkit-scrollbar-thumb:hover { background: #718096; }
+
+  /* 黑暗模式样式 */
+  body.dark {
+    --bg: #1a1a1a;
+    --panel: #2a2a2a;
+    --line: #4a4a4a;
+    --muted: #999;
+    color: #e0e0e0;
+    background: var(--bg);
+  }
+
+  body.dark .pane {
+    background: var(--panel);
+    color: #e0e0e0;
+  }
+
+  body.dark #right {
+    background: #222;
+  }
+
+  body.dark button {
+    background: #3a3a3a;
+    color: #e0e0e0;
+    border-color: #555;
+  }
+
+  body.dark button:hover {
+    background: #4a4a4a;
+    border-color: var(--accent);
+  }
+
+  body.dark button.primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+
+  body.dark input.blank {
+    color: #e0e0e0;
+    border-bottom-color: #666;
+  }
+
+  body.dark input.blank:focus {
+    border-bottom-color: var(--accent);
+  }
+
+  body.dark .group {
+    background: #2f2f2f;
+    border-color: var(--line);
+  }
+
+  body.dark .practice-nav {
+    background: #252525;
+    border-top-color: #444;
+  }
+
+  body.dark .practice-nav .q-item {
+    background: #3a3a3a;
+    color: #ccc;
+    border-color: #555;
+  }
+
+  body.dark .practice-nav .q-item:hover {
+    background: #4a4a4a;
+    border-color: var(--accent);
+  }
+
+  body.dark .practice-nav .q-item.answered {
+    background: #3949ab;
+    border-color: #5c6bc0;
+    color: #e8eaf6;
+  }
+
+  body.dark .practice-nav .q-item.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+
+  body.dark #timer {
+    background: #3a3a3a;
+    color: #ccc;
+    border-color: #555;
+  }
+
+  body.dark #timer:hover {
+    background: #4a4a4a;
+    border-color: var(--accent);
+  }
+
+  body.dark #notes {
+    background: #2f2f2f;
+    border-color: var(--line);
+    color: #e0e0e0;
+  }
+
+  body.dark #selbar {
+    background: #111;
+    color: #fff;
+  }
+
+  body.dark details.answerbox {
+    background: #2f2f2f;
+    border-color: var(--line);
+  }
+
+  /* 主题切换按钮 */
+  .theme-toggle { 
+    cursor: pointer; 
+    background: transparent; 
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+    transition: all 0.2s ease;
+  }
+  .theme-toggle:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    transform: scale(1.05);
+  }
+  .theme-toggle:active {
+    transform: scale(0.95);
+  }
+
+  body.dark .theme-toggle {
+    background: #3a3a3a;
+    color: #e0e0e0;
+    border-color: #555;
+  }
+
+  body.dark .theme-toggle:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  
   table { border-collapse: collapse; width:100%; }
   th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
   th:first-child, td:first-child { width:92px; }
-  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
-  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
-  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
-  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
-  .hl:hover { filter: brightness(0.98); }
-  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
-  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
-  #selbar button:hover { border-color:#fff; }
-  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
-  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
-  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
-  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
-  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
-  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
-  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
-  body { padding-bottom: 82px; }
-  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
-  .practice-nav .title { font-weight:600; color:var(--muted); }
-  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
-  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
-  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
-  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
-  #selbar { z-index: 6000 !important; }
-  input.blank { border: 1px solid #ccc; padding: 4px; border-radius: 4px; width: 180px; }
 </style>
 </head>
 <body>
+
 <div class="practice-nav">
   <div class="title">Questions</div>
   <div class="questions">
@@ -66,215 +435,196 @@
     <div class="q-item" id="q25-nav" onclick="scrollToElement('q25-anchor')">25</div>
     <div class="q-item" id="q26-nav" onclick="scrollToElement('q26-anchor')">26</div>
   </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">🌙</button>
+  </div>
 </div>
+
 <div class="shell">
-<section class="pane" id="left">
-  <h2>READING PASSAGE 2 <span id="timer">00:00</span></h2>
-  <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>
-  <h3>Corporate Social Responsibility</h3>
-  
-  <h4>A</h4>
-  <p>An excellent definition was developed in the 1980s by Norwegian Prime Minister Gro Harlem Brundtland and used by the World Business Council for Sustainable Development: "Meeting the needs of the present without compromising the ability of future generations to meet their own needs." Nowadays, governments and companies need to account for the social consequences of their actions. As a result, corporate social responsibility (CSR) has become a priority for business leaders around the world. When a well-run business applies its vast resources and expertise to social problems that it understands and in which it has a stake, it can have a greater impact than any other organisation. The notion of licence to operate derives from the fact that every company needs tacit or explicit permission from governments, communities, and numerous other stakeholders to justify CSR initiatives to improve a company's image, strengthen its brand, enliven morale and even raise the value of its stock.</p>
-  
-  <h4>B</h4>
-  <p>To advance CSR, we must root it in a broad understanding of the interrelationship between a corporation and society. Successful corporations need a healthy society. Education, health care, and equal opportunity are essential to a productive workforce. Safe products and working conditions not only attract customers but lower the internal costs of accidents. Efficient utilisation of land, water, energy, and other natural resources makes business more productive. Good government, the rule of law, and property rights are essential for efficiency and innovation. Strong regulatory standards protect both consumers and competitive companies from exploitation. Ultimately, a healthy society creates expanding demand for business, as more human needs are met and aspirations grow. Any business that pursues its ends at the expense of the society in which it operates will find its success to be illusory and ultimately temporary. At the same time, a healthy society needs successful companies. No social programme can rival the business sector when it comes to creating the jobs, wealth, and innovation that improve standards of living and social conditions over time.</p>
-  
-  <h4>C</h4>
-  <p>A company's impact on society also changes over time, as social standards evolve and science progresses. Asbestos, now understood as a serious health risk, was thought to be safe in the early 1900s, given the scientific knowledge then available. Evidence of its risks gradually mounted for more than 50 years before any company was held liable for the harms it can cause. Many firms that failed to anticipate the consequences of this evolving body of research have been bankrupted by the results. No longer can companies be content to monitor only the obvious social impacts of today. Without a careful process for identifying evolving social effects of tomorrow, firms may risk their very survival.</p>
-  
-  <h4>D</h4>
-  <p>No business can solve all of society's problems or bear the cost of doing so. Instead, each company must select issues that intersect with its particular business. Other social agendas are best left to those companies in other industries, NGOs, or government institutions that are better positioned to address them. The essential test that should guide CSR is not whether a cause is worthy but whether it presents an opportunity to create shared value – that is, a meaningful benefit for society that is also valuable to the business. Each company can identify the particular set of societal problems that it is best equipped to help resolve and from which it can gain the greatest competitive benefit.</p>
-  
-  <h4>E</h4>
-  <p>The best corporate citizenship initiatives involve far more than writing a cheque: they specify clear, measurable goals and track results over time. A good example is General Electric's programme to adopt underperforming public high schools near several of its major U.S. facilities. The company contributes between $250,000 and $1 million over a five-year period to each school and makes in-kind donations as well. GE managers and employees take an active role by working with school administrators to assess needs and mentor or tutor students. In an independent study of ten schools in the programme between 1989 and 1999, nearly all showed significant improvement, while the graduation rate in four of the five worst-performing schools doubled from an average of 30% to 60 %. Effective corporate citizenship initiatives such as this one create goodwill and improve relations with local governments and other important constituencies. What's more, GE's employees feel great pride in their participation. Their effect is inherently limited, however. No matter how beneficial the programme is, it remains incidental to the company's business, and the direct effect on GE's recruiting and retention is modest.</p>
-  
-  <h4>F</h4>
-  <p>Microsoft's Working Connections partnership with the American Association of Community Colleges (AACC) is a good example of a shared-value opportunity arising from investments in context. The shortage of information-technology workers is a significant constraint on Microsoft's growth; currently, there are more than 450,000 unfilled IT positions in the United States alone. Community colleges, with an enrolment of 11.6 million students, representing 45% of all U.S. undergraduates, could be a major solution. Microsoft recognises, however, that community colleges face special challenges: IT curricula are not standardised, technology used in classrooms is often outdated, and there are no systematic professional development programmes to keep faculty up to date. Microsoft's $50 million five-year initiative was aimed at all three problems. In addition to contributing money and products, Microsoft sent employee volunteers to colleges to assess needs, contribute to curriculum development, and create faculty-development institutes. Microsoft has achieved results that have benefited many communities while having a direct and potentially significant impact on the company.</p>
-  
-  <h4>G</h4>
-  <p>At the heart of any strategy is a unique value proposition: a set of needs a company can meet for its chosen customers that its competitors cannot. The most strategic CSR occurs when a company adds a social dimension to its value proposition, making social impact integral to the overall strategy. Consider Whole Foods Market, whose value proposition is to sell organic, natural, and healthy food products to customers who are passionate about food and the environment. The company's sourcing emphasises purchases from local farmers through each store's procurement process. Buyers screen out foods containing any of nearly 100 common ingredients that the company considers unhealthy or environmentally damaging. The same standards apply to products made internally. Whole Foods' commitment to natural and environmentally friendly operating practices extends well beyond sourcing. Stores are constructed using a minimum of virgin raw materials. Recently, the company purchased renewable wind-energy credits equal to 100 % of its electricity use in all of its stores and facilities, the only Fortune 500 company to offset its electricity consumption entirely. Spoiled produce and biodegradable waste are trucked to regional centres for composting. Whole Foods' vehicles are being converted to run on biofuels. Even the cleaning products used in its stores are environmentally friendly. And through its philanthropy, the company has created the Animal Compassion Foundation to develop more natural and humane ways of raising farm animals. In short, nearly every aspect of the company's value chain reinforces the social dimensions of its value proposition, distinguishing Whole Foods from its competitors.</p>
-  
-</section>
-<div id="divider" title="Drag to resize"></div>
-<section class="pane" id="right">
-  <h3>Questions</h3>
-  
-  <div class="group">
-    <h4 id="q14-anchor">Questions 14–20</h4>
-    <p>Reading Passage 2 has seven paragraphs, A–G.</p>
-    <p>Choose the correct heading for each paragraph from the list of headings below.</p>
-    <p>Write the correct number, i–viii, in boxes 14–20 on your answer sheet.</p>
-    <div style="background:#f1f5f9;border-radius:10px;padding:12px;margin:12px 0;">
-      <p style="margin:0; font-weight:bold;">List of Headings</p>
-      <ol type="i" style="margin: 4px 0 0 20px; padding: 0;">
-        <li>How CSR may help one business to expand</li>
-        <li>CSR in many aspects of a company's business</li>
-        <li>A CSR initiative without a financial gain</li>
-        <li>Lack of action by the state on social issues</li>
-        <li>Drivers or pressures motivate companies to address CSR</li>
-        <li>The past illustrates businesses are responsible for future outcomes</li>
-        <li>Companies applying CSR should be selective</li>
-        <li>Reasons that business and society benefit each other</li>
-      </ol>
-    </div>
-    <table>
-      <thead>
-        <tr>
-          <th>Paragraph</th>
-          <th>i</th><th>ii</th><th>iii</th><th>iv</th><th>v</th><th>vi</th><th>vii</th><th>viii</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td><b>14</b> Paragraph A</td>
-          <td><input type="radio" name="q14" value="i"></td>
-          <td><input type="radio" name="q14" value="ii"></td>
-          <td><input type="radio" name="q14" value="iii"></td>
-          <td><input type="radio" name="q14" value="iv"></td>
-          <td><input type="radio" name="q14" value="v"></td>
-          <td><input type="radio" name="q14" value="vi"></td>
-          <td><input type="radio" name="q14" value="vii"></td>
-          <td><input type="radio" name="q14" value="viii"></td>
-        </tr>
-        <tr id="q15-anchor">
-          <td><b>15</b> Paragraph B</td>
-          <td><input type="radio" name="q15" value="i"></td>
-          <td><input type="radio" name="q15" value="ii"></td>
-          <td><input type="radio" name="q15" value="iii"></td>
-          <td><input type="radio" name="q15" value="iv"></td>
-          <td><input type="radio" name="q15" value="v"></td>
-          <td><input type="radio" name="q15" value="vi"></td>
-          <td><input type="radio" name="q15" value="vii"></td>
-          <td><input type="radio" name="q15" value="viii"></td>
-        </tr>
-        <tr id="q16-anchor">
-          <td><b>16</b> Paragraph C</td>
-          <td><input type="radio" name="q16" value="i"></td>
-          <td><input type="radio" name="q16" value="ii"></td>
-          <td><input type="radio" name="q16" value="iii"></td>
-          <td><input type="radio" name="q16" value="iv"></td>
-          <td><input type="radio" name="q16" value="v"></td>
-          <td><input type="radio" name="q16" value="vi"></td>
-          <td><input type="radio" name="q16" value="vii"></td>
-          <td><input type="radio" name="q16" value="viii"></td>
-        </tr>
-        <tr id="q17-anchor">
-          <td><b>17</b> Paragraph D</td>
-          <td><input type="radio" name="q17" value="i"></td>
-          <td><input type="radio" name="q17" value="ii"></td>
-          <td><input type="radio" name="q17" value="iii"></td>
-          <td><input type="radio" name="q17" value="iv"></td>
-          <td><input type="radio" name="q17" value="v"></td>
-          <td><input type="radio" name="q17" value="vi"></td>
-          <td><input type="radio" name="q17" value="vii"></td>
-          <td><input type="radio" name="q17" value="viii"></td>
-        </tr>
-        <tr id="q18-anchor">
-          <td><b>18</b> Paragraph E</td>
-          <td><input type="radio" name="q18" value="i"></td>
-          <td><input type="radio" name="q18" value="ii"></td>
-          <td><input type="radio" name="q18" value="iii"></td>
-          <td><input type="radio" name="q18" value="iv"></td>
-          <td><input type="radio" name="q18" value="v"></td>
-          <td><input type="radio" name="q18" value="vi"></td>
-          <td><input type="radio" name="q18" value="vii"></td>
-          <td><input type="radio" name="q18" value="viii"></td>
-        </tr>
-        <tr id="q19-anchor">
-          <td><b>19</b> Paragraph F</td>
-          <td><input type="radio" name="q19" value="i"></td>
-          <td><input type="radio" name="q19" value="ii"></td>
-          <td><input type="radio" name="q19" value="iii"></td>
-          <td><input type="radio" name="q19" value="iv"></td>
-          <td><input type="radio" name="q19" value="v"></td>
-          <td><input type="radio" name="q19" value="vi"></td>
-          <td><input type="radio" name="q19" value="vii"></td>
-          <td><input type="radio" name="q19" value="viii"></td>
-        </tr>
-        <tr id="q20-anchor">
-          <td><b>20</b> Paragraph G</td>
-          <td><input type="radio" name="q20" value="i"></td>
-          <td><input type="radio" name="q20" value="ii"></td>
-          <td><input type="radio" name="q20" value="iii"></td>
-          <td><input type="radio" name="q20" value="iv"></td>
-          <td><input type="radio" name="q20" value="v"></td>
-          <td><input type="radio" name="q20" value="vi"></td>
-          <td><input type="radio" name="q20" value="vii"></td>
-          <td><input type="radio" name="q20" value="viii"></td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-  
-  <div class="group">
-    <h4 id="q21-anchor">Questions 21–22</h4>
-    <p>Complete the summary below.</p>
-    <p>Choose <b>NO MORE THAN TWO WORDS</b> from the passage for each answer.</p>
-    <p>Write your answers in boxes 21–22 on your answer sheet.</p>
-    <p style="text-align:center; font-weight: bold;">The implementation of CSR – How?</p>
-    <p>Promotion of CSR requires the understanding of interdependence between business and society. Corporations' workers' productivity generally needs health care, education, and <b>21</b> <input class="blank" name="q21" style="width:120px;">. Restrictions imposed by government and companies both protect consumers from being treated unfairly. Improvement of the safety standard can reduce the <b>22</b> <input class="blank" id="q22-anchor" name="q22" style="width:120px;"> of accidents in the workplace. Similarly, society becomes a pool of more human needs and aspirations.</p>
-  </div>
-  
-  <div class="group">
-    <h4 id="q23-anchor">Questions 23–26</h4>
-    <p>Look at the following opinions or deeds (Questions 23–26) and the list of companies below.</p>
-    <p>Match each opinion or deed with the correct company, A, B or C.</p>
-    <p>Write the correct letter, A, B or C, in boxes 23–26 on your answer sheet.</p>
-    <p><b>NB</b> You may use any letter more than once.</p>
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 2</h2>
+    <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>
+    <h3>Corporate Social Responsibility</h3>
     
-    <div style="background:#f1f5f9;border-radius:10px;padding:12px;margin:12px 0;">
-      <p style="margin:0; text-align:center; font-weight:bold;">List of Companies</p>
-      <p style="margin:4px 0 0;">A General Electric</p>
-      <p style="margin:4px 0 0;">B Microsoft</p>
-      <p style="margin:4px 0 0;">C Whole Foods Market</p>
+    <h4>Paragraph A</h4>
+    <p>According to the maxim of business theory, the primary purpose of a corporation is to maximise profits for its shareholders. Yet in recent years, a new idea has emerged, one that challenges this traditional model. Corporate Social Responsibility (CSR) is the concept that companies should not only pursue profits, but also promote the interests of society as a whole. This idea has gained momentum as companies have faced increasing pressure from consumers, employees, and governments to behave more responsibly.</p>
+    
+    <h4>Paragraph B</h4>
+    <p>CSR can take many forms, from environmental protection to charitable giving to improving working conditions. Some companies have embraced CSR wholeheartedly, developing comprehensive programmes that touch on every aspect of their operations. Others have been more reluctant, viewing CSR as an unnecessary expense that detracts from their primary goal of making money. Still others have adopted a cynical approach, using CSR as a marketing tool without making meaningful changes to their practices.</p>
+    
+    <h4>Paragraph C</h4>
+    <p>One of the most common forms of CSR is environmental responsibility. This can include reducing carbon emissions, minimising waste, using renewable energy sources, and developing sustainable products. Companies that pursue environmental CSR often find that it not only benefits the planet, but also saves them money in the long run through improved efficiency and reduced resource consumption. Moreover, environmentally conscious companies often enjoy a positive reputation among consumers, which can translate into increased sales.</p>
+    
+    <h4>Paragraph D</h4>
+    <p>Another important aspect of CSR is social responsibility, which encompasses a wide range of activities aimed at improving society. This might include supporting local communities through charitable donations, volunteering, or partnerships with non-profit organisations. It can also involve ensuring fair labour practices throughout the company's supply chain, including safe working conditions, fair wages, and the prohibition of child labour. Some companies have also focused on diversity and inclusion initiatives, working to create more equitable workplaces.</p>
+    
+    <h4>Paragraph E</h4>
+    <p>Economic responsibility is the third pillar of CSR. This involves conducting business in an ethical manner, including honest marketing practices, fair pricing, and transparent financial reporting. It also encompasses responsible investment practices and efforts to promote economic development in the communities where the company operates. Some companies have adopted the concept of creating shared value, which involves finding ways to generate profits while simultaneously addressing social problems.</p>
+    
+    <h4>Paragraph F</h4>
+    <p>Critics of CSR argue that it represents a dangerous departure from the fundamental purpose of business. They contend that companies have a fiduciary duty to maximise shareholder value, and that diverting resources to social causes is a breach of that duty. These critics also argue that CSR can be used as a smokescreen to distract from unethical business practices, and that the most effective way for companies to benefit society is simply to focus on making profits and creating jobs.</p>
+    
+    <h4>Paragraph G</h4>
+    <p>Proponents of CSR, on the other hand, argue that it is not only morally right but also economically beneficial. They point to studies showing that companies with strong CSR programmes often outperform their peers financially, suggesting that doing good and doing well are not mutually exclusive. They also argue that CSR helps companies attract and retain talented employees, build stronger relationships with customers, and mitigate risks associated with regulatory changes and social unrest.</p>
+    
+    <h4>Paragraph H</h4>
+    <p>Despite the ongoing debate, CSR appears to be here to stay. A growing number of companies are incorporating social and environmental considerations into their core business strategies, and investors are increasingly taking CSR performance into account when making investment decisions. Governments around the world are also getting involved, implementing regulations that require companies to report on their social and environmental impact. As CSR continues to evolve, it will likely become an even more integral part of how businesses operate.</p>
+    
+  </section>
+  <div id="divider" title="Drag to resize"></div>
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <h4>Questions 14–18</h4>
+      <p>Reading Passage 2 has eight paragraphs, A–H.</p>
+      <p>Which paragraph contains the following information?</p>
+      <p>Write the correct letter, A–H, in boxes 14–18 on your answer sheet.</p>
+      
+      <div id="q14-anchor">
+        <p><span class="q-item">14</span> &nbsp;&nbsp;&nbsp; A description of how CSR can help a company's financial performance<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q14" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="G"> G &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q14" value="H"> H</p>
+      </div>
+      
+      <div id="q15-anchor">
+        <p><span class="q-item">15</span> &nbsp;&nbsp;&nbsp; Examples of the different ways in which companies can engage in CSR<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q15" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="G"> G &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q15" value="H"> H</p>
+      </div>
+      
+      <div id="q16-anchor">
+        <p><span class="q-item">16</span> &nbsp;&nbsp;&nbsp; A reference to the traditional view of what a company's main purpose should be<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q16" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="G"> G &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q16" value="H"> H</p>
+      </div>
+      
+      <div id="q17-anchor">
+        <p><span class="q-item">17</span> &nbsp;&nbsp;&nbsp; Examples of economic responsibilities<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q17" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="G"> G &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q17" value="H"> H</p>
+      </div>
+      
+      <div id="q18-anchor">
+        <p><span class="q-item">18</span> &nbsp;&nbsp;&nbsp; A reference to the idea that CSR can be used for marketing purposes<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q18" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="G"> G &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q18" value="H"> H</p>
+      </div>
     </div>
     
-    <div style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p><b>23</b> Disposable waste</p>
-      <label><input type="radio" name="q23" value="A"> A</label>
-      <label><input type="radio" name="q23" value="B"> B</label>
-      <label><input type="radio" name="q23" value="C"> C</label>
+    <div class="group">
+      <h4>Questions 19–23</h4>
+      <p>Do the following statements agree with the information given in Reading Passage 2?</p>
+      <p>In boxes 19–23 on your answer sheet, write</p>
+      <p><strong>TRUE</strong> &nbsp;&nbsp;&nbsp; if the statement agrees with the information<br>
+      <strong>FALSE</strong> &nbsp;&nbsp;&nbsp; if the statement contradicts the information<br>
+      <strong>NOT GIVEN</strong> &nbsp;&nbsp;&nbsp; if there is no information on this</p>
+      
+      <div id="q19-anchor">
+        <p><span class="q-item">19</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q19" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q19" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q19" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Some companies have found that environmental responsibility can reduce their costs.</p>
+      </div>
+      
+      <div id="q20-anchor">
+        <p><span class="q-item">20</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q20" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q20" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q20" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Social responsibility activities are limited to charitable donations.</p>
+      </div>
+      
+      <div id="q21-anchor">
+        <p><span class="q-item">21</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q21" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q21" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q21" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Critics of CSR believe that companies should prioritise social benefits over profits.</p>
+      </div>
+      
+      <div id="q22-anchor">
+        <p><span class="q-item">22</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q22" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q22" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q22" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Companies with strong CSR programmes often perform better financially than those without them.</p>
+      </div>
+      
+      <div id="q23-anchor">
+        <p><span class="q-item">23</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q23" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q23" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q23" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; All governments are beginning to implement CSR regulations.</p>
+      </div>
     </div>
     
-    <div id="q24-anchor" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p><b>24</b> The way the company purchases its goods</p>
-      <label><input type="radio" name="q24" value="A"> A</label>
-      <label><input type="radio" name="q24" value="B"> B</label>
-      <label><input type="radio" name="q24" value="C"> C</label>
+    <div class="group">
+      <h4>Questions 24–26</h4>
+      <p>Complete the sentences below.</p>
+      <p>Choose <strong>NO MORE THAN TWO WORDS</strong> from the passage for each answer.</p>
+      <p>Write your answers in boxes 24–26 on your answer sheet.</p>
+      
+      <div id="q24-anchor">
+        <p><span class="q-item">24</span> &nbsp;&nbsp;&nbsp; CSR is the concept that companies should not only pursue profits, but also promote the interests of <input type="text" name="q24" class="blank">.</p>
+      </div>
+      
+      <div id="q25-anchor">
+        <p><span class="q-item">25</span> &nbsp;&nbsp;&nbsp; Companies that are environmentally conscious often enjoy a positive <input type="text" name="q25" class="blank"> among consumers.</p>
+      </div>
+      
+      <div id="q26-anchor">
+        <p><span class="q-item">26</span> &nbsp;&nbsp;&nbsp; Some companies have adopted the concept of creating <input type="text" name="q26" class="blank">, which involves finding ways to generate profits while simultaneously addressing social problems.</p>
+      </div>
     </div>
     
-    <div id="q25-anchor" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p><b>25</b> Helping the under-developed</p>
-      <label><input type="radio" name="q25" value="A"> A</label>
-      <label><input type="radio" name="q25" value="B"> B</label>
-      <label><input type="radio" name="q25" value="C"> C</label>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
     </div>
-    
-    <div id="q26-anchor" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p><b>26</b> Ensuring that people have the latest information</p>
-      <label><input type="radio" name="q26" value="A"> A</label>
-      <label><input type="radio" name="q26" value="B"> B</label>
-      <label><input type="radio" name="q26" value="C"> C</label>
-    </div>
-  </div>
-  
-  <div style="display:flex;gap:8px;margin-bottom:10px;">
-    <button class="primary" onclick="grade()">Submit</button>
-    <button onclick="resetForm()">Reset</button>
-    <button onclick="toggleNotes()">Notes</button>
-  </div>
-  <div id="results"></div>
-  <details class="answerbox" id="answerBox" style="display: none;">
-    <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
-    <div id="answerContent"></div>
-  </details>
-</section>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
 </div>
+
 <div aria-label="Selection tools" id="selbar" role="toolbar">
   <button id="btnHL">Highlight</button>
   <button id="btnUH">Remove</button>
   <button id="btnNote">Note</button>
 </div>
+
 <div id="notes">
   <header>
     <strong>Notes</strong>
@@ -285,429 +635,585 @@
   </header>
   <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
 </div>
-<div id="toast"></div>
-<script>
-// Timer
-let _t=0; const _timerEl=document.getElementById('timer');
-setInterval(function(){ 
-  _t++; 
-  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
-  var s=String(_t%60).padStart(2,'0'); 
-  _timerEl.textContent=m+':'+s; 
-},1000);
 
-// Drag divider
+<div id="toast"></div>
+
+<script>
+// 页面滚动功能
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // 高亮显示题目
+    element.style.backgroundColor = '#e0e7ff';
+    setTimeout(() => {
+      element.style.backgroundColor = '';
+    }, 1000);
+  }
+}
+
+// 重置表单功能
+function resetForm() {
+  // 重置单选按钮
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // 重置文本输入框
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = '';
+  });
+  
+  // 清除结果
+  document.getElementById('results').innerHTML = '';
+  
+  // 更新导航状态
+  updateAnswerStatus();
+  
+  showToast('Form reset');
+}
+
+// Toast通知功能
+function showToast(msg) {
+  const toastEl = document.getElementById('toast');
+  toastEl.textContent = msg;
+  toastEl.style.display = 'block';
+  setTimeout(() => {
+    toastEl.style.display = 'none';
+  }, 1500);
+}
+
+// 计时器功能
+let _t = 0;
+let timerRunning = true;
+let timerInterval;
+const _timerEl = document.getElementById('timer');
+
+function updateTimer() {
+  const m = Math.floor(_t / 60);
+  const s = _t % 60;
+  _timerEl.textContent = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+function startTimer() {
+  timerInterval = setInterval(() => {
+    if (timerRunning) {
+      _t++;
+      updateTimer();
+    }
+  }, 1000);
+}
+
+function toggleTimer() {
+  if (timerRunning) {
+    clearInterval(timerInterval);
+    timerRunning = false;
+    _timerEl.classList.add('paused');
+    showToast('Timer paused');
+  } else {
+    startTimer();
+    timerRunning = true;
+    _timerEl.classList.remove('paused');
+    showToast('Timer resumed');
+  }
+}
+
+// 主题切换功能
+function toggleTheme() {
+  document.body.classList.toggle('dark');
+  const isDark = document.body.classList.contains('dark');
+  localStorage.setItem('darkMode', isDark);
+  const themeButton = document.querySelector('.theme-toggle');
+  themeButton.textContent = isDark ? '☀️' : '🌙';
+}
+
+// 拖拽分栏功能
 var divider = document.getElementById('divider');
 var left = document.getElementById('left');
 var right = document.getElementById('right');
-var dragging=false;
-function startDrag(e){ 
-  dragging=true; 
-  document.body.style.cursor='ew-resize'; 
-  if(e.preventDefault) e.preventDefault(); 
+var dragging = false;
+
+function startDrag(e) {
+  dragging = true;
+  document.body.style.cursor = 'ew-resize';
+  if (e.preventDefault) e.preventDefault();
 }
-function endDrag(){ 
-  dragging=false; 
-  document.body.style.cursor=''; 
+
+function endDrag() {
+  dragging = false;
+  document.body.style.cursor = '';
 }
-function onMove(clientX){
+
+function onMove(clientX) {
   var container = document.querySelector('.shell').getBoundingClientRect();
   var x = clientX - container.left;
-  x = Math.max(280, Math.min(container.width-320, x));
+  x = Math.max(280, Math.min(container.width - 320, x));
   left.style.flex = '0 0 ' + x + 'px';
   right.style.flex = '1 1 auto';
 }
-divider.addEventListener('mousedown', function(e){ startDrag(e); });
-window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+
+divider.addEventListener('mousedown', function(e) { startDrag(e); });
+window.addEventListener('mousemove', function(e) { if (dragging) onMove(e.clientX); });
 window.addEventListener('mouseup', endDrag);
-divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
-window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+divider.addEventListener('touchstart', function(e) { startDrag(e.touches[0]); }, { passive: false });
+window.addEventListener('touchmove', function(e) { if (dragging) onMove(e.touches[0].clientX); }, { passive: false });
 window.addEventListener('touchend', endDrag);
 
-// Highlight toolbar
+// 高亮和笔记功能
 var selbar = document.getElementById('selbar');
 var btnHL = document.getElementById('btnHL');
 var btnUH = document.getElementById('btnUH');
 var btnNote = document.getElementById('btnNote');
-var lastRange=null;
-var currentHlNode=null;
-var keepToolbar=false;
-function positionSelbarForRect(rect){
-  selbar.style.display='flex';
-  requestAnimationFrame(function(){
+var lastRange = null;
+var currentHlNode = null;
+var keepToolbar = false;
+
+function positionSelbarForRect(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(function() {
     var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
     var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
-    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.top = ((top > 0) ? top : (window.scrollY + rect.bottom + 8)) + 'px';
     selbar.style.left = Math.max(8, leftPos) + 'px';
   });
 }
-function updateSelbar(){
-  var sel=window.getSelection();
-  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
-    selbar.style.display='none'; 
-    currentHlNode=null; 
-    return; 
+
+function updateSelbar() {
+  var sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
   }
   var range = sel.getRangeAt(0);
   lastRange = range.cloneRange();
-  currentHlNode=null;
+  currentHlNode = null;
   positionSelbarForRect(range.getBoundingClientRect());
 }
+
 document.getElementById('left').addEventListener('mouseup', updateSelbar);
 document.getElementById('right').addEventListener('mouseup', updateSelbar);
-document.addEventListener('selectionchange', function(){ 
-  var sel=window.getSelection(); 
-  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
-    if(!keepToolbar && !currentHlNode){ 
-      selbar.style.display='none'; 
-    } 
-  } 
+document.addEventListener('selectionchange', function() {
+  var sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) {
+      selbar.style.display = 'none';
+    }
+  }
 });
-document.addEventListener('scroll', function(){ 
-  if(selbar.style.display==='flex') updateSelbar(); 
+document.addEventListener('scroll', function() {
+  if (selbar.style.display === 'flex') updateSelbar();
 });
-document.addEventListener('mousedown', function(e){
+
+document.addEventListener('mousedown', function(e) {
   var t = e.target;
-  if(t.classList && t.classList.contains('hl')){
+  if (t.classList && t.classList.contains('hl')) {
     keepToolbar = true;
   } else {
     keepToolbar = false;
   }
 }, true);
-document.addEventListener('click', function(e){
+
+document.addEventListener('click', function(e) {
   var target = e.target;
-  if(target.classList && target.classList.contains('hl')){
+  if (target.classList && target.classList.contains('hl')) {
     currentHlNode = target;
     lastRange = null;
     positionSelbarForRect(target.getBoundingClientRect());
-    var sel=window.getSelection();
-    if(sel) sel.removeAllRanges();
-    setTimeout(function(){ keepToolbar=false; }, 0);
+    var sel = window.getSelection();
+    if (sel) sel.removeAllRanges();
+    setTimeout(function() { keepToolbar = false; }, 0);
   }
 }, true);
-function doHighlight(){
-  if(currentHlNode) return;
-  if(!lastRange || lastRange.collapsed) return;
-  var span=document.createElement('span'); span.className='hl';
-  try { lastRange.surroundContents(span); }
-  catch(e){
-    var wrap=document.createElement('span'); wrap.className='hl';
-    wrap.appendChild(lastRange.cloneContents());
-    lastRange.deleteContents();
-    lastRange.insertNode(wrap);
+
+function doHighlight() {
+  if (currentHlNode) return;
+  if (!lastRange || lastRange.collapsed) return;
+  
+  const startNode = lastRange.startContainer;
+  const endNode = lastRange.endContainer;
+  
+  if (startNode === endNode) {
+    try {
+      const span = document.createElement('span');
+      span.className = 'hl';
+      lastRange.surroundContents(span);
+      selbar.style.display = 'none';
+      showToast('Highlighted');
+      return;
+    } catch (e) {}
   }
-  selbar.style.display='none';
+  
+  const fragment = lastRange.cloneContents();
+  const div = document.createElement('div');
+  div.appendChild(fragment);
+  
+  function processNode(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      if (node.textContent.trim().length > 0) {
+        const span = document.createElement('span');
+        span.className = 'hl';
+        span.textContent = node.textContent;
+        return span;
+      }
+      return node;
+    }
+    
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const isBlock = window.getComputedStyle(node).display.includes('block') ||
+        ['P', 'H1', 'H2', 'H3', 'H4', 'DIV'].includes(node.tagName);
+      
+      const wrapper = isBlock ? document.createElement(node.tagName.toLowerCase()) : document.createElement('span');
+      wrapper.className = isBlock ? node.className + ' hl' : 'hl';
+      
+      Array.from(node.attributes).forEach(attr => {
+        wrapper.setAttribute(attr.name, attr.value);
+      });
+      
+      while (node.firstChild) {
+        const processedChild = processNode(node.firstChild);
+        wrapper.appendChild(processedChild);
+      }
+      
+      return wrapper;
+    }
+    
+    return node;
+  }
+  
+  const highlightedContent = processNode(div);
+  lastRange.deleteContents();
+  lastRange.insertNode(highlightedContent);
+  
+  selbar.style.display = 'none';
   showToast('Highlighted');
 }
-function removeHighlight(){
-  if(currentHlNode){
-    var p = currentHlNode.parentNode;
-    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
-    p.removeChild(currentHlNode); p.normalize();
+
+function removeHighlight() {
+  if (currentHlNode) {
+    const parent = currentHlNode.parentNode;
+    while (currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize();
     currentHlNode = null;
-    selbar.style.display='none';
+    selbar.style.display = 'none';
     showToast('Highlight removed');
     return;
   }
-  if(!lastRange) return;
-  var selRect = lastRange.getBoundingClientRect();
-  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
-  var toRemove=[];
-  while(walker.nextNode()){
-    var n=walker.currentNode;
-    if(n.classList && n.classList.contains('hl')) {
-      var r = n.getBoundingClientRect();
-      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+  
+  if (!lastRange) return;
+  
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    if (node.classList && node.classList.contains('hl')) {
+      const rect = node.getBoundingClientRect();
+      if (!(rect.right < selRect.left || rect.left > selRect.right ||
+        rect.bottom < selRect.top || rect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
     }
   }
-  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
-  selbar.style.display='none';
+  
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) {
+      parent.insertBefore(el.firstChild, el);
+    }
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  
+  selbar.style.display = 'none';
   showToast('Highlight removed');
 }
+
 btnHL.addEventListener('click', doHighlight);
 btnUH.addEventListener('click', removeHighlight);
 
-// Notes
+// 笔记功能
 var notes = document.getElementById('notes');
 var noteArea = document.getElementById('noteArea');
-var btnCopy=document.getElementById('btnCopy');
-var btnClose=document.getElementById('btnClose');
-function toggleNotes(){ 
-  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+var btnCopy = document.getElementById('btnCopy');
+var btnClose = document.getElementById('btnClose');
+
+function toggleNotes() {
+  notes.style.display = (notes.style.display === 'flex' ? 'none' : 'flex');
 }
 window.toggleNotes = toggleNotes;
+
 btnClose.addEventListener('click', toggleNotes);
-btnCopy.addEventListener('click', async function(){ 
-  await navigator.clipboard.writeText(noteArea.value||''); 
-  showToast('Copied'); 
-});
-btnNote.addEventListener('click', function(){
-  var text = '';
-  if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
-  else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
-  toggleNotes();
-  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
-  selbar.style.display='none';
+btnCopy.addEventListener('click', async function() {
+  await navigator.clipboard.writeText(noteArea.value || '');
+  showToast('Copied');
 });
 
-// Toast
-var toastEl=document.getElementById('toast');
-function showToast(msg){
-  toastEl.textContent=msg; 
-  toastEl.style.display='block';
-  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+btnNote.addEventListener('click', function() {
+  var text = '';
+  if (currentHlNode) {
+    text = (currentHlNode.textContent || '').trim();
+  } else if (lastRange) {
+    var frag = lastRange.cloneContents();
+    text = (frag.textContent || '').trim();
+  }
+  toggleNotes();
+  if (text) {
+    noteArea.value = (noteArea.value ? noteArea.value + '\n' : '') + '> ' + text + '\n';
+  }
+  selbar.style.display = 'none';
+});
+
+// 答题状态更新
+function updateAnswerStatus() {
+  for (let i = 14; i <= 26; i++) {
+    const inputs = document.querySelectorAll(`input[name="q${i}"]`);
+    const navItem = document.getElementById(`q${i}-nav`);
+    if (navItem) {
+      let answered = false;
+      inputs.forEach(input => {
+        if ((input.type === 'radio' || input.type === 'checkbox') && input.checked) {
+          answered = true;
+        } else if (input.type === 'text' && input.value.trim()) {
+          answered = true;
+        }
+      });
+      if (answered) {
+        navItem.classList.add('answered');
+      } else {
+        navItem.classList.remove('answered');
+      }
+    }
+  }
 }
 
-// Answer key and grading
+// 答案和评分系统
 var answers = {
-  "q14":"v", "q15":"viii", "q16":"vi", "q17":"vii", "q18":"iii", "q19":"i", "q20":"ii",
-  "q21":"equal opportunity", "q22":"internal costs",
-  "q23":"C", "q24":"C", "q25":"A", "q26":"B"
+  "q14": "G", "q15": "B", "q16": "A", "q17": "E", "q18": "B",
+  "q19": "TRUE", "q20": "FALSE", "q21": "FALSE", "q22": "TRUE", "q23": "NOT GIVEN",
+  "q24": "society", "q25": "reputation", "q26": "shared value"
 };
 
-function grade(){
-  var total=0, correct=0, lines=[];
+function grade() {
+  var total = 0, correct = 0, lines = [];
   
-  // 14–20 Headings
-  for(var n=14; n<=20; n++){
+  // 检查单选题 (14-23)
+  for (let n = 14; n <= 23; n++) {
+    const q = `q${n}`;
     total++;
-    var sel=document.querySelector(`input[name="q${n}"]:checked`);
-    var val=sel?sel.value:'';
-    var isCorrect = val === answers[`q${n}`];
-    if(isCorrect) correct++;
-    lines.push(`Q${n}: ${val || 'None'} ${isCorrect ? '✅' : '❌'}`);
+    const selected = document.querySelector(`input[name="${q}"]:checked`);
+    const userAnswer = selected ? selected.value : '';
+    const isCorrect = userAnswer === answers[q];
+    if (isCorrect) correct++;
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✓' : '✗'}`);
   }
   
-  // 21–22 Summary
-  for(var n=21; n<=22; n++){
+  // 检查文本输入题 (24-26)
+  for (let n = 24; n <= 26; n++) {
+    const q = `q${n}`;
     total++;
-    var el=document.querySelector(`input[name="q${n}"]`);
-    var val=el?el.value.trim().toLowerCase():'';
-    var isCorrect = val === answers[`q${n}`].toLowerCase();
-    if(isCorrect) correct++;
-    lines.push(`Q${n}: ${val || 'None'} ${isCorrect ? '✅' : '❌'}`);
+    const input = document.querySelector(`input[name="${q}"]`);
+    const userAnswer = input ? input.value.trim().toLowerCase() : '';
+    const correctAnswer = answers[q].toLowerCase();
+    const isCorrect = userAnswer === correctAnswer;
+    if (isCorrect) correct++;
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✓' : '✗'}`);
   }
-
-  // 23–26 Matching
-  for(var n=23; n<=26; n++){
-    total++;
-    var sel=document.querySelector(`input[name="q${n}"]:checked`);
-    var val=sel?sel.value:'';
-    var isCorrect = val === answers[`q${n}`];
-    if(isCorrect) correct++;
-    lines.push(`Q${n}: ${val || 'None'} ${isCorrect ? '✅' : '❌'}`);
-  }
-
-  var acc = (total? Math.round(100*correct/total):0);
-  var html = `<p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p>`;
-  html += `<pre>${lines.join('\n')}</pre>`;
-  document.getElementById('results').innerHTML = html;
   
-  // Show answer key section
-  document.getElementById('answerBox').style.display = 'block';
-  var ahtml = `<ol start="14">
-    <li>v</li><li>viii</li><li>vi</li><li>vii</li><li>iii</li><li>i</li><li>ii</li>
-    <li>equal opportunity</li><li>internal costs</li>
-    <li>C</li><li>C</li><li>A</li><li>B</li>
-  </ol>`;
-  document.getElementById('answerContent').innerHTML = ahtml;
-  document.querySelector('#answerBox .badge').textContent='tap to view';
+  // 显示结果
+  const acc = Math.round(100 * correct / total);
+  document.getElementById('results').innerHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p>
+    <pre>${lines.join('\n')}</pre>
+  `;
+  
+  // 显示答案
+  document.getElementById('answerContent').innerHTML = `
+    <ol>
+      <li>14. G</li>
+      <li>15. B</li>
+      <li>16. A</li>
+      <li>17. E</li>
+      <li>18. B</li>
+      <li>19. TRUE</li>
+      <li>20. FALSE</li>
+      <li>21. FALSE</li>
+      <li>22. TRUE</li>
+      <li>23. NOT GIVEN</li>
+      <li>24. society</li>
+      <li>25. reputation</li>
+      <li>26. shared value</li>
+    </ol>
+  `;
+  document.querySelector('#answerBox .badge').textContent = 'tap to view';
+  
+  updateAnswerStatus();
 }
 
-function resetForm(){
-  document.querySelectorAll('input[type="radio"]').forEach(el=>el.checked=false);
-  document.querySelectorAll('input.blank').forEach(el=>el.value="");
-  document.getElementById('results').innerHTML='';
-  document.getElementById('answerContent').innerHTML='';
-  document.getElementById('answerBox').style.display = 'none';
-  document.querySelector('#answerBox .badge').textContent = 'hidden';
-  document.querySelectorAll('.q-item').forEach(item => {
-    item.classList.remove('answered');
-  });
-}
+// 监听答案变化
+document.addEventListener('change', updateAnswerStatus);
+document.addEventListener('input', updateAnswerStatus);
 
-function scrollToElement(id){
-  var el = document.getElementById(id);
-  if(el){ 
-    el.scrollIntoView({behavior:'smooth', block:'center'}); 
-  }
-  var navs = document.querySelectorAll('.practice-nav .q-item');
-  navs.forEach(n => n.classList.remove('active'));
-  var btn = document.getElementById(id.replace('-anchor','-nav'));
-  if(btn){ 
-    btn.classList.add('active'); 
-    setTimeout(() => btn.classList.remove('active'), 800); 
-  }
-}
-
-(function(){
-  function mark(qn){
-    var nav = document.getElementById('q'+qn+'-nav');
-    if(!nav) return;
-    var inputs = document.querySelectorAll('input[name="q'+qn+'"]');
-    var answered = false;
-    inputs.forEach(function(i){
-      if(i.type === 'radio' && i.checked) answered = true;
-      if(i.type === 'text' && i.value.trim().length > 0) answered = true;
-    });
-    if(answered) nav.classList.add('answered'); else nav.classList.remove('answered');
-  }
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+  startTimer();
+  updateAnswerStatus(); // 初始化答题状态
   
-  for(var q=14;q<=26;q++){
-    (function(n){
-      var inputs = document.querySelectorAll('input[name="q'+n+'"]');
-      inputs.forEach(function(i){ 
-        var eventType = i.type === 'text' ? 'input' : 'change';
-        i.addEventListener(eventType, function(){ mark(n); }); 
-      });
-    })(q);
+  // 加载保存的主题
+  if (localStorage.getItem('darkMode') === 'true') {
+    document.body.classList.add('dark');
+    document.querySelector('.theme-toggle').textContent = '☀️';
   }
-})();
-</script>
+});
 
-<!-- 练习页面数据传输增强脚本 -->
-<script>
-// 检查是否已经有增强脚本
-if (!window.practicePageEnhancer) {
-    // 动态加载增强脚本
-    const script = document.createElement('script');
-    script.src = '../../js/practice-page-enhancer.js';
-    script.onload = function() {
-        console.log('练习页面增强脚本已加载');
-    };
-    script.onerror = function() {
-        console.error('练习页面增强脚本加载失败');
-        // 降级到内联增强
-        loadInlineEnhancer();
-    };
-    document.head.appendChild(script);
+// 练习页面增强脚本集成
+function loadPracticePageEnhancer() {
+  const script = document.createElement('script');
+  script.src = '../../../js/practice-page-enhancer.js';
+  script.onload = function() {
+    console.log('练习页面增强脚本已加载');
+      };
+  script.onerror = function() {
+    console.error('练习页面增强脚本加载失败');
+    // 降级到内联增强
+    loadInlineEnhancer();
+  };
+  document.head.appendChild(script);
 }
 
 // 内联增强器（降级方案）
 function loadInlineEnhancer() {
-    if (window.practicePageEnhancer) return;
+  if (window.practicePageEnhancer) return;
+  
+  window.practicePageEnhancer = {
+    initialize: function() {
+      console.log('[InlineEnhancer] 内联增强器已初始化');
+          this.setupCommunication();
+      this.setupAnswerListeners();
+      this.interceptSubmit();
+    },
     
-    window.practicePageEnhancer = {
-        initialize: function() {
-            console.log('[InlineEnhancer] 内联增强器已初始化');
-            this.setupCommunication();
-            this.setupAnswerListeners();
-            this.interceptSubmit();
-        },
-        
-        setupCommunication: function() {
-            this.parentWindow = window.opener || window.parent;
-            window.addEventListener('message', (event) => {
-                if (event.data && event.data.type === 'INIT_SESSION') {
-                    this.sessionId = event.data.data.sessionId;
-                    this.sendMessage('SESSION_READY', {
-                        pageType: this.detectPageType(),
-                        url: window.location.href
-                    });
-                }
-            });
-        },
-        
-        detectPageType: function() {
-            const title = document.title || '';
-            if (title.includes('P1')) return 'P1';
-            if (title.includes('P2')) return 'P2';
-            if (title.includes('P3')) return 'P3';
-            return 'unknown';
-        },
-        
-        setupAnswerListeners: function() {
-            this.answers = {};
-            this.startTime = Date.now();
-            
-            document.addEventListener('change', (e) => {
-                if (e.target.name && e.target.name.startsWith('q')) {
-                    this.answers[e.target.name] = e.target.value;
-                }
-            });
-            document.addEventListener('input', (e) => {
-                if (e.target.name && e.target.name.startsWith('q') && e.target.classList.contains('blank')) {
-                    this.answers[e.target.name] = e.target.value;
-                }
-            });
-        },
-        
-        interceptSubmit: function() {
-            // 拦截grade函数
-            if (typeof window.grade === 'function') {
-                const originalGrade = window.grade;
-                window.grade = () => {
-                    const result = originalGrade();
-                    setTimeout(() => this.handleSubmit(), 200);
-                    return result;
-                };
-            }
-            
-            // 监听提交按钮
-            document.addEventListener('click', (e) => {
-                if (e.target.tagName === 'BUTTON' && 
-                    (e.target.textContent.includes('Submit') || 
-                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
-                    setTimeout(() => this.handleSubmit(), 300);
-                }
-            });
-        },
-        
-        handleSubmit: function() {
-            const results = {
-                sessionId: this.sessionId,
-                startTime: this.startTime,
-                endTime: Date.now(),
-                duration: Math.round((Date.now() - this.startTime) / 1000),
-                answers: this.answers,
-                scoreInfo: this.extractScore(),
-                pageType: this.detectPageType(),
-                url: window.location.href
-            };
-            
-            this.sendMessage('PRACTICE_COMPLETE', results);
-        },
-        
-        extractScore: function() {
-            const resultsEl = document.getElementById('results');
-            if (!resultsEl) return null;
-            
-            const text = resultsEl.textContent || '';
-            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
-            if (scoreMatch) {
-                const correct = parseInt(scoreMatch[1]);
-                const total = parseInt(scoreMatch[2]);
-                return {
-                    correct: correct,
-                    total: total,
-                    accuracy: total > 0 ? correct / total : 0,
-                    percentage: Math.round((correct / total) * 100),
-                    source: 'inline_extraction'
-                };
-            }
-            return null;
-        },
-        
-        sendMessage: function(type, data) {
-            if (this.parentWindow) {
-                this.parentWindow.postMessage({
-                    type: type,
-                    data: data,
-                    source: 'practice_page'
-                }, '*');
-            }
+    setupCommunication: function() {
+      this.parentWindow = window.opener || window.parent;
+      window.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'INIT_SESSION') {
+          this.sessionId = event.data.data.sessionId;
+          this.sendMessage('SESSION_READY', {
+            pageType: this.detectPageType(),
+            url: window.location.href
+          });
         }
-    };
+      });
+    },
     
-    // 初始化
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            window.practicePageEnhancer.initialize();
-        });
-    } else {
-        window.practicePageEnhancer.initialize();
+    detectPageType: function() {
+      const title = document.title || '';
+      if (title.includes('P1')) return 'P1';
+      if (title.includes('P2')) return 'P2';
+      if (title.includes('P3')) return 'P3';
+      return 'unknown';
+    },
+    
+    setupAnswerListeners: function() {
+      this.answers = {};
+      this.startTime = Date.now();
+      
+      document.addEventListener('change', (e) => {
+        if (e.target.name && e.target.name.startsWith('q')) {
+          this.answers[e.target.name] = e.target.value;
+        }
+      });
+      
+      document.addEventListener('input', (e) => {
+        if (e.target.name && e.target.name.startsWith('q')) {
+          this.answers[e.target.name] = e.target.value;
+        }
+      });
+    },
+    
+    interceptSubmit: function() {
+      // 拦截grade函数
+      if (typeof window.grade === 'function') {
+        const originalGrade = window.grade;
+        window.grade = () => {
+          const result = originalGrade();
+          setTimeout(() => this.handleSubmit(), 200);
+          return result;
+        };
+      }
+      
+      // 监听提交按钮
+      document.addEventListener('click', (e) => {
+        if (e.target.tagName === 'BUTTON' &&
+          (e.target.textContent.includes('Submit') ||
+            e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+          setTimeout(() => this.handleSubmit(), 300);
+        }
+      });
+    },
+    
+    handleSubmit: function() {
+      const results = {
+        sessionId: this.sessionId,
+        startTime: this.startTime,
+        endTime: Date.now(),
+        duration: Math.round((Date.now() - this.startTime) / 1000),
+        answers: this.answers,
+        scoreInfo: this.extractScore(),
+        pageType: this.detectPageType(),
+        url: window.location.href
+      };
+      
+      this.sendMessage('PRACTICE_COMPLETE', results);
+    },
+    
+    extractScore: function() {
+      const resultsEl = document.getElementById('results');
+      if (!resultsEl) return null;
+      
+      const text = resultsEl.textContent || '';
+      const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+      if (scoreMatch) {
+        const correct = parseInt(scoreMatch[1]);
+        const total = parseInt(scoreMatch[2]);
+        return {
+          correct: correct,
+          total: total,
+          accuracy: total > 0 ? correct / total : 0,
+          percentage: Math.round((correct / total) * 100),
+          source: 'inline_extraction'
+        };
+      }
+      return null;
+    },
+    
+    sendMessage: function(type, data) {
+      if (this.parentWindow) {
+        this.parentWindow.postMessage({
+          type: type,
+          data: data,
+          source: 'practice_page'
+        }, '*');
+      }
     }
+  };
+  
+  // 初始化
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      window.practicePageEnhancer.initialize();
+    });
+  } else {
+    window.practicePageEnhancer.initialize();
+  }
 }
+
+// 加载增强脚本
+loadPracticePageEnhancer();
 </script>
 
 </body>

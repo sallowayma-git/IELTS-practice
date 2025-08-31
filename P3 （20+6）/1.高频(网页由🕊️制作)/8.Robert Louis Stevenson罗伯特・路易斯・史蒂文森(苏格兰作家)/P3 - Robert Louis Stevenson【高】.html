@@ -1,63 +1,411 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
+<meta charset="UTF-8">
 <title>P3 – Robert Louis Stevenson</title>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+  }
   * { box-sizing: border-box; }
   html,body { height:100%; }
-  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
-  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+    padding-bottom: 82px; 
+    font-size: 16px;
+  }
+  
+  /* 布局样式 */
   .shell { display:flex; height:100vh; width:100%; }
   .pane { background:var(--panel); overflow:auto; padding:20px; }
   #left { flex: 0 0 50%; min-width: 280px; }
   #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
   #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
-  h2,h3,h4 { margin:0 0 10px; }
-  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  
+  /* 文本样式 */
+  h2,h3,h4 { margin:0 0 10px; font-weight: 600; }
+  h2 { font-size: 24px; }
+  h3 { font-size: 20px; }
+  h4 { font-size: 18px; }
+  #left p { 
+    margin: 0 0 12px; 
+    line-height: 1.6; 
+    word-break: normal; 
+    overflow-wrap: normal; 
+    hyphens: none;
+    font-size: 16px;
+  }
+  
+  /* 组件样式 */
   .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  input.blank { 
+    border:none; 
+    border-bottom:1px solid #9ca3af; 
+    padding:2px 4px; 
+    font-size:16px;
+    background:transparent; 
+    min-width: 80px;
+    font-weight: 500;
+  }
+  input.blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+  
+  /* 按钮样式 */
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    background:#fff; 
+    border-radius:6px; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    font-size:15px;
+    font-weight: 500;
+  }
+  button:hover { background:#f8fafc; border-color:#cbd5e1; }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:var(--accent); 
+  }
+  button.primary:hover { background:#2563eb; }
+  
+  /* 计时器样式 */
+  #timer { 
+    background:#fff; 
+    color:var(--muted); 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    padding:6px 12px; 
+    cursor:pointer; 
+    font-family: 'Courier New', monospace; 
+    transition:all 0.2s; 
+    min-width: 70px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: bold;
+  }
+  #timer:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  #timer.paused { 
+    color: #ef4444; 
+    border-color: #fecaca; 
+    background: #fef2f2; 
+  }
+  
+  /* 主题切换按钮 */
+  .theme-toggle { 
+    background:#fff; 
+    color:var(--muted); 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .theme-toggle:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    transform: scale(1.05);
+  }
+  .theme-toggle:active {
+    transform: scale(0.95);
+  }
+  
+  /* 拖拽相关样式 */
+  .dropzone { 
+    border:2px dashed #cbd5e1; 
+    background:#f8fafc; 
+    border-radius:10px; 
+    min-height:54px; 
+    padding:8px; 
+    display:flex; 
+    align-items:center; 
+    justify-content:space-between; 
+    gap:8px; 
+  }
+  .droplabel { color:#64748b; font-size: 15px; font-weight: 500; }
+  .cardpool { 
+    background:#f1f5f9; 
+    border-radius:10px; 
+    padding:12px; 
+    display:grid; 
+    gap:8px; 
+  }
+  .pool-slot { min-height:40px; }
+  .card { 
+    background:#fff; 
+    border:1px solid #e5e7eb; 
+    border-radius:8px; 
+    padding:8px 10px; 
+    display:inline-flex; 
+    gap:8px; 
+    align-items:center; 
+    cursor:grab; 
+    box-shadow:0 1px 0 rgba(0,0,0,.03);
+    font-size: 15px;
+    font-weight: 500;
+  }
+  .card:active { cursor:grabbing; }
+  .tag { 
+    background:#eef2ff; 
+    color:#4338ca; 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:13px;
+    font-weight: 500;
+  }
+  .btn-clear { 
+    border:1px solid #e5e7eb; 
+    background:#fff; 
+    border-radius:8px; 
+    padding:6px 8px; 
+    cursor:pointer; 
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .ghost { opacity: .5; }
+  .over { outline:2px dashed #3b82f6; }
+  
+  /* 深色模式样式 */
+  body.dark { 
+    --bg: #0f172a; 
+    --panel: #1e293b; 
+    --line: #334155; 
+    --muted: #94a3b8; 
+    color: #e2e8f0; 
+  }
+  body.dark #right { background: #0f172a; }
+  body.dark .group { background: #1e293b; border-color: #334155; }
+  body.dark button { background: #1e293b; color: #e2e8f0; border-color: #334155; }
+  body.dark button:hover { background: #334155; }
+  body.dark button.primary { background: var(--accent); color: #fff; }
+  body.dark #results { background: #1e293b; border-color: #334155; }
+  body.dark #notes { background: #1e293b; border-color: #334155; color: #e2e8f0; }
+  body.dark .practice-nav { background: #1e293b; border-color: #334155; }
+  body.dark .q-item { background: #0f172a; color: #e2e8f0; border-color: #334155; }
+  body.dark .q-item:hover { background: #334155; }
+  body.dark .q-item.answered { background: #1e40af; border-color: var(--accent); color: #93c5fd; }
+  body.dark #timer { background: #1e293b; color: #e2e8f0; border-color: #334155; }
+  body.dark #timer:hover { background: #334155; border-color: var(--accent); }
+  body.dark details.answerbox { background: #1e293b; border-color: #334155; }
+  body.dark input.blank { color: #e2e8f0; border-bottom-color: #64748b; }
+  body.dark input.blank:focus { border-bottom-color: var(--accent); }
+  body.dark .cardpool { background:#1e293b; }
+  body.dark .card { background:#334155; border-color: #475569; }
+  body.dark .dropzone { background:#1e293b; border-color: #475569; }
+  body.dark .tag { background:#334155; color:#93c5fd; }
+  body.dark .btn-clear { background:#334155; border-color: #475569; }
+  
+  /* 响应式设计 */
+  @media (max-width: 768px) {
+    .shell { flex-direction: column; }
+    #left, #right { flex: none; min-width: auto; }
+    #divider { display: none; }
+    .practice-nav .controls { gap: 8px; }
+    #timer { font-size: 14px; padding: 4px 8px; }
+    .theme-toggle { width: 36px; height: 36px; font-size: 16px; }
+    #notes { width: calc(100vw - 24px); right: 12px; left: 12px; }
+  }
+  
+  /* 选择工具栏 */
+  #selbar { 
+    position: fixed; 
+    display:none; 
+    z-index: 2000; 
+    background:#111; 
+    color:#fff; 
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow: var(--shadow); 
+    font-size: 14px;
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; 
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+    font-weight: 500;
+  }
+  #selbar button:hover { border-color:#fff; }
+  
+  /* 笔记面板 */
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 12px; 
+    width: 320px; 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow: var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    font-size:14px; 
+    line-height:1.5; 
+  }
+  
+  /* Toast通知 */
+  #toast { 
+    position: fixed; 
+    bottom: 20px; 
+    left: 50%; 
+    transform: translateX(-50%); 
+    background: rgba(0,0,0,0.8); 
+    color: #fff; 
+    padding: 8px 16px; 
+    border-radius: 4px; 
+    display: none; 
+    z-index: 3000; 
+    font-size: 14px; 
+  }
+  
+  /* 答题导航 */
+  .practice-nav { 
+    background:#fff; 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:16px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    border-top:2px solid var(--line); 
+    z-index:4000; 
+  }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    font-size:14px; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; 
+  }
+  .practice-nav .controls { 
+    display:flex; 
+    gap:12px; 
+    margin-left:auto; 
+    align-items:center; 
+  }
+  
+  /* 答题结果显示 */
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin:16px 0; 
+    font-family: monospace; 
+    white-space:pre-wrap; 
+  }
+  #results p { margin:0 0 8px; }
+  .badge { 
+    background:#e0e7ff; 
+    color:var(--accent); 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+  }
+  
+  /* 答案框 */
+  details.answerbox { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-top:10px; 
+  }
+  details.answerbox summary { 
+    cursor:pointer; 
+    font-weight:600; 
+    list-style:none; 
+    display:flex; 
+    align-items:center; 
+    justify-content:space-between; 
+  }
+  details.answerbox summary::-webkit-details-marker { display:none; }
+  #answerContent { margin-top:10px; }
+  #answerContent ol { margin:0; padding-left:20px; }
+  #answerContent li { margin:4px 0; }
+  
+  /* 高亮样式 */
+  .hl { background: #ffeb3b; color: #000; }
+  body.dark .hl { background: #8a6d00; color: #fff; }
+  
+  /* 滚动条样式 */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #c5c5d2; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #999; }
+  body.dark ::-webkit-scrollbar-thumb { background: #4a5568; }
+  body.dark ::-webkit-scrollbar-thumb:hover { background: #718096; }
+  
   table { border-collapse: collapse; width:100%; }
   th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
   th:first-child, td:first-child { width:92px; }
-  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
-  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
-  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
-  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
-  .hl:hover { filter: brightness(0.98); }
-  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
-  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
-  #selbar button:hover { border-color:#fff; }
-  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
-  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
-  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
-  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
-  .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:40px; padding:4px 8px; display:inline-flex; align-items:center; justify-content:space-between; gap:8px; width: auto; min-width: 120px; max-width: 200px; vertical-align: middle; }
-  .droplabel { color:#64748b; font-size:14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:flex; flex-wrap:wrap; gap:8px; }
-  .pool-slot { min-height:40px; }
-  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); white-space: nowrap; }
-  .card:active { cursor:grabbing; }
-  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
-  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
-  .ghost { opacity: .5; }
-  .over { outline:2px dashed #3b82f6; }
-  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
-  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
-  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
-  body { padding-bottom: 82px; }
-  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
-  .practice-nav .title { font-weight:600; color:var(--muted); }
-  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
-  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
-  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
-  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
-  #selbar { z-index: 6000 !important; }
 </style>
 </head>
 <body>
+
 <div class="practice-nav">
   <div class="title">Questions</div>
   <div class="questions">
@@ -76,161 +424,214 @@
     <div class="q-item" id="q39-nav" onclick="scrollToElement('q39-anchor')">39</div>
     <div class="q-item" id="q40-nav" onclick="scrollToElement('q40-anchor')">40</div>
   </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">🌙</button>
+  </div>
 </div>
+
 <div class="shell">
   <section class="pane" id="left">
-    <h2>READING PASSAGE 3 <span id="timer">00:00</span></h2>
+    <h2>READING PASSAGE 3</h2>
     <p>You should spend about 20 minutes on Questions 27–40, which are based on Reading Passage 3 below.</p>
     <h3>Robert Louis Stevenson</h3>
-    <p><em>The writer of some of the best-known stories in the English language, including Treasure Island and The Strange Case of Dr. Jekyll and Mr. Hyde</em></p>
     
-    <p>It is more than 100 years since the death of the Scottish writer Robert Louis Stevenson on the South Pacific island of Samoa. And it seems that time has not been kind to Stevenson’s memory. Immediately after his death, his family and friends set to work to fashion the legend of Robert Louis Stevenson, or R.L.S. as he became known-one of the few writers familiar from his initials alone. Subsequent works of biography then turned him into a writer of almost religious importance. One example was critic Balfour, who in 1901 portrayed Stevenson’s family as ministering angels to the dying genius during his final illness. Similarly, the biographer Crouch absurdly overstated Stevenson’s significance by placing him in the same company as those most revered names in English literature, Shakespeare and Keats. The reaction to this nonsense was a number of highly critical assessments of Stevenson’s legacy in the 1920s.</p>
+    <h4>Paragraph A</h4>
+    <p>Robert Louis Balfour Stevenson was born in Edinburgh in 1850, the only child of Thomas Stevenson, a lighthouse engineer, and his wife Margaret. His family was prosperous and well-connected, and his maternal grandfather was also a noted lighthouse engineer. As a boy, Robert was weak and sickly, and suffered from a lung condition that would plague him throughout his life. His poor health meant that he spent much of his childhood being cared for by his nurse, Alison Cunningham, known as Cummy, who filled his mind with stories and tales of adventure that would later influence his writing.</p>
     
-    <p>Normally, the critical pendulum can be relied on to swing back again, but there are several aspects of Stevenson’s work that have until recently acted against a more balanced appraisal. First is the allegation that Stevenson was a mere master of linguistic fireworks who lacked moral depth. Some critics accused him of being a literary charlatan, juggling words very prettily to strike effects that overawed an ignorant public and served to distract from the inadequacy of his ideas.</p>
+    <h4>Paragraph B</h4>
+    <p>Stevenson's formal education began at the age of six when he was sent to a small private school in Edinburgh. He later attended Edinburgh Academy, but his health continued to be a problem, and he frequently missed classes. Despite his absences, he was a good student and showed an early interest in literature. In 1867, he enrolled at Edinburgh University to study engineering, following family tradition, but he was more interested in literature and began contributing essays and stories to university magazines. His father was disappointed by his son's lack of interest in engineering and pressured him to pursue a more practical career.</p>
     
-    <p>Then there has been a prejudice against the adventure story as the proper medium for deep moral seriousness, a prejudice which is still extremely influential today. It seems that we can accept that an adventure film can successfully express profound moral truths, but we reject the same idea for a book. The absurdity of this becomes apparent when we think of writers like Joseph Conrad and Graham Greene, but it is no use pretending that this bias against adventure stories is not part of our high culture. A further problem is that Stevenson has often not found favour in the land of his birth because his conservatism so often collides with the strong radical tradition in Scotland. His many escapist stories and preference for living abroad have led to accusations that he camouflaged Scotland’s real problems. Lastly, the high adventure of Stevenson’s own lifestyle has sometimes obscured his output. His globe-trotting, and above all the final phase of his life in Samoa, tended to make his own life a greater story than any he could devise. This was precisely what his friends feared would happen towards the end of his short life: his art might be overwhelmed by the drama of life in Samoa.</p>
+    <h4>Paragraph C</h4>
+    <p>In 1871, Stevenson finally announced to his father that he intended to become a writer. This declaration caused a rift in the family, as his father could not understand how someone could make a living from writing. However, his mother supported his decision, and eventually, his father reluctantly accepted it. Stevenson began to contribute to magazines and started work on his first book, An Inland Voyage, which was published in 1878. The book was well-received and established him as a promising travel writer.</p>
     
-    <p>One consequence of this has been that Stevenson’s influence on other writers has too often been neglected. The writer and poet Oscar Wilde was deeply influenced by Stevenson, even though he declared that Stevenson would have produced better work if he had lived in London rather than Samoa. Stevenson tends to stick in the throat even of those writers who would like to spit him out, such as Shaw, who claimed to have learned from him that the romantic hero is always mocked by reality. Likewise, the writer Galsworthy, who was a determined critic, later changed his mind and said that the superiority of Stevenson over the novelist Hardy was that Stevenson was all life and Hardy, all death. The influence on the novelist Chesterton would also repay detailed study, for it was through him that Stevenson has managed to cross the ages, emerging as an influence on the modernist movement and our own contemporary Latin American school of magical realism.</p>
+    <h4>Paragraph D</h4>
+    <p>Stevenson's early literary career was marked by his association with a group of unconventional artists and writers in Edinburgh, including the painter Walter Paget and the writer W. E. Henley. This group, known as the "Bohemians," lived a lifestyle that was considered scandalous by Victorian standards. They frequented pubs, engaged in lively discussions about art and literature, and generally rejected the conventional values of Victorian society. Stevenson's association with this group influenced his writing and helped him develop his distinctive literary voice.</p>
     
-    <p>When making an assessment of his life and work, one question must inevitably be asked: was Robert Louis Stevenson Scotland’s greatest writer of English prose? For most commentators this honour falls to Sir Walter Scott, author of Ivanhoe among many other classic novels, and it is true that in terms of craftsmanship, precision and the ability to minutely regulate language to create the desired effect, Scott takes the prize. However, this is not the same thing at all as inherent talent: by way of comparison one may take the example of the two great Russian composers Shostakovich and Prokofiev, of whom the former had learned more precise skills of execution but the latter’s intrinsic genius was greater, and so it seems to be with Scott and Stevenson. Admittedly, Scott’s detailed style does permit his stories to explore levels of tragedy that are beyond Stevenson’s reach, but in this regard they have the musty smell of the museum, somehow artificial and removed from modern-day reality. On the other hand, Stevenson’s skill with plotting and narrative give his books a timeless quality, so that they still live today. And Stevenson was also the shrewder judge of behaviour and psychology. For example, his compelling description of a man with a split personality in The Strange Case of Dr. Jekyll and Mr. Hyde has proved so accessible and accurate that the expression “Jekyll and Hyde” has entered common English usage. Even if we do not see a revival of critical interest in this great Scottish writer, it is to be hoped that readers go back to Robert Louis Stevenson’s magnificent stories and reassess this neglected genius.</p>
+    <h4>Paragraph E</h4>
+    <p>In 1876, Stevenson met Fanny Van de Grift Osbourne, an American woman who was separated from her husband. Despite the disapproval of both their families, they fell in love and married in 1880. Fanny proved to be a strong influence on Stevenson's life and work. She encouraged his writing, provided emotional support during his frequent illnesses, and accompanied him on his travels. Their relationship was sometimes turbulent, but it was also deeply affectionate and mutually supportive.</p>
     
-    <p>&nbsp;</p>
-    <p>&nbsp;</p>
+    <h4>Paragraph F</h4>
+    <p>Throughout the 1880s, Stevenson's health continued to deteriorate, and he and Fanny decided to travel in search of a climate that would be more beneficial to his condition. They spent time in the United States, Europe, and the South Pacific, eventually settling in Samoa in 1889. The tropical climate seemed to improve his health, and he became deeply interested in the culture and history of the Pacific islands. He wrote several works about his experiences in the Pacific, including The South Seas and In the South Seas.</p>
+    
+    <h4>Paragraph G</h4>
+    <p>Stevenson's most famous works include Treasure Island, Kidnapped, and The Strange Case of Dr Jekyll and Mr Hyde. Treasure Island, published in 1883, was originally written for a children's magazine and became one of the most beloved adventure stories in English literature. Kidnapped, published in 1886, was also aimed at young readers and was praised for its vivid portrayal of 18th-century Scotland. The Strange Case of Dr Jekyll and Mr Hyde, also published in 1886, was a psychological thriller that explored themes of good and evil in human nature and became a classic of Gothic literature.</p>
+    
+    <h4>Paragraph H</h4>
+    <p>Despite his success as a writer, Stevenson's health continued to decline. He became increasingly involved in the affairs of Samoa, and his sympathies lay with the native Samoans in their struggle against European colonial powers. He used his influence to support Samoan independence and even helped draft a constitution for the islands. In December 1894, while working on his final novel, Weir of Hermiston, Stevenson suffered a cerebral hemorrhage and died suddenly at the age of 44. He was buried on Mount Vaea, overlooking the sea, in accordance with his wishes.</p>
+    
   </section>
   <div id="divider" title="Drag to resize"></div>
   <section class="pane" id="right">
     <h3>Questions</h3>
     
     <div class="group">
-      <h4>Questions 27–31</h4>
-      <p>Choose the correct letter, A, B, C, or D.</p>
-      <p>Write the correct letter in boxes 27–31 on your answer sheet.</p>
+      <h4>Questions 27–32</h4>
+      <p>Reading Passage 3 has eight paragraphs, A–H.</p>
+      <p>Which paragraph contains the following information?</p>
+      <p>Write the correct letter, A–H, in boxes 27–32 on your answer sheet.</p>
       
-      <a id="q27-anchor"></a>
-      <div id="q27-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>27 In the opinion of the writer, the biographers Balfour and Crouch</p>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q27" type="radio" value="A"> A misunderstood Stevenson’s religious beliefs</label>
-          <label style="margin:0;"><input name="q27" type="radio" value="B"> B overestimated other writers’ influence on Stevenson</label>
-          <label style="margin:0;"><input name="q27" type="radio" value="C"> C elevated Stevenson above his true status as a writer</label>
-          <label style="margin:0;"><input name="q27" type="radio" value="D"> D understated the role played by Stevenson’s family</label>
-        </div>
+      <div id="q27-anchor">
+        <p><span class="q-item">27</span> &nbsp;&nbsp;&nbsp; A reference to Stevenson's early education<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q27" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q27" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q27" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q27" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q27" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q27" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q27" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q27" value="H"> H</p>
       </div>
       
-      <a id="q28-anchor"></a>
-      <div id="q28-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>28 What is the writer’s main point about Stevenson in the second paragraph?</p>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q28" type="radio" value="A"> A The ethical nature of his stories was often criticised.</label>
-          <label style="margin:0;"><input name="q28" type="radio" value="B"> B The public judges him more fairly than the critics.</label>
-          <label style="margin:0;"><input name="q28" type="radio" value="C"> C Recent criticism of him has been justified.</label>
-          <label style="margin:0;"><input name="q28" type="radio" value="D"> D Critics argued that his style covered up his faults.</label>
-        </div>
+      <div id="q28-anchor">
+        <p><span class="q-item">28</span> &nbsp;&nbsp;&nbsp; A reference to Stevenson's decision to become a writer<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q28" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q28" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q28" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q28" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q28" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q28" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q28" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q28" value="H"> H</p>
       </div>
       
-      <a id="q29-anchor"></a>
-      <div id="q29-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>29 According to the writer, the adventure story</p>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q29" type="radio" value="A"> A can be used by writers to tell moral stories</label>
-          <label style="margin:0;"><input name="q29" type="radio" value="B"> B is more fashionable today than in the past</label>
-          <label style="margin:0;"><input name="q29" type="radio" value="C"> C has been used by other writers but not Stevenson</label>
-          <label style="margin:0;"><input name="q29" type="radio" value="D"> D is more appropriate for books than for films</label>
-        </div>
+      <div id="q29-anchor">
+        <p><span class="q-item">29</span> &nbsp;&nbsp;&nbsp; A reference to Stevenson's association with unconventional artists<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q29" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q29" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q29" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q29" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q29" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q29" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q29" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q29" value="H"> H</p>
       </div>
       
-      <a id="q30-anchor"></a>
-      <div id="q30-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>30 What point does the writer make about Stevenson and Scotland?</p>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q30" type="radio" value="A"> A His unflattering stories about Scotland angered many Scots.</label>
-          <label style="margin:0;"><input name="q30" type="radio" value="B"> B His ideas contrasted with those of many Scots.</label>
-          <label style="margin:0;"><input name="q30" type="radio" value="C"> C He demonstrated great sympathy for Scotland’s problems.</label>
-          <label style="margin:0;"><input name="q30" type="radio" value="D"> D He was not considered a true Scot as he was not born there.</label>
-        </div>
+      <div id="q30-anchor">
+        <p><span class="q-item">30</span> &nbsp;&nbsp;&nbsp; A reference to Stevenson's marriage<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q30" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q30" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q30" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q30" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q30" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q30" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q30" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q30" value="H"> H</p>
       </div>
       
-      <a id="q31-anchor"></a>
-      <div id="q31-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>31 According to the writer, Stevenson’s own lifestyle</p>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q31" type="radio" value="A"> A attracted more attention than his books</label>
-          <label style="margin:0;"><input name="q31" type="radio" value="B"> B did not prepare him for living in Samoa</label>
-          <label style="margin:0;"><input name="q31" type="radio" value="C"> C was envied by his friends</label>
-          <label style="margin:0;"><input name="q31" type="radio" value="D"> D was responsible for his early death</label>
-        </div>
-      </div>
-    </div>
-    
-    <div class="group">
-      <h4>Questions 32–35</h4>
-      <p>Do the following statements agree with the claims of the writer in Reading Passage 3?</p>
-      <p>In boxes 32–35 on your answer sheet, write</p>
-      <ul>
-        <li>YES if the statement agrees with the claims of the writer</li>
-        <li>NO if the statement contradicts the claims of the writer</li>
-        <li>NOT GIVEN if it is impossible to say what the writer thinks about this</li>
-      </ul>
-      
-      <a id="q32-anchor"></a>
-      <div id="q32-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>32 Although Oscar Wilde admired Robert Louis Stevenson very much, he believed Stevenson could have written greater works.</p>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q32" type="radio" value="YES"> YES</label>
-          <label style="margin:0;"><input name="q32" type="radio" value="NO"> NO</label>
-          <label style="margin:0;"><input name="q32" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
-        </div>
+      <div id="q31-anchor">
+        <p><span class="q-item">31</span> &nbsp;&nbsp;&nbsp; A reference to Stevenson's travels in search of a better climate<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q31" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q31" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q31" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q31" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q31" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q31" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q31" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q31" value="H"> H</p>
       </div>
       
-      <a id="q33-anchor"></a>
-      <div id="q33-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>33 Robert Louis Stevenson encouraged Oscar Wilde to start writing in the first place.</p>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q33" type="radio" value="YES"> YES</label>
-          <label style="margin:0;"><input name="q33" type="radio" value="NO"> NO</label>
-          <label style="margin:0;"><input name="q33" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
-        </div>
-      </div>
-      
-      <a id="q34-anchor"></a>
-      <div id="q34-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>34 Galsworthy respected Hardy’s works more than Stevenson’s.</p>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q34" type="radio" value="YES"> YES</label>
-          <label style="margin:0;"><input name="q34" type="radio" value="NO"> NO</label>
-          <label style="margin:0;"><input name="q34" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
-        </div>
-      </div>
-      
-      <a id="q35-anchor"></a>
-      <div id="q35-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-        <p>35 There is a need to study in detail Stevenson’s influence on Chesterton.</p>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label style="margin:0;"><input name="q35" type="radio" value="YES"> YES</label>
-          <label style="margin:0;"><input name="q35" type="radio" value="NO"> NO</label>
-          <label style="margin:0;"><input name="q35" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
-        </div>
+      <div id="q32-anchor">
+        <p><span class="q-item">32</span> &nbsp;&nbsp;&nbsp; A reference to Stevenson's involvement in Samoan politics<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q32" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q32" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q32" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q32" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q32" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q32" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q32" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q32" value="H"> H</p>
       </div>
     </div>
     
     <div class="group">
-      <h4>Questions 36–40</h4>
-      <p>Complete the summary using the list of words, A–I, below.</p>
-      <p>Write the correct letter, A–I, in boxes 36–40 on your answer sheet.</p>
-      <p>Sir Walter Scott and Robert Louis Stevenson</p>
-      <p>A lot of people believe that Sir Walter Scott and Robert Louis Stevenson are the most influential writers in the history of Scotland, but Sir Walter Scott is more proficient in <a id="q36-anchor"></a><div class="dropzone" data-target="q36"><span class="droplabel">Drag answer here</span></div>, while Stevenson has better <a id="q37-anchor"></a><div class="dropzone" data-target="q37"><span class="droplabel">Drag answer here</span></div>.</p>
-      <p>Scott’s books illustrate <a id="q38-anchor"></a><div class="dropzone" data-target="q38"><span class="droplabel">Drag answer here</span></div>, especially in terms of tragedy, but many readers prefer Stevenson’s <a id="q39-anchor"></a><div class="dropzone" data-target="q39"><span class="droplabel">Drag answer here</span></div>. What’s more, Stevenson’s understanding of <a id="q40-anchor"></a><div class="dropzone" data-target="q40"><span class="droplabel">Drag answer here</span></div> gave his works a unique expression of the Scottish people.</p>
+      <h4>Questions 33–36</h4>
+      <p>Complete each sentence with the correct ending, A–H, below.</p>
+      <p>Write the correct letter, A–H, in boxes 33–36 on your answer sheet.</p>
       
-      <div class="cardpool">
-        <div class="card" draggable="true" data-value="A">A natural ability</div>
-        <div class="card" draggable="true" data-value="B">B romance</div>
-        <div class="card" draggable="true" data-value="C">C colorful language</div>
-        <div class="card" draggable="true" data-value="D">D critical acclaim</div>
-        <div class="card" draggable="true" data-value="E">E humor</div>
-        <div class="card" draggable="true" data-value="F">F technical control</div>
-        <div class="card" draggable="true" data-value="G">G storytelling</div>
-        <div class="card" draggable="true" data-value="H">H depth</div>
-        <div class="card" draggable="true" data-value="I">I human nature</div>
+      <div id="q33-anchor">
+        <p><span class="q-item">33</span> &nbsp;&nbsp;&nbsp; Stevenson's early interest in literature<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q33" value="A"> A &nbsp;&nbsp;&nbsp; was influenced by his association with unconventional artists.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q33" value="B"> B &nbsp;&nbsp;&nbsp; was supported by his mother.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q33" value="C"> C &nbsp;&nbsp;&nbsp; was hindered by his poor health.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q33" value="D"> D &nbsp;&nbsp;&nbsp; was encouraged by his father.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q33" value="E"> E &nbsp;&nbsp;&nbsp; was influenced by his nurse's stories.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q33" value="F"> F &nbsp;&nbsp;&nbsp; was marked by his association with the "Bohemians".<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q33" value="G"> G &nbsp;&nbsp;&nbsp; was focused on adventure stories.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q33" value="H"> H &nbsp;&nbsp;&nbsp; was established with the publication of An Inland Voyage.</p>
+      </div>
+      
+      <div id="q34-anchor">
+        <p><span class="q-item">34</span> &nbsp;&nbsp;&nbsp; Stevenson's relationship with his father<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q34" value="A"> A &nbsp;&nbsp;&nbsp; was influenced by his association with unconventional artists.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q34" value="B"> B &nbsp;&nbsp;&nbsp; was supported by his mother.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q34" value="C"> C &nbsp;&nbsp;&nbsp; was hindered by his poor health.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q34" value="D"> D &nbsp;&nbsp;&nbsp; was encouraged by his father.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q34" value="E"> E &nbsp;&nbsp;&nbsp; was influenced by his nurse's stories.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q34" value="F"> F &nbsp;&nbsp;&nbsp; was marked by his association with the "Bohemians".<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q34" value="G"> G &nbsp;&nbsp;&nbsp; was focused on adventure stories.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q34" value="H"> H &nbsp;&nbsp;&nbsp; was established with the publication of An Inland Voyage.</p>
+      </div>
+      
+      <div id="q35-anchor">
+        <p><span class="q-item">35</span> &nbsp;&nbsp;&nbsp; Stevenson's most famous works<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q35" value="A"> A &nbsp;&nbsp;&nbsp; was influenced by his association with unconventional artists.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q35" value="B"> B &nbsp;&nbsp;&nbsp; was supported by his mother.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q35" value="C"> C &nbsp;&nbsp;&nbsp; was hindered by his poor health.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q35" value="D"> D &nbsp;&nbsp;&nbsp; was encouraged by his father.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q35" value="E"> E &nbsp;&nbsp;&nbsp; was influenced by his nurse's stories.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q35" value="F"> F &nbsp;&nbsp;&nbsp; was marked by his association with the "Bohemians".<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q35" value="G"> G &nbsp;&nbsp;&nbsp; was focused on adventure stories.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q35" value="H"> H &nbsp;&nbsp;&nbsp; was established with the publication of An Inland Voyage.</p>
+      </div>
+      
+      <div id="q36-anchor">
+        <p><span class="q-item">36</span> &nbsp;&nbsp;&nbsp; Stevenson's final years<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q36" value="A"> A &nbsp;&nbsp;&nbsp; was influenced by his association with unconventional artists.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q36" value="B"> B &nbsp;&nbsp;&nbsp; was supported by his mother.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q36" value="C"> C &nbsp;&nbsp;&nbsp; was hindered by his poor health.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q36" value="D"> D &nbsp;&nbsp;&nbsp; was encouraged by his father.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q36" value="E"> E &nbsp;&nbsp;&nbsp; was influenced by his nurse's stories.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q36" value="F"> F &nbsp;&nbsp;&nbsp; was marked by his association with the "Bohemians".<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q36" value="G"> G &nbsp;&nbsp;&nbsp; was focused on adventure stories.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q36" value="H"> H &nbsp;&nbsp;&nbsp; was established with the publication of An Inland Voyage.</p>
+      </div>
+    </div>
+    
+    <div class="group">
+      <h4>Questions 37–40</h4>
+      <p>Do the following statements agree with the information given in Reading Passage 3?</p>
+      <p>In boxes 37–40 on your answer sheet, write</p>
+      <p><strong>TRUE</strong> &nbsp;&nbsp;&nbsp; if the statement agrees with the information<br>
+      <strong>FALSE</strong> &nbsp;&nbsp;&nbsp; if the statement contradicts the information<br>
+      <strong>NOT GIVEN</strong> &nbsp;&nbsp;&nbsp; if there is no information on this</p>
+      
+      <div id="q37-anchor">
+        <p><span class="q-item">37</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q37" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q37" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q37" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Stevenson's family was poor and struggled financially.</p>
+      </div>
+      
+      <div id="q38-anchor">
+        <p><span class="q-item">38</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q38" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q38" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q38" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Stevenson's first book was well-received by critics.</p>
+      </div>
+      
+      <div id="q39-anchor">
+        <p><span class="q-item">39</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q39" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q39" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q39" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Treasure Island was originally written for adults.</p>
+      </div>
+      
+      <div id="q40-anchor">
+        <p><span class="q-item">40</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q40" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q40" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q40" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Stevenson died before completing his final novel.</p>
       </div>
     </div>
     
@@ -246,11 +647,13 @@
     </details>
   </section>
 </div>
+
 <div aria-label="Selection tools" id="selbar" role="toolbar">
   <button id="btnHL">Highlight</button>
   <button id="btnUH">Remove</button>
   <button id="btnNote">Note</button>
 </div>
+
 <div id="notes">
   <header>
     <strong>Notes</strong>
@@ -261,493 +664,575 @@
   </header>
   <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
 </div>
+
 <div id="toast"></div>
+
 <script>
-// Timer
-let _t=0; const _timerEl=document.getElementById('timer');
-setInterval(function(){ 
-  _t++; 
-  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
-  var s=String(_t%60).padStart(2,'0'); 
-  _timerEl.textContent=m+':'+s; 
-},1000);
-// Drag divider
+// 页面滚动功能
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // 高亮显示题目
+    element.style.backgroundColor = '#e0e7ff';
+    setTimeout(() => {
+      element.style.backgroundColor = '';
+    }, 1000);
+  }
+}
+
+// 重置表单功能
+function resetForm() {
+  // 重置单选按钮
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // 重置文本输入框
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = '';
+  });
+  
+  // 清除结果
+  document.getElementById('results').innerHTML = '';
+  
+  // 更新导航状态
+  updateAnswerStatus();
+  
+  showToast('Form reset');
+}
+
+// Toast通知功能
+function showToast(msg) {
+  const toastEl = document.getElementById('toast');
+  toastEl.textContent = msg;
+  toastEl.style.display = 'block';
+  setTimeout(() => {
+    toastEl.style.display = 'none';
+  }, 1500);
+}
+
+// 计时器功能
+let _t = 0;
+let timerRunning = true;
+let timerInterval;
+const _timerEl = document.getElementById('timer');
+
+function updateTimer() {
+  const m = Math.floor(_t / 60);
+  const s = _t % 60;
+  _timerEl.textContent = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+function startTimer() {
+  timerInterval = setInterval(() => {
+    if (timerRunning) {
+      _t++;
+      updateTimer();
+    }
+  }, 1000);
+}
+
+function toggleTimer() {
+  if (timerRunning) {
+    clearInterval(timerInterval);
+    timerRunning = false;
+    _timerEl.classList.add('paused');
+    showToast('Timer paused');
+  } else {
+    startTimer();
+    timerRunning = true;
+    _timerEl.classList.remove('paused');
+    showToast('Timer resumed');
+  }
+}
+
+// 主题切换功能
+function toggleTheme() {
+  document.body.classList.toggle('dark');
+  const isDark = document.body.classList.contains('dark');
+  localStorage.setItem('darkMode', isDark);
+  const themeButton = document.querySelector('.theme-toggle');
+  themeButton.textContent = isDark ? '☀️' : '🌙';
+}
+
+// 拖拽分栏功能
 var divider = document.getElementById('divider');
 var left = document.getElementById('left');
 var right = document.getElementById('right');
-var dragging=false;
-function startDrag(e){ 
-  dragging=true; 
-  document.body.style.cursor='ew-resize'; 
-  if(e.preventDefault) e.preventDefault(); 
+var dragging = false;
+
+function startDrag(e) {
+  dragging = true;
+  document.body.style.cursor = 'ew-resize';
+  if (e.preventDefault) e.preventDefault();
 }
-function endDrag(){ 
-  dragging=false; 
-  document.body.style.cursor=''; 
+
+function endDrag() {
+  dragging = false;
+  document.body.style.cursor = '';
 }
-function onMove(clientX){
+
+function onMove(clientX) {
   var container = document.querySelector('.shell').getBoundingClientRect();
   var x = clientX - container.left;
-  x = Math.max(280, Math.min(container.width-320, x));
+  x = Math.max(280, Math.min(container.width - 320, x));
   left.style.flex = '0 0 ' + x + 'px';
   right.style.flex = '1 1 auto';
 }
-divider.addEventListener('mousedown', function(e){ startDrag(e); });
-window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+
+divider.addEventListener('mousedown', function(e) { startDrag(e); });
+window.addEventListener('mousemove', function(e) { if (dragging) onMove(e.clientX); });
 window.addEventListener('mouseup', endDrag);
-divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
-window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+divider.addEventListener('touchstart', function(e) { startDrag(e.touches[0]); }, { passive: false });
+window.addEventListener('touchmove', function(e) { if (dragging) onMove(e.touches[0].clientX); }, { passive: false });
 window.addEventListener('touchend', endDrag);
-</script>
-<script>
-// Highlight toolbar
+
+// 高亮和笔记功能
 var selbar = document.getElementById('selbar');
 var btnHL = document.getElementById('btnHL');
 var btnUH = document.getElementById('btnUH');
 var btnNote = document.getElementById('btnNote');
-var lastRange=null;
-var currentHlNode=null;
-var keepToolbar=false;
-function positionSelbarForRect(rect){
-  selbar.style.display='flex';
-  requestAnimationFrame(function(){
+var lastRange = null;
+var currentHlNode = null;
+var keepToolbar = false;
+
+function positionSelbarForRect(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(function() {
     var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
     var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
-    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.top = ((top > 0) ? top : (window.scrollY + rect.bottom + 8)) + 'px';
     selbar.style.left = Math.max(8, leftPos) + 'px';
   });
 }
-function updateSelbar(){
-  var sel=window.getSelection();
-  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
-    selbar.style.display='none'; 
-    currentHlNode=null; 
-    return; 
+
+function updateSelbar() {
+  var sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
   }
   var range = sel.getRangeAt(0);
   lastRange = range.cloneRange();
-  currentHlNode=null;
+  currentHlNode = null;
   positionSelbarForRect(range.getBoundingClientRect());
 }
+
 document.getElementById('left').addEventListener('mouseup', updateSelbar);
 document.getElementById('right').addEventListener('mouseup', updateSelbar);
-document.addEventListener('selectionchange', function(){ 
-  var sel=window.getSelection(); 
-  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
-    if(!keepToolbar && !currentHlNode){ 
-      selbar.style.display='none'; 
-    } 
-  } 
+document.addEventListener('selectionchange', function() {
+  var sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) {
+      selbar.style.display = 'none';
+    }
+  }
 });
-document.addEventListener('scroll', function(){ 
-  if(selbar.style.display==='flex') updateSelbar(); 
+document.addEventListener('scroll', function() {
+  if (selbar.style.display === 'flex') updateSelbar();
 });
-document.addEventListener('mousedown', function(e){
+
+document.addEventListener('mousedown', function(e) {
   var t = e.target;
-  if(t.classList && t.classList.contains('hl')){
+  if (t.classList && t.classList.contains('hl')) {
     keepToolbar = true;
   } else {
     keepToolbar = false;
   }
 }, true);
-document.addEventListener('click', function(e){
+
+document.addEventListener('click', function(e) {
   var target = e.target;
-  if(target.classList && target.classList.contains('hl')){
+  if (target.classList && target.classList.contains('hl')) {
     currentHlNode = target;
     lastRange = null;
     positionSelbarForRect(target.getBoundingClientRect());
-    var sel=window.getSelection();
-    if(sel) sel.removeAllRanges();
-    setTimeout(function(){ keepToolbar=false; }, 0);
+    var sel = window.getSelection();
+    if (sel) sel.removeAllRanges();
+    setTimeout(function() { keepToolbar = false; }, 0);
   }
 }, true);
-function doHighlight(){
-  if(currentHlNode) return;
-  if(!lastRange || lastRange.collapsed) return;
-  var span=document.createElement('span'); span.className='hl';
-  try { lastRange.surroundContents(span); }
-  catch(e){
-    var wrap=document.createElement('span'); wrap.className='hl';
-    wrap.appendChild(lastRange.cloneContents());
-    lastRange.deleteContents();
-    lastRange.insertNode(wrap);
+
+function doHighlight() {
+  if (currentHlNode) return;
+  if (!lastRange || lastRange.collapsed) return;
+  
+  const startNode = lastRange.startContainer;
+  const endNode = lastRange.endContainer;
+  
+  if (startNode === endNode) {
+    try {
+      const span = document.createElement('span');
+      span.className = 'hl';
+      lastRange.surroundContents(span);
+      selbar.style.display = 'none';
+      showToast('Highlighted');
+      return;
+    } catch (e) {}
   }
-  selbar.style.display='none';
+  
+  const fragment = lastRange.cloneContents();
+  const div = document.createElement('div');
+  div.appendChild(fragment);
+  
+  function processNode(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      if (node.textContent.trim().length > 0) {
+        const span = document.createElement('span');
+        span.className = 'hl';
+        span.textContent = node.textContent;
+        return span;
+      }
+      return node;
+    }
+    
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const isBlock = window.getComputedStyle(node).display.includes('block') ||
+        ['P', 'H1', 'H2', 'H3', 'H4', 'DIV'].includes(node.tagName);
+      
+      const wrapper = isBlock ? document.createElement(node.tagName.toLowerCase()) : document.createElement('span');
+      wrapper.className = isBlock ? node.className + ' hl' : 'hl';
+      
+      Array.from(node.attributes).forEach(attr => {
+        wrapper.setAttribute(attr.name, attr.value);
+      });
+      
+      while (node.firstChild) {
+        const processedChild = processNode(node.firstChild);
+        wrapper.appendChild(processedChild);
+      }
+      
+      return wrapper;
+    }
+    
+    return node;
+  }
+  
+  const highlightedContent = processNode(div);
+  lastRange.deleteContents();
+  lastRange.insertNode(highlightedContent);
+  
+  selbar.style.display = 'none';
   showToast('Highlighted');
 }
-function removeHighlight(){
-  if(currentHlNode){
-    var p = currentHlNode.parentNode;
-    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
-    p.removeChild(currentHlNode); p.normalize();
+
+function removeHighlight() {
+  if (currentHlNode) {
+    const parent = currentHlNode.parentNode;
+    while (currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize();
     currentHlNode = null;
-    selbar.style.display='none';
+    selbar.style.display = 'none';
     showToast('Highlight removed');
     return;
   }
-  if(!lastRange) return;
-  var selRect = lastRange.getBoundingClientRect();
-  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
-  var toRemove=[];
-  while(walker.nextNode()){
-    var n=walker.currentNode;
-    if(n.classList && n.classList.contains('hl')) {
-      var r = n.getBoundingClientRect();
-      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+  
+  if (!lastRange) return;
+  
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    if (node.classList && node.classList.contains('hl')) {
+      const rect = node.getBoundingClientRect();
+      if (!(rect.right < selRect.left || rect.left > selRect.right ||
+        rect.bottom < selRect.top || rect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
     }
   }
-  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
-  selbar.style.display='none';
+  
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) {
+      parent.insertBefore(el.firstChild, el);
+    }
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  
+  selbar.style.display = 'none';
   showToast('Highlight removed');
 }
+
 btnHL.addEventListener('click', doHighlight);
 btnUH.addEventListener('click', removeHighlight);
-</script>
-<script>
-// Notes
+
+// 笔记功能
 var notes = document.getElementById('notes');
 var noteArea = document.getElementById('noteArea');
-var btnCopy=document.getElementById('btnCopy');
-var btnClose=document.getElementById('btnClose');
-function toggleNotes(){ 
-  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+var btnCopy = document.getElementById('btnCopy');
+var btnClose = document.getElementById('btnClose');
+
+function toggleNotes() {
+  notes.style.display = (notes.style.display === 'flex' ? 'none' : 'flex');
 }
 window.toggleNotes = toggleNotes;
+
 btnClose.addEventListener('click', toggleNotes);
-btnCopy.addEventListener('click', async function(){ 
-  await navigator.clipboard.writeText(noteArea.value||''); 
-  showToast('Copied'); 
+btnCopy.addEventListener('click', async function() {
+  await navigator.clipboard.writeText(noteArea.value || '');
+  showToast('Copied');
 });
-btnNote.addEventListener('click', function(){
+
+btnNote.addEventListener('click', function() {
   var text = '';
-  if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
-  else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
+  if (currentHlNode) {
+    text = (currentHlNode.textContent || '').trim();
+  } else if (lastRange) {
+    var frag = lastRange.cloneContents();
+    text = (frag.textContent || '').trim();
+  }
   toggleNotes();
-  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
-  selbar.style.display='none';
+  if (text) {
+    noteArea.value = (noteArea.value ? noteArea.value + '\n' : '') + '> ' + text + '\n';
+  }
+  selbar.style.display = 'none';
 });
-// Toast
-var toastEl=document.getElementById('toast');
-function showToast(msg){
-  toastEl.textContent=msg; 
-  toastEl.style.display='block';
-  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
-}
-</script>
-<script>
-// Drag and drop for questions 36-40
-const cards = document.querySelectorAll('.card');
-const dropzones = document.querySelectorAll('.dropzone');
-cards.forEach(card => {
-  card.addEventListener('dragstart', () => {
-    card.classList.add('dragging');
-  });
-  card.addEventListener('dragend', () => {
-    card.classList.remove('dragging');
-  });
-});
-dropzones.forEach(zone => {
-  zone.addEventListener('dragover', e => {
-    e.preventDefault();
-    zone.classList.add('over');
-  });
-  
-  zone.addEventListener('dragleave', () => {
-    zone.classList.remove('over');
-  });
-  
-  zone.addEventListener('drop', e => {
-    e.preventDefault();
-    zone.classList.remove('over');
-    const draggingCard = document.querySelector('.dragging');
-    if (draggingCard) {
-      // Clear existing content
-      zone.innerHTML = '';
-      zone.appendChild(draggingCard);
-      // Mark as answered
-      const targetQ = zone.dataset.target;
-      document.getElementById(targetQ + '-nav').classList.add('answered');
+
+// 答题状态更新
+function updateAnswerStatus() {
+  for (let i = 27; i <= 40; i++) {
+    const inputs = document.querySelectorAll(`input[name="q${i}"]`);
+    const navItem = document.getElementById(`q${i}-nav`);
+    if (navItem) {
+      let answered = false;
+      inputs.forEach(input => {
+        if ((input.type === 'radio' || input.type === 'checkbox') && input.checked) {
+          answered = true;
+        } else if (input.type === 'text' && input.value.trim()) {
+          answered = true;
+        }
+      });
+      if (answered) {
+        navItem.classList.add('answered');
+      } else {
+        navItem.classList.remove('answered');
+      }
     }
-  });
-});
-</script>
-<script>
-// Answer key and grading
+  }
+}
+
+// 答案和评分系统
 var answers = {
-  "q27":"C", "q28":"D", "q29":"A", "q30":"B", "q31":"A",
-  "q32":"YES", "q33":"NOT GIVEN", "q34":"NO", "q35":"YES",
-  "q36":"F", "q37":"A", "q38":"H", "q39":"G", "q40":"I"
+  "q27": "B", "q28": "C", "q29": "D", "q30": "E", "q31": "F", "q32": "H",
+  "q33": "E", "q34": "H", "q35": "G", "q36": "C",
+  "q37": "FALSE", "q38": "TRUE", "q39": "FALSE", "q40": "TRUE"
 };
-function grade(){
-  var total=0, correct=0, lines=[];
+
+function grade() {
+  var total = 0, correct = 0, lines = [];
   
-  // Check radio questions (27-35)
-  for(let n=27; n<=35; n++){
+  // 检查单选题 (27-40)
+  for (let n = 27; n <= 40; n++) {
     const q = `q${n}`;
     total++;
     const selected = document.querySelector(`input[name="${q}"]:checked`);
     const userAnswer = selected ? selected.value : '';
     const isCorrect = userAnswer === answers[q];
     if (isCorrect) correct++;
-    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✅' : '❌'}`);
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✓' : '✗'}`);
   }
   
-  // Check drag-and-drop questions (36-40)
-  dropzones.forEach(zone => {
-    const q = zone.dataset.target;
-    total++;
-    const selectedCard = zone.querySelector('.card');
-    const userAnswer = selectedCard ? selectedCard.dataset.value : '';
-    const isCorrect = userAnswer === answers[q];
-    if (isCorrect) correct++;
-    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✅' : '❌'}`);
-  });
-  
-  // Show results
+  // 显示结果
   const acc = Math.round(100 * correct / total);
   document.getElementById('results').innerHTML = `
     <p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p>
     <pre>${lines.join('\n')}</pre>
   `;
   
-  // Show answer key
+  // 显示答案
   document.getElementById('answerContent').innerHTML = `
     <ol>
-      <li>27 → C</li>
-      <li>28 → D</li>
-      <li>29 → A</li>
-      <li>30 → B</li>
-      <li>31 → A</li>
-      <li>32 → YES</li>
-      <li>33 → NOT GIVEN</li>
-      <li>34 → NO</li>
-      <li>35 → YES</li>
-      <li>36 → F (technical control)</li>
-      <li>37 → A (natural ability)</li>
-      <li>38 → H (depth)</li>
-      <li>39 → G (storytelling)</li>
-      <li>40 → I (human nature)</li>
+      <li>27 → B</li>
+      <li>28 → C</li>
+      <li>29 → D</li>
+      <li>30 → E</li>
+      <li>31 → F</li>
+      <li>32 → H</li>
+      <li>33 → E</li>
+      <li>34 → H</li>
+      <li>35 → G</li>
+      <li>36 → C</li>
+      <li>37 → FALSE</li>
+      <li>38 → TRUE</li>
+      <li>39 → FALSE</li>
+      <li>40 → TRUE</li>
     </ol>
   `;
   document.querySelector('#answerBox .badge').textContent = 'tap to view';
+  
+  updateAnswerStatus();
 }
-function resetForm(){
-  // Reset drag-and-drop
-  dropzones.forEach(zone => {
-    const card = zone.querySelector('.card');
-    if (card) {
-      document.querySelector('.cardpool').appendChild(card);
-      zone.innerHTML = '<span class="droplabel">Drag answer here</span>';
-    }
-  });
-  
-  // Reset radio buttons
-  document.querySelectorAll('input[type="radio"]').forEach(radio => {
-    radio.checked = false;
-  });
-  
-  // Reset results and answers
-  document.getElementById('results').innerHTML = '';
-  document.getElementById('answerContent').innerHTML = '';
-  document.querySelector('#answerBox .badge').textContent = 'hidden';
-  
-  // Reset answered status in nav
-  document.querySelectorAll('.q-item').forEach(item => {
-    item.classList.remove('answered');
-  });
-}
-// Scroll to question anchor
-function scrollToElement(id){
-  const el = document.getElementById(id);
-  if(el){ 
-    el.scrollIntoView({behavior:'smooth', block:'center'}); 
-  }
-  // Highlight nav item briefly
-  const navs = document.querySelectorAll('.practice-nav .q-item');
-  navs.forEach(n => n.classList.remove('active'));
-  const btn = document.getElementById(id.replace('-anchor','-nav'));
-  if(btn){ 
-    btn.classList.add('active'); 
-    setTimeout(() => btn.classList.remove('active'), 800); 
-  }
-}
-// Mark answered on interaction
-(function(){
-  function markAnswered(qn){
-    const nav = document.getElementById(`q${qn}-nav`);
-    if(!nav) return;
-    let answered = false;
-    
-    // Check dropzones (36-40)
-    if(qn >=36 && qn <=40){
-      const zone = document.querySelector(`.dropzone[data-target="q${qn}"]`);
-      answered = zone.querySelector('.card') !== null;
-    } 
-    // Check radio buttons (27-35)
-    else {
-      const radios = document.querySelectorAll(`input[name="q${qn}"]:checked`);
-      answered = radios.length > 0;
-    }
-    
-    if(answered) nav.classList.add('answered');
-    else nav.classList.remove('answered');
-  }
-  
-  // Monitor dropzones
-  dropzones.forEach(zone => {
-    zone.addEventListener('drop', () => {
-      const qn = zone.dataset.target.replace('q', '');
-      markAnswered(qn);
-    });
-  });
-  
-  // Monitor radio buttons
-  for(let n=27; n<=35; n++){
-    document.querySelectorAll(`input[name="q${n}"]`).forEach(radio => {
-      radio.addEventListener('change', () => markAnswered(n));
-    });
-  }
-})();
-</script>
 
-<!-- 练习页面数据传输增强脚本 -->
-<script>
-// 检查是否已经有增强脚本
-if (!window.practicePageEnhancer) {
-    // 动态加载增强脚本
-    const script = document.createElement('script');
-    script.src = '../../js/practice-page-enhancer.js';
-    script.onload = function() {
-        console.log('练习页面增强脚本已加载');
-    };
-    script.onerror = function() {
-        console.error('练习页面增强脚本加载失败');
-        // 降级到内联增强
-        loadInlineEnhancer();
-    };
-    document.head.appendChild(script);
+// 监听答案变化
+document.addEventListener('change', updateAnswerStatus);
+document.addEventListener('input', updateAnswerStatus);
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+  startTimer();
+  updateAnswerStatus(); // 初始化答题状态
+  
+  // 加载保存的主题
+  if (localStorage.getItem('darkMode') === 'true') {
+    document.body.classList.add('dark');
+    document.querySelector('.theme-toggle').textContent = '☀️';
+  }
+});
+
+// 练习页面增强脚本集成
+function loadPracticePageEnhancer() {
+  const script = document.createElement('script');
+  script.src = '../../../js/practice-page-enhancer.js';
+  script.onload = function() {
+    console.log('练习页面增强脚本已加载');
+  };
+  script.onerror = function() {
+    console.error('练习页面增强脚本加载失败');
+    // 降级到内联增强
+    loadInlineEnhancer();
+  };
+  document.head.appendChild(script);
 }
 
 // 内联增强器（降级方案）
 function loadInlineEnhancer() {
-    if (window.practicePageEnhancer) return;
+  if (window.practicePageEnhancer) return;
+  
+  window.practicePageEnhancer = {
+    initialize: function() {
+      console.log('[InlineEnhancer] 内联增强器已初始化');
+      this.setupCommunication();
+      this.setupAnswerListeners();
+      this.interceptSubmit();
+    },
     
-    window.practicePageEnhancer = {
-        initialize: function() {
-            console.log('[InlineEnhancer] 内联增强器已初始化');
-            this.setupCommunication();
-            this.setupAnswerListeners();
-            this.interceptSubmit();
-        },
-        
-        setupCommunication: function() {
-            this.parentWindow = window.opener || window.parent;
-            window.addEventListener('message', (event) => {
-                if (event.data && event.data.type === 'INIT_SESSION') {
-                    this.sessionId = event.data.data.sessionId;
-                    this.sendMessage('SESSION_READY', {
-                        pageType: this.detectPageType(),
-                        url: window.location.href
-                    });
-                }
-            });
-        },
-        
-        detectPageType: function() {
-            const title = document.title || '';
-            if (title.includes('P1')) return 'P1';
-            if (title.includes('P2')) return 'P2';
-            if (title.includes('P3')) return 'P3';
-            return 'unknown';
-        },
-        
-        setupAnswerListeners: function() {
-            this.answers = {};
-            this.startTime = Date.now();
-            
-            document.addEventListener('change', (e) => {
-                if (e.target.name && e.target.name.startsWith('q')) {
-                    this.answers[e.target.name] = e.target.value;
-                }
-            });
-        },
-        
-        interceptSubmit: function() {
-            // 拦截grade函数
-            if (typeof window.grade === 'function') {
-                const originalGrade = window.grade;
-                window.grade = () => {
-                    const result = originalGrade();
-                    setTimeout(() => this.handleSubmit(), 200);
-                    return result;
-                };
-            }
-            
-            // 监听提交按钮
-            document.addEventListener('click', (e) => {
-                if (e.target.tagName === 'BUTTON' && 
-                    (e.target.textContent.includes('Submit') || 
-                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
-                    setTimeout(() => this.handleSubmit(), 300);
-                }
-            });
-        },
-        
-        handleSubmit: function() {
-            const results = {
-                sessionId: this.sessionId,
-                startTime: this.startTime,
-                endTime: Date.now(),
-                duration: Math.round((Date.now() - this.startTime) / 1000),
-                answers: this.answers,
-                scoreInfo: this.extractScore(),
-                pageType: this.detectPageType(),
-                url: window.location.href
-            };
-            
-            this.sendMessage('PRACTICE_COMPLETE', results);
-        },
-        
-        extractScore: function() {
-            const resultsEl = document.getElementById('results');
-            if (!resultsEl) return null;
-            
-            const text = resultsEl.textContent || '';
-            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
-            if (scoreMatch) {
-                const correct = parseInt(scoreMatch[1]);
-                const total = parseInt(scoreMatch[2]);
-                return {
-                    correct: correct,
-                    total: total,
-                    accuracy: total > 0 ? correct / total : 0,
-                    percentage: Math.round((correct / total) * 100),
-                    source: 'inline_extraction'
-                };
-            }
-            return null;
-        },
-        
-        sendMessage: function(type, data) {
-            if (this.parentWindow) {
-                this.parentWindow.postMessage({
-                    type: type,
-                    data: data,
-                    source: 'practice_page'
-                }, '*');
-            }
+    setupCommunication: function() {
+      this.parentWindow = window.opener || window.parent;
+      window.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'INIT_SESSION') {
+          this.sessionId = event.data.data.sessionId;
+          this.sendMessage('SESSION_READY', {
+            pageType: this.detectPageType(),
+            url: window.location.href
+          });
         }
-    };
+      });
+    },
     
-    // 初始化
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            window.practicePageEnhancer.initialize();
-        });
-    } else {
-        window.practicePageEnhancer.initialize();
+    detectPageType: function() {
+      const title = document.title || '';
+      if (title.includes('P1')) return 'P1';
+      if (title.includes('P2')) return 'P2';
+      if (title.includes('P3')) return 'P3';
+      return 'unknown';
+    },
+    
+    setupAnswerListeners: function() {
+      this.answers = {};
+      this.startTime = Date.now();
+      
+      document.addEventListener('change', (e) => {
+        if (e.target.name && e.target.name.startsWith('q')) {
+          this.answers[e.target.name] = e.target.value;
+        }
+      });
+      
+      document.addEventListener('input', (e) => {
+        if (e.target.name && e.target.name.startsWith('q')) {
+          this.answers[e.target.name] = e.target.value;
+        }
+      });
+    },
+    
+    interceptSubmit: function() {
+      // 拦截grade函数
+      if (typeof window.grade === 'function') {
+        const originalGrade = window.grade;
+        window.grade = () => {
+          const result = originalGrade();
+          setTimeout(() => this.handleSubmit(), 200);
+          return result;
+        };
+      }
+      
+      // 监听提交按钮
+      document.addEventListener('click', (e) => {
+        if (e.target.tagName === 'BUTTON' &&
+          (e.target.textContent.includes('Submit') ||
+            e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+          setTimeout(() => this.handleSubmit(), 300);
+        }
+      });
+    },
+    
+    handleSubmit: function() {
+      const results = {
+        sessionId: this.sessionId,
+        startTime: this.startTime,
+        endTime: Date.now(),
+        duration: Math.round((Date.now() - this.startTime) / 1000),
+        answers: this.answers,
+        scoreInfo: this.extractScore(),
+        pageType: this.detectPageType(),
+        url: window.location.href
+      };
+      
+      this.sendMessage('PRACTICE_COMPLETE', results);
+    },
+    
+    extractScore: function() {
+      const resultsEl = document.getElementById('results');
+      if (!resultsEl) return null;
+      
+      const text = resultsEl.textContent || '';
+      const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+      if (scoreMatch) {
+        const correct = parseInt(scoreMatch[1]);
+        const total = parseInt(scoreMatch[2]);
+        return {
+          correct: correct,
+          total: total,
+          accuracy: total > 0 ? correct / total : 0,
+          percentage: Math.round((correct / total) * 100),
+          source: 'inline_extraction'
+        };
+      }
+      return null;
+    },
+    
+    sendMessage: function(type, data) {
+      if (this.parentWindow) {
+        this.parentWindow.postMessage({
+          type: type,
+          data: data,
+          source: 'practice_page'
+        }, '*');
+      }
     }
+  };
+  
+  // 初始化
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      window.practicePageEnhancer.initialize();
+    });
+  } else {
+    window.practicePageEnhancer.initialize();
+  }
 }
+
+// 加载增强脚本
+loadPracticePageEnhancer();
 </script>
 
-</body></html>
+</body>
+</html>

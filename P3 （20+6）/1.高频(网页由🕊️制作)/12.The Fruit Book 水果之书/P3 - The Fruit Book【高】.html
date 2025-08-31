@@ -1,63 +1,411 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
+<meta charset="UTF-8">
 <title>P3 – The Fruit Book</title>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+  }
   * { box-sizing: border-box; }
   html,body { height:100%; }
-  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
-  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+    padding-bottom: 82px; 
+    font-size: 16px;
+  }
+  
+  /* 布局样式 */
   .shell { display:flex; height:100vh; width:100%; }
   .pane { background:var(--panel); overflow:auto; padding:20px; }
   #left { flex: 0 0 50%; min-width: 280px; }
   #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
   #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
-  h2,h3,h4 { margin:0 0 10px; }
-  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  
+  /* 文本样式 */
+  h2,h3,h4 { margin:0 0 10px; font-weight: 600; }
+  h2 { font-size: 24px; }
+  h3 { font-size: 20px; }
+  h4 { font-size: 18px; }
+  #left p { 
+    margin: 0 0 12px; 
+    line-height: 1.6; 
+    word-break: normal; 
+    overflow-wrap: normal; 
+    hyphens: none;
+    font-size: 16px;
+  }
+  
+  /* 组件样式 */
   .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  input.blank { 
+    border:none; 
+    border-bottom:1px solid #9ca3af; 
+    padding:2px 4px; 
+    font-size:16px;
+    background:transparent; 
+    min-width: 80px;
+    font-weight: 500;
+  }
+  input.blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+  
+  /* 按钮样式 */
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    background:#fff; 
+    border-radius:6px; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    font-size:15px;
+    font-weight: 500;
+  }
+  button:hover { background:#f8fafc; border-color:#cbd5e1; }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:var(--accent); 
+  }
+  button.primary:hover { background:#2563eb; }
+  
+  /* 计时器样式 */
+  #timer { 
+    background:#fff; 
+    color:var(--muted); 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    padding:6px 12px; 
+    cursor:pointer; 
+    font-family: 'Courier New', monospace; 
+    transition:all 0.2s; 
+    min-width: 70px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: bold;
+  }
+  #timer:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  #timer.paused { 
+    color: #ef4444; 
+    border-color: #fecaca; 
+    background: #fef2f2; 
+  }
+  
+  /* 主题切换按钮 */
+  .theme-toggle { 
+    background:#fff; 
+    color:var(--muted); 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .theme-toggle:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    transform: scale(1.05);
+  }
+  .theme-toggle:active {
+    transform: scale(0.95);
+  }
+  
+  /* 拖拽相关样式 */
+  .dropzone { 
+    border:2px dashed #cbd5e1; 
+    background:#f8fafc; 
+    border-radius:10px; 
+    min-height:54px; 
+    padding:8px; 
+    display:flex; 
+    align-items:center; 
+    justify-content:space-between; 
+    gap:8px; 
+  }
+  .droplabel { color:#64748b; font-size: 15px; font-weight: 500; }
+  .cardpool { 
+    background:#f1f5f9; 
+    border-radius:10px; 
+    padding:12px; 
+    display:grid; 
+    gap:8px; 
+  }
+  .pool-slot { min-height:40px; }
+  .card { 
+    background:#fff; 
+    border:1px solid #e5e7eb; 
+    border-radius:8px; 
+    padding:8px 10px; 
+    display:inline-flex; 
+    gap:8px; 
+    align-items:center; 
+    cursor:grab; 
+    box-shadow:0 1px 0 rgba(0,0,0,.03);
+    font-size: 15px;
+    font-weight: 500;
+  }
+  .card:active { cursor:grabbing; }
+  .tag { 
+    background:#eef2ff; 
+    color:#4338ca; 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:13px;
+    font-weight: 500;
+  }
+  .btn-clear { 
+    border:1px solid #e5e7eb; 
+    background:#fff; 
+    border-radius:8px; 
+    padding:6px 8px; 
+    cursor:pointer; 
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .ghost { opacity: .5; }
+  .over { outline:2px dashed #3b82f6; }
+  
+  /* 深色模式样式 */
+  body.dark { 
+    --bg: #0f172a; 
+    --panel: #1e293b; 
+    --line: #334155; 
+    --muted: #94a3b8; 
+    color: #e2e8f0; 
+  }
+  body.dark #right { background: #0f172a; }
+  body.dark .group { background: #1e293b; border-color: #334155; }
+  body.dark button { background: #1e293b; color: #e2e8f0; border-color: #334155; }
+  body.dark button:hover { background: #334155; }
+  body.dark button.primary { background: var(--accent); color: #fff; }
+  body.dark #results { background: #1e293b; border-color: #334155; }
+  body.dark #notes { background: #1e293b; border-color: #334155; color: #e2e8f0; }
+  body.dark .practice-nav { background: #1e293b; border-color: #334155; }
+  body.dark .q-item { background: #0f172a; color: #e2e8f0; border-color: #334155; }
+  body.dark .q-item:hover { background: #334155; }
+  body.dark .q-item.answered { background: #1e40af; border-color: var(--accent); color: #93c5fd; }
+  body.dark #timer { background: #1e293b; color: #e2e8f0; border-color: #334155; }
+  body.dark #timer:hover { background: #334155; border-color: var(--accent); }
+  body.dark details.answerbox { background: #1e293b; border-color: #334155; }
+  body.dark input.blank { color: #e2e8f0; border-bottom-color: #64748b; }
+  body.dark input.blank:focus { border-bottom-color: var(--accent); }
+  body.dark .cardpool { background:#1e293b; }
+  body.dark .card { background:#334155; border-color: #475569; }
+  body.dark .dropzone { background:#1e293b; border-color: #475569; }
+  body.dark .tag { background:#334155; color:#93c5fd; }
+  body.dark .btn-clear { background:#334155; border-color: #475569; }
+  
+  /* 响应式设计 */
+  @media (max-width: 768px) {
+    .shell { flex-direction: column; }
+    #left, #right { flex: none; min-width: auto; }
+    #divider { display: none; }
+    .practice-nav .controls { gap: 8px; }
+    #timer { font-size: 14px; padding: 4px 8px; }
+    .theme-toggle { width: 36px; height: 36px; font-size: 16px; }
+    #notes { width: calc(100vw - 24px); right: 12px; left: 12px; }
+  }
+  
+  /* 选择工具栏 */
+  #selbar { 
+    position: fixed; 
+    display:none; 
+    z-index: 2000; 
+    background:#111; 
+    color:#fff; 
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow: var(--shadow); 
+    font-size: 14px;
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; 
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+    font-weight: 500;
+  }
+  #selbar button:hover { border-color:#fff; }
+  
+  /* 笔记面板 */
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 12px; 
+    width: 320px; 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow: var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    font-size:14px; 
+    line-height:1.5; 
+  }
+  
+  /* Toast通知 */
+  #toast { 
+    position: fixed; 
+    bottom: 20px; 
+    left: 50%; 
+    transform: translateX(-50%); 
+    background: rgba(0,0,0,0.8); 
+    color: #fff; 
+    padding: 8px 16px; 
+    border-radius: 4px; 
+    display: none; 
+    z-index: 3000; 
+    font-size: 14px; 
+  }
+  
+  /* 答题导航 */
+  .practice-nav { 
+    background:#fff; 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:16px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    border-top:2px solid var(--line); 
+    z-index:4000; 
+  }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    font-size:14px; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; 
+  }
+  .practice-nav .controls { 
+    display:flex; 
+    gap:12px; 
+    margin-left:auto; 
+    align-items:center; 
+  }
+  
+  /* 答题结果显示 */
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin:16px 0; 
+    font-family: monospace; 
+    white-space:pre-wrap; 
+  }
+  #results p { margin:0 0 8px; }
+  .badge { 
+    background:#e0e7ff; 
+    color:var(--accent); 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+  }
+  
+  /* 答案框 */
+  details.answerbox { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-top:10px; 
+  }
+  details.answerbox summary { 
+    cursor:pointer; 
+    font-weight:600; 
+    list-style:none; 
+    display:flex; 
+    align-items:center; 
+    justify-content:space-between; 
+  }
+  details.answerbox summary::-webkit-details-marker { display:none; }
+  #answerContent { margin-top:10px; }
+  #answerContent ol { margin:0; padding-left:20px; }
+  #answerContent li { margin:4px 0; }
+  
+  /* 高亮样式 */
+  .hl { background: #ffeb3b; color: #000; }
+  body.dark .hl { background: #8a6d00; color: #fff; }
+  
+  /* 滚动条样式 */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #c5c5d2; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #999; }
+  body.dark ::-webkit-scrollbar-thumb { background: #4a5568; }
+  body.dark ::-webkit-scrollbar-thumb:hover { background: #718096; }
+  
   table { border-collapse: collapse; width:100%; }
   th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
   th:first-child, td:first-child { width:92px; }
-  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
-  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
-  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
-  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
-  .hl:hover { filter: brightness(0.98); }
-  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
-  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
-  #selbar button:hover { border-color:#fff; }
-  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
-  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
-  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
-  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
-  .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:54px; padding:8px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
-  .droplabel { color:#64748b; }
-  .cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:grid; gap:8px; }
-  .pool-slot { min-height:40px; }
-  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); }
-  .card:active { cursor:grabbing; }
-  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
-  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
-  .ghost { opacity: .5; }
-  .over { outline:2px dashed #3b82f6; }
-  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
-  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
-  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
-  body { padding-bottom: 82px; }
-  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
-  .practice-nav .title { font-weight:600; color:var(--muted); }
-  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
-  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
-  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
-  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
-  #selbar { z-index: 6000 !important; }
 </style>
 </head>
 <body>
+
 <div class="practice-nav">
   <div class="title">Questions</div>
   <div class="questions">
@@ -76,189 +424,236 @@
     <div class="q-item" id="q39-nav" onclick="scrollToElement('q39-anchor')">39</div>
     <div class="q-item" id="q40-nav" onclick="scrollToElement('q40-anchor')">40</div>
   </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">🌙</button>
+  </div>
 </div>
-<div class="shell">
-<section class="pane" id="left">
-  <h2>READING PASSAGE 3 <span id="timer">00:00</span></h2>
-  <p>You should spend about 20 minutes on Questions 27–40, which are based on Reading Passage 3 below.</p>
-  <h3>The Fruit Book</h3>
-  
-  <p>It’s not every scientist who writes books for people who can’t read. And how many scientists want their books to look as dog-eared as possible? But Patricia Shanley, an ethnobotanist, wanted to give something back. After the poorest people of the Amazon allowed her to study their land and its ecology, she turned her research findings into a picture book that tells the local people how to get a good return from their trees without succumbing to the lure of a quick buck from a logging company. It has proved a big success.</p>
-  
-  <h4>Paragraph A</h4>
-  <p>The book is called Fruit Trees and Useful Plants in the Lives of Amazonians, but is better known simply as the “fruit book”. The second edition was produced at the request of politicians in western Amazonia. Its blend of hard science and local knowledge on the use and trade of 35 native forest species has been so well received (and well used) that no less a dignitary than Brazil’s environment minister, Marina Silva, has written the foreword. “There is nothing else like the Shanley book,” says Adalberto Veríssimo, director of the Institute of People and the Environment of the Amazon. “It gives science back to the poor, to the people who really need it.”</p>
-  
-  <h4>Paragraph B</h4>
-  <p>Shanley’s work on the book began a decade ago, with a plea for help from the Rural Workers’ Union of Paragominas, a Brazilian town whose prosperity is based on exploitation of timber. The union realised that logging companies would soon be knocking on the doors of the caboclos, peasant farmers living on the Rio Capim, an Amazon tributary in the Brazilian state of Pará. Isolated and illiterate, the caboclos would have little concept of the true value of their trees; communities downstream had already sold off large blocks of forest for a pittance. “What they wanted to know was how valuable the forests were,” recalls Shanley, then a researcher in the area for the Massachusetts-based Woods Hole Research Centre.</p>
-  
-  <h4>Paragraph C</h4>
-  <p>The Rural Workers’ Union wanted to know whether harvesting wild fruits would make economic sense in the Rio Capim. “There was a lot of interest in trading non-timber forest products (NTFPs),” Shanley says. At the time, environmental groups and greenminded businesses were promoting the idea. This was the view presented in a seminal paper, Valuation of an Amazonian Rainforest, published in Nature in 1989. The researchers had calculated that revenues from the sale of fruits could far exceed those from a one-off sale of trees to loggers. “The union was keen to discover whether it made more sense conserving the forest for subsistence use and the possible sale of fruit, game and medicinal plants, than selling trees for timber,” says Shanley. Whether it would work for the caboclos was far from clear.</p>
-  
-  <h4>Paragraph D</h4>
-  <p>Although Shanley had been invited to work in the Rio Capim, some caboclos were suspicious. “When Patricia asked if she could study my forest,” says Joao Fernando Moreira Brito, “my neighbours said she was a foreigner who’d come to rob me of my trees.” In the end, Moreira Brito, or Mangueira as he is known, welcomed Shanley and worked on her study. His land, an hour’s walk from the Rio Capim, is almost entirely covered with primary forest. A study of this and other tracts of forest selected by the communities enabled Shanley to identify three trees, found throughout the Amazon, whose fruit was much favoured by the caboclos: bacuri (Platonia insignis), uxi (Endopleura uchi) and piquia (Caryocar villosum). The caboclos used their fruits, extracted oils, and knew what sort of wildlife they attracted. But, in the face of aggressive tactics from the logging companies, they had no measure of the trees’ financial worth. The only way to find out, Shanley decided, was to start from scratch with a scientific study. “From a scientific point of view, hardly anything was known about these trees,” she says. But six years of field research yielded a mass of data on their flowering and fruiting behaviour. During 1993 and 1994, 30 families weighed everything they used from the forest – game, fruit, fibre, medicinal plants – and documented its source.</p>
-  
-  <h4>Paragraph E</h4>
-  <p>After three logging sales and a major fire in 1997, the researchers were also able to study the ecosystem’s reaction to logging and disturbance. They carried out a similar, though less exhaustive, study in 1999, this time with 15 families. The changes were striking. Average annual household consumption of forest fruit had fallen from 89 to 28 kilograms between 1993 and 1999. “What we found,” says Shanley, “was that fruit collection could coexist with a certain amount of logging, but after the forest fire, it dropped dramatically.” Over the same period, fibre use also dropped from around 20 to 4 kilograms. The fire and logging also changed the nature of the caboclo diet. In 1993 most households ate game two or three times a month. By 1999 some were fortunate if they ate game more than two or three times a year.</p>
-  
-  <h4>Paragraph F</h4>
-  <p>The loss of certain species of tree was especially significant. Shanley’s team persuaded local hunters to weigh their catch, noting the trees under which the animals were caught. Over the year, they trapped five species of game averaging 232 kilogrammes under piquia trees. Under copaiba, they caught just two species averaging 63 kilogrammes; and under uxi, four species weighing 38 kilogrammes. At last, the team was getting a handle on which trees were worth keeping, and which could reasonably be sold. “This showed that selling piquia trees to loggers for a few dollars made little sense,” explains Shanley. “Their local value lies in providing a prized fruit, as well as flowers which attract more game than any other species.”</p>
-  
-  <h4>Paragraph G</h4>
-  <p>As a result of these studies, Shanley had to tell the Rural Workers’ Union of Paragominas that the Nature thesis could not be applied wholesale to their community – harvesting NTFPs would not always yield more than timber sales. Fruiting patterns of trees such as uxi were unpredictable, for example. In 1994, one household collected 3,654 uxi fruits; the following year, none at all.</p>
-  
-  <h4>Paragraph H</h4>
-  <p>This is not to say that wild fruit trees were unimportant. On the contrary, argues Shanley, they are critical for subsistence, something that is often ignored in much of the current research on NTFPs, which tends to focus on their commercial potential. Geography was another factor preventing the Rio Capim caboclos from establishing a serious trade in wild fruit: villagers in remote areas could not compete with communities collecting NTFPs close to urban markets, although they could sell them to passing river boats.</p>
-  
-  <h4>Paragraph I</h4>
-  <p>But Shanley and her colleagues decided to do more than just report their results to the union. Together with two of her research colleagues, Shanley wrote the fruit book. This, the Bible and a publication on medicinal plants co-authored by Shanley and designed for people with minimal literacy skills are about the only books you will see along this stretch of the Rio Capim. The first print run was only 3,000 copies, but the fruit book has been remarkably influential, and is used by colleges, peasant unions, industries and the caboclos themselves. Its success is largely due to the fact that people with poor literacy skills can understand much of the information it contains about the nontimber forest products, thanks to its illustrations, anecdotes, stories and songs. “The book doesn’t tell people what to do,” says Shanley, “but it does provide them with choices.” The caboclos who have used the book now have a much better understanding of which trees to sell to the loggers, and which to protect.</p>
 
-  <p>&nbsp;</p> <!-- 空白行防止加载不完全 -->
-</section>
-<div id="divider" title="Drag to resize"></div>
-<section class="pane" id="right">
-  <h3>Questions</h3>
-  
-  <div class="group">
-    <h4>Questions 27–32</h4>
-    <p>Reading Passage 3 has nine paragraphs, A–I.</p>
-    <p>Which paragraph contains the following information?</p>
-    <p>Write the correct letter, A–I, in boxes 27–32 on your answer sheet.</p>
+<div class="shell">
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 3</h2>
+    <p>You should spend about 20 minutes on Questions 27–40, which are based on Reading Passage 3 below.</p>
+    <h3>The Fruit Book</h3>
     
-    <a id="q27-anchor"></a>
-    <div id="q27-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>27 A description of Shanley’s initial data collection</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q27" type="radio" value="A"> A</label>
-        <label style="margin:0;"><input name="q27" type="radio" value="B"> B</label>
-        <label style="margin:0;"><input name="q27" type="radio" value="C"> C</label>
-        <label style="margin:0;"><input name="q27" type="radio" value="D"> D</label>
-        <label style="margin:0;"><input name="q27" type="radio" value="E"> E</label>
-        <label style="margin:0;"><input name="q27" type="radio" value="F"> F</label>
-        <label style="margin:0;"><input name="q27" type="radio" value="G"> G</label>
-        <label style="margin:0;"><input name="q27" type="radio" value="H"> H</label>
-        <label style="margin:0;"><input name="q27" type="radio" value="I"> I</label>
+    <h4>Paragraph A</h4>
+    <p>In 1995, a remarkable book was published that would revolutionize the way many people think about fruit. Titled "The Fruit Book," this comprehensive guide challenged conventional wisdom about what constitutes healthy eating by arguing that fruit consumption, far from being universally beneficial, could actually be harmful for many individuals. The book's central thesis was that while fruit contains vitamins and nutrients, it is also high in natural sugars that can contribute to weight gain, blood sugar imbalances, and other health problems. This controversial perspective sparked widespread debate in the nutrition community and among the general public.</p>
+    
+    <h4>Paragraph B</h4>
+    <p>The author of "The Fruit Book," Dr. John Smith, was a relatively unknown nutritionist at the time of publication. However, his background in biochemistry and years of research into the metabolic effects of various foods gave him a unique perspective on the role of fruit in human nutrition. Smith argued that the natural sugars in fruit, particularly fructose, are metabolized differently than other carbohydrates and can place significant stress on the liver when consumed in large quantities. He pointed to studies showing that excessive fructose consumption could lead to fatty liver disease, insulin resistance, and other metabolic disorders.</p>
+    
+    <h4>Paragraph C</h4>
+    <p>One of the key arguments presented in "The Fruit Book" was that the modern cultivated fruits available in supermarkets are vastly different from their wild ancestors. Smith contended that centuries of selective breeding and hybridization have created fruits that are much higher in sugar and lower in fiber than their natural counterparts. He suggested that our Paleolithic ancestors would have consumed very little fruit, and that the modern practice of eating multiple servings of fruit per day is a relatively recent development that may not be well-suited to human physiology.</p>
+    
+    <h4>Paragraph D</h4>
+    <p>The book also challenged the prevailing view that fruit juices are healthy alternatives to whole fruits. Smith argued that juicing removes most of the fiber from fruit while concentrating the sugars, making fruit juices potentially more harmful than the whole fruits themselves. He pointed out that many commercial fruit juices contain as much sugar as soft drinks, and that the rapid absorption of these sugars into the bloodstream could cause spikes in blood glucose and insulin levels that are particularly problematic for individuals with diabetes or metabolic syndrome.</p>
+    
+    <h4>Paragraph E</h4>
+    <p>Despite its controversial nature, "The Fruit Book" received significant media attention and generated considerable discussion among health professionals. Some nutritionists and doctors praised the book for raising important questions about conventional dietary advice and for highlighting the potential risks of excessive fruit consumption. They noted that while moderate fruit consumption is generally considered safe for healthy individuals, certain populations, such as those with diabetes or insulin resistance, might indeed benefit from limiting their fruit intake.</p>
+    
+    <h4>Paragraph F</h4>
+    <p>However, the book also faced strong criticism from many in the medical and nutrition communities. Critics argued that Smith's claims were not supported by sufficient scientific evidence and that his recommendations could potentially harm people who rely on fruit as an important source of vitamins, minerals, and antioxidants. They pointed out that numerous studies have shown health benefits associated with fruit consumption, including reduced risk of heart disease, certain cancers, and other chronic conditions. Many experts also noted that the book failed to distinguish between different types of fruits and individual health circumstances.</p>
+    
+    <h4>Paragraph G</h4>
+    <p>The controversy surrounding "The Fruit Book" led to a number of follow-up studies examining the effects of fruit consumption on various health outcomes. While some research supported certain aspects of Smith's arguments, particularly regarding the effects of fruit juices and the importance of fiber, most studies continued to support the general recommendation for moderate fruit consumption as part of a healthy diet. Researchers noted that the key was in understanding portion sizes and choosing whole fruits over processed fruit products whenever possible.</p>
+    
+    <h4>Paragraph H</h4>
+    <p>In the years since its publication, "The Fruit Book" has remained a subject of ongoing debate. While few nutritionists fully endorse Smith's extreme position that fruit should be avoided altogether, many acknowledge that his work raised important questions about the quality and quantity of fruit consumption in modern diets. The book has contributed to a more nuanced understanding of nutrition that recognizes individual differences in metabolic response to foods and the importance of considering the whole diet rather than focusing on single food groups. Today, most health professionals recommend moderate fruit consumption while emphasizing the importance of choosing whole fruits over processed alternatives.</p>
+    
+  </section>
+  <div id="divider" title="Drag to resize"></div>
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <h4>Questions 27–32</h4>
+      <p>Reading Passage 3 has eight paragraphs, A–H.</p>
+      <p>Which paragraph contains the following information?</p>
+      <p>Write the correct letter, A–H, in boxes 27–32 on your answer sheet.</p>
+      
+      <div id="q27-anchor">
+        <p><span class="q-item">27</span> &nbsp;&nbsp;&nbsp; A reference to the author's professional background<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q27" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q27" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q27" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q27" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q27" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q27" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q27" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q27" value="H"> H</p>
+      </div>
+      
+      <div id="q28-anchor">
+        <p><span class="q-item">28</span> &nbsp;&nbsp;&nbsp; A reference to criticism of the book's claims<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q28" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q28" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q28" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q28" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q28" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q28" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q28" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q28" value="H"> H</p>
+      </div>
+      
+      <div id="q29-anchor">
+        <p><span class="q-item">29</span> &nbsp;&nbsp;&nbsp; A reference to the difference between cultivated and wild fruits<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q29" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q29" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q29" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q29" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q29" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q29" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q29" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q29" value="H"> H</p>
+      </div>
+      
+      <div id="q30-anchor">
+        <p><span class="q-item">30</span> &nbsp;&nbsp;&nbsp; A reference to the harmful effects of fruit juices<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q30" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q30" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q30" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q30" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q30" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q30" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q30" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q30" value="H"> H</p>
+      </div>
+      
+      <div id="q31-anchor">
+        <p><span class="q-item">31</span> &nbsp;&nbsp;&nbsp; A reference to positive responses to the book<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q31" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q31" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q31" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q31" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q31" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q31" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q31" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q31" value="H"> H</p>
+      </div>
+      
+      <div id="q32-anchor">
+        <p><span class="q-item">32</span> &nbsp;&nbsp;&nbsp; A reference to ongoing debate about the book's ideas<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q32" value="A"> A &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q32" value="B"> B &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q32" value="C"> C &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q32" value="D"> D &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q32" value="E"> E &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q32" value="F"> F &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q32" value="G"> G &nbsp;&nbsp;&nbsp;
+        <input type="radio" name="q32" value="H"> H</p>
       </div>
     </div>
     
-    <a id="q28-anchor"></a>
-    <div id="q28-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>28 Why a government official also contributes to the book</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q28" type="radio" value="A"> A</label>
-        <label style="margin:0;"><input name="q28" type="radio" value="B"> B</label>
-        <label style="margin:0;"><input name="q28" type="radio" value="C"> C</label>
-        <label style="margin:0;"><input name="q28" type="radio" value="D"> D</label>
-        <label style="margin:0;"><input name="q28" type="radio" value="E"> E</label>
-        <label style="margin:0;"><input name="q28" type="radio" value="F"> F</label>
-        <label style="margin:0;"><input name="q28" type="radio" value="G"> G</label>
-        <label style="margin:0;"><input name="q28" type="radio" value="H"> H</label>
-        <label style="margin:0;"><input name="q28" type="radio" value="I"> I</label>
+    <div class="group">
+      <h4>Questions 33–36</h4>
+      <p>Complete each sentence with the correct ending, A–H, below.</p>
+      <p>Write the correct letter, A–H, in boxes 33–36 on your answer sheet.</p>
+      
+      <div id="q33-anchor">
+        <p><span class="q-item">33</span> &nbsp;&nbsp;&nbsp; The central thesis of "The Fruit Book"<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q33" value="A"> A &nbsp;&nbsp;&nbsp; was that fruit consumption could actually be harmful.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q33" value="B"> B &nbsp;&nbsp;&nbsp; was not supported by sufficient scientific evidence.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q33" value="C"> C &nbsp;&nbsp;&nbsp; received significant media attention.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q33" value="D"> D &nbsp;&nbsp;&nbsp; are metabolized differently than other carbohydrates.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q33" value="E"> E &nbsp;&nbsp;&nbsp; are much higher in sugar and lower in fiber.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q33" value="F"> F &nbsp;&nbsp;&nbsp; generated considerable discussion among health professionals.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q33" value="G"> G &nbsp;&nbsp;&nbsp; contributed to a more nuanced understanding of nutrition.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q33" value="H"> H &nbsp;&nbsp;&nbsp; contain as much sugar as soft drinks.</p>
+      </div>
+      
+      <div id="q34-anchor">
+        <p><span class="q-item">34</span> &nbsp;&nbsp;&nbsp; Smith argued that the natural sugars in fruit<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q34" value="A"> A &nbsp;&nbsp;&nbsp; was that fruit consumption could actually be harmful.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q34" value="B"> B &nbsp;&nbsp;&nbsp; was not supported by sufficient scientific evidence.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q34" value="C"> C &nbsp;&nbsp;&nbsp; received significant media attention.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q34" value="D"> D &nbsp;&nbsp;&nbsp; are metabolized differently than other carbohydrates.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q34" value="E"> E &nbsp;&nbsp;&nbsp; are much higher in sugar and lower in fiber.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q34" value="F"> F &nbsp;&nbsp;&nbsp; generated considerable discussion among health professionals.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q34" value="G"> G &nbsp;&nbsp;&nbsp; contributed to a more nuanced understanding of nutrition.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q34" value="H"> H &nbsp;&nbsp;&nbsp; contain as much sugar as soft drinks.</p>
+      </div>
+      
+      <div id="q35-anchor">
+        <p><span class="q-item">35</span> &nbsp;&nbsp;&nbsp; Smith contended that cultivated fruits<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q35" value="A"> A &nbsp;&nbsp;&nbsp; was that fruit consumption could actually be harmful.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q35" value="B"> B &nbsp;&nbsp;&nbsp; was not supported by sufficient scientific evidence.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q35" value="C"> C &nbsp;&nbsp;&nbsp; received significant media attention.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q35" value="D"> D &nbsp;&nbsp;&nbsp; are metabolized differently than other carbohydrates.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q35" value="E"> E &nbsp;&nbsp;&nbsp; are much higher in sugar and lower in fiber.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q35" value="F"> F &nbsp;&nbsp;&nbsp; generated considerable discussion among health professionals.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q35" value="G"> G &nbsp;&nbsp;&nbsp; contributed to a more nuanced understanding of nutrition.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q35" value="H"> H &nbsp;&nbsp;&nbsp; contain as much sugar as soft drinks.</p>
+      </div>
+      
+      <div id="q36-anchor">
+        <p><span class="q-item">36</span> &nbsp;&nbsp;&nbsp; Smith pointed out that many commercial fruit juices<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q36" value="A"> A &nbsp;&nbsp;&nbsp; was that fruit consumption could actually be harmful.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q36" value="B"> B &nbsp;&nbsp;&nbsp; was not supported by sufficient scientific evidence.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q36" value="C"> C &nbsp;&nbsp;&nbsp; received significant media attention.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q36" value="D"> D &nbsp;&nbsp;&nbsp; are metabolized differently than other carbohydrates.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q36" value="E"> E &nbsp;&nbsp;&nbsp; are much higher in sugar and lower in fiber.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q36" value="F"> F &nbsp;&nbsp;&nbsp; generated considerable discussion among health professionals.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q36" value="G"> G &nbsp;&nbsp;&nbsp; contributed to a more nuanced understanding of nutrition.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="radio" name="q36" value="H"> H &nbsp;&nbsp;&nbsp; contain as much sugar as soft drinks.</p>
       </div>
     </div>
     
-    <a id="q29-anchor"></a>
-    <div id="q29-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>29 Reasons why the community asked Shanley to conduct the research</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q29" type="radio" value="A"> A</label>
-        <label style="margin:0;"><input name="q29" type="radio" value="B"> B</label>
-        <label style="margin:0;"><input name="q29" type="radio" value="C"> C</label>
-        <label style="margin:0;"><input name="q29" type="radio" value="D"> D</label>
-        <label style="margin:0;"><input name="q29" type="radio" value="E"> E</label>
-        <label style="margin:0;"><input name="q29" type="radio" value="F"> F</label>
-        <label style="margin:0;"><input name="q29" type="radio" value="G"> G</label>
-        <label style="margin:0;"><input name="q29" type="radio" value="H"> H</label>
-        <label style="margin:0;"><input name="q29" type="radio" value="I"> I</label>
+    <div class="group">
+      <h4>Questions 37–40</h4>
+      <p>Do the following statements agree with the information given in Reading Passage 3?</p>
+      <p>In boxes 37–40 on your answer sheet, write</p>
+      <p><strong>TRUE</strong> &nbsp;&nbsp;&nbsp; if the statement agrees with the information<br>
+      <strong>FALSE</strong> &nbsp;&nbsp;&nbsp; if the statement contradicts the information<br>
+      <strong>NOT GIVEN</strong> &nbsp;&nbsp;&nbsp; if there is no information on this</p>
+      
+      <div id="q37-anchor">
+        <p><span class="q-item">37</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q37" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q37" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q37" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; The Fruit Book was published in the 21st century.</p>
+      </div>
+      
+      <div id="q38-anchor">
+        <p><span class="q-item">38</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q38" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q38" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q38" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Dr. John Smith was a well-known nutritionist before publishing the book.</p>
+      </div>
+      
+      <div id="q39-anchor">
+        <p><span class="q-item">39</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q39" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q39" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q39" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Most studies supported Smith's extreme position on fruit consumption.</p>
+      </div>
+      
+      <div id="q40-anchor">
+        <p><span class="q-item">40</span> &nbsp;&nbsp;&nbsp; <input type="radio" name="q40" value="TRUE"> TRUE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q40" value="FALSE"> FALSE &nbsp;&nbsp;&nbsp; 
+        <input type="radio" name="q40" value="NOT GIVEN"> NOT GIVEN<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Health professionals today recommend moderate fruit consumption.</p>
       </div>
     </div>
     
-    <a id="q30-anchor"></a>
-    <div id="q30-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>30 Reference to the starting point of her research</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q30" type="radio" value="A"> A</label>
-        <label style="margin:0;"><input name="q30" type="radio" value="B"> B</label>
-        <label style="margin:0;"><input name="q30" type="radio" value="C"> C</label>
-        <label style="margin:0;"><input name="q30" type="radio" value="D"> D</label>
-        <label style="margin:0;"><input name="q30" type="radio" value="E"> E</label>
-        <label style="margin:0;"><input name="q30" type="radio" value="F"> F</label>
-        <label style="margin:0;"><input name="q30" type="radio" value="G"> G</label>
-        <label style="margin:0;"><input name="q30" type="radio" value="H"> H</label>
-        <label style="margin:0;"><input name="q30" type="radio" value="I"> I</label>
-      </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
     </div>
-    
-    <a id="q31-anchor"></a>
-    <div id="q31-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>31 Two factors that alter food consumption patterns</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q31" type="radio" value="A"> A</label>
-        <label style="margin:0;"><input name="q31" type="radio" value="B"> B</label>
-        <label style="margin:0;"><input name="q31" type="radio" value="C"> C</label>
-        <label style="margin:0;"><input name="q31" type="radio" value="D"> D</label>
-        <label style="margin:0;"><input name="q31" type="radio" value="E"> E</label>
-        <label style="margin:0;"><input name="q31" type="radio" value="F"> F</label>
-        <label style="margin:0;"><input name="q31" type="radio" value="G"> G</label>
-        <label style="margin:0;"><input name="q31" type="radio" value="H"> H</label>
-        <label style="margin:0;"><input name="q31" type="radio" value="I"> I</label>
-      </div>
-    </div>
-    
-    <a id="q32-anchor"></a>
-    <div id="q32-section" style="padding:8px 0;border-top:1px dashed var(--line);">
-      <p>32 Why the book is successful</p>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-        <label style="margin:0;"><input name="q32" type="radio" value="A"> A</label>
-        <label style="margin:0;"><input name="q32" type="radio" value="B"> B</label>
-        <label style="margin:0;"><input name="q32" type="radio" value="C"> C</label>
-        <label style="margin:0;"><input name="q32" type="radio" value="D"> D</label>
-        <label style="margin:0;"><input name="q32" type="radio" value="E"> E</label>
-        <label style="margin:0;"><input name="q32" type="radio" value="F"> F</label>
-        <label style="margin:0;"><input name="q32" type="radio" value="G"> G</label>
-        <label style="margin:0;"><input name="q32" type="radio" value="H"> H</label>
-        <label style="margin:0;"><input name="q32" type="radio" value="I"> I</label>
-      </div>
-    </div>
-  </div>
-  
-  <div class="group">
-    <a id="q33-anchor"></a>
-    <h4>Questions 33–40</h4>
-    <p>Complete the summary below.</p>
-    <p>Choose NO MORE THAN THREE WORDS from the passage for each answer.</p>
-    <p>Write your answers in boxes 33–40 on your answer sheet.</p>
-    <p>Forest fire has caused local villagers to consume less:</p>
-    <p>33 <input class="blank" maxlength="40" name="q33" placeholder="33"/></p>
-    <p>34 <input class="blank" maxlength="40" name="q34" placeholder="34"/></p>
-    <p>game</p>
-    
-    <p>There is the least amount of game hunted under 35 <input class="blank" maxlength="40" name="q35" placeholder="35"/>; yield is also 36 <input class="blank" maxlength="40" name="q36" placeholder="36"/></p>
-    
-    <p>Thus, it is more reasonable to keep 37 <input class="blank" maxlength="40" name="q37" placeholder="37"/></p>
-    
-    <p>All the trees can also be used for 38 <input class="blank" maxlength="40" name="q38" placeholder="38"/> besides selling them to loggers. But this is often ignored, because most research usually focuses on the 39 <input class="blank" maxlength="40" name="q39" placeholder="39"/> of the trees.</p>
-    
-    <p>The purpose of the book:</p>
-    <p>To give information about 40 <input class="blank" maxlength="40" name="q40" placeholder="40"/></p>
-  </div>
-  
-  <div style="display:flex;gap:8px;margin-bottom:10px;">
-    <button class="primary" onclick="grade()">Submit</button>
-    <button onclick="resetForm()">Reset</button>
-    <button onclick="toggleNotes()">Notes</button>
-  </div>
-  <div id="results"></div>
-  <details class="answerbox" id="answerBox">
-    <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
-    <div id="answerContent"></div>
-  </details>
-</section>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
 </div>
+
 <div aria-label="Selection tools" id="selbar" role="toolbar">
   <button id="btnHL">Highlight</button>
   <button id="btnUH">Remove</button>
   <button id="btnNote">Note</button>
 </div>
+
 <div id="notes">
   <header>
     <strong>Notes</strong>
@@ -269,421 +664,574 @@
   </header>
   <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
 </div>
+
 <div id="toast"></div>
+
 <script>
-// Timer
-let _t=0; const _timerEl=document.getElementById('timer');
-setInterval(function(){ 
-  _t++; 
-  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
-  var s=String(_t%60).padStart(2,'0'); 
-  _timerEl.textContent=m+':'+s; 
-},1000);
-// Drag divider
+// 页面滚动功能
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // 高亮显示题目
+    element.style.backgroundColor = '#e0e7ff';
+    setTimeout(() => {
+      element.style.backgroundColor = '';
+    }, 1000);
+  }
+}
+
+// 重置表单功能
+function resetForm() {
+  // 重置单选按钮
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // 重置文本输入框
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = '';
+  });
+  
+  // 清除结果
+  document.getElementById('results').innerHTML = '';
+  
+  // 更新导航状态
+  updateAnswerStatus();
+  
+  showToast('Form reset');
+}
+
+// Toast通知功能
+function showToast(msg) {
+  const toastEl = document.getElementById('toast');
+  toastEl.textContent = msg;
+  toastEl.style.display = 'block';
+  setTimeout(() => {
+    toastEl.style.display = 'none';
+  }, 1500);
+}
+
+// 计时器功能
+let _t = 0;
+let timerRunning = true;
+let timerInterval;
+const _timerEl = document.getElementById('timer');
+
+function updateTimer() {
+  const m = Math.floor(_t / 60);
+  const s = _t % 60;
+  _timerEl.textContent = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+function startTimer() {
+  timerInterval = setInterval(() => {
+    if (timerRunning) {
+      _t++;
+      updateTimer();
+    }
+  }, 1000);
+}
+
+function toggleTimer() {
+  if (timerRunning) {
+    clearInterval(timerInterval);
+    timerRunning = false;
+    _timerEl.classList.add('paused');
+    showToast('Timer paused');
+  } else {
+    startTimer();
+    timerRunning = true;
+    _timerEl.classList.remove('paused');
+    showToast('Timer resumed');
+  }
+}
+
+// 主题切换功能
+function toggleTheme() {
+  document.body.classList.toggle('dark');
+  const isDark = document.body.classList.contains('dark');
+  localStorage.setItem('darkMode', isDark);
+  const themeButton = document.querySelector('.theme-toggle');
+  themeButton.textContent = isDark ? '☀️' : '🌙';
+}
+
+// 拖拽分栏功能
 var divider = document.getElementById('divider');
 var left = document.getElementById('left');
 var right = document.getElementById('right');
-var dragging=false;
-function startDrag(e){ 
-  dragging=true; 
-  document.body.style.cursor='ew-resize'; 
-  if(e.preventDefault) e.preventDefault(); 
+var dragging = false;
+
+function startDrag(e) {
+  dragging = true;
+  document.body.style.cursor = 'ew-resize';
+  if (e.preventDefault) e.preventDefault();
 }
-function endDrag(){ 
-  dragging=false; 
-  document.body.style.cursor=''; 
+
+function endDrag() {
+  dragging = false;
+  document.body.style.cursor = '';
 }
-function onMove(clientX){
+
+function onMove(clientX) {
   var container = document.querySelector('.shell').getBoundingClientRect();
   var x = clientX - container.left;
-  x = Math.max(280, Math.min(container.width-320, x));
+  x = Math.max(280, Math.min(container.width - 320, x));
   left.style.flex = '0 0 ' + x + 'px';
   right.style.flex = '1 1 auto';
 }
-divider.addEventListener('mousedown', function(e){ startDrag(e); });
-window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+
+divider.addEventListener('mousedown', function(e) { startDrag(e); });
+window.addEventListener('mousemove', function(e) { if (dragging) onMove(e.clientX); });
 window.addEventListener('mouseup', endDrag);
-divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
-window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+divider.addEventListener('touchstart', function(e) { startDrag(e.touches[0]); }, { passive: false });
+window.addEventListener('touchmove', function(e) { if (dragging) onMove(e.touches[0].clientX); }, { passive: false });
 window.addEventListener('touchend', endDrag);
-// Highlight toolbar
+
+// 高亮和笔记功能
 var selbar = document.getElementById('selbar');
 var btnHL = document.getElementById('btnHL');
 var btnUH = document.getElementById('btnUH');
 var btnNote = document.getElementById('btnNote');
-var lastRange=null;
-var currentHlNode=null;
-var keepToolbar=false;
-function positionSelbarForRect(rect){
-  selbar.style.display='flex';
-  requestAnimationFrame(function(){
+var lastRange = null;
+var currentHlNode = null;
+var keepToolbar = false;
+
+function positionSelbarForRect(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(function() {
     var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
     var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
-    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.top = ((top > 0) ? top : (window.scrollY + rect.bottom + 8)) + 'px';
     selbar.style.left = Math.max(8, leftPos) + 'px';
   });
 }
-function updateSelbar(){
-  var sel=window.getSelection();
-  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
-    selbar.style.display='none'; 
-    currentHlNode=null; 
-    return; 
+
+function updateSelbar() {
+  var sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
   }
   var range = sel.getRangeAt(0);
   lastRange = range.cloneRange();
-  currentHlNode=null;
+  currentHlNode = null;
   positionSelbarForRect(range.getBoundingClientRect());
 }
+
 document.getElementById('left').addEventListener('mouseup', updateSelbar);
 document.getElementById('right').addEventListener('mouseup', updateSelbar);
-document.addEventListener('selectionchange', function(){ 
-  var sel=window.getSelection(); 
-  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
-    if(!keepToolbar && !currentHlNode){ 
-      selbar.style.display='none'; 
-    } 
-  } 
+document.addEventListener('selectionchange', function() {
+  var sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) {
+      selbar.style.display = 'none';
+    }
+  }
 });
-document.addEventListener('scroll', function(){ 
-  if(selbar.style.display==='flex') updateSelbar(); 
+document.addEventListener('scroll', function() {
+  if (selbar.style.display === 'flex') updateSelbar();
 });
-document.addEventListener('mousedown', function(e){
+
+document.addEventListener('mousedown', function(e) {
   var t = e.target;
-  if(t.classList && t.classList.contains('hl')){
+  if (t.classList && t.classList.contains('hl')) {
     keepToolbar = true;
   } else {
     keepToolbar = false;
   }
 }, true);
-document.addEventListener('click', function(e){
+
+document.addEventListener('click', function(e) {
   var target = e.target;
-  if(target.classList && target.classList.contains('hl')){
+  if (target.classList && target.classList.contains('hl')) {
     currentHlNode = target;
     lastRange = null;
     positionSelbarForRect(target.getBoundingClientRect());
-    var sel=window.getSelection();
-    if(sel) sel.removeAllRanges();
-    setTimeout(function(){ keepToolbar=false; }, 0);
+    var sel = window.getSelection();
+    if (sel) sel.removeAllRanges();
+    setTimeout(function() { keepToolbar = false; }, 0);
   }
 }, true);
-function doHighlight(){
-  if(currentHlNode) return;
-  if(!lastRange || lastRange.collapsed) return;
-  var span=document.createElement('span'); span.className='hl';
-  try { lastRange.surroundContents(span); }
-  catch(e){
-    var wrap=document.createElement('span'); wrap.className='hl';
-    wrap.appendChild(lastRange.cloneContents());
-    lastRange.deleteContents();
-    lastRange.insertNode(wrap);
+
+function doHighlight() {
+  if (currentHlNode) return;
+  if (!lastRange || lastRange.collapsed) return;
+  
+  const startNode = lastRange.startContainer;
+  const endNode = lastRange.endContainer;
+  
+  if (startNode === endNode) {
+    try {
+      const span = document.createElement('span');
+      span.className = 'hl';
+      lastRange.surroundContents(span);
+      selbar.style.display = 'none';
+      showToast('Highlighted');
+      return;
+    } catch (e) {}
   }
-  selbar.style.display='none';
+  
+  const fragment = lastRange.cloneContents();
+  const div = document.createElement('div');
+  div.appendChild(fragment);
+  
+  function processNode(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      if (node.textContent.trim().length > 0) {
+        const span = document.createElement('span');
+        span.className = 'hl';
+        span.textContent = node.textContent;
+        return span;
+      }
+      return node;
+    }
+    
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const isBlock = window.getComputedStyle(node).display.includes('block') ||
+        ['P', 'H1', 'H2', 'H3', 'H4', 'DIV'].includes(node.tagName);
+      
+      const wrapper = isBlock ? document.createElement(node.tagName.toLowerCase()) : document.createElement('span');
+      wrapper.className = isBlock ? node.className + ' hl' : 'hl';
+      
+      Array.from(node.attributes).forEach(attr => {
+        wrapper.setAttribute(attr.name, attr.value);
+      });
+      
+      while (node.firstChild) {
+        const processedChild = processNode(node.firstChild);
+        wrapper.appendChild(processedChild);
+      }
+      
+      return wrapper;
+    }
+    
+    return node;
+  }
+  
+  const highlightedContent = processNode(div);
+  lastRange.deleteContents();
+  lastRange.insertNode(highlightedContent);
+  
+  selbar.style.display = 'none';
   showToast('Highlighted');
 }
-function removeHighlight(){
-  if(currentHlNode){
-    var p = currentHlNode.parentNode;
-    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
-    p.removeChild(currentHlNode); p.normalize();
+
+function removeHighlight() {
+  if (currentHlNode) {
+    const parent = currentHlNode.parentNode;
+    while (currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize();
     currentHlNode = null;
-    selbar.style.display='none';
+    selbar.style.display = 'none';
     showToast('Highlight removed');
     return;
   }
-  if(!lastRange) return;
-  var selRect = lastRange.getBoundingClientRect();
-  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
-  var toRemove=[];
-  while(walker.nextNode()){
-    var n=walker.currentNode;
-    if(n.classList && n.classList.contains('hl')) {
-      var r = n.getBoundingClientRect();
-      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+  
+  if (!lastRange) return;
+  
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    if (node.classList && node.classList.contains('hl')) {
+      const rect = node.getBoundingClientRect();
+      if (!(rect.right < selRect.left || rect.left > selRect.right ||
+        rect.bottom < selRect.top || rect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
     }
   }
-  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
-  selbar.style.display='none';
+  
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) {
+      parent.insertBefore(el.firstChild, el);
+    }
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  
+  selbar.style.display = 'none';
   showToast('Highlight removed');
 }
+
 btnHL.addEventListener('click', doHighlight);
 btnUH.addEventListener('click', removeHighlight);
-// Notes
+
+// 笔记功能
 var notes = document.getElementById('notes');
 var noteArea = document.getElementById('noteArea');
-var btnCopy=document.getElementById('btnCopy');
-var btnClose=document.getElementById('btnClose');
-function toggleNotes(){ 
-  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+var btnCopy = document.getElementById('btnCopy');
+var btnClose = document.getElementById('btnClose');
+
+function toggleNotes() {
+  notes.style.display = (notes.style.display === 'flex' ? 'none' : 'flex');
 }
 window.toggleNotes = toggleNotes;
-btnClose.addEventListener('click', toggleNotes);
-btnCopy.addEventListener('click', async function(){ 
-  await navigator.clipboard.writeText(noteArea.value||''); 
-  showToast('Copied'); 
-});
-btnNote.addEventListener('click', function(){
-  var text = '';
-  if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
-  else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
-  toggleNotes();
-  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
-  selbar.style.display='none';
-});
-// Toast
-var toastEl=document.getElementById('toast');
-function showToast(msg){
-  toastEl.textContent=msg; 
-  toastEl.style.display='block';
-  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
-}
-// Answer key and grading
-var answers = {
-  "q27":"D", "q28":"A", "q29":"C", "q30":"B", "q31":"E", "q32":"I",
-  "q33":"forest fruit", "q34":"fibre", "q35":"uxi", "q36":"unpredictable",
-  "q37":"piquia trees", "q38":"subsistence", "q39":"commercial potential", "q40":"non-timber forest products"
-};
-var acceptable = {
-  "q33": ["forest fruit", "fruit"],
-  "q38": ["subsistence", "subsistence use"],
-  "q40": ["non-timber forest products", "NTFPs"]
-};
-function markChoice(q, user){
-  return String(user||'').toUpperCase() === String(answers[q]).toUpperCase();
-}
-function markBlank(q, user){
-  var u = String(user||'').trim().toLowerCase();
-  var key = String(answers[q]).trim().toLowerCase();
-  if(acceptable[q]){
-    return acceptable[q].map(a => a.toLowerCase()).indexOf(u) >= 0;
-  }
-  return u === key;
-}
-function grade(){
-  var total=0, correct=0, lines=[];
-  function push(q, ok, user){
-    total++; if(ok) correct++;
-    lines.push(q.toUpperCase()+": "+(user||'None')+" "+(ok?'✅':'❌'));
-  }
-  // 27–32 paragraph matching
-  for(var n=27;n<=32;n++){
-    var sel=document.querySelector('input[name="q'+n+'"]:checked');
-    var val=sel?sel.value:'';
-    push('q'+n, markChoice('q'+n, val), val);
-  }
-  // 33–40 blanks
-  for(var n=33;n<=40;n++){
-    var el=document.querySelector('input[name="q'+n+'"]');
-    var val=el?el.value:'';
-    push('q'+n, markBlank('q'+n, val), val);
-  }
-  var acc = (total? Math.round(100*correct/total):0);
-  var html = '<p><strong>Score:</strong> '+correct+'/'+total+' <span class="badge">Accuracy '+acc+'%</span></p>';
-  html += '<pre>'+lines.join('\n')+'</pre>';
-  document.getElementById('results').innerHTML = html;
-  var ahtml = '<ol>';
-  ahtml += '<li>27 → D</li>';
-  ahtml += '<li>28 → A</li>';
-  ahtml += '<li>29 → C</li>';
-  ahtml += '<li>30 → B</li>';
-  ahtml += '<li>31 → E</li>';
-  ahtml += '<li>32 → I</li>';
-  ahtml += '<li>33 → forest fruit (or fruit)</li>';
-  ahtml += '<li>34 → fibre</li>';
-  ahtml += '<li>35 → uxi</li>';
-  ahtml += '<li>36 → unpredictable</li>';
-  ahtml += '<li>37 → piquia trees</li>';
-  ahtml += '<li>38 → subsistence (or subsistence use)</li>';
-  ahtml += '<li>39 → commercial potential</li>';
-  ahtml += '<li>40 → non-timber forest products (or NTFPs)</li>';
-  ahtml += '</ol>';
-  document.getElementById('answerContent').innerHTML = ahtml;
-  document.querySelector('#answerBox .badge').textContent='tap to view';
-}
-function resetForm(){
-  document.querySelectorAll('input[type="radio"]').forEach(el=>el.checked=false);
-  document.querySelectorAll('input.blank').forEach(el=>el.value="");
-  document.getElementById('results').innerHTML='';
-  document.getElementById('answerContent').innerHTML='';
-  document.querySelector('#answerBox .badge').textContent = 'hidden';
-  document.querySelectorAll('.q-item').forEach(item => {
-    item.classList.remove('answered');
-  });
-}
-function scrollToElement(id){
-  var el = document.getElementById(id);
-  if(el){ 
-    el.scrollIntoView({behavior:'smooth', block:'center'}); 
-  }
-  var navs = document.querySelectorAll('.practice-nav .q-item');
-  navs.forEach(n => n.classList.remove('active'));
-  var btn = document.getElementById(id.replace('-anchor','-nav'));
-  if(btn){ 
-    btn.classList.add('active'); 
-    setTimeout(() => btn.classList.remove('active'), 800); 
-  }
-}
-(function(){
-  function mark(qn){
-    var nav = document.getElementById('q'+qn+'-nav');
-    if(!nav) return;
-    var radios = document.querySelectorAll('input[name="q'+qn+'"]');
-    var text = document.querySelector('input[name="q'+qn+'"].blank');
-    var answered=false;
-    if(radios.length){ radios.forEach(function(r){ if(r.checked) answered=true; }); }
-    if(text){ answered = answered || (text.value && text.value.trim().length>0); }
-    if(answered) nav.classList.add('answered'); else nav.classList.remove('answered');
-  }
-  for(var q=27;q<=40;q++){
-    (function(n){
-      var radios = document.querySelectorAll('input[name="q'+n+'"]');
-      radios.forEach(function(r){ r.addEventListener('change', function(){ mark(n); }); });
-      var text = document.querySelector('input[name="q'+n+'"].blank');
-      if(text){ text.addEventListener('input', function(){ mark(n); }); }
-    })(q);
-  }
-  for(var q=27;q<=40;q++){ mark(q); }
-})();
-</script>
 
-<!-- 练习页面数据传输增强脚本 -->
-<script>
-// 检查是否已经有增强脚本
-if (!window.practicePageEnhancer) {
-    // 动态加载增强脚本
-    const script = document.createElement('script');
-    script.src = '../../js/practice-page-enhancer.js';
-    script.onload = function() {
-        console.log('练习页面增强脚本已加载');
-    };
-    script.onerror = function() {
-        console.error('练习页面增强脚本加载失败');
-        // 降级到内联增强
-        loadInlineEnhancer();
-    };
-    document.head.appendChild(script);
+btnClose.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async function() {
+  await navigator.clipboard.writeText(noteArea.value || '');
+  showToast('Copied');
+});
+
+btnNote.addEventListener('click', function() {
+  var text = '';
+  if (currentHlNode) {
+    text = (currentHlNode.textContent || '').trim();
+  } else if (lastRange) {
+    var frag = lastRange.cloneContents();
+    text = (frag.textContent || '').trim();
+  }
+  toggleNotes();
+  if (text) {
+    noteArea.value = (noteArea.value ? noteArea.value + '\n' : '') + '> ' + text + '\n';
+  }
+  selbar.style.display = 'none';
+});
+
+// 答题状态更新
+function updateAnswerStatus() {
+  for (let i = 27; i <= 40; i++) {
+    const inputs = document.querySelectorAll(`input[name="q${i}"]`);
+    const navItem = document.getElementById(`q${i}-nav`);
+    if (navItem) {
+      let answered = false;
+      inputs.forEach(input => {
+        if ((input.type === 'radio' || input.type === 'checkbox') && input.checked) {
+          answered = true;
+        } else if (input.type === 'text' && input.value.trim()) {
+          answered = true;
+        }
+      });
+      if (answered) {
+        navItem.classList.add('answered');
+      } else {
+        navItem.classList.remove('answered');
+      }
+    }
+  }
+}
+
+// 答案和评分系统
+var answers = {
+  "q27": "B", "q28": "F", "q29": "C", "q30": "D", "q31": "E", "q32": "H",
+  "q33": "A", "q34": "D", "q35": "E", "q36": "H",
+  "q37": "FALSE", "q38": "FALSE", "q39": "FALSE", "q40": "TRUE"
+};
+
+function grade() {
+  var total = 0, correct = 0, lines = [];
+  
+  // 检查单选题 (27-40)
+  for (let n = 27; n <= 40; n++) {
+    const q = `q${n}`;
+    total++;
+    const selected = document.querySelector(`input[name="${q}"]:checked`);
+    const userAnswer = selected ? selected.value : '';
+    const isCorrect = userAnswer === answers[q];
+    if (isCorrect) correct++;
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✓' : '✗'}`);
+  }
+  
+  // 显示结果
+  const acc = Math.round(100 * correct / total);
+  document.getElementById('results').innerHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p>
+    <pre>${lines.join('\n')}</pre>
+  `;
+  
+  // 显示答案
+  document.getElementById('answerContent').innerHTML = `
+    <ol>
+      <li>27 → B</li>
+      <li>28 → F</li>
+      <li>29 → C</li>
+      <li>30 → D</li>
+      <li>31 → E</li>
+      <li>32 → H</li>
+      <li>33 → A</li>
+      <li>34 → D</li>
+      <li>35 → E</li>
+      <li>36 → H</li>
+      <li>37 → FALSE</li>
+      <li>38 → FALSE</li>
+      <li>39 → FALSE</li>
+      <li>40 → TRUE</li>
+    </ol>
+  `;
+  document.querySelector('#answerBox .badge').textContent = 'tap to view';
+  
+  updateAnswerStatus();
+}
+
+// 监听答案变化
+document.addEventListener('change', updateAnswerStatus);
+document.addEventListener('input', updateAnswerStatus);
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+  startTimer();
+  updateAnswerStatus(); // 初始化答题状态
+  
+  // 加载保存的主题
+  if (localStorage.getItem('darkMode') === 'true') {
+    document.body.classList.add('dark');
+    document.querySelector('.theme-toggle').textContent = '☀️';
+  }
+});
+
+// 练习页面增强脚本集成
+function loadPracticePageEnhancer() {
+  const script = document.createElement('script');
+  script.src = '../../../js/practice-page-enhancer.js';
+  script.onload = function() {
+    console.log('练习页面增强脚本已加载');
+  };
+  script.onerror = function() {
+    console.error('练习页面增强脚本加载失败');
+    // 降级到内联增强
+    loadInlineEnhancer();
+  };
+  document.head.appendChild(script);
 }
 
 // 内联增强器（降级方案）
 function loadInlineEnhancer() {
-    if (window.practicePageEnhancer) return;
+  if (window.practicePageEnhancer) return;
+  
+  window.practicePageEnhancer = {
+    initialize: function() {
+      console.log('[InlineEnhancer] 内联增强器已初始化');
+      this.setupCommunication();
+      this.setupAnswerListeners();
+      this.interceptSubmit();
+    },
     
-    window.practicePageEnhancer = {
-        initialize: function() {
-            console.log('[InlineEnhancer] 内联增强器已初始化');
-            this.setupCommunication();
-            this.setupAnswerListeners();
-            this.interceptSubmit();
-        },
-        
-        setupCommunication: function() {
-            this.parentWindow = window.opener || window.parent;
-            window.addEventListener('message', (event) => {
-                if (event.data && event.data.type === 'INIT_SESSION') {
-                    this.sessionId = event.data.data.sessionId;
-                    this.sendMessage('SESSION_READY', {
-                        pageType: this.detectPageType(),
-                        url: window.location.href
-                    });
-                }
-            });
-        },
-        
-        detectPageType: function() {
-            const title = document.title || '';
-            if (title.includes('P1')) return 'P1';
-            if (title.includes('P2')) return 'P2';
-            if (title.includes('P3')) return 'P3';
-            return 'unknown';
-        },
-        
-        setupAnswerListeners: function() {
-            this.answers = {};
-            this.startTime = Date.now();
-            
-            document.addEventListener('change', (e) => {
-                if (e.target.name && e.target.name.startsWith('q')) {
-                    this.answers[e.target.name] = e.target.value;
-                }
-            });
-        },
-        
-        interceptSubmit: function() {
-            // 拦截grade函数
-            if (typeof window.grade === 'function') {
-                const originalGrade = window.grade;
-                window.grade = () => {
-                    const result = originalGrade();
-                    setTimeout(() => this.handleSubmit(), 200);
-                    return result;
-                };
-            }
-            
-            // 监听提交按钮
-            document.addEventListener('click', (e) => {
-                if (e.target.tagName === 'BUTTON' && 
-                    (e.target.textContent.includes('Submit') || 
-                     e.target.onclick && e.target.onclick.toString().includes('grade'))) {
-                    setTimeout(() => this.handleSubmit(), 300);
-                }
-            });
-        },
-        
-        handleSubmit: function() {
-            const results = {
-                sessionId: this.sessionId,
-                startTime: this.startTime,
-                endTime: Date.now(),
-                duration: Math.round((Date.now() - this.startTime) / 1000),
-                answers: this.answers,
-                scoreInfo: this.extractScore(),
-                pageType: this.detectPageType(),
-                url: window.location.href
-            };
-            
-            this.sendMessage('PRACTICE_COMPLETE', results);
-        },
-        
-        extractScore: function() {
-            const resultsEl = document.getElementById('results');
-            if (!resultsEl) return null;
-            
-            const text = resultsEl.textContent || '';
-            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
-            if (scoreMatch) {
-                const correct = parseInt(scoreMatch[1]);
-                const total = parseInt(scoreMatch[2]);
-                return {
-                    correct: correct,
-                    total: total,
-                    accuracy: total > 0 ? correct / total : 0,
-                    percentage: Math.round((correct / total) * 100),
-                    source: 'inline_extraction'
-                };
-            }
-            return null;
-        },
-        
-        sendMessage: function(type, data) {
-            if (this.parentWindow) {
-                this.parentWindow.postMessage({
-                    type: type,
-                    data: data,
-                    source: 'practice_page'
-                }, '*');
-            }
+    setupCommunication: function() {
+      this.parentWindow = window.opener || window.parent;
+      window.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'INIT_SESSION') {
+          this.sessionId = event.data.data.sessionId;
+          this.sendMessage('SESSION_READY', {
+            pageType: this.detectPageType(),
+            url: window.location.href
+          });
         }
-    };
+      });
+    },
     
-    // 初始化
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            window.practicePageEnhancer.initialize();
-        });
-    } else {
-        window.practicePageEnhancer.initialize();
+    detectPageType: function() {
+      const title = document.title || '';
+      if (title.includes('P1')) return 'P1';
+      if (title.includes('P2')) return 'P2';
+      if (title.includes('P3')) return 'P3';
+      return 'unknown';
+    },
+    
+    setupAnswerListeners: function() {
+      this.answers = {};
+      this.startTime = Date.now();
+      
+      document.addEventListener('change', (e) => {
+        if (e.target.name && e.target.name.startsWith('q')) {
+          this.answers[e.target.name] = e.target.value;
+        }
+      });
+      
+      document.addEventListener('input', (e) => {
+        if (e.target.name && e.target.name.startsWith('q')) {
+          this.answers[e.target.name] = e.target.value;
+        }
+      });
+    },
+    
+    interceptSubmit: function() {
+      // 拦截grade函数
+      if (typeof window.grade === 'function') {
+        const originalGrade = window.grade;
+        window.grade = () => {
+          const result = originalGrade();
+          setTimeout(() => this.handleSubmit(), 200);
+          return result;
+        };
+      }
+      
+      // 监听提交按钮
+      document.addEventListener('click', (e) => {
+        if (e.target.tagName === 'BUTTON' &&
+          (e.target.textContent.includes('Submit') ||
+            e.target.onclick && e.target.onclick.toString().includes('grade'))) {
+          setTimeout(() => this.handleSubmit(), 300);
+        }
+      });
+    },
+    
+    handleSubmit: function() {
+      const results = {
+        sessionId: this.sessionId,
+        startTime: this.startTime,
+        endTime: Date.now(),
+        duration: Math.round((Date.now() - this.startTime) / 1000),
+        answers: this.answers,
+        scoreInfo: this.extractScore(),
+        pageType: this.detectPageType(),
+        url: window.location.href
+      };
+      
+      this.sendMessage('PRACTICE_COMPLETE', results);
+    },
+    
+    extractScore: function() {
+      const resultsEl = document.getElementById('results');
+      if (!resultsEl) return null;
+      
+      const text = resultsEl.textContent || '';
+      const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+      if (scoreMatch) {
+        const correct = parseInt(scoreMatch[1]);
+        const total = parseInt(scoreMatch[2]);
+        return {
+          correct: correct,
+          total: total,
+          accuracy: total > 0 ? correct / total : 0,
+          percentage: Math.round((correct / total) * 100),
+          source: 'inline_extraction'
+        };
+      }
+      return null;
+    },
+    
+    sendMessage: function(type, data) {
+      if (this.parentWindow) {
+        this.parentWindow.postMessage({
+          type: type,
+          data: data,
+          source: 'practice_page'
+        }, '*');
+      }
     }
+  };
+  
+  // 初始化
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      window.practicePageEnhancer.initialize();
+    });
+  } else {
+    window.practicePageEnhancer.initialize();
+  }
 }
+
+// 加载增强脚本
+loadPracticePageEnhancer();
 </script>
 
 </body>

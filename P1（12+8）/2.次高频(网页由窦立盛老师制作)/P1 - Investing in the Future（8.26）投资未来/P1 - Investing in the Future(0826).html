@@ -54,12 +54,38 @@
   .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
   .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
   .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #timer { display: inline-block; background:#fff; border:1px solid var(--line); border-radius:10px; padding:4px 10px; font-size:14px; vertical-align: middle; }
+  .theme-toggle { cursor: pointer; background: transparent; border: none; font-size: 18px; padding: 4px; }
   #selbar { z-index: 6000 !important; }
+
+  /* Dark Mode Styles */
+  body.dark-mode { --bg: #1a1a1a; --panel: #2a2a2a; --line: #4a4a4a; --muted: #999; color: #e0e0e0; }
+  body.dark-mode .pane { background: var(--panel); color: #e0e0e0; }
+  body.dark-mode #right { background: #222; }
+  body.dark-mode button { background: #3a3a3a; color: #e0e0e0; border-color: #555; }
+  body.dark-mode button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  body.dark-mode input.blank, body.dark-mode input[type="text"] { background: #2a2a2a; color: #e0e0e0; border-bottom-color: #666; }
+  body.dark-mode input.blank:focus, body.dark-mode input[type="text"]:focus { border-bottom-color: var(--accent); }
+  body.dark-mode .group, body.dark-mode #results, body.dark-mode details.answerbox { background: #2f2f2f; border-color: var(--line); }
+  body.dark-mode .practice-nav { background: #252525; border-top-color: #444; }
+  body.dark-mode .practice-nav .q-item { background: #3a3a3a; color: #ccc; border-color: #555; }
+  body.dark-mode .practice-nav .q-item:hover { background: #4a4a4a; border-color: var(--accent); }
+  body.dark-mode .practice-nav .q-item.answered { background: #3949ab; border-color: #5c6bc0; color: #e8eaf6; }
+  body.dark-mode .practice-nav .q-item.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  body.dark-mode #timer { background: #3a3a3a; color: #ccc; border-color: #555; }
+  body.dark-mode .hl { background-color: #5b21b6; color: #f5f3ff; }
+  body.dark-mode table, body.dark-mode th, body.dark-mode td { border-color: var(--line); }
+  body.dark-mode th { background: #333; color: #e0e0e0; }
+  body.dark-mode td { background: #2a2a2a; color: #ccc; }
 </style>
 </head>
 <body>
 <div class="practice-nav">
   <div class="title">Questions</div>
+  <div class="controls">
+    <span id="timer">00:00</span>
+    <button class="theme-toggle" onclick="toggleDarkMode()" title="Toggle dark/light mode">☀️</button>
+  </div>
   <div class="questions">
     <div class="q-item" id="q1-nav" onclick="scrollToElement('q1-anchor')">1</div>
     <div class="q-item" id="q2-nav" onclick="scrollToElement('q2-anchor')">2</div>
@@ -78,7 +104,7 @@
 </div>
 <div class="shell">
   <section class="pane" id="left">
-    <h2>READING PASSAGE 1 <span id="timer">00:00</span></h2>
+    <h2>READING PASSAGE 1</h2>
     <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>
     <h3>Investing in the Future</h3>
     <p>History has shown the value of giving money to the University of Auckland</p>
@@ -421,11 +447,25 @@ btnNote.addEventListener('click', function(){
   selbar.style.display='none';
 });
 // Toast
-var toastEl=document.getElementById('toast');
+var toastEl = document.getElementById('toast');
 function showToast(msg){
-  toastEl.textContent=msg; 
-  toastEl.style.display='block';
-  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+  toastEl.textContent = msg; 
+  toastEl.style.display = 'block';
+  setTimeout(function(){ toastEl.style.display = 'none'; }, 1200);
+}
+
+// Dark Mode Toggle
+function toggleDarkMode() {
+  document.body.classList.toggle('dark-mode');
+  const isDarkMode = document.body.classList.contains('dark-mode');
+  localStorage.setItem('darkMode', isDarkMode ? 'enabled' : 'disabled');
+  document.querySelector('.theme-toggle').textContent = isDarkMode ? '🌙' : '☀️';
+}
+
+// Initialize dark mode from localStorage
+if (localStorage.getItem('darkMode') === 'enabled') {
+  document.body.classList.add('dark-mode');
+  document.querySelector('.theme-toggle').textContent = '🌙';
 }
 </script>
 <script>
