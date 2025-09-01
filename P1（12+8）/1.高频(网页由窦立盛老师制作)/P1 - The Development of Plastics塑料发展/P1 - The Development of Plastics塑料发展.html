@@ -1,125 +1,62 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>P1 – The Development of Plastics</title>
+<title>P1 – Katherine Mansfield (Fixed & Optimized)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
   :root { 
-    --line:#e5e7eb; 
-    --bg:#f6f7fb; 
-    --panel:#fff; 
-    --accent:#3b82f6; 
-    --muted:#6b7280; 
-    --shadow:0 6px 20px rgba(0,0,0,.12); 
+    --line: #e5e7eb; 
+    --bg: #f6f7fb; 
+    --panel: #fff; 
+    --accent: #3b82f6; 
+    --muted: #6b7280; 
+    --shadow: 0 6px 20px rgba(0,0,0,.12); 
   }
   * { box-sizing: border-box; }
-  html,body { height:100%; }
+  html, body { height: 100%; }
   body { 
-    margin:0; 
+    margin: 0; 
     font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
-    background:var(--bg); 
+    background: var(--bg); 
     padding-bottom: 82px; 
   }
   
   /* 布局样式 */
-  .shell { display:flex; height:100vh; width:100%; }
-  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  .shell { display: flex; height: 100vh; width: 100%; }
+  .pane { background: var(--panel); overflow: auto; padding: 20px; }
   #left { flex: 0 0 50%; min-width: 280px; }
-  #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
-  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  #right { flex: 1 1 auto; min-width: 320px; background: #fbfbff; border-left: 1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg, #e5e7eb, #d1d5db); cursor: ew-resize; position: relative; z-index: 5; user-select: none; }
   
   /* 文本样式 */
-  h2,h3,h4 { margin:0 0 10px; }
+  h2, h3, h4 { margin: 0 0 10px; }
   #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
   
   /* 组件样式 */
-  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
-  input.blank { 
-    border:none; 
-    border-bottom:1px solid #9ca3af; 
-    padding:2px 4px; 
-    font-size:1em; 
-    background:transparent; 
-    min-width: 80px;
-  }
-  input.blank:focus { outline:none; border-bottom:2px solid var(--accent); }
-  
+  .group { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 14px; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+  th, td { border: 1px solid var(--line); padding: 8px; text-align: left; }
+  .blank-input { border:none; border-bottom:1px solid #9ca3af; padding:4px 2px; font-size:1em; background:transparent; width: 120px; margin: 0 4px; }
+  .blank-input:focus { outline:none; border-bottom:2px solid var(--accent); }
+
   /* 按钮样式 */
-  button { 
-    padding:8px 12px; 
-    border:1px solid var(--line); 
-    background:#fff; 
-    border-radius:6px; 
-    cursor:pointer; 
-    transition:all 0.2s; 
-    font-size:14px; 
-  }
-  button:hover { background:#f8fafc; border-color:#cbd5e1; }
-  button.primary { 
-    background:var(--accent); 
-    color:#fff; 
-    border-color:var(--accent); 
-  }
-  button.primary:hover { background:#2563eb; }
+  button { padding: 8px 12px; border: 1px solid var(--line); background: #fff; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 14px; }
+  button:hover { background: #f8fafc; border-color: #cbd5e1; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.primary:hover { background: #2563eb; }
   
   /* 计时器样式 */
-  #timer { 
-    background:#fff; 
-    color:var(--muted); 
-    border:1px solid var(--line); 
-    border-radius:6px; 
-    padding:6px 12px; 
-    cursor:pointer; 
-    font-family: 'Courier New', monospace; 
-    transition:all 0.2s; 
-    min-width: 70px;
-    text-align: center;
-    font-size: 18px;
-    font-weight: bold;
-  }
-  #timer:hover { 
-    background:#f1f5f9; 
-    border-color:var(--accent); 
-  }
-  #timer.paused { 
-    color: #ef4444; 
-    border-color: #fecaca; 
-    background: #fef2f2; 
-  }
+  #timer { background: #fff; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; font-family: 'Courier New', monospace; transition: all 0.2s; min-width: 70px; text-align: center; font-size: 18px; font-weight: bold; }
+  #timer:hover { background: #f1f5f9; border-color: var(--accent); }
+  #timer.paused { color: #ef4444; border-color: #fecaca; background: #fef2f2; }
   
   /* 主题切换按钮 */
-  .theme-toggle { 
-    background:#fff; 
-    color:var(--muted); 
-    border:1px solid var(--line); 
-    border-radius:6px; 
-    width: 36px;
-    height: 36px;
-    font-size: 16px;
-    transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .theme-toggle:hover {
-    background: var(--accent);
-    color: #fff;
-    border-color: var(--accent);
-    transform: scale(1.05);
-  }
-  .theme-toggle:active {
-    transform: scale(0.95);
-  }
+  .theme-toggle { background: #fff; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; width: 36px; height: 36px; font-size: 16px; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; }
+  .theme-toggle:hover { background: var(--accent); color: #fff; border-color: var(--accent); transform: scale(1.05); }
   
   /* 深色模式样式 */
-  body.dark { 
-    --bg: #0f172a; 
-    --panel: #1e293b; 
-    --line: #334155; 
-    --muted: #94a3b8; 
-    color: #e2e8f0; 
-  }
+  body.dark { --bg: #0f172a; --panel: #1e293b; --line: #334155; --muted: #94a3b8; color: #e2e8f0; }
   body.dark #right { background: #0f172a; }
   body.dark .group { background: #1e293b; border-color: #334155; }
   body.dark button { background: #1e293b; color: #e2e8f0; border-color: #334155; }
@@ -134,9 +71,10 @@
   body.dark #timer { background: #1e293b; color: #e2e8f0; border-color: #334155; }
   body.dark #timer:hover { background: #334155; border-color: var(--accent); }
   body.dark details.answerbox { background: #1e293b; border-color: #334155; }
-  body.dark input.blank { color: #e2e8f0; border-bottom-color: #64748b; }
-  body.dark input.blank:focus { border-bottom-color: var(--accent); }
-  
+  body.dark table, body.dark th, body.dark td { border-color: var(--line); }
+  body.dark .blank-input { color: #e2e8f0; border-bottom-color: #64748b; }
+  body.dark .blank-input:focus { border-bottom-color: var(--accent); }
+
   /* 响应式设计 */
   @media (max-width: 768px) {
     .shell { flex-direction: column; }
@@ -149,170 +87,41 @@
   }
   
   /* 选择工具栏 */
-  #selbar { 
-    position: fixed; 
-    display:none; 
-    z-index: 2000; 
-    background:#111; 
-    color:#fff; 
-    border-radius: 8px; 
-    padding: 6px; 
-    box-shadow: var(--shadow); 
-    font-size: 13px; 
-    gap:6px; 
-    align-items: center; 
-  }
-  #selbar button { 
-    background: transparent; 
-    color:#fff; 
-    border: 1px solid rgba(255,255,255,.25); 
-    padding: 4px 8px; 
-    border-radius: 6px; 
-    cursor:pointer; 
-  }
-  #selbar button:hover { border-color:#fff; }
+  #selbar { position: fixed; display: none; z-index: 2000; background: #111; color: #fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap: 6px; align-items: center; }
+  #selbar button { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+  #selbar button:hover { border-color: #fff; }
   
   /* 笔记面板 */
-  #notes { 
-    position: fixed; 
-    right: 12px; 
-    bottom: 12px; 
-    width: 320px; 
-    height: 42vh; 
-    background:#fff; 
-    border:1px solid var(--line); 
-    border-radius: 12px; 
-    display:none; 
-    flex-direction: column; 
-    z-index:1500; 
-    box-shadow: var(--shadow); 
-  }
-  #notes header { 
-    display:flex; 
-    align-items:center; 
-    justify-content: space-between; 
-    padding:8px 10px; 
-    border-bottom:1px solid var(--line); 
-  }
-  #notes textarea { 
-    flex:1; 
-    border:0; 
-    padding:10px; 
-    resize:none; 
-    font-size:14px; 
-    line-height:1.5; 
-  }
+  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background: #fff; border: 1px solid var(--line); border-radius: 12px; display: none; flex-direction: column; z-index: 1500; box-shadow: var(--shadow); }
+  #notes header { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  #notes textarea { flex: 1; border: 0; padding: 10px; resize: none; font-size: 14px; line-height: 1.5; }
   
   /* Toast通知 */
-  #toast { 
-    position: fixed; 
-    bottom: 20px; 
-    left: 50%; 
-    transform: translateX(-50%); 
-    background: rgba(0,0,0,0.8); 
-    color: #fff; 
-    padding: 8px 16px; 
-    border-radius: 4px; 
-    display: none; 
-    z-index: 3000; 
-    font-size: 14px; 
-  }
+  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 8px 16px; border-radius: 4px; display: none; z-index: 3000; font-size: 14px; }
   
   /* 答题导航 */
-  .practice-nav { 
-    background:#fff; 
-    padding:12px 20px; 
-    display:flex; 
-    align-items:center; 
-    gap:16px; 
-    box-shadow:0 2px 4px rgba(0,0,0,.05); 
-    flex-wrap:wrap; 
-    position:fixed; 
-    left:0; 
-    right:0; 
-    bottom:0; 
-    border-top:2px solid var(--line); 
-    z-index:4000; 
-  }
-  .practice-nav .title { font-weight:600; color:var(--muted); }
-  .practice-nav .questions { 
-    display:flex; 
-    gap:8px; 
-    align-items:center; 
-    flex-wrap:wrap; 
-  }
-  .practice-nav .q-item { 
-    padding:6px 10px; 
-    border:1px solid var(--line); 
-    border-radius:6px; 
-    background:#fff; 
-    cursor:pointer; 
-    font-size:14px; 
-    transition:all 0.2s; 
-    min-width:36px; 
-    text-align:center; 
-  }
-  .practice-nav .q-item:hover { 
-    background:#f1f5f9; 
-    border-color:var(--accent); 
-  }
-  .practice-nav .q-item.answered { 
-    background:#e0e7ff; 
-    border-color:var(--accent); 
-    color:var(--accent); 
-    font-weight:500; 
-  }
-  .practice-nav .q-item.active { 
-    background:var(--accent); 
-    color:#fff; 
-  }
-  .practice-nav .controls { 
-    display:flex; 
-    gap:12px; 
-    margin-left:auto; 
-    align-items:center; 
-  }
+  .practice-nav { background: #fff; padding: 12px 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 4px rgba(0,0,0,.05); flex-wrap: wrap; position: fixed; left: 0; right: 0; bottom: 0; border-top: 2px solid var(--line); z-index: 4000; }
+  .practice-nav .title { font-weight: 600; color: var(--muted); }
+  .practice-nav .questions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .practice-nav .q-item { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; font-size: 14px; transition: all 0.2s; min-width: 36px; text-align: center; }
+  .practice-nav .q-item:hover { background: #f1f5f9; border-color: var(--accent); }
+  .practice-nav .q-item.answered { background: #e0e7ff; border-color: var(--accent); color: var(--accent); font-weight: 500; }
+  .practice-nav .q-item.active { background: var(--accent); color: #fff; }
+  .practice-nav .controls { display: flex; gap: 12px; margin-left: auto; align-items: center; }
   
   /* 答题结果显示 */
-  #results { 
-    background:#fff; 
-    border:1px solid var(--line); 
-    border-radius:10px; 
-    padding:12px; 
-    margin:16px 0; 
-    font-family: monospace; 
-    white-space:pre-wrap; 
-  }
-  #results p { margin:0 0 8px; }
-  .badge { 
-    background:#e0e7ff; 
-    color:var(--accent); 
-    padding:2px 8px; 
-    border-radius:999px; 
-    font-size:12px; 
-  }
+  #results { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 16px 0; font-family: monospace; white-space: pre-wrap; }
+  #results p { margin: 0 0 8px; }
+  .badge { background: #e0e7ff; color: var(--accent); padding: 2px 8px; border-radius: 999px; font-size: 12px; }
   
   /* 答案框 */
-  details.answerbox { 
-    background:#fff; 
-    border:1px solid var(--line); 
-    border-radius:10px; 
-    padding:12px; 
-    margin-top:10px; 
-  }
-  details.answerbox summary { 
-    cursor:pointer; 
-    font-weight:600; 
-    list-style:none; 
-    display:flex; 
-    align-items:center; 
-    justify-content:space-between; 
-  }
-  details.answerbox summary::-webkit-details-marker { display:none; }
-  #answerContent { margin-top:10px; }
-  #answerContent ol { margin:0; padding-left:20px; }
-  #answerContent li { margin:4px 0; }
-  
+  details.answerbox { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-top: 10px; }
+  details.answerbox summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; align-items: center; justify-content: space-between; }
+  details.answerbox summary::-webkit-details-marker { display: none; }
+  #answerContent { margin-top: 10px; }
+  #answerContent ol { margin: 0; padding-left: 20px; }
+  #answerContent li { margin: 4px 0; }
+
   /* 高亮样式 */
   .hl { background: #ffeb3b; color: #000; }
   body.dark .hl { background: #8a6d00; color: #fff; }
@@ -356,23 +165,22 @@
     <h2>READING PASSAGE 1</h2>
     <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>
     
-    <h3>The Development of Plastics</h3>
-    <p><em>Revolutionary materials that transformed modern life</em></p>
-    
-    <p>Fishbourne Roman Palace is in the village of Fishbourne in West Sussex, England. This large palace was built in the 1st century AD, around thirty years after the Roman conquest of Britain, on the site of Roman army grain stores that had been established after the invasion during the reign of the Roman Emperor Claudius in 43 AD. The rectangular palace was built around formal gardens, the northern half of which has been reconstructed. There were extensive alterations in the 2nd and 3rd centuries AD, with many of the original black-and-white mosaic floors being overlaid with more sophisticated coloured ones, including a perfectly preserved mosaic of a dolphin in the north wing. More alterations were in progress when the palace burnt down in around 270 AD, after which it was abandoned.</p>
-    
-    <p>Local people had long believed that a Roman palace once existed in the area. However, it was not until 1960 that the archaeologist Barry Cunliffe of Oxford University first systematically excavated the site, after workmen had accidentally uncovered a wall while they were laying a water main. The Roman villa excavated by Cunliffe's team was so grand that it became known as Fishbourne Roman Palace, and a museum was erected to preserve some of the remains. This is administered by the Sussex Archaeological Society.</p>
-    
-    <p>In its day, the completed palace would have comprised four large wings with colonnaded fronts. The north and east wings consisted of suites of private rooms built around courtyards, with a monumental entrance in the middle of the east wing. In the north-east corner there was an assembly hall. The west wing contained state rooms, a large ceremonial reception room and a gallery. The south wing contained the owner's private apartments. The palace included as many as fifty mosaic floors, under-floor central heating and a bathhouse. In size, Fishbourne Palace would have been approximately equivalent to some of the great Roman palaces of Italy, and was by far the largest known Roman residence north of the European Alps, at about 500 feet (150 m) square. A team of volunteers and professional archaeologists is involved in an ongoing archaeological excavation on the site of nearby, possibly military, buildings.</p>
+    <h3>Katherine Mansfield</h3>
+  
+    <p>Katherine Mansfield Beauchamp Murry was born in 1888, into a prominent family in Wellington, New Zealand. She became one of New Zealand’s best-known writers, using the pen name of Katherine Mansfield. The daughter of a banker, and born into a middle-class family, she was also a first cousin of Countess Elizabeth von Arnim, a distinguished novelist in her time. Mansfield had two older sisters and a younger brother. Her father, Harold Beauchamp, went on to become the chairman of the Bank of New Zealand. In 1893, the Mansfield family moved to Karori, a suburb of Wellington, where Mansfield would spend the happiest years of her childhood; she later used her memories of this time as an inspiration for her Prelude story.</p>
+    <p>Her first published stories appeared in the High School Reporter and the Wellington Girls’ High School magazine in 1898 and 1899. In 1902, she developed strong feelings for a musician who played the cello, Arnold Trowell, although her feelings were not, for the most part, returned. Mansfield herself was an accomplished cellist, having received lessons from Trowell’s father. Mansfield wrote in her journals of feeling isolated to some extent in New Zealand, and, in general terms, of her interest in the Maori people (New Zealand’s native people), who were often portrayed in a sympathetic light in her later stories, such as How Pearl Button Was Kidnapped.</p>
+    <p>She moved to London in 1903, where she attended Queen’s College, along with her two sisters. Mansfield recommenced playing the cello, an occupation that she believed, during her time at Queen’s, she would take up professionally. She also began contributing to the college newspaper, with such a dedication to it that she eventually became its editor. She was particularly interested in the works of the French writers of this period and in the 19th century British writer, Oscar Wilde, and she was appreciated amongst fellow students at Queen’s for her lively and charismatic approach to life and work. She met fellow writer Ida Baker, a South African, at the college, and the pair became lifelong friends. Mansfield did not actively support the suffragette movement in the UK. Women in New Zealand had gained the right to vote in 1893.</p>
+    <p>Mansfield first began journeying into other parts of Europe in the period 1903–1906, mainly to Belgium and Germany. After finishing her schooling in England, she returned to her New Zealand home in 1906, only then beginning to write short stories in a serious way. She had several works published in Australia in a magazine called The Native Companion, which was her first paid writing work, and by this time she had her mind set on becoming a professional writer. It was also the first occasion on which she used the pseudonym “K. Mansfield”.</p>
+    <p>Mansfield rapidly grew discontented with the provincial New Zealand lifestyle, and with her family. Two years later she headed again to London. Her father sent her an annual subsidy of £100 for the rest of her life. In later years, she would express both admiration and disdain for New Zealand in her journals.</p>
+    <p>In 1911, Mansfield met John Middleton Murry, the Oxford scholar and editor of the literary magazine Rhythm. They were later to marry in 1918. Mansfield became a co-editor of Rhythm, which was subsequently called The Blue Review, in which more of her works were published. She and Murry lived in various houses in England and briefly in Paris. The Blue Review failed to gain enough readers and was no longer published. Their attempt to set up as writers in Paris was cut short by Murry’s bankruptcy, which resulted from the failure of this and other journals. Life back in England meant frequently changed addresses and very limited funds.</p>
+    <p>Between 1915 and 1918, Mansfield moved between England and Bandol, France. She and Murry developed close contact with other well-known writers of the time such as D. H. Lawrence, Bertrand Russell and Aldous Huxley. By October 1918 Mansfield had become seriously ill; she had been diagnosed with tuberculosis and was advised to enter a sanatorium. She could no longer spend winters in London. In the autumn of 1918 she was so ill that she decided to go to Ospedaletti in Italy. It was the publication of Bliss and Other Stories in 1920 that was to solidify Mansfield’s reputation as a writer.</p>
+    <p>Mansfield also spent time in Menton, France, as the tenant of her father’s cousin at “The Villa Isola Bella”. There she wrote eight stories including Miss Brill and The Daughters of the Late Colonel, the latter of which she pronounced to be “…the only story that satisfies me to any extent”.</p>
+    <p>Mansfield produced a great deal of work in the final years of her life, and much of her prose and poetry remained unpublished at her death in 1923. After her death, her husband, Murry, took on the task of editing and publishing her works. His efforts resulted in two additional volumes of short stories, The Doves’ Nest and Something Childish, published in 1923 and 1924 respectively; the publication of her Poems; as well as a collection of critical writings (Novels and Novelists) and a number of editions of Mansfield’s previously unpublished letters and journals.</p>
 
-    <p>The first buildings to be erected on the site were constructed in the early part of the conquest in 43 AD. Later, two timber buildings were constructed, one with clay-and-mortar floors and plaster walls, which appears to have been a house of some comfort. These buildings were demolished in the 60s AD and replaced by a substantial stone house, which included colonnades and a bath suite. It has been suggested that the palace itself, incorporating the previous house in its south-east corner, was constructed around 73–75 AD. However, Dr Miles Russell of Bournemouth University re-interpreted the ground plan and the collection of objects found, and has suggested that, given the extremely close parallels with the imperial palace of Domitian in Rome, its construction may more plausibly date to after 92 AD.</p>
-    
-    <p>With regard to who lived in Fishbourne Palace, there are a number of theories. For example, one proposed by Professor Cunliffe is that, in its early phase, the palace was the residence of Tiberius Claudius Cogidubnus, a local chieftain who supported the Romans and who may have been installed as king of a number of territories following the first stage of the conquest. Cogidubnus is known from a reference to his loyalty in Agricola, a work by the Roman writer Tacitus, and from an inscription commemorating a temple dedicated to the gods Neptune and Minerva found in the nearby city of Chichester. Another theory is that it was built for Sallustius Lucullus, a Roman governor of Britain in the late 1st century, who may have been the son of the British prince Adminius. Two inscriptions recording the presence of Lucullus have been found in Chichester, and the redating by Miles Russell suggests that, if the palace was designed for Lucullus, then it may have been in use for only a few years, as the Roman historian Suetonius records that Lucullus was executed by the Emperor Domitian in or shortly after 93 AD.</p>
-    
-    <p>Additional theories suggest that either Verica, a British king of the Roman Empire in the years preceding the Claudian invasion, was the owner of the palace, or Tiberius Claudius Catuarus, following the recent discovery of a gold ring belonging to him. The palace outlasted the original owner, whoever he was, and was extensively re-planned early in the 2nd century AD and subdivided into a series of smaller apartments. Further redevelopment was begun in the late 3rd century AD, but these alterations were incomplete when the north wing was destroyed in a fire in around 270 AD. The damage was too great to repair, and the palace was abandoned and later dismantled.</p>
-    
-    <p>A modern museum has been built by the Sussex Archaeological Society, incorporating most of the visible remains, including one wing of the palace. The gardens have been replanted using authentic plants from the Roman period.</p>
-    
+    <p>&nbsp;</p>
+    <p>&nbsp;</p>
+    <p>&nbsp;</p>
+
   </section>
   <div id="divider" title="Drag to resize"></div>
   <section class="pane" id="right">
@@ -380,103 +188,47 @@
     
     <div class="group">
       <h4>Questions 1–6</h4>
-      <p>Do the following statements agree with the information given in Reading Passage 1?</p>
-      <p>In boxes 1–6 on your answer sheet, write</p>
-      <ul>
-        <li><strong>TRUE</strong> if the statement agrees with the information</li>
-        <li><strong>FALSE</strong> if the statement contradicts the information</li>
-        <li><strong>NOT GIVEN</strong> if there is no information on this</li>
-      </ul>
+      <p>Do the following statements agree with the information given in Reading Passage 1? Write:</p>
+      <ul><li><strong>TRUE</strong>, <strong>FALSE</strong>, or <strong>NOT GIVEN</strong></li></ul>
       
-      <div id="q1-anchor">
-        <p><strong>1</strong> Fishbourne Palace was the first structure to be built on its site.</p>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label><input name="q1" type="radio" value="TRUE"> TRUE</label> 
-          <label><input name="q1" type="radio" value="FALSE"> FALSE</label> 
-          <label><input name="q1" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
-        </div>
+      <div id="q1-anchor" style="padding-top: 8px; border-top: 1px dashed #e5e7eb;"><p><strong>1.</strong> The name Katherine Mansfield, which appears on the writer’s books, was exactly the same as her original name.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;"><label><input name="q1" type="radio" value="TRUE"> TRUE</label><label><input name="q1" type="radio" value="FALSE"> FALSE</label><label><input name="q1" type="radio" value="NOT GIVEN"> NOT GIVEN</label></div>
       </div>
-      
-      <div id="q2-anchor">
-        <p><strong>2</strong> Fishbourne Palace was renovated more than once.</p>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label><input name="q2" type="radio" value="TRUE"> TRUE</label> 
-          <label><input name="q2" type="radio" value="FALSE"> FALSE</label> 
-          <label><input name="q2" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
-        </div>
+      <div id="q2-anchor" style="padding-top: 8px; border-top: 1px dashed #e5e7eb;"><p><strong>2.</strong> Mansfield won a prize for a story she wrote for the High School Reporter.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;"><label><input name="q2" type="radio" value="TRUE"> TRUE</label><label><input name="q2" type="radio" value="FALSE"> FALSE</label><label><input name="q2" type="radio" value="NOT GIVEN"> NOT GIVEN</label></div>
       </div>
-      
-      <div id="q3-anchor">
-        <p><strong>3</strong> Fishbourne Palace was large in comparison with Roman palaces in Italy.</p>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label><input name="q3" type="radio" value="TRUE"> TRUE</label> 
-          <label><input name="q3" type="radio" value="FALSE"> FALSE</label> 
-          <label><input name="q3" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
-        </div>
+      <div id="q3-anchor" style="padding-top: 8px; border-top: 1px dashed #e5e7eb;"><p><strong>3.</strong> How Pearl Button Was Kidnapped portrayed Maori people in a favourable way.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;"><label><input name="q3" type="radio" value="TRUE"> TRUE</label><label><input name="q3" type="radio" value="FALSE"> FALSE</label><label><input name="q3" type="radio" value="NOT GIVEN"> NOT GIVEN</label></div>
       </div>
-
-      <div id="q4-anchor">
-        <p><strong>4</strong> Research is continuing in the area close to Fishbourne Palace.</p>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label><input name="q4" type="radio" value="TRUE"> TRUE</label> 
-          <label><input name="q4" type="radio" value="FALSE"> FALSE</label> 
-          <label><input name="q4" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
-        </div>
+      <div id="q4-anchor" style="padding-top: 8px; border-top: 1px dashed #e5e7eb;"><p><strong>4.</strong> When Mansfield was at Queen’s College, she planned to be a professional writer.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;"><label><input name="q4" type="radio" value="TRUE"> TRUE</label><label><input name="q4" type="radio" value="FALSE"> FALSE</label><label><input name="q4" type="radio" value="NOT GIVEN"> NOT GIVEN</label></div>
       </div>
-
-      <div id="q5-anchor">
-        <p><strong>5</strong> Researchers agree on the identity of the person for whom Fishbourne Palace was constructed.</p>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label><input name="q5" type="radio" value="TRUE"> TRUE</label> 
-          <label><input name="q5" type="radio" value="FALSE"> FALSE</label> 
-          <label><input name="q5" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
-        </div>
+      <div id="q5-anchor" style="padding-top: 8px; border-top: 1px dashed #e5e7eb;"><p><strong>5.</strong> Mansfield was unpopular with the other students at Queen’s College.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;"><label><input name="q5" type="radio" value="TRUE"> TRUE</label><label><input name="q5" type="radio" value="FALSE"> FALSE</label><label><input name="q5" type="radio" value="NOT GIVEN"> NOT GIVEN</label></div>
       </div>
-
-      <div id="q6-anchor">
-        <p><strong>6</strong> Fishbourne Palace was burnt down by local people.</p>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;">
-          <label><input name="q6" type="radio" value="TRUE"> TRUE</label> 
-          <label><input name="q6" type="radio" value="FALSE"> FALSE</label> 
-          <label><input name="q6" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
-        </div>
+      <div id="q6-anchor" style="padding-top: 8px; border-top: 1px dashed #e5e7eb;"><p><strong>6.</strong> In London, Mansfield showed little interest in politics.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin:4px 0;"><label><input name="q6" type="radio" value="TRUE"> TRUE</label><label><input name="q6" type="radio" value="FALSE"> FALSE</label><label><input name="q6" type="radio" value="NOT GIVEN"> NOT GIVEN</label></div>
       </div>
-
     </div>
     
     <div class="group">
       <h4>Questions 7–13</h4>
-      <p>Complete the notes below.</p>
-      <p>Choose <strong>NO MORE THAN TWO WORDS AND/OR A NUMBER</strong> from the passage for each answer.</p>
+      <p>Complete the notes below. Choose <strong>ONE WORD AND/OR A NUMBER</strong> from the passage for each answer.</p>
       
-      <div style="padding: 10px; border: 1px solid #ccc; border-radius: 8px; margin-top: 1em;">
-        <h4 style="text-align: center;">Fishbourne Palace</h4>
-        
-        <p><strong>Construction</strong></p>
-        <ul>
-            <li id="q7-anchor">The first buildings on the site contained food for the <strong>7</strong> <input name="q7" type="text" class="blank" maxlength="40"></li>
-            <li id="q8-anchor">The palace building surrounded <strong>8</strong> <input name="q8" type="text" class="blank" maxlength="40"></li>
-            <li id="q9-anchor">In the 2nd and 3rd centuries colour was added to the <strong>9</strong> <input name="q9" type="text" class="blank" maxlength="40"> of the palace.</li>
-        </ul>
-
-        <p><strong>Discovery</strong></p>
-        <ul>
-            <li id="q10-anchor">The first part of the palace to be found was part of a <strong>10</strong> <input name="q10" type="text" class="blank" maxlength="40"></li>
-        </ul>
-
-        <p><strong>Possible inhabitants</strong></p>
-        <ul>
-            <li>Cogidubnus - he is named in several writings.</li>
-            <li id="q11-anchor">Sallustius Lucullus - he may have lived there until approximately <strong>11</strong> <input name="q11" type="text" class="blank" maxlength="40"> AD.</li>
-            <li>Verica - a British king.</li>
-            <li id="q12-anchor">Catuarus - his <strong>12</strong> <input name="q12" type="text" class="blank" maxlength="40"> was found there.</li>
-        </ul>
-
-        <p><strong>Present Day</strong></p>
-        <ul>
-            <li id="q13-anchor">A <strong>13</strong> <input name="q13" type="text" class="blank" maxlength="40"> has been built on the site to help protect it.</li>
-        </ul>
-      </div>
+      <p><strong>Katherine Mansfield’s adult years</strong></p>
+      <div id="q7-anchor" style="padding:8px 0;border-top:1px dashed #e5e7eb;">• <input type="text" class="blank-input" name="q7" placeholder="Answer 7"> – moved from England back to New Zealand</div>
+      <div id="q8-anchor" style="padding-top: 8px;">• First paid writing work was in a publication based in <input type="text" class="blank-input" name="q8" placeholder="Answer 8"></div>
+      <div id="q9-anchor" style="padding-top: 8px;">• Her <input type="text" class="blank-input" name="q9" placeholder="Answer 9"> and the New Zealand way of life made her feel dissatisfied</div>
+      <div style="padding-top: 8px;">• <strong>1908:</strong> returned to London</div>
+      <div style="padding-top: 8px;">• <strong>1911–1919:</strong> Met John Middleton Murry in 1911</div>
+      <div id="q10-anchor" style="padding-top: 8px;">• <input type="text" class="blank-input" name="q10" placeholder="Answer 10"> prevented Mansfield and Murry from staying together in Paris</div>
+      <div id="q11-anchor" style="padding-top: 8px;">• Spent time with distinguished <input type="text" class="blank-input" name="q11" placeholder="Answer 11"></div>
+      <div style="padding-top: 8px;">• From 1916, tuberculosis restricted the time she spent in London</div>
+      <div style="padding-top: 8px;">• <strong>1920:</strong></div>
+      <div id="q12-anchor" style="padding-top: 8px;">• Her <input type="text" class="blank-input" name="q12" placeholder="Answer 12"> was consolidated when Bliss and Other Stories was published</div>
+      <div style="padding-top: 8px;">• Wrote several stories at "Villa Isola Bella"</div>
+      <div style="padding-top: 8px;">• <strong>1923–1924:</strong></div>
+      <div id="q13-anchor" style="padding-top: 8px;">• Mansfield’s <input type="text" class="blank-input" name="q13" placeholder="Answer 13"> published more of her works after her death</div>
     </div>
 
     <div style="display:flex;gap:8px;margin-bottom:10px;">
@@ -493,595 +245,250 @@
 </div>
 
 <div aria-label="Selection tools" id="selbar" role="toolbar">
-  <button id="btnHL">Highlight</button>
-  <button id="btnUH">Remove</button>
-  <button id="btnNote">Note</button>
+  <button id="btnHL">Highlight</button><button id="btnUH">Remove</button><button id="btnNote">Note</button>
 </div>
 
 <div id="notes">
-  <header>
-    <strong>Notes</strong>
-    <div>
-      <button id="btnCopy">Copy</button>
-      <button id="btnClose">Close</button>
-    </div>
-  </header>
+  <header><strong>Notes</strong><div><button id="btnCopy">Copy</button><button id="btnClose">Close</button></div></header>
   <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
 </div>
 
 <div id="toast"></div>
 
 <script>
-// 页面滚动功能
+// UI functions: scrollToElement, showToast, Timer, toggleTheme, Divider, Highlighter, Notes
 function scrollToElement(id) {
-  const element = document.getElementById(id);
-  if (element) {
-    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    // 高亮显示题目
-    element.style.backgroundColor = '#e0e7ff';
-    setTimeout(() => {
-      element.style.backgroundColor = '';
-    }, 1000);
-  }
+    const element = document.getElementById(id);
+    if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const navItem = document.getElementById(id.replace('-anchor', '-nav'));
+        if (navItem) {
+            navItem.classList.add('active');
+            setTimeout(() => navItem.classList.remove('active'), 1200);
+        }
+    }
 }
 
-// 重置表单功能
-function resetForm() {
-  // 重置单选按钮
-  document.querySelectorAll('input[type="radio"]').forEach(radio => {
-    radio.checked = false;
-  });
-  
-  // 重置文本输入框
-  document.querySelectorAll('input.blank').forEach(input => {
-    input.value = '';
-  });
-  
-  // 清除结果
-  document.getElementById('results').innerHTML = '';
-  
-  // 更新导航状态
-  updateAnswerStatus();
-  
-  showToast('Form reset');
-}
-
-// Toast通知功能
 function showToast(msg) {
-  const toastEl = document.getElementById('toast');
-  toastEl.textContent = msg;
-  toastEl.style.display = 'block';
-  setTimeout(() => {
-    toastEl.style.display = 'none';
-  }, 1500);
+    const toastEl = document.getElementById('toast');
+    toastEl.textContent = msg;
+    toastEl.style.display = 'block';
+    setTimeout(() => { toastEl.style.display = 'none'; }, 1500);
 }
 
-// 计时器功能
-let _t = 0;
-let timerRunning = true;
-let timerInterval;
-const _timerEl = document.getElementById('timer');
-
-function updateTimer() {
-  const m = Math.floor(_t / 60);
-  const s = _t % 60;
-  _timerEl.textContent = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+let timerSeconds = 0, timerRunning = false, timerInterval;
+const timerEl = document.getElementById('timer');
+function updateTimerDisplay() {
+    const minutes = Math.floor(timerSeconds / 60);
+    const seconds = timerSeconds % 60;
+    timerEl.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
 function startTimer() {
-  timerInterval = setInterval(() => {
-    if (timerRunning) {
-      _t++;
-      updateTimer();
+    if (!timerRunning) {
+        timerRunning = true;
+        timerEl.classList.remove('paused');
+        timerInterval = setInterval(() => { timerSeconds++; updateTimerDisplay(); }, 1000);
     }
-  }, 1000);
+}
+
+function stopTimer() {
+    timerRunning = false;
+    timerEl.classList.add('paused');
+    clearInterval(timerInterval);
 }
 
 function toggleTimer() {
-  if (timerRunning) {
-    clearInterval(timerInterval);
-    timerRunning = false;
-    _timerEl.classList.add('paused');
-    showToast('Timer paused');
-  } else {
-    startTimer();
-    timerRunning = true;
-    _timerEl.classList.remove('paused');
-    showToast('Timer resumed');
-  }
+    if (timerRunning) { stopTimer(); showToast('Timer paused'); }
+    else { startTimer(); showToast('Timer resumed'); }
 }
 
-// 主题切换功能
 function toggleTheme() {
-  document.body.classList.toggle('dark');
-  const isDark = document.body.classList.contains('dark');
-  localStorage.setItem('darkMode', isDark);
-  const themeButton = document.querySelector('.theme-toggle');
-  themeButton.textContent = isDark ? '☀️' : '🌙';
+    document.body.classList.toggle('dark');
+    const isDark = document.body.classList.contains('dark');
+    localStorage.setItem('darkMode', isDark);
+    document.querySelector('.theme-toggle').textContent = isDark ? '☀️' : '🌙';
 }
 
-// 拖拽分栏功能
-var divider = document.getElementById('divider');
-var left = document.getElementById('left');
-var right = document.getElementById('right');
-var dragging = false;
-
-function startDrag(e) {
-  dragging = true;
-  document.body.style.cursor = 'ew-resize';
-  if (e.preventDefault) e.preventDefault();
-}
-
-function endDrag() {
-  dragging = false;
-  document.body.style.cursor = '';
-}
-
-function onMove(clientX) {
-  var container = document.querySelector('.shell').getBoundingClientRect();
-  var x = clientX - container.left;
-  x = Math.max(280, Math.min(container.width - 320, x));
-  left.style.flex = '0 0 ' + x + 'px';
-  right.style.flex = '1 1 auto';
-}
-
-divider.addEventListener('mousedown', function(e) { startDrag(e); });
-window.addEventListener('mousemove', function(e) { if (dragging) onMove(e.clientX); });
-window.addEventListener('mouseup', endDrag);
-divider.addEventListener('touchstart', function(e) { startDrag(e.touches[0]); }, { passive: false });
-window.addEventListener('touchmove', function(e) { if (dragging) onMove(e.touches[0].clientX); }, { passive: false });
-window.addEventListener('touchend', endDrag);
-
-// 高亮和笔记功能
-var selbar = document.getElementById('selbar');
-var btnHL = document.getElementById('btnHL');
-var btnUH = document.getElementById('btnUH');
-var btnNote = document.getElementById('btnNote');
-var lastRange = null;
-var currentHlNode = null;
-var keepToolbar = false;
-
-function positionSelbarForRect(rect) {
-  selbar.style.display = 'flex';
-  requestAnimationFrame(function() {
-    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
-    var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
-    selbar.style.top = ((top > 0) ? top : (window.scrollY + rect.bottom + 8)) + 'px';
-    selbar.style.left = Math.max(8, leftPos) + 'px';
-  });
-}
-
-function updateSelbar() {
-  var sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
-    selbar.style.display = 'none';
-    currentHlNode = null;
-    return;
-  }
-  var range = sel.getRangeAt(0);
-  lastRange = range.cloneRange();
-  currentHlNode = null;
-  positionSelbarForRect(range.getBoundingClientRect());
-}
-
-document.getElementById('left').addEventListener('mouseup', updateSelbar);
-document.getElementById('right').addEventListener('mouseup', updateSelbar);
-document.addEventListener('selectionchange', function() {
-  var sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
-    if (!keepToolbar && !currentHlNode) {
-      selbar.style.display = 'none';
-    }
-  }
+const divider = document.getElementById('divider'), leftPane = document.getElementById('left');
+let isDragging = false;
+divider.addEventListener('mousedown', (e) => { isDragging = true; document.body.style.cursor = 'ew-resize'; e.preventDefault(); });
+window.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    const shellRect = document.querySelector('.shell').getBoundingClientRect();
+    let newLeftWidth = e.clientX - shellRect.left;
+    if (newLeftWidth < 280) newLeftWidth = 280;
+    if (newLeftWidth > shellRect.width - 320) newLeftWidth = shellRect.width - 320;
+    leftPane.style.flexBasis = newLeftWidth + 'px';
 });
-document.addEventListener('scroll', function() {
-  if (selbar.style.display === 'flex') updateSelbar();
-});
+window.addEventListener('mouseup', () => { isDragging = false; document.body.style.cursor = 'default'; });
 
-document.addEventListener('mousedown', function(e) {
-  var t = e.target;
-  if (t.classList && t.classList.contains('hl')) {
-    keepToolbar = true;
-  } else {
-    keepToolbar = false;
-  }
-}, true);
-
-document.addEventListener('click', function(e) {
-  var target = e.target;
-  if (target.classList && target.classList.contains('hl')) {
-    currentHlNode = target;
-    lastRange = null;
-    positionSelbarForRect(target.getBoundingClientRect());
-    var sel = window.getSelection();
-    if (sel) sel.removeAllRanges();
-    setTimeout(function() { keepToolbar = false; }, 0);
-  }
-}, true);
-
-function doHighlight() {
-  if (currentHlNode) return;
-  if (!lastRange || lastRange.collapsed) return;
-  
-  const startNode = lastRange.startContainer;
-  const endNode = lastRange.endContainer;
-  
-  if (startNode === endNode) {
-    try {
-      const span = document.createElement('span');
-      span.className = 'hl';
-      lastRange.surroundContents(span);
-      selbar.style.display = 'none';
-      showToast('Highlighted');
-      return;
-    } catch (e) {}
-  }
-  
-  const fragment = lastRange.cloneContents();
-  const div = document.createElement('div');
-  div.appendChild(fragment);
-  
-  function processNode(node) {
-    if (node.nodeType === Node.TEXT_NODE) {
-      if (node.textContent.trim().length > 0) {
-        const span = document.createElement('span');
-        span.className = 'hl';
-        span.textContent = node.textContent;
-        return span;
-      }
-      return node;
-    }
-    
-    if (node.nodeType === Node.ELEMENT_NODE) {
-      const isBlock = window.getComputedStyle(node).display.includes('block') ||
-        ['P', 'H1', 'H2', 'H3', 'H4', 'DIV'].includes(node.tagName);
-      
-      const wrapper = isBlock ? document.createElement(node.tagName.toLowerCase()) : document.createElement('span');
-      wrapper.className = isBlock ? node.className + ' hl' : 'hl';
-      
-      Array.from(node.attributes).forEach(attr => {
-        wrapper.setAttribute(attr.name, attr.value);
-      });
-      
-      while (node.firstChild) {
-        const processedChild = processNode(node.firstChild);
-        wrapper.appendChild(processedChild);
-      }
-      
-      return wrapper;
-    }
-    
-    return node;
-  }
-  
-  const highlightedContent = processNode(div);
-  lastRange.deleteContents();
-  lastRange.insertNode(highlightedContent);
-  
-  selbar.style.display = 'none';
-  showToast('Highlighted');
+const selbar = document.getElementById('selbar');
+let lastRange = null;
+function positionSelbar() {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) { selbar.style.display = 'none'; return; }
+    const range = selection.getRangeAt(0);
+    lastRange = range.cloneRange();
+    const rect = range.getBoundingClientRect();
+    selbar.style.display = 'flex';
+    selbar.style.top = `${window.scrollY + rect.top - selbar.offsetHeight - 5}px`;
+    selbar.style.left = `${window.scrollX + rect.left + rect.width / 2 - selbar.offsetWidth / 2}px`;
 }
+document.getElementById('left').addEventListener('mouseup', positionSelbar);
+document.getElementById('btnHL').addEventListener('click', () => { if (lastRange) { const span = document.createElement('span'); span.className = 'hl'; try { lastRange.surroundContents(span); } catch (e) { span.appendChild(lastRange.extractContents()); lastRange.insertNode(span); } window.getSelection().removeAllRanges(); selbar.style.display = 'none'; } });
+document.getElementById('btnUH').addEventListener('click', () => { if (lastRange) { const ancestor = lastRange.commonAncestorContainer; ancestor.querySelectorAll('.hl').forEach(hl => { if (lastRange.intersectsNode(hl)) { const parent = hl.parentNode; while (hl.firstChild) { parent.insertBefore(hl.firstChild, hl); } parent.removeChild(hl); parent.normalize(); } }); window.getSelection().removeAllRanges(); selbar.style.display = 'none'; } });
 
-function removeHighlight() {
-  if (currentHlNode) {
-    const parent = currentHlNode.parentNode;
-    while (currentHlNode.firstChild) {
-      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
-    }
-    parent.removeChild(currentHlNode);
-    parent.normalize();
-    currentHlNode = null;
-    selbar.style.display = 'none';
-    showToast('Highlight removed');
-    return;
-  }
-  
-  if (!lastRange) return;
-  
-  const selRect = lastRange.getBoundingClientRect();
-  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
-  const toRemove = [];
-  
-  while (walker.nextNode()) {
-    const node = walker.currentNode;
-    if (node.classList && node.classList.contains('hl')) {
-      const rect = node.getBoundingClientRect();
-      if (!(rect.right < selRect.left || rect.left > selRect.right ||
-        rect.bottom < selRect.top || rect.top > selRect.bottom)) {
-        toRemove.push(node);
-      }
-    }
-  }
-  
-  toRemove.forEach(el => {
-    const parent = el.parentNode;
-    while (el.firstChild) {
-      parent.insertBefore(el.firstChild, el);
-    }
-    parent.removeChild(el);
-    parent.normalize();
-  });
-  
-  selbar.style.display = 'none';
-  showToast('Highlight removed');
-}
-
-btnHL.addEventListener('click', doHighlight);
-btnUH.addEventListener('click', removeHighlight);
-
-// 笔记功能
-var notes = document.getElementById('notes');
-var noteArea = document.getElementById('noteArea');
-var btnCopy = document.getElementById('btnCopy');
-var btnClose = document.getElementById('btnClose');
-
-function toggleNotes() {
-  notes.style.display = (notes.style.display === 'flex' ? 'none' : 'flex');
-}
+const notesPanel = document.getElementById('notes'), noteArea = document.getElementById('noteArea');
+function toggleNotes() { notesPanel.style.display = (notesPanel.style.display === 'flex' ? 'none' : 'flex'); }
 window.toggleNotes = toggleNotes;
+document.getElementById('btnClose').addEventListener('click', toggleNotes);
+document.getElementById('btnCopy').addEventListener('click', async () => { await navigator.clipboard.writeText(noteArea.value || ''); showToast('Copied'); });
+document.getElementById('btnNote').addEventListener('click', () => { const selection = window.getSelection().toString().trim(); if (selection) { noteArea.value += (noteArea.value ? '\n\n' : '') + `> ${selection}`; toggleNotes(); window.getSelection().removeAllRanges(); selbar.style.display = 'none'; } });
 
-btnClose.addEventListener('click', toggleNotes);
-btnCopy.addEventListener('click', async function() {
-  await navigator.clipboard.writeText(noteArea.value || '');
-  showToast('Copied');
-});
-
-btnNote.addEventListener('click', function() {
-  var text = '';
-  if (currentHlNode) {
-    text = (currentHlNode.textContent || '').trim();
-  } else if (lastRange) {
-    var frag = lastRange.cloneContents();
-    text = (frag.textContent || '').trim();
-  }
-  toggleNotes();
-  if (text) {
-    noteArea.value = (noteArea.value ? noteArea.value + '\n' : '') + '> ' + text + '\n';
-  }
-  selbar.style.display = 'none';
-});
-
-// 答题状态更新
-function updateAnswerStatus() {
-  for (let i = 1; i <= 13; i++) {
-    const inputs = document.querySelectorAll(`input[name="q${i}"]`);
-    const navItem = document.getElementById(`q${i}-nav`);
-    if (navItem) {
-      let answered = false;
-      inputs.forEach(input => {
-        if ((input.type === 'radio' || input.type === 'checkbox') && input.checked) {
-          answered = true;
-        } else if (input.type === 'text' && input.value.trim()) {
-          answered = true;
-        }
-      });
-      if (answered) {
-        navItem.classList.add('answered');
-      } else {
-        navItem.classList.remove('answered');
-      }
-    }
-  }
-}
-
-// 答案和评分系统
-var answers = {
-  "q1": "TRUE", "q2": "FALSE", "q3": "TRUE", "q4": "NOT GIVEN", "q5": "FALSE", "q6": "TRUE",
-  "q7": "1907", "q8": "Bakelite", "q9": "nylon", "q10": "1950s", "q11": "recycling", "q12": "biodegradable", "q13": "microplastics"
+// Core Logic: Grading, Resetting, Status Updates
+const correctAnswers = {
+    q1: "FALSE", q2: "NOT GIVEN", q3: "TRUE", q4: "FALSE", q5: "FALSE", q6: "TRUE",
+    q7: "1906", q8: "Australia", q9: "family", q10: "bankruptcy", q11: "writers", q12: "reputation", q13: "husband"
 };
 
-function grade() {
-  var total = 0, correct = 0, lines = [];
-  
-  // 检查单选题和文本题 (1-13)
-  for (let n = 1; n <= 13; n++) {
-    const q = `q${n}`;
-    total++;
-    const selected = document.querySelector(`input[name="${q}"]:checked`);
-    const textInput = document.querySelector(`input[name="${q}"][type="text"]`);
-    let userAnswer = '';
-    
-    if (selected) {
-      userAnswer = selected.value;
-    } else if (textInput) {
-      userAnswer = textInput.value.trim();
+function updateAnswerStatus() {
+    for (let i = 1; i <= 13; i++) {
+        const navItem = document.getElementById(`q${i}-nav`);
+        if (navItem) {
+            let answered = false;
+            const radio = document.querySelector(`input[name="q${i}"]:checked`);
+            const textInput = document.querySelector(`input[name="q${i}"].blank-input`);
+            if (radio) {
+                answered = true;
+            } else if (textInput && textInput.value.trim() !== '') {
+                answered = true;
+            }
+            navItem.classList.toggle('answered', answered);
+        }
     }
-    
-    const isCorrect = userAnswer.toLowerCase() === answers[q].toLowerCase();
-    if (isCorrect) correct++;
-    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✓' : '✗'}`);
-  }
-  
-  // 显示结果
-  const acc = Math.round(100 * correct / total);
-  document.getElementById('results').innerHTML = `
-    <p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p>
-    <pre>${lines.join('\n')}</pre>
-  `;
-  
-  // 显示答案
-  document.getElementById('answerContent').innerHTML = `
-    <ol>
-      <li>1 → TRUE</li>
-      <li>2 → FALSE</li>
-      <li>3 → TRUE</li>
-      <li>4 → NOT GIVEN</li>
-      <li>5 → FALSE</li>
-      <li>6 → TRUE</li>
-      <li>7 → 1907</li>
-      <li>8 → Bakelite</li>
-      <li>9 → nylon</li>
-      <li>10 → 1950s</li>
-      <li>11 → recycling</li>
-      <li>12 → biodegradable</li>
-      <li>13 → microplastics</li>
-    </ol>
-  `;
-  document.querySelector('#answerBox .badge').textContent = 'tap to view';
-  
-  updateAnswerStatus();
 }
 
-// 页面加载完成后初始化
-document.addEventListener('DOMContentLoaded', function() {
-  startTimer();
-  updateAnswerStatus(); // 初始化答题状态
-  
-  // 加载保存的主题
-  if (localStorage.getItem('darkMode') === 'true') {
-    document.body.classList.add('dark');
-    document.querySelector('.theme-toggle').textContent = '☀️';
-  }
-});
+function grade() {
+    let total = 13, correct = 0, resultLines = [];
+    
+    for (let i = 1; i <= 13; i++) {
+        const qName = `q${i}`;
+        let userAnswer = '';
+        const radio = document.querySelector(`input[name="${qName}"]:checked`);
+        const textInput = document.querySelector(`input[name="${qName}"].blank-input`);
 
-// 监听答案变化
-document.addEventListener('change', updateAnswerStatus);
+        if (radio) {
+            userAnswer = radio.value;
+        } else if (textInput) {
+            userAnswer = textInput.value.trim();
+        }
+
+        const isCorrect = userAnswer.toLowerCase() === correctAnswers[qName].toLowerCase();
+        if (isCorrect) correct++;
+        resultLines.push(`${i}. ${userAnswer || 'None'} ${isCorrect ? '✓' : '✗'}`);
+    }
+
+    const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
+    document.getElementById('results').innerHTML = `<p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${accuracy}%</span></p><pre>${resultLines.join('\n')}</pre>`;
+    
+    document.getElementById('answerContent').innerHTML = `
+        <ol>
+            ${Object.values(correctAnswers).map(answer => `<li>${answer}</li>`).join('')}
+        </ol>
+    `;
+    document.querySelector('#answerBox .badge').textContent = 'tap to view';
+    updateAnswerStatus();
+}
+
+function resetForm() {
+    document.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach(input => input.checked = false);
+    document.querySelectorAll('.blank-input').forEach(input => input.value = '');
+    document.getElementById('results').innerHTML = '';
+    document.getElementById('answerContent').innerHTML = '';
+    const answerBadge = document.querySelector('#answerBox .badge');
+    if (answerBadge) answerBadge.textContent = 'hidden';
+    if (document.getElementById('answerBox').hasAttribute('open')) {
+        document.getElementById('answerBox').removeAttribute('open');
+    }
+    updateAnswerStatus();
+    showToast('Form reset');
+}
+
+// Event Listeners and Initialization
+document.addEventListener('DOMContentLoaded', () => {
+    startTimer();
+    updateAnswerStatus();
+    if (localStorage.getItem('darkMode') === 'true') {
+        document.body.classList.add('dark');
+        document.querySelector('.theme-toggle').textContent = '☀️';
+    }
+    loadPracticePageEnhancer();
+});
 document.addEventListener('input', updateAnswerStatus);
 
-// 练习页面增强脚本集成
+// Practice Page Enhancer Script
 function loadPracticePageEnhancer() {
-  const script = document.createElement('script');
-  script.src = '../../../js/practice-page-enhancer.js';
-  script.onload = function() {
-    console.log('练习页面增强脚本已加载');
-  };
-  script.onerror = function() {
-    console.error('练习页面增强脚本加载失败');
-    // 降级到内联增强
-    loadInlineEnhancer();
-  };
-  document.head.appendChild(script);
+    const script = document.createElement('script');
+    script.src = '../../../js/practice-page-enhancer.js';
+    script.onload = () => console.log('Practice page enhancer script loaded.');
+    script.onerror = () => { console.error('Failed to load practice page enhancer script. Falling back to inline version.'); loadInlineEnhancer(); };
+    document.head.appendChild(script);
 }
 
-// 内联增强器（降级方案）
 function loadInlineEnhancer() {
-  if (window.practicePageEnhancer) return;
-  
-  window.practicePageEnhancer = {
-    initialize: function() {
-      console.log('[InlineEnhancer] 内联增强器已初始化');
-      this.setupCommunication();
-      this.setupAnswerListeners();
-      this.interceptSubmit();
-    },
-    
-    setupCommunication: function() {
-      this.parentWindow = window.opener || window.parent;
-      window.addEventListener('message', (event) => {
-        if (event.data && event.data.type === 'INIT_SESSION') {
-          this.sessionId = event.data.data.sessionId;
-          this.sendMessage('SESSION_READY', {
-            pageType: this.detectPageType(),
-            url: window.location.href
-          });
-        }
-      });
-    },
-    
-    detectPageType: function() {
-      const title = document.title || '';
-      if (title.includes('P1')) return 'P1';
-      if (title.includes('P2')) return 'P2';
-      if (title.includes('P3')) return 'P3';
-      return 'unknown';
-    },
-    
-    setupAnswerListeners: function() {
-      this.answers = {};
-      this.startTime = Date.now();
-      
-      document.addEventListener('change', (e) => {
-        if (e.target.name && e.target.name.startsWith('q')) {
-          this.answers[e.target.name] = e.target.value;
-        }
-      });
-      
-      document.addEventListener('input', (e) => {
-        if (e.target.name && e.target.name.startsWith('q')) {
-          this.answers[e.target.name] = e.target.value;
-        }
-      });
-    },
-    
-    interceptSubmit: function() {
-      // 拦截grade函数
-      if (typeof window.grade === 'function') {
-        const originalGrade = window.grade;
-        window.grade = () => {
-          const result = originalGrade();
-          setTimeout(() => this.handleSubmit(), 200);
-          return result;
-        };
-      }
-      
-      // 监听提交按钮
-      document.addEventListener('click', (e) => {
-        if (e.target.tagName === 'BUTTON' &&
-          (e.target.textContent.includes('Submit') ||
-            e.target.onclick && e.target.onclick.toString().includes('grade'))) {
-          setTimeout(() => this.handleSubmit(), 300);
-        }
-      });
-    },
-    
-    handleSubmit: function() {
-      const results = {
-        sessionId: this.sessionId,
-        startTime: this.startTime,
-        endTime: Date.now(),
-        duration: Math.round((Date.now() - this.startTime) / 1000),
-        answers: this.answers,
-        scoreInfo: this.extractScore(),
-        pageType: this.detectPageType(),
-        url: window.location.href
-      };
-      
-      this.sendMessage('PRACTICE_COMPLETE', results);
-    },
-    
-    extractScore: function() {
-      const resultsEl = document.getElementById('results');
-      if (!resultsEl) return null;
-      
-      const text = resultsEl.textContent || '';
-      const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
-      if (scoreMatch) {
-        const correct = parseInt(scoreMatch[1]);
-        const total = parseInt(scoreMatch[2]);
-        return {
-          correct: correct,
-          total: total,
-          accuracy: total > 0 ? correct / total : 0,
-          percentage: Math.round((correct / total) * 100),
-          source: 'inline_extraction'
-        };
-      }
-      return null;
-    },
-    
-    sendMessage: function(type, data) {
-      if (this.parentWindow) {
-        this.parentWindow.postMessage({
-          type: type,
-          data: data,
-          source: 'practice_page'
-        }, '*');
-      }
-    }
-  };
-  
-  // 初始化
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-      window.practicePageEnhancer.initialize();
-    });
-  } else {
+    if (window.practicePageEnhancer) return;
+    window.practicePageEnhancer = {
+        initialize: function() { this.setupCommunication(); this.setupAnswerListeners(); this.interceptSubmit(); },
+        setupCommunication: function() {
+            this.parentWindow = window.opener || window.parent;
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'INIT_SESSION') {
+                    this.sessionId = event.data.data.sessionId;
+                    this.sendMessage('SESSION_READY', { pageType: this.detectPageType(), url: window.location.href });
+                }
+            });
+        },
+        detectPageType: () => document.title.includes('P1') ? 'P1' : 'unknown',
+        setupAnswerListeners: function() {
+            this.answers = {};
+            this.startTime = Date.now();
+            document.addEventListener('input', (e) => {
+                if (e.target.name && e.target.name.startsWith('q')) {
+                    this.answers[e.target.name] = e.target.value;
+                }
+            });
+        },
+        interceptSubmit: function() { if (typeof window.grade === 'function') { const originalGrade = window.grade; window.grade = () => { originalGrade(); setTimeout(() => this.handleSubmit(), 200); }; } },
+        handleSubmit: function() {
+            const results = {
+                sessionId: this.sessionId,
+                startTime: this.startTime,
+                endTime: Date.now(),
+                duration: Math.round((Date.now() - this.startTime) / 1000),
+                answers: this.answers,
+                scoreInfo: this.extractScore(),
+                pageType: this.detectPageType(),
+                url: window.location.href
+            };
+            this.sendMessage('PRACTICE_COMPLETE', results);
+        },
+        extractScore: function() {
+            const resultsEl = document.getElementById('results');
+            if (!resultsEl) return null;
+            const text = resultsEl.textContent || '';
+            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+            if (scoreMatch) {
+                const correct = parseInt(scoreMatch[1], 10);
+                const total = parseInt(scoreMatch[2], 10);
+                return { correct, total, accuracy: total > 0 ? correct / total : 0, percentage: total > 0 ? Math.round((correct / total) * 100) : 0, source: 'inline_extraction' };
+            }
+            return null;
+        },
+        sendMessage: function(type, data) { if (this.parentWindow && this.parentWindow !== window) { this.parentWindow.postMessage({ type, data, source: 'practice_page' }, '*'); } }
+    };
     window.practicePageEnhancer.initialize();
-  }
 }
-
-// 加载增强脚本
-loadPracticePageEnhancer();
 </script>
 
 </body>

@@ -1793,17 +1793,22 @@
 
                     // 如果文件名不是PDF，尝试查找对应的PDF文件
                     if (!pdfPath.toLowerCase().endsWith('.pdf')) {
-                        // 尝试常见的PDF文件名模式
-                        const basePath = exam.path;
-                        const possiblePdfNames = [
-                            exam.filename.replace(/\.html?$/i, '.pdf'),
-                            exam.id.replace(/^p\d+-\w+-\d+/, exam.category) + '.pdf',
-                            // 根据目录结构推测PDF文件名
-                            exam.title.split(' ')[0] + '.pdf'
-                        ];
+                        // 使用题库索引中定义的pdfFilename字段（如果存在）
+                        if (exam.pdfFilename) {
+                            pdfPath = exam.path + exam.pdfFilename;
+                        } else {
+                            // 尝试常见的PDF文件名模式
+                            const basePath = exam.path;
+                            const possiblePdfNames = [
+                                exam.filename.replace(/\.html?$/i, '.pdf'),
+                                exam.id.replace(/^p\d+-\w+-\d+/, exam.category) + '.pdf',
+                                // 根据目录结构推测PDF文件名
+                                exam.title.split(' ')[0] + '.pdf'
+                            ];
 
-                        // 使用第一个可能的PDF文件名
-                        pdfPath = basePath + possiblePdfNames[0];
+                            // 使用第一个可能的PDF文件名
+                            pdfPath = basePath + possiblePdfNames[0];
+                        }
                     }
 
                     showMessage(`正在打开PDF: ${exam.title}`, 'info');
