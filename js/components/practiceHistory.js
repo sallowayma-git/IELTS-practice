@@ -281,7 +281,10 @@ class PracticeHistory {
         // 搜索输入事件
         const searchInput = document.getElementById('history-search');
         if (searchInput) {
-            searchInput.addEventListener('input', Utils.debounce((e) => {
+            const debounceFunc = (window.Utils && typeof window.Utils.debounce === 'function') 
+                ? Utils.debounce 
+                : this.debounce;
+            searchInput.addEventListener('input', debounceFunc((e) => {
                 this.searchQuery = e.target.value.trim().toLowerCase();
                 this.applyFilters();
             }, 300));
@@ -329,8 +332,15 @@ class PracticeHistory {
                 throw new Error('PracticeRecorder not available');
             }
             
-            // 获取所有记录
-            this.currentRecords = practiceRecorder.getPracticeRecords();
+            // 检查getPracticeRecords方法是否存在
+            if (typeof practiceRecorder.getPracticeRecords !== 'function') {
+                console.error('getPracticeRecords method not found on practiceRecorder');
+                // 使用降级方法直接从storage获取
+                this.currentRecords = storage.get('practice_records', []);
+            } else {
+                // 获取所有记录
+                this.currentRecords = practiceRecorder.getPracticeRecords();
+            }
             
             // 应用筛选和排序
             this.applyFilters();
@@ -498,16 +508,88 @@ class PracticeHistory {
      * 更新历史统计信息
      */
     updateHistoryStats() {
-        const totalPractices = this.filteredRecords.length;
-        const avgAccuracy = totalPractices > 0 
-            ? Math.round(this.filteredRecords.reduce((sum, r) => sum + r.accuracy, 0) / totalPractices * 100)
-            : 0;
-        const totalTime = this.filteredRecords.reduce((sum, r) => sum + r.duration, 0);
-        
-        document.getElementById('total-practices').textContent = totalPractices;
-        document.getElementById('avg-accuracy').textContent = avgAccuracy + '%';
-        document.getElementById('total-time').textContent = Utils.formatDuration(totalTime);
-        document.getElementById('filtered-count').textContent = totalPractices;
+        try {
+            const totalPractices = this.filteredRecords.length;
+            const avgAccuracy = totalPractices > 0 
+                ? Math.round(this.filteredRecords.reduce((sum, r) => sum + r.accuracy, 0) / totalPractices * 100)
+                : 0;
+            const totalTime = this.filteredRecords.reduce((sum, r) => sum + r.duration, 0);
+            
+            document.getElementById('total-practices').textContent = totalPractices;
+            document.getElementById('avg-accuracy').textContent = avgAccuracy + '%';
+            
+            // 防御性检查 Utils 对象是否存在
+            console.log('[PracticeHistory] Utils对象检查:', {
+                windowUtils: !!window.Utils,
+                formatDurationExists: window.Utils && typeof window.Utils.formatDuration === 'function',
+                totalTime: totalTime
+            });
+            
+            const formattedTime = (window.Utils && typeof window.Utils.formatDuration === 'function') 
+                ? Utils.formatDuration(totalTime)
+                : this.formatDurationFallback(totalTime);
+            document.getElementById('total-time').textContent = formattedTime;
+            document.getElementById('filtered-count').textContent = totalPractices;
+        } catch (error) {
+            console.error('[PracticeHistory] updateHistoryStats错误:', error);
+            // 使用备用方案
+            document.getElementById('total-time').textContent = '计算中...';
+        }
+    }
+
+    /**
+     * 备用时间格式化函数
+     */
+    formatDurationFallback(seconds) {
+        if (seconds < 60) {
+            return `${seconds}秒`;
+        } else if (seconds < 3600) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return remainingSeconds > 0 ? `${minutes}分${remainingSeconds}秒` : `${minutes}分钟`;
+        } else {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            return minutes > 0 ? `${hours}小时${minutes}分钟` : `${hours}小时`;
+        }
+    }
+
+    /**
+     * 备用日期格式化函数
+     */
+    formatDateFallback(date, format = 'YYYY-MM-DD') {
+        const d = new Date(date);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const hours = String(d.getHours()).padStart(2, '0');
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        const seconds = String(d.getSeconds()).padStart(2, '0');
+
+        return format
+            .replace('YYYY', year)
+            .replace('MM', month)
+            .replace('DD', day)
+            .replace('HH', hours)
+            .replace('mm', minutes)
+            .replace('ss', seconds);
+    }
+
+    /**
+     * 备用防抖函数
+     */
+    debounce(func, wait, immediate = false) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                timeout = null;
+                if (!immediate) func.apply(this, args);
+            };
+            const callNow = immediate && !timeout;
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+            if (callNow) func.apply(this, args);
+        };
     }
 
     /**
@@ -541,8 +623,12 @@ class PracticeHistory {
      */
     createRecordItem(record) {
         const accuracy = Math.round(record.accuracy * 100);
-        const duration = Utils.formatDuration(record.duration);
-        const startTime = Utils.formatDate(record.startTime, 'YYYY-MM-DD HH:mm');
+        const duration = (window.Utils && typeof window.Utils.formatDuration === 'function') 
+            ? Utils.formatDuration(record.duration)
+            : this.formatDurationFallback(record.duration);
+        const startTime = (window.Utils && typeof window.Utils.formatDate === 'function') 
+            ? Utils.formatDate(record.startTime, 'YYYY-MM-DD HH:mm')
+            : this.formatDateFallback(record.startTime, 'YYYY-MM-DD HH:mm');
         
         const accuracyClass = accuracy >= 80 ? 'excellent' : accuracy >= 60 ? 'good' : 'needs-improvement';
         const statusClass = record.status === 'completed' ? 'completed' : 'interrupted';
@@ -720,9 +806,15 @@ class PracticeHistory {
         if (!record) return;
         
         const accuracy = Math.round(record.accuracy * 100);
-        const duration = Utils.formatDuration(record.duration);
-        const startTime = Utils.formatDate(record.startTime, 'YYYY-MM-DD HH:mm:ss');
-        const endTime = Utils.formatDate(record.endTime, 'YYYY-MM-DD HH:mm:ss');
+        const duration = (window.Utils && typeof window.Utils.formatDuration === 'function') 
+            ? Utils.formatDuration(record.duration)
+            : this.formatDurationFallback(record.duration);
+        const startTime = (window.Utils && typeof window.Utils.formatDate === 'function') 
+            ? Utils.formatDate(record.startTime, 'YYYY-MM-DD HH:mm:ss')
+            : this.formatDateFallback(record.startTime, 'YYYY-MM-DD HH:mm:ss');
+        const endTime = (window.Utils && typeof window.Utils.formatDate === 'function') 
+            ? Utils.formatDate(record.endTime, 'YYYY-MM-DD HH:mm:ss')
+            : this.formatDateFallback(record.endTime, 'YYYY-MM-DD HH:mm:ss');
         
         // 生成答案详情表格
         const answersTableHtml = this.generateAnswersTable(record);

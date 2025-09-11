@@ -455,3 +455,7 @@ window.Utils = {
     formatFileSize,
     ColorUtils
 };
+
+// 添加加载确认日志
+console.log('[Utils] 工具函数已加载，Utils对象可用:', !!window.Utils);
+console.log('[Utils] formatDuration函数可用:', typeof window.Utils.formatDuration === 'function');

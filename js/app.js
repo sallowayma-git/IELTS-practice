@@ -313,7 +313,7 @@ class ExamSystemApp {
         // 定义组件加载优先级 - 只加载实际存在的组件
         const coreComponents = ['PracticeRecorder']; // 只有PracticeRecorder是必需的
         const optionalComponents = [
-            'ExamBrowser', 'PracticeHistory', 'ExamScanner'
+            'ExamBrowser' // PracticeHistory and ExamScanner were removed
         ]; // 只加载真正需要且存在的组件
 
         try {
@@ -374,7 +374,7 @@ class ExamSystemApp {
 
         const componentInitializers = [
             { name: 'ExamBrowser', init: () => new ExamBrowser() },
-            { name: 'PracticeHistory', init: () => new PracticeHistory() },
+            // PracticeHistory组件已移除，使用简单的练习记录界面
             { name: 'ExamScanner', init: () => new ExamScanner() },
             { name: 'RecommendationDisplay', init: () => new RecommendationDisplay() },
             {
@@ -434,7 +434,7 @@ class ExamSystemApp {
 
         // 只初始化已经加载的组件
         const availableComponents = [
-            'ExamBrowser', 'PracticeHistory', 'ExamScanner'
+            'ExamBrowser' // PracticeHistory and ExamScanner were removed
         ].filter(name => window[name]);
 
         if (availableComponents.length > 0) {
@@ -777,9 +777,8 @@ class ExamSystemApp {
                 }
                 break;
             case 'practice':
-                if (this.components.practiceHistory) {
-                    this.components.practiceHistory.refreshHistory();
-                }
+                // 使用简单的练习记录更新，不依赖复杂组件
+                this.updateSimplePracticeView();
                 break;
             case 'analysis':
                 this.loadAnalysisData();
@@ -1331,6 +1330,31 @@ class ExamSystemApp {
                     sessionId: this.generateSessionId(),
                     status: 'started'
                 };
+            },
+
+            getPracticeRecords: (filters = {}) => {
+                console.log('[FallbackRecorder] 获取练习记录');
+                try {
+                    const records = storage.get('practice_records', []);
+                    
+                    if (Object.keys(filters).length === 0) {
+                        return records;
+                    }
+                    
+                    return records.filter(record => {
+                        if (filters.examId && record.examId !== filters.examId) return false;
+                        if (filters.category && record.category !== filters.category) return false;
+                        if (filters.startDate && new Date(record.startTime) < new Date(filters.startDate)) return false;
+                        if (filters.endDate && new Date(record.startTime) > new Date(filters.endDate)) return false;
+                        if (filters.minAccuracy && record.accuracy < filters.minAccuracy) return false;
+                        if (filters.maxAccuracy && record.accuracy > filters.maxAccuracy) return false;
+                        
+                        return true;
+                    });
+                } catch (error) {
+                    console.error('[FallbackRecorder] 获取记录失败:', error);
+                    return [];
+                }
             }
         };
     }
@@ -1474,7 +1498,7 @@ class ExamSystemApp {
     /**
      * 开始练习会话
      */
-    startPracticeSession(examId) {
+    async startPracticeSession(examId) {
         const examIndex = storage.get('exam_index', []);
         const exam = examIndex.find(e => e.id === examId);
 
@@ -1483,9 +1507,20 @@ class ExamSystemApp {
             return;
         }
 
-        // 使用练习记录器开始会话
-        if (this.components.practiceRecorder) {
-            try {
+        try {
+            // 优先使用新的练习页面管理器
+            if (window.practicePageManager) {
+                console.log('[App] 使用练习页面管理器启动会话');
+                const sessionId = await window.practicePageManager.startPracticeSession(examId, exam);
+                console.log('[App] 练习会话已启动:', sessionId);
+                
+                // 更新题目状态
+                this.updateExamStatus(examId, 'in-progress');
+                return sessionId;
+            }
+            
+            // 使用练习记录器开始会话
+            if (this.components.practiceRecorder) {
                 let sessionData;
                 if (typeof this.components.practiceRecorder.startPracticeSession === 'function') {
                     sessionData = this.components.practiceRecorder.startPracticeSession(examId, exam);
@@ -1496,26 +1531,55 @@ class ExamSystemApp {
                     sessionData = null;
                 }
                 console.log('[App] 练习会话已通过记录器启动:', sessionData);
-            } catch (error) {
-                console.error('[App] 练习记录器启动失败:', error);
+            } else {
+                // 降级处理
+                console.log('[App] 使用降级会话管理');
+                const sessionData = {
+                    examId: examId,
+                    startTime: new Date().toISOString(),
+                    status: 'started',
+                    sessionId: this.generateSessionId()
+                };
+
+                const activeSessions = storage.get('active_sessions', []);
+                activeSessions.push(sessionData);
+                storage.set('active_sessions', activeSessions);
             }
-        } else {
-            // 降级处理
-            console.log('[App] 使用降级会话管理');
-            const sessionData = {
-                examId: examId,
-                startTime: new Date().toISOString(),
-                status: 'started',
-                sessionId: this.generateSessionId()
-            };
 
-            const activeSessions = storage.get('active_sessions', []);
-            activeSessions.push(sessionData);
-            storage.set('active_sessions', activeSessions);
+            // 更新题目状态
+            this.updateExamStatus(examId, 'in-progress');
+            
+        } catch (error) {
+            console.error('[App] 启动练习会话失败:', error);
+            
+            // 最终降级方案
+            this.startPracticeSessionFallback(examId, exam);
         }
+    }
 
+    /**
+     * 降级启动练习会话
+     */
+    startPracticeSessionFallback(examId, exam) {
+        console.log('[App] 使用最终降级方案启动练习');
+        
+        const sessionData = {
+            examId: examId,
+            startTime: new Date().toISOString(),
+            status: 'started',
+            sessionId: this.generateSessionId()
+        };
+
+        const activeSessions = storage.get('active_sessions', []);
+        activeSessions.push(sessionData);
+        storage.set('active_sessions', activeSessions);
+        
         // 更新题目状态
         this.updateExamStatus(examId, 'in-progress');
+        
+        // 尝试打开练习页面
+        const practiceUrl = `templates/ielts-exam-template.html?examId=${examId}`;
+        window.open(practiceUrl, `practice_${sessionData.sessionId}`, 'width=1200,height=800');
     }
 
     /**
@@ -2354,6 +2418,85 @@ class ExamSystemApp {
      */
     refreshOverviewData() {
         this.updateOverviewStats();
+    }
+
+    /**
+     * 更新简单的练习记录视图
+     */
+    updateSimplePracticeView() {
+        try {
+            // 获取练习记录
+            const practiceRecords = storage.get('practice_records', []);
+            
+            // 更新统计信息
+            const totalPracticed = practiceRecords.length;
+            const avgScore = totalPracticed > 0 
+                ? Math.round(practiceRecords.reduce((sum, r) => sum + (r.accuracy || 0), 0) / totalPracticed * 100)
+                : 0;
+            const totalTime = Math.round(practiceRecords.reduce((sum, r) => sum + (r.duration || 0), 0) / 60); // 转换为分钟
+            
+            // 计算连续学习天数
+            const dates = new Set(practiceRecords.map(r => new Date(r.startTime).toDateString()));
+            const streakDays = dates.size;
+            
+            // 更新DOM元素
+            const totalPracticedEl = document.getElementById('total-practiced');
+            const avgScoreEl = document.getElementById('avg-score');
+            const studyTimeEl = document.getElementById('study-time');
+            const streakDaysEl = document.getElementById('streak-days');
+            
+            if (totalPracticedEl) totalPracticedEl.textContent = totalPracticed;
+            if (avgScoreEl) avgScoreEl.textContent = avgScore + '%';
+            if (studyTimeEl) studyTimeEl.textContent = totalTime;
+            if (streakDaysEl) streakDaysEl.textContent = streakDays;
+            
+            // 更新练习历史列表
+            this.updateSimplePracticeList(practiceRecords);
+            
+        } catch (error) {
+            console.error('Failed to update practice view:', error);
+        }
+    }
+
+    /**
+     * 更新简单的练习记录列表
+     */
+    updateSimplePracticeList(records) {
+        const historyContainer = document.getElementById('practice-history-list');
+        if (!historyContainer) return;
+        
+        if (records.length === 0) {
+            historyContainer.innerHTML = `
+                <div style="text-align: center; padding: 40px; opacity: 0.7;">
+                    <div style="font-size: 3em; margin-bottom: 15px;">📋</div>
+                    <p>暂无练习记录</p>
+                    <p style="font-size: 0.9em; margin-top: 10px;">开始练习后，记录将自动保存在这里</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // 显示所有记录
+        const recentRecords = records;
+        
+        historyContainer.innerHTML = recentRecords.map(record => {
+            const accuracy = Math.round((record.accuracy || 0) * 100);
+            const duration = Math.round((record.duration || 0) / 60); // 转换为分钟
+            const date = new Date(record.startTime).toLocaleDateString();
+            
+            return `
+                <div class="history-item" style="display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+                    <div>
+                        <h4 style="margin: 0; color: white;">${record.title || record.examId}</h4>
+                        <p style="margin: 5px 0 0 0; opacity: 0.8; font-size: 0.9em;">${date}</p>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="color: ${accuracy >= 80 ? '#4ade80' : accuracy >= 60 ? '#fbbf24' : '#f87171'}; font-weight: bold;">${accuracy}%</div>
+                        <div style="opacity: 0.8; font-size: 0.9em;">${duration}分钟</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
     }
 
     /**
