@@ -1,0 +1,409 @@
+/* 练习记录详情弹窗样式 */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.modal-overlay.show {
+    opacity: 1;
+}
+
+.modal-container {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+    max-width: 800px;
+    width: 90%;
+    max-height: 90vh;
+    overflow: hidden;
+    transform: translateY(-20px);
+    transition: transform 0.3s ease;
+}
+
+.modal-overlay.show .modal-container {
+    transform: translateY(0);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid #e5e7eb;
+    background: #f9fafb;
+}
+
+.modal-title {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: #6b7280;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.modal-close:hover {
+    background: #e5e7eb;
+    color: #374151;
+}
+
+.modal-body {
+    padding: 24px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.record-summary h4 {
+    margin: 0 0 16px 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #1f2937;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 8px;
+}
+
+.record-meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.meta-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: #f8fafc;
+    border-radius: 8px;
+    border-left: 4px solid #e2e8f0;
+}
+
+.meta-label {
+    font-weight: 500;
+    color: #64748b;
+}
+
+.meta-value {
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.score-highlight {
+    color: #059669 !important;
+    font-size: 1.1em;
+}
+
+.answer-details h5 {
+    margin: 0 0 16px 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1f2937;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.answer-table-container {
+    overflow-x: auto;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+}
+
+.answer-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.answer-table thead {
+    background: #f8fafc;
+}
+
+.answer-table th {
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 600;
+    color: #374151;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.answer-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.answer-row.correct {
+    background: #f0fdf4;
+}
+
+.answer-row.incorrect {
+    background: #fef2f2;
+}
+
+.question-num {
+    font-weight: 600;
+    color: #1e293b;
+    text-align: center;
+    width: 80px;
+}
+
+.user-answer {
+    color: #1e293b;
+    font-family: 'Courier New', monospace;
+}
+
+.correct-answer {
+    color: #059669;
+    font-family: 'Courier New', monospace;
+    font-weight: 500;
+}
+
+.result {
+    text-align: center;
+    font-weight: bold;
+    font-size: 1.1em;
+    width: 60px;
+}
+
+.result.correct {
+    color: #059669;
+}
+
+.result.incorrect {
+    color: #dc2626;
+}
+
+.no-details {
+    text-align: center;
+    color: #6b7280;
+    font-style: italic;
+    padding: 40px 20px;
+    background: #f9fafb;
+    border-radius: 8px;
+    margin: 0;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 20px 24px;
+    border-top: 1px solid #e5e7eb;
+    background: #f9fafb;
+}
+
+.modal-footer .btn {
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-primary {
+    background: #3b82f6;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #2563eb;
+}
+
+.btn-secondary {
+    background: #6b7280;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #4b5563;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .modal-container {
+        width: 95%;
+        margin: 20px;
+    }
+    
+    .modal-header,
+    .modal-body,
+    .modal-footer {
+        padding: 16px;
+    }
+    
+    .record-meta {
+        grid-template-columns: 1fr;
+    }
+    
+    .meta-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+    
+    .answer-table {
+        font-size: 0.8rem;
+    }
+    
+    .answer-table th,
+    .answer-table td {
+        padding: 8px 12px;
+    }
+    
+    .modal-footer {
+        flex-direction: column;
+    }
+    
+    .modal-footer .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* 可点击的练习记录标题样式 */
+.practice-record-title {
+    color: #3b82f6;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    border-bottom: 1px solid transparent;
+}
+
+.practice-record-title:hover {
+    color: #1d4ed8;
+    border-bottom-color: #3b82f6;
+    text-decoration: none;
+}
+
+.practice-record-title:active {
+    color: #1e40af;
+}
+
+/* 练习历史表格中的可点击标题 */
+.history-table .practice-record-title {
+    font-weight: 500;
+}
+
+.history-table .practice-record-title:hover {
+    background: rgba(59, 130, 246, 0.1);
+    padding: 2px 4px;
+    border-radius: 4px;
+    border-bottom: none;
+}
+/* 导出对
+话框样式 */
+.export-options h4 {
+    margin: 0 0 16px 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.format-options {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.format-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.format-option:hover {
+    border-color: #3b82f6;
+    background: #f8fafc;
+}
+
+.format-option input[type="radio"] {
+    margin-top: 2px;
+}
+
+.format-option input[type="radio"]:checked + .option-content {
+    color: #1e40af;
+}
+
+.format-option:has(input[type="radio"]:checked) {
+    border-color: #3b82f6;
+    background: #eff6ff;
+}
+
+.option-content strong {
+    display: block;
+    margin-bottom: 4px;
+    font-weight: 600;
+}
+
+.option-content p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: #6b7280;
+    line-height: 1.4;
+}
+
+/* 修复练习历史中的可点击标题样式 */
+.history-record-item .practice-record-title {
+    color: #1f2937;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-radius: 4px;
+    padding: 2px 4px;
+    margin: -2px -4px;
+}
+
+.history-record-item .practice-record-title:hover {
+    color: #3b82f6;
+    background: rgba(59, 130, 246, 0.1);
+    text-decoration: none;
+}
+
+.history-record-item .practice-record-title:active {
+    color: #1e40af;
+    background: rgba(59, 130, 246, 0.2);
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .format-option {
+        padding: 12px;
+    }
+    
+    .option-content strong {
+        font-size: 0.9rem;
+    }
+    
+    .option-content p {
+        font-size: 0.8rem;
+    }
+}
