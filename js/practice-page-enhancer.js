@@ -288,6 +288,7 @@ if (!window.practicePageEnhancer) {
 
     window.practicePageEnhancer = {
         sessionId: null,
+        examId: null, // 新增：存储唯一的examId
         parentWindow: null,
         answers: {},
         correctAnswers: {},
@@ -336,7 +337,8 @@ if (!window.practicePageEnhancer) {
             window.addEventListener('message', (event) => {
                 if (event.data && event.data.type === 'INIT_SESSION') {
                     this.sessionId = event.data.data.sessionId;
-                    console.log('[PracticeEnhancer] 收到会话初始化:', this.sessionId);
+                    this.examId = event.data.data.examId; // 存储 examId
+                    console.log('[PracticeEnhancer] 收到会话初始化:', this.sessionId, 'Exam ID:', this.examId);
                     this.sendMessage('SESSION_READY', {
                         pageType: this.detectPageType(),
                         url: window.location.href,
@@ -962,7 +964,7 @@ if (!window.practicePageEnhancer) {
 
                     const results = {
                         sessionId: self.sessionId,
-                        examId: self.sessionId.split('_')[0] || 'unknown',
+                        examId: self.examId, // 使用存储的 examId
                         startTime: self.startTime,
                         endTime: endTime,
                         duration: duration,

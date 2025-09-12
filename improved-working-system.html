@@ -1289,7 +1289,7 @@
     <script src="js/core/practiceRecorder.js"></script>
     <!-- practiceHistory.js 已移除，使用简单的练习记录界面 -->
     <script src="js/components/PDFHandler.js"></script>
-    <script src="js/components/examBrowser.js"></script>
+    <!-- ExamBrowser.js 已移除，使用内置的题目列表功能 -->
     <!-- <script src="js/components/ExamScanner.js"></script> -->
     <script src="js/components/IndexValidator.js"></script>
     <script src="js/components/CommunicationTester.js"></script>
@@ -1838,13 +1838,8 @@
             updateOverview();
             updateSystemInfo();
 
-            // 通知ExamBrowser组件数据已更新
-            if (window.app && window.app.components && window.app.components.examBrowser) {
-                console.log('[System] 通知ExamBrowser组件刷新数据');
-                setTimeout(() => {
-                    window.app.components.examBrowser.refreshExamList();
-                }, 100);
-            }
+            // ExamBrowser组件已移除，使用内置的题目列表功能
+            console.log('[System] 题库数据已更新，题目列表将自动刷新');
         }
 
         // 题库加载降级方案
@@ -1956,10 +1951,6 @@
                     let fullRelativePath = file.webkitRelativePath;
                     if (!fullRelativePath || !fullRelativePath.includes('/') || !file.name.toLowerCase().endsWith('.html')) continue;
 
-                    // 统一数据格式，移除顶层目录
-                    if (fullRelativePath.startsWith(commonBasePath)) {
-                        fullRelativePath = fullRelativePath.substring(commonBasePath.length);
-                    }
 
                     const pathParts = fullRelativePath.split('/');
                     const htmlFileName = pathParts[pathParts.length - 1];
@@ -1985,7 +1976,7 @@
                             path: relativePath,
                             filename: htmlFileName,
                             hasHtml: true,
-                            hasPdf: true, 
+                            hasPdf: true,
                             pdfFilename: htmlFileName.replace(/\.html?$/i, '.pdf')
                         });
                     }
@@ -2492,10 +2483,9 @@
                     return;
                 }
 
-                const basePath = '睡着过项目组(9.4)[134篇]/';
-                const rawPath = basePath + exam.path + exam.filename;
+                const rawPath = exam.path + exam.filename;
                 // Encode the path to handle special characters safely in file:/// URLs
-                const fullPath = './' + encodeURI(rawPath);
+                const fullPath = './' + encodeURI(rawPath).replace(/%252F/g, '/');
 
                 // Add logging for the fullPath
                 console.log('[openExam] Attempting to open encoded fullPath:', fullPath);
@@ -2751,7 +2741,6 @@
                 return;
             }
 
-            const basePath = '睡着过项目组(9.4)[134篇]/';
             let relativePdfPath;
 
             // 构造PDF文件路径
@@ -2766,8 +2755,7 @@
                 relativePdfPath = exam.path + exam.filename.replace(/\.html?$/i, '.pdf');
             }
             
-            const fullRawPath = basePath + relativePdfPath;
-            const encodedPdfPath = './' + encodeURI(fullRawPath);
+            const encodedPdfPath = './' + encodeURI(relativePdfPath).replace(/%252F/g, '/');
 
             console.log('[viewPDF] Attempting to open encoded pdfPath:', encodedPdfPath);
             showMessage(`正在打开PDF: ${exam.title}`, 'info');
@@ -3875,6 +3863,111 @@
 
         // 设置全局消息监听器（无论应用是否初始化都要设置）
         function setupMessageListener() {
+            // 将 handlePracticeDataReceived 定义在监听器内部，确保作用域和可用性
+            function handlePracticeDataReceived(data) {
+                console.log('[App] 正在处理接收到的练习数据...', data);
+
+                if (!data || !data.sessionId) {
+                    console.error('[App] 接收到的练习数据无效或缺少sessionId。');
+                    showMessage('处理练习数据失败：数据格式错误', 'error');
+                    return;
+                }
+
+                if (processedSessions.has(data.sessionId)) {
+                    console.warn(`[App] 已处理过会话 ${data.sessionId}，跳过。`);
+                    return;
+                }
+
+                let exam = examIndex.find(e => e.id === data.examId);
+                if (!exam) {
+                    console.warn(`[App] 无法通过ID ${data.examId} 找到题目，尝试通过标题和URL进行模糊匹配...`);
+
+                    // 尝试通过标题匹配
+                    if (data.title) {
+                        // 清理标题，去掉前缀
+                        const cleanTitle = data.title.replace(/^IELTS Reading Practice - /i, '').trim();
+                        exam = examIndex.find(e => e.title.toLowerCase().includes(cleanTitle.toLowerCase()) ||
+                                                  cleanTitle.toLowerCase().includes(e.title.toLowerCase()));
+                    }
+
+                    // 如果标题匹配失败，尝试通过URL匹配
+                    if (!exam && data.url) {
+                        const filename = data.url.substring(data.url.lastIndexOf('/') + 1);
+                        exam = examIndex.find(e => e.filename === filename);
+
+                        // 如果文件名匹配失败，尝试通过URL路径中的关键词匹配
+                        if (!exam) {
+                            const urlParts = data.url.split('/');
+                            const articleDir = urlParts[urlParts.length - 2]; // 获取目录名
+                            console.log('[App] 尝试通过目录名匹配:', articleDir);
+
+                            // 解析目录名格式如 "99. P3 - Voynich Manuscript 伏尼契手稿【高】"
+                            const match = articleDir.match(/^\d+\.\s*P[123]\s*-\s*(.+?)(?:【.+】)?$/);
+                            if (match) {
+                                const titlePart = match[1].trim();
+                                console.log('[App] 提取的标题部分:', titlePart);
+
+                                // 通过标题关键词匹配
+                                const titleWords = titlePart.toLowerCase().split(/\s+/).filter(word => word.length > 2);
+                                exam = examIndex.find(e => {
+                                    const examTitleLower = e.title.toLowerCase();
+                                    const matchCount = titleWords.filter(word => examTitleLower.includes(word)).length;
+                                    return matchCount >= Math.min(2, titleWords.length);
+                                });
+
+                                if (exam) {
+                                    console.log('[App] 通过目录名关键词匹配找到:', exam.title);
+                                }
+                            }
+                        }
+                    }
+
+                    if (!exam) {
+                        console.error(`[App] 所有匹配尝试均失败，无法找到题目。`);
+                        console.error(`[App] 调试信息 - examId: ${data.examId}, title: ${data.title}, url: ${data.url}`);
+                        showMessage(`无法保存记录：未找到题目 ${data.title || data.examId}`, 'error');
+                        return;
+                    }
+                    console.log(`[App] 通过模糊匹配成功找到题目: ${exam.title}`);
+                }
+
+                const accuracy = data.scoreInfo && data.scoreInfo.total > 0
+                    ? Math.round((data.scoreInfo.correct / data.scoreInfo.total) * 100)
+                    : 0;
+
+                const newRecord = {
+                    id: `rec_${data.sessionId}`,
+                    examId: data.examId,
+                    title: exam.title,
+                    category: exam.category,
+                    frequency: exam.frequency,
+                    date: new Date(data.endTime).toISOString(),
+                    duration: data.duration, // in seconds
+                    accuracy: (data.scoreInfo && data.scoreInfo.accuracy) || 0,
+                    percentage: accuracy,
+                    score: (data.scoreInfo && data.scoreInfo.correct) || 0,
+                    totalQuestions: (data.scoreInfo && data.scoreInfo.total) || 0,
+                    dataSource: 'real',
+                    realData: data
+                };
+
+                console.log('[App] 创建新练习记录:', newRecord);
+
+                practiceRecords.unshift(newRecord);
+                storage.set('practice_records', practiceRecords);
+                processedSessions.add(data.sessionId);
+
+                showMessage(`练习 "${exam.title}" 记录已保存！正确率: ${accuracy}%`, 'success');
+
+                // 更新UI
+                if (document.getElementById('practice-view').classList.contains('active')) {
+                    updatePracticeView();
+                }
+                if (document.getElementById('browse-view').classList.contains('active')) {
+                    loadExamList(); // 重载列表以更新圆点颜色
+                }
+            }
+
             window.addEventListener('message', (event) => {
                 console.log('[System] 收到消息:', event.data);
 
@@ -3921,11 +4014,57 @@
                 return;
             }
 
-            const exam = examIndex.find(e => e.id === data.examId);
+            let exam = examIndex.find(e => e.id === data.examId);
             if (!exam) {
-                console.error(`[App] 找不到与ID ${data.examId} 匹配的题目。`);
-                showMessage(`无法保存记录：未找到题目 ${data.examId}`, 'error');
-                return;
+                console.warn(`[App] 无法通过ID ${data.examId} 找到题目，尝试通过标题和URL进行模糊匹配...`);
+
+                // 尝试通过标题匹配
+                if (data.title) {
+                    // 清理标题，去掉前缀
+                    const cleanTitle = data.title.replace(/^IELTS Reading Practice - /i, '').trim();
+                    exam = examIndex.find(e => e.title.toLowerCase().includes(cleanTitle.toLowerCase()) ||
+                                              cleanTitle.toLowerCase().includes(e.title.toLowerCase()));
+                }
+
+                // 如果标题匹配失败，尝试通过URL匹配
+                if (!exam && data.url) {
+                    const filename = data.url.substring(data.url.lastIndexOf('/') + 1);
+                    exam = examIndex.find(e => e.filename === filename);
+
+                    // 如果文件名匹配失败，尝试通过URL路径中的关键词匹配
+                    if (!exam) {
+                        const urlParts = data.url.split('/');
+                        const articleDir = urlParts[urlParts.length - 2]; // 获取目录名
+                        console.log('[App] 尝试通过目录名匹配:', articleDir);
+
+                        // 解析目录名格式如 "99. P3 - Voynich Manuscript 伏尼契手稿【高】"
+                        const match = articleDir.match(/^\d+\.\s*P[123]\s*-\s*(.+?)(?:【.+】)?$/);
+                        if (match) {
+                            const titlePart = match[1].trim();
+                            console.log('[App] 提取的标题部分:', titlePart);
+
+                            // 通过标题关键词匹配
+                            const titleWords = titlePart.toLowerCase().split(/\s+/).filter(word => word.length > 2);
+                            exam = examIndex.find(e => {
+                                const examTitleLower = e.title.toLowerCase();
+                                const matchCount = titleWords.filter(word => examTitleLower.includes(word)).length;
+                                return matchCount >= Math.min(2, titleWords.length);
+                            });
+
+                            if (exam) {
+                                console.log('[App] 通过目录名关键词匹配找到:', exam.title);
+                            }
+                        }
+                    }
+                }
+
+                if (!exam) {
+                    console.error(`[App] 所有匹配尝试均失败，无法找到题目。`);
+                    console.error(`[App] 调试信息 - examId: ${data.examId}, title: ${data.title}, url: ${data.url}`);
+                    showMessage(`无法保存记录：未找到题目 ${data.title || data.examId}`, 'error');
+                    return;
+                }
+                console.log(`[App] 通过模糊匹配成功找到题目: ${exam.title}`);
             }
 
             const accuracy = data.totalQuestions > 0 ? Math.round((data.score / data.totalQuestions) * 100) : 0;

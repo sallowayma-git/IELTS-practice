@@ -318,13 +318,8 @@ class EventManager {
     
     handleSearch(query) {
         console.log(`[EventManager] 搜索: ${query}`);
-        
-        // 通知ExamBrowser组件
-        if (window.app && window.app.components && window.app.components.examBrowser) {
-            window.app.components.examBrowser.searchQuery = query.trim().toLowerCase();
-            window.app.components.examBrowser.refreshExamList();
-        }
-        
+
+        // ExamBrowser组件已移除，使用内置的搜索功能
         // 兼容旧的搜索函数
         if (window.searchExams) {
             window.searchExams(query);
@@ -333,64 +328,29 @@ class EventManager {
     
     handleFilterChange(filterId, value) {
         console.log(`[EventManager] 筛选器变化: ${filterId} = ${value}`);
-        
-        // 通知ExamBrowser组件
-        if (window.app && window.app.components && window.app.components.examBrowser) {
-            const examBrowser = window.app.components.examBrowser;
-            
-            switch (filterId) {
-                case 'frequency-filter':
-                    examBrowser.filters.frequency = value;
-                    break;
-                case 'status-filter':
-                    examBrowser.filters.status = value;
-                    break;
-                case 'difficulty-filter':
-                    examBrowser.filters.difficulty = value;
-                    break;
-                case 'sort-filter':
-                    const [sortBy, sortOrder] = value.split('-');
-                    examBrowser.sortBy = sortBy;
-                    examBrowser.sortOrder = sortOrder;
-                    break;
-            }
-            
-            examBrowser.refreshExamList();
-        }
-        
+
+        // ExamBrowser组件已移除，使用内置的筛选功能
         this.dispatchCustomEvent('filterChanged', { filterId, value });
     }
     
     handleViewChange(viewMode) {
         console.log(`[EventManager] 视图变化: ${viewMode}`);
-        
-        // 通知ExamBrowser组件
-        if (window.app && window.app.components && window.app.components.examBrowser) {
-            window.app.components.examBrowser.setViewMode(viewMode);
-        }
-        
+
+        // ExamBrowser组件已移除，使用内置的视图功能
         this.dispatchCustomEvent('viewChanged', { viewMode });
     }
     
     handleExamCardClick(examId) {
         console.log(`[EventManager] 题目卡片点击: ${examId}`);
-        
-        // 通知ExamBrowser组件
-        if (window.app && window.app.components && window.app.components.examBrowser) {
-            window.app.components.examBrowser.showExamPreview(examId);
-        }
-        
+
+        // ExamBrowser组件已移除，使用内置的题目预览功能
         this.dispatchCustomEvent('examCardClicked', { examId });
     }
     
     handleExamAction(action, examId) {
         console.log(`[EventManager] 题目操作: ${action} - ${examId}`);
-        
-        // 通知ExamBrowser组件
-        if (window.app && window.app.components && window.app.components.examBrowser) {
-            window.app.components.examBrowser.handleExamAction(action, examId);
-        }
-        
+
+        // ExamBrowser组件已移除，使用内置的题目操作功能
         this.dispatchCustomEvent('examAction', { action, examId });
     }
     
@@ -466,8 +426,10 @@ class EventManager {
                     this.handleViewChange('list');
                     break;
                 case 'Escape':
-                    if (window.app && window.app.components && window.app.components.examBrowser) {
-                        window.app.components.examBrowser.closeExamPreview();
+                    // ExamBrowser组件已移除，Escape键用于关闭模态框
+                    const modal = document.querySelector('.modal-overlay');
+                    if (modal) {
+                        modal.remove();
                     }
                     break;
             }

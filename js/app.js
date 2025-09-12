@@ -313,7 +313,7 @@ class ExamSystemApp {
         // 定义组件加载优先级 - 只加载实际存在的组件
         const coreComponents = ['PracticeRecorder']; // 只有PracticeRecorder是必需的
         const optionalComponents = [
-            'ExamBrowser' // PracticeHistory and ExamScanner were removed
+            // ExamBrowser已移除，使用内置的题目列表功能
         ]; // 只加载真正需要且存在的组件
 
         try {
@@ -373,7 +373,7 @@ class ExamSystemApp {
         console.log('[App] 初始化可选组件...');
 
         const componentInitializers = [
-            { name: 'ExamBrowser', init: () => new ExamBrowser() },
+            // ExamBrowser组件已移除，使用内置的题目列表功能
             // PracticeHistory组件已移除，使用简单的练习记录界面
             { name: 'ExamScanner', init: () => new ExamScanner() },
             { name: 'RecommendationDisplay', init: () => new RecommendationDisplay() },
@@ -434,7 +434,8 @@ class ExamSystemApp {
 
         // 只初始化已经加载的组件
         const availableComponents = [
-            'ExamBrowser' // PracticeHistory and ExamScanner were removed
+            // ExamBrowser已移除，使用内置的题目列表功能
+            // PracticeHistory and ExamScanner were removed
         ].filter(name => window[name]);
 
         if (availableComponents.length > 0) {
@@ -446,11 +447,7 @@ class ExamSystemApp {
             console.warn('[App] 没有发现可用的可选组件');
         }
 
-        // 如果ExamBrowser仍然不可用，创建一个简化版本
-        if (!this.components.examBrowser && !window.ExamBrowser) {
-            // 静默创建ExamBrowser简化版本
-            this.components.examBrowser = this.createFallbackExamBrowser();
-        }
+        // ExamBrowser组件已移除，使用内置的题目列表功能
     }
 
     /**
@@ -1359,49 +1356,7 @@ class ExamSystemApp {
         };
     }
 
-    /**
-     * 创建降级版ExamBrowser
-     */
-    createFallbackExamBrowser() {
-        return {
-            // 基本的题库浏览功能
-            displayExams: (exams) => {
-                console.log('[FallbackExamBrowser] 显示考试列表:', exams.length);
-                const examList = document.getElementById('examList');
-                if (examList && exams) {
-                    examList.innerHTML = exams.map(exam => `
-                        <div class="exam-item fallback-mode" style="border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 8px;">
-                            <h3 style="margin: 0 0 10px 0; color: #333;">${exam.title}</h3>
-                            <p style="margin: 5px 0; color: #666;">分类: ${exam.category} | 频率: ${exam.frequency}</p>
-                            <button onclick="window.open('${exam.path}', '_blank')" class="btn btn-primary" style="margin-top: 10px;">
-                                开始练习
-                            </button>
-                        </div>
-                    `).join('');
-                }
-            },
-
-            // 搜索功能
-            search: (query) => {
-                console.log('[FallbackExamBrowser] 搜索:', query);
-                const examIndex = storage.get('exam_index', []);
-                return examIndex.filter(exam =>
-                    exam.title.toLowerCase().includes(query.toLowerCase()) ||
-                    exam.category.toLowerCase().includes(query.toLowerCase())
-                );
-            },
-
-            // 分类过滤
-            filterByCategory: (category) => {
-                console.log('[FallbackExamBrowser] 分类过滤:', category);
-                const examIndex = storage.get('exam_index', []);
-                return category === 'all' ? examIndex : examIndex.filter(exam => exam.category === category);
-            },
-
-            // 标记为降级模式
-            isFallback: true
-        };
-    }
+    // ExamBrowser组件已移除，使用内置的题目列表功能
 
     /**
      * 格式化时长
