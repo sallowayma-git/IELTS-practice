@@ -2473,10 +2473,11 @@
 
                 const rawPath = exam.path + exam.filename;
                 // Encode the path to handle special characters safely in file:/// URLs
-                const fullPath = './' + encodeURI(rawPath);
+                const encodedFullPath = './' + encodeURI(rawPath);
+                const fullPath = decodeURIComponent(encodedFullPath); // Attempt to decode the URI
 
                 // Add logging for the fullPath
-                console.log('[openExam] Attempting to open encoded fullPath:', fullPath);
+                console.log('[openExam] Attempting to open decoded fullPath:', fullPath);
 
                 const examWindow = window.open(fullPath, `exam_${exam.id}`,
                     'width=1200,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=no,menubar=no,location=no'
@@ -2753,9 +2754,10 @@
             }
 
             const encodedPdfPath = './' + encodeURI(pdfPath);
+            const finalPdfPath = decodeURIComponent(encodedPdfPath); // Attempt to decode the URI
 
             // Add logging for the pdfPath
-            console.log('[viewPDF] Attempting to open encoded pdfPath:', encodedPdfPath);
+            console.log('[viewPDF] Attempting to open decoded pdfPath:', finalPdfPath);
 
             showMessage(`正在打开PDF: ${exam.title}`, 'info');
 
