@@ -804,10 +804,8 @@ class SystemDiagnostics {
         // 这里应该重新扫描题库文件
         // 由于浏览器环境限制，我们只能重置索引
         console.log('Rebuilding exam index...');
-        // 实际实现需要调用 ExamScanner
-        if (window.examScanner) {
-            await window.examScanner.scanExams();
-        }
+        // ExamScanner已移除，跳过索引重建
+        console.log('ExamScanner已移除，无法重建索引');
     }
 
     /**

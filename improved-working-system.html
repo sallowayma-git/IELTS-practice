@@ -18,7 +18,7 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             color: white;
-            
+
             /* CSS变量定义 */
             --accent-color: #3b82f6;
             --accent-hover: #1d4ed8;
@@ -1153,8 +1153,10 @@
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <h3>📈 练习历史</h3>
                 <div>
-                    <button class="btn btn-secondary" onclick="exportPracticeData()" style="margin-right: 10px;">📊 导出数据</button>
-                    <button class="btn btn-info" onclick="toggleBulkDelete()" id="bulk-delete-btn" style="margin-right: 10px;">📝 批量管理</button>
+                    <button class="btn btn-secondary" onclick="exportPracticeData()" style="margin-right: 10px;">📊
+                        导出数据</button>
+                    <button class="btn btn-info" onclick="toggleBulkDelete()" id="bulk-delete-btn"
+                        style="margin-right: 10px;">📝 批量管理</button>
                     <button class="btn btn-warning" onclick="clearPracticeData()">🗑️ 清除记录</button>
                 </div>
             </div>
@@ -1289,8 +1291,7 @@
     <script src="js/core/practiceRecorder.js"></script>
     <!-- practiceHistory.js 已移除，使用简单的练习记录界面 -->
     <script src="js/components/PDFHandler.js"></script>
-    <!-- ExamBrowser.js 已移除，使用内置的题目列表功能 -->
-    <!-- <script src="js/components/ExamScanner.js"></script> -->
+
     <script src="js/components/IndexValidator.js"></script>
     <script src="js/components/CommunicationTester.js"></script>
     <script src="js/components/ErrorFixer.js"></script>
@@ -1917,7 +1918,7 @@
 
             const fileList = Array.from(files);
             const allowedExtensions = ['.html', '.htm', '.pdf'];
-            
+
             // 验证文件夹内容
             let invalidFile = null;
             for (const file of fileList) {
@@ -1941,7 +1942,7 @@
 
             const rootDirName = fileList.length > 0 ? fileList[0].webkitRelativePath.split('/')[0] : '新题库';
             showMessage(`正在扫描题库 "${rootDirName}"...`, 'info');
-            
+
             setTimeout(() => {
                 const commonBasePath = rootDirName ? `${rootDirName}/` : '';
                 const newExamIndex = [];
@@ -1955,7 +1956,7 @@
                     const pathParts = fullRelativePath.split('/');
                     const htmlFileName = pathParts[pathParts.length - 1];
                     const articleDir = pathParts[pathParts.length - 2];
-                    
+
                     if (seenDirectories.has(articleDir)) continue;
 
                     const match = articleDir.match(/^(?:[\d\.]+\s*)?(P[1-3])\s*-\s*(.*?)(?:【(.*?)】)?$/);
@@ -2007,7 +2008,7 @@
                 } else {
                     showMessage('在所选文件夹中未找到符合命名规范的HTML题目文件。', 'error');
                 }
-                event.target.value = ''; 
+                event.target.value = '';
             }, 100);
         }
 
@@ -2080,7 +2081,7 @@
             if (confirm("确定要删除此题库配置吗？此操作不可恢复。")) {
                 let configs = getLibraryConfigurations();
                 configs = configs.filter(config => config.key !== configKey);
-                storage.set(EXAM_CONFIGS_KEY, configs); 
+                storage.set(EXAM_CONFIGS_KEY, configs);
                 storage.remove(configKey); // 移除实际的题库数据
 
                 showMessage('题库配置已删除', 'success');
@@ -2399,7 +2400,7 @@
             const accuracy = bestRecord.percentage;
 
             if (accuracy === undefined || accuracy === null) return null;
-            
+
             // 根据正确率返回颜色
             if (accuracy >= 80) return '#4ade80'; // 绿色
             if (accuracy >= 60) return '#fbbf24'; // 黄色
@@ -2601,7 +2602,7 @@
 
             alert(statusMessage);
             console.log('[System] 组件状态检查:', components);
-            
+
             // 如果有组件未加载，尝试修复
             if (!allGood) {
                 attemptComponentRecovery();
@@ -2611,45 +2612,45 @@
         // 数据一致性验证和修复
         function validateAndFixDataConsistency() {
             console.log('[System] 开始数据一致性验证和修复...');
-            
+
             if (!window.DataConsistencyManager) {
                 console.error('[System] DataConsistencyManager未加载');
                 showMessage('数据一致性管理器未加载', 'error');
                 return;
             }
-            
+
             try {
                 const manager = new DataConsistencyManager();
                 const practiceRecords = storage.get('practice_records', []);
-                
+
                 if (practiceRecords.length === 0) {
                     showMessage('没有练习记录需要验证', 'info');
                     return;
                 }
-                
+
                 // 生成验证报告
                 const report = manager.getDataQualityReport(practiceRecords);
                 console.log('[System] 数据质量报告:', report);
-                
+
                 // 修复数据问题
                 const fixedRecords = manager.fixDataInconsistencies(practiceRecords);
-                
+
                 // 保存修复后的数据
                 storage.set('practice_records', fixedRecords);
-                
+
                 // 生成修复后报告
                 const postFixReport = manager.getDataQualityReport(fixedRecords);
                 console.log('[System] 修复后质量报告:', postFixReport);
-                
+
                 // 显示结果
                 const improvedRecords = postFixReport.recordsWithCorrectAnswers - report.recordsWithCorrectAnswers;
                 const improvedComparisons = postFixReport.recordsWithComparison - report.recordsWithComparison;
-                
+
                 let message = `数据验证完成！\n`;
                 message += `总记录数: ${report.totalRecords}\n`;
                 message += `有效记录: ${postFixReport.validRecords}\n`;
                 message += `包含正确答案: ${postFixReport.recordsWithCorrectAnswers}`;
-                
+
                 if (improvedRecords > 0 || improvedComparisons > 0) {
                     message += `\n\n修复结果:\n`;
                     if (improvedRecords > 0) {
@@ -2659,10 +2660,10 @@
                         message += `- 生成了 ${improvedComparisons} 条记录的答案比较数据\n`;
                     }
                 }
-                
+
                 showMessage('数据一致性验证和修复完成', 'success');
                 alert(message);
-                
+
             } catch (error) {
                 console.error('[System] 数据验证修复失败:', error);
                 showMessage('数据验证修复失败: ' + error.message, 'error');
@@ -2672,7 +2673,7 @@
         // 组件恢复尝试
         function attemptComponentRecovery() {
             console.log('[System] 尝试修复未加载的组件...');
-            
+
             // 检查并初始化PracticeHistory
             if (!window.PracticeHistory && window.practiceRecorder) {
                 console.log('[System] 创建PracticeHistory降级实现');
@@ -2687,17 +2688,17 @@
                     }
                 };
             }
-            
+
             // 检查并初始化PracticePageEnhancer
             if (!window.practicePageEnhancer) {
                 console.log('[System] 创建PracticePageEnhancer降级实现');
                 window.practicePageEnhancer = {
                     isInitialized: false,
-                    initialize: function() {
+                    initialize: function () {
                         this.isInitialized = true;
                         console.log('[PracticePageEnhancer] 降级版本已初始化');
                     },
-                    getStatus: function() {
+                    getStatus: function () {
                         return {
                             isInitialized: this.isInitialized,
                             sessionId: null,
@@ -2711,17 +2712,17 @@
                 };
                 window.practicePageEnhancer.initialize();
             }
-            
+
             // 检查并初始化PracticeHistoryEnhancer
             if (!window.practiceHistoryEnhancer && window.MarkdownExporter) {
                 console.log('[System] 创建PracticeHistoryEnhancer降级实现');
                 window.practiceHistoryEnhancer = {
                     initialized: false,
-                    initialize: function() {
+                    initialize: function () {
                         this.initialized = true;
                         console.log('[PracticeHistoryEnhancer] 降级版本已初始化');
                     },
-                    showExportDialog: function() {
+                    showExportDialog: function () {
                         if (window.exportPracticeData) {
                             window.exportPracticeData();
                         }
@@ -2729,7 +2730,7 @@
                 };
                 window.practiceHistoryEnhancer.initialize();
             }
-            
+
             console.log('[System] 组件恢复尝试完成');
         }
 
@@ -2754,7 +2755,7 @@
                 // Fallback if pdfFilename is missing
                 relativePdfPath = exam.path + exam.filename.replace(/\.html?$/i, '.pdf');
             }
-            
+
             const encodedPdfPath = './' + encodeURI(relativePdfPath).replace(/%252F/g, '/');
 
             console.log('[viewPDF] Attempting to open encoded pdfPath:', encodedPdfPath);
@@ -3364,7 +3365,7 @@
             const avgScoreEl = document.getElementById('avg-score');
             const studyTimeEl = document.getElementById('study-time');
             const streakDaysEl = document.getElementById('streak-days');
-            
+
             if (totalPracticedEl) totalPracticedEl.textContent = practiceStats.totalPracticed;
             if (avgScoreEl) avgScoreEl.textContent = practiceStats.avgScore + '%';
             if (studyTimeEl) studyTimeEl.textContent = practiceStats.totalTime;
@@ -3372,7 +3373,7 @@
 
             // 更新练习历史
             const historyContainer = document.getElementById('practice-history-list');
-            
+
             if (!historyContainer) {
                 console.warn('practice-history-list element not found');
                 return;
@@ -3887,7 +3888,7 @@
                         // 清理标题，去掉前缀
                         const cleanTitle = data.title.replace(/^IELTS Reading Practice - /i, '').trim();
                         exam = examIndex.find(e => e.title.toLowerCase().includes(cleanTitle.toLowerCase()) ||
-                                                  cleanTitle.toLowerCase().includes(e.title.toLowerCase()));
+                            cleanTitle.toLowerCase().includes(e.title.toLowerCase()));
                     }
 
                     // 如果标题匹配失败，尝试通过URL匹配
@@ -4023,7 +4024,7 @@
                     // 清理标题，去掉前缀
                     const cleanTitle = data.title.replace(/^IELTS Reading Practice - /i, '').trim();
                     exam = examIndex.find(e => e.title.toLowerCase().includes(cleanTitle.toLowerCase()) ||
-                                              cleanTitle.toLowerCase().includes(e.title.toLowerCase()));
+                        cleanTitle.toLowerCase().includes(e.title.toLowerCase()));
                 }
 
                 // 如果标题匹配失败，尝试通过URL匹配
@@ -4037,22 +4038,51 @@
                         const articleDir = urlParts[urlParts.length - 2]; // 获取目录名
                         console.log('[App] 尝试通过目录名匹配:', articleDir);
 
-                        // 解析目录名格式如 "99. P3 - Voynich Manuscript 伏尼契手稿【高】"
-                        const match = articleDir.match(/^\d+\.\s*P[123]\s*-\s*(.+?)(?:【.+】)?$/);
+                        // 先解码URL编码的目录名
+                        const decodedDir = decodeURIComponent(articleDir);
+                        console.log('[App] 解码后的目录名:', decodedDir);
+
+                        // 解析目录名格式如 "98. P3 - Video Games' Unexpected Benefits to the Human Brain 电子游戏的好处【次】"
+                        const match = decodedDir.match(/^(\d+)\.\s*P([123])\s*-\s*(.+?)(?:【(.+?)】)?$/);
                         if (match) {
-                            const titlePart = match[1].trim();
-                            console.log('[App] 提取的标题部分:', titlePart);
+                            const [, number, level, titlePart, frequency] = match;
+                            console.log('[App] 提取的信息:', { number, level, titlePart, frequency });
 
                             // 通过标题关键词匹配
                             const titleWords = titlePart.toLowerCase().split(/\s+/).filter(word => word.length > 2);
+                            console.log('[App] 标题关键词:', titleWords);
+
                             exam = examIndex.find(e => {
                                 const examTitleLower = e.title.toLowerCase();
                                 const matchCount = titleWords.filter(word => examTitleLower.includes(word)).length;
+                                console.log(`[App] 检查题目 "${e.title}": 匹配 ${matchCount}/${titleWords.length} 个关键词`);
                                 return matchCount >= Math.min(2, titleWords.length);
                             });
 
                             if (exam) {
                                 console.log('[App] 通过目录名关键词匹配找到:', exam.title);
+                            } else {
+                                // 如果关键词匹配失败，尝试更宽松的匹配
+                                console.log('[App] 关键词匹配失败，尝试更宽松的匹配...');
+                                exam = examIndex.find(e => {
+                                    const examTitleLower = e.title.toLowerCase();
+                                    // 检查是否包含主要关键词
+                                    const mainKeywords = titleWords.filter(word =>
+                                        word.length > 4 && !['games', 'human', 'brain', 'benefits'].includes(word)
+                                    );
+                                    if (mainKeywords.length > 0) {
+                                        return mainKeywords.some(word => examTitleLower.includes(word));
+                                    }
+                                    // 或者检查特殊词汇
+                                    return titleWords.some(word =>
+                                        ['video', 'games', 'unexpected', 'benefits'].includes(word) &&
+                                        examTitleLower.includes(word)
+                                    );
+                                });
+
+                                if (exam) {
+                                    console.log('[App] 通过宽松匹配找到:', exam.title);
+                                }
                             }
                         }
                     }
@@ -4071,7 +4101,8 @@
 
             const newRecord = {
                 id: `rec_${data.sessionId}`,
-                examId: data.examId,
+                examId: exam.id, // 使用找到的题目的真实ID，而不是通用的data.examId
+                originalExamId: data.examId, // 保留原始examId用于调试
                 title: exam.title,
                 category: exam.category,
                 frequency: exam.frequency,
@@ -4166,7 +4197,7 @@
                 if (defaultConfigData && defaultConfigData.length > 0) {
                     saveLibraryConfiguration('默认题库', 'exam_index', defaultConfigData.length);
                 }
-            } catch(e) {
+            } catch (e) {
                 console.error('Failed to ensure default config', e);
             }
         }
@@ -4219,7 +4250,7 @@
 
                 // 自动加载题库
                 loadLibrary();
-                
+
                 // 延迟检查组件状态并自动修复
                 setTimeout(() => {
                     performComponentHealthCheck();
@@ -4230,16 +4261,16 @@
         // 组件健康检查
         function performComponentHealthCheck() {
             console.log('[System] 执行组件健康检查...');
-            
+
             const criticalComponents = {
                 'PracticeRecorder': window.PracticeRecorder,
                 'PracticeHistoryEnhancer': window.practiceHistoryEnhancer,
                 'MarkdownExporter': window.MarkdownExporter
             };
-            
+
             let hasIssues = false;
             const issues = [];
-            
+
             Object.entries(criticalComponents).forEach(([name, component]) => {
                 if (!component) {
                     hasIssues = true;
@@ -4249,17 +4280,17 @@
                     console.log(`✅ ${name} 已加载`);
                 }
             });
-            
+
             if (hasIssues) {
                 console.log(`❌ 发现 ${issues.length} 个组件问题:`, issues);
                 attemptComponentRecovery();
-                
+
                 // 再次检查修复结果
                 setTimeout(() => {
-                    const fixedComponents = issues.filter(name => 
+                    const fixedComponents = issues.filter(name =>
                         window[name] || window[name.charAt(0).toLowerCase() + name.slice(1)]
                     );
-                    
+
                     if (fixedComponents.length > 0) {
                         console.log(`✅ 已修复 ${fixedComponents.length} 个组件:`, fixedComponents);
                     }

@@ -364,6 +364,41 @@ if (!window.practicePageEnhancer) {
             return 'unknown';
         },
 
+        // 新增：从URL中提取真实的examId
+        extractExamIdFromUrl: function() {
+            const url = window.location.href || '';
+            const title = document.title || '';
+            
+            // 尝试从URL路径中提取题目编号
+            const pathParts = url.split('/');
+            
+            // 查找包含题目编号的路径部分，格式如 "97. P3 - The value of literary prizes 文学奖项的价值"
+            for (let part of pathParts) {
+                const decodedPart = decodeURIComponent(part);
+                const match = decodedPart.match(/^(\d+)\.\s*P([123])\s*-\s*(.+)/);
+                if (match) {
+                    const [, number, level, titlePart] = match;
+                    // 根据题目编号和级别生成examId
+                    // 这里需要根据实际的ID格式调整
+                    return `p${level.toLowerCase()}-${number}`;
+                }
+            }
+            
+            // 如果无法从URL提取，尝试从标题提取
+            if (title) {
+                const titleMatch = title.match(/P([123])\s*-\s*(.+)/);
+                if (titleMatch) {
+                    const [, level, titlePart] = titleMatch;
+                    // 生成一个基于标题的ID
+                    const cleanTitle = titlePart.replace(/[^\w\s]/g, '').replace(/\s+/g, '-').toLowerCase();
+                    return `p${level.toLowerCase()}-${cleanTitle}`;
+                }
+            }
+            
+            // 最后的降级方案：返回页面类型
+            return this.detectPageType();
+        },
+
         extractCorrectAnswers: function () {
             console.log('[PracticeEnhancer] 开始提取正确答案');
             
@@ -962,9 +997,13 @@ if (!window.practicePageEnhancer) {
                     // 生成答案比较数据
                     const answerComparison = self.generateAnswerComparison();
 
+                    // 使用从URL提取的真实examId，而不是父窗口传递的通用ID
+                    const realExamId = self.extractExamIdFromUrl();
+                    
                     const results = {
                         sessionId: self.sessionId,
-                        examId: self.examId, // 使用存储的 examId
+                        examId: realExamId, // 使用从URL提取的真实examId
+                        originalExamId: self.examId, // 保留原始的examId用于调试
                         startTime: self.startTime,
                         endTime: endTime,
                         duration: duration,
