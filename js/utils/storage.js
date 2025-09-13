@@ -21,8 +21,18 @@ class StorageManager {
             
             // 初始化版本信息
             const currentVersion = this.get('system_version');
-            if (!currentVersion || currentVersion !== this.version) {
+            console.log(`[Storage] 当前版本: ${currentVersion}, 目标版本: ${this.version}`);
+            
+            if (!currentVersion) {
+                // 首次安装
+                console.log('[Storage] 首次安装，初始化默认数据');
+                this.handleVersionUpgrade(null);
+            } else if (currentVersion !== this.version) {
+                // 版本升级
+                console.log('[Storage] 版本升级，迁移数据');
                 this.handleVersionUpgrade(currentVersion);
+            } else {
+                console.log('[Storage] 版本匹配，跳过初始化');
             }
         } catch (error) {
             console.warn('LocalStorage not available, falling back to memory storage');
@@ -72,8 +82,12 @@ class StorageManager {
         };
 
         Object.entries(defaultData).forEach(([key, value]) => {
-            if (!this.get(key)) {
+            const existingValue = this.get(key);
+            if (existingValue === null || existingValue === undefined) {
+                console.log(`[Storage] 初始化默认数据: ${key}`);
                 this.set(key, value);
+            } else {
+                console.log(`[Storage] 保留现有数据: ${key} (${Array.isArray(existingValue) ? existingValue.length + ' 项' : typeof existingValue})`);
             }
         });
     }

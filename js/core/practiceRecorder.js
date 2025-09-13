@@ -24,6 +24,9 @@ class PracticeRecorder {
         // 恢复活动会话
         this.restoreActiveSessions();
         
+        // 恢复临时存储的记录
+        this.recoverTemporaryRecords();
+        
         // 设置消息监听器
         this.setupMessageListeners();
         
@@ -422,45 +425,248 @@ class PracticeRecorder {
      * 保存练习记录
      */
     savePracticeRecord(record) {
-        try {
-            console.log('[PracticeRecorder] 开始保存练习记录:', record.id);
+        const maxRetries = 3;
+        let attempt = 0;
+        
+        while (attempt < maxRetries) {
+            attempt++;
             
-            // 使用ScoreStorage保存记录
-            if (this.scoreStorage && typeof this.scoreStorage.savePracticeRecord === 'function') {
-                const savedRecord = this.scoreStorage.savePracticeRecord(record);
-                console.log(`[PracticeRecorder] ScoreStorage保存成功: ${savedRecord.id}`);
-                return savedRecord;
-            } else {
-                console.warn('[PracticeRecorder] ScoreStorage不可用，使用降级保存');
-                throw new Error('ScoreStorage not available');
+            try {
+                console.log(`[PracticeRecorder] 开始保存练习记录 (尝试 ${attempt}/${maxRetries}):`, record.id);
+                
+                // 首先尝试使用ScoreStorage保存记录
+                if (this.scoreStorage && typeof this.scoreStorage.savePracticeRecord === 'function') {
+                    const savedRecord = this.scoreStorage.savePracticeRecord(record);
+                    console.log(`[PracticeRecorder] ScoreStorage保存成功: ${savedRecord.id}`);
+                    
+                    // 验证保存是否真的成功
+                    if (this.verifyRecordSaved(savedRecord.id)) {
+                        console.log('[PracticeRecorder] 记录保存验证成功');
+                        return savedRecord;
+                    } else {
+                        console.warn('[PracticeRecorder] ScoreStorage保存验证失败，尝试降级保存');
+                        throw new Error('ScoreStorage save verification failed');
+                    }
+                } else {
+                    console.warn('[PracticeRecorder] ScoreStorage不可用，使用降级保存');
+                    throw new Error('ScoreStorage not available');
+                }
+            } catch (error) {
+                console.error(`[PracticeRecorder] ScoreStorage保存失败 (尝试 ${attempt}):`, error);
+                
+                // 如果是最后一次尝试或者是严重错误，使用降级保存
+                if (attempt === maxRetries || this.isCriticalError(error)) {
+                    return this.fallbackSavePracticeRecord(record);
+                }
+                
+                // 等待一段时间后重试
+                if (attempt < maxRetries) {
+                    console.log(`[PracticeRecorder] 等待 ${attempt * 100}ms 后重试...`);
+                    // 同步等待（在实际应用中可能需要异步处理）
+                    const start = Date.now();
+                    while (Date.now() - start < attempt * 100) {
+                        // 简单的同步等待
+                    }
+                }
             }
-        } catch (error) {
-            console.error('[PracticeRecorder] ScoreStorage保存失败:', error);
-            
-            // 降级处理：直接保存到storage
+        }
+        
+        // 如果所有尝试都失败，使用降级保存
+        return this.fallbackSavePracticeRecord(record);
+    }
+
+    /**
+     * 降级保存练习记录
+     */
+    fallbackSavePracticeRecord(record) {
+        try {
             console.log('[PracticeRecorder] 使用降级保存方法');
+            
+            // 标准化记录格式，确保与ScoreStorage兼容
+            const standardizedRecord = this.standardizeRecordForFallback(record);
+            
             const records = storage.get('practice_records', []);
             console.log('[PracticeRecorder] 当前记录数量:', records.length);
             
-            records.unshift(record); // 新记录放在前面
-            
-            if (records.length > 1000) {
-                records.splice(1000); // 保留最新的1000条记录
+            // 检查是否已存在相同ID的记录
+            const existingIndex = records.findIndex(r => r.id === standardizedRecord.id);
+            if (existingIndex !== -1) {
+                console.log('[PracticeRecorder] 发现重复记录，更新现有记录');
+                records[existingIndex] = standardizedRecord;
+            } else {
+                // 新记录添加到开头（保持时间顺序）
+                records.unshift(standardizedRecord);
             }
             
-            storage.set('practice_records', records);
-            console.log(`[PracticeRecorder] 降级保存成功: ${record.id}`);
+            // 限制记录数量
+            if (records.length > 1000) {
+                records.splice(1000);
+            }
+            
+            // 保存记录
+            const saveSuccess = storage.set('practice_records', records);
+            if (!saveSuccess) {
+                throw new Error('Storage.set returned false');
+            }
+            
+            console.log(`[PracticeRecorder] 降级保存成功: ${standardizedRecord.id}`);
             
             // 验证保存是否成功
-            const savedRecords = storage.get('practice_records', []);
-            const savedRecord = savedRecords.find(r => r.id === record.id);
-            if (savedRecord) {
-                console.log('[PracticeRecorder] 记录保存验证成功');
+            if (this.verifyRecordSaved(standardizedRecord.id)) {
+                console.log('[PracticeRecorder] 降级保存验证成功');
+                
+                // 手动更新用户统计（因为ScoreStorage不可用）
+                this.updateUserStatsManually(standardizedRecord);
+                
+                return standardizedRecord;
             } else {
-                console.error('[PracticeRecorder] 记录保存验证失败');
+                throw new Error('Fallback save verification failed');
             }
             
-            return record;
+        } catch (error) {
+            console.error('[PracticeRecorder] 降级保存失败:', error);
+            
+            // 最后的备用方案：保存到临时存储
+            this.saveToTemporaryStorage(record);
+            
+            // 抛出错误，但不阻止用户继续使用
+            throw new Error(`All save methods failed: ${error.message}`);
+        }
+    }
+
+    /**
+     * 标准化记录格式（用于降级保存）
+     */
+    standardizeRecordForFallback(recordData) {
+        const now = new Date().toISOString();
+        
+        return {
+            // 基础信息
+            id: recordData.id || this.generateRecordId(),
+            examId: recordData.examId,
+            sessionId: recordData.sessionId,
+            
+            // 时间信息
+            startTime: recordData.startTime,
+            endTime: recordData.endTime,
+            duration: recordData.duration || 0,
+            
+            // 成绩信息
+            status: recordData.status || 'completed',
+            score: recordData.score || 0,
+            totalQuestions: recordData.totalQuestions || 0,
+            correctAnswers: recordData.correctAnswers || 0,
+            accuracy: recordData.accuracy || 0,
+            
+            // 答题详情
+            answers: recordData.answers || [],
+            questionTypePerformance: recordData.questionTypePerformance || {},
+            
+            // 元数据
+            metadata: {
+                examTitle: '',
+                category: '',
+                frequency: '',
+                ...recordData.metadata
+            },
+            
+            // 系统信息
+            version: '1.0.0',
+            createdAt: recordData.createdAt || now,
+            updatedAt: now,
+            
+            // 降级保存标识
+            savedBy: 'fallback',
+            fallbackReason: 'ScoreStorage unavailable'
+        };
+    }
+
+    /**
+     * 验证记录是否已保存
+     */
+    verifyRecordSaved(recordId) {
+        try {
+            const records = storage.get('practice_records', []);
+            const found = records.find(r => r.id === recordId);
+            return !!found;
+        } catch (error) {
+            console.error('[PracticeRecorder] 验证记录保存时出错:', error);
+            return false;
+        }
+    }
+
+    /**
+     * 判断是否为严重错误
+     */
+    isCriticalError(error) {
+        const criticalMessages = [
+            'QuotaExceededError',
+            'localStorage not available',
+            'Storage quota exceeded'
+        ];
+        
+        return criticalMessages.some(msg => 
+            error.message && error.message.includes(msg)
+        );
+    }
+
+    /**
+     * 手动更新用户统计
+     */
+    updateUserStatsManually(practiceRecord) {
+        try {
+            const stats = storage.get('user_stats', {
+                totalPractices: 0,
+                totalTimeSpent: 0,
+                averageScore: 0,
+                categoryStats: {},
+                questionTypeStats: {},
+                streakDays: 0,
+                lastPracticeDate: null,
+                achievements: []
+            });
+            
+            // 更新基础统计
+            stats.totalPractices += 1;
+            stats.totalTimeSpent += practiceRecord.duration;
+            
+            // 计算平均分数
+            const totalScore = (stats.averageScore * (stats.totalPractices - 1)) + practiceRecord.accuracy;
+            stats.averageScore = totalScore / stats.totalPractices;
+            
+            // 更新时间戳
+            stats.updatedAt = new Date().toISOString();
+            
+            storage.set('user_stats', stats);
+            console.log('[PracticeRecorder] 用户统计手动更新完成');
+            
+        } catch (error) {
+            console.error('[PracticeRecorder] 手动更新用户统计失败:', error);
+        }
+    }
+
+    /**
+     * 保存到临时存储
+     */
+    saveToTemporaryStorage(record) {
+        try {
+            const tempRecords = storage.get('temp_practice_records', []);
+            tempRecords.push({
+                ...record,
+                tempSavedAt: new Date().toISOString(),
+                needsRecovery: true
+            });
+            
+            // 限制临时记录数量
+            if (tempRecords.length > 50) {
+                tempRecords.splice(0, tempRecords.length - 50);
+            }
+            
+            storage.set('temp_practice_records', tempRecords);
+            console.log('[PracticeRecorder] 记录已保存到临时存储:', record.id);
+            
+        } catch (error) {
+            console.error('[PracticeRecorder] 临时存储也失败:', error);
         }
     }
 
@@ -743,11 +949,8 @@ class PracticeRecorder {
             // 构造增强的练习记录
             const practiceRecord = this.createRealPracticeRecord(exam, validatedData);
             
-            // 保存记录
+            // 保存记录 - 这里ScoreStorage会自动更新用户统计
             this.savePracticeRecord(practiceRecord);
-            
-            // 更新用户统计
-            this.updateUserStats(practiceRecord);
             
             // 清理活动会话
             this.activeSessions.delete(examId);
@@ -835,30 +1038,39 @@ class PracticeRecorder {
         const accuracy = scoreInfo.accuracy || (totalQuestions > 0 ? score / totalQuestions : 0);
         
         const practiceRecord = {
+            // 基础信息 - 与ScoreStorage兼容
             id: recordId,
             examId: exam.id,
-            title: exam.title,
-            category: exam.category,
-            frequency: exam.frequency,
+            sessionId: realData.sessionId,
             
-            // 真实数据标识
-            dataSource: 'real',
-            isRealData: true,
-            
-            // 基本信息
+            // 时间信息
             startTime: realData.startTime ? new Date(realData.startTime).toISOString() : 
                       new Date(Date.now() - realData.duration * 1000).toISOString(),
             endTime: realData.endTime ? new Date(realData.endTime).toISOString() : now.toISOString(),
-            date: now.toISOString(),
+            duration: realData.duration || 0,
             
-            // 成绩数据
+            // 成绩信息
+            status: 'completed',
             score: score,
             totalQuestions: totalQuestions,
+            correctAnswers: score, // 正确答案数等于分数
             accuracy: accuracy,
-            percentage: Math.round(accuracy * 100),
-            duration: realData.duration, // 秒
             
-            // 详细数据
+            // 答题详情 - 转换为ScoreStorage期望的格式
+            answers: this.convertAnswersFormat(realData.answers || {}),
+            questionTypePerformance: this.extractQuestionTypePerformance(realData),
+            
+            // 元数据 - 与ScoreStorage兼容
+            metadata: {
+                examTitle: exam.title || '',
+                category: exam.category || '',
+                frequency: exam.frequency || '',
+                collectionMethod: 'automatic',
+                dataQuality: this.assessDataQuality(realData),
+                processingTime: Date.now()
+            },
+            
+            // 额外的真实数据信息
             realData: {
                 sessionId: realData.sessionId,
                 answers: realData.answers || {},
@@ -870,16 +1082,57 @@ class PracticeRecorder {
                 source: scoreInfo.source || 'data_collector'
             },
             
-            // 元数据
-            metadata: {
-                collectionMethod: 'automatic',
-                dataQuality: this.assessDataQuality(realData),
-                processingTime: Date.now(),
-                version: '1.0'
-            }
+            // 系统信息
+            dataSource: 'real',
+            isRealData: true,
+            createdAt: now.toISOString()
         };
         
         return practiceRecord;
+    }
+
+    /**
+     * 转换答案格式为ScoreStorage兼容格式
+     */
+    convertAnswersFormat(answers) {
+        if (!answers || typeof answers !== 'object') {
+            return [];
+        }
+        
+        return Object.entries(answers).map(([questionId, answer], index) => ({
+            questionId: questionId,
+            answer: answer,
+            correct: false, // 这里需要与正确答案比较，暂时设为false
+            timeSpent: 0,
+            questionType: 'unknown',
+            timestamp: new Date().toISOString()
+        }));
+    }
+
+    /**
+     * 提取题型表现数据
+     */
+    extractQuestionTypePerformance(realData) {
+        // 从realData中提取题型表现，如果没有则返回空对象
+        if (realData.questionTypePerformance) {
+            return realData.questionTypePerformance;
+        }
+        
+        // 如果有scoreInfo，尝试从中提取
+        if (realData.scoreInfo) {
+            const { correct, total } = realData.scoreInfo;
+            if (correct !== undefined && total !== undefined) {
+                return {
+                    'general': {
+                        total: total,
+                        correct: correct,
+                        accuracy: total > 0 ? correct / total : 0
+                    }
+                };
+            }
+        }
+        
+        return {};
     }
 
     /**
@@ -1018,6 +1271,159 @@ class PracticeRecorder {
                 }
             }, '*');
         }
+    }
+
+    /**
+     * 恢复临时存储的记录
+     */
+    recoverTemporaryRecords() {
+        try {
+            const tempRecords = storage.get('temp_practice_records', []);
+            
+            if (tempRecords.length === 0) {
+                console.log('[PracticeRecorder] 没有需要恢复的临时记录');
+                return;
+            }
+            
+            console.log(`[PracticeRecorder] 发现 ${tempRecords.length} 条临时记录，开始恢复...`);
+            
+            let recoveredCount = 0;
+            const failedRecords = [];
+            
+            tempRecords.forEach(tempRecord => {
+                try {
+                    // 移除临时标识
+                    const { tempSavedAt, needsRecovery, ...cleanRecord } = tempRecord;
+                    
+                    // 尝试正常保存
+                    this.savePracticeRecord(cleanRecord);
+                    recoveredCount++;
+                    
+                    console.log(`[PracticeRecorder] 恢复记录成功: ${cleanRecord.id}`);
+                    
+                } catch (error) {
+                    console.error(`[PracticeRecorder] 恢复记录失败: ${tempRecord.id}`, error);
+                    failedRecords.push(tempRecord);
+                }
+            });
+            
+            // 清理已恢复的临时记录
+            if (failedRecords.length === 0) {
+                storage.remove('temp_practice_records');
+                console.log(`[PracticeRecorder] 所有 ${recoveredCount} 条临时记录恢复成功`);
+            } else {
+                storage.set('temp_practice_records', failedRecords);
+                console.log(`[PracticeRecorder] 恢复了 ${recoveredCount} 条记录，${failedRecords.length} 条失败`);
+            }
+            
+        } catch (error) {
+            console.error('[PracticeRecorder] 恢复临时记录时出错:', error);
+        }
+    }
+
+    /**
+     * 获取数据完整性报告
+     */
+    getDataIntegrityReport() {
+        try {
+            const report = {
+                timestamp: new Date().toISOString(),
+                practiceRecords: {
+                    total: 0,
+                    valid: 0,
+                    corrupted: 0
+                },
+                temporaryRecords: {
+                    total: 0,
+                    needsRecovery: 0
+                },
+                activeSessions: {
+                    total: this.activeSessions.size,
+                    active: 0,
+                    stale: 0
+                },
+                storage: {
+                    available: true,
+                    quota: 'unknown'
+                }
+            };
+            
+            // 检查练习记录
+            const records = storage.get('practice_records', []);
+            report.practiceRecords.total = records.length;
+            
+            records.forEach(record => {
+                if (this.validateRecordIntegrity(record)) {
+                    report.practiceRecords.valid++;
+                } else {
+                    report.practiceRecords.corrupted++;
+                }
+            });
+            
+            // 检查临时记录
+            const tempRecords = storage.get('temp_practice_records', []);
+            report.temporaryRecords.total = tempRecords.length;
+            report.temporaryRecords.needsRecovery = tempRecords.filter(r => r.needsRecovery).length;
+            
+            // 检查活动会话
+            const now = Date.now();
+            this.activeSessions.forEach(session => {
+                const lastActivity = new Date(session.lastActivity).getTime();
+                const inactiveTime = now - lastActivity;
+                
+                if (inactiveTime < 30 * 60 * 1000) { // 30分钟内
+                    report.activeSessions.active++;
+                } else {
+                    report.activeSessions.stale++;
+                }
+            });
+            
+            // 检查存储状态
+            try {
+                const storageInfo = storage.getStorageInfo();
+                report.storage.quota = storageInfo;
+            } catch (error) {
+                report.storage.available = false;
+            }
+            
+            return report;
+            
+        } catch (error) {
+            console.error('[PracticeRecorder] 生成完整性报告失败:', error);
+            return null;
+        }
+    }
+
+    /**
+     * 验证记录完整性
+     */
+    validateRecordIntegrity(record) {
+        const requiredFields = ['id', 'examId', 'startTime', 'endTime'];
+        
+        for (const field of requiredFields) {
+            if (!record[field]) {
+                return false;
+            }
+        }
+        
+        // 验证时间格式
+        try {
+            new Date(record.startTime);
+            new Date(record.endTime);
+        } catch (error) {
+            return false;
+        }
+        
+        // 验证数值范围
+        if (record.accuracy !== undefined && (record.accuracy < 0 || record.accuracy > 1)) {
+            return false;
+        }
+        
+        if (record.duration !== undefined && record.duration < 0) {
+            return false;
+        }
+        
+        return true;
     }
 
     /**

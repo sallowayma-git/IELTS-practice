@@ -33,8 +33,8 @@ class ScoreStorage {
         // 设置自动备份
         this.setupAutoBackup();
         
-        // 清理过期数据
-        this.cleanupExpiredData();
+        // 暂时禁用清理过期数据，避免误删新记录
+        // this.cleanupExpiredData();
     }
 
     /**
@@ -97,12 +97,20 @@ class ScoreStorage {
      */
     initializeDataStructures() {
         // 确保基础数据结构存在
-        if (!storage.get(this.storageKeys.practiceRecords)) {
+        const existingRecords = storage.get(this.storageKeys.practiceRecords);
+        if (existingRecords === null || existingRecords === undefined) {
+            console.log('[ScoreStorage] 初始化练习记录数组');
             storage.set(this.storageKeys.practiceRecords, []);
+        } else {
+            console.log(`[ScoreStorage] 保留现有练习记录: ${existingRecords.length} 条`);
         }
         
-        if (!storage.get(this.storageKeys.userStats)) {
+        const existingStats = storage.get(this.storageKeys.userStats);
+        if (existingStats === null || existingStats === undefined) {
+            console.log('[ScoreStorage] 初始化用户统计');
             storage.set(this.storageKeys.userStats, this.getDefaultUserStats());
+        } else {
+            console.log('[ScoreStorage] 保留现有用户统计');
         }
     }
 
@@ -138,16 +146,26 @@ class ScoreStorage {
             // 获取现有记录
             const records = storage.get(this.storageKeys.practiceRecords, []);
             
-            // 添加新记录
-            records.push(standardizedRecord);
+            // 检查是否已存在相同ID的记录
+            const existingIndex = records.findIndex(r => r.id === standardizedRecord.id);
+            if (existingIndex !== -1) {
+                console.log('更新现有记录:', standardizedRecord.id);
+                records[existingIndex] = standardizedRecord;
+            } else {
+                // 添加新记录到开头（保持最新记录在前）
+                records.unshift(standardizedRecord);
+            }
             
             // 维护记录数量限制
             if (records.length > this.maxRecords) {
-                records.splice(0, records.length - this.maxRecords);
+                records.splice(this.maxRecords);
             }
             
             // 保存记录
-            storage.set(this.storageKeys.practiceRecords, records);
+            const saveResult = storage.set(this.storageKeys.practiceRecords, records);
+            if (!saveResult) {
+                throw new Error('Failed to save records to storage');
+            }
             
             // 更新用户统计
             this.updateUserStats(standardizedRecord);

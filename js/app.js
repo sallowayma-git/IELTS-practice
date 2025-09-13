@@ -375,7 +375,7 @@ class ExamSystemApp {
         const componentInitializers = [
             // ExamBrowser组件已移除，使用内置的题目列表功能
             // PracticeHistory组件已移除，使用简单的练习记录界面
-            { name: 'ExamScanner', init: () => new ExamScanner() },
+
             { name: 'RecommendationDisplay', init: () => new RecommendationDisplay() },
             {
                 name: 'GoalSettings', init: () => {
@@ -582,12 +582,8 @@ class ExamSystemApp {
      */
     async loadInitialData() {
         try {
-            // 扫描题库（如果扫描器可用）
-            if (this.components.examScanner && typeof this.components.examScanner.scanExamLibrary === 'function') {
-                await this.components.examScanner.scanExamLibrary();
-            } else {
-                console.log('[App] ExamScanner不可用，跳过题库扫描');
-            }
+            // ExamScanner已移除，题库索引由其他方式管理
+            console.log('[App] 跳过ExamScanner扫描，使用现有题库索引');
 
             // 加载用户统计
             await this.loadUserStats();
@@ -1620,17 +1616,9 @@ class ExamSystemApp {
         console.log('[DataCollection] PracticeRecorder状态:', !!this.components.practiceRecorder);
 
         try {
-            // 使用真实数据更新练习记录
-            if (this.components && this.components.practiceRecorder) {
-                console.log('[DataCollection] 使用PracticeRecorder处理真实数据');
-                const result = this.components.practiceRecorder.handleRealPracticeData(examId, data);
-                console.log('[DataCollection] PracticeRecorder处理结果:', result);
-            } else {
-                // 降级处理：直接保存真实数据
-                console.log('[DataCollection] PracticeRecorder不可用，使用降级保存');
-                console.log('[DataCollection] Components状态:', this.components);
-                this.saveRealPracticeData(examId, data);
-            }
+            // 直接保存真实数据（采用旧版本的简单方式）
+            console.log('[DataCollection] 直接保存真实数据');
+            this.saveRealPracticeData(examId, data);
 
             // 更新UI状态
             this.updateExamStatus(examId, 'completed');
@@ -1713,19 +1701,21 @@ class ExamSystemApp {
     }
 
     /**
-     * 保存真实练习数据
+     * 保存真实练习数据（采用旧版本的简单直接方式）
      */
     saveRealPracticeData(examId, realData) {
         try {
+            console.log('[DataCollection] 开始保存真实练习数据:', examId, realData);
+            
             const examIndex = storage.get('exam_index', []);
             const exam = examIndex.find(e => e.id === examId);
 
             if (!exam) {
-                console.error('无法找到题目信息:', examId);
+                console.error('[DataCollection] 无法找到题目信息:', examId);
                 return;
             }
 
-            // 构造增强的练习记录
+            // 构造练习记录（与旧版本完全相同的格式）
             const practiceRecord = {
                 id: Date.now(),
                 examId: examId,
@@ -1755,8 +1745,10 @@ class ExamSystemApp {
                 timestamp: Date.now()
             };
 
-            // 保存到练习记录
+            // 直接保存到localStorage（与旧版本完全相同的方式）
             const practiceRecords = storage.get('practice_records', []);
+            console.log('[DataCollection] 当前记录数量:', practiceRecords.length);
+            
             practiceRecords.unshift(practiceRecord);
 
             // 限制记录数量
@@ -1764,9 +1756,19 @@ class ExamSystemApp {
                 practiceRecords.splice(100);
             }
 
-            storage.set('practice_records', practiceRecords);
+            const saveResult = storage.set('practice_records', practiceRecords);
+            console.log('[DataCollection] 保存结果:', saveResult);
 
-            console.log('[DataCollection] 真实练习数据已保存:', practiceRecord);
+            // 立即验证保存是否成功
+            const verifyRecords = storage.get('practice_records', []);
+            const savedRecord = verifyRecords.find(r => r.id === practiceRecord.id);
+            
+            if (savedRecord) {
+                console.log('[DataCollection] ✓ 真实练习数据保存成功:', practiceRecord.id);
+                console.log('[DataCollection] ✓ 验证成功，当前总记录数:', verifyRecords.length);
+            } else {
+                console.error('[DataCollection] ✗ 保存验证失败，记录未找到');
+            }
 
         } catch (error) {
             console.error('[DataCollection] 保存真实数据失败:', error);
