@@ -1753,6 +1753,25 @@ class ExamSystemApp {
                 timestamp: Date.now()
             };
 
+            // 兼容旧视图字段（便于总览系统统计与详情展示）
+            try {
+                const sInfo = realData && realData.scoreInfo ? realData.scoreInfo : {};
+                const correct = typeof sInfo?.correct === 'number' ? sInfo.correct : 0;
+                const total = typeof sInfo?.total === 'number' ? sInfo.total : (practiceRecord.realData?.totalQuestions || 0);
+                const acc = typeof sInfo?.accuracy === 'number' ? sInfo.accuracy : (total > 0 ? correct / total : 0);
+                const pct = typeof sInfo?.percentage === 'number' ? sInfo.percentage : Math.round(acc * 100);
+
+                practiceRecord.score = correct;
+                practiceRecord.totalQuestions = total;
+                practiceRecord.accuracy = acc;
+                practiceRecord.percentage = pct;
+                practiceRecord.answers = realData.answers || {};
+                practiceRecord.startTime = new Date((realData.startTime ?? (Date.now() - (realData.duration || 0) * 1000))).toISOString();
+                practiceRecord.endTime = new Date((realData.endTime ?? Date.now())).toISOString();
+            } catch (compatErr) {
+                console.warn('[DataCollection] 兼容字段填充失败:', compatErr);
+            }
+
             // 直接保存到localStorage（与旧版本完全相同的方式）
             const practiceRecords = storage.get('practice_records', []);
             console.log('[DataCollection] 当前记录数量:', practiceRecords.length);

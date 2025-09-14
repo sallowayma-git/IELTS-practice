@@ -455,3 +455,21 @@ class PracticeRecordModal {
 
 // 创建全局实例
 window.practiceRecordModal = new PracticeRecordModal();
+
+// 兼容方法：通过ID显示（用于主应用桥接和历史增强器）
+if (!window.practiceRecordModal.showById) {
+  window.practiceRecordModal.showById = function(recordId) {
+    try {
+      const toIdStr = (v) => v == null ? '' : String(v);
+      const targetIdStr = toIdStr(recordId);
+      const records = (window.storage && window.storage.get('practice_records', [])) || [];
+      let record = records.find(r => r.id === recordId || toIdStr(r.id) === targetIdStr) ||
+                   records.find(r => toIdStr(r.sessionId) === targetIdStr);
+      if (!record) throw new Error('记录不存在');
+      this.show(record);
+    } catch (e) {
+      console.error('[PracticeRecordModal] showById 失败:', e);
+      if (window.showMessage) window.showMessage('无法显示记录详情: ' + e.message, 'error');
+    }
+  };
+}
