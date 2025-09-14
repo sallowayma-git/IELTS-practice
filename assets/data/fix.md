@@ -357,7 +357,7 @@ this.cleanupExpiredData();
 #### 18.2 具体修改
 
 **js/app.js**:
-```javascript
+```
 // 删除
 { name: 'ExamScanner', init: () => new ExamScanner() },
 
@@ -366,7 +366,7 @@ console.log('[App] 跳过ExamScanner扫描，使用现有题库索引');
 ```
 
 **js/utils/systemDiagnostics.js**:
-```javascript
+```
 // 替换ExamScanner调用
 console.log('ExamScanner已移除，无法重建索引');
 ```
@@ -479,3 +479,88 @@ exam = examIndex.find(e => {
 **修复内容**: 改进URL解码和模糊匹配逻辑
 
 **预期效果**: 现在应该能够正确匹配"Video Games"等题目并保存记录
+
+## 最新修复与改进记录
+
+### 路径解析与资源访问修复
+
+**问题**: 阅读和听力材料的HTML和PDF文件无法打开，出现路径错误
+
+**解决方案**:
+1. **统一路径解析与构造**:
+   - 新增路径解析器 resolveExamBasePath 和 buildResourcePath，确保两类资源路径构造统一
+   - 听力题目路径自动将旧前缀"睡着过听力项目-已完成小样"替换为实际文件夹"ListeningPractice"，并保证路径以 / 结尾
+   - 阅读题目路径自动添加前缀"睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/"
+
+2. **链接校验**:
+   - 添加链接校验器，可遍历 examIndex，校验解析后的 HTML 和 PDF 路径并输出报告
+
+3. **具体实现**:
+   - js/main.js: 添加 resolveExamBasePath, buildResourcePath；openExam 和 viewPDF 现在使用 buildResourcePath
+   - js/app.js: buildExamUrl 现在优先使用 window.buildResourcePath（如果存在）
+   - js/main.js: 添加本地 openPDFSafely 方法，确保即使没有旧依赖也能打开 PDF
+
+### localStorage 配额问题修复
+
+**问题**: 备份时报错 QuotaExceededError，localStorage 空间不足
+
+**解决方案**:
+1. **多层防护机制**:
+   - 大文件检测：如果备份载荷过大（~>4.5MB），跳过 localStorage 直接下载备份文件
+   - 清理重试：localStorage 空间不足时，删除最旧的本地备份并重试写入
+   - 文件下载后备选方案：如果仍然超过配额，自动将备份导出为文件并记录到 backup_index 中，标记 location: 'download'
+   - 安全索引更新：backup_index 更新时会自动裁剪以适应配额限制
+   - 启动清理：初始化时运行清理程序，减少立即触发配额问题的可能性
+
+2. **具体实现**:
+   - js/components/DataIntegrityManager.js: createBackup 现在使用 tryStoreBackupWithEviction + downloadBackupFile + safeUpdateBackupIndex
+   - js/main.js: createManualBackup 现在等待 createBackup 完成，正确处理后备方案并显示警告信息
+
+3. **配置调整**:
+   - 本地备份保留数量从 10 个减少到 5 个，降低存储压力
+   - 自动备份间隔从默认值改为 10 分钟 (600000ms)
+
+### 题库配置切换功能修复
+
+**问题**: 题库配置切换按钮失效，相关组件无法加载，抛出 ReferenceError: getLibraryConfigurations is not defined
+
+**解决方案**:
+1. **函数补全**:
+   - 在 js/main.js 中补全题库配置相关函数:
+     - getLibraryConfigurations(): 从 storage 读取 exam_index_configurations
+     - saveLibraryConfiguration(name, key, examCount): 将题库配置保存到 storage
+     - setActiveLibraryConfiguration(key): 设置当前使用的题库配置键
+
+2. **功能逻辑**:
+   - 现有按钮逻辑 switchLibraryConfig(key) 会设置活动配置并重新加载
+   - 重载后 loadLibrary() 将从 active_exam_index_key 加载对应索引（若无缓存则回退到默认合并 completeExamIndex + listeningExamIndex 并缓存）
+
+### 用户体验改进
+
+1. **备份列表刷新**:
+   - 手动"创建备份"后，备份列表现在会自动刷新显示新备份
+   - 修改位置: js/main.js → createManualBackup() 函数中添加调用 showBackupList()
+
+2. **错误处理增强**:
+   - 添加额外的 try/catch 保护，防止异常条目导致界面崩溃
+   - 改进错误信息显示，提供更友好的提示
+
+### 后续优化建议
+
+1. **可选改进**:
+   - 压缩备份：为 localStorage 中的备份添加轻量级压缩（如 LZ-string），以适应更多历史记录
+   - 一次性清理：立即只保留最近 N 个本地备份，快速释放空间
+   - 源数据规范化：将 assets/scripts/listening-exam-data.js 的路径前缀直接改为 ListeningPractice，去除运行时替换
+   - 文档完善：创建 Confluence 页面记录备份策略与恢复步骤，创建 Jira 工作项跟踪相关改进
+
+### 验证步骤
+
+1. **执行硬刷新**加载最新脚本:
+   - Windows: Ctrl+F5
+   - macOS: Cmd+Shift+R
+
+2. **功能测试**:
+   - 设置 → "创建备份": 应该成功创建备份或显示"空间不足，已下载为文件"警告
+   - 设置 → "备份列表": 应能正常打开并显示最新备份（包括本地和下载型）
+   - 设置 → "题库配置切换": 应显示配置列表，点击切换后应能正常加载对应题库
+   - 题库浏览 → 尝试打开阅读 P1 和听力 P3 题目: 应能正确解析路径并打开 HTML 和 PDF 文件

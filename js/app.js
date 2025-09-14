@@ -870,19 +870,21 @@ class ExamSystemApp {
      * 构造题目URL
      */
     buildExamUrl(exam) {
-        // 基于exam对象构造完整的文件路径
-        let examPath = exam.path;
+        // 使用全局的路径构建器以确保阅读/听力路径正确
+        try {
+            if (typeof window.buildResourcePath === 'function') {
+                return window.buildResourcePath(exam, 'html');
+            }
+        } catch (e) {
+            // 继续使用回退逻辑
+        }
 
-        // 确保路径格式正确
+        // 回退：基于exam对象构造完整的文件路径（可能不含根前缀）
+        let examPath = exam.path || '';
         if (!examPath.endsWith('/')) {
             examPath += '/';
         }
-
-        // 添加文件名
-        const fullPath = examPath + exam.filename;
-
-        // 返回相对于当前页面的路径
-        return fullPath;
+        return examPath + exam.filename;
     }
 
 
@@ -1222,6 +1224,12 @@ class ExamSystemApp {
             // 验证窗口来源（如果可能的话）- 放宽验证条件
             if (event.source && examWindow && event.source !== examWindow) {
                 console.log('[App] 消息来源窗口不匹配，但仍处理消息');
+            }
+
+            // 放宽消息源过滤，兼容 inline_collector 与 practice_page
+            const src = (event.data && event.data.source) || '';
+            if (src && src !== 'practice_page' && src !== 'inline_collector') {
+                return; // 非预期来源的消息忽略
             }
 
             const { type, data } = event.data || {};
@@ -2381,38 +2389,11 @@ class ExamSystemApp {
      * 更新简单的练习记录视图
      */
     updateSimplePracticeView() {
-        try {
-            // 获取练习记录
-            const practiceRecords = storage.get('practice_records', []);
-            
-            // 更新统计信息
-            const totalPracticed = practiceRecords.length;
-            const avgScore = totalPracticed > 0 
-                ? Math.round(practiceRecords.reduce((sum, r) => sum + (r.accuracy || 0), 0) / totalPracticed * 100)
-                : 0;
-            const totalTime = Math.round(practiceRecords.reduce((sum, r) => sum + (r.duration || 0), 0) / 60); // 转换为分钟
-            
-            // 计算连续学习天数
-            const dates = new Set(practiceRecords.map(r => new Date(r.startTime).toDateString()));
-            const streakDays = dates.size;
-            
-            // 更新DOM元素
-            const totalPracticedEl = document.getElementById('total-practiced');
-            const avgScoreEl = document.getElementById('avg-score');
-            const studyTimeEl = document.getElementById('study-time');
-            const streakDaysEl = document.getElementById('streak-days');
-            
-            if (totalPracticedEl) totalPracticedEl.textContent = totalPracticed;
-            if (avgScoreEl) avgScoreEl.textContent = avgScore + '%';
-            if (studyTimeEl) studyTimeEl.textContent = totalTime;
-            if (streakDaysEl) streakDaysEl.textContent = streakDays;
-            
-            // 更新练习历史列表
-            this.updateSimplePracticeList(practiceRecords);
-            
-        } catch (error) {
-            console.error('Failed to update practice view:', error);
-        }
+        // This function is disabled because its logic has been moved to
+        // updatePracticeView() in main.js to support virtual scrolling.
+        // Leaving this empty prevents it from overwriting the virtual scroller DOM.
+        console.log('[App] updateSimplePracticeView is disabled, functionality moved to main.js.');
+        return;
     }
 
     /**
@@ -2707,7 +2688,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         await window.app.initialize();
     } catch (error) {
         console.error('Failed to start application:', error);
-        window.handleError(error, 'Application Startup');
+        if (window.handleError) {
+            window.handleError(error, 'Application Startup');
+        } else {
+            // Fallback: non-blocking user message if error handler is unavailable
+            try {
+                const container = document.getElementById('message-container');
+                if (container) {
+                    const msg = document.createElement('div');
+                    msg.className = 'message error';
+                    msg.textContent = '系统启动失败，请检查控制台日志。';
+                    container.appendChild(msg);
+                }
+            } catch (_) {
+                // no-op
+            }
+        }
     }
 });
 
