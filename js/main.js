@@ -12,6 +12,8 @@ let pdfHandler = null;
 let browseStateManager = null;
 let practiceListScroller = null;
 const processedSessions = new Set();
+let bulkDeleteMode = false;
+let selectedRecords = new Set();
 
 
 // --- Initialization ---
@@ -207,28 +209,51 @@ function formatDurationShort(seconds) {
     return `${h}小时${mm}分钟`;
 }
 
+function getDurationColor(seconds) {
+    const minutes = (seconds || 0) / 60;
+    if (minutes < 20) return '#4ade80'; // green-400
+    if (minutes < 23) return '#facc15'; // yellow-400
+    if (minutes < 26) return '#fb923c'; // orange-400
+    if (minutes < 30) return '#f87171'; // red-400
+    return '#ef4444'; // red-500
+}
+
 function renderPracticeRecordItem(record) {
     const item = document.createElement('div');
     item.className = 'history-item';
 
-    const durationStr = formatDurationShort(record.duration || 0);
+    const durationInSeconds = record.duration || 0;
+    const durationStr = formatDurationShort(durationInSeconds);
+    const durationColor = getDurationColor(durationInSeconds);
 
-    // 左侧：标题 + 次行（日期在左、用时在右，统一右对齐，确保垂直线对齐）
-    // 右侧：仅保留分数百分比
+    const isSelected = selectedRecords.has(record.id);
+    if (bulkDeleteMode && isSelected) {
+        item.classList.add('history-item-selected');
+    }
+    item.dataset.recordId = record.id;
+    item.onclick = () => {
+        if (bulkDeleteMode) {
+            toggleRecordSelection(record.id);
+        }
+    };
+
     item.innerHTML = `
-        <div style="flex:1; min-width:0;">
-            <a href="#" class="practice-record-title" onclick="showRecordDetails('${record.id}'); return false;" style="display:inline-block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+        <div class="record-info" style="cursor: ${bulkDeleteMode ? 'pointer' : 'default'};">
+            <a href="#" class="practice-record-title" onclick="event.stopPropagation(); showRecordDetails('${record.id}'); return false;">
                 <strong>${record.title}</strong>
             </a>
-            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:4px; gap:10px;">
-                <small style="opacity:0.8;">${new Date(record.date).toLocaleString()}</small>
-                <small style="opacity:0.9; min-width:120px; text-align:right;">用时：${durationStr}</small>
+            <div class="record-meta-line">
+                <small class="record-date">${new Date(record.date).toLocaleString()}</small>
+                <small class="record-duration-value"><strong>用时：</strong><strong class="duration-time" style="color: ${durationColor};">${durationStr}</strong></small>
             </div>
         </div>
-        <div style="text-align: right; min-width:80px;">
-            <div style="color: ${getScoreColor(record.percentage || 0)}; font-weight: bold; font-size: 1.2em;">
+        <div class="record-percentage-container">
+            <div class="record-percentage" style="color: ${getScoreColor(record.percentage || 0)};">
                 ${record.percentage || 0}%
             </div>
+        </div>
+        <div class="record-actions-container">
+            ${!bulkDeleteMode ? `<button class="delete-record-btn" onclick="event.stopPropagation(); deleteRecord('${record.id}')" title="删除此记录">❌</button>` : ''}
         </div>
     `;
     return item;
@@ -296,7 +321,7 @@ function updatePracticeView() {
     }
     
     if (window.VirtualScroller) {
-        practiceListScroller = new VirtualScroller(historyContainer, recordsToShow, renderPracticeRecordItem, { itemHeight: 60, containerHeight: 650 });
+        practiceListScroller = new VirtualScroller(historyContainer, recordsToShow, renderPracticeRecordItem, { itemHeight: 65, containerHeight: 650 }); /* 增加itemHeight以匹配新的gap和padding */
     } else {
         // Fallback to simple rendering if VirtualScroller is not available
         historyContainer.innerHTML = recordsToShow.map(record => renderPracticeRecordItem(record).outerHTML).join('');
@@ -442,6 +467,15 @@ window.resolveExamBasePath = resolveExamBasePath;
 window.buildResourcePath = buildResourcePath;
 
 function openExam(examId) {
+  // 优先走 App 流程（带会话与通信）
+  if (window.app && typeof window.app.openExam === 'function') {
+    try {
+      window.app.openExam(examId);
+      return;
+    } catch (e) {
+      console.warn('[Main] app.openExam 调用失败，将使用简化打开逻辑:', e);
+    }
+  }
     const exam = examIndex.find(e => e.id === examId);
     if (!exam) return showMessage('题目不存在', 'error');
     if (!exam.hasHtml) return viewPDF(examId);
@@ -820,17 +854,128 @@ function performSearch(query) {
 }
 
 function exportPracticeData() {
-    if (window.practiceHistoryEnhancer) {
-        window.practiceHistoryEnhancer.showExportDialog();
-    } else {
-        showMessage('导出功能尚未初始化', 'warning');
+    if (practiceRecords.length === 0) {
+        showMessage('暂无练习数据可导出', 'info');
+        return;
     }
+    showMessage('正在准备导出...', 'info');
+    setTimeout(() => {
+        try {
+            const data = {
+                exportDate: new Date().toISOString(),
+                stats: practiceStats,
+                records: practiceRecords
+            };
+
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `practice-records-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showMessage('练习数据已导出', 'success');
+        } catch (error) {
+            console.error('导出失败:', error);
+            showMessage('导出失败: ' + error.message, 'error');
+        }
+    }, 100);
 }
 
 function toggleBulkDelete() {
-    // This function's logic was in the original file but seems to be missing from components.
-    // Placeholder implementation:
-    showMessage('批量删除功能暂不可用', 'warning');
+    bulkDeleteMode = !bulkDeleteMode;
+    const btn = document.getElementById('bulk-delete-btn');
+
+    if (bulkDeleteMode) {
+        btn.textContent = '✅ 完成选择';
+        btn.classList.remove('btn-info');
+        btn.classList.add('btn-success');
+        selectedRecords.clear();
+        showMessage('批量管理模式已开启，点击记录进行选择', 'info');
+    } else {
+        btn.textContent = '📝 批量管理';
+        btn.classList.remove('btn-success');
+        btn.classList.add('btn-info');
+
+        if (selectedRecords.size > 0) {
+            const confirmMessage = `确定要删除选中的 ${selectedRecords.size} 条记录吗？此操作不可恢复。`;
+            if (confirm(confirmMessage)) {
+                bulkDeleteRecords();
+            }
+        }
+        selectedRecords.clear();
+    }
+
+    updatePracticeView();
+}
+
+function bulkDeleteRecords() {
+    const records = storage.get('practice_records', []);
+    const recordsToKeep = records.filter(record => !selectedRecords.has(record.id));
+
+    const deletedCount = records.length - recordsToKeep.length;
+
+    storage.set('practice_records', recordsToKeep);
+    practiceRecords = recordsToKeep;
+
+    syncPracticeRecords(); // Re-sync and update UI
+
+    showMessage(`已删除 ${deletedCount} 条记录`, 'success');
+    console.log(`[System] 批量删除了 ${deletedCount} 条练习记录`);
+}
+
+function toggleRecordSelection(recordId) {
+    if (!bulkDeleteMode) return;
+
+    if (selectedRecords.has(recordId)) {
+        selectedRecords.delete(recordId);
+    } else {
+        selectedRecords.add(recordId);
+    }
+    updatePracticeView(); // Re-render to show selection state
+}
+
+function deleteRecord(recordId) {
+    if (!recordId) {
+        showMessage('记录ID无效', 'error');
+        return;
+    }
+
+    const records = storage.get('practice_records', []);
+    const recordIndex = records.findIndex(record => String(record.id) === String(recordId));
+
+    if (recordIndex === -1) {
+        showMessage('未找到指定记录', 'error');
+        return;
+    }
+
+    const record = records[recordIndex];
+    const confirmMessage = `确定要删除这条练习记录吗？\n\n题目: ${record.title}\n时间: ${new Date(record.date).toLocaleString()}\n\n此操作不可恢复。`;
+
+    if (confirm(confirmMessage)) {
+        const historyItem = document.querySelector(`[data-record-id="${recordId}"]`);
+        if (historyItem) {
+            historyItem.classList.add('deleting');
+            setTimeout(() => {
+                historyItem.classList.add('deleted');
+                setTimeout(() => {
+                    records.splice(recordIndex, 1);
+                    storage.set('practice_records', records);
+                    syncPracticeRecords(); // Re-sync and update UI
+                    showMessage('记录已删除', 'success');
+                }, 300);
+            }, 200);
+        } else {
+            // Fallback if element not found
+            records.splice(recordIndex, 1);
+            storage.set('practice_records', records);
+            syncPracticeRecords();
+            showMessage('记录已删除', 'success');
+        }
+    }
 }
 
 function clearPracticeData() {
