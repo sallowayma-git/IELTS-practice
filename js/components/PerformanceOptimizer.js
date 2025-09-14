@@ -382,7 +382,7 @@ class PerformanceOptimizer {
                     if (entry.entryType === 'measure') {
                         console.log(`[Performance] ${entry.name}: ${entry.duration.toFixed(2)}ms`);
                     }
-                }。
+                }
             });
             
             observer.observe({ entryTypes: ['measure'] });

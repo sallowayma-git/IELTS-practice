@@ -317,6 +317,10 @@ class SettingsPanel {
                             <p class="settings-description">导入导出、备份恢复练习数据</p>
                         </div>
                         <div class="settings-item">
+                            <button class="btn" id="library-loader">加载题库</button>
+                            <p class="settings-description">阅读/听力题库全量重载与增量更新</p>
+                        </div>
+                        <div class="settings-item">
                             <button class="btn btn-secondary" id="system-maintenance">系统维护</button>
                             <p class="settings-description">系统诊断、性能监控和维护工具</p>
                         </div>
@@ -507,6 +511,19 @@ class SettingsPanel {
                 this.hide();
                 if (window.dataManagementPanel) {
                     window.dataManagementPanel.show();
+                }
+            });
+        }
+
+        // 加载题库
+        const libraryLoaderBtn = modal.querySelector('#library-loader');
+        if (libraryLoaderBtn) {
+            libraryLoaderBtn.addEventListener('click', () => {
+                this.hide();
+                if (window.showLibraryLoaderModal) {
+                    window.showLibraryLoaderModal();
+                } else if (window.showMessage) {
+                    window.showMessage('加载题库功能尚未初始化', 'warning');
                 }
             });
         }

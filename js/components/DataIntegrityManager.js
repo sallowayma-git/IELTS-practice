@@ -4,8 +4,8 @@
  */
 class DataIntegrityManager {
     constructor() {
-        this.backupInterval = 300000; // 5分钟自动备份
-        this.maxBackups = 10; // 最多保留10个备份
+        this.backupInterval = 600000; // 10分钟自动备份
+        this.maxBackups = 5; // 最多保留5个备份（减少占用）
         this.dataVersion = '1.0.0';
         this.backupTimer = null;
         this.validationRules = new Map();
@@ -15,6 +15,9 @@ class DataIntegrityManager {
         
         // 启动自动备份
         this.startAutoBackup();
+        
+        // 尝试立即清理旧备份，防止一启动就触发配额
+        try { this.cleanupOldBackups(); } catch (_) {}
         
         console.log('[DataIntegrityManager] 数据完整性管理器已初始化');
     }
@@ -30,6 +33,7 @@ class DataIntegrityManager {
                 id: 'string',
                 startTime: 'string',
                 endTime: 'string',
+                date: 'string', // Allow 'date' as well
                 duration: 'number',
                 examId: 'string',
                 examTitle: 'string',
@@ -37,6 +41,7 @@ class DataIntegrityManager {
             },
             validators: {
                 startTime: (value) => !isNaN(new Date(value).getTime()),
+                date: (value) => !value || !isNaN(new Date(value).getTime()),
                 endTime: (value) => !value || !isNaN(new Date(value).getTime()),
                 duration: (value) => typeof value === 'number' && value >= 0,
                 id: (value) => typeof value === 'string' && value.length > 0
@@ -137,14 +142,56 @@ class DataIntegrityManager {
                 checksum: this.calculateChecksum(backupData)
             };
 
-            // 保存备份
             const backupKey = `backup_${backup.id}`;
-            localStorage.setItem(backupKey, JSON.stringify(backup));
+            const backupStr = JSON.stringify(backup);
 
-            // 更新备份索引
-            this.updateBackupIndex(backup);
+            // 如果备份体积过大，直接导出文件，避免占满localStorage
+            const approxSizeKB = Math.round(backupStr.length / 1024);
+            if (approxSizeKB > 4500) { // ~4.5MB 阈值（多数浏览器配额约5MB）
+                console.warn('[DataIntegrityManager] 备份体积过大，改为文件下载备份:', approxSizeKB, 'KB');
+                this.downloadBackupFile(backup);
+                this.safeUpdateBackupIndex({
+                    id: backup.id,
+                    timestamp: backup.timestamp,
+                    type: `${type}_file_large`,
+                    version: backup.version,
+                    size: backupStr.length,
+                    location: 'download'
+                });
+                this.notifyUser('备份体积过大，已直接下载到本地文件', 'warning');
+                return { ...backup, external: true, large: true };
+            }
 
-            // 清理旧备份
+            // 首先尝试存储，如果空间不足则逐步清理旧备份后重试
+            const stored = this.tryStoreBackupWithEviction(backupKey, backupStr);
+
+            if (!stored) {
+                // 仍然无法存储，触发下载备份到本地文件并记录提示
+                console.warn('[DataIntegrityManager] 本地空间不足，切换为文件下载备份');
+                this.downloadBackupFile(backup);
+                this.safeUpdateBackupIndex({
+                    id: backup.id,
+                    timestamp: backup.timestamp,
+                    type: `${type}_file`,
+                    version: backup.version,
+                    size: backupStr.length,
+                    location: 'download'
+                });
+                this.notifyUser('本地存储空间不足，已将备份下载为文件', 'warning');
+                return { ...backup, external: true };
+            }
+
+            // 更新备份索引（带有健壮的配额处理）
+            this.safeUpdateBackupIndex({
+                id: backup.id,
+                timestamp: backup.timestamp,
+                type: backup.type,
+                version: backup.version,
+                size: backupStr.length,
+                location: 'localStorage'
+            });
+
+            // 清理超过上限的旧备份
             this.cleanupOldBackups();
 
             console.log(`[DataIntegrityManager] 备份已创建: ${backup.id} (${type})`);
@@ -152,6 +199,17 @@ class DataIntegrityManager {
 
         } catch (error) {
             console.error('[DataIntegrityManager] 创建备份失败:', error);
+            // 如果是配额问题，在此层提供最终保底方案：导出为文件并不抛出异常
+            if (this.isQuotaExceeded(error)) {
+                try {
+                    this.exportData();
+                    this.notifyUser('本地空间不足：已导出数据为文件', 'warning');
+                } catch (e2) {
+                    console.error('[DataIntegrityManager] 保底导出失败:', e2);
+                    this.notifyUser('本地空间不足且导出失败，请清理浏览器存储空间后重试', 'error');
+                }
+                return { external: true, exported: true, error: error?.message };
+            }
             throw error;
         }
     }
@@ -161,8 +219,8 @@ class DataIntegrityManager {
      */
     updateBackupIndex(backup) {
         try {
+            // 保持向后兼容，但推荐使用 safeUpdateBackupIndex
             const index = JSON.parse(localStorage.getItem('backup_index') || '[]');
-            
             index.push({
                 id: backup.id,
                 timestamp: backup.timestamp,
@@ -170,13 +228,96 @@ class DataIntegrityManager {
                 version: backup.version,
                 size: JSON.stringify(backup).length
             });
-
-            // 按时间排序
             index.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
             localStorage.setItem('backup_index', JSON.stringify(index));
         } catch (error) {
             console.error('[DataIntegrityManager] 更新备份索引失败:', error);
+        }
+    }
+
+    safeUpdateBackupIndex(entry) {
+        try {
+            const index = JSON.parse(localStorage.getItem('backup_index') || '[]');
+            index.push(entry);
+            index.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            try {
+                localStorage.setItem('backup_index', JSON.stringify(index));
+            } catch (e) {
+                // 如果索引写入也超限，移除最旧项再试
+                while (index.length > 0) {
+                    index.pop();
+                    try {
+                        localStorage.setItem('backup_index', JSON.stringify(index));
+                        console.warn('[DataIntegrityManager] 备份索引空间不足，已丢弃部分索引条目');
+                        break;
+                    } catch (_) {
+                        continue;
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('[DataIntegrityManager] 安全更新备份索引失败:', error);
+        }
+    }
+
+    tryStoreBackupWithEviction(key, value) {
+        try {
+            localStorage.setItem(key, value);
+            return true;
+        } catch (e) {
+            if (!this.isQuotaExceeded(e)) throw e;
+            // 更积极的清理：持续删除最旧备份直到成功或没有可删项
+            let index;
+            try {
+                index = JSON.parse(localStorage.getItem('backup_index') || '[]');
+            } catch (_) {
+                index = [];
+            }
+            // 仅考虑本地备份
+            index = index.filter(entry => entry.location !== 'download');
+            while (index.length > 0) {
+                const last = index[index.length - 1];
+                try { localStorage.removeItem(`backup_${last.id}`); } catch (_) {}
+                index.pop();
+                try { localStorage.setItem('backup_index', JSON.stringify(index)); } catch (_) {}
+                try {
+                    localStorage.setItem(key, value);
+                    return true;
+                } catch (e2) {
+                    if (!this.isQuotaExceeded(e2)) throw e2;
+                    // 继续清理
+                }
+            }
+            // 无可清理仍然失败
+            return false;
+        }
+    }
+
+    isQuotaExceeded(e) {
+        return e && (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014);
+    }
+
+    downloadBackupFile(backup) {
+        try {
+            const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ielts_backup_${backup.id}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('[DataIntegrityManager] 下载备份文件失败:', error);
+        }
+    }
+
+    notifyUser(message, type = 'info') {
+        if (window.showMessage) {
+            window.showMessage(message, type);
+        } else {
+            console.log(`[${type}] ${message}`);
         }
     }
 
@@ -185,20 +326,21 @@ class DataIntegrityManager {
      */
     cleanupOldBackups() {
         try {
-            const index = JSON.parse(localStorage.getItem('backup_index') || '[]');
-            
+            let index = JSON.parse(localStorage.getItem('backup_index') || '[]');
+
+            // 只保留存储在localStorage的备份（忽略 location='download' 记录）
+            index = index.filter(entry => entry.location !== 'download');
             if (index.length > this.maxBackups) {
-                // 删除超出限制的备份
                 const toDelete = index.slice(this.maxBackups);
                 toDelete.forEach(backup => {
-                    localStorage.removeItem(`backup_${backup.id}`);
+                    try { localStorage.removeItem(`backup_${backup.id}`); } catch (_) {}
                 });
-
-                // 更新索引
                 const newIndex = index.slice(0, this.maxBackups);
                 localStorage.setItem('backup_index', JSON.stringify(newIndex));
-
                 console.log(`[DataIntegrityManager] 已清理 ${toDelete.length} 个旧备份`);
+            } else {
+                // 写回过滤后的索引
+                localStorage.setItem('backup_index', JSON.stringify(index));
             }
         } catch (error) {
             console.error('[DataIntegrityManager] 清理旧备份失败:', error);
@@ -248,6 +390,13 @@ class DataIntegrityManager {
             });
 
             console.log(`[DataIntegrityManager] 备份恢复完成: ${backupId}`);
+
+            // 尝试通知主应用刷新
+            if (window.syncPracticeRecords) {
+                console.log('[DataIntegrityManager] Notifying main window to sync records after restore...');
+                window.syncPracticeRecords();
+            }
+            
             return true;
 
         } catch (error) {
@@ -324,7 +473,14 @@ class DataIntegrityManager {
             return data;
         }
 
-        const repairedData = data.filter(item => {
+        const repairedData = data.map(item => {
+            const newItem = { ...item };
+            // Compatibility fix: If 'startTime' is missing but 'date' exists, use 'date'.
+            if (!newItem.startTime && newItem.date) {
+                newItem.startTime = newItem.date;
+            }
+            return newItem;
+        }).filter(item => {
             // 检查必需字段
             if (rules.required) {
                 for (const field of rules.required) {
@@ -428,57 +584,60 @@ class DataIntegrityManager {
     async importData(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
-            
+
             reader.onload = async (event) => {
                 try {
-                    const importData = JSON.parse(event.target.result);
-                    
-                    // 验证导入数据格式
-                    if (!importData.data || !importData.checksum) {
-                        throw new Error('无效的导入文件格式');
-                    }
+                    const importFileContent = JSON.parse(event.target.result);
 
-                    // 验证数据完整性
-                    const calculatedChecksum = this.calculateChecksum(importData.data);
-                    if (calculatedChecksum !== importData.checksum) {
-                        throw new Error('导入数据校验失败，文件可能已损坏');
-                    }
-
-                    // 创建导入前备份
-                    await this.createBackup(null, 'pre_import');
-
-                    // 验证和修复导入的数据
-                    const validationResults = {};
-                    Object.entries(importData.data).forEach(([key, value]) => {
-                        const validation = this.validateData(key, value);
-                        validationResults[key] = validation;
+                    // 核心逻辑: 只关心 'practice_records'
+                    if (importFileContent && importFileContent.data && Array.isArray(importFileContent.data.practice_records)) {
+                        const recordsToImport = importFileContent.data.practice_records;
                         
-                        if (!validation.valid) {
-                            console.warn(`[DataIntegrityManager] 导入数据验证失败 ${key}:`, validation.errors);
-                            importData.data[key] = this.repairData(key, value);
+                        // 直接、无条件地覆盖localStorage
+                        // 使用已有的 storage 辅助函数
+                        if (window.storage) {
+                           storage.set('practice_records', recordsToImport);
+                        } else {
+                           localStorage.setItem('practice_records', JSON.stringify(recordsToImport));
                         }
-                    });
+                        
+                        console.log(`[DataIntegrityManager] 强制写入 ${recordsToImport.length} 条练习记录到 localStorage.`);
 
-                    // 导入数据
-                    let importedCount = 0;
-                    Object.entries(importData.data).forEach(([key, value]) => {
-                        try {
-                            localStorage.setItem(key, JSON.stringify(value));
-                            importedCount++;
-                        } catch (error) {
-                            console.error(`[DataIntegrityManager] 导入 ${key} 失败:`, error);
+                        // 通知主窗口同步
+                        if (window.syncPracticeRecords) {
+                            console.log('[DataIntegrityManager] 通知主窗口同步记录...');
+                            window.syncPracticeRecords();
                         }
-                    });
+                        
+                        resolve({ importedCount: recordsToImport.length });
 
-                    console.log(`[DataIntegrityManager] 数据导入完成: ${importedCount} 个项目`);
-                    resolve({
-                        importedCount,
-                        validationResults,
-                        version: importData.version
-                    });
-
+                    } else {
+                        // 也许用户导入了其他数据, 我们只关心练习记录
+                        if (importFileContent && importFileContent.data) {
+                             Object.entries(importFileContent.data).forEach(([key, value]) => {
+                                try {
+                                    if (window.storage) {
+                                        storage.set(key, value);
+                                    } else {
+                                        localStorage.setItem(key, JSON.stringify(value));
+                                    }
+                                } catch (error) {
+                                    console.error(`[DataIntegrityManager] 导入 ${key} 失败:`, error);
+                                }
+                            });
+                            console.log('[DataIntegrityManager] 导入文件不包含练习记录，但已尝试导入其他数据。');
+                            
+                            if (window.syncPracticeRecords) {
+                                console.log('[DataIntegrityManager] 通知主窗口同步记录...');
+                                window.syncPracticeRecords();
+                            }
+                            resolve({ importedCount: Object.keys(importFileContent.data).length });
+                        } else {
+                             throw new Error('导入文件格式不正确，未找到 "data" 对象。');
+                        }
+                    }
                 } catch (error) {
-                    console.error('[DataIntegrityManager] 数据导入失败:', error);
+                    console.error('[DataIntegrityManager] 导入失败:', error);
                     reject(error);
                 }
             };
