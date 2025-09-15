@@ -1205,6 +1205,13 @@ class ExamSystemApp {
         // 设置窗口通信
         this.setupExamWindowCommunication(examWindow, examId);
 
+        // 启动与练习页的会话握手（file:// 下更可靠）
+        try {
+            this.startExamHandshake(examWindow, examId);
+        } catch (e) {
+            console.warn('[App] 启动握手失败:', e);
+        }
+
         // 更新UI状态
         this.updateExamStatus(examId, 'in-progress');
     }
@@ -1218,8 +1225,7 @@ class ExamSystemApp {
             // 验证消息数据格式
             if (!event.data || typeof event.data !== 'object') return;
 
-            // 只处理来自练习页面的消息
-            if (event.data.source !== 'practice_page') return;
+            // 兼容处理：允许缺失来源标记的消息（旧页面可能未填充 source）
 
             // 验证窗口来源（如果可能的话）- 放宽验证条件
             if (event.source && examWindow && event.source !== examWindow) {
@@ -1271,17 +1277,64 @@ class ExamSystemApp {
         }
         this.messageHandlers.set(examId, messageHandler);
 
-        // 向题目窗口发送初始化消息
+        // 向题目窗口发送初始化消息（兼容 0.2 增强器监听的 INIT_SESSION）
         examWindow.addEventListener('load', () => {
-            examWindow.postMessage({
-                type: 'init_exam_session',
-                data: {
-                    examId: examId,
-                    parentOrigin: window.location.origin,
-                    sessionId: this.generateSessionId()
-                }
-            }, '*');
+            const initPayload = {
+                examId: examId,
+                parentOrigin: window.location.origin,
+                sessionId: this.generateSessionId()
+            };
+            try {
+                // 首选 0.2 的大写事件名，保证 practicePageEnhancer 能收到并设置 sessionId
+                console.log('[System] 发送初始化消息到练习页面:', { type: 'INIT_SESSION', data: {} });
+                examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
+                // 同时发一份旧事件名，兼容历史实现
+                examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
+            } catch (e) {
+                console.warn('[App] 发送初始化消息失败:', e);
+            }
         });
+    }
+
+    /**
+     * 与练习页建立握手（重复发送 INIT_SESSION，直到收到 SESSION_READY）
+     */
+    startExamHandshake(examWindow, examId) {
+        if (!this._handshakeTimers) this._handshakeTimers = new Map();
+
+        // 避免重复握手
+        if (this._handshakeTimers.has(examId)) return;
+
+        const initPayload = {
+            examId,
+            parentOrigin: window.location.origin,
+            sessionId: this.generateSessionId()
+        };
+
+        let attempts = 0;
+        const maxAttempts = 30; // ~9s
+        const tick = () => {
+            if (examWindow && !examWindow.closed) {
+                try {
+                    // 直接发送两种事件名，确保增强器任何实现都能收到
+                    if (attempts === 0) {
+                        console.log('[System] 发送初始化消息到练习页面:', { type: 'INIT_SESSION', data: {} });
+                    }
+                    examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
+                    examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
+                } catch (_) { /* 忽略 */ }
+            }
+            attempts++;
+            if (attempts >= maxAttempts) {
+                clearInterval(timer);
+                this._handshakeTimers.delete(examId);
+                console.warn('[App] 握手超时，练习页可能未加载增强器');
+            }
+        };
+        const timer = setInterval(tick, 300);
+        this._handshakeTimers.set(examId, timer);
+        // 立即发送一次
+        tick();
     }
 
     /**
@@ -1593,6 +1646,14 @@ class ExamSystemApp {
             windowInfo.pageType = data.pageType;
             this.examWindows.set(examId, windowInfo);
         }
+
+        // 停止握手重试
+        try {
+            if (this._handshakeTimers && this._handshakeTimers.has(examId)) {
+                clearInterval(this._handshakeTimers.get(examId));
+                this._handshakeTimers.delete(examId);
+            }
+        } catch (_) {}
 
         // 可以在这里发送额外的配置信息给数据采集器
         // 例如题目信息、特殊设置等
@@ -2259,35 +2320,10 @@ class ExamSystemApp {
     // 显示活动会话指示器（已禁用，无需统计活动会话）
     showActiveSessionsIndicator() {
         // 根据需求移除该功能，确保不显示“活动练习”浮动指示器
-        const indicator = document.querySelector('.active-sessions-indicator');
-        if (indicator) indicator.remove();
+        const indicatorEl = document.querySelector('.active-sessions-indicator');
+        if (indicatorEl) indicatorEl.remove();
+        // 功能禁用，直接返回
         return;
-        const activeSessions = storage.get('active_sessions', []);
-
-        if (activeSessions.length === 0) {
-            this.hideActiveSessionsIndicator();
-            return;
-        }
-
-        let indicator = document.querySelector('.active-sessions-indicator');
-
-        if (!indicator) {
-            indicator = document.createElement('div');
-            indicator.className = 'active-sessions-indicator';
-            document.body.appendChild(indicator);
-
-            // 点击显示会话详情
-            indicator.addEventListener('click', () => {
-                this.showActiveSessionsDetails();
-            });
-        }
-
-        indicator.innerHTML = `
-            <span class="indicator-text">活动练习</span>
-            <span class="session-count">${activeSessions.length}</span>
-        `;
-
-        indicator.style.display = 'block';
     }
 
     /**
@@ -2793,3 +2829,29 @@ window.addEventListener('beforeunload', () => {
         window.app.destroy();
     }
 });
+
+// 调试辅助：导出握手状态
+window.getHandshakeState = function() {
+    try {
+        const state = { timers: [], windows: [] };
+        if (window.app) {
+            if (window.app._handshakeTimers) {
+                state.timers = Array.from(window.app._handshakeTimers.keys());
+            }
+            if (window.app.examWindows) {
+                window.app.examWindows.forEach((info, id) => {
+                    state.windows.push({
+                        examId: id,
+                        ready: !!info.dataCollectorReady,
+                        pageType: info.pageType || null,
+                        lastUpdate: info.lastUpdate || null,
+                        status: info.status || null
+                    });
+                });
+            }
+        }
+        return state;
+    } catch (e) {
+        return { error: e.message };
+    }
+};

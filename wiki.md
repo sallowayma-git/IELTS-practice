@@ -41,6 +41,49 @@ graph LR
     style D fill:#bfb,stroke:#333
 ```
 
+### 通信与数据传输（v0.3 本地适配）
+
+- 目标：在用户“本地双击 index.html（file://）”场景下，保证练习页与总览页通信可靠，练习数据稳定入库。
+- 握手流程（父→子→父）：
+  - 父页打开练习页窗口后，周期性发送两种初始化事件（任一命中即可）：
+    - `INIT_SESSION`（0.2 版本惯用事件名，练习页增强器以此设置 `sessionId`）
+    - `init_exam_session`（历史兼容）
+  - 子页增强器收到后发送 `SESSION_READY`，父页停止重试并标记 dataCollectorReady。
+  - 完成练习后，子页发送 `PRACTICE_COMPLETE`（包含成绩、答案、比较明细等），父页持久化并刷新 UI。
+- file:// 关键点：
+  - 浏览器安全策略下，file 与 http(s) 的 `localStorage` 天然隔离；v0.3 不会自动跨源读取 Live Server 产生的数据。
+  - 提供“📥 导入本地JSON记录”入口，手动选择 JSON（单条或批量导出）并合并到当前存储。
+- 相关组件与函数：
+  - `js/app.js`
+    - `setupExamWindowCommunication(examWindow, examId)`：统一消息派发与处理（SESSION_READY / PROGRESS_UPDATE / PRACTICE_COMPLETE）。
+    - `startExamHandshake(examWindow, examId)`：每 300ms 发送初始化消息，直到收到 `SESSION_READY`。
+    - `handlePracticeComplete(examId, data)`：落库与 UI 同步，容错处理。
+  - `js/practice-page-enhancer.js`（练习页）
+    - 侦听 `INIT_SESSION` 设置 `sessionId`，采集答案与成绩，发送 `PRACTICE_COMPLETE`。
+  - `js/main.js`
+    - `setupCompletionMessageBridge()`：作为兜底桥接，收到 `PRACTICE_COMPLETE` 但父端未落库时直接保存。
+    - `importLegacyRecordJSONs()` / `importLegacyRecordsFromFiles(files)`：导入本地 JSON 记录（合并去重）。
+
+### 数据格式（要点）
+
+- 练习记录核心字段（最小集）：
+  - `id`（唯一）、`examId`、`title`、`category`、`date`、`duration`、`percentage`、`dataSource: 'real'`。
+  - 兼容包含 `realData`/`scoreInfo`/`answerComparison` 的详细结构。
+- 存储键：
+  - `exam_system_practice_records`：数组；`exam_system_user_stats`：统计；`exam_system_active_sessions`：活跃会话等。
+
+### 题库配置与加载 UI
+
+- 题库配置切换（Settings > ⚙️ 题库配置切换）
+  - 展开列表显示所有已保存的题库配置；当前配置标记“（当前）”。
+  - “默认题库”（key: `exam_index`）始终存在，仅可被切换，禁止删除。
+  - 切换按钮在目标配置为当前时禁用，避免重复操作。
+
+- 加载题库（Settings > 📂 加载题库）
+  - 弹窗背景采用不透明深色遮罩（rgba(0,0,0,0.65) + blur），提高可读性。
+  - 内容卡片使用深色背景+细边框+阴影，分阅读/听力两列入口；支持全量重载与增量更新。
+  - 全量重载会生成新配置并自动切换；增量更新在默认配置下会自动复制出新配置，保护默认配置不被破坏。
+
 **关键特性**：
 - **模块化**：~50文件，components/ (UI)，core/ (逻辑)，utils/ (工具)。初始化顺序：核心(PracticeRecorder) → 可选(ExamBrowser等) → 事件监听。
 - **错误处理**：全局`handleGlobalError`捕获JS/Promise错误，fallback UI (showFallbackUI)。
