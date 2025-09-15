@@ -1,0 +1,411 @@
+{
+  "id": 1757867681274,
+  "examId": "p2-high-05",
+  "title": "Investment in shares versus investment in other assets 回报数据分析",
+  "category": "P2",
+  "frequency": "high",
+  "realData": {
+    "score": 0,
+    "totalQuestions": 13,
+    "accuracy": 0,
+    "percentage": 0,
+    "duration": 19,
+    "answers": {
+      "qb": "viii",
+      "qa": "iv",
+      "qc": "iii",
+      "qd": "v",
+      "qe": "vii",
+      "qf": "ii",
+      "qg": "vi",
+      "q14": "iv",
+      "q15": "viii",
+      "q16": "iii",
+      "q17": "v",
+      "q18": "vii",
+      "q19": "ii",
+      "q20": "vi",
+      "q21": "A",
+      "q22": "C",
+      "q23": "D",
+      "q24": "No answer",
+      "q25": "No answer",
+      "q26": "No answer"
+    },
+    "correctAnswers": {
+      "q14": "iii",
+      "q15": "iv",
+      "q16": "ii",
+      "q17": "i",
+      "q18": "viii",
+      "q19": "vi",
+      "q20": "v",
+      "q21": "D",
+      "q22": "A",
+      "q23": "C",
+      "q24": "banker",
+      "q25": "computers",
+      "q26": "paper"
+    },
+    "interactions": [
+      {
+        "type": "click",
+        "target": "BUTTON.primary",
+        "timestamp": 1757867679757
+      }
+    ],
+    "isRealData": true,
+    "source": "final_score_extraction",
+    "scoreInfo": {
+      "correct": 0,
+      "total": 13,
+      "accuracy": 0,
+      "percentage": 0,
+      "details": {
+        "qb": {
+          "userAnswer": "viii",
+          "correctAnswer": "",
+          "isCorrect": false
+        },
+        "qa": {
+          "userAnswer": "iv",
+          "correctAnswer": "",
+          "isCorrect": false
+        },
+        "qc": {
+          "userAnswer": "iii",
+          "correctAnswer": "",
+          "isCorrect": false
+        },
+        "qd": {
+          "userAnswer": "v",
+          "correctAnswer": "",
+          "isCorrect": false
+        },
+        "qe": {
+          "userAnswer": "vii",
+          "correctAnswer": "",
+          "isCorrect": false
+        },
+        "qf": {
+          "userAnswer": "ii",
+          "correctAnswer": "",
+          "isCorrect": false
+        },
+        "qg": {
+          "userAnswer": "vi",
+          "correctAnswer": "",
+          "isCorrect": false
+        },
+        "q14": {
+          "userAnswer": "iv",
+          "correctAnswer": "iii",
+          "isCorrect": false
+        },
+        "q15": {
+          "userAnswer": "viii",
+          "correctAnswer": "iv",
+          "isCorrect": false
+        },
+        "q16": {
+          "userAnswer": "iii",
+          "correctAnswer": "ii",
+          "isCorrect": false
+        },
+        "q17": {
+          "userAnswer": "v",
+          "correctAnswer": "i",
+          "isCorrect": false
+        },
+        "q18": {
+          "userAnswer": "vii",
+          "correctAnswer": "viii",
+          "isCorrect": false
+        },
+        "q19": {
+          "userAnswer": "ii",
+          "correctAnswer": "vi",
+          "isCorrect": false
+        },
+        "q20": {
+          "userAnswer": "vi",
+          "correctAnswer": "v",
+          "isCorrect": false
+        },
+        "q21": {
+          "userAnswer": "A",
+          "correctAnswer": "D",
+          "isCorrect": false
+        },
+        "q22": {
+          "userAnswer": "C",
+          "correctAnswer": "A",
+          "isCorrect": false
+        },
+        "q23": {
+          "userAnswer": "D",
+          "correctAnswer": "C",
+          "isCorrect": false
+        },
+        "q24": {
+          "userAnswer": "No answer",
+          "correctAnswer": "banker",
+          "isCorrect": false
+        },
+        "q25": {
+          "userAnswer": "No answer",
+          "correctAnswer": "computers",
+          "isCorrect": false
+        },
+        "q26": {
+          "userAnswer": "No answer",
+          "correctAnswer": "paper",
+          "isCorrect": false
+        }
+      }
+    }
+  },
+  "dataSource": "real",
+  "date": "2025-09-14T16:34:41.274Z",
+  "sessionId": "p2-high-05_1757867664134",
+  "timestamp": 1757867681274,
+  "score": 0,
+  "correctAnswers": 0,
+  "totalQuestions": 13,
+  "accuracy": 0,
+  "percentage": 0,
+  "answers": {
+    "qb": "viii",
+    "qa": "iv",
+    "qc": "iii",
+    "qd": "v",
+    "qe": "vii",
+    "qf": "ii",
+    "qg": "vi",
+    "q14": "iv",
+    "q15": "viii",
+    "q16": "iii",
+    "q17": "v",
+    "q18": "vii",
+    "q19": "ii",
+    "q20": "vi",
+    "q21": "A",
+    "q22": "C",
+    "q23": "D",
+    "q24": "No answer",
+    "q25": "No answer",
+    "q26": "No answer"
+  },
+  "startTime": "2025-09-14T16:34:22.167Z",
+  "endTime": "2025-09-14T16:34:41.273Z",
+  "scoreInfo": {
+    "correct": 0,
+    "total": 13,
+    "accuracy": 0,
+    "percentage": 0,
+    "details": {
+      "qb": {
+        "userAnswer": "viii",
+        "correctAnswer": "",
+        "isCorrect": false
+      },
+      "qa": {
+        "userAnswer": "iv",
+        "correctAnswer": "",
+        "isCorrect": false
+      },
+      "qc": {
+        "userAnswer": "iii",
+        "correctAnswer": "",
+        "isCorrect": false
+      },
+      "qd": {
+        "userAnswer": "v",
+        "correctAnswer": "",
+        "isCorrect": false
+      },
+      "qe": {
+        "userAnswer": "vii",
+        "correctAnswer": "",
+        "isCorrect": false
+      },
+      "qf": {
+        "userAnswer": "ii",
+        "correctAnswer": "",
+        "isCorrect": false
+      },
+      "qg": {
+        "userAnswer": "vi",
+        "correctAnswer": "",
+        "isCorrect": false
+      },
+      "q14": {
+        "userAnswer": "iv",
+        "correctAnswer": "iii",
+        "isCorrect": false
+      },
+      "q15": {
+        "userAnswer": "viii",
+        "correctAnswer": "iv",
+        "isCorrect": false
+      },
+      "q16": {
+        "userAnswer": "iii",
+        "correctAnswer": "ii",
+        "isCorrect": false
+      },
+      "q17": {
+        "userAnswer": "v",
+        "correctAnswer": "i",
+        "isCorrect": false
+      },
+      "q18": {
+        "userAnswer": "vii",
+        "correctAnswer": "viii",
+        "isCorrect": false
+      },
+      "q19": {
+        "userAnswer": "ii",
+        "correctAnswer": "vi",
+        "isCorrect": false
+      },
+      "q20": {
+        "userAnswer": "vi",
+        "correctAnswer": "v",
+        "isCorrect": false
+      },
+      "q21": {
+        "userAnswer": "A",
+        "correctAnswer": "D",
+        "isCorrect": false
+      },
+      "q22": {
+        "userAnswer": "C",
+        "correctAnswer": "A",
+        "isCorrect": false
+      },
+      "q23": {
+        "userAnswer": "D",
+        "correctAnswer": "C",
+        "isCorrect": false
+      },
+      "q24": {
+        "userAnswer": "No answer",
+        "correctAnswer": "banker",
+        "isCorrect": false
+      },
+      "q25": {
+        "userAnswer": "No answer",
+        "correctAnswer": "computers",
+        "isCorrect": false
+      },
+      "q26": {
+        "userAnswer": "No answer",
+        "correctAnswer": "paper",
+        "isCorrect": false
+      }
+    }
+  },
+  "answerComparison": {
+    "qb": {
+      "userAnswer": "viii",
+      "correctAnswer": null,
+      "isCorrect": false
+    },
+    "qa": {
+      "userAnswer": "iv",
+      "correctAnswer": null,
+      "isCorrect": false
+    },
+    "qc": {
+      "userAnswer": "iii",
+      "correctAnswer": null,
+      "isCorrect": false
+    },
+    "qd": {
+      "userAnswer": "v",
+      "correctAnswer": null,
+      "isCorrect": false
+    },
+    "qe": {
+      "userAnswer": "vii",
+      "correctAnswer": null,
+      "isCorrect": false
+    },
+    "qf": {
+      "userAnswer": "ii",
+      "correctAnswer": null,
+      "isCorrect": false
+    },
+    "qg": {
+      "userAnswer": "vi",
+      "correctAnswer": null,
+      "isCorrect": false
+    },
+    "q14": {
+      "userAnswer": "iv",
+      "correctAnswer": "iii",
+      "isCorrect": false
+    },
+    "q15": {
+      "userAnswer": "viii",
+      "correctAnswer": "iv",
+      "isCorrect": false
+    },
+    "q16": {
+      "userAnswer": "iii",
+      "correctAnswer": "ii",
+      "isCorrect": false
+    },
+    "q17": {
+      "userAnswer": "v",
+      "correctAnswer": "i",
+      "isCorrect": false
+    },
+    "q18": {
+      "userAnswer": "vii",
+      "correctAnswer": "viii",
+      "isCorrect": false
+    },
+    "q19": {
+      "userAnswer": "ii",
+      "correctAnswer": "vi",
+      "isCorrect": false
+    },
+    "q20": {
+      "userAnswer": "vi",
+      "correctAnswer": "v",
+      "isCorrect": false
+    },
+    "q21": {
+      "userAnswer": "A",
+      "correctAnswer": "D",
+      "isCorrect": false
+    },
+    "q22": {
+      "userAnswer": "C",
+      "correctAnswer": "A",
+      "isCorrect": false
+    },
+    "q23": {
+      "userAnswer": "D",
+      "correctAnswer": "C",
+      "isCorrect": false
+    },
+    "q24": {
+      "userAnswer": "No answer",
+      "correctAnswer": "banker",
+      "isCorrect": false
+    },
+    "q25": {
+      "userAnswer": "No answer",
+      "correctAnswer": "computers",
+      "isCorrect": false
+    },
+    "q26": {
+      "userAnswer": "No answer",
+      "correctAnswer": "paper",
+      "isCorrect": false
+    }
+  }
+}

@@ -91,10 +91,9 @@
                     <button class="btn btn-sm" onclick="filterRecordsByType('listening')">听力</button>
                 </div>
                 <div>
-                    <button class="btn btn-secondary" onclick="exportPracticeData()" style="margin-right: 10px;">📊
-                        导出数据</button>
+                    <button class="btn btn-secondary" onclick="(window.markdownExporter||(window.markdownExporter=new MarkdownExporter())).exportToMarkdown()" style="margin-right: 10px;">📄 导出Markdown</button>
                     <button class="btn btn-info" onclick="toggleBulkDelete()" id="bulk-delete-btn"
-                        style="margin-right: 10px;">📝 批量管理</button>
+                        style="margin-right: 10px;">📝 批量删除</button>
                     <button class="btn btn-warning" onclick="clearPracticeData()">🗑️ 清除记录</button>
                 </div>
             </div>
@@ -229,7 +228,6 @@
     <!-- 加载核心组件 -->
     <script src="js/core/scoreStorage.js"></script>
     <script src="js/core/practiceRecorder.js"></script>
-    <!-- practiceHistory.js 已移除，使用简单的练习记录界面 -->
     <script src="js/components/PDFHandler.js"></script>
 
     <script src="js/components/IndexValidator.js"></script>

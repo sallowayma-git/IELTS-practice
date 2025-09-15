@@ -3,6 +3,74 @@
  * 用于将练习数据导出为 Markdown 格式
  */
 class MarkdownExporter {
+    // 合并 comparison 与其他来源以补全缺失 correctAnswer
+    mergeComparisonWithCorrections(record) {
+        const comparison = JSON.parse(JSON.stringify(record.answerComparison || {}));
+        const sources = [
+            record.correctAnswers || {},
+            (record.realData && record.realData.correctAnswers) || {},
+        ];
+        if (record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details) {
+            sources.push(Object.fromEntries(Object.entries(record.realData.scoreInfo.details).map(([k,v]) => [k, v && v.correctAnswer])));
+        }
+        if (record.scoreInfo && record.scoreInfo.details) {
+            sources.push(Object.fromEntries(Object.entries(record.scoreInfo.details).map(([k,v]) => [k, v && v.correctAnswer])));
+        }
+        const getFromSources = (key) => {
+            for (const src of sources) {
+                if (src && src[key] != null && String(src[key]).trim() !== '') return src[key];
+            }
+            return null;
+        };
+        Object.keys(comparison).forEach(key => {
+            const item = comparison[key] || {};
+            if (item.correctAnswer == null || String(item.correctAnswer).trim() === '') {
+                const fixed = getFromSources(key);
+                if (fixed != null) item.correctAnswer = fixed;
+            }
+            if (item.userAnswer == null) item.userAnswer = '';
+            if (item.correctAnswer == null) item.correctAnswer = '';
+            comparison[key] = item;
+        });
+        // 映射 qa.. 到可能对应的数值区间 q14..q20
+        const letterKeys = Object.keys(comparison).filter(k => /^q[a-z]$/i.test(k));
+        if (letterKeys.length > 0) {
+            let numericKeys = Object.keys(comparison).filter(k => /q\d+$/i.test(k));
+            if (numericKeys.length === 0) {
+                for (const src of sources) {
+                    if (!src) continue;
+                    numericKeys.push(...Object.keys(src).filter(k => /q\d+$/i.test(k)));
+                }
+                numericKeys = Array.from(new Set(numericKeys));
+            }
+            letterKeys.sort();
+            numericKeys.sort((a,b) => (parseInt(a.replace(/\D/g,''))||0) - (parseInt(b.replace(/\D/g,''))||0));
+            if (numericKeys.length >= letterKeys.length) {
+                let bestStart = 0, found = false;
+                for (let i=0; i+letterKeys.length-1 < numericKeys.length; i++) {
+                    const first = parseInt(numericKeys[i].replace(/\D/g,''));
+                    const last = parseInt(numericKeys[i+letterKeys.length-1].replace(/\D/g,''));
+                    if (!isNaN(first) && !isNaN(last) && (last - first + 1) === letterKeys.length) { bestStart = i; found = true; break; }
+                }
+                const slice = numericKeys.slice(found ? bestStart : 0, (found ? bestStart : 0) + letterKeys.length);
+                for (let i=0; i<letterKeys.length; i++) {
+                    const lk = letterKeys[i], nk = slice[i];
+                    if (!nk) continue;
+                    const item = comparison[lk] || {};
+                    if (!item.correctAnswer || String(item.correctAnswer).trim() === '') {
+                        const nkItem = comparison[nk];
+                        let val = nkItem && nkItem.correctAnswer;
+                        if (!val) val = getFromSources(nk);
+                        if (val != null) item.correctAnswer = val;
+                    }
+                    if (item.userAnswer == null) item.userAnswer = '';
+                    if (item.correctAnswer == null) item.correctAnswer = '';
+                    comparison[lk] = item;
+                }
+            }
+        }
+        return comparison;
+    }
     constructor() {
         this.storage = window.storage;
     }
@@ -347,9 +415,10 @@ class MarkdownExporter {
      */
     generateAnswerTable(realData, record) {
         try {
-            // 优先使用answerComparison数据确保一致性
+            // 优先使用answerComparison数据确保一致性（若有则合并补全缺失正确答案）
             if (record.answerComparison && Object.keys(record.answerComparison).length > 0) {
-                return this.generateTableFromComparison(record.answerComparison);
+                const merged = this.mergeComparisonWithCorrections(record);
+                return this.generateTableFromComparison(merged);
             }
             
             // 降级到原有逻辑
@@ -399,6 +468,8 @@ class MarkdownExporter {
      * 从answerComparison生成表格
      */
     generateTableFromComparison(answerComparison) {
+        // 支持将 keys 中的非数字后缀/前缀保留下来，比如 qa/qb 显示为 a/b
+
         try {
             let table = '| Question | Your Answer | Correct Answer | Result |\n';
             table += '| -------- | ----------- | -------------- | ------ |\n';
@@ -418,7 +489,11 @@ class MarkdownExporter {
                 const key = keysToProcess[i];
                 try {
                     const comparison = answerComparison[key];
-                    const questionNum = key.replace(/\D/g, '');
+                    // 如果没有数字，fallback 使用去掉前缀 q 的字母编号
+                    let questionNum = key.replace(/\D/g, '');
+                    if (!questionNum) {
+                        questionNum = key.replace(/^q/i, '');
+                    }
                     const result = comparison.isCorrect ? '✓' : '✗';
                     
                     // 清理答案文本
@@ -480,12 +555,19 @@ class MarkdownExporter {
             }
         }
         
-        // 尝试从 scoreInfo 的 details 中获取
+        // 尝试从 scoreInfo 的 details 中获取（优先 realData.scoreInfo，其次顶层 scoreInfo）
+        const detailsSources = [];
         if (record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details) {
+            detailsSources.push(record.realData.scoreInfo.details);
+        }
+        if (record.scoreInfo && record.scoreInfo.details) {
+            detailsSources.push(record.scoreInfo.details);
+        }
+        for (const details of detailsSources) {
             const correctAnswers = {};
-            Object.keys(record.realData.scoreInfo.details).forEach(key => {
-                const detail = record.realData.scoreInfo.details[key];
-                if (detail.correctAnswer) {
+            Object.keys(details).forEach(key => {
+                const detail = details[key];
+                if (detail && detail.correctAnswer != null && String(detail.correctAnswer).trim() !== '') {
                     correctAnswers[key] = detail.correctAnswer;
                 }
             });
@@ -670,7 +752,7 @@ class MarkdownExporter {
             const a = document.createElement('a');
             
             a.href = url;
-            a.download = `practice_records_${new Date().toISOString().split('T')[0]}.md`;
+            a.download = `ielts-practice-records-${new Date().toISOString().split('T')[0]}.md`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);

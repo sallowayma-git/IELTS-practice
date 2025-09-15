@@ -132,9 +132,10 @@ class PracticeRecordModal {
      * 生成答题详情表格
      */
     generateAnswerTable(record) {
-        // 优先使用answerComparison数据
+        // 优先使用answerComparison数据（若存在则与其他来源合并补全缺失的正确答案）
         if (record.answerComparison && Object.keys(record.answerComparison).length > 0) {
-            return this.generateTableFromComparison(record.answerComparison);
+            const merged = this.mergeComparisonWithCorrections(record);
+            return this.generateTableFromComparison(merged);
         }
         
         // 降级到原有逻辑
@@ -212,16 +213,20 @@ class PracticeRecordModal {
                     <tbody>
         `;
         
-        // 按问题编号排序
+        // 按问题编号排序（若无数字则按字母序）
         const sortedKeys = Object.keys(answerComparison).sort((a, b) => {
-            const numA = parseInt(a.replace(/\D/g, '')) || 0;
-            const numB = parseInt(b.replace(/\D/g, '')) || 0;
-            return numA - numB;
+            const na = parseInt(a.replace(/\D/g, ''));
+            const nb = parseInt(b.replace(/\D/g, ''));
+            if (!isNaN(na) && !isNaN(nb)) return na - nb;
+            return a.localeCompare(b);
         });
         
         sortedKeys.forEach(key => {
             const comparison = answerComparison[key];
-            const questionNum = key.replace(/\D/g, '');
+            let questionNum = key.replace(/\D/g, '');
+            if (!questionNum) {
+                questionNum = key.replace(/^q/i, '');
+            }
             const result = comparison.isCorrect ? '✓' : '✗';
             const resultClass = comparison.isCorrect ? 'correct' : 'incorrect';
             
@@ -244,6 +249,94 @@ class PracticeRecordModal {
         return table;
     }
 
+    /**
+     * 将 answerComparison 与其他来源的正确答案合并，补全缺失 correctAnswer
+     */
+    mergeComparisonWithCorrections(record) {
+        // Deep clone to avoid mutating original
+        const comparison = JSON.parse(JSON.stringify(record.answerComparison || {}));
+        const sources = [
+            record.correctAnswers || {},
+            (record.realData && record.realData.correctAnswers) || {},
+        ];
+        // details sources
+        if (record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details) {
+            sources.push(Object.fromEntries(Object.entries(record.realData.scoreInfo.details).map(([k,v]) => [k, v && v.correctAnswer])));
+        }
+        if (record.scoreInfo && record.scoreInfo.details) {
+            sources.push(Object.fromEntries(Object.entries(record.scoreInfo.details).map(([k,v]) => [k, v && v.correctAnswer])));
+        }
+
+        const getFromSources = (key) => {
+            for (const src of sources) {
+                if (src && src[key] != null && String(src[key]).trim() !== '') return src[key];
+            }
+            return null;
+        };
+
+        // First pass: fill directly matching keys
+        Object.keys(comparison).forEach(key => {
+            const item = comparison[key] || {};
+            if (item.correctAnswer == null || String(item.correctAnswer).trim() === '') {
+                const fixed = getFromSources(key);
+                if (fixed != null) item.correctAnswer = fixed;
+            }
+            if (item.userAnswer == null) item.userAnswer = '';
+            if (item.correctAnswer == null) item.correctAnswer = '';
+            comparison[key] = item;
+        });
+
+        // Second pass: map lettered keys (qa, qb, ...) to numeric groups (e.g., q14..q20)
+        const letterKeys = Object.keys(comparison).filter(k => /^q[a-z]$/i.test(k));
+        if (letterKeys.length > 0) {
+            // Prefer numeric keys present in comparison; if none, gather from sources
+            let numericKeys = Object.keys(comparison).filter(k => /q\d+$/i.test(k));
+            if (numericKeys.length === 0) {
+                for (const src of sources) {
+                    if (!src) continue;
+                    numericKeys.push(...Object.keys(src).filter(k => /q\d+$/i.test(k)));
+                }
+                numericKeys = Array.from(new Set(numericKeys));
+            }
+            // Sort
+            letterKeys.sort();
+            numericKeys.sort((a,b) => (parseInt(a.replace(/\D/g,''))||0) - (parseInt(b.replace(/\D/g,''))||0));
+
+            // Optionally restrict numericKeys to same count as letterKeys and contiguous range by detecting the first block
+            if (numericKeys.length >= letterKeys.length) {
+                // Try to find a contiguous window with same length
+                let windowStart = 0;
+                let bestStart = 0;
+                let found = false;
+                for (let i=0; i+letterKeys.length-1 < numericKeys.length; i++) {
+                    const first = parseInt(numericKeys[i].replace(/\D/g,''));
+                    const last = parseInt(numericKeys[i+letterKeys.length-1].replace(/\D/g,''));
+                    if (!isNaN(first) && !isNaN(last) && (last - first + 1) === letterKeys.length) {
+                        bestStart = i; found = true; break;
+                    }
+                }
+                windowStart = found ? bestStart : 0;
+                const slice = numericKeys.slice(windowStart, windowStart + letterKeys.length);
+                for (let i=0; i<letterKeys.length; i++) {
+                    const lk = letterKeys[i];
+                    const nk = slice[i];
+                    if (!nk) continue;
+                    const item = comparison[lk] || {};
+                    if (!item.correctAnswer || String(item.correctAnswer).trim() === '') {
+                        // Prefer comparison numeric correctAnswer first
+                        const nkItem = comparison[nk];
+                        let val = nkItem && nkItem.correctAnswer;
+                        if (!val) val = getFromSources(nk);
+                        if (val != null) item.correctAnswer = val;
+                    }
+                    if (item.userAnswer == null) item.userAnswer = '';
+                    if (item.correctAnswer == null) item.correctAnswer = '';
+                    comparison[lk] = item;
+                }
+            }
+        }
+        return comparison;
+    }
     /**
      * 格式化持续时间
      */
@@ -288,12 +381,19 @@ class PracticeRecordModal {
             }
         }
         
-        // 尝试从 scoreInfo 的 details 中获取
+        // 尝试从 scoreInfo 的 details 中获取（优先 realData.scoreInfo，其次顶层 scoreInfo）
+        const detailsSources = [];
         if (record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details) {
+            detailsSources.push(record.realData.scoreInfo.details);
+        }
+        if (record.scoreInfo && record.scoreInfo.details) {
+            detailsSources.push(record.scoreInfo.details);
+        }
+        for (const details of detailsSources) {
             const correctAnswers = {};
-            Object.keys(record.realData.scoreInfo.details).forEach(key => {
-                const detail = record.realData.scoreInfo.details[key];
-                if (detail.correctAnswer) {
+            Object.keys(details).forEach(key => {
+                const detail = details[key];
+                if (detail && detail.correctAnswer != null && String(detail.correctAnswer).trim() !== '') {
                     correctAnswers[key] = detail.correctAnswer;
                 }
             });

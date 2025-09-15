@@ -73,17 +73,19 @@ function syncPracticeRecords() {
 
 function setupMessageListener() {
     window.addEventListener('message', (event) => {
-        // Basic security check
-        if (event.origin !== window.location.origin) {
-            return;
-        }
+        // 更兼容的安全检查：允许同源或 file 协议下的子窗口
+        try {
+            if (event.origin && event.origin !== 'null' && event.origin !== window.location.origin) {
+                return;
+            }
+        } catch (_) {}
 
-        const data = event.data;
-        if (data && data.type === 'practice_completed') {
-            console.log('[System] Received practice completion message. Syncing records.');
+        const data = event.data || {};
+        const type = data.type;
+        if (type === 'PRACTICE_COMPLETE' || type === 'practice_completed') {
+            console.log('[System] 收到练习完成消息，正在同步记录...');
             showMessage('练习已完成，正在更新记录...', 'success');
-            // Use a timeout to ensure storage has been updated by the other window
-            setTimeout(syncPracticeRecords, 500);
+            setTimeout(syncPracticeRecords, 300);
         }
     });
 }
@@ -247,13 +249,15 @@ function renderPracticeRecordItem(record) {
                 <small class="record-duration-value"><strong>用时：</strong><strong class="duration-time" style="color: ${durationColor};">${durationStr}</strong></small>
             </div>
         </div>
-        <div class="record-percentage-container">
+        <div class="record-percentage-container" style="flex-grow: 1; text-align: right; padding-right: 5px;">
             <div class="record-percentage" style="color: ${getScoreColor(record.percentage || 0)};">
                 ${record.percentage || 0}%
             </div>
         </div>
-        <div class="record-actions-container">
-            ${!bulkDeleteMode ? `<button class="delete-record-btn" onclick="event.stopPropagation(); deleteRecord('${record.id}')" title="删除此记录">❌</button>` : ''}
+        <div class="record-actions-container" style="flex-shrink: 0;">
+            ${!bulkDeleteMode ? `
+                <button class="delete-record-btn" onclick="event.stopPropagation(); deleteRecord('${record.id}')" title="删除此记录">🗑️</button>
+            ` : ''}
         </div>
     `;
     return item;
@@ -853,38 +857,47 @@ function performSearch(query) {
     displayExams(searchResults);
 }
 
+/* Replaced by robust exporter below */
 function exportPracticeData() {
-    if (practiceRecords.length === 0) {
-        showMessage('暂无练习数据可导出', 'info');
-        return;
-    }
-    showMessage('正在准备导出...', 'info');
-    setTimeout(() => {
-        try {
-            const data = {
-                exportDate: new Date().toISOString(),
-                stats: practiceStats,
-                records: practiceRecords
-            };
+    try {
+        const records = window.storage ? window.storage.get('practice_records', []) : (window.practiceRecords || []);
+        const stats = window.app && window.app.userStats ? window.app.userStats : (window.practiceStats || {});
 
-            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `practice-records-${new Date().toISOString().split('T')[0]}.json`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-
-            showMessage('练习数据已导出', 'success');
-        } catch (error) {
-            console.error('导出失败:', error);
-            showMessage('导出失败: ' + error.message, 'error');
+        if (!records || records.length === 0) {
+            showMessage('暂无练习数据可导出', 'info');
+            return;
         }
-    }, 100);
-}
 
+        showMessage('正在准备导出...', 'info');
+        setTimeout(() => {
+            try {
+                const data = {
+                    exportDate: new Date().toISOString(),
+                    stats: stats,
+                    records: records
+                };
+
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `practice-records-${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                showMessage('练习数据已导出', 'success');
+            } catch (error) {
+                console.error('导出失败:', error);
+                showMessage('导出失败: ' + error.message, 'error');
+            }
+        }, 100);
+    } catch (e) {
+        console.error('导出失败:', e);
+        showMessage('导出失败: ' + e.message, 'error');
+    }
+}
 function toggleBulkDelete() {
     bulkDeleteMode = !bulkDeleteMode;
     const btn = document.getElementById('bulk-delete-btn');
@@ -937,6 +950,7 @@ function toggleRecordSelection(recordId) {
     }
     updatePracticeView(); // Re-render to show selection state
 }
+
 
 function deleteRecord(recordId) {
     if (!recordId) {
