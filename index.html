@@ -20,10 +20,10 @@
         </div>
 
         <nav class="main-nav">
-            <button class="nav-btn active" onclick="showView('overview')">📊 总览</button>
-            <button class="nav-btn" onclick="showView('browse')">📚 题库浏览</button>
-            <button class="nav-btn" onclick="showView('practice')">📝 练习记录</button>
-            <button class="nav-btn" onclick="showView('settings')">⚙️ 设置</button>
+            <button class="nav-btn active" onclick="window.showView && window.showView('overview')">📊 总览</button>
+            <button class="nav-btn" onclick="window.showView && window.showView('browse')">📚 题库浏览</button>
+            <button class="nav-btn" onclick="window.showView && window.showView('practice')">📝 练习记录</button>
+            <button class="nav-btn" onclick="window.showView && window.showView('settings')">⚙️ 设置</button>
         </nav>
 
         <!-- 总览页面 -->
@@ -117,7 +117,7 @@
             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                 <button class="btn btn-warning" onclick="clearCache()">🗑️ 清除缓存</button>
                 <button class="btn" onclick="showLibraryLoaderModal()">📂 加载题库</button>
-                <button class="btn btn-info" onclick="showLibraryConfigList()">⚙️ 题库配置切换</button>
+                <button class="btn btn-info" onclick="showLibraryConfigListV2()">⚙️ 题库配置切换</button>
             </div>
 
             <div style="margin-top: 30px;">
@@ -249,6 +249,7 @@
     <!-- Test scripts removed - files don't exist -->
     
     <script src="js/main.js"></script>
+    <script src="js/boot-fallbacks.js"></script>
     <!-- 系统修复脚本 -->
     <script src="fix-system.js"></script>
     <!-- 加载主应用 -->
