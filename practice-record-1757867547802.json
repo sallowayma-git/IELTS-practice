@@ -1,0 +1,642 @@
+{
+  "id": 1757867547802,
+  "examId": "p3-high-03",
+  "title": "Flower Power 鲜花的力量(花之力)",
+  "category": "P3",
+  "frequency": "high",
+  "realData": {
+    "score": 0,
+    "totalQuestions": 14,
+    "accuracy": 0,
+    "percentage": 0,
+    "duration": 20,
+    "answers": {
+      "qb": "vii",
+      "qa": "iii",
+      "qc": "iv",
+      "qd": "vi",
+      "qe": "i",
+      "qf": "viii",
+      "q34": "C",
+      "q35": "B",
+      "q36": "B",
+      "q37": "C",
+      "q39": "55",
+      "q38": "25",
+      "q40": "25"
+    },
+    "correctAnswers": {
+      "q27": "V",
+      "q28": "iv",
+      "q29": "vii",
+      "q30": "ii",
+      "q31": "viii",
+      "q32": "vi",
+      "q33": "iii",
+      "q34": "B",
+      "q35": "A",
+      "q36": "C",
+      "q37": "B",
+      "q38": "food",
+      "q39": "children",
+      "q40": "edible"
+    },
+    "interactions": [
+      {
+        "type": "click",
+        "target": "LABEL",
+        "timestamp": 1757867538993
+      },
+      {
+        "type": "click",
+        "target": "INPUT",
+        "timestamp": 1757867538993
+      },
+      {
+        "type": "answer",
+        "questionId": "q34",
+        "value": "C",
+        "timestamp": 1757867538993,
+        "elementType": "radio"
+      },
+      {
+        "type": "answer",
+        "questionId": "q34",
+        "value": "C",
+        "timestamp": 1757867538993,
+        "elementType": "radio"
+      },
+      {
+        "type": "answer",
+        "questionId": "q34",
+        "value": "C",
+        "timestamp": 1757867539004,
+        "elementType": "radio"
+      },
+      {
+        "type": "click",
+        "target": "LABEL",
+        "timestamp": 1757867539471
+      },
+      {
+        "type": "click",
+        "target": "INPUT",
+        "timestamp": 1757867539472
+      },
+      {
+        "type": "answer",
+        "questionId": "q35",
+        "value": "B",
+        "timestamp": 1757867539472,
+        "elementType": "radio"
+      },
+      {
+        "type": "answer",
+        "questionId": "q35",
+        "value": "B",
+        "timestamp": 1757867539472,
+        "elementType": "radio"
+      },
+      {
+        "type": "answer",
+        "questionId": "q35",
+        "value": "B",
+        "timestamp": 1757867539484,
+        "elementType": "radio"
+      },
+      {
+        "type": "click",
+        "target": "LABEL",
+        "timestamp": 1757867540060
+      },
+      {
+        "type": "click",
+        "target": "INPUT",
+        "timestamp": 1757867540060
+      },
+      {
+        "type": "answer",
+        "questionId": "q36",
+        "value": "B",
+        "timestamp": 1757867540060,
+        "elementType": "radio"
+      },
+      {
+        "type": "answer",
+        "questionId": "q36",
+        "value": "B",
+        "timestamp": 1757867540060,
+        "elementType": "radio"
+      },
+      {
+        "type": "answer",
+        "questionId": "q36",
+        "value": "B",
+        "timestamp": 1757867540070,
+        "elementType": "radio"
+      },
+      {
+        "type": "click",
+        "target": "LABEL",
+        "timestamp": 1757867541132
+      },
+      {
+        "type": "click",
+        "target": "INPUT",
+        "timestamp": 1757867541132
+      },
+      {
+        "type": "answer",
+        "questionId": "q37",
+        "value": "C",
+        "timestamp": 1757867541132,
+        "elementType": "radio"
+      },
+      {
+        "type": "answer",
+        "questionId": "q37",
+        "value": "C",
+        "timestamp": 1757867541132,
+        "elementType": "radio"
+      },
+      {
+        "type": "answer",
+        "questionId": "q37",
+        "value": "C",
+        "timestamp": 1757867541144,
+        "elementType": "radio"
+      },
+      {
+        "type": "click",
+        "target": "INPUT.blank",
+        "timestamp": 1757867542221
+      },
+      {
+        "type": "answer",
+        "questionId": "q39",
+        "value": "5",
+        "timestamp": 1757867542970,
+        "elementType": "text"
+      },
+      {
+        "type": "answer",
+        "questionId": "q39",
+        "value": "5",
+        "timestamp": 1757867542970,
+        "elementType": "text"
+      },
+      {
+        "type": "answer",
+        "questionId": "q39",
+        "value": "55",
+        "timestamp": 1757867543130,
+        "elementType": "text"
+      },
+      {
+        "type": "answer",
+        "questionId": "q39",
+        "value": "55",
+        "timestamp": 1757867543130,
+        "elementType": "text"
+      },
+      {
+        "type": "answer",
+        "questionId": "q39",
+        "value": "55",
+        "timestamp": 1757867543790,
+        "elementType": "text"
+      },
+      {
+        "type": "click",
+        "target": "INPUT.blank",
+        "timestamp": 1757867543924
+      },
+      {
+        "type": "answer",
+        "questionId": "q38",
+        "value": "2",
+        "timestamp": 1757867543998,
+        "elementType": "text"
+      },
+      {
+        "type": "answer",
+        "questionId": "q38",
+        "value": "2",
+        "timestamp": 1757867543998,
+        "elementType": "text"
+      },
+      {
+        "type": "answer",
+        "questionId": "q38",
+        "value": "25",
+        "timestamp": 1757867544106,
+        "elementType": "text"
+      },
+      {
+        "type": "answer",
+        "questionId": "q38",
+        "value": "25",
+        "timestamp": 1757867544106,
+        "elementType": "text"
+      },
+      {
+        "type": "answer",
+        "questionId": "q38",
+        "value": "25",
+        "timestamp": 1757867544908,
+        "elementType": "text"
+      },
+      {
+        "type": "click",
+        "target": "INPUT.blank",
+        "timestamp": 1757867544979
+      },
+      {
+        "type": "answer",
+        "questionId": "q40",
+        "value": "2",
+        "timestamp": 1757867545133,
+        "elementType": "text"
+      },
+      {
+        "type": "answer",
+        "questionId": "q40",
+        "value": "2",
+        "timestamp": 1757867545133,
+        "elementType": "text"
+      },
+      {
+        "type": "answer",
+        "questionId": "q40",
+        "value": "25",
+        "timestamp": 1757867545214,
+        "elementType": "text"
+      },
+      {
+        "type": "answer",
+        "questionId": "q40",
+        "value": "25",
+        "timestamp": 1757867545214,
+        "elementType": "text"
+      },
+      {
+        "type": "answer",
+        "questionId": "q40",
+        "value": "25",
+        "timestamp": 1757867546222,
+        "elementType": "text"
+      },
+      {
+        "type": "click",
+        "target": "BUTTON.primary",
+        "timestamp": 1757867546299
+      }
+    ],
+    "isRealData": true,
+    "source": "final_score_extraction",
+    "scoreInfo": {
+      "correct": 0,
+      "total": 14,
+      "accuracy": 0,
+      "percentage": 0,
+      "details": {
+        "qb": {
+          "userAnswer": "vii",
+          "correctAnswer": "",
+          "isCorrect": false
+        },
+        "qa": {
+          "userAnswer": "iii",
+          "correctAnswer": "",
+          "isCorrect": false
+        },
+        "qc": {
+          "userAnswer": "iv",
+          "correctAnswer": "",
+          "isCorrect": false
+        },
+        "qd": {
+          "userAnswer": "vi",
+          "correctAnswer": "",
+          "isCorrect": false
+        },
+        "qe": {
+          "userAnswer": "i",
+          "correctAnswer": "",
+          "isCorrect": false
+        },
+        "qf": {
+          "userAnswer": "viii",
+          "correctAnswer": "",
+          "isCorrect": false
+        },
+        "q34": {
+          "userAnswer": "C",
+          "correctAnswer": "B",
+          "isCorrect": false
+        },
+        "q35": {
+          "userAnswer": "B",
+          "correctAnswer": "A",
+          "isCorrect": false
+        },
+        "q36": {
+          "userAnswer": "B",
+          "correctAnswer": "C",
+          "isCorrect": false
+        },
+        "q37": {
+          "userAnswer": "C",
+          "correctAnswer": "B",
+          "isCorrect": false
+        },
+        "q39": {
+          "userAnswer": "55",
+          "correctAnswer": "children",
+          "isCorrect": false
+        },
+        "q38": {
+          "userAnswer": "25",
+          "correctAnswer": "food",
+          "isCorrect": false
+        },
+        "q40": {
+          "userAnswer": "25",
+          "correctAnswer": "edible",
+          "isCorrect": false
+        },
+        "q27": {
+          "userAnswer": "",
+          "correctAnswer": "V",
+          "isCorrect": false
+        },
+        "q28": {
+          "userAnswer": "",
+          "correctAnswer": "iv",
+          "isCorrect": false
+        },
+        "q29": {
+          "userAnswer": "",
+          "correctAnswer": "vii",
+          "isCorrect": false
+        },
+        "q30": {
+          "userAnswer": "",
+          "correctAnswer": "ii",
+          "isCorrect": false
+        },
+        "q31": {
+          "userAnswer": "",
+          "correctAnswer": "viii",
+          "isCorrect": false
+        },
+        "q32": {
+          "userAnswer": "",
+          "correctAnswer": "vi",
+          "isCorrect": false
+        },
+        "q33": {
+          "userAnswer": "",
+          "correctAnswer": "iii",
+          "isCorrect": false
+        }
+      }
+    }
+  },
+  "dataSource": "real",
+  "date": "2025-09-14T16:32:27.802Z",
+  "sessionId": "p3-high-03_1757867529384",
+  "timestamp": 1757867547802,
+  "score": 0,
+  "correctAnswers": 0,
+  "totalQuestions": 14,
+  "accuracy": 0,
+  "percentage": 0,
+  "answers": {
+    "qb": "vii",
+    "qa": "iii",
+    "qc": "iv",
+    "qd": "vi",
+    "qe": "i",
+    "qf": "viii",
+    "q34": "C",
+    "q35": "B",
+    "q36": "B",
+    "q37": "C",
+    "q39": "55",
+    "q38": "25",
+    "q40": "25"
+  },
+  "startTime": "2025-09-14T16:32:07.411Z",
+  "endTime": "2025-09-14T16:32:27.802Z",
+  "scoreInfo": {
+    "correct": 0,
+    "total": 14,
+    "accuracy": 0,
+    "percentage": 0,
+    "details": {
+      "qb": {
+        "userAnswer": "vii",
+        "correctAnswer": "",
+        "isCorrect": false
+      },
+      "qa": {
+        "userAnswer": "iii",
+        "correctAnswer": "",
+        "isCorrect": false
+      },
+      "qc": {
+        "userAnswer": "iv",
+        "correctAnswer": "",
+        "isCorrect": false
+      },
+      "qd": {
+        "userAnswer": "vi",
+        "correctAnswer": "",
+        "isCorrect": false
+      },
+      "qe": {
+        "userAnswer": "i",
+        "correctAnswer": "",
+        "isCorrect": false
+      },
+      "qf": {
+        "userAnswer": "viii",
+        "correctAnswer": "",
+        "isCorrect": false
+      },
+      "q34": {
+        "userAnswer": "C",
+        "correctAnswer": "B",
+        "isCorrect": false
+      },
+      "q35": {
+        "userAnswer": "B",
+        "correctAnswer": "A",
+        "isCorrect": false
+      },
+      "q36": {
+        "userAnswer": "B",
+        "correctAnswer": "C",
+        "isCorrect": false
+      },
+      "q37": {
+        "userAnswer": "C",
+        "correctAnswer": "B",
+        "isCorrect": false
+      },
+      "q39": {
+        "userAnswer": "55",
+        "correctAnswer": "children",
+        "isCorrect": false
+      },
+      "q38": {
+        "userAnswer": "25",
+        "correctAnswer": "food",
+        "isCorrect": false
+      },
+      "q40": {
+        "userAnswer": "25",
+        "correctAnswer": "edible",
+        "isCorrect": false
+      },
+      "q27": {
+        "userAnswer": "",
+        "correctAnswer": "V",
+        "isCorrect": false
+      },
+      "q28": {
+        "userAnswer": "",
+        "correctAnswer": "iv",
+        "isCorrect": false
+      },
+      "q29": {
+        "userAnswer": "",
+        "correctAnswer": "vii",
+        "isCorrect": false
+      },
+      "q30": {
+        "userAnswer": "",
+        "correctAnswer": "ii",
+        "isCorrect": false
+      },
+      "q31": {
+        "userAnswer": "",
+        "correctAnswer": "viii",
+        "isCorrect": false
+      },
+      "q32": {
+        "userAnswer": "",
+        "correctAnswer": "vi",
+        "isCorrect": false
+      },
+      "q33": {
+        "userAnswer": "",
+        "correctAnswer": "iii",
+        "isCorrect": false
+      }
+    }
+  },
+  "answerComparison": {
+    "qb": {
+      "userAnswer": "vii",
+      "correctAnswer": null,
+      "isCorrect": false
+    },
+    "qa": {
+      "userAnswer": "iii",
+      "correctAnswer": null,
+      "isCorrect": false
+    },
+    "qc": {
+      "userAnswer": "iv",
+      "correctAnswer": null,
+      "isCorrect": false
+    },
+    "qd": {
+      "userAnswer": "vi",
+      "correctAnswer": null,
+      "isCorrect": false
+    },
+    "qe": {
+      "userAnswer": "i",
+      "correctAnswer": null,
+      "isCorrect": false
+    },
+    "qf": {
+      "userAnswer": "viii",
+      "correctAnswer": null,
+      "isCorrect": false
+    },
+    "q34": {
+      "userAnswer": "C",
+      "correctAnswer": "B",
+      "isCorrect": false
+    },
+    "q35": {
+      "userAnswer": "B",
+      "correctAnswer": "A",
+      "isCorrect": false
+    },
+    "q36": {
+      "userAnswer": "B",
+      "correctAnswer": "C",
+      "isCorrect": false
+    },
+    "q37": {
+      "userAnswer": "C",
+      "correctAnswer": "B",
+      "isCorrect": false
+    },
+    "q39": {
+      "userAnswer": "55",
+      "correctAnswer": "children",
+      "isCorrect": false
+    },
+    "q38": {
+      "userAnswer": "25",
+      "correctAnswer": "food",
+      "isCorrect": false
+    },
+    "q40": {
+      "userAnswer": "25",
+      "correctAnswer": "edible",
+      "isCorrect": false
+    },
+    "q27": {
+      "userAnswer": null,
+      "correctAnswer": "V",
+      "isCorrect": false
+    },
+    "q28": {
+      "userAnswer": null,
+      "correctAnswer": "iv",
+      "isCorrect": false
+    },
+    "q29": {
+      "userAnswer": null,
+      "correctAnswer": "vii",
+      "isCorrect": false
+    },
+    "q30": {
+      "userAnswer": null,
+      "correctAnswer": "ii",
+      "isCorrect": false
+    },
+    "q31": {
+      "userAnswer": null,
+      "correctAnswer": "viii",
+      "isCorrect": false
+    },
+    "q32": {
+      "userAnswer": null,
+      "correctAnswer": "vi",
+      "isCorrect": false
+    },
+    "q33": {
+      "userAnswer": null,
+      "correctAnswer": "iii",
+      "isCorrect": false
+    }
+  }
+}

@@ -1628,6 +1628,18 @@ class ExamSystemApp {
             console.log('[DataCollection] 直接保存真实数据');
             this.saveRealPracticeData(examId, data);
 
+            // 刷新内存中的练习记录，确保无需手动刷新即可看到
+            try {
+                if (typeof window.syncPracticeRecords === 'function') {
+                    window.syncPracticeRecords();
+                } else if (window.storage) {
+                    const latest = window.storage.get('practice_records', []);
+                    window.practiceRecords = latest;
+                }
+            } catch (syncErr) {
+                console.warn('[DataCollection] 刷新练习记录失败（UI可能需要手动刷新）:', syncErr);
+            }
+
             // 更新UI状态
             this.updateExamStatus(examId, 'completed');
 
@@ -1733,17 +1745,18 @@ class ExamSystemApp {
 
                 // 真实数据
                 realData: {
-                    score: realData.scoreInfo?.correct || 0,
-                    totalQuestions: realData.scoreInfo?.total || 0,
-                    accuracy: realData.scoreInfo?.accuracy || 0,
-                    percentage: realData.scoreInfo?.percentage || 0,
-                    duration: realData.duration,
-                    answers: realData.answers,
-                    answerHistory: realData.answerHistory,
-                    interactions: realData.interactions,
-                    isRealData: true,
-                    source: realData.scoreInfo?.source || 'unknown'
-                },
+                   score: realData.scoreInfo?.correct || 0,
+                   totalQuestions: realData.scoreInfo?.total || 0,
+                   accuracy: realData.scoreInfo?.accuracy || 0,
+                   percentage: realData.scoreInfo?.percentage || 0,
+                   duration: realData.duration,
+                   answers: realData.answers,
+                   correctAnswers: realData.correctAnswers || {},
+                   answerHistory: realData.answerHistory,
+                   interactions: realData.interactions,
+                   isRealData: true,
+                   source: realData.scoreInfo?.source || 'unknown'
+               },
 
                 // 数据来源标识
                 dataSource: 'real',
@@ -1757,17 +1770,50 @@ class ExamSystemApp {
             try {
                 const sInfo = realData && realData.scoreInfo ? realData.scoreInfo : {};
                 const correct = typeof sInfo?.correct === 'number' ? sInfo.correct : 0;
-                const total = typeof sInfo?.total === 'number' ? sInfo.total : (practiceRecord.realData?.totalQuestions || 0);
+                const total = typeof sInfo?.total === 'number' ? sInfo.total : (practiceRecord.realData?.totalQuestions || Object.keys(realData.answers || {}).length || 0);
                 const acc = typeof sInfo?.accuracy === 'number' ? sInfo.accuracy : (total > 0 ? correct / total : 0);
                 const pct = typeof sInfo?.percentage === 'number' ? sInfo.percentage : Math.round(acc * 100);
 
                 practiceRecord.score = correct;
+                practiceRecord.correctAnswers = correct; // 兼容练习记录视图所需字段
                 practiceRecord.totalQuestions = total;
                 practiceRecord.accuracy = acc;
                 practiceRecord.percentage = pct;
                 practiceRecord.answers = realData.answers || {};
                 practiceRecord.startTime = new Date((realData.startTime ?? (Date.now() - (realData.duration || 0) * 1000))).toISOString();
                 practiceRecord.endTime = new Date((realData.endTime ?? Date.now())).toISOString();
+
+                // 填充详情，便于在练习记录详情中显示正确答案
+                const comp = realData && realData.answerComparison ? realData.answerComparison : {};
+                const details = {};
+                Object.entries(comp).forEach(([qid, obj]) => {
+                    details[qid] = {
+                        userAnswer: obj && obj.userAnswer != null ? obj.userAnswer : '',
+                        correctAnswer: obj && obj.correctAnswer != null ? obj.correctAnswer : '',
+                        isCorrect: !!(obj && obj.isCorrect)
+                    };
+                });
+                // 将详情放入 realData.scoreInfo，便于历史详情与Markdown导出读取
+                if (!practiceRecord.realData) practiceRecord.realData = {};
+                practiceRecord.realData.scoreInfo = {
+                    correct: correct,
+                    total: total,
+                    accuracy: acc,
+                    percentage: pct,
+                    details: details
+                };
+                
+                // 同时保留顶层一致性（仅用于展示，不作为详情读取来源）
+                practiceRecord.scoreInfo = {
+                    correct: correct,
+                    total: total,
+                    accuracy: acc,
+                    percentage: pct,
+                    details: details
+                };
+                
+                // 将比较结构提升到顶层，便于兼容读取
+                practiceRecord.answerComparison = comp;
             } catch (compatErr) {
                 console.warn('[DataCollection] 兼容字段填充失败:', compatErr);
             }
@@ -2210,7 +2256,12 @@ class ExamSystemApp {
     /**
      * 显示活动会话指示器
      */
+    // 显示活动会话指示器（已禁用，无需统计活动会话）
     showActiveSessionsIndicator() {
+        // 根据需求移除该功能，确保不显示“活动练习”浮动指示器
+        const indicator = document.querySelector('.active-sessions-indicator');
+        if (indicator) indicator.remove();
+        return;
         const activeSessions = storage.get('active_sessions', []);
 
         if (activeSessions.length === 0) {
@@ -2364,6 +2415,12 @@ class ExamSystemApp {
      * 开始会话监控
      */
     startSessionMonitoring() {
+        // 禁用活动会话监控，以避免误判窗口关闭状态
+        if (this.sessionMonitorInterval) {
+            clearInterval(this.sessionMonitorInterval);
+            this.sessionMonitorInterval = null;
+        }
+        return;
         // 每30秒检查一次活动会话
         this.sessionMonitorInterval = setInterval(() => {
             this.updateActiveSessionsIndicator();
@@ -2375,6 +2432,10 @@ class ExamSystemApp {
      * 更新活动会话指示器
      */
     updateActiveSessionsIndicator() {
+        // 已禁用活动会话显示
+        const indicator = document.querySelector('.active-sessions-indicator');
+        if (indicator) indicator.remove();
+        return;
         this.showActiveSessionsIndicator();
     }
 
