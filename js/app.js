@@ -770,6 +770,12 @@ class ExamSystemApp {
             case 'overview':
                 this.refreshOverviewData();
                 break;
+            case 'browse':
+                // Initialize browse view when activated
+                if (typeof window.initializeBrowseView === 'function') {
+                    window.initializeBrowseView();
+                }
+                break;
             case 'specialized-practice':
                 if (this.components.specializedPractice) {
                     this.components.specializedPractice.updateSpecializedProgress();
