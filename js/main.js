@@ -596,55 +596,56 @@ function showLibraryLoaderModal() {
     modal.className = 'modal';
     modal.style.maxWidth = '900px';
     modal.style.width = '90%';
-    modal.style.background = 'linear-gradient(145deg, rgba(45, 52, 80, 0.9), rgba(25, 30, 50, 0.95))';
-    modal.style.color = '#e5e7eb';
-    modal.style.border = '1px solid rgba(255, 255, 255, 0.1)';
-    modal.style.borderRadius = '16px';
-    modal.style.boxShadow = '0 20px 50px rgba(0,0,0,0.5)';
+    modal.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.9))';
+    modal.style.color = '#1e293b';
+    modal.style.border = 'none';
+    modal.style.borderRadius = '20px';
+    modal.style.boxShadow = '0 25px 60px rgba(0,0,0,0.15), 0 0 0 1px rgba(255,255,255,0.2)';
+    modal.style.backdropFilter = 'blur(20px)';
     modal.innerHTML = `
-        <div class="modal-header">
-            <h2>加载题库</h2>
-            <button class="modal-close" aria-label="关闭">×</button>
+        <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 20px 20px 0 0;">
+            <h2 style="margin: 0; font-size: 1.5em; font-weight: 600;">📚 加载题库</h2>
+            <button class="modal-close" aria-label="关闭" style="background: rgba(255,255,255,0.2); border: none; color: white; width: 32px; height: 32px; border-radius: 50%; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;">×</button>
         </div>
-        <div class="modal-body">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                <div style="border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 16px; background: rgba(0,0,0,0.2);">
-                    <h3>📖 阅读题库加载</h3>
-                    <p style="opacity:0.9;">支持全量重载与增量更新。请上传包含题目HTML/PDF的根文件夹。</p>
-                    <div style="display:flex; gap:10px; flex-wrap: wrap;">
-                        <button class="btn" id="reading-full-btn">全量重载</button>
-                        <button class="btn btn-secondary" id="reading-inc-btn">增量更新</button>
+        <div class="modal-body" style="padding: 30px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                <div style="border: 2px solid rgba(102, 126, 234, 0.2); border-radius: 16px; padding: 24px; background: linear-gradient(135deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05)); transition: all 0.3s ease;">
+                    <h3 style="margin: 0 0 12px 0; color: #667eea; font-size: 1.2em;">📖 阅读题库加载</h3>
+                    <p style="margin: 0 0 20px 0; color: #64748b; line-height: 1.6;">支持全量重载与增量更新。请上传包含题目HTML/PDF的根文件夹。</p>
+                    <div style="display:flex; gap:12px; flex-wrap: wrap;">
+                        <button class="btn" id="reading-full-btn" style="background: linear-gradient(135deg, #667eea, #764ba2); border: none; color: white; padding: 12px 20px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">全量重载</button>
+                        <button class="btn btn-secondary" id="reading-inc-btn" style="background: rgba(102, 126, 234, 0.1); border: 2px solid rgba(102, 126, 234, 0.3); color: #667eea; padding: 12px 20px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">增量更新</button>
                     </div>
                     <input type="file" id="reading-full-input" webkitdirectory multiple style="display:none;" />
                     <input type="file" id="reading-inc-input" webkitdirectory multiple style="display:none;" />
-                    <div style="margin-top:10px; font-size: 0.9em; opacity:0.9;">
-                        建议路径：.../3. 所有文章(9.4)[134篇]/...
+                    <div style="margin-top:16px; font-size: 0.85em; color: #94a3b8;">
+                        💡 建议路径：.../3. 所有文章(9.4)[134篇]/...
                     </div>
                 </div>
-                <div style="border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 16px; background: rgba(0,0,0,0.2);">
-                    <h3>🎧 听力题库加载</h3>
-                    <p style="opacity:0.9;">支持全量重载与增量更新。请上传包含题目HTML/PDF/音频的根文件夹。</p>
-                    <div style="display:flex; gap:10px; flex-wrap: wrap;">
-                        <button class="btn" id="listening-full-btn">全量重载</button>
-                        <button class="btn btn-secondary" id="listening-inc-btn">增量更新</button>
+                <div style="border: 2px solid rgba(118, 75, 162, 0.2); border-radius: 16px; padding: 24px; background: linear-gradient(135deg, rgba(118, 75, 162, 0.05), rgba(102, 126, 234, 0.05)); transition: all 0.3s ease;">
+                    <h3 style="margin: 0 0 12px 0; color: #764ba2; font-size: 1.2em;">🎧 听力题库加载</h3>
+                    <p style="margin: 0 0 20px 0; color: #64748b; line-height: 1.6;">支持全量重载与增量更新。请上传包含题目HTML/PDF/音频的根文件夹。</p>
+                    <div style="display:flex; gap:12px; flex-wrap: wrap;">
+                        <button class="btn" id="listening-full-btn" style="background: linear-gradient(135deg, #764ba2, #667eea); border: none; color: white; padding: 12px 20px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">全量重载</button>
+                        <button class="btn btn-secondary" id="listening-inc-btn" style="background: rgba(118, 75, 162, 0.1); border: 2px solid rgba(118, 75, 162, 0.3); color: #764ba2; padding: 12px 20px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">增量更新</button>
                     </div>
                     <input type="file" id="listening-full-input" webkitdirectory multiple style="display:none;" />
                     <input type="file" id="listening-inc-input" webkitdirectory multiple style="display:none;" />
-                    <div style="margin-top:10px; font-size: 0.9em; opacity:0.9;">
-                        建议路径：ListeningPractice/P3 或 ListeningPractice/P4
+                    <div style="margin-top:16px; font-size: 0.85em; color: #94a3b8;">
+                        💡 建议路径：ListeningPractice/P3 或 ListeningPractice/P4
                     </div>
                 </div>
             </div>
-            <div style="margin-top:16px; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px;">
-                <div style="font-weight:600;">说明</div>
-                <ul style="margin:8px 0 0 18px; line-height:1.6;">
+            <div style="margin-top:24px; padding: 20px; background: linear-gradient(135deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05)); border-radius: 12px; border: 1px solid rgba(102, 126, 234, 0.1);">
+                <div style="font-weight:600; color: #1e293b; margin-bottom: 12px; font-size: 1.1em;">📋 操作说明</div>
+                <ul style="margin:0; padding-left: 20px; line-height:1.7; color: #64748b;">
                     <li>全量重载会替换当前配置中对应类型（阅读/听力）的全部索引，并保留另一类型原有数据。</li>
                     <li>增量更新会将新文件生成的新索引追加到当前配置。若当前为默认配置，则会自动复制为新配置后再追加，确保默认配置不被影响。</li>
                 </ul>
             </div>
         </div>
-        <div class="modal-footer">
-            <button class="btn btn-secondary" id="close-loader">关闭</button>
+        <div class="modal-footer" style="padding: 20px 30px; background: rgba(248, 250, 252, 0.8); border-radius: 0 0 20px 20px; border-top: 1px solid rgba(226, 232, 240, 0.5);">
+            <button class="btn btn-secondary" id="close-loader" style="background: rgba(100, 116, 139, 0.1); border: 2px solid rgba(100, 116, 139, 0.2); color: #64748b; padding: 12px 24px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">关闭</button>
         </div>
     `;
 
