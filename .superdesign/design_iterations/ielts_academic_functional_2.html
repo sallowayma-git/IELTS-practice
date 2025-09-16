@@ -923,11 +923,11 @@
             </div>
 
             <div class="nav-menu">
-                <button class="nav-item active" onclick="showView('overview')">
+                <button class="nav-item" onclick="showView('overview')">
                     <i class="fas fa-chart-line"></i>
                     <span>学习总览</span>
                 </button>
-                <button class="nav-item" onclick="showView('browse')">
+                <button class="nav-item active" onclick="showView('browse')">
                     <i class="fas fa-book-open"></i>
                     <span>题库浏览</span>
                 </button>
@@ -950,7 +950,7 @@
         <!-- Main Content Area -->
         <main class="main-content">
             <!-- Overview View -->
-            <div id="overview-view" class="view active">
+            <div id="overview-view" class="view">
                 <div class="content-header">
                     <h2>学习总览</h2>
                     <div class="breadcrumb">首页 / 学习总览</div>
@@ -996,7 +996,7 @@
             </div>
 
             <!-- Browse View -->
-            <div id="browse-view" class="view">
+            <div id="browse-view" class="view active">
                 <div class="content-header">
                     <h2>题库浏览</h2>
                     <div class="breadcrumb">首页 / 题库浏览</div>
@@ -1170,32 +1170,70 @@
     <input type="file" id="folder-picker" webkitdirectory style="display: none;">
 
     <!-- Load existing JavaScript files -->
-    <script src="assets/scripts/complete-exam-data.js"></script>
-    <script src="assets/scripts/listening-exam-data.js"></script>
-    <script src="js/utils/helpers.js"></script>
-    <script src="js/utils/storage.js"></script>
-    <script src="js/utils/asyncExportHandler.js"></script>
-    <script src="js/core/scoreStorage.js"></script>
-    <script src="js/core/practiceRecorder.js"></script>
-    <script src="js/components/PDFHandler.js"></script>
-    <script src="js/utils/markdownExporter.js"></script>
-    <script src="js/components/practiceRecordModal.js"></script>
-    <script src="js/components/practiceHistoryEnhancer.js"></script>
-    <script src="js/main.js"></script>
-    <script src="js/boot-fallbacks.js"></script>
-    <script src="fix-system.js"></script>
-    <script src="js/app.js"></script>
+    <script src="../../assets/scripts/complete-exam-data.js"></script>
+    <script src="../../assets/scripts/listening-exam-data.js"></script>
+    <script src="../../js/utils/helpers.js"></script>
+    <script src="../../js/utils/storage.js"></script>
+    <script src="../../js/utils/asyncExportHandler.js"></script>
+    <script src="../../js/core/scoreStorage.js"></script>
+    <script src="../../js/core/practiceRecorder.js"></script>
+    <script src="../../js/components/PDFHandler.js"></script>
+    <script src="../../js/utils/markdownExporter.js"></script>
+    <script src="../../js/components/practiceRecordModal.js"></script>
+    <script src="../../js/components/practiceHistoryEnhancer.js"></script>
+    <script src="../../assets/scripts/complete-exam-data.js"></script>
+    <script src="../../assets/scripts/listening-exam-data.js"></script>
+    <script src="../../assets/scripts/complete-exam-data.js"></script>
+    <script src="../../assets/scripts/listening-exam-data.js"></script>
+    <script src="../../js/main.js"></script>
+    <script src="../../js/boot-fallbacks.js"></script>
+    <script src="../../fix-system.js"></script>
+    <script src="../../js/app.js"></script>
 
     <script>
-        // Global variables
-        let examIndex = [];
-        let currentCategory = 'all';
-        let currentExamType = 'all';
-        let filteredExams = [];
-        let practiceRecords = [];
+        // Global variables are defined in js/main.js
+        // let examIndex = [];
+        // let currentCategory = 'all';
+        // let currentExamType = 'all';
+        // let filteredExams = [];
+        // let practiceRecords = [];
 
         // Initialize the application
         document.addEventListener('DOMContentLoaded', function() {
+           // Override global functions to fix path issues
+           if (window.PDFHandler) {
+               const originalOpenPDF = window.PDFHandler.prototype.openPDF;
+               window.PDFHandler.prototype.openPDF = function(pdfPath, examTitle, options) {
+                   const basePath = '../../';
+                   const correctedPath = pdfPath.startsWith('.') ? basePath + pdfPath.substring(2) : basePath + pdfPath;
+                   console.log('[OVERRIDE] Corrected PDF Path:', correctedPath);
+                   return originalOpenPDF.call(this, correctedPath, examTitle, options);
+               };
+           }
+
+           const originalOpenExam = window.openExam;
+           window.openExam = function(examId) {
+               const examIndex = window.examIndex || [];
+               const exam = examIndex.find(e => e.id === examId);
+               if (!exam) {
+                   console.error('[OVERRIDE] Exam not found:', examId);
+                   return;
+               }
+               const basePath = '../../';
+               let url;
+               if (exam.hasHtml && exam.filename) {
+                   url = basePath + exam.path + exam.filename;
+               } else if (exam.pdfFilename) {
+                   url = basePath + exam.path + exam.pdfFilename;
+               } else {
+                    console.error('[OVERRIDE] No valid file found for exam:', examId);
+                   return;
+               }
+               console.log('[OVERRIDE] Opening URL:', url);
+               window.open(url, `exam_${examId}`, 'width=1200,height=800,scrollbars=yes,resizable=yes');
+           };
+
+
             // First try to load data from localStorage
             loadFromLocalStorage();
             initializeApp();
@@ -1291,21 +1329,25 @@
             const averageScore = document.getElementById('average-score');
             const studyHours = document.getElementById('study-hours');
 
-            if (examIndex && examIndex.length > 0) {
-                totalExamsCount.textContent = examIndex.length;
+            // Null check for examIndex
+            const safeExamIndex = examIndex || [];
+            const safePracticeRecords = practiceRecords || [];
+
+            if (safeExamIndex.length > 0) {
+                totalExamsCount.textContent = safeExamIndex.length;
 
                 let completed = 0;
                 let totalScore = 0;
                 let totalDuration = 0;
 
-                if (practiceRecords && practiceRecords.length > 0) {
-                    completed = new Set(practiceRecords.map(record => record.examId)).size;
-                    totalScore = practiceRecords.reduce((sum, record) => sum + (record.score || 0), 0);
-                    totalDuration = practiceRecords.reduce((sum, record) => sum + (record.duration || 0), 0);
+                if (safePracticeRecords.length > 0) {
+                    completed = new Set(safePracticeRecords.map(record => record.examId)).size;
+                    totalScore = safePracticeRecords.reduce((sum, record) => sum + (record.score || 0), 0);
+                    totalDuration = safePracticeRecords.reduce((sum, record) => sum + (record.duration || 0), 0);
                 }
 
                 completedCount.textContent = completed;
-                averageScore.textContent = practiceRecords.length > 0 ? Math.round(totalScore / practiceRecords.length) + '%' : '0%';
+                averageScore.textContent = safePracticeRecords.length > 0 ? Math.round(totalScore / safePracticeRecords.length) + '%' : '0%';
                 studyHours.textContent = Math.round(totalDuration / 3600 * 10) / 10;
             } else {
                 totalExamsCount.textContent = '0';
@@ -1339,17 +1381,21 @@
                 }
             ];
 
+            // Null check for examIndex
+            const safeExamIndex = examIndex || [];
+            const safePracticeRecords = practiceRecords || [];
+
             // Calculate statistics
-            if (examIndex && examIndex.length > 0) {
-                const readingExams = examIndex.filter(exam => exam.type === 'reading');
-                const listeningExams = examIndex.filter(exam => exam.type === 'listening');
+            if (safeExamIndex.length > 0) {
+                const readingExams = safeExamIndex.filter(exam => exam.type === 'reading');
+                const listeningExams = safeExamIndex.filter(exam => exam.type === 'listening');
 
                 categories[0].total = readingExams.length;
                 categories[1].total = listeningExams.length;
 
-                if (practiceRecords && practiceRecords.length > 0) {
-                    const readingRecords = practiceRecords.filter(record => record.type === 'reading');
-                    const listeningRecords = practiceRecords.filter(record => record.type === 'listening');
+                if (safePracticeRecords.length > 0) {
+                    const readingRecords = safePracticeRecords.filter(record => record.type === 'reading');
+                    const listeningRecords = safePracticeRecords.filter(record => record.type === 'listening');
 
                     categories[0].completed = new Set(readingRecords.map(record => record.examId)).size;
                     categories[1].completed = new Set(listeningRecords.map(record => record.examId)).size;
@@ -1597,7 +1643,8 @@
                 window.openExam(examId);
             } else {
                 // Fallback implementation
-                const exam = examIndex.find(e => e.id === examId);
+                const safeExamIndex = examIndex || [];
+                const exam = safeExamIndex.find(e => e.id === examId);
                 if (exam) {
                     if (exam.hasHtml) {
                         // Open HTML practice - use the correct path from the exam data
@@ -1606,18 +1653,20 @@
                         // Check if exam has path and filename properties
                         if (exam.path && exam.filename) {
                             // For files in 睡着过项目组 directory
-                            fullPath = `./睡着过项目组(9.4)[134篇]/2. 高频次高频文章[83篇]/1. P1（高频）[12篇]/${exam.path}${exam.filename}`;
+                            const basePath = '../../';
+                            fullPath = basePath + exam.path + exam.filename;
                         } else if (exam.htmlPath) {
                             // Fallback to htmlPath if available
                             fullPath = exam.htmlPath;
                         } else {
                             // Default path structure for reading/listening
+                            const basePath = '../../';
                             if (exam.type === 'reading' || exam.category === 'P1') {
-                                fullPath = `./睡着过项目组(9.4)[134篇]/2. 高频次高频文章[83篇]/1. P1（高频）[12篇]/${exam.filename || exam.id + '.html'}`;
+                                fullPath = basePath + `睡着过项目组(9.4)[134篇]/2. 高频次高频文章[83篇]/1. P1（高频）[12篇]/${exam.filename || exam.id + '.html'}`;
                             } else if (exam.type === 'listening' || exam.category === 'P2') {
-                                fullPath = `./ListeningPractice/${exam.category}/${exam.filename || exam.id + '.html'}`;
+                                fullPath = basePath + `ListeningPractice/${exam.category}/${exam.filename || exam.id + '.html'}`;
                             } else {
-                                fullPath = `./睡着过项目组(9.4)[134篇]/2. 高频次高频文章[83篇]/1. P1（高频）[12篇]/${exam.filename || exam.id + '.html'}`;
+                                fullPath = basePath + `睡着过项目组(9.4)[134篇]/2. 高频次高频文章[83篇]/1. P1（高频）[12篇]/${exam.filename || exam.id + '.html'}`;
                             }
                         }
 
@@ -1632,14 +1681,19 @@
                     } else if (exam.pdfFilename) {
                         // Open PDF
                         let pdfPath;
+                        const basePath = '../../';
                         if (exam.path && exam.pdfFilename) {
-                            pdfPath = `./睡着过项目组(9.4)[134篇]/2. 高频次高频文章[83篇]/1. P1（高频）[12篇]/${exam.path}${exam.pdfFilename}`;
+                            pdfPath = basePath + exam.path + exam.pdfFilename;
                         } else {
-                            pdfPath = exam.pdfPath || `./睡着过项目组(9.4)[134篇]/2. 高频次高频文章[83篇]/1. P1（高频）[12篇]/${exam.pdfFilename}`;
+                            pdfPath = basePath + (exam.pdfPath || `睡着过项目组(9.4)[134篇]/2. 高频次高频文章[83篇]/1. P1（高频）[12篇]/${exam.pdfFilename}`);
                         }
 
-                        window.open(pdfPath, `pdf_${exam.id}`, 'width=1000,height=800,scrollbars=yes,resizable=yes');
-                        showMessage('正在打开PDF: ' + (exam.title || exam.name), 'success');
+                        const pdfWindow = window.open(pdfPath, `pdf_${exam.id}`, 'width=1000,height=800,scrollbars=yes,resizable=yes');
+                        if (pdfWindow) {
+                            showMessage('正在打开PDF: ' + (exam.title || exam.name), 'success');
+                        } else {
+                            showMessage('PDF 打开失败，请手动打开: ' + pdfPath, 'error');
+                        }
                     } else {
                         showMessage('题目文件不存在', 'error');
                     }
@@ -1810,54 +1864,58 @@
         }
 
         function loadLibrary(forceReload = false) {
+            const startTime = performance.now();
+            
             // Try to load from localStorage first
             if (!forceReload) {
                 try {
                     const storedExamIndex = localStorage.getItem('exam_index');
                     if (storedExamIndex) {
                         examIndex = JSON.parse(storedExamIndex);
-                        updateOverview();
-                        updateBrowseView();
-                        showMessage('题库加载完成', 'success');
+                        finishLibraryLoading(startTime);
                         return;
                     }
                 } catch (error) {
                     console.warn('Failed to load exam index from localStorage:', error);
                 }
             }
-
-            // Call the global loadLibrary function from js/main.js
-            if (typeof window.loadLibrary === 'function') {
-                window.loadLibrary(forceReload);
-            } else {
-                // Fallback implementation
-                console.log('[Library] 使用备用加载方案');
-                if (typeof completeExamData !== 'undefined') {
-                    examIndex = completeExamData;
-                    localStorage.setItem('exam_index', JSON.stringify(examIndex));
-                    updateOverview();
-                    updateBrowseView();
-                    showMessage('题库加载完成', 'success');
-                } else if (window.completeExamIndex || window.listeningExamIndex) {
-                    let readingExams = [];
-                    if (window.completeExamIndex && Array.isArray(window.completeExamIndex)) {
-                        readingExams = window.completeExamIndex.map(exam => ({ ...exam, type: 'reading' }));
-                    }
-
-                    let listeningExams = [];
-                    if (window.listeningExamIndex && Array.isArray(window.listeningExamIndex)) {
-                        listeningExams = window.listeningExamIndex;
-                    }
-
-                    examIndex = [...readingExams, ...listeningExams];
-                    localStorage.setItem('exam_index', JSON.stringify(examIndex));
-                    updateOverview();
-                    updateBrowseView();
-                    showMessage('题库加载完成', 'success');
-                } else {
-                    showMessage('题库加载失败', 'error', '未找到题库数据');
+        
+            console.log(`[Library] ${forceReload ? 'Force' : 'Normal'} loading library index...`);
+            showMessage('正在加载题库索引...', 'info');
+        
+            try {
+                let readingExams = [];
+                if (window.completeExamIndex && Array.isArray(window.completeExamIndex)) {
+                    readingExams = window.completeExamIndex.map(exam => ({ ...exam, type: 'reading' }));
+                    console.log(`[Library] Loaded reading library: ${readingExams.length} items`);
                 }
+        
+                let listeningExams = [];
+                if (window.listeningExamIndex && Array.isArray(window.listeningExamIndex)) {
+                    listeningExams = window.listeningExamIndex;
+                    console.log(`[Library] Loaded listening library: ${listeningExams.length} items`);
+                }
+        
+                if (readingExams.length === 0 && listeningExams.length === 0) {
+                    console.warn('[Library] No built-in library data detected, continuing with empty index');
+                }
+        
+                examIndex = [...readingExams, ...listeningExams];
+                localStorage.setItem('exam_index', JSON.stringify(examIndex));
+        
+                finishLibraryLoading(startTime);
+            } catch (error) {
+                console.error('[Library] Failed to load library:', error);
+                examIndex = [];
+                finishLibraryLoading(startTime);
             }
+        }
+        
+        function finishLibraryLoading(startTime) {
+            const loadTime = performance.now() - startTime;
+            showMessage(`题库加载完成！共 ${examIndex.length} 个题目 - ${Math.round(loadTime)}ms`, 'success');
+            updateOverview();
+            updateBrowseView();
         }
 
         function checkLibraryUpdates() {
