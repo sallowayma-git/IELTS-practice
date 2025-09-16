@@ -554,6 +554,33 @@ class DataIntegrityManager {
                 }
             });
 
+            // 兼容层：确保导出包含扁平 practice_records 和 user_stats，便于旧版系统直接导入
+            try {
+                const prefix = (window.storage && window.storage.prefix) ? window.storage.prefix : 'exam_system_';
+                if (!Array.isArray(exportData.data.practice_records)) {
+                    const wrappedRecs = exportData.data[`${prefix}practice_records`];
+                    if (wrappedRecs && Array.isArray(wrappedRecs.data)) {
+                        exportData.data.practice_records = wrappedRecs.data;
+                    } else if (window.storage && window.storage.get) {
+                        exportData.data.practice_records = window.storage.get('practice_records', []);
+                    } else {
+                        exportData.data.practice_records = [];
+                    }
+                }
+                if (!exportData.data.user_stats || typeof exportData.data.user_stats !== 'object') {
+                    const wrappedStats = exportData.data[`${prefix}user_stats`];
+                    if (wrappedStats && wrappedStats.data) {
+                        exportData.data.user_stats = wrappedStats.data;
+                    } else if (window.storage && window.storage.get) {
+                        exportData.data.user_stats = window.storage.get('user_stats', {});
+                    } else {
+                        exportData.data.user_stats = {};
+                    }
+                }
+            } catch (e) {
+                console.warn('[DataIntegrityManager] 导出兼容层处理失败:', e);
+            }
+
             exportData.checksum = this.calculateChecksum(exportData.data);
 
             const blob = new Blob([JSON.stringify(exportData, null, 2)], {
@@ -589,6 +616,70 @@ class DataIntegrityManager {
                 try {
                     const importFileContent = JSON.parse(event.target.result);
 
+                    // 兼容层（新旧导出格式）：优先处理 exam_system_* 包装结构，避免双重前缀与嵌套
+                    try {
+                        const prefix = (window.storage && window.storage.prefix) ? window.storage.prefix : 'exam_system_';
+                        const dataSection = importFileContent && importFileContent.data ? importFileContent.data : null;
+                        if (!dataSection) throw new Error('NO_DATA_SECTION');
+
+                        // 提取练习记录
+                        let recordsToImport = [];
+                        if (Array.isArray(dataSection.practice_records)) {
+                            recordsToImport = dataSection.practice_records;
+                        } else if (dataSection[`${prefix}practice_records`] && Array.isArray(dataSection[`${prefix}practice_records`].data)) {
+                            recordsToImport = dataSection[`${prefix}practice_records`].data;
+                        } else if (Array.isArray(importFileContent.records)) {
+                            recordsToImport = importFileContent.records;
+                        } else if (Array.isArray(importFileContent.practiceRecords)) {
+                            recordsToImport = importFileContent.practiceRecords;
+                        }
+
+                        // 提取用户统计（可选）
+                        let userStatsToImport = null;
+                        if (dataSection.user_stats && typeof dataSection.user_stats === 'object') {
+                            userStatsToImport = dataSection.user_stats;
+                        } else if (dataSection[`${prefix}user_stats`] && dataSection[`${prefix}user_stats`].data) {
+                            userStatsToImport = dataSection[`${prefix}user_stats`].data;
+                        } else if (importFileContent.userStats) {
+                            userStatsToImport = importFileContent.userStats;
+                        }
+
+                        // 写入关键数据
+                        if (window.storage) {
+                            storage.set('practice_records', Array.isArray(recordsToImport) ? recordsToImport : []);
+                            if (userStatsToImport) storage.set('user_stats', userStatsToImport);
+                        } else {
+                            localStorage.setItem('practice_records', JSON.stringify(Array.isArray(recordsToImport) ? recordsToImport : []));
+                            if (userStatsToImport) localStorage.setItem('user_stats', JSON.stringify(userStatsToImport));
+                        }
+
+                        // 其余数据键：去前缀并解包 data
+                        Object.entries(dataSection).forEach(([key, value]) => {
+                            try {
+                                // 跳过已处理的关键键，以及其带前缀的等价键
+                                const cleanKey = key.startsWith(prefix) ? key.slice(prefix.length) : key;
+                                if (cleanKey === 'practice_records' || cleanKey === 'user_stats') return;
+                                const unwrapped = (value && typeof value === 'object' && 'data' in value) ? value.data : value;
+                                if (window.storage) {
+                                    storage.set(cleanKey, unwrapped);
+                                } else {
+                                    localStorage.setItem(cleanKey, JSON.stringify(unwrapped));
+                                }
+                            } catch (e) {
+                                console.error(`[DataIntegrityManager] 导入 ${key} 失败:`, e);
+                            }
+                        });
+
+                        if (window.syncPracticeRecords) {
+                            console.log('[DataIntegrityManager] 通知主窗口同步记录..');
+                            window.syncPracticeRecords();
+                        }
+                        resolve({ importedCount: Array.isArray(recordsToImport) ? recordsToImport.length : 0 });
+                        return; // 避免落入旧逻辑
+                    } catch (__compatErr) {
+                        // 回退到旧逻辑
+                    }
+
                     // 核心逻辑: 只关心 'practice_records'
                     if (importFileContent && importFileContent.data && Array.isArray(importFileContent.data.practice_records)) {
                         const recordsToImport = importFileContent.data.practice_records;
@@ -616,10 +707,13 @@ class DataIntegrityManager {
                         if (importFileContent && importFileContent.data) {
                              Object.entries(importFileContent.data).forEach(([key, value]) => {
                                 try {
+                                    const prefix = (window.storage && window.storage.prefix) ? window.storage.prefix : 'exam_system_';
+                                    const cleanKey = key.startsWith(prefix) ? key.slice(prefix.length) : key;
+                                    const unwrapped = (value && typeof value === 'object' && 'data' in value) ? value.data : value;
                                     if (window.storage) {
-                                        storage.set(key, value);
+                                        storage.set(cleanKey, unwrapped);
                                     } else {
-                                        localStorage.setItem(key, JSON.stringify(value));
+                                        localStorage.setItem(cleanKey, JSON.stringify(unwrapped));
                                     }
                                 } catch (error) {
                                     console.error(`[DataIntegrityManager] 导入 ${key} 失败:`, error);

@@ -1172,9 +1172,15 @@ function openExam(examId) {
             return;
         }
 
-        const rawPath = exam.path + exam.filename;
-        // Encode the path to handle special characters safely in file:/// URLs
-        const fullPath = './' + encodeURI(rawPath).replace(/%252F/g, '/');
+        // Prefer unified path builder if available
+        let fullPath;
+        if (typeof window.buildResourcePath === 'function') {
+            fullPath = window.buildResourcePath(exam, 'html');
+        } else {
+            const rawPath = exam.path + exam.filename;
+            // Encode the path to handle special characters safely in file:/// URLs
+            fullPath = './' + encodeURI(rawPath).replace(/%252F/g, '/');
+        }
 
         // Add logging for the fullPath
         console.log('[openExam] Attempting to open encoded fullPath:', fullPath);
@@ -1438,6 +1444,12 @@ function viewPDF(examId) {
     if (potentialPath.toLowerCase().endsWith('.pdf')) {
         relativePdfPath = potentialPath;
     } else if (exam.pdfFilename) {
+        if (typeof window.buildResourcePath === 'function') {
+            const built = window.buildResourcePath(exam, 'pdf');
+            showMessage(`正在打开PDF: ${exam.title}`, 'info');
+            openPDFSafely(built, exam.title);
+            return;
+        }
         relativePdfPath = exam.path + exam.pdfFilename;
     } else {
         // Fallback if pdfFilename is missing
