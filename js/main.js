@@ -438,6 +438,15 @@ function renderExamItem(exam) {
 
 function resolveExamBasePath(exam) {
   let basePath = (exam && exam.path) ? String(exam.path) : "";
+  // Hotfix: 强制修正阅读题库根路径，避免常量乱码导致路径拼接失败
+  (function(){
+    try {
+      const readingRootFixed = '睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/';
+      if (exam && exam.type === 'reading' && basePath && !basePath.includes('睡着过项目组(9.4)[134篇]/')) {
+        basePath = readingRootFixed + basePath;
+      }
+    } catch (_) {}
+  })();
   const readingRoot = '睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/';
   
   if (exam && exam.type === 'reading' && !basePath.includes('睡着过项目组(9.4)[134篇]')) {
