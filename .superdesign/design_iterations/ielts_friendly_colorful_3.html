@@ -1,0 +1,2307 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><span class="logo-melody" aria-label="美乐蒂图标" title="美乐蒂" style="display:inline-flex;vertical-align:middle;margin-right:10px"><svg width="40" height="40" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" role="img"><circle cx="60" cy="70" r="40" fill="#F7C6D6" /><ellipse cx="30" cy="25" rx="15" ry="35" fill="#F7C6D6" /><ellipse cx="90" cy="25" rx="15" ry="35" fill="#F7C6D6" /><ellipse cx="30" cy="30" rx="8" ry="28" fill="#F299B9" /><ellipse cx="90" cy="30" rx="8" ry="28" fill="#F299B9" /><circle cx="45" cy="70" r="7" fill="#3F3D56" /><circle cx="75" cy="70" r="7" fill="#3F3D56" /><polygon points="60,85 55,80 65,80" fill="#E94E77" /><path d="M55 85 Q60 95 65 85" stroke="#E94E77" stroke-width="2" fill="none" /><circle cx="40" cy="90" r="6" fill="#F299B9" opacity="0.6" /><circle cx="80" cy="90" r="6" fill="#F299B9" opacity="0.6" /><circle cx="60" cy="30" r="15" fill="#FFB6C1" /><rect x="50" y="20" width="20" height="20" rx="4" ry="4" fill="#F27091" /><circle cx="45" cy="30" r="10" fill="#FFB6C1" /><circle cx="75" cy="30" r="10" fill="#FFB6C1" /></svg></span>IELTS学习伙伴 - 美乐蒂主题</title>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* CSS Variables for Melody Theme */
+        .view{display:none}.view.active{display:block}
+        .view{display:none}.view.active{display:block}
+        :root {
+            /* Primary Colors - Melody Pink Theme */
+            --color-primary: #FFB6C1;  /* Melody Pink */
+            --color-secondary: #FFC0CB; /* Light Pink */
+            --color-accent: #FF69B4;   /* Hot Pink */
+            --color-purple: #DDA0DD;   /* Plum */
+            --color-pink: #FFB6C1;     /* Light Pink */
+            --color-orange: #FFA07A;   /* Light Salmon */
+            --color-blue: #87CEEB;     /* Sky Blue */
+            --color-green: #98FB98;    /* Pale Green */
+            --color-white: #FFFFFF;    /* White */
+            --color-cream: #FFF8E7;    /* Cream */
+
+            /* Gradients */
+            --gradient-primary: linear-gradient(135deg, #FFB6C1 0%, #FFC0CB 100%);
+            --gradient-secondary: linear-gradient(135deg, #FF69B4 0%, #FF1493 100%);
+            --gradient-accent: linear-gradient(135deg, #FFF8E7 0%, #FFDAB9 100%);
+            --gradient-rainbow: linear-gradient(135deg, #FFB6C1, #FFC0CB, #FF69B4, #DDA0DD, #FFA07A);
+
+            /* Background Gradients */
+            --bg-main: linear-gradient(135deg, #FFE4E1 0%, #FFC0CB 50%, #FFB6C1 100%);
+            --bg-card: linear-gradient(135deg, #FFF8E7 0%, #FFDAB9 100%);
+            --bg-light: linear-gradient(135deg, #FFFFFF 0%, #FFF8E7 100%);
+
+            /* Text Colors */
+            --text-primary: #2D3748;
+            --text-secondary: #4A5568;
+            --text-light: #718096;
+            --text-white: #FFFFFF;
+
+            /* Spacing - 8px Grid System */
+            --space-1: 0.125rem;  /* 2px */
+            --space-2: 0.25rem;   /* 4px */
+            --space-3: 0.5rem;    /* 8px */
+            --space-4: 0.75rem;   /* 12px */
+            --space-5: 1rem;      /* 16px */
+            --space-6: 1.5rem;    /* 24px */
+            --space-7: 2rem;      /* 32px */
+            --space-8: 3rem;      /* 48px */
+            --space-9: 4rem;      /* 64px */
+
+            /* Border Radius - Extra Rounded */
+            --radius-sm: 0.5rem;   /* 8px */
+            --radius-md: 1rem;     /* 16px */
+            --radius-lg: 1.5rem;   /* 24px */
+            --radius-xl: 2rem;     /* 32px */
+            --radius-full: 9999px;
+
+            /* Shadows */
+            --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.1);
+            --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.15);
+            --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.2);
+            --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.25);
+            --shadow-colored: 0 8px 32px rgba(255, 107, 107, 0.3);
+
+            /* Animations */
+            --transition-fast: 0.2s ease;
+            --transition-normal: 0.3s ease;
+            --transition-slow: 0.5s ease;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Nunito', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #FFE4E1 0%, #FFC0CB 50%, #FFB6C1 100%);
+            min-height: 100vh;
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* Animated Background */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background:
+                radial-gradient(circle at 20% 50%, rgba(255, 182, 193, 0.2) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(255, 192, 203, 0.2) 0%, transparent 50%),
+                radial-gradient(circle at 40% 80%, rgba(255, 105, 180, 0.1) 0%, transparent 50%);
+            animation: float 20s ease-in-out infinite;
+            z-index: -1;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            33% { transform: translate(-30px, -30px) rotate(120deg); }
+            66% { transform: translate(20px, -10px) rotate(240deg); }
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: var(--space-5);
+        }
+
+        /* Header with Animation */
+        .header {
+            text-align: center;
+            margin-bottom: var(--space-8);
+            padding: var(--space-8) var(--space-6);
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 248, 231, 0.9));
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-xl);
+            backdrop-filter: blur(10px);
+            border: 3px solid var(--color-primary);
+            background-clip: padding-box;
+            position: relative;
+            overflow: hidden;
+            animation: slideDown 0.8s ease-out;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: var(--gradient-rainbow);
+            transition: left 0.8s ease;
+            z-index: -1;
+        }
+
+        .header:hover::before {
+            left: 0;
+        }
+
+        .header:not(:hover)::before {
+            left: 100%;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .header h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: var(--space-3);
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        /* Navigation */
+        .main-nav {
+            display: flex;
+            justify-content: center;
+            gap: var(--space-4);
+            margin-bottom: var(--space-8);
+            flex-wrap: wrap;
+        }
+
+        .nav-btn {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.7));
+            border: none;
+            color: var(--text-primary);
+            padding: var(--space-4) var(--space-6);
+            border-radius: var(--radius-full);
+            cursor: pointer;
+            font-size: 1.1rem;
+            font-weight: 700;
+            transition: all var(--transition-normal);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            box-shadow: var(--shadow-md);
+            backdrop-filter: blur(10px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .nav-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: var(--gradient-rainbow);
+            transition: left var(--transition-normal);
+            z-index: -1;
+        }
+
+        .nav-btn:hover {
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: var(--shadow-xl);
+            color: var(--text-white);
+        }
+
+        .nav-btn:hover::before {
+            left: 0;
+        }
+
+        .nav-btn.active {
+            background: var(--gradient-primary);
+            color: var(--text-white);
+            transform: scale(1.1);
+            box-shadow: var(--shadow-colored);
+            border: 2px solid var(--color-accent) !important;
+        }
+
+        .nav-btn i {
+            font-size: 1.3rem;
+        }
+
+        /* View Containers */
+        .view {
+            display: none;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.85));
+            padding: var(--space-7);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-xl);
+            backdrop-filter: blur(15px);
+            border: 3px solid transparent;
+            background-clip: padding-box;
+            min-height: 500px;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .view.active {
+            display: block !important;
+            border-color: var(--color-primary) !important;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .view h2 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: var(--gradient-secondary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: var(--space-6);
+            text-align: center;
+        }
+
+        /* Category Grid */
+        .category-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: var(--space-6);
+        }
+
+        .category-card {
+            background: linear-gradient(135deg, var(--color-pink), var(--color-orange));
+            padding: var(--space-6);
+            border-radius: var(--radius-xl);
+            transition: all var(--transition-normal);
+            box-shadow: var(--shadow-lg);
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+            animation: bounceIn 0.6s ease-out;
+        }
+
+        @keyframes bounceIn {
+            0% {
+                opacity: 0;
+                transform: scale(0.3);
+            }
+            50% {
+                transform: scale(1.05);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .category-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transform: rotate(45deg);
+            transition: all 0.6s ease;
+            opacity: 0;
+        }
+
+        .category-card:hover::before {
+            animation: shine 0.6s ease-in-out;
+        }
+
+        @keyframes shine {
+            0% {
+                transform: translateX(-100%) translateY(-100%) rotate(45deg);
+                opacity: 0;
+            }
+            50% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateX(100%) translateY(100%) rotate(45deg);
+                opacity: 0;
+            }
+        }
+
+        .category-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: var(--shadow-xl);
+        }
+
+        .category-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: var(--space-5);
+        }
+
+        .category-icon {
+            font-size: 3rem;
+            margin-right: var(--space-4);
+            color: var(--text-white);
+            filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.3));
+        }
+
+        .category-title {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--text-white);
+            margin-bottom: var(--space-2);
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .category-meta {
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 600;
+        }
+
+        .category-actions {
+            display: flex;
+            gap: var(--space-3);
+            margin-top: var(--space-5);
+        }
+
+        /* Colorful Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--space-2);
+            padding: var(--space-4) var(--space-6);
+            border-radius: var(--radius-full);
+            font-size: 1rem;
+            font-weight: 700;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+            transition: all var(--transition-normal);
+            position: relative;
+            overflow: hidden;
+            color: var(--text-white);
+            box-shadow: var(--shadow-md);
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .btn:hover::before {
+            left: 100%;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px) scale(1.05);
+            box-shadow: var(--shadow-xl);
+        }
+
+        .btn-primary {
+            background: var(--gradient-primary);
+        }
+
+        .btn-secondary {
+            background: var(--gradient-secondary);
+        }
+
+        .btn-accent {
+            background: var(--gradient-accent);
+            color: var(--text-primary);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, var(--color-green), #90EE90);
+        }
+
+        .btn-info {
+            background: linear-gradient(135deg, var(--color-blue), #ADD8E6);
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, var(--color-orange), #FFD700);
+        }
+
+        /* Search Box */
+        .search-box {
+            margin-bottom: var(--space-6);
+        }
+
+        .search-input {
+            width: 100%;
+            padding: var(--space-4) var(--space-5);
+            border: 3px solid transparent;
+            border-radius: var(--radius-full);
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.7));
+            color: var(--text-primary);
+            font-size: 1.1rem;
+            font-family: 'Nunito', sans-serif;
+            font-weight: 600;
+            transition: all var(--transition-normal);
+            backdrop-filter: blur(10px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 4px rgba(255, 107, 107, 0.3), var(--shadow-lg);
+            transform: scale(1.02);
+        }
+
+        .search-input::placeholder {
+            color: var(--text-light);
+            font-weight: 600;
+        }
+
+        /* Exam List */
+        .exam-list {
+            display: grid;
+            gap: var(--space-4);
+            max-height: 600px;
+            overflow-y: auto;
+            padding-right: var(--space-3);
+        }
+
+        .exam-list::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .exam-list::-webkit-scrollbar-track {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.1));
+            border-radius: var(--radius-full);
+        }
+
+        .exam-list::-webkit-scrollbar-thumb {
+            background: var(--gradient-primary);
+            border-radius: var(--radius-full);
+        }
+
+        .exam-item {
+            background: linear-gradient(135deg, var(--color-purple), var(--color-blue));
+            padding: var(--space-5);
+            border-radius: var(--radius-lg);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all var(--transition-normal);
+            box-shadow: var(--shadow-md);
+            position: relative;
+            overflow: hidden;
+            animation: slideInLeft 0.5s ease-out;
+        }
+
+        @keyframes slideInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .exam-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--gradient-rainbow);
+        }
+
+        .exam-item:hover {
+            transform: translateX(8px) scale(1.02);
+            box-shadow: var(--shadow-xl);
+        }
+
+        .exam-info h4 {
+            margin: 0;
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--text-white);
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        .exam-meta {
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 600;
+            margin-top: var(--space-2);
+        }
+
+        .exam-actions {
+            display: flex;
+            gap: var(--space-3);
+        }
+
+        /* Practice Stats */
+        .practice-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: var(--space-5);
+            margin-bottom: var(--space-7);
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, var(--color-pink), var(--color-accent));
+            padding: var(--space-6);
+            border-radius: var(--radius-xl);
+            text-align: center;
+            box-shadow: var(--shadow-lg);
+            transition: all var(--transition-normal);
+            position: relative;
+            overflow: hidden;
+            animation: popIn 0.6s ease-out;
+        }
+
+        @keyframes popIn {
+            0% {
+                opacity: 0;
+                transform: scale(0.5);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: conic-gradient(from 0deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            animation: rotate 4s linear infinite;
+        }
+
+        @keyframes rotate {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px) scale(1.05);
+            box-shadow: var(--shadow-xl);
+        }
+
+        .stat-number {
+            font-size: 3rem;
+            font-weight: 800;
+            color: var(--text-white);
+            margin-bottom: var(--space-2);
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            position: relative;
+            z-index: 1;
+        }
+
+        .stat-label {
+            font-size: 1.1rem;
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Practice History */
+        .practice-history {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.7));
+            border-radius: var(--radius-xl);
+            padding: var(--space-6);
+            box-shadow: var(--shadow-lg);
+            backdrop-filter: blur(10px);
+        }
+
+        .history-item {
+            background: linear-gradient(135deg, var(--color-green), var(--color-blue));
+            padding: var(--space-5);
+            border-radius: var(--radius-lg);
+            margin-bottom: var(--space-3);
+            box-shadow: var(--shadow-md);
+            transition: all var(--transition-normal);
+            animation: slideInUp 0.5s ease-out;
+            position: relative;
+            overflow: hidden;
+        }
+
+        @keyframes slideInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .history-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 100px;
+            height: 100px;
+            background: linear-gradient(135deg, transparent, rgba(255, 255, 255, 0.3));
+            border-radius: 50%;
+            transform: translate(30px, -30px);
+        }
+
+        .history-item:hover {
+            transform: translateY(-3px) scale(1.01);
+            box-shadow: var(--shadow-xl);
+        }
+
+        /* Settings Panel */
+        .settings-section {
+            background: linear-gradient(135deg, var(--color-orange), var(--color-pink));
+            padding: var(--space-6);
+            border-radius: var(--radius-xl);
+            margin-bottom: var(--space-5);
+            box-shadow: var(--shadow-lg);
+            animation: fadeInScale 0.6s ease-out;
+        }
+
+        @keyframes fadeInScale {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .settings-section h3 {
+            color: var(--text-white);
+            font-size: 1.5rem;
+            font-weight: 800;
+            margin-bottom: var(--space-3);
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        .settings-section p {
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 600;
+            margin-bottom: var(--space-4);
+        }
+
+        .settings-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-3);
+            justify-content: center;
+        }
+
+        /* Loading Animation */
+        .loading {
+            text-align: center;
+            padding: var(--space-8);
+            color: var(--text-secondary);
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255, 107, 107, 0.3);
+            border-top: 4px solid var(--color-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto var(--space-4);
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .container {
+                padding: var(--space-3);
+            }
+
+            .header {
+                padding: var(--space-5) var(--space-4);
+                margin-bottom: var(--space-6);
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .main-nav {
+                flex-direction: column;
+                align-items: center;
+                gap: var(--space-3);
+            }
+
+            .nav-btn {
+                width: 100%;
+                max-width: 300px;
+                justify-content: center;
+            }
+
+            .category-grid {
+                grid-template-columns: 1fr;
+                gap: var(--space-4);
+            }
+
+            .practice-stats {
+                grid-template-columns: repeat(2, 1fr);
+                gap: var(--space-4);
+            }
+
+            .view {
+                padding: var(--space-5);
+            }
+
+            .view h2 {
+                font-size: 2rem;
+            }
+
+            .stat-number {
+                font-size: 2rem;
+            }
+
+            .settings-buttons {
+                flex-direction: column;
+            }
+
+            .settings-buttons .btn {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .header h1 {
+                font-size: 1.5rem;
+            }
+
+            .practice-stats {
+                grid-template-columns: 1fr;
+            }
+
+            .category-card,
+            .exam-item,
+            .history-item {
+                padding: var(--space-4);
+            }
+        }
+
+        /* Fun Animations */
+        .bounce {
+            animation: bounce 2s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% {
+                transform: translateY(0);
+            }
+            40% {
+                transform: translateY(-10px);
+            }
+            60% {
+                transform: translateY(-5px);
+            }
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.05);
+            }
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        .wiggle {
+            animation: wiggle 1s ease-in-out infinite;
+        }
+
+        @keyframes wiggle {
+            0%, 7% {
+                transform: rotateZ(0);
+            }
+            15% {
+                transform: rotateZ(-15deg);
+            }
+            20% {
+                transform: rotateZ(10deg);
+            }
+            25% {
+                transform: rotateZ(-10deg);
+            }
+            30% {
+                transform: rotateZ(6deg);
+            }
+            35% {
+                transform: rotateZ(-4deg);
+            }
+            40%, 100% {
+                transform: rotateZ(0);
+            }
+        }
+
+        /* Interactive Elements */
+        .interactive {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .interactive:active {
+            transform: scale(0.95);
+        }
+
+        /* Success Animation */
+        @keyframes success {
+            0% {
+                transform: scale(0);
+                opacity: 0;
+            }
+            50% {
+                transform: scale(1.2);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .success-animation {
+            animation: success 0.6s ease-out;
+        }
+
+        /* Melody Rabbit Head - Geometric Design */
+        .melody-rabbit {
+            display: inline-block;
+            width: 60px;
+            height: 60px;
+            position: relative;
+            margin-right: 15px;
+            vertical-align: middle;
+        }
+
+        .melody-rabbit::before {
+            content: '';
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background: var(--color-primary);
+            border-radius: 50%;
+            top: 5px;
+            left: 5px;
+            box-shadow: 0 4px 8px rgba(255, 182, 193, 0.3);
+            z-index: 1;
+        }
+
+        /* Rabbit ears */
+        .melody-rabbit .ear-left,
+        .melody-rabbit .ear-right {
+            position: absolute;
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-bottom: 25px solid var(--color-primary);
+            top: -10px;
+            z-index: 0;
+        }
+
+        .melody-rabbit .ear-left {
+            left: 12px;
+            transform: rotate(-15deg);
+        }
+
+        .melody-rabbit .ear-right {
+            right: 12px;
+            transform: rotate(15deg);
+        }
+
+        /* Rabbit eyes */
+        .melody-rabbit .eye {
+            position: absolute;
+            width: 6px;
+            height: 8px;
+            background: var(--text-primary);
+            border-radius: 50%;
+            top: 18px;
+            z-index: 2;
+        }
+
+        .melody-rabbit .eye.left {
+            left: 15px;
+        }
+
+        .melody-rabbit .eye.right {
+            right: 15px;
+        }
+
+        /* Rabbit nose */
+        .melody-rabbit .nose {
+            position: absolute;
+            width: 8px;
+            height: 6px;
+            background: #FF69B4;
+            border-radius: 50%;
+            top: 28px;
+            left: 26px;
+            z-index: 2;
+        }
+
+        /* Rabbit mouth */
+        .melody-rabbit .mouth {
+            position: absolute;
+            width: 12px;
+            height: 6px;
+            border: 2px solid #FF69B4;
+            border-top: none;
+            border-radius: 0 0 12px 12px;
+            top: 34px;
+            left: 24px;
+            z-index: 2;
+        }
+
+        /* Floating Action Button */
+        .fab {
+            position: fixed;
+            bottom: var(--space-6);
+            right: var(--space-6);
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: var(--gradient-primary);
+            color: white;
+            border: none;
+            box-shadow: var(--shadow-xl);
+            cursor: pointer;
+            font-size: 1.5rem;
+            transition: all var(--transition-normal);
+            z-index: 1000;
+        }
+
+        .fab:hover {
+            transform: scale(1.1) rotate(90deg);
+            box-shadow: var(--shadow-colored);
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: relative;
+        }
+
+        .tooltip::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--text-primary);
+            color: white;
+            padding: var(--space-2) var(--space-3);
+            border-radius: var(--radius-md);
+            font-size: 0.9rem;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity var(--transition-normal);
+        }
+
+        .tooltip:hover::after {
+            opacity: 1;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+<div id="message-container" style="position:fixed;top:12px;right:12px;z-index:10000"></div>
+        <!-- Header -->
+        <div class="header">
+            <h1 class="bounce">
+                <div class="melody-rabbit">
+                    <div class="ear-left"></div>
+                    <div class="ear-right"></div>
+                    <div class="eye left"></div>
+                    <div class="eye right"></div>
+                    <div class="nose"></div>
+                    <div class="mouth"></div>
+                </div>
+                IELTS学习伙伴
+            </h1>
+            <p>让学习变得更有趣吧！🎨</p>
+        </div>
+
+        <!-- Navigation -->
+        <nav class="main-nav">
+            <button class="nav-btn active interactive" data-view="overview">
+                <i class="fas fa-chart-pie"></i>
+                概览
+            </button>
+            <button class="nav-btn interactive" data-view="browse">
+                <i class="fas fa-book"></i>
+                题库浏览
+            </button>
+            <button class="nav-btn interactive" data-view="practice">
+                <i class="fas fa-history"></i>
+                练习记录
+            </button>
+            <button class="nav-btn interactive" data-view="settings">
+                <i class="fas fa-cog"></i>
+                设置
+            </button>
+        </nav>
+
+        <script>
+        // Minimal showView fallback and nav wiring (no dependency on library)
+        (function(){
+          function fallbackShowView(viewName, btn){
+            try{ if (typeof window.showView === 'function' && window.showView !== fallbackShowView) return window.showView(viewName, btn); }catch(_){ }
+            try{ document.querySelectorAll('.view').forEach(function(v){ v.classList.remove('active'); }); }catch(_){ }
+            var el = document.getElementById(viewName + '-view'); if (el) el.classList.add('active');
+            try{ document.querySelectorAll('.nav-btn').forEach(function(b){ b.classList.remove('active'); }); if (btn) btn.classList.add('active'); }catch(_){ }
+          }
+          if (typeof window.showView !== 'function') window.showView = fallbackShowView;
+          document.addEventListener('DOMContentLoaded', function(){
+            document.querySelectorAll('.nav-btn[data-view]').forEach(function(btn){
+              btn.addEventListener('click', function(e){ e.preventDefault(); fallbackShowView(btn.getAttribute('data-view'), btn); });
+            });
+          });
+        })();
+        </script>
+
+        <!-- Overview View -->
+        <div id="overview-view" class="view active">
+            <h2>🎓 学习概览</h2>
+            <div id="category-overview" class="category-grid">
+                <!-- 鍔ㄦ€佺敓鎴愮殑闃呰鍜屽惉鍔涚粌涔犲崱鐗?-->
+            </div>
+        </div>
+
+        <!-- Browse View -->
+        <div id="browse-view" class="view">
+            <h2 id="browse-title">📚 题库浏览</h2>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-5);">
+                <div id="type-filter-buttons">
+                    <button class="btn btn-primary active">鍏ㄩ儴</button>
+                    <button class="btn btn-secondary">闃呰</button>
+                    <button class="btn btn-secondary">鍚姏</button>
+                </div>
+            </div>
+
+            <div class="search-box">
+                <input type="text" class="search-input" placeholder="馃攳 鎼滅储棰樼洰..." onkeyup="searchExams(this.value)">
+            </div>
+
+            <div id="exam-list-container" class="exam-list">
+                <div class="exam-item interactive">
+                    <div class="exam-info">
+                        <h4>阅读理解练习 #001</h4>
+                        <div class="exam-meta">闅惧害: 涓瓑 路 棰樻暟: 40 路 宸茬粌涔? 12</div>
+                    </div>
+                    <div class="exam-actions">
+                        <button class="btn btn-success">开始练习</button>
+                        <button class="btn btn-info">鏌ョ湅璇︽儏</button>
+                    </div>
+                </div>
+
+                <div class="exam-item interactive">
+                    <div class="exam-info">
+                        <h4>听力理解练习 #002</h4>
+                        <div class="exam-meta">闅惧害: 鍥伴毦 路 棰樻暟: 30 路 宸茬粌涔? 8</div>
+                    </div>
+                    <div class="exam-actions">
+                        <button class="btn btn-success">开始练习</button>
+                        <button class="btn btn-info">鏌ョ湅璇︽儏</button>
+                    </div>
+                </div>
+
+                <div class="exam-item interactive">
+                    <div class="exam-info">
+                        <h4>阅读理解练习 #003</h4>
+                        <div class="exam-meta">闅惧害: 绠€鍗?路 棰樻暟: 25 路 宸茬粌涔? 20</div>
+                    </div>
+                    <div class="exam-actions">
+                        <button class="btn btn-success">开始练习</button>
+                        <button class="btn btn-info">鏌ョ湅璇︽儏</button>
+                    </div>
+                </div>
+
+                <div class="exam-item interactive">
+                    <div class="exam-info">
+                        <h4>听力理解练习 #004</h4>
+                        <div class="exam-meta">闅惧害: 涓瓑 路 棰樻暟: 35 路 宸茬粌涔? 15</div>
+                    </div>
+                    <div class="exam-actions">
+                        <button class="btn btn-success">开始练习</button>
+                        <button class="btn btn-info">鏌ョ湅璇︽儏</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Practice View -->
+        <div id="practice-view" class="view">
+            <h2>📝 练习记录</h2>
+
+            <div class="practice-stats">
+                <div class="stat-card pulse">
+                    <div class="stat-number">127</div>
+                    <div class="stat-label">宸茬粌涔犻鐩?/div>
+                </div>
+                <div class="stat-card pulse">
+                    <div class="stat-number">85%</div>
+                    <div class="stat-label">骞冲潎姝ｇ‘鐜?/div>
+                </div>
+                <div class="stat-card pulse">
+                    <div class="stat-number">2,340</div>
+                    <div class="stat-label">学习时长(分钟)</div>
+                </div>
+                <div class="stat-card pulse">
+                    <div class="stat-number">15</div>
+                    <div class="stat-label">连续学习天数</div>
+                </div>
+            </div>
+
+            <div class="practice-history">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-5);">
+                    <h3>📱 练习历史</h3>
+                    <div>
+                        <button class="btn btn-warning">馃搫 瀵煎嚭鎶ュ憡</button>
+                        <button class="btn btn-info">馃棏锔?娓呴櫎璁板綍</button>
+                    </div>
+                </div>
+
+                <div id="practice-history-list" class="history-list">
+                    <div class="history-item">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <h4 style="color: white; margin-bottom: var(--space-2);">阅读理解练习 #001</h4>
+                                <div style="color: rgba(255, 255, 255, 0.9); font-weight: 600;">
+                                    <span>馃搮 2024-01-15</span>
+                                    <span style="margin-left: var(--space-4);">鈴憋笍 45鍒嗛挓</span>
+                                </div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div style="font-size: 2rem; font-weight: 800; color: white;">90%</div>
+                                <div style="color: rgba(255, 255, 255, 0.9); font-weight: 600;">姝ｇ‘鐜?/div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="history-item">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <h4 style="color: white; margin-bottom: var(--space-2);">听力理解练习 #002</h4>
+                                <div style="color: rgba(255, 255, 255, 0.9); font-weight: 600;">
+                                    <span>馃搮 2024-01-14</span>
+                                    <span style="margin-left: var(--space-4);">鈴憋笍 30鍒嗛挓</span>
+                                </div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div style="font-size: 2rem; font-weight: 800; color: white;">75%</div>
+                                <div style="color: rgba(255, 255, 255, 0.9); font-weight: 600;">姝ｇ‘鐜?/div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="history-item">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <h4 style="color: white; margin-bottom: var(--space-2);">阅读理解练习 #003</h4>
+                                <div style="color: rgba(255, 255, 255, 0.9); font-weight: 600;">
+                                    <span>馃搮 2024-01-13</span>
+                                    <span style="margin-left: var(--space-4);">鈴憋笍 35鍒嗛挓</span>
+                                </div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div style="font-size: 2rem; font-weight: 800; color: white;">85%</div>
+                                <div style="color: rgba(255, 255, 255, 0.9); font-weight: 600;">姝ｇ‘鐜?/div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings View -->
+        <div id="settings-view" class="view">
+            <h2>⚙️ 系统设置</h2>
+
+            <div class="settings-section">
+                <h3>🔧 系统管理</h3>
+                <p>管理你的学习系统和偏好设置</p>
+                <div class="settings-buttons">
+                    <button class="btn btn-warning" onclick="clearCache()">馃棏锔?娓呴櫎缂撳瓨</button>
+                    <button class="btn btn-primary" onclick="showLibraryLoaderModal()">📨 加载题库</button>
+                    <button class="btn btn-secondary" onclick="showLibraryConfigListV2()">⚙️ 题库配置</button>
+                    <button class="btn btn-info" onclick="loadLibrary(true); showMessage('题库已强制刷新', 'success')">🔄 刷新题库</button>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h3>📊 数据管理</h3>
+                <p>备份、导入和导出你的学习数据</p>
+                <div class="settings-buttons">
+                    <button class="btn btn-success" onclick="createManualBackup()">📊 创建备份</button>
+                    <button class="btn btn-primary" onclick="showBackupList()">📥 备份列表</button>
+                    <button class="btn btn-secondary" onclick="exportAllData()">📤 导出数据</button>
+                    <button class="btn btn-info" onclick="importData()">📥 导入数据</button>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h3>🎨 个性化设置</h3>
+                <p>鑷畾涔変綘鐨勫涔犱綋楠?/p>
+                <div class="settings-buttons">
+                    <button class="btn btn-accent">🎨 主题设置</button>
+                    <button class="btn btn-primary">🎉 通知设置</button>
+                    <button class="btn btn-secondary">🎓 学习目标</button>
+                    <button class="btn btn-info">👤 个人资料</button>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h3>🎓 系统信息</h3>
+                <div style="background: rgba(255, 255, 255, 0.2); padding: var(--space-4); border-radius: var(--radius-lg); margin-top: var(--space-4);">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: var(--space-3);">
+                        <span style="font-weight: 700; color: white;">题库状态:</span>
+                        <span style="color: var(--color-accent); font-weight: 700;">鉁?宸插姞杞藉畬鏁?/span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: var(--space-3);">
+                        <span style="font-weight: 700; color: white;">棰樼洰鎬绘暟:</span>
+                        <span style="color: white; font-weight: 700;">147</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: var(--space-3);">
+                        <span style="font-weight: 700; color: white;">鐗堟湰:</span>
+                        <span style="color: white; font-weight: 700;">v3.0 褰╄櫣鐗?/span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span style="font-weight: 700; color: white;">鏈€鍚庢洿鏂?</span>
+                        <span style="color: white; font-weight: 700;">2024-01-15</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Action Button -->
+    <button class="fab tooltip" data-tooltip="蹇€熷紑濮嬬粌涔? onclick="quickStart()">
+        <i class="fas fa-play"></i>
+    </button>
+
+    <script>
+        // View Management - Simple Implementation
+        function showView(viewName, clickedElement = null) {
+            console.log('showView called:', viewName, 'element:', clickedElement);
+
+            // 隐藏所有视图
+            document.querySelectorAll('.view').forEach(view => {
+                view.classList.remove('active');
+            });
+
+            // 显示选中视图
+            const targetView = document.getElementById(viewName + '-view');
+            if (targetView) {
+                targetView.classList.add('active');
+                console.log('View switched to:', viewName);
+            } else {
+                console.error('View not found:', viewName + '-view');
+            }
+
+            // 更新按钮状态
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            if (clickedElement) {
+                clickedElement.classList.add('active');
+            }
+        }
+
+        // 简单的视图更新函数
+        function updateOverview() {
+            console.log('Updating overview view');
+            const categoryGrid = document.getElementById('category-grid');
+            if (categoryGrid) {
+                categoryGrid.innerHTML = `
+                    <div class="category-card interactive" onclick="startCategoryPractice('reading')">
+                        <div class="category-header">
+                            <div class="category-icon">📚</div>
+                            <div>
+                                <div class="category-title">阅读理解</div>
+                                <div class="category-meta">进度: 0/0</div>
+                            </div>
+                        </div>
+                        <div class="category-actions">
+                            <button class="btn btn-primary">开始练习</button>
+                        </div>
+                    </div>
+                    <div class="category-card interactive" onclick="startCategoryPractice('listening')">
+                        <div class="category-header">
+                            <div class="category-icon">🎧</div>
+                            <div>
+                                <div class="category-title">听力练习</div>
+                                <div class="category-meta">进度: 0/0</div>
+                            </div>
+                        </div>
+                        <div class="category-actions">
+                            <button class="btn btn-primary">开始练习</button>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        function updateBrowseView() {
+            console.log('Updating browse view');
+        }
+
+        function updatePracticeView() {
+            console.log('Updating practice view');
+        }
+
+        function updateSettingsView() {
+            console.log('Updating settings view');
+        }
+
+        // Category Practice
+        function startCategoryPractice(category) {
+            const messages = {
+                'reading': '📚 开始阅读练习！准备好提升你的阅读技能了吗？',
+                'listening': '🎧 开始听力练习！让我们一起训练你的听力理解能力！',
+                'writing': '✍️ 开始写作练习！准备好表达你的想法了吗？',
+                'speaking': '🎤 开始口语练习！让我们一起练习口语交流！'
+            };
+
+            showMessage(messages[category] || '开始练习！', 'success');
+        }
+
+        // Category Practice
+        function startCategoryPractice(category) {
+            const messages = {
+                'reading': '📚 开始阅读练习！准备好提升你的阅读技能了吗？',
+                'listening': '馃帶 寮€濮嬪惉鍔涚粌涔狅紒璁╂垜浠缁冧綘鐨勫惉鍔涚悊瑙ｈ兘鍔涳紒',
+                'writing': '鉁嶏笍 寮€濮嬪啓浣滅粌涔狅紒鍑嗗濂借〃杈句綘鐨勬兂娉曚簡鍚楋紵',
+                'speaking': '馃棧锔?寮€濮嬪彛璇粌涔狅紒璁╂垜浠竴璧风粌涔犲彛璇氦娴侊紒'
+            };
+
+            showMessage(messages[category] || '开始练习！', 'success');
+        }
+
+        // Search Functionality
+        function searchExams(query) {
+            console.log('Searching for:', query);
+            // 简单的搜索功能实现
+            const examItems = document.querySelectorAll('.exam-item');
+            examItems.forEach(item => {
+                const title = item.querySelector('h4').textContent.toLowerCase();
+                if (title.includes(query.toLowerCase())) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+
+        // Quick Start Function
+        function quickStart() {
+            const messages = [
+                '🎉 快速开始练习吧！',
+                '🤔 今天想练习什么呢？',
+                '🎮 准备好战斗了吗？',
+                '🤝 让我们一起学习吧！'
+            ];
+
+            const randomMessage = messages[Math.floor(Math.random() * messages.length)];
+            showMessage(randomMessage, 'info');
+
+            // Navigate to overview
+            showView('overview');
+
+            // Add pulse animation to first category card
+            const firstCard = document.querySelector('.category-card');
+            if (firstCard) {
+                firstCard.classList.add('pulse');
+                setTimeout(() => {
+                    firstCard.classList.remove('pulse');
+                }, 2000);
+            }
+        }
+
+        // Message System
+        function showMessage(message, type = 'info') {
+            // Remove existing messages
+            const existingMessages = document.querySelectorAll('.message');
+            existingMessages.forEach(msg => msg.remove());
+
+            // Create message element
+            const messageEl = document.createElement('div');
+            messageEl.className = `message ${type}`;
+            messageEl.textContent = message;
+
+            // Add styles
+            Object.assign(messageEl.style, {
+                position: 'fixed',
+                top: '20px',
+                right: '20px',
+                padding: '15px 25px',
+                borderRadius: '50px',
+                color: 'white',
+                fontWeight: '700',
+                fontSize: '16px',
+                zIndex: '10000',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+                backdropFilter: 'blur(10px)',
+                animation: 'slideInRight 0.5s ease-out'
+            });
+
+            // Set background based on type
+            const backgrounds = {
+                success: 'linear-gradient(135deg, #4ECDC4, #44A08D)',
+                error: 'linear-gradient(135deg, #FF6B6B, #FF5252)',
+                info: 'linear-gradient(135deg, #667eea, #764ba2)',
+                warning: 'linear-gradient(135deg, #FFE66D, #FFB347)'
+            };
+            messageEl.style.background = backgrounds[type] || backgrounds.info;
+
+            document.body.appendChild(messageEl);
+
+            // Auto remove after 3 seconds
+            setTimeout(() => {
+                messageEl.style.animation = 'slideOutRight 0.5s ease-in';
+                setTimeout(() => {
+                    if (messageEl.parentNode) {
+                        messageEl.parentNode.removeChild(messageEl);
+                    }
+                }, 500);
+            }, 3000);
+        }
+
+        // Add CSS animations for messages
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideInRight {
+                from {
+                    transform: translateX(100%);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+            }
+
+            @keyframes slideOutRight {
+                from {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+                to {
+                    transform: translateX(100%);
+                    opacity: 0;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Add interactive effects
+        document.addEventListener('DOMContentLoaded', function() {
+            // 调试信息
+            console.log('=== IELTS学习伙伴 - 调试信息 ===');
+            console.log('当前活动视图:', document.querySelector('.view.active')?.id || '无');
+
+            // 测试：检查所有视图是否存在
+            const viewNames = ['overview', 'browse', 'practice', 'settings'];
+            viewNames.forEach(name => {
+                const view = document.getElementById(name + '-view');
+                if (view) {
+                    console.log('✓ View found:', name + '-view');
+                } else {
+                    console.error('✗ View missing:', name + '-view');
+                }
+            });
+
+            // 检查导航按钮
+            const navButtons = document.querySelectorAll('.nav-btn');
+            console.log('导航按钮数量:', navButtons.length);
+            navButtons.forEach((btn, i) => {
+                console.log(`按钮 ${i + 1}:`, btn.textContent.trim());
+            });
+
+            // 初始化概览视图
+            updateOverview();
+
+            // 添加测试函数到全局作用域
+            window.testViewSwitch = function(viewName) {
+                console.log('测试切换到视图:', viewName);
+                showView(viewName);
+            };
+
+            // 为导航按钮添加事件监听器
+            const navButtons2 = document.querySelectorAll('.nav-btn');
+            navButtons2.forEach((button, index) => {
+                // 直接添加点击事件，不依赖onclick
+                button.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    // 根据索引确定视图名称
+                    const viewNames = ['overview', 'browse', 'practice', 'settings'];
+                    const viewName = viewNames[index];
+
+                    console.log('Button clicked:', index, viewName);
+                    showView(viewName, this);
+                });
+
+                // 移除原有的onclick属性
+                button.removeAttribute('onclick');
+            });
+
+            // Add hover effects to all interactive elements
+            const interactiveElements = document.querySelectorAll('.interactive');
+            interactiveElements.forEach(element => {
+                element.addEventListener('mouseenter', function() {
+                    this.style.transform = 'scale(1.05)';
+                });
+
+                element.addEventListener('mouseleave', function() {
+                    this.style.transform = 'scale(1)';
+                });
+            });
+
+            // Add click ripple effect
+            const buttons = document.querySelectorAll('.btn, .nav-btn');
+            buttons.forEach(button => {
+                button.addEventListener('click', function(e) {
+                    const ripple = document.createElement('span');
+                    const rect = this.getBoundingClientRect();
+                    const size = Math.max(rect.width, rect.height);
+                    const x = e.clientX - rect.left - size / 2;
+                    const y = e.clientY - rect.top - size / 2;
+
+                    ripple.style.width = ripple.style.height = size + 'px';
+                    ripple.style.left = x + 'px';
+                    ripple.style.top = y + 'px';
+                    ripple.classList.add('ripple');
+
+                    this.appendChild(ripple);
+
+                    setTimeout(() => {
+                        ripple.remove();
+                    }, 600);
+                });
+            });
+
+            // Welcome message
+            setTimeout(() => {
+                showMessage('🎉 欢迎来到IELTS学习中心！让我们一起开始学习之旅吧！', 'success');
+            }, 1000);
+        });
+
+        // Add ripple effect styles
+        const rippleStyle = document.createElement('style');
+        rippleStyle.textContent = `
+            .btn, .nav-btn {
+                position: relative;
+                overflow: hidden;
+            }
+
+            .ripple {
+                position: absolute;
+                border-radius: 50%;
+                background: rgba(255, 255, 255, 0.6);
+                transform: scale(0);
+                animation: ripple-animation 0.6s linear;
+                pointer-events: none;
+            }
+
+            @keyframes ripple-animation {
+                to {
+                    transform: scale(4);
+                    opacity: 0;
+                }
+            }
+        `;
+        document.head.appendChild(rippleStyle);
+
+        // Simulate progress updates
+        function updateProgress() {
+            const statNumbers = document.querySelectorAll('.stat-number');
+            statNumbers.forEach(stat => {
+                const finalValue = stat.textContent;
+                const isPercentage = finalValue.includes('%');
+                const numericValue = parseInt(finalValue);
+
+                if (!isNaN(numericValue)) {
+                    animateValue(stat, 0, numericValue, 2000, isPercentage);
+                }
+            });
+        }
+
+        function animateValue(element, start, end, duration, isPercentage = false) {
+            const startTime = performance.now();
+
+            function update(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+
+                const easeOutQuart = 1 - Math.pow(1 - progress, 4);
+                const currentValue = Math.floor(start + (end - start) * easeOutQuart);
+
+                element.textContent = currentValue + (isPercentage ? '%' : '');
+
+                if (progress < 1) {
+                    requestAnimationFrame(update);
+                }
+            }
+
+            requestAnimationFrame(update);
+        }
+
+        // Initialize progress animation when practice view is shown
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('.nav-btn') && e.target.textContent.includes('练习记录')) {
+                setTimeout(updateProgress, 300);
+            }
+        });
+
+        // Add keyboard navigation
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey) {
+                switch(e.key) {
+                    case '1':
+                        showView('overview');
+                        break;
+                    case '2':
+                        showView('browse');
+                        break;
+                    case '3':
+                        showView('practice');
+                        break;
+                    case '4':
+                        showView('settings');
+                        break;
+                }
+            }
+        });
+
+        // ==================== 瀹為檯鍔熻兘浠ｇ爜 ====================
+
+        // 鍏ㄥ眬鍙橀噺
+        let examIndex = [];
+        let currentCategory = 'all';
+        let currentExamType = 'all';
+        let filteredExams = [];
+        let practiceRecords = [];
+
+        // 鍒濆鍖栧簲鐢?
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeApp();
+
+            // 寤惰繜鍔犺浇浠ョ‘淇濆叏灞€鍑芥暟宸插噯澶囧ソ
+            setTimeout(() => {
+                if (typeof window.loadLibrary === 'function') {
+                    window.loadLibrary();
+                } else {
+                    loadLibrary();
+                }
+
+                if (typeof window.syncPracticeRecords === 'function') {
+                    window.syncPracticeRecords();
+                } else {
+                    syncPracticeRecords();
+                }
+            }, 100);
+        });
+
+        function initializeApp() {
+            // 鍒濆鍖栫幇鏈夌粍浠?
+            if (typeof initializeLegacyComponents === 'function') {
+                initializeLegacyComponents();
+            }
+
+            // 鍒濆鍖朥I缁勪欢
+            updateOverview();
+            updateBrowseView();
+            updatePracticeView();
+
+            // 鏄剧ず娆㈣繋娑堟伅
+            showMessage('🎉 欢迎来到IELTS学习中心！', 'success');
+        }
+
+  
+        // 更新概览视图
+        function updateOverview() {
+            const categoryGrid = document.getElementById('category-grid');
+
+            // 绀轰緥鍒嗙被鏁版嵁 - 鏇挎崲涓哄疄闄呮暟鎹?
+            const categories = [
+                {
+                    name: '闃呰鐞嗚В',
+                    icon: '馃摎',
+                    total: 0,
+                    completed: 0,
+                    color: '#FF6B6B'
+                },
+                {
+                    name: '听力练习',
+                    icon: '馃帶',
+                    total: 0,
+                    completed: 0,
+                    color: '#4ECDC4'
+                }
+            ];
+
+            // 浣跨敤瀹為檯鑰冭瘯鏁版嵁鏇存柊
+            if (examIndex && examIndex.length > 0) {
+                const readingExams = examIndex.filter(exam => exam.type === 'reading');
+                const listeningExams = examIndex.filter(exam => exam.type === 'listening');
+
+                categories[0].total = readingExams.length;
+                categories[1].total = listeningExams.length;
+
+                // 根据练习记录计算完成数
+                if (practiceRecords && practiceRecords.length > 0) {
+                    const readingCompleted = new Set(practiceRecords
+                        .filter(record => record.type === 'reading')
+                        .map(record => record.examId)).size;
+                    const listeningCompleted = new Set(practiceRecords
+                        .filter(record => record.type === 'listening')
+                        .map(record => record.examId)).size;
+
+                    categories[0].completed = readingCompleted;
+                    categories[1].completed = listeningCompleted;
+                }
+            }
+
+            categoryGrid.innerHTML = categories.map(category => `
+                <div class="category-card interactive" onclick="startCategoryPractice('${category.name}')">
+                    <div class="category-header">
+                        <div class="category-icon">${category.icon}</div>
+                        <div>
+                            <div class="category-title">${category.name}</div>
+                            <div class="category-meta">进度: ${category.completed}/${category.total}</div>
+                        </div>
+                    </div>
+                    <div class="category-actions">
+                        <button class="btn btn-primary">开始练习</button>
+                        <button class="btn btn-secondary">鏌ョ湅璇︽儏</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // 更新题库浏览视图
+        function updateBrowseView() {
+            // Use the global loadExamList function from js/main.js if available
+            if (typeof window.loadExamList === 'function') {
+                window.loadExamList();
+                return;
+            }
+
+            // Fallback implementation
+            const examList = document.getElementById('exam-list-container');
+
+            if (!examIndex || examIndex.length === 0) {
+                examList.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: white;">
+                        <div style="font-size: 3rem; margin-bottom: 15px;">馃摎</div>
+                        <p>鏆傛棤棰樼洰鏁版嵁</p>
+                        <p style="font-size: 0.9rem; margin-top: 10px;">璇峰姞杞介搴撴垨妫€鏌ヨ缃?/p>
+                    </div>
+                `;
+                return;
+            }
+
+            // 根据当前类型过滤考试
+            let filteredExams = examIndex;
+            if (currentExamType !== 'all') {
+                filteredExams = examIndex.filter(exam => exam.type === currentExamType);
+            }
+
+            examList.innerHTML = filteredExams.map(exam => `
+                <div class="exam-item">
+                    <div class="exam-info">
+                        <h4>${exam.title || exam.name || 'Untitled'}</h4>
+                        <div class="exam-meta">
+                            <span><i class="fas fa-tag"></i> ${getTypeLabel(exam.type)}</span>
+                            <span><i class="fas fa-question-circle"></i> ${exam.questionCount || 0} 棰?/span>
+                        </div>
+                    </div>
+                    <div class="exam-actions">
+                        <button class="btn" onclick="startExam('${exam.id}')">
+                            <i class="fas fa-play"></i>
+                            <span>开始练习</span>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // 更新练习视图
+        function updatePracticeView() {
+            // 鏇存柊缁熻鏁版嵁
+            const totalPracticed = document.getElementById('total-practiced');
+            const avgScore = document.getElementById('avg-score');
+            const studyTime = document.getElementById('study-time');
+            const streakDays = document.getElementById('streak-days');
+
+            if (practiceRecords && practiceRecords.length > 0) {
+                totalPracticed.textContent = practiceRecords.length;
+
+                const totalScore = practiceRecords.reduce((sum, record) => sum + (record.score || 0), 0);
+                const avgScoreValue = Math.round(totalScore / practiceRecords.length);
+                avgScore.textContent = avgScoreValue + '%';
+
+                const totalTime = practiceRecords.reduce((sum, record) => sum + (record.duration || 0), 0);
+                studyTime.textContent = Math.round(totalTime / 60);
+
+                streakDays.textContent = calculateStreakDays();
+            } else {
+                totalPracticed.textContent = '0';
+                avgScore.textContent = '0%';
+                studyTime.textContent = '0';
+                streakDays.textContent = '0';
+            }
+
+            // 更新练习历史
+            updatePracticeHistory();
+        }
+
+        // 鏇存柊缁冧範鍘嗗彶
+        function updatePracticeHistory() {
+            // Use the global practiceRecords if available
+            if (typeof window.practiceRecords !== 'undefined') {
+                practiceRecords = window.practiceRecords;
+            }
+
+            const historyList = document.getElementById('practice-history-list');
+
+            if (!practiceRecords || practiceRecords.length === 0) {
+                historyList.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: #666;">
+                        <div style="font-size: 3rem; margin-bottom: 15px;">馃搵</div>
+                        <p>暂无练习记录</p>
+                        <p style="font-size: 0.9rem; margin-top: 10px;">开始练习后，记录将显示在这里</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // 鎸夋棩鏈熸帓搴忚褰曪紙鏈€鏂扮殑鍦ㄥ墠锛?
+            const sortedRecords = [...practiceRecords].sort((a, b) =>
+                new Date(b.date || b.timestamp) - new Date(a.date || a.timestamp)
+            );
+
+            historyList.innerHTML = sortedRecords.map(record => `
+                <div class="history-item">
+                    <div class="history-header">
+                        <div class="history-title">${record.title || record.examName || '练习'}</div>
+                        <div class="history-score">${record.score || 0}%</div>
+                    </div>
+                    <div class="history-meta">
+                        <span><i class="fas fa-calendar"></i> ${formatDate(record.date || record.timestamp)}</span>
+                        <span><i class="fas fa-clock"></i> ${formatDuration(record.duration || 0)}</span>
+                        <span><i class="fas fa-tag"></i> ${getTypeLabel(record.type)}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // 杈呭姪鍑芥暟
+        function getTypeLabel(type) {
+            const labels = {
+                'reading': '闃呰',
+                'listening': '鍚姏'
+            };
+            return labels[type] || type;
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('zh-CN');
+        }
+
+        function formatDuration(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+
+        function calculateStreakDays() {
+            // 简单的连续天数计算 - 可以增强
+            return Math.min(practiceRecords.length, 30);
+        }
+
+        // 鎿嶄綔鍑芥暟
+        function startCategoryPractice(category) {
+            showView('browse');
+            if (category === '闃呰鐞嗚В') {
+                filterByType('reading');
+            } else if (category === '听力练习') {
+                filterByType('listening');
+            }
+        }
+
+        function startExam(examId) {
+            const exam = examIndex.find(e => e.id === examId);
+            if (exam) {
+                // 在新窗口中打开练习页面
+                const practiceUrl = `${exam.type === 'reading' ? 'ReadingPractice' : 'ListeningPractice'}/practice.html?id=${examId}`;
+                window.open(practiceUrl, '_blank');
+                showMessage(`开始练习: ${exam.title || exam.name}`, 'success');
+            }
+        }
+
+        function filterByType(type) {
+            // Use the global filterByType function from js/main.js if available
+            if (typeof window.filterByType === 'function') {
+                window.filterByType(type);
+                return;
+            }
+
+            // Fallback implementation
+            currentExamType = type;
+
+            // 鏇存柊绛涢€夋寜閽?
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            updateBrowseView();
+        }
+
+        function filterRecordsByType(type) {
+            // 鏇存柊绛涢€夋寜閽?
+            document.querySelectorAll('#practice-view .filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // 绛涢€夎褰曪紙闇€瑕佸疄鐜帮級
+            updatePracticeHistory();
+        }
+
+        function searchExams(query) {
+            // Use the global searchExams function from js/main.js if available
+            if (typeof window.searchExams === 'function') {
+                window.searchExams(query);
+                return;
+            }
+
+            // Fallback implementation
+            if (!query) {
+                updateBrowseView();
+                return;
+            }
+
+            const filtered = examIndex.filter(exam => {
+                const title = (exam.title || exam.name || '').toLowerCase();
+                const searchQuery = query.toLowerCase();
+                return title.includes(searchQuery);
+            });
+
+            const examList = document.getElementById('exam-list-container');
+            examList.innerHTML = filtered.map(exam => `
+                <div class="exam-item">
+                    <div class="exam-info">
+                        <h4>${exam.title || exam.name || 'Untitled'}</h4>
+                        <div class="exam-meta">
+                            <span><i class="fas fa-tag"></i> ${getTypeLabel(exam.type)}</span>
+                            <span><i class="fas fa-question-circle"></i> ${exam.questionCount || 0} 棰?/span>
+                        </div>
+                    </div>
+                    <div class="exam-actions">
+                        <button class="btn" onclick="startExam('${exam.id}')">
+                            <i class="fas fa-play"></i>
+                            <span>开始练习</span>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // 设置函数
+        function clearCache() {
+            if (confirm('确定要清除所有缓存数据吗？')) {
+                localStorage.clear();
+                showMessage('缓存已清除', 'success');
+                setTimeout(() => location.reload(), 1000);
+            }
+        }
+
+        function loadLibrary(forceReload = false) {
+            // 使用现有的 loadLibrary 函数
+            if (typeof window.loadLibrary === 'function') {
+                window.loadLibrary(forceReload);
+            } else {
+                // 简单实现
+                if (typeof completeExamData !== 'undefined') {
+                    examIndex = completeExamData;
+                    updateOverview();
+                    updateBrowseView();
+                    showMessage('题库加载完成', 'success');
+                }
+            }
+        }
+
+        function showSystemInfo() {
+            const info = `
+                系统信息：
+                - 题目总数: ${examIndex.length}
+                - 练习记录: ${practiceRecords.length}
+                - 浏览器: ${navigator.userAgent}
+                - 时间: ${new Date().toLocaleString('zh-CN')}
+            `;
+            alert(info);
+        }
+
+        function createBackup() {
+            const data = {
+                examIndex: examIndex,
+                practiceRecords: practiceRecords,
+                timestamp: new Date().toISOString()
+            };
+
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ielts_backup_${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+
+            showMessage('备份创建成功', 'success');
+        }
+
+        function importData() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = function(e) {
+                const file = e.target.files[0];
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        if (data.examIndex) examIndex = data.examIndex;
+                        if (data.practiceRecords) practiceRecords = data.practiceRecords;
+
+                        // 淇濆瓨鍒?localStorage
+                        localStorage.setItem('practice_records', JSON.stringify(practiceRecords));
+
+                        updateOverview();
+                        updateBrowseView();
+                        updatePracticeView();
+
+                        showMessage('鏁版嵁瀵煎叆鎴愬姛', 'success');
+                    } catch (error) {
+                        showMessage('鏁版嵁瀵煎叆澶辫触: ' + error.message, 'error');
+                    }
+                };
+                reader.readAsText(file);
+            };
+            input.click();
+        }
+
+        function exportAllData() {
+            createBackup(); // 閲嶇敤澶囦唤鍑芥暟
+        }
+
+        function exportPracticeData() {
+            const data = {
+                practiceRecords: practiceRecords,
+                timestamp: new Date().toISOString()
+            };
+
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ielts_practice_${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+
+            showMessage('练习数据导出成功', 'success');
+        }
+
+        function clearPracticeData() {
+            if (confirm('纭畾瑕佹竻闄ゆ墍鏈夌粌涔犺褰曞悧锛熸鎿嶄綔涓嶅彲鎾ら攢锛?)) {
+                practiceRecords = [];
+                localStorage.removeItem('practice_records');
+                updatePracticeView();
+                showMessage('练习记录已清除', 'success');
+            }
+        }
+
+        // 同步练习记录与存储
+        function syncPracticeRecords() {
+            // Use the global syncPracticeRecords function from js/main.js if available
+            if (typeof window.syncPracticeRecords === 'function') {
+                window.syncPracticeRecords();
+                return;
+            }
+
+            // Fallback implementation
+            try {
+                const records = JSON.parse(localStorage.getItem('practice_records') || '[]');
+                practiceRecords = records;
+                updatePracticeView();
+            } catch (error) {
+                console.error('Failed to sync practice records:', error);
+                practiceRecords = [];
+            }
+        }
+
+        // 监听练习完成消息
+        window.addEventListener('message', function(event) {
+            if (event.data && event.data.type === 'PRACTICE_COMPLETE') {
+                showMessage('练习已完成！正在更新记录...', 'success');
+                setTimeout(syncPracticeRecords, 1000);
+            }
+        });
+
+        // 娣诲姞閿洏蹇嵎閿?
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey) {
+                switch(e.key) {
+                    case '1':
+                        showView('overview');
+                        break;
+                    case '2':
+                        showView('browse');
+                        break;
+                    case '3':
+                        showView('practice');
+                        break;
+                    case '4':
+                        showView('settings');
+                        break;
+                }
+            }
+        });
+
+        // 添加随机鼓励消息
+        const encouragements = [
+            '👏 你真棒！继续保持！',
+            '🎭 每一次练习都是进步！',
+            '🎮 你的努力一定会有收获！',
+            '🎨 学习的每一天都很精彩！',
+            '💪 你是最棒的学习者！',
+            '🎉 不断进步，不断成长！',
+            '🎯 坚持就是胜利！',
+            '🙌 你的努力让人感动！',
+        ];
+
+        function showRandomEncouragement() {
+            const randomMessage = encouragements[Math.floor(Math.random() * encouragements.length)];
+            showMessage(randomMessage, 'success');
+        }
+
+        // 姣?0绉掓樉绀洪紦鍔辨秷鎭?
+        setInterval(showRandomEncouragement, 30000);
+
+        // 娣诲姞瑙嗗樊鏁堟灉
+        document.addEventListener('mousemove', function(e) {
+            const cards = document.querySelectorAll('.category-card, .stat-card');
+            const x = e.clientX / window.innerWidth;
+            const y = e.clientY / window.innerHeight;
+
+            cards.forEach(card => {
+                const rect = card.getBoundingClientRect();
+                const cardX = rect.left + rect.width / 2;
+                const cardY = rect.top + rect.height / 2;
+                const angleX = (e.clientY - cardY) * 0.01;
+                const angleY = (e.clientX - cardX) * -0.01;
+
+                card.style.transform = `perspective(1000px) rotateX(${angleX}deg) rotateY(${angleY}deg) translateZ(10px)`;
+            });
+        });
+
+        // 榧犳爣绂诲紑鏃堕噸缃彉鎹?
+        document.addEventListener('mouseleave', function() {
+            const cards = document.querySelectorAll('.category-card, .stat-card');
+            cards.forEach(card => {
+                card.style.transform = '';
+            });
+        });
+
+        // 鍔犺浇鐜版湁鑴氭湰鏂囦欢
+        const existingScripts = [
+            'assets/scripts/complete-exam-data.js',
+            'assets/scripts/listening-exam-data.js',
+            'js/utils/helpers.js',
+            'js/utils/storage.js',
+            'js/components/DataIntegrityManager.js',
+            'js/utils/asyncExportHandler.js',
+            'js/core/scoreStorage.js',
+            'js/core/practiceRecorder.js',
+            'js/components/PDFHandler.js',
+            'js/utils/markdownExporter.js',
+            'js/components/practiceRecordModal.js',
+            'js/components/practiceHistoryEnhancer.js',
+            'js/main.js',
+            'js/boot-fallbacks.js',
+            'fix-system.js',
+            'js/app.js'
+        ];
+
+        // 鍔犲叆鐩稿鍓嶇紑锛岀‘淇濅粠 .superdesign/design_iterations/ 鍙纭畾浣嶅埌浠撳簱鏍圭洰褰?        const ROOT_PREFIX = '../../';
+        existingScripts.forEach(src => {
+            const script = document.createElement('script');
+            const isAbs = /^(?:https?:)?\//.test(src) || src.startsWith('.') || src.startsWith('/');
+            script.src = isAbs ? src : (ROOT_PREFIX + src);
+            script.onerror = () => console.warn(`Failed to load script: ${script.src}`);
+            document.head.appendChild(script);
+        });
+
+    </script>
+</body>
+
+</html>
