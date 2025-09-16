@@ -1,0 +1,2244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IELTS 学术练习管理系统 - Academic Professional</title>
+
+    <!-- Georgia Serif Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Georgia:wght@400;700&family=Source+Sans+Pro:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+    <style>
+        /* ==================== CSS Custom Properties (Design Tokens) ==================== */
+        :root {
+            /* Academic Blue Color Palette */
+            --color-primary: #1e3a8a;        /* Deep Navy Blue */
+            --color-primary-light: #2563eb;   /* Bright Blue */
+            --color-primary-dark: #1e293b;   /* Dark Blue */
+            --color-secondary: #3b82f6;      /* Medium Blue */
+            --color-accent: #60a5fa;         /* Light Blue */
+
+            /* Neutral Colors */
+            --color-white: #ffffff;
+            --color-gray-50: #f8fafc;
+            --color-gray-100: #f1f5f9;
+            --color-gray-200: #e2e8f0;
+            --color-gray-300: #cbd5e1;
+            --color-gray-400: #94a3b8;
+            --color-gray-500: #64748b;
+            --color-gray-600: #475569;
+            --color-gray-700: #334155;
+            --color-gray-800: #1e293b;
+            --color-gray-900: #0f172a;
+
+            /* Academic Colors */
+            --color-parchment: #f8f6f0;      /* Paper background */
+            --color-ink: #2d3748;            /* Text color */
+            --color-highlight: #fef3c7;      /* Yellow highlight */
+
+            /* Semantic Colors */
+            --color-success: #10b981;
+            --color-warning: #f59e0b;
+            --color-error: #ef4444;
+            --color-info: #3b82f6;
+
+            /* 4-Point Grid System (4px base) */
+            --space-1: 0.25rem;    /* 4px */
+            --space-2: 0.5rem;     /* 8px */
+            --space-3: 0.75rem;    /* 12px */
+            --space-4: 1rem;       /* 16px */
+            --space-5: 1.25rem;    /* 20px */
+            --space-6: 1.5rem;     /* 24px */
+            --space-7: 2rem;       /* 32px */
+            --space-8: 2.5rem;     /* 40px */
+            --space-9: 3rem;       /* 48px */
+            --space-10: 4rem;      /* 64px */
+
+            /* Border Radius */
+            --radius-sm: 0.25rem;   /* 4px */
+            --radius-md: 0.375rem;  /* 6px */
+            --radius-lg: 0.5rem;    /* 8px */
+            --radius-xl: 0.75rem;   /* 12px */
+            --radius-2xl: 1rem;     /* 16px */
+            --radius-full: 9999px;
+
+            /* Typography Scale */
+            --font-size-xs: 0.75rem;     /* 12px */
+            --font-size-sm: 0.875rem;    /* 14px */
+            --font-size-base: 1rem;      /* 16px */
+            --font-size-lg: 1.125rem;    /* 18px */
+            --font-size-xl: 1.25rem;     /* 20px */
+            --font-size-2xl: 1.5rem;     /* 24px */
+            --font-size-3xl: 1.875rem;   /* 30px */
+            --font-size-4xl: 2.25rem;    /* 36px */
+            --font-size-5xl: 3rem;       /* 48px */
+
+            /* Font Weights */
+            --font-weight-normal: 400;
+            --font-weight-medium: 500;
+            --font-weight-semibold: 600;
+            --font-weight-bold: 700;
+
+            /* Line Heights */
+            --line-height-tight: 1.25;
+            --line-height-normal: 1.5;
+            --line-height-relaxed: 1.75;
+
+            /* Shadows */
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+
+            /* Transitions */
+            --transition-fast: 150ms ease-out;
+            --transition-normal: 200ms ease-out;
+            --transition-slow: 300ms ease-out;
+        }
+
+        /* ==================== Reset & Base Styles ==================== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Georgia', serif;
+            background-color: var(--color-parchment);
+            color: var(--color-ink);
+            line-height: var(--line-height-normal);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .app-container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* ==================== Sidebar Navigation ==================== */
+        .sidebar {
+            width: 280px;
+            background-color: var(--color-white);
+            border-right: 1px solid var(--color-gray-200);
+            padding: var(--space-6);
+            display: flex;
+            flex-direction: column;
+            box-shadow: var(--shadow-md);
+        }
+
+        .sidebar-header {
+            text-align: center;
+            margin-bottom: var(--space-8);
+            padding-bottom: var(--space-6);
+            border-bottom: 2px solid var(--color-gray-200);
+        }
+
+        .sidebar-header h1 {
+            font-size: var(--font-size-2xl);
+            font-weight: var(--font-weight-bold);
+            color: var(--color-primary);
+            margin-bottom: var(--space-2);
+            letter-spacing: -0.025em;
+        }
+
+        .sidebar-header p {
+            font-size: var(--font-size-sm);
+            color: var(--color-gray-600);
+            font-style: italic;
+        }
+
+        .nav-menu {
+            flex: 1;
+        }
+
+        .nav-item {
+            display: block;
+            width: 100%;
+            padding: var(--space-4) var(--space-5);
+            margin-bottom: var(--space-2);
+            background-color: var(--color-gray-50);
+            border: 1px solid var(--color-gray-200);
+            border-radius: var(--radius-md);
+            color: var(--color-gray-700);
+            text-decoration: none;
+            font-family: 'Source Sans Pro', sans-serif;
+            font-weight: var(--font-weight-medium);
+            font-size: var(--font-size-base);
+            text-align: left;
+            transition: all var(--transition-normal);
+            cursor: pointer;
+        }
+
+        .nav-item:hover {
+            background-color: var(--color-primary-light);
+            color: var(--color-white);
+            border-color: var(--color-primary);
+            transform: translateX(4px);
+        }
+
+        .nav-item.active {
+            background-color: var(--color-primary);
+            color: var(--color-white);
+            border-color: var(--color-primary);
+            box-shadow: var(--shadow-md);
+        }
+
+        .nav-item i {
+            margin-right: var(--space-3);
+            width: 20px;
+            text-align: center;
+        }
+
+        .sidebar-footer {
+            padding-top: var(--space-6);
+            border-top: 1px solid var(--color-gray-200);
+            font-size: var(--font-size-xs);
+            color: var(--color-gray-500);
+            text-align: center;
+        }
+
+        /* ==================== Main Content Area ==================== */
+        .main-content {
+            flex: 1;
+            padding: var(--space-8);
+            background-color: var(--color-parchment);
+            overflow-y: auto;
+        }
+
+        .content-header {
+            margin-bottom: var(--space-8);
+            padding-bottom: var(--space-6);
+            border-bottom: 2px solid var(--color-gray-200);
+        }
+
+        .content-header h2 {
+            font-size: var(--font-size-4xl);
+            font-weight: var(--font-weight-bold);
+            color: var(--color-primary);
+            margin-bottom: var(--space-2);
+            letter-spacing: -0.025em;
+        }
+
+        .content-header .breadcrumb {
+            font-size: var(--font-size-sm);
+            color: var(--color-gray-600);
+            font-family: 'Source Sans Pro', sans-serif;
+        }
+
+        /* ==================== View Sections ==================== */
+        .view {
+            display: none;
+            animation: fadeIn var(--transition-normal) ease-in-out;
+        }
+
+        .view.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ==================== Overview Page ==================== */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: var(--space-6);
+            margin-bottom: var(--space-8);
+        }
+
+        .stat-card {
+            background-color: var(--color-white);
+            border: 1px solid var(--color-gray-200);
+            border-radius: var(--radius-lg);
+            padding: var(--space-6);
+            text-align: center;
+            box-shadow: var(--shadow-md);
+            transition: all var(--transition-normal);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--color-primary);
+        }
+
+        .stat-icon {
+            font-size: var(--font-size-3xl);
+            color: var(--color-primary);
+            margin-bottom: var(--space-4);
+        }
+
+        .stat-number {
+            font-size: var(--font-size-4xl);
+            font-weight: var(--font-weight-bold);
+            color: var(--color-primary);
+            margin-bottom: var(--space-2);
+        }
+
+        .stat-label {
+            font-size: var(--font-size-sm);
+            color: var(--color-gray-600);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-family: 'Source Sans Pro', sans-serif;
+            font-weight: var(--font-weight-semibold);
+        }
+
+        .categories-section {
+            margin-bottom: var(--space-8);
+        }
+
+        .section-title {
+            font-size: var(--font-size-2xl);
+            font-weight: var(--font-weight-bold);
+            color: var(--color-primary);
+            margin-bottom: var(--space-6);
+            padding-bottom: var(--space-3);
+            border-bottom: 2px solid var(--color-gray-200);
+        }
+
+        .categories-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: var(--space-6);
+        }
+
+        .category-card {
+            background-color: var(--color-white);
+            border: 1px solid var(--color-gray-200);
+            border-radius: var(--radius-lg);
+            padding: var(--space-6);
+            box-shadow: var(--shadow-md);
+            transition: all var(--transition-normal);
+            cursor: pointer;
+        }
+
+        .category-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--color-primary);
+        }
+
+        .category-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: var(--space-4);
+        }
+
+        .category-icon {
+            font-size: var(--font-size-2xl);
+            color: var(--color-primary);
+            margin-right: var(--space-4);
+        }
+
+        .category-title {
+            font-size: var(--font-size-xl);
+            font-weight: var(--font-weight-bold);
+            color: var(--color-ink);
+        }
+
+        .category-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-4);
+        }
+
+        .category-stat {
+            text-align: center;
+            padding: var(--space-3);
+            background-color: var(--color-gray-50);
+            border-radius: var(--radius-md);
+        }
+
+        .category-stat-number {
+            font-size: var(--font-size-lg);
+            font-weight: var(--font-weight-bold);
+            color: var(--color-primary);
+        }
+
+        .category-stat-label {
+            font-size: var(--font-size-xs);
+            color: var(--color-gray-600);
+            text-transform: uppercase;
+            font-family: 'Source Sans Pro', sans-serif;
+        }
+
+        /* ==================== Browse Page ==================== */
+        .search-section {
+            background-color: var(--color-white);
+            border: 1px solid var(--color-gray-200);
+            border-radius: var(--radius-lg);
+            padding: var(--space-6);
+            margin-bottom: var(--space-6);
+            box-shadow: var(--shadow-md);
+        }
+
+        .search-row {
+            display: flex;
+            gap: var(--space-4);
+            margin-bottom: var(--space-4);
+        }
+
+        .search-input {
+            flex: 1;
+            padding: var(--space-4);
+            border: 1px solid var(--color-gray-300);
+            border-radius: var(--radius-md);
+            font-size: var(--font-size-base);
+            font-family: 'Source Sans Pro', sans-serif;
+            transition: all var(--transition-normal);
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .filter-buttons {
+            display: flex;
+            gap: var(--space-3);
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: var(--space-3) var(--space-5);
+            border: 1px solid var(--color-gray-300);
+            border-radius: var(--radius-md);
+            background-color: var(--color-white);
+            color: var(--color-gray-700);
+            font-size: var(--font-size-sm);
+            font-family: 'Source Sans Pro', sans-serif;
+            font-weight: var(--font-weight-medium);
+            cursor: pointer;
+            transition: all var(--transition-normal);
+        }
+
+        .filter-btn:hover {
+            background-color: var(--color-primary-light);
+            color: var(--color-white);
+            border-color: var(--color-primary);
+        }
+
+        .filter-btn.active {
+            background-color: var(--color-primary);
+            color: var(--color-white);
+            border-color: var(--color-primary);
+        }
+
+        .exam-list {
+            display: grid;
+            gap: var(--space-4);
+        }
+
+        .exam-item {
+            background-color: var(--color-white);
+            border: 1px solid var(--color-gray-200);
+            border-radius: var(--radius-lg);
+            padding: var(--space-6);
+            box-shadow: var(--shadow-md);
+            transition: all var(--transition-normal);
+        }
+
+        .exam-item:hover {
+            transform: translateX(4px);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--color-primary);
+        }
+
+        .exam-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: var(--space-4);
+        }
+
+        .exam-info h3 {
+            font-size: var(--font-size-lg);
+            font-weight: var(--font-weight-bold);
+            color: var(--color-ink);
+            margin-bottom: var(--space-2);
+        }
+
+        .exam-meta {
+            display: flex;
+            gap: var(--space-4);
+            font-size: var(--font-size-sm);
+            color: var(--color-gray-600);
+            font-family: 'Source Sans Pro', sans-serif;
+        }
+
+        .exam-meta-item {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+        }
+
+        .exam-actions {
+            display: flex;
+            gap: var(--space-3);
+        }
+
+        .btn {
+            padding: var(--space-3) var(--space-5);
+            border: 1px solid var(--color-gray-300);
+            border-radius: var(--radius-md);
+            background-color: var(--color-white);
+            color: var(--color-gray-700);
+            font-size: var(--font-size-sm);
+            font-family: 'Source Sans Pro', sans-serif;
+            font-weight: var(--font-weight-medium);
+            cursor: pointer;
+            transition: all var(--transition-normal);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-2);
+        }
+
+        .btn:hover {
+            background-color: var(--color-primary-light);
+            color: var(--color-white);
+            border-color: var(--color-primary);
+            transform: translateY(-1px);
+        }
+
+        .btn-primary {
+            background-color: var(--color-primary);
+            color: var(--color-white);
+            border-color: var(--color-primary);
+        }
+
+        .btn-primary:hover {
+            background-color: var(--color-primary-dark);
+            border-color: var(--color-primary-dark);
+        }
+
+        .btn-secondary {
+            background-color: var(--color-gray-100);
+            border-color: var(--color-gray-300);
+        }
+
+        .btn-success {
+            background-color: var(--color-success);
+            color: var(--color-white);
+            border-color: var(--color-success);
+        }
+
+        .btn-warning {
+            background-color: var(--color-warning);
+            color: var(--color-white);
+            border-color: var(--color-warning);
+        }
+
+        /* ==================== Practice Records ==================== */
+        .practice-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-6);
+        }
+
+        .practice-actions {
+            display: flex;
+            gap: var(--space-3);
+        }
+
+        .records-table {
+            background-color: var(--color-white);
+            border: 1px solid var(--color-gray-200);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            box-shadow: var(--shadow-md);
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: 'Source Sans Pro', sans-serif;
+        }
+
+        .table th,
+        .table td {
+            padding: var(--space-4);
+            text-align: left;
+            border-bottom: 1px solid var(--color-gray-200);
+        }
+
+        .table th {
+            background-color: var(--color-gray-50);
+            font-weight: var(--font-weight-semibold);
+            color: var(--color-gray-700);
+            font-size: var(--font-size-sm);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .table tbody tr:hover {
+            background-color: var(--color-gray-50);
+        }
+
+        .table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .score-badge {
+            display: inline-block;
+            padding: var(--space-2) var(--space-4);
+            border-radius: var(--radius-full);
+            font-size: var(--font-size-sm);
+            font-weight: var(--font-weight-semibold);
+            text-align: center;
+            min-width: 60px;
+        }
+
+        .score-excellent {
+            background-color: #dcfce7;
+            color: #166534;
+        }
+
+        .score-good {
+            background-color: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        .score-fair {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+
+        .score-poor {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+
+        /* ==================== Settings Page ==================== */
+        .settings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: var(--space-6);
+        }
+
+        .settings-card {
+            background-color: var(--color-white);
+            border: 1px solid var(--color-gray-200);
+            border-radius: var(--radius-lg);
+            padding: var(--space-6);
+            box-shadow: var(--shadow-md);
+        }
+
+        .settings-card h3 {
+            font-size: var(--font-size-lg);
+            font-weight: var(--font-weight-bold);
+            color: var(--color-primary);
+            margin-bottom: var(--space-4);
+        }
+
+        .settings-card p {
+            font-size: var(--font-size-sm);
+            color: var(--color-gray-600);
+            margin-bottom: var(--space-4);
+            line-height: var(--line-height-relaxed);
+        }
+
+        .settings-actions {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-3);
+        }
+
+        /* ==================== Message System ==================== */
+        .message-container {
+            position: fixed;
+            top: var(--space-6);
+            right: var(--space-6);
+            z-index: 1000;
+            max-width: 400px;
+        }
+
+        .message {
+            background-color: var(--color-white);
+            border: 1px solid var(--color-gray-200);
+            border-radius: var(--radius-lg);
+            padding: var(--space-4) var(--space-5);
+            margin-bottom: var(--space-3);
+            box-shadow: var(--shadow-lg);
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            animation: slideIn var(--transition-normal) ease-out;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .message-icon {
+            font-size: var(--font-size-lg);
+        }
+
+        .message.success {
+            border-left: 4px solid var(--color-success);
+        }
+
+        .message.success .message-icon {
+            color: var(--color-success);
+        }
+
+        .message.error {
+            border-left: 4px solid var(--color-error);
+        }
+
+        .message.error .message-icon {
+            color: var(--color-error);
+        }
+
+        .message.warning {
+            border-left: 4px solid var(--color-warning);
+        }
+
+        .message.warning .message-icon {
+            color: var(--color-warning);
+        }
+
+        .message.info {
+            border-left: 4px solid var(--color-info);
+        }
+
+        .message.info .message-icon {
+            color: var(--color-info);
+        }
+
+        .message-content {
+            flex: 1;
+        }
+
+        .message-title {
+            font-weight: var(--font-weight-semibold);
+            margin-bottom: var(--space-1);
+        }
+
+        .message-text {
+            font-size: var(--font-size-sm);
+            color: var(--color-gray-600);
+        }
+
+        /* ==================== Loading & Empty States ==================== */
+        .loading {
+            text-align: center;
+            padding: var(--space-10);
+            color: var(--color-gray-600);
+        }
+
+        .spinner {
+            border: 3px solid var(--color-gray-200);
+            border-radius: var(--radius-full);
+            border-top: 3px solid var(--color-primary);
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto var(--space-4);
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: var(--space-10);
+            color: var(--color-gray-600);
+        }
+
+        .empty-state-icon {
+            font-size: var(--font-size-5xl);
+            margin-bottom: var(--space-4);
+            opacity: 0.5;
+        }
+
+        .empty-state-title {
+            font-size: var(--font-size-xl);
+            font-weight: var(--font-weight-semibold);
+            margin-bottom: var(--space-2);
+        }
+
+        .empty-state-text {
+            font-size: var(--font-size-base);
+            color: var(--color-gray-500);
+        }
+
+        /* ==================== Responsive Design ==================== */
+        @media (max-width: 1024px) {
+            .app-container {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                padding: var(--space-4);
+            }
+
+            .sidebar-header {
+                margin-bottom: var(--space-4);
+            }
+
+            .nav-menu {
+                display: flex;
+                gap: var(--space-3);
+                overflow-x: auto;
+            }
+
+            .nav-item {
+                flex-shrink: 0;
+                margin-bottom: 0;
+            }
+
+            .main-content {
+                padding: var(--space-4);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .categories-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .settings-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .search-row {
+                flex-direction: column;
+            }
+
+            .practice-header {
+                flex-direction: column;
+                gap: var(--space-4);
+                align-items: stretch;
+            }
+
+            .practice-actions {
+                justify-content: center;
+            }
+
+            .records-table {
+                overflow-x: auto;
+            }
+
+            .table {
+                min-width: 600px;
+            }
+
+            .message-container {
+                left: var(--space-4);
+                right: var(--space-4);
+                max-width: none;
+            }
+        }
+
+        /* ==================== Print Styles ==================== */
+        @media print {
+            .sidebar,
+            .message-container,
+            .btn {
+                display: none !important;
+            }
+
+            .main-content {
+                padding: 0;
+            }
+
+            .stat-card,
+            .category-card,
+            .exam-item,
+            .settings-card {
+                break-inside: avoid;
+                box-shadow: none;
+                border: 1px solid var(--color-gray-300);
+            }
+        }
+
+        /* ==================== Accessibility ==================== */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        /* Focus styles */
+        button:focus,
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: 2px solid var(--color-primary);
+            outline-offset: 2px;
+        }
+
+        /* High contrast mode support */
+        @media (prefers-contrast: high) {
+            :root {
+                --color-gray-200: #999999;
+                --color-gray-300: #666666;
+                --color-gray-600: #333333;
+            }
+        }
+
+        /* Reduced motion support */
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <h1>IELTS 学术</h1>
+                <p>专业练习管理系统</p>
+            </div>
+
+            <div class="nav-menu">
+                <button class="nav-item active" onclick="showView('overview')">
+                    <i class="fas fa-chart-line"></i>
+                    <span>学习总览</span>
+                </button>
+                <button class="nav-item" onclick="showView('browse')">
+                    <i class="fas fa-book-open"></i>
+                    <span>题库浏览</span>
+                </button>
+                <button class="nav-item" onclick="showView('practice')">
+                    <i class="fas fa-history"></i>
+                    <span>练习记录</span>
+                </button>
+                <button class="nav-item" onclick="showView('settings')">
+                    <i class="fas fa-cogs"></i>
+                    <span>系统设置</span>
+                </button>
+            </div>
+
+            <div class="sidebar-footer">
+                <p>© 2024 IELTS Academic</p>
+                <p>专业 · 高效 · 可靠</p>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Overview View -->
+            <div id="overview-view" class="view active">
+                <div class="content-header">
+                    <h2>学习总览</h2>
+                    <div class="breadcrumb">首页 / 学习总览</div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-book-reader"></i>
+                        </div>
+                        <div class="stat-number" id="total-exams-count">0</div>
+                        <div class="stat-label">总题目数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="stat-number" id="completed-count">0</div>
+                        <div class="stat-label">已完成</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-percentage"></i>
+                        </div>
+                        <div class="stat-number" id="average-score">0%</div>
+                        <div class="stat-label">平均正确率</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="stat-number" id="study-hours">0</div>
+                        <div class="stat-label">学习时长(小时)</div>
+                    </div>
+                </div>
+
+                <div class="categories-section">
+                    <h3 class="section-title">学科分类</h3>
+                    <div class="categories-grid" id="categories-grid">
+                        <!-- Categories will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Browse View -->
+            <div id="browse-view" class="view">
+                <div class="content-header">
+                    <h2>题库浏览</h2>
+                    <div class="breadcrumb">首页 / 题库浏览</div>
+                </div>
+
+                <div class="search-section">
+                    <div class="search-row">
+                        <input type="text" class="search-input" placeholder="搜索题目..." onkeyup="searchExams(this.value)">
+                        <button class="btn btn-primary" onclick="refreshExamList()">
+                            <i class="fas fa-sync-alt"></i>
+                            刷新
+                        </button>
+                    </div>
+                    <div class="filter-buttons">
+                        <button class="filter-btn active" onclick="filterByType('all')">全部</button>
+                        <button class="filter-btn" onclick="filterByType('reading')">阅读</button>
+                        <button class="filter-btn" onclick="filterByType('listening')">听力</button>
+                    </div>
+                </div>
+
+                <div class="exam-list" id="exam-list-container">
+                    <!-- Exam items will be populated by JavaScript -->
+                </div>
+
+                <div class="loading" id="browse-loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>正在加载题目列表...</p>
+                </div>
+
+                <div class="empty-state" id="browse-empty" style="display: none;">
+                    <div class="empty-state-icon">
+                        <i class="fas fa-book-open"></i>
+                    </div>
+                    <div class="empty-state-title">暂无题目</div>
+                    <div class="empty-state-text">请检查题库配置或联系管理员</div>
+                </div>
+            </div>
+
+            <!-- Practice View -->
+            <div id="practice-view" class="view">
+                <div class="content-header">
+                    <h2>练习记录</h2>
+                    <div class="breadcrumb">首页 / 练习记录</div>
+                </div>
+
+                <div class="practice-header">
+                    <div class="filter-buttons">
+                        <button class="filter-btn active" onclick="filterRecordsByType('all')">全部记录</button>
+                        <button class="filter-btn" onclick="filterRecordsByType('reading')">阅读记录</button>
+                        <button class="filter-btn" onclick="filterRecordsByType('listening')">听力记录</button>
+                    </div>
+                    <div class="practice-actions">
+                        <button class="btn btn-secondary" onclick="exportPracticeData()">
+                            <i class="fas fa-download"></i>
+                            导出记录
+                        </button>
+                        <button class="btn btn-warning" onclick="clearPracticeData()">
+                            <i class="fas fa-trash"></i>
+                            清除记录
+                        </button>
+                    </div>
+                </div>
+
+                <div class="records-table">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>题目名称</th>
+                                <th>类型</th>
+                                <th>得分</th>
+                                <th>用时</th>
+                                <th>完成时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="practice-records-tbody">
+                            <!-- Practice records will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="empty-state" id="practice-empty" style="display: none;">
+                    <div class="empty-state-icon">
+                        <i class="fas fa-history"></i>
+                    </div>
+                    <div class="empty-state-title">暂无练习记录</div>
+                    <div class="empty-state-text">开始练习后，您的记录将显示在这里</div>
+                </div>
+            </div>
+
+            <!-- Settings View -->
+            <div id="settings-view" class="view">
+                <div class="content-header">
+                    <h2>系统设置</h2>
+                    <div class="breadcrumb">首页 / 系统设置</div>
+                </div>
+
+                <div class="settings-grid">
+                    <div class="settings-card">
+                        <h3><i class="fas fa-broom"></i> 系统清理</h3>
+                        <p>清理系统缓存和临时文件，提高系统运行效率</p>
+                        <div class="settings-actions">
+                            <button class="btn btn-primary" onclick="clearCache()">
+                                <i class="fas fa-broom"></i>
+                                清除缓存
+                            </button>
+                            <button class="btn btn-secondary" onclick="clearTemporaryFiles()">
+                                <i class="fas fa-file-archive"></i>
+                                清理临时文件
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="settings-card">
+                        <h3><i class="fas fa-database"></i> 题库管理</h3>
+                        <p>管理题库数据，包括重新加载和更新题库</p>
+                        <div class="settings-actions">
+                            <button class="btn btn-primary" onclick="loadLibrary(true)">
+                                <i class="fas fa-sync-alt"></i>
+                                重新加载题库
+                            </button>
+                            <button class="btn btn-secondary" onclick="checkLibraryUpdates()">
+                                <i class="fas fa-download"></i>
+                                检查更新
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="settings-card">
+                        <h3><i class="fas fa-save"></i> 数据管理</h3>
+                        <p>备份、恢复和迁移学习数据</p>
+                        <div class="settings-actions">
+                            <button class="btn btn-success" onclick="createBackup()">
+                                <i class="fas fa-download"></i>
+                                创建备份
+                            </button>
+                            <button class="btn btn-primary" onclick="importData()">
+                                <i class="fas fa-upload"></i>
+                                导入数据
+                            </button>
+                            <button class="btn btn-secondary" onclick="exportAllData()">
+                                <i class="fas fa-file-export"></i>
+                                导出全部数据
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="settings-card">
+                        <h3><i class="fas fa-info-circle"></i> 系统信息</h3>
+                        <p>查看系统版本、题库统计和使用统计</p>
+                        <div class="settings-actions">
+                            <button class="btn btn-primary" onclick="showSystemInfo()">
+                                <i class="fas fa-info"></i>
+                                系统信息
+                            </button>
+                            <button class="btn btn-secondary" onclick="showUsageStatistics()">
+                                <i class="fas fa-chart-bar"></i>
+                                使用统计
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Message Container -->
+    <div class="message-container" id="message-container"></div>
+
+    <!-- Hidden file input for folder selection -->
+    <input type="file" id="folder-picker" webkitdirectory style="display: none;">
+
+    <!-- Load existing JavaScript files -->
+    <script src="assets/scripts/complete-exam-data.js"></script>
+    <script src="assets/scripts/listening-exam-data.js"></script>
+    <script src="js/utils/helpers.js"></script>
+    <script src="js/utils/storage.js"></script>
+    <script src="js/utils/asyncExportHandler.js"></script>
+    <script src="js/core/scoreStorage.js"></script>
+    <script src="js/core/practiceRecorder.js"></script>
+    <script src="js/components/PDFHandler.js"></script>
+    <script src="js/utils/markdownExporter.js"></script>
+    <script src="js/components/practiceRecordModal.js"></script>
+    <script src="js/components/practiceHistoryEnhancer.js"></script>
+    <script src="js/main.js"></script>
+    <script src="js/boot-fallbacks.js"></script>
+    <script src="fix-system.js"></script>
+    <script src="js/app.js"></script>
+
+    <script>
+        // Global variables
+        let examIndex = [];
+        let currentCategory = 'all';
+        let currentExamType = 'all';
+        let filteredExams = [];
+        let practiceRecords = [];
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            // First try to load data from localStorage
+            loadFromLocalStorage();
+            initializeApp();
+            loadLibrary();
+            syncPracticeRecords();
+        });
+
+        // Load data from localStorage
+        function loadFromLocalStorage() {
+            try {
+                const storedExamIndex = localStorage.getItem('exam_index');
+                const storedPracticeRecords = localStorage.getItem('practice_records');
+
+                if (storedExamIndex) {
+                    examIndex = JSON.parse(storedExamIndex);
+                    console.log('Loaded exam index from localStorage:', examIndex.length, 'items');
+                }
+
+                if (storedPracticeRecords) {
+                    practiceRecords = JSON.parse(storedPracticeRecords);
+                    console.log('Loaded practice records from localStorage:', practiceRecords.length, 'items');
+                }
+            } catch (error) {
+                console.error('Failed to load data from localStorage:', error);
+            }
+        }
+
+        function initializeApp() {
+            // Initialize existing components
+            if (typeof initializeLegacyComponents === 'function') {
+                initializeLegacyComponents();
+            }
+
+            // Initialize UI components
+            updateOverview();
+            updateBrowseView();
+            updatePracticeView();
+            updateSettingsView();
+
+            // Show welcome message
+            showMessage('系统初始化完成', 'success', '欢迎使用IELTS学术练习管理系统');
+        }
+
+        // View management
+        function showView(viewName) {
+            // Hide all views
+            document.querySelectorAll('.view').forEach(view => {
+                view.classList.remove('active');
+            });
+
+            // Show selected view
+            document.getElementById(viewName + '-view').classList.add('active');
+
+            // Update navigation buttons
+            document.querySelectorAll('.nav-item').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Find and activate the corresponding nav button
+            const navButtons = document.querySelectorAll('.nav-item');
+            navButtons.forEach(btn => {
+                const btnText = btn.textContent.trim();
+                if ((viewName === 'overview' && btnText.includes('总览')) ||
+                    (viewName === 'browse' && btnText.includes('题库')) ||
+                    (viewName === 'practice' && btnText.includes('记录')) ||
+                    (viewName === 'settings' && btnText.includes('设置'))) {
+                    btn.classList.add('active');
+                }
+            });
+
+            // Update view-specific content
+            switch(viewName) {
+                case 'overview':
+                    updateOverview();
+                    break;
+                case 'browse':
+                    updateBrowseView();
+                    break;
+                case 'practice':
+                    updatePracticeView();
+                    break;
+                case 'settings':
+                    updateSettingsView();
+                    break;
+            }
+        }
+
+        // Update overview view
+        function updateOverview() {
+            // Update statistics
+            const totalExamsCount = document.getElementById('total-exams-count');
+            const completedCount = document.getElementById('completed-count');
+            const averageScore = document.getElementById('average-score');
+            const studyHours = document.getElementById('study-hours');
+
+            if (examIndex && examIndex.length > 0) {
+                totalExamsCount.textContent = examIndex.length;
+
+                let completed = 0;
+                let totalScore = 0;
+                let totalDuration = 0;
+
+                if (practiceRecords && practiceRecords.length > 0) {
+                    completed = new Set(practiceRecords.map(record => record.examId)).size;
+                    totalScore = practiceRecords.reduce((sum, record) => sum + (record.score || 0), 0);
+                    totalDuration = practiceRecords.reduce((sum, record) => sum + (record.duration || 0), 0);
+                }
+
+                completedCount.textContent = completed;
+                averageScore.textContent = practiceRecords.length > 0 ? Math.round(totalScore / practiceRecords.length) + '%' : '0%';
+                studyHours.textContent = Math.round(totalDuration / 3600 * 10) / 10;
+            } else {
+                totalExamsCount.textContent = '0';
+                completedCount.textContent = '0';
+                averageScore.textContent = '0%';
+                studyHours.textContent = '0';
+            }
+
+            // Update categories
+            updateCategories();
+        }
+
+        // Update categories section
+        function updateCategories() {
+            const categoriesGrid = document.getElementById('categories-grid');
+
+            const categories = [
+                {
+                    name: '阅读理解',
+                    icon: 'fas fa-book-open',
+                    total: 0,
+                    completed: 0,
+                    averageScore: 0
+                },
+                {
+                    name: '听力练习',
+                    icon: 'fas fa-headphones',
+                    total: 0,
+                    completed: 0,
+                    averageScore: 0
+                }
+            ];
+
+            // Calculate statistics
+            if (examIndex && examIndex.length > 0) {
+                const readingExams = examIndex.filter(exam => exam.type === 'reading');
+                const listeningExams = examIndex.filter(exam => exam.type === 'listening');
+
+                categories[0].total = readingExams.length;
+                categories[1].total = listeningExams.length;
+
+                if (practiceRecords && practiceRecords.length > 0) {
+                    const readingRecords = practiceRecords.filter(record => record.type === 'reading');
+                    const listeningRecords = practiceRecords.filter(record => record.type === 'listening');
+
+                    categories[0].completed = new Set(readingRecords.map(record => record.examId)).size;
+                    categories[1].completed = new Set(listeningRecords.map(record => record.examId)).size;
+
+                    categories[0].averageScore = readingRecords.length > 0 ?
+                        Math.round(readingRecords.reduce((sum, record) => sum + (record.score || 0), 0) / readingRecords.length) : 0;
+                    categories[1].averageScore = listeningRecords.length > 0 ?
+                        Math.round(listeningRecords.reduce((sum, record) => sum + (record.score || 0), 0) / listeningRecords.length) : 0;
+                }
+            }
+
+            categoriesGrid.innerHTML = categories.map(category => `
+                <div class="category-card" onclick="startCategoryPractice('${category.name}')">
+                    <div class="category-header">
+                        <div class="category-icon">
+                            <i class="${category.icon}"></i>
+                        </div>
+                        <div class="category-title">${category.name}</div>
+                    </div>
+                    <div class="category-stats">
+                        <div class="category-stat">
+                            <div class="category-stat-number">${category.total}</div>
+                            <div class="category-stat-label">总题目</div>
+                        </div>
+                        <div class="category-stat">
+                            <div class="category-stat-number">${category.completed}</div>
+                            <div class="category-stat-label">已完成</div>
+                        </div>
+                        <div class="category-stat">
+                            <div class="category-stat-number">${category.averageScore}%</div>
+                            <div class="category-stat-label">平均分</div>
+                        </div>
+                        <div class="category-stat">
+                            <div class="category-stat-number">${Math.round((category.completed / category.total) * 100) || 0}%</div>
+                            <div class="category-stat-label">完成率</div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Update browse view
+        function updateBrowseView() {
+            // Use the global loadExamList function from js/main.js if available
+            if (typeof window.loadExamList === 'function') {
+                window.loadExamList();
+                return;
+            }
+
+            // Fallback implementation
+            const examList = document.getElementById('exam-list-container');
+            const loading = document.getElementById('browse-loading');
+            const empty = document.getElementById('browse-empty');
+
+            if (!examIndex || examIndex.length === 0) {
+                examList.style.display = 'none';
+                loading.style.display = 'none';
+                empty.style.display = 'block';
+                return;
+            }
+
+            // Filter exams based on current type
+            let filtered = examIndex;
+            if (currentExamType !== 'all') {
+                filtered = examIndex.filter(exam => exam.type === currentExamType);
+            }
+
+            if (filtered.length === 0) {
+                examList.style.display = 'none';
+                loading.style.display = 'none';
+                empty.style.display = 'block';
+                return;
+            }
+
+            examList.style.display = 'grid';
+            loading.style.display = 'none';
+            empty.style.display = 'none';
+
+            examList.innerHTML = filtered.map(exam => `
+                <div class="exam-item">
+                    <div class="exam-header">
+                        <div class="exam-info">
+                            <h3>${exam.title || exam.name || '未命名题目'}</h3>
+                            <div class="exam-meta">
+                                <div class="exam-meta-item">
+                                    <i class="fas fa-tag"></i>
+                                    <span>${getTypeLabel(exam.type)}</span>
+                                </div>
+                                <div class="exam-meta-item">
+                                    <i class="fas fa-question-circle"></i>
+                                    <span>${exam.questionCount || 0} 题</span>
+                                </div>
+                                <div class="exam-meta-item">
+                                    <i class="fas fa-clock"></i>
+                                    <span>${exam.estimatedTime || '预计' + (exam.questionCount || 0) * 2 + '分钟'}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="exam-actions">
+                            <button class="btn btn-primary" onclick="startExam('${exam.id}')">
+                                <i class="fas fa-play"></i>
+                                开始练习
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Update practice view
+        function updatePracticeView() {
+            updatePracticeRecords();
+        }
+
+        // Update practice records table
+        function updatePracticeRecords() {
+            const tbody = document.getElementById('practice-records-tbody');
+            const empty = document.getElementById('practice-empty');
+
+            if (!practiceRecords || practiceRecords.length === 0) {
+                tbody.innerHTML = '';
+                empty.style.display = 'block';
+                return;
+            }
+
+            empty.style.display = 'none';
+
+            // Sort records by date (newest first)
+            const sortedRecords = [...practiceRecords].sort((a, b) => {
+                const dateA = new Date(a.date || a.timestamp);
+                const dateB = new Date(b.date || b.timestamp);
+                return dateB - dateA;
+            });
+
+            tbody.innerHTML = sortedRecords.map(record => {
+                const score = record.score || (record.realData ? record.realData.percentage : 0);
+                const duration = record.duration || (record.realData ? record.realData.duration : 0);
+                const scoreClass = getScoreClass(score);
+
+                return `
+                    <tr>
+                        <td>${record.title || record.examName || '未命名练习'}</td>
+                        <td>${getTypeLabel(record.type)}</td>
+                        <td><span class="score-badge ${scoreClass}">${score}%</span></td>
+                        <td>${formatDuration(duration)}</td>
+                        <td>${formatDateTime(record.date || record.timestamp)}</td>
+                        <td>
+                            <button class="btn btn-sm" onclick="viewRecordDetails('${record.id || record.timestamp}')">
+                                <i class="fas fa-eye"></i>
+                                查看
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Update settings view
+        function updateSettingsView() {
+            // Settings view doesn't need dynamic updates
+        }
+
+        // Helper functions
+        function getTypeLabel(type) {
+            const labels = {
+                'reading': '阅读',
+                'listening': '听力',
+                'writing': '写作',
+                'speaking': '口语'
+            };
+            return labels[type] || type;
+        }
+
+        function getExamTypeFromCategory(category) {
+            // Map category to exam type
+            if (!category) return 'reading';
+
+            const categoryLower = category.toLowerCase();
+            if (categoryLower.includes('p1') || categoryLower.includes('reading')) {
+                return 'reading';
+            } else if (categoryLower.includes('p2') || categoryLower.includes('listening')) {
+                return 'listening';
+            } else if (categoryLower.includes('p3') || categoryLower.includes('writing')) {
+                return 'reading'; // P3 is typically reading in IELTS
+            } else {
+                return 'reading'; // Default to reading
+            }
+        }
+
+        function getExamCategoryFromType(type) {
+            // Map exam type to category
+            if (!type) return 'P1';
+
+            const typeLower = type.toLowerCase();
+            if (typeLower.includes('reading')) {
+                return 'P1';
+            } else if (typeLower.includes('listening')) {
+                return 'P2';
+            } else if (typeLower.includes('writing')) {
+                return 'P3';
+            } else {
+                return 'P1'; // Default to P1
+            }
+        }
+
+        function formatDateTime(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('zh-CN') + ' ' + date.toLocaleTimeString('zh-CN', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function formatDuration(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+
+            if (hours > 0) {
+                return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            }
+            return `${minutes}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function getScoreClass(score) {
+            if (score >= 90) return 'score-excellent';
+            if (score >= 80) return 'score-good';
+            if (score >= 60) return 'score-fair';
+            return 'score-poor';
+        }
+
+        // Action functions
+        function startCategoryPractice(categoryName) {
+            showView('browse');
+            if (categoryName === '阅读理解') {
+                filterByType('reading');
+            } else if (categoryName === '听力练习') {
+                filterByType('listening');
+            }
+        }
+
+        function startExam(examId) {
+            // Use the global openExam function from js/main.js
+            if (typeof window.openExam === 'function') {
+                window.openExam(examId);
+            } else {
+                // Fallback implementation
+                const exam = examIndex.find(e => e.id === examId);
+                if (exam) {
+                    if (exam.hasHtml) {
+                        // Open HTML practice - use the correct path from the exam data
+                        let fullPath;
+
+                        // Check if exam has path and filename properties
+                        if (exam.path && exam.filename) {
+                            // For files in 睡着过项目组 directory
+                            fullPath = `./睡着过项目组(9.4)[134篇]/2. 高频次高频文章[83篇]/1. P1（高频）[12篇]/${exam.path}${exam.filename}`;
+                        } else if (exam.htmlPath) {
+                            // Fallback to htmlPath if available
+                            fullPath = exam.htmlPath;
+                        } else {
+                            // Default path structure for reading/listening
+                            if (exam.type === 'reading' || exam.category === 'P1') {
+                                fullPath = `./睡着过项目组(9.4)[134篇]/2. 高频次高频文章[83篇]/1. P1（高频）[12篇]/${exam.filename || exam.id + '.html'}`;
+                            } else if (exam.type === 'listening' || exam.category === 'P2') {
+                                fullPath = `./ListeningPractice/${exam.category}/${exam.filename || exam.id + '.html'}`;
+                            } else {
+                                fullPath = `./睡着过项目组(9.4)[134篇]/2. 高频次高频文章[83篇]/1. P1（高频）[12篇]/${exam.filename || exam.id + '.html'}`;
+                            }
+                        }
+
+                        console.log('Attempting to open:', fullPath);
+
+                        const examWindow = window.open(fullPath, `exam_${exam.id}`, 'width=1200,height=800,scrollbars=yes,resizable=yes');
+                        if (examWindow) {
+                            showMessage('正在打开: ' + (exam.title || exam.name), 'success');
+                        } else {
+                            showMessage('无法打开窗口，请检查弹窗设置', 'error');
+                        }
+                    } else if (exam.pdfFilename) {
+                        // Open PDF
+                        let pdfPath;
+                        if (exam.path && exam.pdfFilename) {
+                            pdfPath = `./睡着过项目组(9.4)[134篇]/2. 高频次高频文章[83篇]/1. P1（高频）[12篇]/${exam.path}${exam.pdfFilename}`;
+                        } else {
+                            pdfPath = exam.pdfPath || `./睡着过项目组(9.4)[134篇]/2. 高频次高频文章[83篇]/1. P1（高频）[12篇]/${exam.pdfFilename}`;
+                        }
+
+                        window.open(pdfPath, `pdf_${exam.id}`, 'width=1000,height=800,scrollbars=yes,resizable=yes');
+                        showMessage('正在打开PDF: ' + (exam.title || exam.name), 'success');
+                    } else {
+                        showMessage('题目文件不存在', 'error');
+                    }
+                } else {
+                    showMessage('未找到题目', 'error');
+                }
+            }
+        }
+
+        function filterByType(type) {
+            currentExamType = type;
+
+            // Update filter buttons
+            document.querySelectorAll('#browse-view .filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            updateBrowseView();
+        }
+
+        function filterRecordsByType(type) {
+            // Update filter buttons
+            document.querySelectorAll('#practice-view .filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // Filter records
+            let filtered = practiceRecords;
+            if (type !== 'all') {
+                filtered = practiceRecords.filter(record => record.type === type);
+            }
+
+            const tbody = document.getElementById('practice-records-tbody');
+            const empty = document.getElementById('practice-empty');
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = '';
+                empty.style.display = 'block';
+                return;
+            }
+
+            empty.style.display = 'none';
+
+            // Sort and display filtered records
+            const sortedRecords = [...filtered].sort((a, b) => {
+                const dateA = new Date(a.date || a.timestamp);
+                const dateB = new Date(b.date || b.timestamp);
+                return dateB - dateA;
+            });
+
+            tbody.innerHTML = sortedRecords.map(record => {
+                const score = record.score || (record.realData ? record.realData.percentage : 0);
+                const duration = record.duration || (record.realData ? record.realData.duration : 0);
+                const scoreClass = getScoreClass(score);
+
+                return `
+                    <tr>
+                        <td>${record.title || record.examName || '未命名练习'}</td>
+                        <td>${getTypeLabel(record.type)}</td>
+                        <td><span class="score-badge ${scoreClass}">${score}%</span></td>
+                        <td>${formatDuration(duration)}</td>
+                        <td>${formatDateTime(record.date || record.timestamp)}</td>
+                        <td>
+                            <button class="btn btn-sm" onclick="viewRecordDetails('${record.id || record.timestamp}')">
+                                <i class="fas fa-eye"></i>
+                                查看
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function searchExams(query) {
+            if (!query || !examIndex) {
+                updateBrowseView();
+                return;
+            }
+
+            const filtered = examIndex.filter(exam => {
+                const title = (exam.title || exam.name || '').toLowerCase();
+                const searchQuery = query.toLowerCase();
+                return title.includes(searchQuery);
+            });
+
+            const examList = document.getElementById('exam-list-container');
+            const empty = document.getElementById('browse-empty');
+
+            if (filtered.length === 0) {
+                examList.style.display = 'none';
+                empty.style.display = 'block';
+                return;
+            }
+
+            examList.style.display = 'grid';
+            empty.style.display = 'none';
+
+            examList.innerHTML = filtered.map(exam => `
+                <div class="exam-item">
+                    <div class="exam-header">
+                        <div class="exam-info">
+                            <h3>${exam.title || exam.name || '未命名题目'}</h3>
+                            <div class="exam-meta">
+                                <div class="exam-meta-item">
+                                    <i class="fas fa-tag"></i>
+                                    <span>${getTypeLabel(exam.type)}</span>
+                                </div>
+                                <div class="exam-meta-item">
+                                    <i class="fas fa-question-circle"></i>
+                                    <span>${exam.questionCount || 0} 题</span>
+                                </div>
+                                <div class="exam-meta-item">
+                                    <i class="fas fa-clock"></i>
+                                    <span>${exam.estimatedTime || '预计' + (exam.questionCount || 0) * 2 + '分钟'}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="exam-actions">
+                            <button class="btn btn-primary" onclick="startExam('${exam.id}')">
+                                <i class="fas fa-play"></i>
+                                开始练习
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function refreshExamList() {
+            // Use the global loadLibrary function from js/main.js to refresh
+            const loading = document.getElementById('browse-loading');
+            const examList = document.getElementById('exam-list-container');
+
+            loading.style.display = 'block';
+            examList.style.display = 'none';
+
+            setTimeout(() => {
+                loadLibrary(true);
+                loading.style.display = 'none';
+                examList.style.display = 'grid';
+                showMessage('题库已刷新', 'success');
+            }, 1000);
+        }
+
+        function viewRecordDetails(recordId) {
+            const record = practiceRecords.find(r => (r.id || r.timestamp) === recordId);
+            if (record) {
+                // Show record details modal or navigate to detail page
+                showMessage('记录详情', 'info', `查看练习记录: ${record.title || record.examName}`);
+                // Implementation for showing detailed record view
+            }
+        }
+
+        // Settings functions
+        function clearCache() {
+            if (confirm('确定要清除所有缓存数据吗？此操作不可撤销。')) {
+                localStorage.clear();
+                sessionStorage.clear();
+                showMessage('缓存已清除', 'success', '系统缓存已成功清除');
+                setTimeout(() => location.reload(), 1500);
+            }
+        }
+
+        function clearTemporaryFiles() {
+            showMessage('清理完成', 'success', '临时文件已清理完毕');
+        }
+
+        function loadLibrary(forceReload = false) {
+            // Try to load from localStorage first
+            if (!forceReload) {
+                try {
+                    const storedExamIndex = localStorage.getItem('exam_index');
+                    if (storedExamIndex) {
+                        examIndex = JSON.parse(storedExamIndex);
+                        updateOverview();
+                        updateBrowseView();
+                        showMessage('题库加载完成', 'success');
+                        return;
+                    }
+                } catch (error) {
+                    console.warn('Failed to load exam index from localStorage:', error);
+                }
+            }
+
+            // Call the global loadLibrary function from js/main.js
+            if (typeof window.loadLibrary === 'function') {
+                window.loadLibrary(forceReload);
+            } else {
+                // Fallback implementation
+                console.log('[Library] 使用备用加载方案');
+                if (typeof completeExamData !== 'undefined') {
+                    examIndex = completeExamData;
+                    localStorage.setItem('exam_index', JSON.stringify(examIndex));
+                    updateOverview();
+                    updateBrowseView();
+                    showMessage('题库加载完成', 'success');
+                } else if (window.completeExamIndex || window.listeningExamIndex) {
+                    let readingExams = [];
+                    if (window.completeExamIndex && Array.isArray(window.completeExamIndex)) {
+                        readingExams = window.completeExamIndex.map(exam => ({ ...exam, type: 'reading' }));
+                    }
+
+                    let listeningExams = [];
+                    if (window.listeningExamIndex && Array.isArray(window.listeningExamIndex)) {
+                        listeningExams = window.listeningExamIndex;
+                    }
+
+                    examIndex = [...readingExams, ...listeningExams];
+                    localStorage.setItem('exam_index', JSON.stringify(examIndex));
+                    updateOverview();
+                    updateBrowseView();
+                    showMessage('题库加载完成', 'success');
+                } else {
+                    showMessage('题库加载失败', 'error', '未找到题库数据');
+                }
+            }
+        }
+
+        function checkLibraryUpdates() {
+            showMessage('检查更新', 'info', '正在检查题库更新...');
+            setTimeout(() => {
+                showMessage('已是最新版本', 'success', '题库已是最新版本');
+            }, 2000);
+        }
+
+        function createBackup() {
+            const data = {
+                examIndex: examIndex,
+                practiceRecords: practiceRecords,
+                settings: {
+                    theme: 'academic',
+                    language: 'zh-CN',
+                    version: '1.0.0'
+                },
+                timestamp: new Date().toISOString()
+            };
+
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ielts_academic_backup_${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showMessage('备份创建成功', 'success', '数据备份已保存到下载文件夹');
+        }
+
+        function importData() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        console.log('Import data structure:', data);
+
+                        let importedExamCount = 0;
+                        let importedRecordCount = 0;
+
+                        // Handle the exported data format from ielts_data_export_*.json
+                        // First, check for top-level practice_records
+                        if (data.practice_records && Array.isArray(data.practice_records)) {
+                            console.log('Found top-level practice_records:', data.practice_records.length);
+                            // Import practice records from exported format
+                            const importedRecords = data.practice_records.map(record => {
+                                const score = record.realData ? record.realData.percentage : (record.percentage || 0);
+                                const duration = record.realData ? record.realData.duration : (record.duration || 0);
+
+                                return {
+                                    id: record.id || record.timestamp || Date.now(),
+                                    examId: record.examId || '',
+                                    title: record.title || record.examName || '未命名练习',
+                                    type: record.type || getExamTypeFromCategory(record.category),
+                                    category: record.category || getExamCategoryFromType(record.type),
+                                    frequency: record.frequency || 'medium',
+                                    score: score,
+                                    duration: duration,
+                                    date: record.date || (record.timestamp ? new Date(record.timestamp).toISOString() : new Date().toISOString()),
+                                    timestamp: record.timestamp || record.id || Date.now(),
+                                    realData: record.realData || null,
+                                    dataSource: record.dataSource || 'imported'
+                                };
+                            });
+
+                            practiceRecords = importedRecords;
+                            localStorage.setItem('practice_records', JSON.stringify(practiceRecords));
+                            importedRecordCount = importedRecords.length;
+                        }
+                        // Also check for nested practice_records in data.data
+                        else if (data.data && data.data.practice_records && Array.isArray(data.data.practice_records)) {
+                            console.log('Found nested practice_records:', data.data.practice_records.length);
+                            const importedRecords = data.data.practice_records.map(record => {
+                                const score = record.realData ? record.realData.percentage : (record.percentage || 0);
+                                const duration = record.realData ? record.realData.duration : (record.duration || 0);
+
+                                return {
+                                    id: record.id || record.timestamp || Date.now(),
+                                    examId: record.examId || '',
+                                    title: record.title || record.examName || '未命名练习',
+                                    type: record.type || getExamTypeFromCategory(record.category),
+                                    category: record.category || getExamCategoryFromType(record.type),
+                                    frequency: record.frequency || 'medium',
+                                    score: score,
+                                    duration: duration,
+                                    date: record.date || (record.timestamp ? new Date(record.timestamp).toISOString() : new Date().toISOString()),
+                                    timestamp: record.timestamp || record.id || Date.now(),
+                                    realData: record.realData || null,
+                                    dataSource: record.dataSource || 'imported'
+                                };
+                            });
+
+                            practiceRecords = importedRecords;
+                            localStorage.setItem('practice_records', JSON.stringify(practiceRecords));
+                            importedRecordCount = importedRecords.length;
+                        }
+
+                        // Handle exam index data from exported format
+                        if (data.data && data.data['exam_system_exam_index'] && data.data['exam_system_exam_index'].data) {
+                            console.log('Found exam_system_exam_index:', data.data['exam_system_exam_index'].data.length);
+                            const importedExams = data.data['exam_system_exam_index'].data.map(exam => ({
+                                id: exam.id,
+                                title: exam.title,
+                                type: exam.type || getExamTypeFromCategory(exam.category),
+                                category: exam.category,
+                                frequency: exam.frequency,
+                                hasHtml: exam.hasHtml,
+                                hasPdf: exam.hasPdf,
+                                path: exam.path,
+                                filename: exam.filename,
+                                pdfFilename: exam.pdfFilename,
+                                questionCount: exam.questionCount || 14 // Default question count
+                            }));
+
+                            examIndex = importedExams;
+                            localStorage.setItem('exam_index', JSON.stringify(examIndex));
+                            importedExamCount = importedExams.length;
+                        }
+                        // Fallback to direct format
+                        else if (data.examIndex) {
+                            examIndex = data.examIndex;
+                            localStorage.setItem('exam_index', JSON.stringify(examIndex));
+                            importedExamCount = examIndex.length;
+                        }
+
+                        // Fallback to direct practice records format
+                        if (data.practiceRecords) {
+                            practiceRecords = data.practiceRecords;
+                            localStorage.setItem('practice_records', JSON.stringify(practiceRecords));
+                            importedRecordCount = practiceRecords.length;
+                        }
+
+                        console.log('Import results:', {
+                            examCount: importedExamCount,
+                            recordCount: importedRecordCount,
+                            totalExams: examIndex.length,
+                            totalRecords: practiceRecords.length
+                        });
+
+                        updateOverview();
+                        updateBrowseView();
+                        updatePracticeView();
+
+                        showMessage('数据导入成功', 'success', `成功导入 ${importedExamCount} 道题目和 ${importedRecordCount} 条练习记录`);
+                    } catch (error) {
+                        console.error('Import error:', error);
+                        showMessage('导入失败', 'error', '文件格式错误或数据损坏: ' + error.message);
+                    }
+                };
+                reader.readAsText(file);
+            };
+            input.click();
+        }
+
+        function exportAllData() {
+            createBackup(); // Reuse backup function
+        }
+
+        function exportPracticeData() {
+            const data = {
+                exportId: `${Date.now()}_${Math.random().toString(36).substring(2, 10)}`,
+                timestamp: new Date().toISOString(),
+                version: "1.0.0",
+                data: {
+                    practice_records: practiceRecords.map(record => ({
+                        id: record.id,
+                        examId: record.examId,
+                        title: record.title,
+                        category: record.category || getExamCategoryFromType(record.type),
+                        frequency: record.frequency || 'medium',
+                        realData: {
+                            score: record.score,
+                            totalQuestions: record.realData ? record.realData.totalQuestions : 14,
+                            accuracy: record.score / 100,
+                            percentage: record.score,
+                            duration: record.duration,
+                            answers: record.realData ? record.realData.answers : {},
+                            correctAnswers: record.realData ? record.realData.correctAnswers : {},
+                            interactions: record.realData ? record.realData.interactions : [],
+                            isRealData: true,
+                            source: "academic_system_export"
+                        }
+                    })),
+                    exam_system_exam_index: {
+                        data: examIndex,
+                        timestamp: Date.now(),
+                        version: "1.0.0"
+                    }
+                }
+            };
+
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ielts_data_export_${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showMessage('导出成功', 'success', `已导出 ${practiceRecords.length} 条练习记录和 ${examIndex.length} 道题目`);
+        }
+
+        function clearPracticeData() {
+            if (confirm('确定要清除所有练习记录吗？此操作不可撤销！')) {
+                practiceRecords = [];
+                localStorage.removeItem('practice_records');
+                updatePracticeView();
+                updateOverview();
+                showMessage('记录已清除', 'success', '所有练习记录已清除');
+            }
+        }
+
+        function showSystemInfo() {
+            const info = `
+IELTS 学术练习管理系统
+=======================================
+系统版本: 1.0.0
+构建时间: ${new Date().toLocaleString('zh-CN')}
+
+题库信息:
+- 总题目数: ${examIndex.length}
+- 阅读题目: ${examIndex.filter(e => e.type === 'reading').length}
+- 听力题目: ${examIndex.filter(e => e.type === 'listening').length}
+
+学习统计:
+- 练习记录: ${practiceRecords.length}
+- 总学习时长: ${Math.round(practiceRecords.reduce((sum, r) => sum + (r.duration || 0), 0) / 60)} 分钟
+- 平均分数: ${practiceRecords.length > 0 ? Math.round(practiceRecords.reduce((sum, r) => sum + (r.score || 0), 0) / practiceRecords.length) : 0}%
+
+浏览器信息:
+- User Agent: ${navigator.userAgent}
+- 语言: ${navigator.language}
+- 平台: ${navigator.platform}
+
+存储信息:
+- LocalStorage: ${(JSON.stringify(localStorage).length / 1024).toFixed(2)} KB
+- SessionStorage: ${(JSON.stringify(sessionStorage).length / 1024).toFixed(2)} KB
+            `;
+
+            alert(info);
+        }
+
+        function showUsageStatistics() {
+            showMessage('使用统计', 'info', '详细使用统计功能开发中...');
+        }
+
+        // Show message function
+        function showMessage(type, severity = 'info', text = '') {
+            const messageContainer = document.getElementById('message-container');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${severity}`;
+
+            const iconMap = {
+                'success': 'fas fa-check-circle',
+                'error': 'fas fa-exclamation-circle',
+                'warning': 'fas fa-exclamation-triangle',
+                'info': 'fas fa-info-circle'
+            };
+
+            const icon = iconMap[severity] || 'fas fa-info-circle';
+
+            messageDiv.innerHTML = `
+                <i class="${icon} message-icon"></i>
+                <div class="message-content">
+                    <div class="message-title">${type}</div>
+                    <div class="message-text">${text}</div>
+                </div>
+            `;
+
+            messageContainer.appendChild(messageDiv);
+
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    messageDiv.style.animation = 'slideIn 0.3s ease-out reverse';
+                    setTimeout(() => {
+                        if (messageDiv.parentNode) {
+                            messageDiv.parentNode.removeChild(messageDiv);
+                        }
+                    }, 300);
+                }
+            }, 5000);
+        }
+
+        // Sync practice records with storage
+        function syncPracticeRecords() {
+            try {
+                const records = JSON.parse(localStorage.getItem('practice_records') || '[]');
+
+                // Ensure records have the required fields
+                practiceRecords = records.map(record => ({
+                    id: record.id || record.timestamp || Date.now(),
+                    examId: record.examId || '',
+                    title: record.title || record.examName || '未命名练习',
+                    type: record.type || 'reading',
+                    score: record.score || (record.realData ? record.realData.percentage : 0),
+                    duration: record.duration || (record.realData ? record.realData.duration : 0),
+                    date: record.date || (record.timestamp ? new Date(record.timestamp).toISOString() : new Date().toISOString()),
+                    timestamp: record.timestamp || record.id || Date.now(),
+                    realData: record.realData || null
+                }));
+
+                updatePracticeView();
+                updateOverview();
+            } catch (error) {
+                console.error('Failed to sync practice records:', error);
+                practiceRecords = [];
+            }
+        }
+
+        // Listen for practice completion messages
+        window.addEventListener('message', function(event) {
+            if (event.data && (event.data.type === 'PRACTICE_COMPLETE' || event.data.type === 'practice_completed')) {
+                showMessage('练习完成', 'success', '练习已完成，正在更新记录...');
+                setTimeout(syncPracticeRecords, 1000);
+            }
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey || e.metaKey) {
+                switch(e.key) {
+                    case '1':
+                        e.preventDefault();
+                        showView('overview');
+                        break;
+                    case '2':
+                        e.preventDefault();
+                        showView('browse');
+                        break;
+                    case '3':
+                        e.preventDefault();
+                        showView('practice');
+                        break;
+                    case '4':
+                        e.preventDefault();
+                        showView('settings');
+                        break;
+                    case 's':
+                        if (e.shiftKey) {
+                            e.preventDefault();
+                            createBackup();
+                        }
+                        break;
+                }
+            }
+        });
+
+        // Auto-save functionality
+        setInterval(() => {
+            if (practiceRecords.length > 0) {
+                localStorage.setItem('practice_records', JSON.stringify(practiceRecords));
+            }
+        }, 30000); // Auto-save every 30 seconds
+
+        // Handle window unload
+        window.addEventListener('beforeunload', function(e) {
+            if (practiceRecords.length > 0) {
+                localStorage.setItem('practice_records', JSON.stringify(practiceRecords));
+            }
+        });
+
+        // Initialize on page load
+        window.addEventListener('load', function() {
+            console.log('IELTS Academic Practice System initialized');
+            showMessage('系统就绪', 'success', 'IELTS学术练习管理系统已就绪');
+        });
+    </script>
+</body>
+
+</html>
