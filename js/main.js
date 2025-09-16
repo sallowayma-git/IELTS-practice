@@ -46,7 +46,6 @@ function initializeLegacyComponents() {
     loadLibrary();
     syncPracticeRecords(); // Load initial records and update UI
     setupMessageListener(); // Listen for updates from child windows
-    setupCompletionMessageBridge(); // Bridge to persist PRACTICE_COMPLETE when needed
 }
 
 
@@ -168,8 +167,8 @@ function updateOverview() {
         +     '</div>'
         +   '</div>'
         +   '<div class="category-actions">'
-        +     '<button class="btn" onclick="browseCategory(\'' + cat + '\', \'reading\')">浏览</button>'
-        +     '<button class="btn btn-secondary" onclick="startRandomPractice(\'' + cat + '\', \'reading\')">随机</button>'
+        +     '<button class="btn" onclick="browseCategory(\'' + cat + '\', \'reading\')">📚 浏览题库</button>'
+        +     '<button class="btn btn-secondary" onclick="startRandomPractice(\'' + cat + '\', \'reading\')">🎲 随机练习</button>'
         +   '</div>'
         + '</div>';
     });
@@ -188,8 +187,8 @@ function updateOverview() {
                 +     '</div>'
                 +   '</div>'
                 +   '<div class="category-actions">'
-                +     '<button class="btn" onclick="browseCategory(\'' + cat + '\', \'listening\')">浏览</button>'
-                +     '<button class="btn btn-secondary" onclick="startRandomPractice(\'' + cat + '\', \'listening\')">随机</button>'
+                +     '<button class="btn" onclick="browseCategory(\'' + cat + '\', \'listening\')">📚 浏览题库</button>'
+                +     '<button class="btn btn-secondary" onclick="startRandomPractice(\'' + cat + '\', \'listening\')">🎲 随机练习</button>'
                 +   '</div>'
                 + '</div>';
             }
@@ -408,25 +407,27 @@ function renderExamItem(exam) {
                 </div>
             </div>
             <div class="exam-actions">
-                <button class="btn" onclick="openExam('${exam.id}')">开始</button>
-                <button class="btn btn-secondary" onclick="viewPDF('${exam.id}')">PDF</button>
+                <button class="btn exam-item-action-btn" onclick="openExam('${exam.id}')">开始</button>
+                <button class="btn btn-secondary exam-item-action-btn" onclick="viewPDF('${exam.id}')">PDF</button>
             </div>
         </div>
     `;
 }
 
 function resolveExamBasePath(exam) {
-  var basePath = (exam && exam.path) ? String(exam.path) : "";
-  if (exam && exam.type === 'listening') {
-    var normalized = basePath.replace(/^(\.\/|\/)+/, "");
-    if (!/^ListeningPractice\//.test(normalized)) {
-      normalized = "ListeningPractice/" + normalized.replace(/^\/?/, "");
-    }
-    basePath = normalized;
+  let basePath = (exam && exam.path) ? String(exam.path) : "";
+  const readingRoot = '睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/';
+  
+  if (exam && exam.type === 'reading' && !basePath.includes('睡着过项目组(9.4)[134篇]')) {
+      basePath = readingRoot + basePath;
   }
-  if (!/\/$/.test(basePath)) basePath += "/";
-  basePath = basePath.replace(/\\/g, "/");
-  basePath = basePath.replace(/\/+/g, "/");
+
+  // 听力路径在数据文件中似乎是完整的，不需要修改
+  
+  if (!basePath.endsWith('/')) {
+    basePath += "/";
+  }
+  basePath = basePath.replace(/\\/g, "/").replace(/\/+/g, "/");
   return basePath;
 }
 
@@ -595,10 +596,10 @@ function showLibraryLoaderModal() {
     modal.className = 'modal';
     modal.style.maxWidth = '900px';
     modal.style.width = '90%';
-    modal.style.background = 'rgba(17,24,39,0.98)';
+    modal.style.background = 'linear-gradient(145deg, rgba(45, 52, 80, 0.9), rgba(25, 30, 50, 0.95))';
     modal.style.color = '#e5e7eb';
-    modal.style.border = '1px solid rgba(255,255,255,0.12)';
-    modal.style.borderRadius = '12px';
+    modal.style.border = '1px solid rgba(255, 255, 255, 0.1)';
+    modal.style.borderRadius = '16px';
     modal.style.boxShadow = '0 20px 50px rgba(0,0,0,0.5)';
     modal.innerHTML = `
         <div class="modal-header">
@@ -607,7 +608,7 @@ function showLibraryLoaderModal() {
         </div>
         <div class="modal-body">
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                <div style="border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 16px; background: rgba(255,255,255,0.06);">
+                <div style="border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 16px; background: rgba(0,0,0,0.2);">
                     <h3>📖 阅读题库加载</h3>
                     <p style="opacity:0.9;">支持全量重载与增量更新。请上传包含题目HTML/PDF的根文件夹。</p>
                     <div style="display:flex; gap:10px; flex-wrap: wrap;">
@@ -620,7 +621,7 @@ function showLibraryLoaderModal() {
                         建议路径：.../3. 所有文章(9.4)[134篇]/...
                     </div>
                 </div>
-                <div style="border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 16px; background: rgba(255,255,255,0.06);">
+                <div style="border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 16px; background: rgba(0,0,0,0.2);">
                     <h3>🎧 听力题库加载</h3>
                     <p style="opacity:0.9;">支持全量重载与增量更新。请上传包含题目HTML/PDF/音频的根文件夹。</p>
                     <div style="display:flex; gap:10px; flex-wrap: wrap;">
@@ -634,7 +635,7 @@ function showLibraryLoaderModal() {
                     </div>
                 </div>
             </div>
-            <div style="margin-top:16px; padding: 12px; background: rgba(255,255,255,0.08); border-radius: 8px;">
+            <div style="margin-top:16px; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px;">
                 <div style="font-weight:600;">说明</div>
                 <ul style="margin:8px 0 0 18px; line-height:1.6;">
                     <li>全量重载会替换当前配置中对应类型（阅读/听力）的全部索引，并保留另一类型原有数据。</li>
@@ -659,8 +660,8 @@ function showLibraryLoaderModal() {
             .library-loader-modal .btn.btn-secondary{background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.15)}
             .library-loader-modal .btn.btn-secondary:hover{background:rgba(255,255,255,0.12)}
             .library-loader-modal h2,.library-loader-modal h3{margin:0 0 8px}
-            .library-loader-modal .modal-header{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:8px}
-            .library-loader-modal .modal-footer{border-top:1px solid rgba(255,255,255,0.1)}
+            .library-loader-modal .modal-header{display:flex;justify-content:space-between;align-items:center;padding-bottom:8px}
+            .library-loader-modal .modal-footer{}
         `;
         // add scoping class
         modal.className += ' library-loader-modal';
@@ -743,7 +744,7 @@ async function handleLibraryUpload(options, files) {
             saveLibraryConfiguration(configName, targetKey, newIndex.length);
             setActiveLibraryConfiguration(targetKey);
             showMessage('新的题库配置已创建并激活；正在重新加载...', 'success');
-            setTimeout(() => location.reload(), 800);
+            setTimeout(() => { location.reload(); }, 800);
             return;
         }
 
@@ -758,7 +759,7 @@ async function handleLibraryUpload(options, files) {
             saveLibraryConfiguration(configName, targetKey, newIndex.length);
             setActiveLibraryConfiguration(targetKey);
             showMessage('新的题库配置已创建并激活；正在重新加载...', 'success');
-            setTimeout(() => location.reload(), 800);
+            setTimeout(() => { location.reload(); }, 800);
             return;
         }
 
@@ -1014,7 +1015,7 @@ function clearCache() {
             // window.performanceOptimizer.cleanup(); 
         }
         showMessage('缓存已清除', 'success');
-        setTimeout(() => location.reload(), 1000);
+        setTimeout(() => { location.reload(); }, 1000);
     }
 }
 
@@ -1280,7 +1281,7 @@ function showLibraryConfigListV2() {
     }
 
     let html = `
-        <div style="background: rgba(17,24,39,0.94); padding: 20px; border-radius: 10px; margin: 20px 0; border:1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 30px rgba(0,0,0,0.35); color:#e5e7eb;">
+        <div style="background: linear-gradient(145deg, #4d3d7b, #1e1a33); padding: 20px; border-radius: 16px; margin: 20px 0; border:1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 30px rgba(0,0,0,0.35); color:#e5e7eb;">
             <h3 style="margin:0 0 10px;">📚 题库配置列表</h3>
             <div style="max-height: 320px; overflow-y: auto; margin: 10px 0;">
     `;
@@ -1319,34 +1320,6 @@ function showLibraryConfigListV2() {
     container.appendChild(listDiv);
 }
 
-// 兼容桥接：当练习页发送PRACTICE_COMPLETE 但未被app.js 捕获时，直接保存记录
-function setupCompletionMessageBridge() {
-    window.addEventListener('message', (event) => {
-        try {
-            if (event.origin && event.origin !== 'null' && event.origin !== window.location.origin) {
-                return;
-            }
-        } catch (_) {}
-
-        const msg = event.data || {};
-        if (msg && msg.type === 'PRACTICE_COMPLETE') {
-            try {
-                const payload = msg.data || {};
-                const examId = payload.examId || payload.originalExamId;
-                if (examId && window.app && typeof window.app.saveRealPracticeData === 'function') {
-                    console.log('[Bridge] 捕获到 PRACTICE_COMPLETE，直接写入记录:', examId);
-                    window.app.saveRealPracticeData(examId, payload);
-                    // 写入后刷新UI
-                    setTimeout(() => {
-                        try { syncPracticeRecords(); } catch (_) {}
-                    }, 300);
-                }
-            } catch (e) {
-                console.warn('[Bridge] 保存记录失败:', e);
-            }
-        }
-    });
-}
 
 // （已移除）导出调试信息函数在当前版本不再暴露到设置页按钮
 

@@ -1152,3 +1152,8 @@ body {
         font-size: 0.8rem;
     }
 }
+
+.exam-item-action-btn {
+    padding: 8px 16px;
+    font-size: 14px;
+}

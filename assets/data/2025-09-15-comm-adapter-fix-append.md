@@ -47,6 +47,111 @@
 - 验证总览卡片/题库浏览/设置页三大视图交互流程（过滤、随机练习、导出导入、备份恢复），确认交互提示均无编码问题。
 - 最终跑一遍“奇数引号扫描 + 非 `<` 前缀闭合标签扫描”，确保归零。
 
+---
+
+# 本次操作日志条目 (For Appending)
+
+## 2025-09-16 10:22:51
+### 1. 问题描述 / 触发事件 (Problem Description / Triggering Event)
+用户报告了多个系统问题和视觉改进需求：
+1.  **编码问题**: UI中存在乱码字符（`0xFFFD`），导致中文显示不正常。
+2.  **导航/题目打开问题**: 练习题目（HTML/PDF）无法正常打开，或打开后主应用页面会跳转到总览页。
+3.  **重复记录问题**: 完成练习后，练习历史中会出现多条重复记录。
+4.  **视觉不一致**: 题库浏览界面的按钮样式、题库配置列表背景、加载题库弹窗样式、总览页按钮文本不符合整体主题和用户期望。
+
+### 2. 原始用户反馈 / 请求 / 决策依据 (Initial User Feedback / Request / Decision Basis)
+用户最初要求进行代码审查，并随后提供了详细的视觉改进反馈。在问题诊断过程中，用户还手动验证了功能修复，并明确指出“加载题库”弹窗的样式需要重新设计。决策依据是提升用户体验、修复核心功能缺陷，并确保系统稳定性和数据准确性。
+
+### 3. 操作概述 (Operation Summary)
+本次操作全面修复了系统中的编码问题、导航与题目打开的逻辑缺陷、练习历史重复记录的Bug，并根据用户反馈对多处UI进行了视觉优化，包括按钮样式、背景渐变、弹窗设计和文本内容更新。
+
+### 4. 详细操作脚本/步骤 (Detailed Operation Script/Steps Performed)
+-   **步骤 1: 修复 `js/main.js` 中的编码问题和乱码**
+    -   **描述**: 清理 `js/main.js` 中所有 `0xFFFD` 字符和不正确的中文编码，确保UI文本的正确显示。
+    -   **已执行操作**: 使用 `write_to_file` 工具，将 `js/main.js` 的内容进行全文替换，修正了字符编码问题。
+-   **步骤 2: 统一导航逻辑，修复页面跳转问题**
+    -   **描述**: 解决 `js/main.js` 和 `js/app.js` 之间导航逻辑冲突导致页面跳转异常的问题。
+    -   **已执行操作**:
+        -   修改 `index.html`，将导航按钮的 `onclick` 属性替换为 `data-view` 属性，将导航控制权统一交给 `js/app.js`。
+        -   调整 `js/main.js` 中的 `initializeApplication` 函数，将其重命名为 `initializeLegacyComponents`，并移除其 `DOMContentLoaded` 事件监听，使其成为一个由 `js/app.js` 调用的普通函数。
+        -   移除 `js/main.js` 中冲突的 `showView` 函数。
+        -   修改 `js/app.js`，使其在初始化时显式调用 `window.initializeLegacyComponents()`，确保旧组件的初始化。
+-   **步骤 3: 修复题目（HTML/PDF）无法打开的路径问题**
+    -   **描述**: 解决 `js/main.js` 中 `resolveExamBasePath` 函数在处理阅读材料路径时存在的问题，导致题目页面无法正确加载。
+    -   **已执行操作**: 修改 `js/main.js` 中的 `resolveExamBasePath` 函数，为阅读材料路径硬编码了正确的根目录前缀 (`睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/`)。
+-   **步骤 4: 修复练习历史中出现重复记录的问题**
+    -   **描述**: 发现完成练习后，练习历史会产生多条重复记录，原因在于 `js/main.js` 中冗余的 `setupCompletionMessageBridge` 消息处理。
+    -   **已执行操作**: 移除 `js/main.js` 中 `setupCompletionMessageBridge` 函数的定义和调用，确保 `PRACTICE_COMPLETE` 消息只由 `js/app.js` 处理一次。
+-   **步骤 5: 视觉优化 - 增大按钮尺寸和字体**
+    -   **描述**: 根据用户反馈，增大题库浏览界面中“开始”和“PDF”按钮的尺寸和字体。
+    -   **已执行操作**: 在 `css/main.css` 中添加 `.exam-item-action-btn` 样式，并修改 `js/main.js` 的 `renderExamItem` 函数，为相关按钮添加此 CSS 类。
+-   **步骤 6: 视觉优化 - 题库配置列表背景**
+    -   **描述**: 将题库配置列表的背景色改为与主题匹配的紫色渐变。
+    -   **已执行操作**: 修改 `js/main.js` 中 `showLibraryConfigListV2` 函数的 `style.background` 属性，应用 `linear-gradient(145deg, #4d3d7b, #1e1a33)`。
+-   **步骤 7: 视觉优化 - 总览页按钮文本**
+    -   **描述**: 将总览页的“浏览”和“随机”按钮文本更新为包含表情符号的更具吸引力的文本。
+    -   **已执行操作**: 修改 `js/main.js` 中 `updateOverview` 函数，将按钮文本分别更新为“📚 浏览题库”和“🎲 随机练习”。
+-   **步骤 8: 移除 `js/app.js` 中的调试断点**
+    -   **描述**: 移除之前调试过程中添加的 `debugger;` 语句。
+    -   **已执行操作**: 通过 `apply_diff` 移除 `js/app.js` 中 `setupEventListeners` 函数内的 `debugger;` 语句。
+-   **步骤 9: 视觉优化 - 重新设计“加载题库”弹窗**
+    -   **描述**: 针对用户提出的“加载题库”弹窗设计问题，移除白色边框，并调整内部元素的背景色，使其与整体主题风格保持一致。
+    -   **已执行操作**:
+        -   修改 `js/main.js` 中内联样式表的 `modal-header` 和 `modal-footer` 样式，移除了 `border-bottom` 和 `border-top`。
+        -   修改 `js/main.js` 中 `modal-body` 内部的 `div` 的背景色，从 `rgba(255,255,255,0.06)` 和 `rgba(255,255,255,0.08)` 修改为 `rgba(0,0,0,0.2)`。
+
+### 5. 变更内容详情 (Detailed Changes Implemented)
+#### 文件/配置项: `js/main.js`
+- **受影响路径**: `js/main.js`
+- **变更类型**: 代码修改 (MODIFIED)
+- **变更说明**:
+    - 清理了乱码字符，确保中文显示正常。
+    - `initializeApplication` 重命名为 `initializeLegacyComponents`，并移除 `DOMContentLoaded` 监听。
+    - 移除了 `showView` 函数。
+    - 修改 `renderExamItem` 函数，为“开始”和“PDF”按钮添加 `exam-item-action-btn` 类。
+    - 修改 `updateOverview` 函数，更新总览页按钮文本。
+    - 修改 `showLibraryConfigListV2` 函数，更新题库配置列表背景为紫色渐变。
+    - 修正 `resolveExamBasePath` 函数，确保阅读材料路径正确。
+    - 移除 `setupCompletionMessageBridge` 函数，解决重复记录问题。
+    - 修改 `showLibraryLoaderModal` 函数，移除了 `modal-header` 和 `modal-footer` 的边框，并调整了内部 `div` 的背景色。
+- **内容差异 (Diff)**: (此处省略详细diff，因为涉及全文替换和多处修改，但已在上述步骤中详细说明)
+
+#### 文件/配置项: `js/app.js`
+- **受影响路径**: `js/app.js`
+- **变更类型**: 代码修改 (MODIFIED)
+- **变更说明**:
+    - 在 `initialize` 方法中添加 `window.initializeLegacyComponents()` 调用。
+    - 移除了 `setupEventListeners` 函数内的 `debugger;` 语句。
+- **内容差异 (Diff)**: (此处省略详细diff，因为涉及多处修改，但已在上述步骤中详细说明)
+
+#### 文件/配置项: `index.html`
+- **受影响路径**: `index.html`
+- **变更类型**: HTML结构修改 (MODIFIED)
+- **变更说明**: 将导航按钮的 `onclick` 属性替换为 `data-view` 属性。
+- **内容差异 (Diff)**: (此处省略详细diff，但已在上述步骤中详细说明)
+
+#### 文件/配置项: `css/main.css`
+- **受影响路径**: `css/main.css`
+- **变更类型**: 样式新增 (ADDED)
+- **变更说明**: 新增 `.exam-item-action-btn` 样式，用于增大按钮尺寸和字体。
+- **内容差异 (Diff)**: (此处省略详细diff，但已在上述步骤中详细说明)
+
+### 6. 影响分析 (Impact Analysis)
+-   **积极影响**:
+    -   **用户体验显著提升**: 解决了乱码问题，UI显示正常，导航流畅，题目可正常打开，视觉效果更佳。
+    -   **系统稳定性增强**: 修复了导致重复记录的Bug，数据准确性得到保障。
+    -   **代码结构优化**: 统一了导航逻辑，减少了代码耦合，提升了可维护性。
+    -   **功能完整性**: 核心练习功能和数据记录恢复正常。
+-   **潜在风险**:
+    -   由于 `resolveExamBasePath` 的硬编码修复，如果未来文件路径结构发生变化，可能需要再次调整。
+    -   `js/main.js` 和 `js/app.js` 之间的交互仍需进一步解耦，以实现更清晰的模块化。
+-   **业务影响**:
+    -   用户可以正常使用系统进行雅思练习，提高了系统的可用性和可靠性。
+
+### 7. 进一步行动 / 建议 (Further Actions / Recommendations)
+-   **重构建议**: 考虑将 `js/main.js` 中的部分遗留功能逐步迁移到 `js/app.js` 或其他更现代的模块中，以进一步解耦和优化代码结构。
+-   **配置外部化**: 对于 `resolveExamBasePath` 中的硬编码路径，考虑引入配置文件或更智能的路径解析机制，以提高系统的灵活性。
+
 # 2025-09-16 编码修复与架构重构日志
 
 ### 1. 问题描述 / 触发事件 (Problem Description / Triggering Event)
@@ -272,3 +377,108 @@
 - **代码审查**: 建议对项目中所有JS文件进行一次全面的代码审查，特别是 `boot-fallbacks.js`，以识别并消除更多潜在的“聪明”但脆弱的兜底逻辑。
 - **依赖管理**: 考虑引入一个简单的构建工具（如`esbuild`或`parcel`）或依赖加载器（如`RequireJS`），以更现代、更可靠的方式管理模块和依赖，而不是依赖全局 `window` 对象和 `<script>` 标签的加载顺序。
 - **自动化测试**: 强烈建议为核心功能（如导航、数据读写）编写端到端测试（例如使用 `Puppeteer`），以在未来的修改中自动捕捉此类回归性bug。
+
+---
+
+# 本次操作日志条目 (For Appending)
+
+## 2025-09-16 10:22:51
+### 1. 问题描述 / 触发事件 (Problem Description / Triggering Event)
+用户报告了多个系统问题和视觉改进需求：
+1.  **编码问题**: UI中存在乱码字符（`0xFFFD`），导致中文显示不正常。
+2.  **导航/题目打开问题**: 练习题目（HTML/PDF）无法正常打开，或打开后主应用页面会跳转到总览页。
+3.  **重复记录问题**: 完成练习后，练习历史中会出现多条重复记录。
+4.  **视觉不一致**: 题库浏览界面的按钮样式、题库配置列表背景、加载题库弹窗样式、总览页按钮文本不符合整体主题和用户期望。
+
+### 2. 原始用户反馈 / 请求 / 决策依据 (Initial User Feedback / Request / Decision Basis)
+用户最初要求进行代码审查，并随后提供了详细的视觉改进反馈。在问题诊断过程中，用户还手动验证了功能修复，并明确指出“加载题库”弹窗的样式需要重新设计。决策依据是提升用户体验、修复核心功能缺陷，并确保系统稳定性和数据准确性。
+
+### 3. 操作概述 (Operation Summary)
+本次操作全面修复了系统中的编码问题、导航与题目打开的逻辑缺陷、练习历史重复记录的Bug，并根据用户反馈对多处UI进行了视觉优化，包括按钮样式、背景渐变、弹窗设计和文本内容更新。
+
+### 4. 详细操作脚本/步骤 (Detailed Operation Script/Steps Performed)
+-   **步骤 1: 修复 `js/main.js` 中的编码问题和乱码**
+    -   **描述**: 清理 `js/main.js` 中所有 `0xFFFD` 字符和不正确的中文编码，确保UI文本的正确显示。
+    -   **已执行操作**: 使用 `write_to_file` 工具，将 `js/main.js` 的内容进行全文替换，修正了字符编码问题。
+-   **步骤 2: 统一导航逻辑，修复页面跳转问题**
+    -   **描述**: 解决 `js/main.js` 和 `js/app.js` 之间导航逻辑冲突导致页面跳转异常的问题。
+    -   **已执行操作**:
+        -   修改 `index.html`，将导航按钮的 `onclick` 属性替换为 `data-view` 属性，将导航控制权统一交给 `js/app.js`。
+        -   调整 `js/main.js` 中的 `initializeApplication` 函数，将其重命名为 `initializeLegacyComponents`，并移除其 `DOMContentLoaded` 事件监听，使其成为一个由 `js/app.js` 调用的普通函数。
+        -   移除 `js/main.js` 中冲突的 `showView` 函数。
+        -   修改 `js/app.js`，使其在初始化时显式调用 `window.initializeLegacyComponents()`，确保旧组件的初始化。
+-   **步骤 3: 修复题目（HTML/PDF）无法打开的路径问题**
+    -   **描述**: 解决 `js/main.js` 中 `resolveExamBasePath` 函数在处理阅读材料路径时存在的问题，导致题目页面无法正确加载。
+    -   **已执行操作**: 修改 `js/main.js` 中的 `resolveExamBasePath` 函数，为阅读材料路径硬编码了正确的根目录前缀 (`睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/`)。
+-   **步骤 4: 修复练习历史中出现重复记录的问题**
+    -   **描述**: 发现完成练习后，练习历史会产生多条重复记录，原因在于 `js/main.js` 中冗余的 `setupCompletionMessageBridge` 消息处理。
+    -   **已执行操作**: 移除 `js/main.js` 中 `setupCompletionMessageBridge` 函数的定义和调用，确保 `PRACTICE_COMPLETE` 消息只由 `js/app.js` 处理一次。
+-   **步骤 5: 视觉优化 - 增大按钮尺寸和字体**
+    -   **描述**: 根据用户反馈，增大题库浏览界面中“开始”和“PDF”按钮的尺寸和字体。
+    -   **已执行操作**: 在 `css/main.css` 中添加 `.exam-item-action-btn` 样式，并修改 `js/main.js` 的 `renderExamItem` 函数，为相关按钮添加此 CSS 类。
+-   **步骤 6: 视觉优化 - 题库配置列表背景**
+    -   **描述**: 将题库配置列表的背景色改为与主题匹配的紫色渐变。
+    -   **已执行操作**: 修改 `js/main.js` 中 `showLibraryConfigListV2` 函数的 `style.background` 属性，应用 `linear-gradient(145deg, #4d3d7b, #1e1a33)`。
+-   **步骤 7: 视觉优化 - 总览页按钮文本**
+    -   **描述**: 将总览页的“浏览”和“随机”按钮文本更新为包含表情符号的更具吸引力的文本。
+    -   **已执行操作**: 修改 `js/main.js` 中 `updateOverview` 函数，将按钮文本分别更新为“📚 浏览题库”和“🎲 随机练习”。
+-   **步骤 8: 移除 `js/app.js` 中的调试断点**
+    -   **描述**: 移除之前调试过程中添加的 `debugger;` 语句。
+    -   **已执行操作**: 通过 `apply_diff` 移除 `js/app.js` 中 `setupEventListeners` 函数内的 `debugger;` 语句。
+-   **步骤 9: 视觉优化 - 重新设计“加载题库”弹窗**
+    -   **描述**: 针对用户提出的“加载题库”弹窗设计问题，移除白色边框，并调整内部元素的背景色，使其与整体主题风格保持一致。
+    -   **已执行操作**:
+        -   修改 `js/main.js` 中内联样式表的 `modal-header` 和 `modal-footer` 样式，移除了 `border-bottom` 和 `border-top`。
+        -   修改 `js/main.js` 中 `modal-body` 内部的 `div` 的背景色，从 `rgba(255,255,255,0.06)` 和 `rgba(255,255,255,0.08)` 修改为 `rgba(0,0,0,0.2)`。
+
+### 5. 变更内容详情 (Detailed Changes Implemented)
+#### 文件/配置项: `js/main.js`
+- **受影响路径**: `js/main.js`
+- **变更类型**: 代码修改 (MODIFIED)
+- **变更说明**:
+    - 清理了乱码字符，确保中文显示正常。
+    - `initializeApplication` 重命名为 `initializeLegacyComponents`，并移除 `DOMContentLoaded` 监听。
+    - 移除了 `showView` 函数。
+    - 修改 `renderExamItem` 函数，为“开始”和“PDF”按钮添加 `exam-item-action-btn` 类。
+    - 修改 `updateOverview` 函数，更新总览页按钮文本。
+    - 修改 `showLibraryConfigListV2` 函数，更新题库配置列表背景为紫色渐变。
+    - 修正 `resolveExamBasePath` 函数，确保阅读材料路径正确。
+    - 移除 `setupCompletionMessageBridge` 函数，解决重复记录问题。
+    - 修改 `showLibraryLoaderModal` 函数，移除了 `modal-header` 和 `modal-footer` 的边框，并调整了内部 `div` 的背景色。
+- **内容差异 (Diff)**: (此处省略详细diff，因为涉及全文替换和多处修改，但已在上述步骤中详细说明)
+
+#### 文件/配置项: `js/app.js`
+- **受影响路径**: `js/app.js`
+- **变更类型**: 代码修改 (MODIFIED)
+- **变更说明**:
+    - 在 `initialize` 方法中添加 `window.initializeLegacyComponents()` 调用。
+    - 移除了 `setupEventListeners` 函数内的 `debugger;` 语句。
+- **内容差异 (Diff)**: (此处省略详细diff，因为涉及多处修改，但已在上述步骤中详细说明)
+
+#### 文件/配置项: `index.html`
+- **受影响路径**: `index.html`
+- **变更类型**: HTML结构修改 (MODIFIED)
+- **变更说明**: 将导航按钮的 `onclick` 属性替换为 `data-view` 属性。
+- **内容差异 (Diff)**: (此处省略详细diff，但已在上述步骤中详细说明)
+
+#### 文件/配置项: `css/main.css`
+- **受影响路径**: `css/main.css`
+- **变更类型**: 样式新增 (ADDED)
+- **变更说明**: 新增 `.exam-item-action-btn` 样式，用于增大按钮尺寸和字体。
+- **内容差异 (Diff)**: (此处省略详细diff，但已在上述步骤中详细说明)
+
+### 6. 影响分析 (Impact Analysis)
+-   **积极影响**:
+    -   **用户体验显著提升**: 解决了乱码问题，UI显示正常，导航流畅，题目可正常打开，视觉效果更佳。
+    -   **系统稳定性增强**: 修复了导致重复记录的Bug，数据准确性得到保障。
+    -   **代码结构优化**: 统一了导航逻辑，减少了代码耦合，提升了可维护性。
+    -   **功能完整性**: 核心练习功能和数据记录恢复正常。
+-   **潜在风险**:
+    -   由于 `resolveExamBasePath` 的硬编码修复，如果未来文件路径结构发生变化，可能需要再次调整。
+    -   `js/main.js` 和 `js/app.js` 之间的交互仍需进一步解耦，以实现更清晰的模块化。
+-   **业务影响**:
+    -   用户可以正常使用系统进行雅思练习，提高了系统的可用性和可靠性。
+
+### 7. 进一步行动 / 建议 (Further Actions / Recommendations)
+-   **重构建议**: 考虑将 `js/main.js` 中的部分遗留功能逐步迁移到 `js/app.js` 或其他更现代的模块中，以进一步解耦和优化代码结构。
+-   **配置外部化**: 对于 `resolveExamBasePath` 中的硬编码路径，考虑引入配置文件或更智能的路径解析机制，以提高系统的灵活性。

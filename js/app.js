@@ -882,12 +882,8 @@ class ExamSystemApp {
      */
     buildExamUrl(exam) {
         // 使用全局的路径构建器以确保阅读/听力路径正确
-        try {
-            if (typeof window.buildResourcePath === 'function') {
-                return window.buildResourcePath(exam, 'html');
-            }
-        } catch (e) {
-            // 继续使用回退逻辑
+        if (typeof window.buildResourcePath === 'function') {
+            return window.buildResourcePath(exam, 'html');
         }
 
         // 回退：基于exam对象构造完整的文件路径（可能不含根前缀）
