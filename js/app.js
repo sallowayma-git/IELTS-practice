@@ -851,7 +851,12 @@ class ExamSystemApp {
      * 打开指定题目进行练习
      */
     openExam(examId) {
-        const examIndex = storage.get('exam_index', []);
+        // Respect active exam index key instead of hard-coded 'exam_index'
+        let activeKey = 'exam_index';
+        try {
+            activeKey = storage.get('active_exam_index_key', 'exam_index') || 'exam_index';
+        } catch(_) {}
+        const examIndex = storage.get(activeKey, []) || storage.get('exam_index', []);
         const exam = examIndex.find(e => e.id === examId);
 
         if (!exam) {

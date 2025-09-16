@@ -528,6 +528,37 @@ function openPDFSafely(pdfPath, examTitle = 'PDF') {
     }
 }
 
+// Export current exam index to a timestamped script file under assets/scripts (download)
+function exportExamIndexToScriptFile(fullIndex, noteLabel = '') {
+    try {
+        const reading = (fullIndex || []).filter(e => e.type === 'reading').map(e => {
+            const { type, ...rest } = e || {};
+            return rest;
+        });
+        const listening = (fullIndex || []).filter(e => e.type === 'listening');
+
+        const pad = (n) => String(n).padStart(2, '0');
+        const d = new Date();
+        const ts = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+        const header = `// 题库配置导出 ${d.toLocaleString()}\n// 说明: 保存此文件到 assets/scripts/ 并在需要时手动在 index.html 引入以覆盖内置数据\n`;
+        const content = `${header}window.completeExamIndex = ${JSON.stringify(reading, null, 2)};\n\nwindow.listeningExamIndex = ${JSON.stringify(listening, null, 2)};\n`;
+
+        const blob = new Blob([content], { type: 'application/javascript' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `exam-index-${ts}.js`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        try { showMessage(`题库配置已导出: exam-index-${ts}.js（请移动到 assets/scripts/）`, 'success'); } catch(_) {}
+    } catch (e) {
+        console.error('[LibraryExport] 题库配置导出失败:', e);
+        try { showMessage('题库配置导出失败: ' + (e && e.message || e), 'error'); } catch(_) {}
+    }
+}
+
 // --- Helper Functions ---
 function getViewName(viewName) {
     switch (viewName) {
@@ -713,6 +744,9 @@ function showLibraryLoaderModal() {
     wire('#listening-inc-btn', '#listening-inc-input', 'listening', 'incremental');
 }
 
+// expose modal launcher globally for SettingsPanel button
+try { window.showLibraryLoaderModal = showLibraryLoaderModal; } catch(_) {}
+
 async function handleLibraryUpload(options, files) {
     const { type, mode } = options;
     try {
@@ -766,6 +800,8 @@ async function handleLibraryUpload(options, files) {
             storage.set(targetKey, newIndex);
             saveLibraryConfiguration(configName, targetKey, newIndex.length);
             setActiveLibraryConfiguration(targetKey);
+            // 导出为时间命名脚本，便于统一管理
+            try { exportExamIndexToScriptFile(newIndex, configName); } catch(_) {}
             showMessage('新的题库配置已创建并激活；正在重新加载...', 'success');
             setTimeout(() => { location.reload(); }, 800);
             return;
@@ -788,9 +824,12 @@ async function handleLibraryUpload(options, files) {
 
         // Save to the current active key（非默认配置下的增量更新）
         storage.set(targetKey, newIndex);
-        saveLibraryConfiguration(`${type === 'reading' ? '阅读' : '听力'}增量-${new Date().toLocaleString()}`, targetKey, newIndex.length);
+        const incName = `${type === 'reading' ? '阅读' : '听力'}增量-${new Date().toLocaleString()}`;
+        saveLibraryConfiguration(incName, targetKey, newIndex.length);
         showMessage('索引已更新；正在刷新界面...', 'success');
         examIndex = newIndex;
+        // 也导出一次，便于归档
+        try { exportExamIndexToScriptFile(newIndex, incName); } catch(_) {}
         updateOverview();
         if (document.getElementById('browse-view')?.classList.contains('active')) {
             loadExamList();
