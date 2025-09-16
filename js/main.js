@@ -140,6 +140,7 @@ function finishLibraryLoading(startTime) {
     showMessage(`题库加载完成！共 ${examIndex.length} 个题目 - ${Math.round(loadTime)}ms`, 'success');
     updateOverview();
     updateSystemInfo();
+    window.dispatchEvent(new CustomEvent('examIndexLoaded'));
 }
 
 // --- UI Update Functions ---
@@ -166,7 +167,7 @@ function updateOverview() {
         +       '<div class="category-meta">' + (readingStats[cat] ? readingStats[cat].total : 0) + ' 篇</div>'
         +     '</div>'
         +   '</div>'
-        +   '<div class="category-actions">'
+        +   '<div class="category-actions" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: nowrap;">'
         +     '<button class="btn" onclick="browseCategory(\'' + cat + '\', \'reading\')">📚 浏览题库</button>'
         +     '<button class="btn btn-secondary" onclick="startRandomPractice(\'' + cat + '\', \'reading\')">🎲 随机练习</button>'
         +   '</div>'
@@ -186,7 +187,7 @@ function updateOverview() {
                 +       '<div class="category-meta">' + listeningStats[cat].total + ' 篇</div>'
                 +     '</div>'
                 +   '</div>'
-                +   '<div class="category-actions">'
+                +   '<div class="category-actions" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: nowrap;">'
                 +     '<button class="btn" onclick="browseCategory(\'' + cat + '\', \'listening\')">📚 浏览题库</button>'
                 +     '<button class="btn btn-secondary" onclick="startRandomPractice(\'' + cat + '\', \'listening\')">🎲 随机练习</button>'
                 +   '</div>'
@@ -199,10 +200,10 @@ function updateOverview() {
 }
 
 function getScoreColor(percentage) {
-    if (percentage >= 90) return '#4ade80';
-    if (percentage >= 75) return '#facc15';
-    if (percentage >= 60) return '#fb923c';
-    return '#f87171';
+    if (percentage >= 90) return '#10b981';
+    if (percentage >= 75) return '#f59e0b';
+    if (percentage >= 60) return '#f97316';
+    return '#ef4444';
 }
 
 function formatDurationShort(seconds) {
@@ -217,11 +218,11 @@ function formatDurationShort(seconds) {
 
 function getDurationColor(seconds) {
     const minutes = (seconds || 0) / 60;
-    if (minutes < 20) return '#4ade80'; // green-400
-    if (minutes < 23) return '#facc15'; // yellow-400
-    if (minutes < 26) return '#fb923c'; // orange-400
-    if (minutes < 30) return '#f87171'; // red-400
-    return '#ef4444'; // red-500
+    if (minutes < 20) return '#10b981'; // green-500
+    if (minutes < 23) return '#f59e0b'; // yellow-500
+    if (minutes < 26) return '#f97316'; // orange-500
+    if (minutes < 30) return '#ef4444'; // red-500
+    return '#dc2626'; // red-600
 }
 
 function renderPracticeRecordItem(record) {
@@ -321,7 +322,7 @@ function updatePracticeView() {
     }
     
     if (window.VirtualScroller) {
-        practiceListScroller = new VirtualScroller(historyContainer, recordsToShow, renderPracticeRecordItem, { itemHeight: 65, containerHeight: 650 }); // 增加itemHeight以匹配新的gap和padding
+        practiceListScroller = new VirtualScroller(historyContainer, recordsToShow, renderPracticeRecordItem, { itemHeight: 100, containerHeight: 650 }); // 增加itemHeight以匹配新的gap和padding
     } else {
         // Fallback to simple rendering if VirtualScroller is not available
         historyContainer.innerHTML = recordsToShow.map(record => renderPracticeRecordItem(record).outerHTML).join('');
@@ -338,11 +339,21 @@ function browseCategory(category, type = 'reading') {
     const typeText = type === 'listening' ? '听力' : '阅读';
     document.getElementById('browse-title').textContent = `📚 ${category} ${typeText}题库浏览`;
     showView('browse', false);
+    loadExamList(); // Ensure exam list is loaded when browsing category
 }
 
 function filterByType(type) {
     currentExamType = type;
-    currentCategory = 'all'; 
+    currentCategory = 'all';
+    document.getElementById('browse-title').textContent = '📚 题库浏览';
+    loadExamList();
+}
+
+// Initialize browse view when it's activated
+function initializeBrowseView() {
+    console.log('[System] Initializing browse view...');
+    currentCategory = 'all';
+    currentExamType = 'all';
     document.getElementById('browse-title').textContent = '📚 题库浏览';
     loadExamList();
 }
@@ -521,15 +532,15 @@ function updateSystemInfo() {
     if (!examIndex) return;
     const readingExams = examIndex.filter(e => e.type === 'reading');
     const listeningExams = examIndex.filter(e => e.type === 'listening');
-    
-    document.getElementById('total-exams').textContent = `${examIndex.length} 个`;
+
+    document.getElementById('total-exams').textContent = examIndex.length;
     // These IDs might not exist anymore, but we'll add them for robustness
     const htmlExamsEl = document.getElementById('html-exams');
     const pdfExamsEl = document.getElementById('pdf-exams');
     const lastUpdateEl = document.getElementById('last-update');
 
-    if (htmlExamsEl) htmlExamsEl.textContent = `${readingExams.length + listeningExams.length} 个`; // Simplified
-    if (pdfExamsEl) pdfExamsEl.textContent = `${examIndex.filter(e => e.pdfFilename).length} 个`;
+    if (htmlExamsEl) htmlExamsEl.textContent = readingExams.length + listeningExams.length; // Simplified
+    if (pdfExamsEl) pdfExamsEl.textContent = examIndex.filter(e => e.pdfFilename).length;
     if (lastUpdateEl) lastUpdateEl.textContent = new Date().toLocaleString();
 }
 
