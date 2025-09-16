@@ -16,7 +16,7 @@
     <div class="container">
         <div class="header">
             <h1>📚 考试总览系统</h1>
-            <p>IELTS练习管理平台 - <a href="#" onclick="showDeveloperTeam(); return false;" style="color: rgba(102, 126, 234, 0.8); text-decoration: none; font-weight: 600; transition: color 0.3s ease;">睡着过</a></p>
+            <p>IELTS练习管理平台 - <a href="#" onclick="showDeveloperTeam(); return false;" style="color: rgba(102, 126, 234, 0.8); text-decoration: none; font-weight: 600; transition: color 0.3s ease;">睡着过呈现</a></p>
         </div>
 
         <nav class="main-nav">
@@ -112,15 +112,18 @@
     <div id="settings-view" class="view">
         <h2>⚙️ 系统设置</h2>
         <div style="background: rgba(255, 255, 255, 0.1); padding: 20px; border-radius: 10px;">
-            <h3>🔧 系统管理</h3>
-            <p style="margin: 15px 0; opacity: 0.9;">系统工具和设置选项</p>
-            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <button class="btn btn-warning" onclick="clearCache()">🗑️ 清除缓存</button>
-                <button class="btn" onclick="showLibraryLoaderModal()">📂 加载题库</button>
-                <button class="btn btn-info" onclick="showLibraryConfigListV2()">⚙️ 题库配置切换</button>
+            <div style="margin-bottom: 30px;">
+                <h3>🔧 系统管理</h3>
+                <p style="margin: 15px 0; opacity: 0.9;">系统工具和设置选项</p>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
+                    <button class="btn btn-warning" onclick="clearCache()">🗑️ 清除缓存</button>
+                    <button class="btn" onclick="showLibraryLoaderModal()">📂 加载题库</button>
+                    <button class="btn btn-info" onclick="showLibraryConfigListV2()">⚙️ 题库配置切换</button>
+                    <button class="btn btn-warning" onclick="loadLibrary(true); showMessage('题库已强制刷新', 'success')">🔄 强制刷新题库</button>
+                </div>
             </div>
 
-            <div style="margin-top: 30px;">
+            <div style="margin-bottom: 30px;">
                 <h3>💾 数据管理</h3>
                 <p style="margin: 15px 0; opacity: 0.9;">数据备份、导入导出和完整性检查</p>
                 <div style="display: flex; gap: 10px; flex-wrap: wrap;">
@@ -131,14 +134,14 @@
                 </div>
             </div>
 
-            <div style="margin-top: 30px;">
+            <div>
                 <h3>📊 系统信息</h3>
-                <div style="margin-top: 15px; line-height: 1.8;">
-                    <div>题库状态: <span style="color: #4ade80;">已加载完整索引</span></div>
-                    <div>题目总数: <span id="total-exams">93</span></div>
-                    <div>HTML题目: <span id="html-exams">93</span></div>
-                    <div>PDF题目: <span id="pdf-exams">93</span></div>
-                    <div>最后更新: <span id="last-update">页面加载时</span></div>
+                <div style="margin-top: 15px; line-height: 1.8; font-weight: bold;">
+                    <div style="color: #10b981;">题库状态: 已加载完整索引</div>
+                    <div>题目总数: <span id="total-exams">147</span></div>
+                    <div>HTML题目: <span id="html-exams">147</span></div>
+                    <div>PDF题目: <span id="pdf-exams">147</span></div>
+                    <div>最后更新: <span id="last-update">2025/9/16 14:47:09</span></div>
                 </div>
 
                 <!-- 开发团队链接 -->
@@ -207,6 +210,18 @@
                 </div>
                 <div class="developer-card">
                     <div class="developer-name">zᙆ</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">zO_cssjjj👧</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">爱吃青花鱼罐头的罗罗酱</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">llalaland</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">哈希海</div>
                 </div>
             </div>
 

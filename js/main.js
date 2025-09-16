@@ -83,12 +83,12 @@ function setupMessageListener() {
     });
 }
 
-function loadLibrary() {
+function loadLibrary(forceReload = false) {
     const startTime = performance.now();
     const activeConfigKey = getActiveLibraryConfigurationKey();
-    const cachedData = storage.get(activeConfigKey);
+    let cachedData = storage.get(activeConfigKey);
 
-    if (cachedData) {
+    if (!forceReload && cachedData) {
         console.log(`[System] 使用localStorage中的缓存，key为 '${activeConfigKey}'`);
         examIndex = cachedData;
         // 确保默认题库配置的记录存在
@@ -106,17 +106,20 @@ function loadLibrary() {
         return;
     }
 
+    console.log(`[System] ${forceReload ? '强制' : '正常'}加载题库索引...`);
     showMessage('正在加载题库索引...', 'info');
 
     try {
         let readingExams = [];
         if (window.completeExamIndex && Array.isArray(window.completeExamIndex)) {
             readingExams = window.completeExamIndex.map(exam => ({ ...exam, type: 'reading' }));
+            console.log(`[Library] 加载阅读题库: ${readingExams.length} 项`);
         }
 
         let listeningExams = [];
         if (window.listeningExamIndex && Array.isArray(window.listeningExamIndex)) {
             listeningExams = window.listeningExamIndex; // type is already in the data
+            console.log(`[Library] 加载听力题库: ${listeningExams.length} 项 (P3: ${listeningExams.filter(e => e.category === 'P3').length}, P4: ${listeningExams.filter(e => e.category === 'P4').length})`);
         }
 
         if (readingExams.length === 0 && listeningExams.length === 0) {
@@ -124,15 +127,16 @@ function loadLibrary() {
         }
 
         examIndex = [...readingExams, ...listeningExams];
-        storage.set('exam_index', examIndex);
-        saveLibraryConfiguration('默认题库', 'exam_index', examIndex.length);
-        setActiveLibraryConfiguration('exam_index');
+        storage.set(activeConfigKey, examIndex); // 始终保存到缓存
+        saveLibraryConfiguration('默认题库', activeConfigKey, examIndex.length);
+        setActiveLibraryConfiguration(activeConfigKey);
         
         finishLibraryLoading(startTime);
 
     } catch (error) {
-        try { console.error('[Library] 加载题库失败:', error); } catch(_) {}
-        examIndex = []; try { finishLibraryLoading(startTime); } catch(_) {}
+        console.error('[Library] 加载题库失败:', error);
+        examIndex = [];
+        finishLibraryLoading(startTime);
     }
 }
 function finishLibraryLoading(startTime) {
@@ -153,7 +157,13 @@ function updateOverview() {
     readingExams.forEach(exam => { if (readingStats[exam.category]) readingStats[exam.category].total++; });
 
     const listeningStats = { P3: { total: 0 }, P4: { total: 0 } };
-    listeningExams.forEach(exam => { if (listeningStats[exam.category]) listeningStats[exam.category].total++; });
+    listeningExams.forEach(exam => {
+        if (exam.category && listeningStats[exam.category]) {
+            listeningStats[exam.category].total++;
+        } else {
+            console.warn('[Overview] 未知听力类别:', exam.category, exam);
+        }
+    });
 
     const categoryContainer = document.getElementById('category-overview');
     let html = '<h3 style="grid-column: 1 / -1;">阅读</h3>';
@@ -177,14 +187,15 @@ function updateOverview() {
     if (listeningExams.length > 0) {
         html += '<h3 style="margin-top: 40px; grid-column: 1 / -1;">听力</h3>';
         ['P3','P4'].forEach(cat => {
-            if ((listeningStats[cat] ? listeningStats[cat].total : 0) > 0) {
+            const count = listeningStats[cat] ? listeningStats[cat].total : 0;
+            if (count > 0) {
                 html += ''
                 + '<div class="category-card">'
                 +   '<div class="category-header">'
                 +     '<div class="category-icon">🎧</div>'
                 +     '<div>'
                 +       '<div class="category-title">' + cat + ' 听力</div>'
-                +       '<div class="category-meta">' + listeningStats[cat].total + ' 篇</div>'
+                +       '<div class="category-meta">' + count + ' 篇</div>'
                 +     '</div>'
                 +   '</div>'
                 +   '<div class="category-actions" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: nowrap;">'
@@ -1293,8 +1304,8 @@ function showLibraryConfigListV2() {
     }
 
     let html = `
-        <div style="background: linear-gradient(145deg, #4d3d7b, #1e1a33); padding: 20px; border-radius: 16px; margin: 20px 0; border:1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 30px rgba(0,0,0,0.35); color:#e5e7eb;">
-            <h3 style="margin:0 0 10px;">📚 题库配置列表</h3>
+        <div style="background: #D9CBBA; padding: 20px; border-radius: 10px; margin: 20px 0; border:2px solid #737373; box-shadow: 0 10px 30px rgba(0,0,0,0.35); color:#000000;">
+            <h3 style="margin:0 0 10px; color: #000000;">📚 题库配置列表</h3>
             <div style="max-height: 320px; overflow-y: auto; margin: 10px 0;">
     `;
     configs.forEach(cfg => {
@@ -1305,10 +1316,10 @@ function showLibraryConfigListV2() {
         const activeIndicator = isActive ? '（当前）' : '';
 
         html += `
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid rgba(255,255,255,0.1);">
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid rgba(0,0,0,0.1); color: #000000; background: linear-gradient(135deg, #BF755A, #a0654a); border-radius: 8px; margin: 5px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                 <div style="line-height:1.3;">
-                    <strong>${label}</strong> ${activeIndicator}<br>
-                    <small>${date} - ${cfg.examCount || 0} 个题目</small>
+                    <strong style="color: #F2F2F2;">${label}</strong> ${activeIndicator}<br>
+                    <small style="color: #F2F2F2;">${date} - ${cfg.examCount || 0} 个题目</small>
                 </div>
                 <div>
                     <button class="btn btn-secondary" onclick="switchLibraryConfig('${cfg.key}')" style="margin-left:10px;" ${isActive ? 'disabled' : ''}>切换</button>
