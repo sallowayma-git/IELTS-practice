@@ -39,6 +39,9 @@
   // Fallbacks for data export/import buttons in Settings
   if (typeof window.exportAllData !== 'function') {
     window.exportAllData = function(){
+      if (!window.dataIntegrityManager && window.DataIntegrityManager) {
+        try{ window.dataIntegrityManager = new window.DataIntegrityManager(); } catch(_){}
+      }
       if (window.dataIntegrityManager && typeof window.dataIntegrityManager.exportData==='function') {
         window.dataIntegrityManager.exportData();
         window.showMessage && window.showMessage('数据导出成功','success');
@@ -50,6 +53,9 @@
 
   if (typeof window.importData !== 'function') {
     window.importData = function(){
+      if (!window.dataIntegrityManager && window.DataIntegrityManager) {
+        try{ window.dataIntegrityManager = new window.DataIntegrityManager(); } catch(_){}
+      }
       if (!(window.dataIntegrityManager && typeof window.dataIntegrityManager.importData==='function')) {
         window.showMessage && window.showMessage('数据管理模块未初始化','error');
         return;
@@ -57,6 +63,65 @@
       var input=document.createElement('input'); input.type='file'; input.accept='.json';
       input.onchange = function(e){ var f=e.target.files&&e.target.files[0]; if(!f) return; var ok=confirm('导入数据将覆盖当前数据，确定继续吗？'); if(!ok) return; (async function(){ try{ await window.dataIntegrityManager.importData(f); window.showMessage && window.showMessage('数据导入成功','success'); } catch(err){ window.showMessage && window.showMessage('数据导入失败: '+(err&&err.message||err),'error'); } })(); };
       input.click();
+    };
+  }
+
+  // Fallbacks for backup operations used by Settings
+  if (typeof window.createManualBackup !== 'function') {
+    window.createManualBackup = function(){
+      if (!window.dataIntegrityManager && window.DataIntegrityManager) {
+        try{ window.dataIntegrityManager = new window.DataIntegrityManager(); } catch(_){}
+      }
+      if (!(window.dataIntegrityManager && typeof window.dataIntegrityManager.createBackup==='function')){
+        window.showMessage && window.showMessage('数据管理模块未初始化','error');
+        return;
+      }
+      (async function(){
+        try{
+          var b = await window.dataIntegrityManager.createBackup(null,'manual');
+          if (b && b.external) {
+            window.showMessage && window.showMessage('本地存储空间不足，已将备份下载为文件','warning');
+          } else {
+            window.showMessage && window.showMessage('备份创建成功: '+(b&&b.id||''),'success');
+          }
+        }catch(e){
+          window.showMessage && window.showMessage('备份创建失败: '+(e&&e.message||e),'error');
+        }
+      })();
+    };
+  }
+
+  if (typeof window.showBackupList !== 'function') {
+    window.showBackupList = function(){
+      if (!window.dataIntegrityManager && window.DataIntegrityManager) {
+        try{ window.dataIntegrityManager = new window.DataIntegrityManager(); } catch(_){}
+      }
+      if (!(window.dataIntegrityManager && typeof window.dataIntegrityManager.getBackupList==='function')){
+        window.showMessage && window.showMessage('数据管理模块未初始化','error');
+        return;
+      }
+      var backups = window.dataIntegrityManager.getBackupList()||[];
+      if (backups.length===0){ window.showMessage && window.showMessage('暂无备份记录','info'); return; }
+      var container = document.getElementById('settings-view') || document.body;
+      var existing = container.querySelector('.backup-list'); if (existing) existing.remove();
+      var listDiv = document.createElement('div'); listDiv.className='backup-list';
+      var html = ''+
+        '<div style="background: rgba(255, 255, 255, 0.1); padding: 20px; border-radius: 10px; margin: 20px 0;">'+
+        ' <h3>📋 备份列表</h3>'+
+        ' <div style="max-height: 300px; overflow-y: auto; margin: 15px 0;">'+
+        backups.map(function(b){
+          var date = new Date(b.timestamp).toLocaleString();
+          var sizeKB = Math.round((b.size||0)/1024);
+          var typeIcon = (b.type==='auto')?'🔄':(b.type==='manual'?'👤':'⚠️');
+          return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px;border-bottom:1px solid rgba(255,255,255,0.1);">'
+               +   '<div><strong>'+typeIcon+' '+(b.id||'')+'</strong><br><small>'+date+' · '+sizeKB+' KB · v'+(b.version||'')+'</small></div>'
+               +   '<button class="btn btn-secondary" onclick="restoreBackup(\''+(b.id||'')+'\')" style="margin-left:10px;">恢复</button>'
+               + '</div>';
+        }).join('')+
+        ' </div>'+
+        ' <button class="btn btn-secondary" onclick="this.parentElement.remove()">关闭</button>'+
+        '</div>';
+      listDiv.innerHTML = html; container.appendChild(listDiv);
     };
   }
   function ensureDefaultConfig(){

@@ -1,7 +1,7 @@
 // 听力题库数据
 // 最后更新时间: 2025-09-13
 // 数据版本: v1.0
-const listeningExamIndex = [
+window.listeningExamIndex = [
     // P3
     {
         id: 'listening-p3-01',

@@ -2,7 +2,7 @@
 // 最后更新时间: 2025-09-04
 // 数据版本: v3.0
 // 重写索引以适应新的文件结构
-const completeExamIndex = [
+window.completeExamIndex = [
     // P1 高频题目 (12题)
     {
         id: 'p1-high-01',

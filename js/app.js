@@ -35,6 +35,12 @@ class ExamSystemApp {
             // 设置事件监听器
             this.setupEventListeners();
 
+            // 调用 main.js 的遗留组件初始化
+            if (typeof window.initializeLegacyComponents === 'function') {
+                this.updateLoadingMessage('正在初始化遗留组件...');
+                window.initializeLegacyComponents();
+            }
+
             this.updateLoadingMessage('正在加载初始数据...');
             // 加载初始数据
             await this.loadInitialData();
@@ -58,7 +64,7 @@ class ExamSystemApp {
             this.showLoading(false);
 
             console.log('[App] IELTS考试系统初始化成功');
-            this.showUserMessage('系统初始化完成 Sallowaymmm呈现', 'success');
+            this.showUserMessage('系统初始化完成', 'success');
 
         } catch (error) {
             this.showLoading(false);
@@ -298,11 +304,16 @@ class ExamSystemApp {
      * 检查必要的依赖
      */
     checkDependencies() {
-        const requiredGlobals = ['storage', 'Utils'];
+        // 仅检查硬性依赖，保持向后兼容；Utils 可选
+        const requiredGlobals = ['storage'];
         const missing = requiredGlobals.filter(name => !window[name]);
 
         if (missing.length > 0) {
             throw new Error(`Missing required dependencies: ${missing.join(', ')}`);
+        }
+        // 软依赖提示但不阻断
+        if (!window.Utils) {
+            console.warn('[App] Optional dependency missing: Utils (continuing)');
         }
     }
 
