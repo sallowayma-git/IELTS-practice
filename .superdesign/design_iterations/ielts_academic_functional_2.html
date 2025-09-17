@@ -1125,7 +1125,7 @@
                         <h3><i class="fas fa-broom"></i> 系统清理</h3>
                         <p>清理系统缓存和临时文件，提高系统运行效率</p>
                         <div class="settings-actions">
-                            <button class="btn btn-primary" onclick="clearCache()">
+                            <button class="btn btn-primary" onclick="fixedClearCache()">
                                 <i class="fas fa-broom"></i>
                                 清除缓存
                             </button>
@@ -1140,9 +1140,9 @@
                         <h3><i class="fas fa-database"></i> 题库管理</h3>
                         <p>管理题库数据，包括重新加载和更新题库</p>
                         <div class="settings-actions">
-                            <button class="btn btn-primary" onclick="loadLibrary(true)">
+                            <button class="btn btn-primary" onclick="forceReloadLibrary()">
                                 <i class="fas fa-sync-alt"></i>
-                                重新加载题库
+                                强制刷新题库
                             </button>
                             <button class="btn btn-secondary" onclick="checkLibraryUpdates()">
                                 <i class="fas fa-download"></i>
@@ -1155,9 +1155,9 @@
                         <h3><i class="fas fa-save"></i> 数据管理</h3>
                         <p>备份、恢复和迁移学习数据</p>
                         <div class="settings-actions">
-                            <button class="btn btn-success" onclick="createBackup()">
-                                <i class="fas fa-download"></i>
-                                创建备份
+                            <button class="btn btn-success" onclick="showBackupList()">
+                                <i class="fas fa-list"></i>
+                                备份列表
                             </button>
                             <button class="btn btn-primary" onclick="importData()">
                                 <i class="fas fa-upload"></i>
@@ -2653,6 +2653,13 @@ IELTS 学术练习管理系统
                       </div>
                       <button class="btn btn-primary" onclick="window.location.href='../../index.html'">切换</button>
                     </div>
+                    <div style="border:1px solid var(--color-gray-200);border-radius:8px;padding:12px;display:flex;justify-content:space-between;align-items:center;">
+                      <div>
+                        <div style="color:#ec4899;font-weight:600;">Melody (美乐蒂)</div>
+                        <div style="color:var(--color-gray-600);font-size:0.9rem;">可爱粉色主题，温馨学习体验</div>
+                      </div>
+                      <button class="btn btn-primary" onclick="window.location.href='.superdesign/design_iterations/my_melody_ielts_1.html'">切换</button>
+                    </div>
                   </div>
                 </div>
                 <div class="modal-footer">
@@ -2781,27 +2788,42 @@ IELTS 学术练习管理系统
     })();
     </script>
 <script>
-(function () {
-  function safeGetRecords() {
+// 修复函数 - 确保在页面加载早期就可用
+function safeGetRecords() {
     try {
-      if (window.storage && typeof storage.get === 'function') {
-        return storage.get('practice_records', []) || [];
-      }
-    } catch (_) {}
+        if (window.storage && typeof storage.get === 'function') {
+            return storage.get('practice_records', []) || [];
+        }
+    } catch (e) {
+        console.warn('[Fix] storage.get failed:', e);
+    }
     try {
-      return JSON.parse(localStorage.getItem('practice_records') || '[]');
-    } catch (_) { return []; }
-  }
-  function safeSetRecords(list) {
+        return JSON.parse(localStorage.getItem('practice_records') || '[]');
+    } catch (e) {
+        console.warn('[Fix] localStorage fallback failed:', e);
+        return [];
+    }
+}
+
+function safeSetRecords(list) {
     try {
-      if (window.storage && typeof storage.set === 'function') {
-        storage.set('practice_records', list || []);
-        return;
-      }
-    } catch (_) {}
-    try { localStorage.setItem('practice_records', JSON.stringify(list || [])); } catch(_) {}
-  }
-  function normalizeRecord(r) {
+        if (window.storage && typeof storage.set === 'function') {
+            storage.set('practice_records', list || []);
+            console.log('[Fix] Records saved via storage.set');
+            return;
+        }
+    } catch (e) {
+        console.warn('[Fix] storage.set failed:', e);
+    }
+    try {
+        localStorage.setItem('practice_records', JSON.stringify(list || []));
+        console.log('[Fix] Records saved via localStorage');
+    } catch(e) {
+        console.error('[Fix] All storage methods failed:', e);
+    }
+}
+
+function normalizeRecord(r) {
     var exam = (Array.isArray(window.examIndex) ? window.examIndex.find(e => String(e.id) === String(r.examId)) : null) || {};
     var percent = (typeof r.accuracy === 'number') ? Math.round(r.accuracy * 100) : (r.score || (r.realData && r.realData.percentage) || 0);
     var dur = r.duration || (r.realData && r.realData.duration) || 0;
@@ -2809,89 +2831,248 @@ IELTS 学术练习管理系统
     var title = (r.metadata && r.metadata.examTitle) || r.title || r.examName || exam.title || '未命名练习';
     var type = exam.type || r.type || (typeof getExamTypeFromCategory === 'function' ? getExamTypeFromCategory((r.metadata && r.metadata.category) || r.category) : 'reading');
     return {
-      id: r.id || r.timestamp || Date.now(),
-      examId: r.examId || '',
-      title: title,
-      type: type,
-      score: percent,
-      duration: dur,
-      date: new Date(when).toISOString(),
-      timestamp: when,
-      realData: r.realData || null
+        id: r.id || r.timestamp || Date.now(),
+        examId: r.examId || '',
+        title: title,
+        type: type,
+        score: percent,
+        duration: dur,
+        date: new Date(when).toISOString(),
+        timestamp: when,
+        realData: r.realData || null
     };
-  }
+}
 
-  // 1) 覆盖同步：优先读取 storage（修复作答后记录不更新）
-  var _oldSync = window.syncPracticeRecords;
-  window.syncPracticeRecords = function () {
-    try {
-      var records = safeGetRecords();
-      window.practiceRecords = (records || []).map(normalizeRecord);
-      if (typeof updatePracticeView === 'function') updatePracticeView();
-      try { if (typeof updateOverview === 'function') updateOverview(); } catch(_) {}
-    } catch (e) {
-      console.error('[design] syncPracticeRecords error', e);
-      window.practiceRecords = [];
-      if (typeof _oldSync === 'function') try { _oldSync(); } catch(_) {}
-    }
-  };
-
-  // 2) 覆盖清缓存：清理带前缀存储 + 重建题库索引 + 刷新记录（修复1与4）
-  var _oldClear = window.clearCache;
-  window.clearCache = function () {
+// 修复清除缓存功能
+window.fixedClearCache = function() {
+    console.log('[Fix] fixedClearCache called');
     if (!confirm('确定要清除所有缓存数据吗？此操作不可撤销！')) return;
+
     try {
-      if (window.storage && typeof storage.clear === 'function') storage.clear();
-      else { localStorage.clear(); }
-    } catch (_) {}
+        // 清除所有存储
+        if (window.storage && typeof storage.clear === 'function') {
+            storage.clear();
+            console.log('[Fix] Storage cleared via storage.clear');
+        } else {
+            localStorage.clear();
+            console.log('[Fix] Storage cleared via localStorage.clear');
+        }
+    } catch (e) {
+        console.error('[Fix] Error clearing storage:', e);
+    }
+
     // 确保练习记录被清空
     safeSetRecords([]);
-    try { if (typeof showMessage === 'function') showMessage('缓存已清除', 'success'); } catch(_) {}
-    // 立刻重建题库索引，避免"题目不存在"
-    try { if (typeof loadLibrary === 'function') loadLibrary(true); } catch(_) {}
-    // 刷新练习记录视图
-    setTimeout(function(){ try { window.syncPracticeRecords(); } catch(_) {} }, 200);
-  };
+    console.log('[Fix] Practice records cleared');
 
-  // 3) 批量删除执行段对接带前缀存储（修复3）
-  var _oldBulk = window.bulkDeleteAction;
-  window.bulkDeleteAction = function () {
-    if (!window.bulkDeleteMode) { return _oldBulk ? _oldBulk() : null; }
+    // 显示消息
+    try {
+        if (typeof showMessage === 'function') {
+            showMessage('缓存已清除', 'success');
+        }
+    } catch (e) {
+        console.warn('[Fix] showMessage failed:', e);
+    }
+
+    // 立即重建题库索引，避免"题目不存在"
+    try {
+        if (typeof loadLibrary === 'function') {
+            loadLibrary(true);
+            console.log('[Fix] Library reloaded');
+        }
+    } catch (e) {
+        console.warn('[Fix] loadLibrary failed:', e);
+    }
+
+    // 刷新练习记录视图
+    setTimeout(function() {
+        try {
+            if (typeof syncPracticeRecords === 'function') {
+                syncPracticeRecords();
+                console.log('[Fix] Practice records synced');
+            }
+        } catch (e) {
+            console.warn('[Fix] syncPracticeRecords failed:', e);
+        }
+    }, 200);
+};
+
+// 修复强制刷新题库功能
+window.forceReloadLibrary = function() {
+    console.log('[Fix] forceReloadLibrary called');
+    try {
+        if (typeof loadLibrary === 'function') {
+            loadLibrary(true);
+            console.log('[Fix] Library force reloaded');
+            if (typeof showMessage === 'function') {
+                showMessage('题库已强制刷新', 'success');
+            }
+        }
+    } catch (e) {
+        console.error('[Fix] forceReloadLibrary failed:', e);
+    }
+};
+
+// 修复练习记录同步功能
+window.fixedSyncPracticeRecords = function() {
+    console.log('[Fix] fixedSyncPracticeRecords called');
+    try {
+        var records = safeGetRecords();
+        console.log('[Fix] Found', records.length, 'records');
+        window.practiceRecords = (records || []).map(normalizeRecord);
+
+        if (typeof updatePracticeView === 'function') {
+            updatePracticeView();
+            console.log('[Fix] Practice view updated');
+        }
+
+        try {
+            if (typeof updateOverview === 'function') {
+                updateOverview();
+            }
+        } catch (e) {
+            console.warn('[Fix] updateOverview failed:', e);
+        }
+    } catch (e) {
+        console.error('[Fix] fixedSyncPracticeRecords error:', e);
+        window.practiceRecords = [];
+    }
+};
+
+// 修复批量删除功能
+window.fixedBulkDeleteAction = function() {
+    console.log('[Fix] fixedBulkDeleteAction called');
+    if (!window.bulkDeleteMode) {
+        console.log('[Fix] Not in bulk delete mode');
+        return;
+    }
+
     var ids = Array.from((window.selectedRecordIds || new Set())).map(String);
-    if (ids.length === 0) { if (_oldBulk) return _oldBulk(); return; }
+    console.log('[Fix] Deleting records:', ids);
+
+    if (ids.length === 0) {
+        console.log('[Fix] No records selected for deletion');
+        return;
+    }
+
     var list = safeGetRecords();
     var setIds = new Set(ids);
     var newList = (list || []).filter(r => !setIds.has(String(r.id || r.timestamp)));
-    safeSetRecords(newList);
-    // 同步内存并刷新
-    try { window.practiceRecords = (window.practiceRecords || []).filter(r => !setIds.has(String(r.id || r.timestamp))); } catch(_) {}
-    try { if (typeof updatePracticeView === 'function') updatePracticeView(); } catch(_) {}
-    try { if (typeof updateOverview === 'function') updateOverview(); } catch(_) {}
-    try { (window.selectedRecordIds || new Set()).clear(); } catch(_) {}
-    window.bulkDeleteMode = false;
-    var btn = document.getElementById('bulk-delete-btn'); if (btn) btn.innerHTML = '<i class="fas fa-trash"></i> 批量删除';
-    try { showMessage('删除成功', 'success'); } catch(_) {}
-  };
 
-  // 4) 运行时修正文案与绑定（修复5与6）
-  window.addEventListener('DOMContentLoaded', function(){
+    console.log('[Fix] Records before:', list.length, 'after:', newList.length);
+
+    safeSetRecords(newList);
+
+    // 同步内存并刷新
     try {
-      var settings = document.getElementById('settings-view');
-      if (!settings) return;
-      settings.querySelectorAll('button').forEach(function(btn){
-        var txt = (btn.textContent || '').trim();
-        if (txt.includes('创建备份')) {
-          btn.innerHTML = '<i class="fas fa-list"></i> 备份列表';
-          btn.onclick = function(){ if (typeof showBackupList === 'function') showBackupList(); else if (typeof createBackup === 'function') createBackup(); };
+        window.practiceRecords = (window.practiceRecords || []).filter(r => !setIds.has(String(r.id || r.timestamp)));
+    } catch (e) {
+        console.warn('[Fix] Error updating memory records:', e);
+    }
+
+    try {
+        if (typeof updatePracticeView === 'function') {
+            updatePracticeView();
         }
-        if (txt.includes('重新加载题库')) {
-          btn.innerHTML = '<i class="fas fa-sync-alt"></i> 强制刷新题库';
-          btn.onclick = function(){ try { loadLibrary(true); if (typeof showMessage==='function') showMessage('题库已强制刷新','success'); } catch(_) {} };
+    } catch (e) {
+        console.warn('[Fix] updatePracticeView failed:', e);
+    }
+
+    try {
+        if (typeof updateOverview === 'function') {
+            updateOverview();
         }
-      });
-    } catch (_) {}
-  });
-})();
+    } catch (e) {
+        console.warn('[Fix] updateOverview failed:', e);
+    }
+
+    try {
+        (window.selectedRecordIds || new Set()).clear();
+    } catch (e) {
+        console.warn('[Fix] Error clearing selected IDs:', e);
+    }
+
+    window.bulkDeleteMode = false;
+    var btn = document.getElementById('bulk-delete-btn');
+    if (btn) {
+        btn.innerHTML = '<i class="fas fa-trash"></i> 批量删除';
+    }
+
+    try {
+        showMessage('删除成功', 'success');
+    } catch (e) {
+        console.warn('[Fix] showMessage failed:', e);
+    }
+};
+
+// 覆盖原有函数
+console.log('[Fix] Applying function overrides...');
+
+// 等待DOM加载完成后覆盖原有函数
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('[Fix] DOM loaded, applying overrides...');
+
+    // 覆盖练习记录同步
+    if (typeof window.syncPracticeRecords === 'function') {
+        window.syncPracticeRecords = window.fixedSyncPracticeRecords;
+        console.log('[Fix] syncPracticeRecords overridden');
+    }
+
+    // 覆盖清除缓存
+    if (typeof window.clearCache === 'function') {
+        window.clearCache = window.fixedClearCache;
+        console.log('[Fix] clearCache overridden');
+    }
+
+    // 覆盖批量删除
+    if (typeof window.bulkDeleteAction === 'function') {
+        window.bulkDeleteAction = window.fixedBulkDeleteAction;
+        console.log('[Fix] bulkDeleteAction overridden');
+    }
+
+    // 立即同步一次练习记录
+    setTimeout(function() {
+        try {
+            window.fixedSyncPracticeRecords();
+        } catch (e) {
+            console.warn('[Fix] Initial sync failed:', e);
+        }
+    }, 500);
+});
+
+// 如果DOMContentLoaded已经触发，立即执行
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', arguments.callee);
+} else {
+    console.log('[Fix] DOM already loaded, applying overrides immediately...');
+
+    // 覆盖练习记录同步
+    if (typeof window.syncPracticeRecords === 'function') {
+        window.syncPracticeRecords = window.fixedSyncPracticeRecords;
+        console.log('[Fix] syncPracticeRecords overridden (immediate)');
+    }
+
+    // 覆盖清除缓存
+    if (typeof window.clearCache === 'function') {
+        window.clearCache = window.fixedClearCache;
+        console.log('[Fix] clearCache overridden (immediate)');
+    }
+
+    // 覆盖批量删除
+    if (typeof window.bulkDeleteAction === 'function') {
+        window.bulkDeleteAction = window.fixedBulkDeleteAction;
+        console.log('[Fix] bulkDeleteAction overridden (immediate)');
+    }
+
+    // 立即同步一次练习记录
+    setTimeout(function() {
+        try {
+            window.fixedSyncPracticeRecords();
+        } catch (e) {
+            console.warn('[Fix] Initial sync failed:', e);
+        }
+    }, 500);
+}
 </script>
 </body>
 
