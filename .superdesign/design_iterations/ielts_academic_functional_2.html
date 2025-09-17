@@ -911,6 +911,22 @@
             }
         }
     </style>
+    <!-- 练习记录详情弹窗样式（引用现有库，不修改库文件） -->
+    <link rel="stylesheet" href="../../css/practice-record-modal.css">
+    <style>
+        /* ==================== Design Adapt Overrides ==================== */
+        /* 4) 小圆点对齐：相对上移 1px，使与题目文本更居中 */
+        .completion-dot { position: relative; top: -1px; }
+
+        /* 弹窗风格适配 Academic */
+        .modal-header { background: var(--color-gray-50); border-bottom: 1px solid var(--color-gray-200); }
+        .modal-title { color: var(--color-primary); }
+        .modal-footer { background: var(--color-gray-50); border-top: 1px solid var(--color-gray-200); }
+        .record-summary h4 { background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%); }
+        .meta-item { background: var(--color-gray-50); border-left-color: var(--color-accent); }
+        .meta-label { color: var(--color-gray-600); }
+        .meta-value { color: var(--color-primary-dark); }
+    </style>
 </head>
 
 <body>
@@ -923,11 +939,11 @@
             </div>
 
             <div class="nav-menu">
-                <button class="nav-item" onclick="showView('overview')">
+                <button class="nav-item active" onclick="showView('overview')">
                     <i class="fas fa-chart-line"></i>
                     <span>学习总览</span>
                 </button>
-                <button class="nav-item active" onclick="showView('browse')">
+                <button class="nav-item" onclick="showView('browse')">
                     <i class="fas fa-book-open"></i>
                     <span>题库浏览</span>
                 </button>
@@ -950,7 +966,7 @@
         <!-- Main Content Area -->
         <main class="main-content">
             <!-- Overview View -->
-            <div id="overview-view" class="view">
+            <div id="overview-view" class="view active">
                 <div class="content-header">
                     <h2>学习总览</h2>
                     <div class="breadcrumb">首页 / 学习总览</div>
@@ -996,7 +1012,7 @@
             </div>
 
             <!-- Browse View -->
-            <div id="browse-view" class="view active">
+            <div id="browse-view" class="view">
                 <div class="content-header">
                     <h2>题库浏览</h2>
                     <div class="breadcrumb">首页 / 题库浏览</div>
@@ -1053,6 +1069,10 @@
                             <i class="fas fa-download"></i>
                             导出记录
                         </button>
+                        <button class="btn" onclick="batchDeleteSelected()">
+                            <i class="fas fa-trash"></i>
+                            批量删除
+                        </button>
                         <button class="btn btn-warning" onclick="clearPracticeData()">
                             <i class="fas fa-trash"></i>
                             清除记录
@@ -1064,6 +1084,7 @@
                     <table class="table">
                         <thead>
                             <tr>
+                                <th style="width:40px;text-align:center;"><input type="checkbox" id="select-all-records" onclick="toggleSelectAll(this)"></th>
                                 <th>题目名称</th>
                                 <th>类型</th>
                                 <th>得分</th>
@@ -1155,6 +1176,10 @@
                             <button class="btn btn-secondary" onclick="showUsageStatistics()">
                                 <i class="fas fa-chart-bar"></i>
                                 使用统计
+                            </button>
+                            <button class="btn btn-secondary" onclick="showThemeSwitcher()">
+                                <i class="fas fa-palette"></i>
+                                主题切换
                             </button>
                         </div>
                     </div>
@@ -1266,6 +1291,8 @@
         // let currentExamType = 'all';
         // let filteredExams = [];
         // let practiceRecords = [];
+        // 选择性批量删除所用集合（仅本页使用）
+        let selectedRecordIds = new Set();
 
         // Initialize the application
         document.addEventListener('DOMContentLoaded', function() {
@@ -2358,6 +2385,291 @@ IELTS 学术练习管理系统
             console.log('IELTS Academic Practice System initialized');
             showMessage('系统就绪', 'success', 'IELTS学术练习管理系统已就绪');
         });
+    </script>
+
+    <!-- 页面增强脚本（仅适配本题 HTML，不修改库文件） -->
+    <script>
+    (function(){
+        // 保障兼容：全局集合（若未定义则创建）
+        if (!window.selectedRecordIds) window.selectedRecordIds = new Set();
+
+        // 1) 查看详情：调用现有 PracticeRecordModal 显示弹窗
+        window.viewRecordDetails = function(recordId) {
+            try {
+                if (window.practiceRecordModal && typeof window.practiceRecordModal.showById === 'function') {
+                    window.practiceRecordModal.showById(recordId);
+                } else if (window.practiceHistoryEnhancer && typeof window.practiceHistoryEnhancer.showRecordDetails === 'function') {
+                    window.practiceHistoryEnhancer.showRecordDetails(recordId);
+                } else {
+                    var recs = JSON.parse(localStorage.getItem('practice_records')||'[]');
+                    var r = recs.find(function(x){ return String(x.id||x.timestamp) === String(recordId); });
+                    alert(r ? ('题目：' + (r.title||'未知') + '\n分数：' + (r.score||0) + '%\n用时：' + (r.duration||0) + '秒') : '记录不存在');
+                }
+            } catch (e) {
+                console.error('[viewRecordDetails] 失败:', e);
+                if (window.showMessage) window.showMessage('无法显示记录详情: ' + e.message, 'error');
+            }
+        };
+
+        // 2) 注入选择列（用于批量删除）
+        window.decoratePracticeTableForSelection = function() {
+            try {
+                var tbody = document.getElementById('practice-records-tbody');
+                if (!tbody) return;
+                var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+                rows.forEach(function(row){
+                    var firstCell = row.children[0];
+                    var hasCheckbox = firstCell && firstCell.querySelector && firstCell.querySelector('input.record-select');
+                    if (hasCheckbox) return;
+                    // 从“查看”按钮中提取 recordId
+                    var actionBtn = row.querySelector('button[onclick^="viewRecordDetails("]');
+                    var recordId = '';
+                    if (actionBtn) {
+                        var oc = actionBtn.getAttribute('onclick') || '';
+                        var m = oc.match(/viewRecordDetails\(['\"](.+?)['\"]\)/);
+                        if (m) recordId = m[1];
+                    }
+                    var cb = document.createElement('input');
+                    cb.type = 'checkbox';
+                    cb.className = 'record-select';
+                    cb.setAttribute('data-id', recordId);
+                    cb.checked = window.selectedRecordIds.has(String(recordId));
+                    cb.onchange = function(){ window.onRecordCheckboxChange(cb); };
+                    var td = document.createElement('td');
+                    td.style.textAlign = 'center';
+                    td.appendChild(cb);
+                    row.insertBefore(td, row.firstChild);
+                });
+                window.syncSelectAllCheckboxState();
+            } catch (e) { console.warn('[SelectionDecor] 渲染失败:', e); }
+        };
+
+        window.onRecordCheckboxChange = function(el){
+            var id = String(el.getAttribute('data-id'));
+            if (el.checked) window.selectedRecordIds.add(id); else window.selectedRecordIds.delete(id);
+            window.syncSelectAllCheckboxState();
+        };
+
+        window.toggleSelectAll = function(master){
+            var check = !!master.checked;
+            var cbs = document.querySelectorAll('#practice-records-tbody .record-select');
+            Array.prototype.forEach.call(cbs, function(cb){
+                cb.checked = check;
+                var id = String(cb.getAttribute('data-id'));
+                if (check) window.selectedRecordIds.add(id); else window.selectedRecordIds.delete(id);
+            });
+            window.syncSelectAllCheckboxState();
+        };
+
+        window.syncSelectAllCheckboxState = function(){
+            var cbs = Array.prototype.slice.call(document.querySelectorAll('#practice-records-tbody .record-select'));
+            var master = document.getElementById('select-all-records');
+            if (!master) return;
+            if (cbs.length === 0) { master.checked = false; master.indeterminate = false; return; }
+            var checkedCount = cbs.filter(function(cb){ return cb.checked; }).length;
+            master.checked = checkedCount === cbs.length;
+            master.indeterminate = checkedCount > 0 && checkedCount < cbs.length;
+        };
+
+        window.batchDeleteSelected = function(){
+            var ids = Array.from(window.selectedRecordIds || []);
+            if (ids.length === 0) { try { showMessage('未选择记录', 'warning', '请先选择要删除的记录'); } catch(_) {} return; }
+            if (!confirm('确定要删除选中的 ' + ids.length + ' 条记录吗？此操作不可撤销。')) return;
+            try {
+                var list = JSON.parse(localStorage.getItem('practice_records')||'[]');
+                var idSet = new Set(ids.map(String));
+                list = list.filter(function(r){ return !idSet.has(String(r.id||r.timestamp)); });
+                localStorage.setItem('practice_records', JSON.stringify(list));
+                if (window.practiceRecords) window.practiceRecords = list;
+            } catch (e) { console.warn('[BatchDelete] 本地存储更新失败:', e); }
+            window.selectedRecordIds.clear();
+            try { updatePracticeView(); } catch(_) {}
+            try { updateOverview(); } catch(_) {}
+            try { showMessage('删除成功', 'success', '已删除选中记录'); } catch(_) {}
+        };
+
+        // 3) 增强导入：兼容 exam_system_practice_records 结构
+        (function(){
+            var originalImport = window.importData;
+            window.importData = function(){
+                var input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.json';
+                input.onchange = function(e){
+                    var file = e.target.files[0]; if (!file) return;
+                    var reader = new FileReader();
+                    reader.onload = function(ev){
+                        try {
+                            var data = JSON.parse(ev.target.result);
+                            var importedExamCount = 0, importedRecordCount = 0;
+
+                            function mapRecord(r){
+                                var pct = null;
+                                if (r.percentage != null) pct = r.percentage;
+                                else if (r.realData && r.realData.percentage != null) pct = r.realData.percentage;
+                                else if (r.accuracy != null) pct = Math.round(Number(r.accuracy)*100);
+                                else if (r.realData && r.realData.accuracy != null) pct = Math.round(Number(r.realData.accuracy)*100);
+                                else if (r.score != null && r.totalQuestions) pct = Math.round((Number(r.score)/Number(r.totalQuestions))*100);
+                                var dur = r.duration || (r.realData && r.realData.duration) || (r.endTime && r.startTime ? Math.max(0, Math.floor((new Date(r.endTime)-new Date(r.startTime))/1000)) : 0);
+                                var dateStr = r.date || (r.timestamp ? new Date(r.timestamp).toISOString() : (r.endTime || r.startTime || new Date().toISOString()));
+                                var rd = r.realData || null;
+                                if (!rd) {
+                                    rd = {
+                                        score: r.score != null ? r.score : null,
+                                        totalQuestions: r.totalQuestions || (r.scoreInfo && r.scoreInfo.total) || null,
+                                        accuracy: (r.accuracy != null ? r.accuracy : (pct != null ? pct/100 : null)),
+                                        percentage: pct != null ? pct : null,
+                                        duration: dur,
+                                        answers: r.answers || (r.scoreInfo && r.scoreInfo.details ? Object.fromEntries(Object.entries(r.scoreInfo.details).map(function(ent){ return [ent[0], (ent[1]&&ent[1].userAnswer)]; })) : {}),
+                                        correctAnswers: (r.realData && r.realData.correctAnswers) || (r.scoreInfo && r.scoreInfo.details ? Object.fromEntries(Object.entries(r.scoreInfo.details).map(function(ent){ return [ent[0], (ent[1]&&ent[1].correctAnswer)]; })) : {}),
+                                        interactions: r.interactions || [],
+                                        isRealData: true,
+                                        source: r.dataSource || 'imported'
+                                    };
+                                }
+                                return {
+                                    id: r.id || r.timestamp || Date.now(),
+                                    examId: r.examId || '',
+                                    title: r.title || r.examName || '未命名练习',
+                                    type: r.type || (typeof getExamTypeFromCategory === 'function' ? getExamTypeFromCategory(r.category) : 'reading'),
+                                    category: r.category || (typeof getExamCategoryFromType === 'function' ? getExamCategoryFromType(r.type) : 'P1'),
+                                    frequency: r.frequency || 'medium',
+                                    score: pct || 0,
+                                    duration: dur,
+                                    date: dateStr,
+                                    timestamp: r.timestamp || r.id || Date.now(),
+                                    realData: rd,
+                                    dataSource: r.dataSource || 'imported'
+                                };
+                            }
+
+                            // exam index sources
+                            if (data && data.data && data.data.exam_system_exam_index && Array.isArray(data.data.exam_system_exam_index.data)) {
+                                try { localStorage.setItem('exam_index', JSON.stringify(data.data.exam_system_exam_index.data)); importedExamCount = data.data.exam_system_exam_index.data.length; } catch(_) {}
+                            } else if (data && data.exam_system_exam_index && Array.isArray(data.exam_system_exam_index.data)) {
+                                try { localStorage.setItem('exam_index', JSON.stringify(data.exam_system_exam_index.data)); importedExamCount = data.exam_system_exam_index.data.length; } catch(_) {}
+                            } else if (Array.isArray(data.exam_index)) {
+                                try { localStorage.setItem('exam_index', JSON.stringify(data.exam_index)); importedExamCount = data.exam_index.length; } catch(_) {}
+                            }
+
+                            // practice records sources
+                            var importedRecords = null;
+                            if (Array.isArray(data.practice_records)) {
+                                importedRecords = data.practice_records.map(mapRecord);
+                            } else if (data && data.data && Array.isArray(data.data.practice_records)) {
+                                importedRecords = data.data.practice_records.map(mapRecord);
+                            } else if (data && data.exam_system_practice_records && Array.isArray(data.exam_system_practice_records.data)) {
+                                importedRecords = data.exam_system_practice_records.data.map(mapRecord);
+                            } else if (Array.isArray(data.practiceRecords)) {
+                                importedRecords = data.practiceRecords.map(mapRecord);
+                            }
+
+                            if (importedRecords) {
+                                localStorage.setItem('practice_records', JSON.stringify(importedRecords));
+                                if (window.practiceRecords) window.practiceRecords = importedRecords;
+                                importedRecordCount = importedRecords.length;
+                            }
+
+                            try { updateOverview(); } catch(_) {}
+                            try { updateBrowseView(); } catch(_) {}
+                            try { updatePracticeView(); } catch(_) {}
+                            try { showMessage('数据导入成功', 'success', '成功导入 ' + importedExamCount + ' 道题目和 ' + importedRecordCount + ' 条练习记录'); } catch(_) {}
+                        } catch (err) {
+                            console.error('[Import] 失败:', err);
+                            if (window.showMessage) window.showMessage('导入失败: ' + err.message, 'error');
+                        }
+                    };
+                    reader.readAsText(file);
+                };
+                input.click();
+            };
+        })();
+
+        // 4) 主题切换弹窗
+        window.showThemeSwitcher = function(){
+            /*
+            var html = '\
+            <div id="theme-switcher" class="modal-overlay show">\
+              <div class="modal-container" style="max-width:560px;">\
+                <div class="modal-header">\
+                  <h3 class="modal-title"><i class="fas fa-palette"></i> 主题切换</h3>\
+                  <button class="modal-close" onclick="document.getElementById(\'theme-switcher\').remove()"><i class="fas fa-times"></i></button>\
+                </div>\
+                <div class="modal-body">\
+                  <div style="display:grid;gap:12px;">\
+                    <div style="border:1px solid var(--color-gray-200);border-radius:8px;padding:12px;background:var(--color-gray-50);display:flex;justify-content:space-between;align-items:center;">\
+                      <div>\
+                        <div style="color:var(--color-primary);font-weight:600;">Academic（专业  高效  可靠）</div>\
+                        <div style="color:var(--color-gray-600);font-size:0.9rem;">当前主题</div>\
+                      </div>\
+                      <span class="score-badge score-good">当前</span>\
+                    </div>\
+                    <div style="border:1px solid var(--color-gray-200);border-radius:8px;padding:12px;display:flex;justify-content:space-between;align-items:center;">\
+                      <div>\
+                        <div style="color:#a16207;font-weight:600;">Bloom（秋日  暖阳）</div>\
+                        <div style="color:var(--color-gray-600);font-size:0.9rem;">温暖配色，适合放松阅读</div>\
+                      </div>\
+                      <button class="btn btn-primary" onclick="window.location.href='../../index.html'">切换</button>\
+                    </div>\
+                  </div>\
+                </div>\
+                <div class="modal-footer">\
+                  <button class="btn btn-secondary" onclick="document.getElementById(\'theme-switcher\').remove()">关闭</button>\
+                </div>\
+              </div>\
+            </div>';
+            document.body.insertAdjacentHTML('beforeend', html);
+        */
+        };
+
+        // 安全重写：使用模板字符串，避免引号转义问题
+        window.showThemeSwitcher = function(){
+            const html = `
+            <div id="theme-switcher" class="modal-overlay show">
+              <div class="modal-container" style="max-width:560px;">
+                <div class="modal-header">
+                  <h3 class="modal-title"><i class="fas fa-palette"></i> 主题切换</h3>
+                  <button class="modal-close" onclick="document.getElementById('theme-switcher').remove()"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="modal-body">
+                  <div style="display:grid;gap:12px;">
+                    <div style="border:1px solid var(--color-gray-200);border-radius:8px;padding:12px;background:var(--color-gray-50);display:flex;justify-content:space-between;align-items:center;">
+                      <div>
+                        <div style="color:var(--color-primary);font-weight:600;">Academic (专业 高效 可靠)</div>
+                        <div style="color:var(--color-gray-600);font-size:0.9rem;">当前主题</div>
+                      </div>
+                      <span class="score-badge score-good">当前</span>
+                    </div>
+                    <div style="border:1px solid var(--color-gray-200);border-radius:8px;padding:12px;display:flex;justify-content:space-between;align-items:center;">
+                      <div>
+                        <div style="color:#a16207;font-weight:600;">Bloom (秋日 暖阳)</div>
+                        <div style="color:var(--color-gray-600);font-size:0.9rem;">温暖配色，适合放松阅读</div>
+                      </div>
+                      <button class="btn btn-primary" onclick="window.location.href='../../index.html'">切换</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="modal-footer">
+                  <button class="btn btn-secondary" onclick="document.getElementById('theme-switcher').remove()">关闭</button>
+                </div>
+              </div>
+            </div>`;
+            document.body.insertAdjacentHTML('beforeend', html);
+        };
+
+        // 5) 默认进首页“学习总览”
+        try { showView('overview'); } catch(_) {}
+
+        // 6) 监听表格变化，首次装饰
+        try {
+            var tbody = document.getElementById('practice-records-tbody');
+            if (tbody) {
+                var observer = new MutationObserver(function(){ decoratePracticeTableForSelection(); });
+                observer.observe(tbody, { childList: true });
+                setTimeout(decoratePracticeTableForSelection, 0);
+            }
+        } catch (e) { console.warn('[SelectionDecor] 初始化失败:', e); }
+    })();
     </script>
 </body>
 
