@@ -926,6 +926,12 @@
         .meta-item { background: var(--color-gray-50); border-left-color: var(--color-accent); }
         .meta-label { color: var(--color-gray-600); }
         .meta-value { color: var(--color-primary-dark); }
+
+        /* 练习记录行选择（批量删除模式） */
+        .record-row.selected { background: #fef2f2 !important; }
+        .records-table tbody tr.selected { background: #fef2f2 !important; }
+        #practice-view.bulk-mode .record-row { cursor: pointer; }
+        #practice-view.bulk-mode .record-row:hover { background: #fee2e2; }
     </style>
 </head>
 
@@ -1069,7 +1075,7 @@
                             <i class="fas fa-download"></i>
                             导出记录
                         </button>
-                        <button class="btn" onclick="batchDeleteSelected()">
+                        <button class="btn" onclick="bulkDeleteAction()" id="bulk-delete-btn">
                             <i class="fas fa-trash"></i>
                             批量删除
                         </button>
@@ -1084,7 +1090,6 @@
                     <table class="table">
                         <thead>
                             <tr>
-                                <th style="width:40px;text-align:center;"><input type="checkbox" id="select-all-records" onclick="toggleSelectAll(this)"></th>
                                 <th>题目名称</th>
                                 <th>类型</th>
                                 <th>得分</th>
@@ -2656,6 +2661,109 @@ IELTS 学术练习管理系统
             </div>`;
             document.body.insertAdjacentHTML('beforeend', html);
         };
+
+        // —— 批量删除（行点击选择）实现 ——
+        // 关闭旧的复选框装饰逻辑
+        window.decoratePracticeTableForSelection = function(){};
+
+        // 切换批量删除模式
+        window.bulkDeleteAction = function(){
+            if (!window.bulkDeleteMode) {
+                setBulkDeleteMode(true);
+                try { showMessage('批量选择已开启', 'info', '点击记录行可选择；完成后再次点击完成选择'); } catch(_) {}
+            } else {
+                // 完成选择 -> 执行删除
+                const ids = Array.from(selectedRecordIds || []);
+                if (ids.length === 0) { setBulkDeleteMode(false); return; }
+                try {
+                    let list = JSON.parse(localStorage.getItem('practice_records')||'[]');
+                    const setIds = new Set(ids.map(String));
+                    list = list.filter(r => !setIds.has(String(r.id||r.timestamp)));
+                    localStorage.setItem('practice_records', JSON.stringify(list));
+                    if (window.practiceRecords) window.practiceRecords = list;
+                } catch(e) { console.warn('[BulkDelete] 更新存储失败:', e); }
+                selectedRecordIds.clear();
+                try { updatePracticeView(); } catch(_) {}
+                try { updateOverview(); } catch(_) {}
+                setBulkDeleteMode(false);
+                try { showMessage('删除成功', 'success', '已删除所选记录'); } catch(_) {}
+            }
+        };
+
+        function setBulkDeleteMode(on) {
+            window.bulkDeleteMode = !!on;
+            const pv = document.getElementById('practice-view');
+            if (pv) pv.classList.toggle('bulk-mode', window.bulkDeleteMode);
+            updateBulkDeleteButton();
+        }
+
+        function updateBulkDeleteButton() {
+            const btn = document.getElementById('bulk-delete-btn');
+            if (!btn) return;
+            if (window.bulkDeleteMode) {
+                btn.innerHTML = '<i class="fas fa-check"></i> 完成选择';
+            } else {
+                btn.innerHTML = '<i class="fas fa-trash"></i> 批量删除';
+            }
+        }
+
+        // 行点击选择（仅在批量模式下有效），避开“查看”按钮
+        (function setupRecordRowClick(){
+            const tbody = document.getElementById('practice-records-tbody');
+            if (!tbody) return;
+            tbody.addEventListener('click', function(e){
+                if (!window.bulkDeleteMode) return;
+                const btn = e.target.closest && e.target.closest('button');
+                if (btn) return; // 不干扰“查看”
+                const row = e.target.closest && e.target.closest('tr');
+                if (!row) return;
+                let id = '';
+                try {
+                    const actionBtn = row.querySelector('button[onclick^="viewRecordDetails("]');
+                    const oc = actionBtn && actionBtn.getAttribute('onclick');
+                    const m = oc && oc.match(/viewRecordDetails\(['\"](.+?)['\"]\)/);
+                    if (m) id = m[1];
+                } catch(_) {}
+                if (!id) return;
+                const key = String(id);
+                if (selectedRecordIds.has(key)) { selectedRecordIds.delete(key); row.classList.remove('selected'); }
+                else { selectedRecordIds.add(key); row.classList.add('selected'); }
+            });
+
+            // 监听渲染变化，补上行类名并同步选中状态
+            const mo = new MutationObserver(() => {
+                const rows = Array.from(tbody.querySelectorAll('tr'));
+                rows.forEach(row => {
+                    row.classList.add('record-row');
+                    // 同步选中样式
+                    try {
+                        const actionBtn = row.querySelector('button[onclick^="viewRecordDetails("]');
+                        const oc = actionBtn && actionBtn.getAttribute('onclick');
+                        const m = oc && oc.match(/viewRecordDetails\(['\"](.+?)['\"]\)/);
+                        const id = m ? String(m[1]) : '';
+                        if (id && selectedRecordIds.has(id)) row.classList.add('selected'); else row.classList.remove('selected');
+                    } catch(_) {}
+                });
+            });
+            mo.observe(tbody, { childList: true });
+            // 首次同步
+            setTimeout(() => mo.takeRecords() && null, 0);
+        })();
+
+        // 题库打开回退：将 startExam 委托到 openExam
+        (function ensureStartExamDelegates(){
+            try {
+                if (!window.startExam || !window.startExam.__designPatched) {
+                    const original = window.startExam;
+                    window.startExam = function(examId){
+                        if (typeof window.openExam === 'function') return window.openExam(examId);
+                        if (typeof original === 'function') return original(examId);
+                        try { showMessage('无法打开题目：未找到 openExam', 'error'); } catch(_) {}
+                    };
+                    window.startExam.__designPatched = true;
+                }
+            } catch(_) {}
+        })();
 
         // 5) 默认进首页“学习总览”
         try { showView('overview'); } catch(_) {}
