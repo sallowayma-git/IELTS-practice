@@ -433,12 +433,14 @@ class ScoreStorage {
      * 获取练习记录
      */
     getPracticeRecords(filters = {}) {
-        const records = storage.get(this.storageKeys.practiceRecords, []);
-        
+        const raw = storage.get(this.storageKeys.practiceRecords, []);
+        // Normalize each record to ensure UI can rely on a stable shape
+        const records = raw.map(r => this.normalizeRecordFields(r));
+
         if (Object.keys(filters).length === 0) {
             return records.sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
         }
-        
+
         return records.filter(record => {
             // 按考试ID筛选
             if (filters.examId && record.examId !== filters.examId) return false;
@@ -474,7 +476,7 @@ class ScoreStorage {
     recalculateUserStats() {
         console.log('Recalculating user stats...');
         
-        const records = storage.get(this.storageKeys.practiceRecords, []);
+        const records = (storage.get(this.storageKeys.practiceRecords, []) || []).map(r => this.normalizeRecordFields(r));
         const stats = this.getDefaultUserStats();
         
         // 重新计算所有统计数据
@@ -483,6 +485,115 @@ class ScoreStorage {
         });
         
         console.log('User stats recalculated');
+    }
+
+    /**
+     * 将不同来源/版本的记录统一为稳定字段，以便 UI/统计可靠工作
+     * 不修改存储中的原始对象，仅在返回路径做兼容填充
+     */
+    normalizeRecordFields(record) {
+        try {
+            const r = { ...(record || {}) };
+
+            // metadata 兜底
+            r.metadata = {
+                examTitle: (r.metadata && r.metadata.examTitle) || r.title || r.examTitle || r.examId || '',
+                category: (r.metadata && r.metadata.category) || r.category || '',
+                frequency: (r.metadata && r.metadata.frequency) || r.frequency || '',
+                ...(r.metadata || {})
+            };
+
+            // 时间字段归一
+            const rd = r.realData || {};
+            if (!r.startTime) {
+                if (typeof rd.startTime === 'number') {
+                    r.startTime = new Date(rd.startTime).toISOString();
+                } else if (rd.startTime) {
+                    r.startTime = new Date(rd.startTime).toISOString();
+                } else if (r.date) {
+                    r.startTime = new Date(r.date).toISOString();
+                }
+            }
+            if (!r.endTime) {
+                if (typeof rd.endTime === 'number') {
+                    r.endTime = new Date(rd.endTime).toISOString();
+                } else if (rd.endTime) {
+                    r.endTime = new Date(rd.endTime).toISOString();
+                } else if (r.startTime && (r.duration || rd.duration)) {
+                    const base = new Date(r.startTime).getTime();
+                    const seconds = (Number(r.duration || rd.duration) || 0);
+                    r.endTime = new Date(base + seconds * 1000).toISOString();
+                }
+            }
+
+            // 用时归一（秒）
+            if (typeof r.duration !== 'number' || isNaN(r.duration)) {
+                if (typeof rd.duration === 'number') {
+                    r.duration = rd.duration;
+                } else if (r.startTime && r.endTime) {
+                    r.duration = Math.max(0, Math.floor((new Date(r.endTime) - new Date(r.startTime)) / 1000));
+                } else {
+                    r.duration = 0;
+                }
+            }
+
+            // scoreInfo 归一
+            const sInfo = r.scoreInfo || rd.scoreInfo || {};
+            if (!r.scoreInfo && (rd.scoreInfo || r.answerComparison)) {
+                r.scoreInfo = sInfo;
+            }
+
+            // answers 归一
+            if (!r.answers && rd.answers) {
+                r.answers = rd.answers;
+            }
+
+            // 正确/总题数归一
+            const derivedCorrect = (typeof r.correctAnswers === 'number') ? r.correctAnswers
+                                 : (typeof r.score === 'number' ? r.score
+                                    : (typeof sInfo.correct === 'number' ? sInfo.correct : null));
+
+            const derivedTotal = (typeof r.totalQuestions === 'number') ? r.totalQuestions
+                               : (typeof sInfo.total === 'number' ? sInfo.total
+                                  : (r.realData && typeof r.realData.totalQuestions === 'number' ? r.realData.totalQuestions
+                                     : (r.answers ? Object.keys(r.answers).length
+                                        : (rd.answers ? Object.keys(rd.answers || {}).length : null))));
+
+            if (typeof r.correctAnswers !== 'number' && derivedCorrect != null) {
+                r.correctAnswers = derivedCorrect;
+            }
+            if (typeof r.totalQuestions !== 'number' && derivedTotal != null) {
+                r.totalQuestions = derivedTotal;
+            }
+
+            // 准确率/百分比归一
+            let acc = (typeof r.accuracy === 'number') ? r.accuracy
+                    : (typeof sInfo.accuracy === 'number' ? sInfo.accuracy : null);
+            if (acc == null) {
+                if (typeof r.correctAnswers === 'number' && typeof r.totalQuestions === 'number' && r.totalQuestions > 0) {
+                    acc = r.correctAnswers / r.totalQuestions;
+                } else {
+                    acc = 0;
+                }
+            }
+            r.accuracy = acc;
+
+            if (typeof r.percentage !== 'number' || isNaN(r.percentage)) {
+                if (typeof sInfo.percentage === 'number') {
+                    r.percentage = sInfo.percentage;
+                } else {
+                    r.percentage = Math.round(acc * 100);
+                }
+            }
+
+            // 状态兜底
+            if (!r.status) r.status = 'completed';
+
+            return r;
+        } catch (e) {
+            try { console.warn('[ScoreStorage] normalizeRecordFields failed:', e); } catch(_) {}
+            return record;
+        }
     }
 
     /**
