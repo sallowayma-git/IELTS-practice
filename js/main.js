@@ -53,9 +53,31 @@ function initializeLegacyComponents() {
 
 function syncPracticeRecords() {
     console.log('[System] 正在从存储中同步练习记录...');
-    // The ONLY source of truth is the 'practice_records' key in storage.
-    const records = storage.get('practice_records', []);
-    
+    let records = [];
+    try {
+        // Prefer normalized records from ScoreStorage via PracticeRecorder
+        const pr = window.app && window.app.components && window.app.components.practiceRecorder;
+        if (pr && typeof pr.getPracticeRecords === 'function') {
+            records = pr.getPracticeRecords();
+        } else {
+            // Fallback: read raw storage and defensively normalize minimal fields
+            const raw = storage.get('practice_records', []) || [];
+            records = raw.map(r => {
+                const rd = (r && r.realData) || {};
+                const sInfo = r && (r.scoreInfo || rd.scoreInfo) || {};
+                const correct = (typeof r.correctAnswers === 'number') ? r.correctAnswers : (typeof sInfo.correct === 'number' ? sInfo.correct : (typeof r.score === 'number' ? r.score : 0));
+                const total = (typeof r.totalQuestions === 'number') ? r.totalQuestions : (typeof sInfo.total === 'number' ? sInfo.total : (rd.answers ? Object.keys(rd.answers).length : 0));
+                const acc = (typeof r.accuracy === 'number') ? r.accuracy : (total > 0 ? (correct / total) : 0);
+                const pct = (typeof r.percentage === 'number') ? r.percentage : Math.round(acc * 100);
+                const dur = (typeof r.duration === 'number') ? r.duration : (typeof rd.duration === 'number' ? rd.duration : 0);
+                return { ...r, accuracy: acc, percentage: pct, duration: dur, correctAnswers: (r.correctAnswers ?? correct), totalQuestions: (r.totalQuestions ?? total) };
+            });
+        }
+    } catch (e) {
+        console.warn('[System] 同步记录时发生错误，使用存储原始数据:', e);
+        records = storage.get('practice_records', []);
+    }
+
     // Ensure the global variable is the single source of truth for the UI
     window.practiceRecords = records;
     practiceRecords = records; // also update the local-scoped variable
@@ -251,7 +273,7 @@ function renderPracticeRecordItem(record) {
 
     const title = record.title || "无标题";
     const dateText = new Date(record.date).toLocaleString();
-    const percentage = record.percentage || 0;
+    const percentage = (typeof record.percentage === 'number') ? record.percentage : Math.round(((record.accuracy || 0) * 100));
 
     item.innerHTML = ''
         + '<div class="record-info" style="cursor: ' + (bulkDeleteMode ? 'pointer' : 'default') + ';">'
