@@ -1174,6 +1174,27 @@
     <script src="../../assets/scripts/listening-exam-data.js"></script>
     <script src="../../js/utils/helpers.js"></script>
     <script src="../../js/utils/storage.js"></script>
+    <script>
+        // 设计页适配：确保 app.js 在首次统计时不会读到 null
+        // storage.js 默认会将 exam_index 初始化为 null，这里在 app 初始化前兜底为 []
+        (function () {
+            try {
+                if (window.storage && typeof storage.get === 'function') {
+                    var idx = storage.get('exam_index', null);
+                    if (idx === null) {
+                        storage.set('exam_index', []);
+                    }
+                    // 也确保活动配置键存在，避免后续读取为空
+                    var activeKey = storage.get('active_exam_index_key', null);
+                    if (!activeKey) {
+                        storage.set('active_exam_index_key', 'exam_index');
+                    }
+                }
+            } catch (e) {
+                console.warn('[Design Adapt] 预填充存储失败:', e);
+            }
+        })();
+    </script>
     <script src="../../js/utils/asyncExportHandler.js"></script>
     <script src="../../js/core/scoreStorage.js"></script>
     <script src="../../js/core/practiceRecorder.js"></script>
@@ -1181,11 +1202,59 @@
     <script src="../../js/utils/markdownExporter.js"></script>
     <script src="../../js/components/practiceRecordModal.js"></script>
     <script src="../../js/components/practiceHistoryEnhancer.js"></script>
-    <script src="../../assets/scripts/complete-exam-data.js"></script>
-    <script src="../../assets/scripts/listening-exam-data.js"></script>
-    <script src="../../assets/scripts/complete-exam-data.js"></script>
-    <script src="../../assets/scripts/listening-exam-data.js"></script>
     <script src="../../js/main.js"></script>
+    <script>
+        // 设计页适配：修正资源路径为项目根的绝对 file:// URL（本页位于 .superdesign/design_iterations/ 下）
+        // 使 buildResourcePath 产出的相对路径在子目录内也能正确指向根部资源，且避免 ".." 被 PDFHandler 拒绝
+        (function () {
+            var BASE_URL = new URL('../../', window.location.href);
+            try {
+                var originalBuild = window.buildResourcePath;
+                window.buildResourcePath = function (exam, kind) {
+                    var p = '';
+                    try { p = originalBuild ? originalBuild(exam, kind) : ''; } catch (_) {}
+                    if (typeof p === 'string') {
+                        // 规范化为不含 ".." 的绝对 URL
+                        // 去掉开头的 "./"，并使用 URL 解析为绝对路径
+                        var rel = p.replace(/^\.\//, '');
+                        var abs = new URL(rel, BASE_URL).href;
+                        return abs;
+                    }
+                    return p;
+                };
+
+                // 进一步兜底：若 PDFHandler 已加载，则修正其 openPDF 参数路径
+                if (window.PDFHandler && window.PDFHandler.prototype && !window.PDFHandler.prototype.__designPatched) {
+                    var _openPDF = window.PDFHandler.prototype.openPDF;
+                    window.PDFHandler.prototype.openPDF = function (pdfPath, examTitle, options) {
+                        try {
+                            if (typeof pdfPath === 'string') {
+                                // 将相对路径解析为绝对 file:// URL，消除 ".."，以通过 PDFHandler 的校验
+                                var normalized = pdfPath.replace(/^\.\//, '');
+                                pdfPath = new URL(normalized, BASE_URL).href;
+                            }
+                        } catch (_) {}
+                        return _openPDF.call(this, pdfPath, examTitle, options);
+                    };
+                    window.PDFHandler.prototype.__designPatched = true;
+                }
+            } catch (e) {
+                console.warn('[Design Adapt] 路径适配失败:', e);
+            }
+
+            // 规范化 showMessage 的第三参，避免字符串导致 0ms 立即消失
+            try {
+                var _showMessage = window.showMessage;
+                if (typeof _showMessage === 'function' && !_showMessage.__designPatched) {
+                    window.showMessage = function (message, type, duration) {
+                        var d = (typeof duration === 'number' && isFinite(duration)) ? duration : 4000;
+                        return _showMessage(message, type, d);
+                    };
+                    window.showMessage.__designPatched = true;
+                }
+            } catch (_) {}
+        })();
+    </script>
     <script src="../../js/boot-fallbacks.js"></script>
     <script src="../../fix-system.js"></script>
     <script src="../../js/app.js"></script>
@@ -1200,38 +1269,31 @@
 
         // Initialize the application
         document.addEventListener('DOMContentLoaded', function() {
-           // Override global functions to fix path issues
-           if (window.PDFHandler) {
-               const originalOpenPDF = window.PDFHandler.prototype.openPDF;
-               window.PDFHandler.prototype.openPDF = function(pdfPath, examTitle, options) {
-                   const basePath = '../../';
-                   const correctedPath = pdfPath.startsWith('.') ? basePath + pdfPath.substring(2) : basePath + pdfPath;
-                   console.log('[OVERRIDE] Corrected PDF Path:', correctedPath);
-                   return originalOpenPDF.call(this, correctedPath, examTitle, options);
-               };
+           // 已在主脚本加载后通过设计页适配修正过 PDF 路径，这里避免重复覆盖
+           if (window.PDFHandler && window.PDFHandler.prototype) {
+               console.log('[OVERRIDE] PDF 路径已通过设计页适配修正，跳过重复覆盖');
            }
 
-           const originalOpenExam = window.openExam;
-           window.openExam = function(examId) {
-               const examIndex = window.examIndex || [];
-               const exam = examIndex.find(e => e.id === examId);
-               if (!exam) {
-                   console.error('[OVERRIDE] Exam not found:', examId);
-                   return;
-               }
-               const basePath = '../../';
-               let url;
-               if (exam.hasHtml && exam.filename) {
-                   url = basePath + exam.path + exam.filename;
-               } else if (exam.pdfFilename) {
-                   url = basePath + exam.path + exam.pdfFilename;
-               } else {
-                    console.error('[OVERRIDE] No valid file found for exam:', examId);
-                   return;
-               }
-               console.log('[OVERRIDE] Opening URL:', url);
-               window.open(url, `exam_${examId}`, 'width=1200,height=800,scrollbars=yes,resizable=yes');
-           };
+           // 如全局已定义 openExam（来自 main.js），则不覆盖；否则提供简化后备实现
+           (function(){
+               try {
+                   if (typeof window.openExam === 'function') {
+                       console.log('[OVERRIDE] 检测到全局 openExam，跳过覆盖');
+                   } else {
+                       window.openExam = function(examId) {
+                           var list = (typeof examIndex !== 'undefined' && examIndex) ? examIndex : [];
+                           var exam = list.find(function(e){ return e && e.id === examId; });
+                           if (!exam) { try { showMessage('未找到题目', 'error'); } catch(_) {} return; }
+                           var kind = exam.hasHtml ? 'html' : 'pdf';
+                           var url = (typeof window.buildResourcePath === 'function') ? window.buildResourcePath(exam, kind) : '';
+                           if (!url) { try { showMessage('无法构建题目路径', 'error'); } catch(_) {} return; }
+                           var win = window.open(url, 'exam_' + exam.id, 'width=1200,height=800,scrollbars=yes,resizable=yes');
+                           if (win) { try { showMessage('正在打开: ' + (exam.title || exam.name || exam.id), 'success'); } catch(_) {} }
+                       };
+                       console.log('[OVERRIDE] 已注入简化 openExam 备用实现');
+                   }
+               } catch (e) { console.warn('[OVERRIDE] openExam 处理异常:', e); }
+           })();
 
 
             // First try to load data from localStorage
