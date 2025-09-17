@@ -101,6 +101,68 @@ class DataConsistencyManager {
             enriched.scoreInfo = this.calculateScoreFromComparison(enriched.answerComparison);
             console.log('[DataConsistencyManager] 从答案比较计算分数');
         }
+        // 从 realData.scoreInfo 合并缺失项
+        if (enriched.realData && enriched.realData.scoreInfo) {
+            enriched.scoreInfo = { ...(enriched.scoreInfo || {}), ...enriched.realData.scoreInfo };
+        }
+
+        // 顶层字段兜底：score / totalQuestions / accuracy / percentage
+        if (typeof enriched.score !== 'number') {
+            if (enriched.scoreInfo && typeof enriched.scoreInfo.correct === 'number') {
+                enriched.score = enriched.scoreInfo.correct;
+            } else if (typeof enriched.correctAnswers === 'number') {
+                enriched.score = enriched.correctAnswers;
+            }
+        }
+        if (typeof enriched.totalQuestions !== 'number') {
+            if (enriched.scoreInfo && typeof enriched.scoreInfo.total === 'number') {
+                enriched.totalQuestions = enriched.scoreInfo.total;
+            } else if (enriched.answers) {
+                enriched.totalQuestions = Object.keys(enriched.answers).length;
+            } else if (enriched.realData && enriched.realData.answers) {
+                enriched.totalQuestions = Object.keys(enriched.realData.answers).length;
+            }
+        }
+        if (typeof enriched.accuracy !== 'number') {
+            if (enriched.scoreInfo && typeof enriched.scoreInfo.accuracy === 'number') {
+                enriched.accuracy = enriched.scoreInfo.accuracy;
+            } else if (typeof enriched.score === 'number' && typeof enriched.totalQuestions === 'number' && enriched.totalQuestions > 0) {
+                enriched.accuracy = enriched.score / enriched.totalQuestions;
+            } else {
+                enriched.accuracy = 0;
+            }
+        }
+        if (typeof enriched.percentage !== 'number') {
+            if (enriched.scoreInfo && typeof enriched.scoreInfo.percentage === 'number') {
+                enriched.percentage = enriched.scoreInfo.percentage;
+            } else {
+                enriched.percentage = Math.round((enriched.accuracy || 0) * 100);
+            }
+        }
+
+        // 时间信息兜底：start/end/duration（秒）
+        if (!enriched.startTime) {
+            const rs = enriched.realData && enriched.realData.startTime;
+            if (rs) enriched.startTime = new Date(rs).toISOString();
+        }
+        if (!enriched.endTime) {
+            const re = enriched.realData && enriched.realData.endTime;
+            if (re) enriched.endTime = new Date(re).toISOString();
+        }
+        if (typeof enriched.duration !== 'number') {
+            if (enriched.realData && typeof enriched.realData.duration === 'number') {
+                enriched.duration = enriched.realData.duration;
+            } else if (enriched.startTime && enriched.endTime) {
+                enriched.duration = Math.max(0, Math.floor((new Date(enriched.endTime) - new Date(enriched.startTime)) / 1000));
+            } else {
+                enriched.duration = 0;
+            }
+        }
+
+        // 标题/分类兜底
+        if (!enriched.title && enriched.metadata && enriched.metadata.examTitle) enriched.title = enriched.metadata.examTitle;
+        if (!enriched.category && enriched.metadata && enriched.metadata.category) enriched.category = enriched.metadata.category;
+        if (!enriched.frequency && enriched.metadata && enriched.metadata.frequency) enriched.frequency = enriched.metadata.frequency;
 
         // 确保realData结构的兼容性
         if (!enriched.realData) {

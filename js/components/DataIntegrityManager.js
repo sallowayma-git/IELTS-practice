@@ -590,7 +590,17 @@ class DataIntegrityManager {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `ielts_data_export_${new Date().toISOString().split('T')[0]}.json`;
+            // Use local system date (YYYY-MM-DD) for filename
+            (function(){
+                try {
+                    const d = new Date();
+                    const pad = (n) => String(n).padStart(2, '0');
+                    const localDate = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+                    a.download = `ielts_data_export_${localDate}.json`;
+                } catch (_) {
+                    a.download = `ielts_data_export_${new Date().toISOString().split('T')[0]}.json`;
+                }
+            })();
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -862,3 +872,30 @@ class DataIntegrityManager {
 
 // 导出类
 window.DataIntegrityManager = DataIntegrityManager;
+
+// Export override: ensure flattened fields come from StorageManager snapshot
+(function() {
+  try {
+    const proto = DataIntegrityManager && DataIntegrityManager.prototype;
+    if (!proto || typeof proto.exportData !== 'function') return;
+    const originalExport = proto.exportData;
+    proto.exportData = function(keys = null) {
+      const result = originalExport.call(this, keys);
+      try {
+        if (window && window.storage && typeof window.storage.get === 'function' && result && result.data) {
+          // Force flattened fields from StorageManager
+          result.data.practice_records = window.storage.get('practice_records', []);
+          result.data.user_stats = window.storage.get('user_stats', {});
+          if (typeof this.calculateChecksum === 'function') {
+            result.checksum = this.calculateChecksum(result.data);
+          }
+        }
+      } catch (e) {
+        try { console.warn('[DataIntegrityManager] export override failed:', e); } catch(_) {}
+      }
+      return result;
+    };
+  } catch (e) {
+    try { console.warn('[DataIntegrityManager] export override install failed:', e); } catch(_) {}
+  }
+})();

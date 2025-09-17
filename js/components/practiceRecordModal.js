@@ -67,11 +67,27 @@ class PracticeRecordModal {
      * 创建弹窗HTML
      */
     createModalHtml(record) {
-        const { title, category, frequency, score, totalQuestions, startTime, duration } = record;
-        
+        // 兼容：填充缺失的关键字段（不修改原对象）
+        const safeTitle = record.title || record.metadata?.examTitle || '未知题目';
+        const safeCategory = record.category || record.metadata?.category || 'Unknown';
+        const safeFrequency = record.frequency || record.metadata?.frequency || 'unknown';
+        const startTs = record.startTime || record.date;
+        const durationSec = (typeof record.duration === 'number' ? record.duration
+                            : (record.realData && typeof record.realData.duration === 'number' ? record.realData.duration
+                               : (startTs && record.endTime ? Math.max(0, Math.floor((new Date(record.endTime) - new Date(startTs)) / 1000)) : 0)));
+        const scoreNum = (typeof record.score === 'number') ? record.score
+                        : (typeof record.correctAnswers === 'number') ? record.correctAnswers
+                        : (record.scoreInfo && typeof record.scoreInfo.correct === 'number' ? record.scoreInfo.correct
+                           : (record.realData && record.realData.scoreInfo && typeof record.realData.scoreInfo.correct === 'number' ? record.realData.scoreInfo.correct : 0));
+        const totalQ = (typeof record.totalQuestions === 'number') ? record.totalQuestions
+                       : (record.scoreInfo && typeof record.scoreInfo.total === 'number' ? record.scoreInfo.total
+                          : (record.realData && record.realData.scoreInfo && typeof record.realData.scoreInfo.total === 'number' ? record.realData.scoreInfo.total
+                             : (record.answers ? Object.keys(record.answers).length
+                                : (record.realData && record.realData.answers ? Object.keys(record.realData.answers).length : 0))));
+
         // 格式化时间
-        const formattedDate = new Date(startTime || record.date).toLocaleString();
-        const formattedDuration = this.formatDuration(duration);
+        const formattedDate = new Date(startTs).toLocaleString();
+        const formattedDuration = this.formatDuration(durationSec);
         
         // 生成答题详情表格
         const answerTable = this.generateAnswerTable(record);
@@ -88,7 +104,7 @@ class PracticeRecordModal {
                     
                     <div class="modal-body">
                         <div class="record-summary">
-                            <h4>${category}-${frequency}-${title}</h4>
+                            <h4>${safeCategory}-${safeFrequency}-${safeTitle}</h4>
                             <div class="record-meta">
                                 <div class="meta-item">
                                     <span class="meta-label">练习时间:</span>
@@ -100,7 +116,7 @@ class PracticeRecordModal {
                                 </div>
                                 <div class="meta-item">
                                     <span class="meta-label">分数:</span>
-                                    <span class="meta-value score-highlight">${score}/${totalQuestions}</span>
+                                    <span class="meta-value score-highlight">${scoreNum}/${totalQ}</span>
                                 </div>
                                 <div class="meta-item">
                                     <span class="meta-label">准确率:</span>
