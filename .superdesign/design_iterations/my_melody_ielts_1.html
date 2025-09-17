@@ -1,0 +1,1804 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎀 My Melody IELTS 学习系统 🎀</title>
+    <style>
+        /* 美乐蒂主题色彩 */
+        :root {
+            --my-melody-pink: #FFB6E1;
+            --my-melody-blue: #87CEEB;
+            --my-melody-yellow: #FFF8DC;
+            --my-melody-purple: #DDA0DD;
+            --my-melody-mint: #98FB98;
+            --my-melody-lavender: #E6E6FA;
+            --text-primary: #2D3748;
+            --text-secondary: #4A5568;
+            --bg-overlay: rgba(255, 255, 255, 0.9);
+            --shadow-soft: 0 8px 32px rgba(255, 182, 225, 0.3);
+            --shadow-strong: 0 12px 48px rgba(255, 182, 225, 0.4);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #FFE4F1 0%, #E6F3FF 25%, #FFF0F5 50%, #F0E6FF 75%, #E4FFE4 100%);
+            background-size: 400% 400%;
+            animation: rainbowFlow 15s ease infinite;
+            min-height: 100vh;
+            color: var(--text-primary);
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        @keyframes rainbowFlow {
+            0% { background-position: 0% 50%; }
+            25% { background-position: 100% 50%; }
+            50% { background-position: 100% 100%; }
+            75% { background-position: 0% 100%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* 浮动粒子背景 */
+        .particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .particle {
+            position: absolute;
+            font-size: 20px;
+            opacity: 0.6;
+            animation: float 6s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(180deg); }
+        }
+
+        /* 主容器 */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            position: relative;
+            z-index: 10;
+        }
+
+        /* 头部标题 */
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            background: var(--bg-overlay);
+            backdrop-filter: blur(10px);
+            border-radius: 30px;
+            padding: 30px;
+            box-shadow: var(--shadow-soft);
+            border: 3px solid var(--my-melody-pink);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(45deg, var(--my-melody-pink), var(--my-melody-purple), var(--my-melody-blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+            animation: titleGlow 3s ease-in-out infinite alternate;
+        }
+
+        @keyframes titleGlow {
+            from { filter: drop-shadow(0 0 10px var(--my-melody-pink)); }
+            to { filter: drop-shadow(0 0 20px var(--my-melody-purple)); }
+        }
+
+        .header p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+
+        /* 浮动岛屿导航 */
+        .nav-islands {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .island {
+            background: var(--bg-overlay);
+            backdrop-filter: blur(10px);
+            border-radius: 25px;
+            padding: 20px 30px;
+            box-shadow: var(--shadow-soft);
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            position: relative;
+            overflow: hidden;
+            min-width: 120px;
+            text-align: center;
+        }
+
+        .island:hover {
+            transform: translateY(-5px) scale(1.05);
+            box-shadow: var(--shadow-strong);
+            border-color: var(--my-melody-pink);
+        }
+
+        .island.active {
+            background: linear-gradient(135deg, var(--my-melody-pink), var(--my-melody-purple));
+            color: white;
+            transform: translateY(-3px);
+        }
+
+        .island::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%);
+            transform: rotate(45deg);
+            transition: all 0.5s;
+            opacity: 0;
+        }
+
+        .island:hover::before {
+            opacity: 1;
+        }
+
+        .island-icon {
+            font-size: 2rem;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .island-title {
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        /* 页面内容区域 */
+        .page {
+            display: none;
+            background: var(--bg-overlay);
+            backdrop-filter: blur(15px);
+            border-radius: 30px;
+            padding: 30px;
+            box-shadow: var(--shadow-soft);
+            border: 3px solid var(--my-melody-lavender);
+            animation: pageSlideIn 0.5s ease-out;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        @keyframes pageSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* 统计卡片 */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, var(--my-melody-yellow), var(--my-melody-mint));
+            border-radius: 20px;
+            padding: 25px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+            border: 2px solid var(--my-melody-pink);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--text-primary);
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        /* 题库网格 */
+        .exam-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .exam-card {
+            background: linear-gradient(135deg, var(--my-melody-lavender), var(--my-melody-blue));
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+            cursor: pointer;
+        }
+
+        .exam-card:hover {
+            transform: translateY(-5px) scale(1.02);
+            box-shadow: var(--shadow-soft);
+            border-color: var(--my-melody-pink);
+        }
+
+        .exam-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: var(--text-primary);
+        }
+
+        .exam-meta {
+            display: flex;
+            justify-content: space-between;
+            align-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 15px;
+        }
+
+        .exam-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            background: var(--my-melody-pink);
+            color: white;
+            border: none;
+            border-radius: 15px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .btn:hover {
+            background: var(--my-melody-purple);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(221, 160, 221, 0.4);
+        }
+
+        .btn-secondary {
+            background: var(--my-melody-blue);
+        }
+
+        .btn-secondary:hover {
+            background: #6BB6D6;
+        }
+
+        /* 练习记录列表 */
+        .record-list {
+            background: white;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .record-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background-color 0.3s ease;
+        }
+
+        .record-item:hover {
+            background-color: var(--my-melody-yellow);
+        }
+
+        .record-item.selected {
+            background-color: var(--my-melody-lavender);
+        }
+
+        .record-checkbox {
+            margin-right: 15px;
+        }
+
+        .record-info {
+            flex: 1;
+        }
+
+        .record-title {
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .record-meta {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .record-score {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--my-melody-purple);
+            margin-right: 15px;
+        }
+
+        /* 批量操作栏 */
+        .bulk-actions {
+            background: linear-gradient(135deg, var(--my-melody-pink), var(--my-melody-purple));
+            color: white;
+            padding: 15px 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .bulk-actions.show {
+            display: flex;
+        }
+
+        .bulk-info {
+            font-weight: 600;
+        }
+
+        .bulk-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        /* 成绩徽章 */
+        .score-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        .score-excellent {
+            background: var(--my-melody-mint);
+            color: white;
+        }
+
+        .score-good {
+            background: var(--my-melody-blue);
+            color: white;
+        }
+
+        .score-average {
+            background: var(--my-melody-yellow);
+            color: var(--text-primary);
+        }
+
+        .score-poor {
+            background: #ffcccb;
+            color: #8b0000;
+        }
+
+        /* 设置面板 */
+        .settings-section {
+            background: white;
+            border-radius: 20px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .settings-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+        }
+
+        .setting-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .setting-item:last-child {
+            border-bottom: none;
+        }
+
+        .toggle {
+            position: relative;
+            width: 60px;
+            height: 30px;
+            background: #ddd;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .toggle.active {
+            background: var(--my-melody-pink);
+        }
+
+        .toggle::after {
+            content: '';
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 24px;
+            height: 24px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.3s ease;
+        }
+
+        .toggle.active::after {
+            transform: translateX(30px);
+        }
+
+        /* 数据管理区域 */
+        .data-actions {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .nav-islands {
+                gap: 10px;
+            }
+
+            .island {
+                padding: 15px 20px;
+                min-width: 100px;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                gap: 15px;
+            }
+
+            .exam-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .page {
+                padding: 20px;
+            }
+        }
+
+        /* 加载动画 */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--my-melody-pink);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* 通知消息 */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--my-melody-pink);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 15px;
+            box-shadow: var(--shadow-strong);
+            transform: translateX(400px);
+            transition: transform 0.3s ease;
+            z-index: 1000;
+        }
+
+        .notification.show {
+            transform: translateX(0);
+        }
+
+        /* 过滤器 */
+        .filters {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .filter-select {
+            padding: 8px 12px;
+            border: 2px solid var(--my-melody-lavender);
+            border-radius: 10px;
+            background: white;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+        }
+
+        .search-box {
+            padding: 8px 12px;
+            border: 2px solid var(--my-melody-lavender);
+            border-radius: 10px;
+            background: white;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        /* 空状态 */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+
+        .empty-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .empty-title {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .empty-description {
+            font-size: 1rem;
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 浮动粒子背景 -->
+    <div class="particles" id="particles"></div>
+
+    <!-- 通知消息 -->
+    <div class="notification" id="notification"></div>
+
+    <div class="container">
+        <!-- 头部 -->
+        <header class="header">
+            <h1>🎀 My Melody IELTS 学习系统 🎀</h1>
+            <p>与美乐蒂一起开启你的IELTS学习之旅！✨</p>
+        </header>
+
+        <!-- 浮动岛屿导航 -->
+        <nav class="nav-islands">
+            <div class="island active" data-page="overview">
+                <span class="island-icon">🏠</span>
+                <span class="island-title">总览</span>
+            </div>
+            <div class="island" data-page="browse">
+                <span class="island-icon">📚</span>
+                <span class="island-title">题库浏览</span>
+            </div>
+            <div class="island" data-page="practice">
+                <span class="island-icon">📝</span>
+                <span class="island-title">练习记录</span>
+            </div>
+            <div class="island" data-page="settings">
+                <span class="island-icon">⚙️</span>
+                <span class="island-title">设置</span>
+            </div>
+        </nav>
+
+        <!-- 总览页面 -->
+        <div class="page active" id="overview">
+            <h2>🌟 学习总览</h2>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number" id="totalExams">0</div>
+                    <div class="stat-label">总题目数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="completedCount">0</div>
+                    <div class="stat-label">已完成</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="avgScore">0%</div>
+                    <div class="stat-label">平均分数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="studyDays">0</div>
+                    <div class="stat-label">学习天数</div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h3>🎯 快速开始</h3>
+                <div class="data-actions">
+                    <button class="btn" onclick="startRandomPractice()">🎲 随机练习</button>
+                    <button class="btn btn-secondary" onclick="goToBrowse()">📖 浏览题库</button>
+                    <button class="btn btn-secondary" onclick="viewProgress()">📊 查看进度</button>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h3>📈 最近练习</h3>
+                <div id="recentPractice"></div>
+            </div>
+        </div>
+
+        <!-- 题库浏览页面 -->
+        <div class="page" id="browse">
+            <h2>📚 题库浏览</h2>
+
+            <div class="filters">
+                <div class="filter-group">
+                    <label>类型:</label>
+                    <select class="filter-select" id="typeFilter">
+                        <option value="all">全部</option>
+                        <option value="reading">阅读</option>
+                        <option value="listening">听力</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>难度:</label>
+                    <select class="filter-select" id="difficultyFilter">
+                        <option value="all">全部</option>
+                        <option value="easy">简单</option>
+                        <option value="medium">中等</option>
+                        <option value="hard">困难</option>
+                    </select>
+                </div>
+                <input type="text" class="search-box" id="searchBox" placeholder="🔍 搜索题目...">
+            </div>
+
+            <div class="exam-grid" id="examGrid"></div>
+
+            <div class="loading" id="browseLoading">
+                <div class="spinner"></div>
+                <p>正在加载题库...</p>
+            </div>
+        </div>
+
+        <!-- 练习记录页面 -->
+        <div class="page" id="practice">
+            <h2>📝 练习记录</h2>
+
+            <!-- 批量操作栏 -->
+            <div class="bulk-actions" id="bulkActions">
+                <div class="bulk-info">
+                    已选择 <span id="selectedCount">0</span> 条记录
+                </div>
+                <div class="bulk-buttons">
+                    <button class="btn" onclick="batchDeleteSelected()">🗑️ 删除选中</button>
+                    <button class="btn btn-secondary" onclick="exportSelectedRecords()">📤 导出选中</button>
+                    <button class="btn btn-secondary" onclick="clearSelection()">取消选择</button>
+                </div>
+            </div>
+
+            <div class="filters">
+                <div class="filter-group">
+                    <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this)">
+                    <label for="selectAllCheckbox">全选</label>
+                </div>
+                <div class="filter-group">
+                    <label>时间范围:</label>
+                    <select class="filter-select" id="timeFilter">
+                        <option value="all">全部</option>
+                        <option value="today">今天</option>
+                        <option value="week">本周</option>
+                        <option value="month">本月</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>类型:</label>
+                    <select class="filter-select" id="recordTypeFilter">
+                        <option value="all">全部</option>
+                        <option value="reading">阅读</option>
+                        <option value="listening">听力</option>
+                    </select>
+                </div>
+                <button class="btn" onclick="clearAllRecords()">🗑️ 清空记录</button>
+                <button class="btn btn-secondary" onclick="exportRecords()">📤 导出记录</button>
+                <button class="btn btn-secondary" onclick="importRecords()">📥 导入记录</button>
+            </div>
+
+            <div class="record-list" id="recordList"></div>
+
+            <div class="empty-state" id="noRecords">
+                <div class="empty-icon">📝</div>
+                <div class="empty-title">还没有练习记录</div>
+                <div class="empty-description">开始你的第一次练习吧！</div>
+                <button class="btn" onclick="goToBrowse()">开始练习</button>
+            </div>
+        </div>
+
+        <!-- 设置页面 -->
+        <div class="page" id="settings">
+            <h2>⚙️ 设置</h2>
+
+            <div class="settings-section">
+                <h3>🎨 主题设置</h3>
+                <div class="setting-item">
+                    <span>动画效果</span>
+                    <div class="toggle active" id="animationToggle"></div>
+                </div>
+                <div class="setting-item">
+                    <span>粒子效果</span>
+                    <div class="toggle active" id="particlesToggle"></div>
+                </div>
+                <div class="setting-item">
+                    <span>音效</span>
+                    <div class="toggle" id="soundToggle"></div>
+                </div>
+                <div class="setting-item">
+                    <span>深色模式</span>
+                    <div class="toggle" id="darkModeToggle"></div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h3>📊 学习设置</h3>
+                <div class="setting-item">
+                    <span>自动保存进度</span>
+                    <div class="toggle active" id="autoSaveToggle"></div>
+                </div>
+                <div class="setting-item">
+                    <span>练习提醒</span>
+                    <div class="toggle" id="reminderToggle"></div>
+                </div>
+                <div class="setting-item">
+                    <span>成绩统计</span>
+                    <div class="toggle active" id="statisticsToggle"></div>
+                </div>
+                <div class="setting-item">
+                    <span>学习报告</span>
+                    <div class="toggle" id="reportToggle"></div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h3>📚 题库管理</h3>
+                <div class="data-actions">
+                    <button class="btn" onclick="loadLibrary()">🔄 重新加载题库</button>
+                    <button class="btn btn-secondary" onclick="checkLibraryUpdates()">📋 检查更新</button>
+                    <button class="btn btn-secondary" onclick="libraryInfo()">ℹ️ 题库信息</button>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h3>💾 数据管理</h3>
+                <div class="data-actions">
+                    <button class="btn" onclick="backupData()">📥 备份数据</button>
+                    <button class="btn btn-secondary" onclick="restoreData()">📤 恢复数据</button>
+                    <button class="btn btn-secondary" onclick="clearAllData()">🗑️ 清空数据</button>
+                    <button class="btn btn-secondary" onclick="exportData()">📋 导出数据</button>
+                    <button class="btn btn-secondary" onclick="importData()">📥 导入数据</button>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h3>🧹 系统清理</h3>
+                <div class="data-actions">
+                    <button class="btn" onclick="clearCache()">🗑️ 清理缓存</button>
+                    <button class="btn btn-secondary" onclick="clearTemporaryFiles()">📁 清理临时文件</button>
+                    <button class="btn btn-secondary" onclick="resetSettings()">🔄 重置设置</button>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h3>ℹ️ 系统信息</h3>
+                <div class="data-actions">
+                    <button class="btn" onclick="showSystemInfo()">📊 系统信息</button>
+                    <button class="btn btn-secondary" onclick="showUsageStatistics()">📈 使用统计</button>
+                    <button class="btn btn-secondary" onclick="showHelp()">❓ 帮助</button>
+                </div>
+                <p style="margin-top: 15px; color: var(--text-secondary);">
+                    🎀 My Melody IELTS 学习系统 v1.0<br>
+                    让学习变得更加愉快和高效！<br>
+                    与可爱的美乐蒂一起，享受学习的乐趣 ✨
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局状态管理
+        class MyMelodyIELTSApp {
+            constructor() {
+                this.currentPage = 'overview';
+                this.examData = [];
+                this.practiceRecords = [];
+                this.settings = {
+                    animations: true,
+                    particles: true,
+                    sound: false,
+                    autoSave: true,
+                    reminders: false,
+                    darkMode: false,
+                    statistics: true,
+                    reports: false
+                };
+                this.init();
+            }
+
+            init() {
+                this.loadData();
+                this.setupEventListeners();
+                this.createParticles();
+                this.updateUI();
+                this.startDataSync();
+            }
+
+            // 数据加载
+            loadData() {
+                // 从本地存储加载数据
+                const savedExamData = localStorage.getItem('myMelodyExamData');
+                const savedRecords = localStorage.getItem('myMelodyPracticeRecords');
+                const savedSettings = localStorage.getItem('myMelodySettings');
+
+                if (savedExamData) {
+                    this.examData = JSON.parse(savedExamData);
+                } else {
+                    // 初始化示例数据
+                    this.initSampleData();
+                }
+
+                if (savedRecords) {
+                    this.practiceRecords = JSON.parse(savedRecords);
+                }
+
+                if (savedSettings) {
+                    this.settings = { ...this.settings, ...JSON.parse(savedSettings) };
+                }
+
+                this.updateSettingsUI();
+            }
+
+            // 初始化示例数据
+            initSampleData() {
+                this.examData = [
+                    {
+                        id: 1,
+                        title: 'Reading Test 1',
+                        type: 'reading',
+                        category: 'P1',
+                        difficulty: 'medium',
+                        questions: 40,
+                        timeLimit: 60,
+                        description: 'Academic Reading Practice Test'
+                    },
+                    {
+                        id: 2,
+                        title: 'Listening Test 1',
+                        type: 'listening',
+                        category: 'P1',
+                        difficulty: 'easy',
+                        questions: 40,
+                        timeLimit: 30,
+                        description: 'General Listening Practice Test'
+                    },
+                    {
+                        id: 3,
+                        title: 'Reading Test 2',
+                        type: 'reading',
+                        category: 'P2',
+                        difficulty: 'hard',
+                        questions: 40,
+                        timeLimit: 60,
+                        description: 'Advanced Reading Practice Test'
+                    },
+                    {
+                        id: 4,
+                        title: 'Listening Test 2',
+                        type: 'listening',
+                        category: 'P2',
+                        difficulty: 'medium',
+                        questions: 40,
+                        timeLimit: 30,
+                        description: 'Intermediate Listening Practice Test'
+                    }
+                ];
+                this.saveData();
+            }
+
+            // 数据保存
+            saveData() {
+                localStorage.setItem('myMelodyExamData', JSON.stringify(this.examData));
+                localStorage.setItem('myMelodyPracticeRecords', JSON.stringify(this.practiceRecords));
+                localStorage.setItem('myMelodySettings', JSON.stringify(this.settings));
+            }
+
+            // 设置事件监听器
+            setupEventListeners() {
+                // 导航点击事件
+                document.querySelectorAll('.island').forEach(island => {
+                    island.addEventListener('click', (e) => {
+                        const page = e.currentTarget.dataset.page;
+                        this.switchPage(page);
+                    });
+                });
+
+                // 过滤器事件
+                document.getElementById('typeFilter')?.addEventListener('change', () => this.filterExams());
+                document.getElementById('difficultyFilter')?.addEventListener('change', () => this.filterExams());
+                document.getElementById('searchBox')?.addEventListener('input', () => this.filterExams());
+                document.getElementById('timeFilter')?.addEventListener('change', () => this.filterRecords());
+                document.getElementById('recordTypeFilter')?.addEventListener('change', () => this.filterRecords());
+
+                // 设置开关事件
+                document.getElementById('animationToggle')?.addEventListener('click', (e) => this.toggleSetting(e.target, 'animations'));
+                document.getElementById('particlesToggle')?.addEventListener('click', (e) => this.toggleSetting(e.target, 'particles'));
+                document.getElementById('soundToggle')?.addEventListener('click', (e) => this.toggleSetting(e.target, 'sound'));
+                document.getElementById('autoSaveToggle')?.addEventListener('click', (e) => this.toggleSetting(e.target, 'autoSave'));
+                document.getElementById('reminderToggle')?.addEventListener('click', (e) => this.toggleSetting(e.target, 'reminders'));
+                document.getElementById('darkModeToggle')?.addEventListener('click', (e) => this.toggleSetting(e.target, 'darkMode'));
+                document.getElementById('statisticsToggle')?.addEventListener('click', (e) => this.toggleSetting(e.target, 'statistics'));
+                document.getElementById('reportToggle')?.addEventListener('click', (e) => this.toggleSetting(e.target, 'reports'));
+            }
+
+            // 页面切换
+            switchPage(pageName) {
+                // 更新导航状态
+                document.querySelectorAll('.island').forEach(island => {
+                    island.classList.remove('active');
+                });
+                document.querySelector(`[data-page="${pageName}"]`).classList.add('active');
+
+                // 更新页面显示
+                document.querySelectorAll('.page').forEach(page => {
+                    page.classList.remove('active');
+                });
+                document.getElementById(pageName).classList.add('active');
+
+                this.currentPage = pageName;
+                this.updatePageContent(pageName);
+            }
+
+            // 更新页面内容
+            updatePageContent(pageName) {
+                switch (pageName) {
+                    case 'overview':
+                        this.updateOverview();
+                        break;
+                    case 'browse':
+                        this.updateBrowse();
+                        break;
+                    case 'practice':
+                        this.updatePractice();
+                        break;
+                    case 'settings':
+                        // 设置页面内容已在HTML中定义
+                        break;
+                }
+            }
+
+            // 更新总览页面
+            updateOverview() {
+                document.getElementById('totalExams').textContent = this.examData.length;
+                document.getElementById('completedCount').textContent = this.practiceRecords.length;
+
+                const avgScore = this.practiceRecords.length > 0
+                    ? Math.round(this.practiceRecords.reduce((sum, record) => sum + record.score, 0) / this.practiceRecords.length)
+                    : 0;
+                document.getElementById('avgScore').textContent = avgScore + '%';
+
+                // 计算学习天数
+                const uniqueDays = new Set(this.practiceRecords.map(record =>
+                    new Date(record.date).toDateString()
+                )).size;
+                document.getElementById('studyDays').textContent = uniqueDays;
+
+                // 更新最近练习
+                this.updateRecentPractice();
+            }
+
+            // 更新最近练习
+            updateRecentPractice() {
+                const container = document.getElementById('recentPractice');
+                const recent = this.practiceRecords.slice(-3).reverse();
+
+                if (recent.length === 0) {
+                    container.innerHTML = '<p style="text-align: center; color: #999;">还没有练习记录</p>';
+                    return;
+                }
+
+                container.innerHTML = recent.map(record => `
+                    <div class="record-item">
+                        <div class="record-info">
+                            <div class="record-title">${record.title}</div>
+                            <div class="record-meta">${new Date(record.date).toLocaleDateString()} • ${record.type}</div>
+                        </div>
+                        <div class="record-score">${record.score}%</div>
+                    </div>
+                `).join('');
+            }
+
+            // 更新题库浏览页面
+            updateBrowse() {
+                this.filterExams();
+            }
+
+            // 过滤题目
+            filterExams() {
+                const typeFilter = document.getElementById('typeFilter')?.value || 'all';
+                const difficultyFilter = document.getElementById('difficultyFilter')?.value || 'all';
+                const searchTerm = document.getElementById('searchBox')?.value.toLowerCase() || '';
+
+                let filtered = this.examData.filter(exam => {
+                    const typeMatch = typeFilter === 'all' || exam.type === typeFilter;
+                    const difficultyMatch = difficultyFilter === 'all' || exam.difficulty === difficultyFilter;
+                    const searchMatch = exam.title.toLowerCase().includes(searchTerm) ||
+                                      exam.description.toLowerCase().includes(searchTerm);
+
+                    return typeMatch && difficultyMatch && searchMatch;
+                });
+
+                this.renderExams(filtered);
+            }
+
+            // 渲染题目列表
+            renderExams(exams) {
+                const container = document.getElementById('examGrid');
+
+                if (exams.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-icon">📚</div>
+                            <div class="empty-title">没有找到题目</div>
+                            <div class="empty-description">尝试调整搜索条件</div>
+                        </div>
+                    `;
+                    return;
+                }
+
+                container.innerHTML = exams.map(exam => {
+                    const isCompleted = this.practiceRecords.some(record => record.examId === exam.id);
+                    const bestScore = isCompleted ?
+                        Math.max(...this.practiceRecords
+                            .filter(record => record.examId === exam.id)
+                            .map(record => record.score)) : 0;
+
+                    return `
+                        <div class="exam-card" onclick="startExam(${exam.id})">
+                            <div class="exam-title">${exam.title}</div>
+                            <div class="exam-meta">
+                                <span>${exam.type === 'reading' ? '📖 阅读' : '🎧 听力'}</span>
+                                <span>${exam.difficulty === 'easy' ? '简单' : exam.difficulty === 'medium' ? '中等' : '困难'}</span>
+                                <span>${exam.questions}题</span>
+                            </div>
+                            <div class="exam-actions">
+                                <button class="btn" onclick="event.stopPropagation(); startExam(${exam.id})">
+                                    ${isCompleted ? '重新练习' : '开始练习'}
+                                </button>
+                                ${isCompleted ? `<span style="color: var(--my-melody-purple); font-weight: bold;">最佳: ${bestScore}%</span>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            // 更新练习记录页面
+            updatePractice() {
+                this.filterRecords();
+            }
+
+            // 过滤记录
+            filterRecords() {
+                const timeFilter = document.getElementById('timeFilter')?.value || 'all';
+                const typeFilter = document.getElementById('recordTypeFilter')?.value || 'all';
+
+                let filtered = this.practiceRecords.filter(record => {
+                    const typeMatch = typeFilter === 'all' || record.type === typeFilter;
+
+                    let timeMatch = true;
+                    if (timeFilter !== 'all') {
+                        const recordDate = new Date(record.date);
+                        const now = new Date();
+
+                        switch (timeFilter) {
+                            case 'today':
+                                timeMatch = recordDate.toDateString() === now.toDateString();
+                                break;
+                            case 'week':
+                                const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                                timeMatch = recordDate >= weekAgo;
+                                break;
+                            case 'month':
+                                const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                                timeMatch = recordDate >= monthAgo;
+                                break;
+                        }
+                    }
+
+                    return typeMatch && timeMatch;
+                });
+
+                this.renderRecords(filtered);
+            }
+
+            // 渲染练习记录
+            renderRecords(records) {
+                const container = document.getElementById('recordList');
+                const noRecords = document.getElementById('noRecords');
+
+                if (records.length === 0) {
+                    container.style.display = 'none';
+                    noRecords.style.display = 'block';
+                    return;
+                }
+
+                container.style.display = 'block';
+                noRecords.style.display = 'none';
+
+                container.innerHTML = records.map(record => {
+                    const scoreClass = this.getScoreClass(record.score);
+                    return `
+                        <div class="record-item" data-record-id="${record.id}">
+                            <input type="checkbox" class="record-checkbox" onchange="onRecordCheckboxChange(this)">
+                            <div class="record-info">
+                                <div class="record-title">${record.title}</div>
+                                <div class="record-meta">
+                                    ${new Date(record.date).toLocaleString()} •
+                                    ${record.type === 'reading' ? '阅读' : '听力'} •
+                                    用时: ${record.duration}分钟
+                                </div>
+                            </div>
+                            <div class="record-score">
+                                <span class="score-badge ${scoreClass}">${record.score}%</span>
+                            </div>
+                            <button class="btn btn-secondary" onclick="viewRecordDetails('${record.id}')">详情</button>
+                            <button class="btn" onclick="deleteRecord('${record.id}')">删除</button>
+                        </div>
+                    `;
+                }).join('');
+
+                this.updateBulkActionsState();
+            }
+
+            // 获取成绩等级样式
+            getScoreClass(score) {
+                if (score >= 90) return 'score-excellent';
+                if (score >= 80) return 'score-good';
+                if (score >= 70) return 'score-average';
+                return 'score-poor';
+            }
+
+            // 更新批量操作状态
+            updateBulkActionsState() {
+                const checkboxes = document.querySelectorAll('.record-checkbox');
+                const checkedBoxes = document.querySelectorAll('.record-checkbox:checked');
+                const bulkActions = document.getElementById('bulkActions');
+                const selectedCount = document.getElementById('selectedCount');
+                const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+
+                if (checkedBoxes.length > 0) {
+                    bulkActions.classList.add('show');
+                    selectedCount.textContent = checkedBoxes.length;
+                } else {
+                    bulkActions.classList.remove('show');
+                }
+
+                // 更新全选框状态
+                if (checkboxes.length === 0) {
+                    selectAllCheckbox.indeterminate = false;
+                    selectAllCheckbox.checked = false;
+                } else if (checkedBoxes.length === checkboxes.length) {
+                    selectAllCheckbox.indeterminate = false;
+                    selectAllCheckbox.checked = true;
+                } else {
+                    selectAllCheckbox.indeterminate = true;
+                    selectAllCheckbox.checked = false;
+                }
+            }
+
+            // 更新设置UI
+            updateSettingsUI() {
+                document.getElementById('animationToggle')?.classList.toggle('active', this.settings.animations);
+                document.getElementById('particlesToggle')?.classList.toggle('active', this.settings.particles);
+                document.getElementById('soundToggle')?.classList.toggle('active', this.settings.sound);
+                document.getElementById('autoSaveToggle')?.classList.toggle('active', this.settings.autoSave);
+                document.getElementById('reminderToggle')?.classList.toggle('active', this.settings.reminders);
+                document.getElementById('darkModeToggle')?.classList.toggle('active', this.settings.darkMode);
+                document.getElementById('statisticsToggle')?.classList.toggle('active', this.settings.statistics);
+                document.getElementById('reportToggle')?.classList.toggle('active', this.settings.reports);
+            }
+
+            // 切换设置
+            toggleSetting(element, setting) {
+                element.classList.toggle('active');
+                this.settings[setting] = element.classList.contains('active');
+                this.saveData();
+
+                if (setting === 'particles') {
+                    document.getElementById('particles').style.display = this.settings.particles ? 'block' : 'none';
+                }
+
+                if (setting === 'animations') {
+                    document.body.style.animationPlayState = this.settings.animations ? 'running' : 'paused';
+                }
+
+                if (setting === 'darkMode') {
+                    document.body.classList.toggle('dark-mode', this.settings.darkMode);
+                    this.applyDarkMode();
+                }
+            }
+
+            // 应用深色模式
+            applyDarkMode() {
+                if (this.settings.darkMode) {
+                    document.body.style.background = 'linear-gradient(135deg, #1a1a2e 0%, #16213e 25%, #0f3460 50%, #533483 75%, #7209b7 100%)';
+                    document.body.style.color = '#e0e0e0';
+                } else {
+                    document.body.style.background = 'linear-gradient(135deg, #FFE4F1 0%, #E6F3FF 25%, #FFF0F5 50%, #F0E6FF 75%, #E4FFE4 100%)';
+                    document.body.style.color = 'var(--text-primary)';
+                }
+            }
+
+            // 创建粒子效果
+            createParticles() {
+                const container = document.getElementById('particles');
+                const particles = ['✨', '🌟', '💫', '⭐', '🌸', '🌺', '🌼', '🌻', '🦋', '🌈'];
+
+                for (let i = 0; i < 15; i++) {
+                    const particle = document.createElement('div');
+                    particle.className = 'particle';
+                    particle.textContent = particles[Math.floor(Math.random() * particles.length)];
+                    particle.style.left = Math.random() * 100 + '%';
+                    particle.style.top = Math.random() * 100 + '%';
+                    particle.style.animationDelay = Math.random() * 6 + 's';
+                    particle.style.animationDuration = (Math.random() * 3 + 3) + 's';
+                    container.appendChild(particle);
+                }
+            }
+
+            // 更新UI
+            updateUI() {
+                this.updateOverview();
+            }
+
+            // 开始数据同步
+            startDataSync() {
+                // 监听storage变化，实现多标签页同步
+                window.addEventListener('storage', (e) => {
+                    if (e.key === 'myMelodyPracticeRecords' || e.key === 'myMelodyExamData') {
+                        this.loadData();
+                        this.updateUI();
+                    }
+                });
+
+                // 定期保存数据
+                setInterval(() => {
+                    if (this.settings.autoSave) {
+                        this.saveData();
+                    }
+                }, 30000); // 每30秒保存一次
+            }
+
+            // 显示通知
+            showNotification(message, duration = 3000) {
+                const notification = document.getElementById('notification');
+                notification.textContent = message;
+                notification.classList.add('show');
+
+                setTimeout(() => {
+                    notification.classList.remove('show');
+                }, duration);
+            }
+        }
+
+        // 全局函数
+        let app;
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            app = new MyMelodyIELTSApp();
+        });
+
+        // 全局函数定义
+        function startExam(examId) {
+            const exam = app.examData.find(e => e.id === examId);
+            if (exam) {
+                app.showNotification(`开始练习: ${exam.title}`);
+                // 这里可以打开练习页面或模态框
+                setTimeout(() => {
+                    // 模拟练习完成
+                    const score = Math.floor(Math.random() * 40) + 60; // 60-100分
+                    const record = {
+                        id: Date.now().toString(),
+                        examId: exam.id,
+                        title: exam.title,
+                        type: exam.type,
+                        score: score,
+                        date: new Date().toISOString(),
+                        duration: Math.floor(Math.random() * 30) + 10 // 10-40分钟
+                    };
+
+                    app.practiceRecords.push(record);
+                    app.saveData();
+                    app.updateUI();
+                    app.showNotification(`练习完成！得分: ${score}%`);
+                }, 2000);
+            }
+        }
+
+        function startRandomPractice() {
+            if (app.examData.length === 0) {
+                app.showNotification('题库为空，请先添加题目');
+                return;
+            }
+
+            const randomExam = app.examData[Math.floor(Math.random() * app.examData.length)];
+            startExam(randomExam.id);
+        }
+
+        function goToBrowse() {
+            app.switchPage('browse');
+        }
+
+        function viewProgress() {
+            app.switchPage('practice');
+        }
+
+        function deleteRecord(recordId) {
+            if (confirm('确定要删除这条练习记录吗？')) {
+                app.practiceRecords = app.practiceRecords.filter(record => record.id !== recordId);
+                app.saveData();
+                app.updatePractice();
+                app.showNotification('记录已删除');
+            }
+        }
+
+        function clearAllRecords() {
+            if (confirm('确定要清空所有练习记录吗？此操作不可恢复！')) {
+                app.practiceRecords = [];
+                app.saveData();
+                app.updatePractice();
+                app.showNotification('所有练习记录已清空');
+            }
+        }
+
+        function exportRecords() {
+            const data = {
+                exportDate: new Date().toISOString(),
+                records: app.practiceRecords
+            };
+
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `my-melody-practice-records-${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+
+            app.showNotification('练习记录已导出');
+        }
+
+        function backupData() {
+            const backup = {
+                examData: app.examData,
+                practiceRecords: app.practiceRecords,
+                settings: app.settings,
+                backupDate: new Date().toISOString()
+            };
+
+            localStorage.setItem('myMelodyBackup', JSON.stringify(backup));
+            app.showNotification('数据备份成功');
+        }
+
+        function restoreData() {
+            const backup = localStorage.getItem('myMelodyBackup');
+            if (backup) {
+                const data = JSON.parse(backup);
+                app.examData = data.examData || [];
+                app.practiceRecords = data.practiceRecords || [];
+                app.settings = { ...app.settings, ...data.settings };
+                app.saveData();
+                app.updateUI();
+                app.showNotification('数据恢复成功');
+            } else {
+                app.showNotification('没有找到备份数据');
+            }
+        }
+
+        function clearAllData() {
+            if (confirm('确定要清空所有数据吗？此操作不可恢复！')) {
+                app.examData = [];
+                app.practiceRecords = [];
+                app.settings = {
+                    animations: true,
+                    particles: true,
+                    sound: false,
+                    autoSave: true,
+                    reminders: false
+                };
+                app.saveData();
+                app.updateUI();
+                app.showNotification('所有数据已清空');
+            }
+        }
+
+        function exportData() {
+            const exportData = {
+                examData: app.examData,
+                practiceRecords: app.practiceRecords,
+                settings: app.settings,
+                exportDate: new Date().toISOString(),
+                version: '1.0'
+            };
+
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `my-melody-ielts-data-${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+
+            app.showNotification('数据导出成功');
+        }
+
+        function importData() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        try {
+                            const data = JSON.parse(e.target.result);
+                            if (data.examData) app.examData = data.examData;
+                            if (data.practiceRecords) app.practiceRecords = data.practiceRecords;
+                            if (data.settings) app.settings = { ...app.settings, ...data.settings };
+
+                            app.saveData();
+                            app.updateUI();
+                            app.showNotification('数据导入成功');
+                        } catch (error) {
+                            app.showNotification('数据导入失败：格式错误');
+                        }
+                    };
+                    reader.readAsText(file);
+                }
+            };
+            input.click();
+        }
+
+        function importRecords() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        try {
+                            const data = JSON.parse(e.target.result);
+                            let importedCount = 0;
+
+                            if (data.practiceRecords) {
+                                data.practiceRecords.forEach(record => {
+                                    if (!app.practiceRecords.find(r => r.id === record.id)) {
+                                        app.practiceRecords.push(record);
+                                        importedCount++;
+                                    }
+                                });
+                            } else if (Array.isArray(data)) {
+                                // 处理直接的记录数组
+                                data.forEach(record => {
+                                    if (!app.practiceRecords.find(r => r.id === record.id)) {
+                                        app.practiceRecords.push(record);
+                                        importedCount++;
+                                    }
+                                });
+                            }
+
+                            if (importedCount > 0) {
+                                app.saveData();
+                                app.updatePractice();
+                                app.showNotification(`成功导入 ${importedCount} 条练习记录`);
+                            } else {
+                                app.showNotification('没有新的练习记录可导入');
+                            }
+                        } catch (error) {
+                            app.showNotification('练习记录导入失败：格式错误');
+                        }
+                    };
+                    reader.readAsText(file);
+                }
+            };
+            input.click();
+        }
+
+        // 批量操作函数
+        function onRecordCheckboxChange(checkbox) {
+            const recordItem = checkbox.closest('.record-item');
+            if (checkbox.checked) {
+                recordItem.classList.add('selected');
+            } else {
+                recordItem.classList.remove('selected');
+            }
+            app.updateBulkActionsState();
+        }
+
+        function toggleSelectAll(checkbox) {
+            const checkboxes = document.querySelectorAll('.record-checkbox');
+            checkboxes.forEach(cb => {
+                cb.checked = checkbox.checked;
+                const recordItem = cb.closest('.record-item');
+                if (checkbox.checked) {
+                    recordItem.classList.add('selected');
+                } else {
+                    recordItem.classList.remove('selected');
+                }
+            });
+            app.updateBulkActionsState();
+        }
+
+        function clearSelection() {
+            const checkboxes = document.querySelectorAll('.record-checkbox');
+            checkboxes.forEach(cb => cb.checked = false);
+            document.querySelectorAll('.record-item').forEach(item => item.classList.remove('selected'));
+            document.getElementById('selectAllCheckbox').checked = false;
+            app.updateBulkActionsState();
+        }
+
+        function batchDeleteSelected() {
+            const selectedIds = Array.from(document.querySelectorAll('.record-checkbox:checked'))
+                .map(cb => cb.closest('.record-item').dataset.recordId);
+
+            if (selectedIds.length === 0) {
+                app.showNotification('请选择要删除的记录');
+                return;
+            }
+
+            if (confirm(`确定要删除选中的 ${selectedIds.length} 条记录吗？此操作不可恢复！`)) {
+                app.practiceRecords = app.practiceRecords.filter(record => !selectedIds.includes(record.id));
+                app.saveData();
+                app.updatePractice();
+                app.showNotification(`成功删除 ${selectedIds.length} 条记录`);
+            }
+        }
+
+        function exportSelectedRecords() {
+            const selectedIds = Array.from(document.querySelectorAll('.record-checkbox:checked'))
+                .map(cb => cb.closest('.record-item').dataset.recordId);
+
+            if (selectedIds.length === 0) {
+                app.showNotification('请选择要导出的记录');
+                return;
+            }
+
+            const selectedRecords = app.practiceRecords.filter(record => selectedIds.includes(record.id));
+            const exportData = {
+                practiceRecords: selectedRecords,
+                exportDate: new Date().toISOString(),
+                version: '1.0'
+            };
+
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `my-melody-selected-records-${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+
+            app.showNotification(`成功导出 ${selectedIds.length} 条记录`);
+        }
+
+        function viewRecordDetails(recordId) {
+            const record = app.practiceRecords.find(r => r.id === recordId);
+            if (record) {
+                const details = `
+                    题目：${record.title}
+                    类型：${record.type === 'reading' ? '阅读' : '听力'}
+                    分数：${record.score}%
+                    用时：${record.duration}分钟
+                    日期：${new Date(record.date).toLocaleString()}
+                `;
+                alert(details);
+            }
+        }
+
+        // 系统管理函数
+        function clearCache() {
+            if (confirm('确定要清理缓存吗？这将清除所有临时数据。')) {
+                // 清理localStorage中的缓存数据
+                const keysToRemove = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key.includes('cache') || key.includes('temp')) {
+                        keysToRemove.push(key);
+                    }
+                }
+                keysToRemove.forEach(key => localStorage.removeItem(key));
+                app.showNotification('缓存清理完成');
+            }
+        }
+
+        function clearTemporaryFiles() {
+            app.showNotification('临时文件清理功能开发中...');
+        }
+
+        function resetSettings() {
+            if (confirm('确定要重置所有设置吗？此操作不可恢复！')) {
+                app.settings = {
+                    animations: true,
+                    particles: true,
+                    sound: false,
+                    autoSave: true,
+                    reminders: false,
+                    darkMode: false,
+                    statistics: true,
+                    reports: false
+                };
+                app.saveData();
+                app.updateSettingsUI();
+                app.applyDarkMode();
+                app.showNotification('设置已重置');
+            }
+        }
+
+        function loadLibrary() {
+            app.showNotification('正在重新加载题库...');
+            setTimeout(() => {
+                app.initSampleData();
+                app.updateBrowse();
+                app.showNotification('题库重新加载完成');
+            }, 1000);
+        }
+
+        function checkLibraryUpdates() {
+            app.showNotification('正在检查题库更新...');
+            setTimeout(() => {
+                app.showNotification('题库已是最新版本');
+            }, 1500);
+        }
+
+        function libraryInfo() {
+            const info = `
+                题库信息：
+                总题目数：${app.examData.length}
+                阅读题目：${app.examData.filter(e => e.type === 'reading').length}
+                听力题目：${app.examData.filter(e => e.type === 'listening').length}
+
+                分类统计：
+                P1级别：${app.examData.filter(e => e.category === 'P1').length}
+                P2级别：${app.examData.filter(e => e.category === 'P2').length}
+                P3级别：${app.examData.filter(e => e.category === 'P3').length}
+            `;
+            alert(info);
+        }
+
+        function showSystemInfo() {
+            const info = `
+                My Melody IELTS 学习系统 v1.0
+
+                系统信息：
+                浏览器：${navigator.userAgent}
+                语言：${navigator.language}
+                在线状态：${navigator.onLine ? '在线' : '离线'}
+
+                存储信息：
+                练习记录：${app.practiceRecords.length} 条
+                题目数据：${app.examData.length} 条
+                设置项目：${Object.keys(app.settings).length} 项
+
+                最后更新：${new Date().toLocaleString()}
+            `;
+            alert(info);
+        }
+
+        function showUsageStatistics() {
+            const totalExams = app.practiceRecords.length;
+            const totalDuration = app.practiceRecords.reduce((sum, record) => sum + record.duration, 0);
+            const avgScore = totalExams > 0 ?
+                Math.round(app.practiceRecords.reduce((sum, record) => sum + record.score, 0) / totalExams) : 0;
+
+            const stats = `
+                使用统计：
+                总练习次数：${totalExams}
+                总学习时长：${Math.round(totalDuration / 60)} 小时
+                平均分数：${avgScore}%
+
+                分类统计：
+                阅读练习：${app.practiceRecords.filter(r => r.type === 'reading').length} 次
+                听力练习：${app.practiceRecords.filter(r => r.type === 'listening').length} 次
+
+                最近7天：${app.practiceRecords.filter(r => {
+                    const recordDate = new Date(r.date);
+                    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+                    return recordDate >= weekAgo;
+                }).length} 次
+            `;
+            alert(stats);
+        }
+
+        function showHelp() {
+            const help = `
+                My Melody IELTS 学习系统 - 使用帮助
+
+                基本功能：
+                • 题库浏览：查看和搜索所有练习题目
+                • 练习记录：管理你的练习历史和成绩
+                • 设置：个性化你的学习体验
+
+                快捷操作：
+                • 点击题目卡片开始练习
+                • 使用搜索框快速找到题目
+                • 批量选择记录进行操作
+                • 导入导出数据备份学习进度
+
+                学习建议：
+                • 每天保持练习，建立学习习惯
+                • 定期复习错题，提高准确率
+                • 合理安排时间，避免疲劳学习
+
+                如遇问题，请检查浏览器控制台或联系管理员。
+            `;
+            alert(help);
+        }
+    </script>
+</body>
+</html>

@@ -1229,6 +1229,7 @@
     <script src="../../js/core/scoreStorage.js"></script>
     <script src="../../js/core/practiceRecorder.js"></script>
     <script src="../../js/components/PDFHandler.js"></script>
+    <script src="../../js/components/DataIntegrityManager.js"></script>
     <script src="../../js/utils/markdownExporter.js"></script>
     <script src="../../js/components/practiceRecordModal.js"></script>
     <script src="../../js/components/practiceHistoryEnhancer.js"></script>
@@ -2779,6 +2780,119 @@ IELTS 学术练习管理系统
         } catch (e) { console.warn('[SelectionDecor] 初始化失败:', e); }
     })();
     </script>
+<script>
+(function () {
+  function safeGetRecords() {
+    try {
+      if (window.storage && typeof storage.get === 'function') {
+        return storage.get('practice_records', []) || [];
+      }
+    } catch (_) {}
+    try {
+      return JSON.parse(localStorage.getItem('practice_records') || '[]');
+    } catch (_) { return []; }
+  }
+  function safeSetRecords(list) {
+    try {
+      if (window.storage && typeof storage.set === 'function') {
+        storage.set('practice_records', list || []);
+        return;
+      }
+    } catch (_) {}
+    try { localStorage.setItem('practice_records', JSON.stringify(list || [])); } catch(_) {}
+  }
+  function normalizeRecord(r) {
+    var exam = (Array.isArray(window.examIndex) ? window.examIndex.find(e => String(e.id) === String(r.examId)) : null) || {};
+    var percent = (typeof r.accuracy === 'number') ? Math.round(r.accuracy * 100) : (r.score || (r.realData && r.realData.percentage) || 0);
+    var dur = r.duration || (r.realData && r.realData.duration) || 0;
+    var when = r.endTime || r.createdAt || r.date || r.timestamp || Date.now();
+    var title = (r.metadata && r.metadata.examTitle) || r.title || r.examName || exam.title || '未命名练习';
+    var type = exam.type || r.type || (typeof getExamTypeFromCategory === 'function' ? getExamTypeFromCategory((r.metadata && r.metadata.category) || r.category) : 'reading');
+    return {
+      id: r.id || r.timestamp || Date.now(),
+      examId: r.examId || '',
+      title: title,
+      type: type,
+      score: percent,
+      duration: dur,
+      date: new Date(when).toISOString(),
+      timestamp: when,
+      realData: r.realData || null
+    };
+  }
+
+  // 1) 覆盖同步：优先读取 storage（修复作答后记录不更新）
+  var _oldSync = window.syncPracticeRecords;
+  window.syncPracticeRecords = function () {
+    try {
+      var records = safeGetRecords();
+      window.practiceRecords = (records || []).map(normalizeRecord);
+      if (typeof updatePracticeView === 'function') updatePracticeView();
+      try { if (typeof updateOverview === 'function') updateOverview(); } catch(_) {}
+    } catch (e) {
+      console.error('[design] syncPracticeRecords error', e);
+      window.practiceRecords = [];
+      if (typeof _oldSync === 'function') try { _oldSync(); } catch(_) {}
+    }
+  };
+
+  // 2) 覆盖清缓存：清理带前缀存储 + 重建题库索引 + 刷新记录（修复1与4）
+  var _oldClear = window.clearCache;
+  window.clearCache = function () {
+    if (!confirm('确定要清除所有缓存数据吗？此操作不可撤销！')) return;
+    try {
+      if (window.storage && typeof storage.clear === 'function') storage.clear();
+      else { localStorage.clear(); }
+    } catch (_) {}
+    // 确保练习记录被清空
+    safeSetRecords([]);
+    try { if (typeof showMessage === 'function') showMessage('缓存已清除', 'success'); } catch(_) {}
+    // 立刻重建题库索引，避免"题目不存在"
+    try { if (typeof loadLibrary === 'function') loadLibrary(true); } catch(_) {}
+    // 刷新练习记录视图
+    setTimeout(function(){ try { window.syncPracticeRecords(); } catch(_) {} }, 200);
+  };
+
+  // 3) 批量删除执行段对接带前缀存储（修复3）
+  var _oldBulk = window.bulkDeleteAction;
+  window.bulkDeleteAction = function () {
+    if (!window.bulkDeleteMode) { return _oldBulk ? _oldBulk() : null; }
+    var ids = Array.from((window.selectedRecordIds || new Set())).map(String);
+    if (ids.length === 0) { if (_oldBulk) return _oldBulk(); return; }
+    var list = safeGetRecords();
+    var setIds = new Set(ids);
+    var newList = (list || []).filter(r => !setIds.has(String(r.id || r.timestamp)));
+    safeSetRecords(newList);
+    // 同步内存并刷新
+    try { window.practiceRecords = (window.practiceRecords || []).filter(r => !setIds.has(String(r.id || r.timestamp))); } catch(_) {}
+    try { if (typeof updatePracticeView === 'function') updatePracticeView(); } catch(_) {}
+    try { if (typeof updateOverview === 'function') updateOverview(); } catch(_) {}
+    try { (window.selectedRecordIds || new Set()).clear(); } catch(_) {}
+    window.bulkDeleteMode = false;
+    var btn = document.getElementById('bulk-delete-btn'); if (btn) btn.innerHTML = '<i class="fas fa-trash"></i> 批量删除';
+    try { showMessage('删除成功', 'success'); } catch(_) {}
+  };
+
+  // 4) 运行时修正文案与绑定（修复5与6）
+  window.addEventListener('DOMContentLoaded', function(){
+    try {
+      var settings = document.getElementById('settings-view');
+      if (!settings) return;
+      settings.querySelectorAll('button').forEach(function(btn){
+        var txt = (btn.textContent || '').trim();
+        if (txt.includes('创建备份')) {
+          btn.innerHTML = '<i class="fas fa-list"></i> 备份列表';
+          btn.onclick = function(){ if (typeof showBackupList === 'function') showBackupList(); else if (typeof createBackup === 'function') createBackup(); };
+        }
+        if (txt.includes('重新加载题库')) {
+          btn.innerHTML = '<i class="fas fa-sync-alt"></i> 强制刷新题库';
+          btn.onclick = function(){ try { loadLibrary(true); if (typeof showMessage==='function') showMessage('题库已强制刷新','success'); } catch(_) {} };
+        }
+      });
+    } catch (_) {}
+  });
+})();
+</script>
 </body>
 
 </html>
