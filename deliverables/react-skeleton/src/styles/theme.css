@@ -1,0 +1,36 @@
+/* Apple-like liquid glass theme refinements */
+:root{
+  --glass-bg: rgba(255,255,255,0.28);
+  --glass-border: rgba(255,255,255,0.35);
+  --glass-shadow: 0 10px 30px rgba(0,0,0,.15), inset 0 1px 0 rgba(255,255,255,.2);
+  --ink: #0f172a; --ink-subtle:#334155; --ink-muted:#64748b;
+  --accent: #6e7bf7; --accent-2:#a27bf6; --ok:#10b981; --bad:#ef4444;
+}
+.glass-card{
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+.header{
+  position: relative;
+}
+.header::after{
+  content:''; position:absolute; inset: -1px; border-radius: inherit;
+  background: radial-gradient(120% 60% at 50% -20%, rgba(255,255,255,.5) 0%, rgba(255,255,255,0) 60%),
+              radial-gradient(80% 50% at 80% 10%, rgba(174,203,250,.25) 0%, rgba(174,203,250,0) 60%),
+              radial-gradient(80% 50% at 20% 10%, rgba(255,182,225,.25) 0%, rgba(255,182,225,0) 60%);
+  pointer-events:none;
+}
+.nav-btn{
+  color: var(--ink-subtle);
+  backdrop-filter: blur(8px);
+}
+.nav-btn.active{ background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+
+/* micro interactions */
+.nav-btn, .btn, .exam-card, .category-card{ transition: transform .18s ease, box-shadow .18s ease, background .18s ease; }
+.nav-btn:hover, .btn:hover, .exam-card:hover, .category-card:hover{ transform: translateY(-2px); }
+
+/* prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce){ *{ animation: none !important; transition: none !important; } }
+

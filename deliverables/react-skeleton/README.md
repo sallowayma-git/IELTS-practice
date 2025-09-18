@@ -12,6 +12,19 @@ npm run dev
 
 打开终端输出的本地地址预览应用。
 
+提示：要从站点中直接“打开题目 HTML/PDF”，请用静态服务器在项目根目录启动服务（确保题目文件也被同源服务）：
+
+```
+# 在项目根目录（包含 deliverables/ 和 ListeningPractice/ 等）
+npx http-server . -p 8080
+# 或任意静态服务器（python -m http.server 8080 等）
+
+# 然后访问：
+http://localhost:8080/deliverables/react-skeleton/index.html
+```
+
+这样 `open HTML/PDF` 将以相对路径访问根目录中的题目文件。
+
 ## 结构
 
 - `src/App.tsx` 顶层布局与路由式视图切换（本地 state）
@@ -25,4 +38,3 @@ npm run dev
 - 引入虚拟滚动库：`react-window` 渲染练习历史/题目列表。
 - 使用 CSS 变量按主题切换（Bloom/Melody），将原有变量迁移到 `:root` 并配套暗色方案。
 - 分析并迁移 `postMessage` 通信：封装消息常量与 handler。
-

@@ -14,13 +14,12 @@ export function ensureSlashEnd(p: string): string {
 export function buildHtmlPath(exam: Exam): string {
   const base = ensureSlashEnd(normalizePath(exam.path || ''));
   const file = exam.filename || 'index.html';
-  // '../../' from deliverables/react-skeleton to project root
-  return '../../' + base + file;
+  // Use absolute from server root to ensure working when hosted at project root
+  return '/' + base + file;
 }
 
 export function buildPdfPath(exam: Exam): string | null {
   if (!exam.pdfFilename) return null;
   const base = ensureSlashEnd(normalizePath(exam.path || ''));
-  return '../../' + base + exam.pdfFilename;
+  return '/' + base + exam.pdfFilename;
 }
-
