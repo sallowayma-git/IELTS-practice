@@ -7,6 +7,9 @@
 
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="../../assets/scripts/complete-exam-data.js"></script>
+    <script src="../../assets/scripts/listening-exam-data.js"></script>
+    <script src="../../js/components/PerformanceOptimizer.js"></script>
     <style>
         /* 美乐蒂主题色彩 */
         :root {
@@ -669,15 +672,19 @@
 
         .exam-meta {
             display: flex;
-            justify-content: space-between;
-            align-size: 0.8rem;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
             color: var(--text-secondary);
-            margin-bottom: 15px;
+            margin-bottom: 12px;
+            white-space: nowrap;
         }
 
         .exam-actions {
             display: flex;
             gap: 10px;
+            align-items: center;
+            justify-content: space-between;
         }
 
         .btn {
@@ -1767,6 +1774,9 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            border-radius: 16px;
+            overflow: hidden;
+            padding: 16px;
         }
 
         .modal-container {
@@ -1873,6 +1883,19 @@
                 font-size: 1.5rem;
             }
         }
+        /* 搜索结果卡片紧凑样式 */
+        #examGrid .exam-card {
+            padding: 12px 14px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--bg-card), var(--bg-secondary));
+            border: 1px solid var(--border-primary);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        #examGrid .exam-title { font-size: 1rem; margin-bottom: 6px; }
+        #examGrid .exam-meta { font-size: 0.85rem; margin-bottom: 8px; }
+        #examGrid .btn { padding: 6px 12px; font-size: 0.85rem; border-radius: 10px; }
+        .best-score { font-weight: 700; color: var(--my-melody-purple); }
+
     </style>
 </head>
 <body>
@@ -1960,8 +1983,8 @@
             <div class="filters">
                 <input type="text" class="search-box" id="searchBox" placeholder="🔍 搜索题目...">
                 <button class="btn" onclick="refreshExamList()">🔄 刷新题库</button>
-                <button class="btn btn-secondary" onclick="loadLibrary()">📂 重新加载</button>
             </div>
+            <div id="examGrid" class="exam-grid"></div>
 
             <!-- 阅读分类 -->
             <div class="category-section">
@@ -2034,42 +2057,42 @@
             <div class="category-section">
                 <h3>🎧 听力练习</h3>
                 <div class="categories-grid">
-                    <div class="category-card" onclick="showCategoryExams('listening', 'P1')">
+                    <div class="category-card" onclick="showCategoryExams('listening', 'P3')">
                         <div class="category-header">
                             <div class="category-icon">🎧</div>
-                            <div class="category-title">P1 听力题目</div>
+                            <div class="category-title">P3 听力题目</div>
                         </div>
                         <div class="category-stats">
                             <div class="category-stat">
-                                <div class="category-stat-number" id="listening-p1-count">0</div>
+                                <div class="category-stat-number" id="listening-p3-count">0</div>
                                 <div class="category-stat-label">总题目</div>
                             </div>
                             <div class="category-stat">
-                                <div class="category-stat-number" id="listening-p1-completed">0</div>
+                                <div class="category-stat-number" id="listening-p3-completed">0</div>
                                 <div class="category-stat-label">已完成</div>
                             </div>
                             <div class="category-stat">
-                                <div class="category-stat-number" id="listening-p1-avg">0%</div>
+                                <div class="category-stat-number" id="listening-p3-avg">0%</div>
                                 <div class="category-stat-label">平均分</div>
                             </div>
                         </div>
                     </div>
-                    <div class="category-card" onclick="showCategoryExams('listening', 'P2')">
+                    <div class="category-card" onclick="showCategoryExams('listening', 'P4')">
                         <div class="category-header">
                             <div class="category-icon">🎧</div>
-                            <div class="category-title">P2 听力题目</div>
+                            <div class="category-title">P4 听力题目</div>
                         </div>
                         <div class="category-stats">
                             <div class="category-stat">
-                                <div class="category-stat-number" id="listening-p2-count">0</div>
+                                <div class="category-stat-number" id="listening-p4-count">0</div>
                                 <div class="category-stat-label">总题目</div>
                             </div>
                             <div class="category-stat">
-                                <div class="category-stat-number" id="listening-p2-completed">0</div>
+                                <div class="category-stat-number" id="listening-p4-completed">0</div>
                                 <div class="category-stat-label">已完成</div>
                             </div>
                             <div class="category-stat">
-                                <div class="category-stat-number" id="listening-p2-avg">0%</div>
+                                <div class="category-stat-number" id="listening-p4-avg">0%</div>
                                 <div class="category-stat-label">平均分</div>
                             </div>
                         </div>
@@ -2223,7 +2246,7 @@
             <div class="settings-section">
                 <h3>💾 数据管理</h3>
                 <div class="data-actions">
-                    <button class="btn" onclick="backupData()">📥 备份数据</button>
+                    <button class="btn" onclick="showBackupList()">📥 备份列表</button>
                     <button class="btn btn-secondary" onclick="restoreData()">📤 恢复数据</button>
                     <button class="btn btn-secondary" onclick="clearAllData()">🗑️ 清空数据</button>
                     <button class="btn btn-secondary" onclick="exportData()">📋 导出数据</button>
@@ -2489,12 +2512,16 @@
                 const typeFilter = document.getElementById('typeFilter')?.value || 'all';
                 const difficultyFilter = document.getElementById('difficultyFilter')?.value || 'all';
                 const searchTerm = document.getElementById('searchBox')?.value.toLowerCase() || '';
+                const candidate = document.getElementById('examGrid');
+                const sections = document.querySelectorAll('#browse .category-section');
+                if (candidate) candidate.style.display = searchTerm ? 'block' : 'none';
+                sections.forEach(sec => { sec.style.display = searchTerm ? 'none' : ''; });
 
                 let filtered = this.examData.filter(exam => {
                     const typeMatch = typeFilter === 'all' || exam.type === typeFilter;
                     const difficultyMatch = difficultyFilter === 'all' || exam.difficulty === difficultyFilter;
                     const searchMatch = exam.title.toLowerCase().includes(searchTerm) ||
-                                      exam.description.toLowerCase().includes(searchTerm);
+                                      (exam.description || '').toLowerCase().includes(searchTerm);
 
                     return typeMatch && difficultyMatch && searchMatch;
                 });
@@ -2611,7 +2638,7 @@
                                 <div class="record-meta">
                                     ${new Date(record.date).toLocaleString()} •
                                     ${record.type === 'reading' ? '阅读' : '听力'} •
-                                    用时: ${record.duration}分钟
+                                    用时: ${formatDuration(record.duration)}
                                 </div>
                             </div>
                             <div class="record-score">
@@ -4036,6 +4063,182 @@
             document.getElementById('darkModeToggle')?.addEventListener('click', (e) => app.toggleSetting(e.target, 'darkMode'));
             document.getElementById('statisticsToggle')?.addEventListener('click', (e) => app.toggleSetting(e.target, 'statistics'));
                     }
+    </script>
+
+    <script>
+    // Overrides per MyMelody_IELTS_Fix_Guide
+    (function(){
+      function buildResourcePath(exam, kind = 'html') {
+        if (!exam || !exam.path) {
+          console.warn('[Resource] Invalid exam data:', exam);
+          return '#';
+        }
+        let basePath = exam.path.replace(/\\/g, '/');
+        if (!basePath.endsWith('/')) basePath += '/';
+        let fileName;
+        if (kind === 'html') {
+          fileName = exam.filename || exam.fileName || 'index.html';
+        } else {
+          fileName = exam.pdfFilename || exam.fileName || 'content.pdf';
+        }
+        return basePath + fileName;
+      }
+      window.buildResourcePath = buildResourcePath;
+
+      window.openExamPDF = function(examId) {
+        const exam = (window.app && window.app.examData || []).find(e => String(e.id) === String(examId));
+        if (!exam) return;
+        const pdfPath = buildResourcePath(exam, 'pdf');
+        window.open(pdfPath, '_blank');
+      };
+
+      window.updateCategoryStats = function() {
+        const categories = ['reading', 'listening'];
+        categories.forEach(type => {
+          const parts = (type === 'reading') ? ['P1','P2','P3'] : ['P3','P4'];
+          parts.forEach(part => {
+            const exams = (window.app && window.app.examData || []).filter(exam => exam.type === type && exam.category === part);
+            const totalCount = exams.length;
+            const completedRecords = (window.app && window.app.practiceRecords || []).filter(record =>
+              exams.some(exam => exam.id === record.examId || exam.title === record.title)
+            );
+            const completedCount = completedRecords.length;
+            const avgScore = completedCount > 0 ?
+              Math.round(completedRecords.reduce((sum, record) => sum + ((record.percentage ?? record.score) || 0), 0) / completedCount) : 0;
+            const countElement = document.getElementById(`${type}-${part.toLowerCase()}-count`);
+            const completedElement = document.getElementById(`${type}-${part.toLowerCase()}-completed`);
+            const avgElement = document.getElementById(`${type}-${part.toLowerCase()}-avg`);
+            if (countElement) countElement.textContent = totalCount;
+            if (completedElement) completedElement.textContent = completedCount;
+            if (avgElement) avgElement.textContent = avgScore + '%';
+          });
+        });
+      };
+
+      window.showCategoryExams = function(type, category) {
+        const exams = (window.app && window.app.examData || []).filter(exam => exam.type === type && exam.category === category);
+        const typeText = type === 'reading' ? '阅读' : '听力';
+        document.getElementById('modalTitle').textContent = `${category} ${typeText}题目列表`;
+        const examListContainer = document.getElementById('modalExamList');
+
+        if (exams.length === 0) {
+          examListContainer.innerHTML = `
+            <div style="text-align: center; padding: 40px;">
+              <div style="font-size: 3rem; margin-bottom: 15px;">📂</div>
+              <p>此分类暂无题目</p>
+            </div>
+          `;
+        } else {
+          examListContainer.innerHTML = exams.map(exam => {
+            const isCompleted = (window.app && window.app.practiceRecords || []).some(record =>
+              record.examId === exam.id || record.title === exam.title
+            );
+            const bestScore = isCompleted ?
+              Math.max(...(window.app && window.app.practiceRecords || [])
+                .filter(record => record.examId === exam.id || record.title === exam.title)
+                .map(record => (record.score ?? record.percentage ?? 0))) : 0;
+
+            return `
+              <div class="exam-item">
+                <div class="exam-title">${exam.title || '无标题'}</div>
+                <div class="exam-meta">
+                  <span>${type === 'reading' ? '📖 阅读' : '🎧 听力'}</span>
+                  <span>${exam.category || 'P1'}</span>
+                  ${isCompleted ? `<span class="best-score">最佳：${bestScore}%</span>` : ''}
+                </div>
+                <div class="exam-actions">
+                  <button class="btn" onclick="openRealExam('${exam.id}', '${type}')">
+                    ${isCompleted ? '重新练习' : '开始练习'}
+                  </button>
+                  <button class="btn btn-secondary" onclick="openExamPDF('${exam.id}')">查看PDF</button>
+                </div>
+              </div>
+            `;
+          }).join('');
+        }
+        document.getElementById('examListModal').style.display = 'flex';
+      };
+
+      MyMelodyIELTSApp.prototype.renderExams = function(exams) {
+        const container = document.getElementById('examGrid');
+        if (!container) return;
+        if (exams.length === 0) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-icon">📚</div>
+              <div class="empty-title">没有找到题目</div>
+              <div class="empty-description">尝试调整搜索条件</div>
+            </div>
+          `;
+          return;
+        }
+        if (window.VirtualScroller) {
+          container.innerHTML = '';
+          new VirtualScroller(
+            container,
+            exams,
+            (exam) => {
+              const isCompleted = (window.app && window.app.practiceRecords || []).some(record => record.examId === exam.id || record.title === exam.title);
+              const bestScore = isCompleted ?
+                Math.max(...(window.app && window.app.practiceRecords || [])
+                  .filter(record => record.examId === exam.id || record.title === exam.title)
+                  .map(record => (record.score ?? record.percentage ?? 0))) : 0;
+              const w = document.createElement('div');
+              w.innerHTML = `
+                <div class="exam-card" onclick="openRealExam('${String(exam.id)}','${String(exam.type)}')">
+                  <div class="exam-title">${exam.title}</div>
+                  <div class="exam-meta">
+                    <span>${exam.type === 'reading' ? '📖 阅读' : '🎧 听力'}</span>
+                    <span>${exam.category || ''}</span>
+                    ${isCompleted ? `<span class='best-score'>最佳 ${bestScore}%</span>` : ''}
+                  </div>
+                  <div class="exam-actions">
+                    <button class="btn" onclick="event.stopPropagation(); openRealExam('${String(exam.id)}','${String(exam.type)}')">
+                      ${isCompleted ? '重新练习' : '开始练习'}
+                    </button>
+                    <button class="btn btn-secondary" onclick="event.stopPropagation(); openExamPDF('${String(exam.id)}')">查看PDF</button>
+                  </div>
+                </div>`;
+              return w.firstElementChild;
+            },
+            { itemHeight: 100, bufferSize: 6, containerHeight: Math.min(window.innerHeight*0.65, 520) }
+          );
+          return;
+        }
+        container.innerHTML = exams.map(exam => {
+          const isCompleted = (window.app && window.app.practiceRecords || []).some(record => record.examId === exam.id || record.title === exam.title);
+          const bestScore = isCompleted ?
+            Math.max(...(window.app && window.app.practiceRecords || [])
+              .filter(record => record.examId === exam.id || record.title === exam.title)
+              .map(record => (record.score ?? record.percentage ?? 0))) : 0;
+          return `
+            <div class=\"exam-card\" onclick=\"openRealExam('${String(exam.id)}','${String(exam.type)}')\">
+              <div class=\"exam-title\">${exam.title}</div>
+              <div class=\"exam-meta\">
+                <span>${exam.type === 'reading' ? '📖 阅读' : '🎧 听力'}</span>
+                <span>${exam.category || ''}</span>
+                ${isCompleted ? `<span class=\"best-score\">最佳 ${bestScore}%</span>` : ''}
+              </div>
+              <div class=\"exam-actions\">  
+                <button class=\"btn\" onclick=\"event.stopPropagation(); openRealExam('${String(exam.id)}','${String(exam.type)}')\">
+                  ${isCompleted ? '重新练习' : '开始练习'}
+                </button>
+                <button class=\"btn btn-secondary\" onclick=\"event.stopPropagation(); openExamPDF('${String(exam.id)}')\">查看PDF</button>
+              </div>
+            </div>\n      `;
+        }).join('');
+      };
+
+      window.formatDuration = function(value) {
+        const s = Number(value || 0);
+        const sec = s > 300 ? s : s * 60;
+        if (sec < 60) return `${Math.floor(sec)}秒`;
+        const m = Math.floor(sec / 60);
+        if (m < 60) return `${m}分钟`;
+        const h = Math.floor(m / 60), mm = m % 60;
+        return `${h}小时${mm}分钟`;
+      };
+    })();
     </script>
 </body>
 </html>
