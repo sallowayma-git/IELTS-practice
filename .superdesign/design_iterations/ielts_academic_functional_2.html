@@ -1438,7 +1438,7 @@
                 var _showMessage = window.showMessage;
                 if (typeof _showMessage === 'function' && !_showMessage.__designPatched) {
                     window.showMessage = function (message, type, duration) {
-                        var d = (typeof duration === 'number' && isFinite(duration)) ? duration : 4000;
+                        var d = (typeof duration === 'number' && isFinite(duration)) ? duration : 2000;
                         return _showMessage(message, type, d);
                     };
                     window.showMessage.__designPatched = true;
@@ -1516,7 +1516,45 @@
             }
         }
 
+        // 防重复消息显示机制
+        window._welcomeMessageShown = false;
+        window._initializationInProgress = false;
+        window._messageHistory = new Set(); // 记录已显示的消息
+        window._lastMessageTime = 0; // 记录上一条消息的时间
+
+        // 优化 showMessage 函数，防止短时间内重复显示相同消息
+        const originalShowMessage = window.showMessage || function() {};
+        window.showMessage = function(message, type = 'info', duration = 2000) {
+            const now = Date.now();
+            const messageKey = `${message}-${type}`;
+
+            // 如果在2秒内显示过相同的消息，则跳过
+            if (window._messageHistory.has(messageKey) && (now - window._lastMessageTime) < 2000) {
+                console.log('[Message] 跳过重复消息:', message);
+                return;
+            }
+
+            // 记录消息
+            window._messageHistory.add(messageKey);
+            window._lastMessageTime = now;
+
+            // 3秒后清理消息记录
+            setTimeout(() => {
+                window._messageHistory.delete(messageKey);
+            }, 3000);
+
+            // 调用原始函数
+            return originalShowMessage(message, type, duration);
+        };
+
         function initializeApp() {
+            // 防止重复初始化
+            if (window._initializationInProgress) {
+                console.log('[App] 初始化已在进行中，跳过重复初始化');
+                return;
+            }
+            window._initializationInProgress = true;
+
             // Initialize existing components
             if (typeof initializeLegacyComponents === 'function') {
                 initializeLegacyComponents();
@@ -1528,8 +1566,14 @@
             updatePracticeView();
             updateSettingsView();
 
-            // Show welcome message
-            showMessage('系统初始化完成', 'success', '欢迎使用IELTS学术练习管理系统');
+            // 只显示一次欢迎消息
+            if (!window._welcomeMessageShown) {
+                showMessage('系统初始化完成', 'success');
+                window._welcomeMessageShown = true;
+            }
+
+            // 标记初始化完成
+            window._initializationInProgress = false;
         }
 
         // View management
@@ -2099,7 +2143,7 @@
             const record = practiceRecords.find(r => (r.id || r.timestamp) === recordId);
             if (record) {
                 // Show record details modal or navigate to detail page
-                showMessage('记录详情', 'info', `查看练习记录: ${record.title || record.examName}`);
+                showMessage(`查看练习记录: ${record.title || record.examName}`, 'info');
                 // Implementation for showing detailed record view
             }
         }
@@ -2109,7 +2153,7 @@
             if (confirm('确定要清除所有缓存数据吗？此操作不可撤销。')) {
                 localStorage.clear();
                 sessionStorage.clear();
-                showMessage('缓存已清除', 'success', '系统缓存已成功清除');
+                showMessage('缓存已清除', 'success');
                 setTimeout(() => location.reload(), 1500);
             }
         }
@@ -2127,16 +2171,25 @@
                 } catch (e) {
                     console.warn('Failed to clear storage:', e);
                 }
-                showMessage('缓存和练习记录已清除', 'success', '所有数据已成功清除');
+                showMessage('缓存和练习记录已清除', 'success');
                 setTimeout(() => location.reload(), 1500);
             }
         }
 
         function clearTemporaryFiles() {
-            showMessage('清理完成', 'success', '临时文件已清理完毕');
+            showMessage('清理完成', 'success');
         }
 
+        // Load library - 添加防重复加载
+        window._libraryLoadingInProgress = false;
         function loadLibrary(forceReload = false) {
+            // 防止重复加载
+            if (window._libraryLoadingInProgress && !forceReload) {
+                console.log('[Library] 题库加载已在进行中，跳过重复调用');
+                return;
+            }
+            window._libraryLoadingInProgress = true;
+
             const startTime = performance.now();
             
             // Try to load from localStorage first
@@ -2151,6 +2204,9 @@
                 } catch (error) {
                     console.warn('Failed to load exam index from localStorage:', error);
                 }
+            } else {
+                // 如果是强制刷新，重置状态
+                window._libraryLoadingInProgress = false;
             }
         
             console.log(`[Library] ${forceReload ? 'Force' : 'Normal'} loading library index...`);
@@ -2186,15 +2242,17 @@
         
         function finishLibraryLoading(startTime) {
             const loadTime = performance.now() - startTime;
-            showMessage(`题库加载完成！共 ${examIndex.length} 个题目 - ${Math.round(loadTime)}ms`, 'success');
+            showMessage(`题库加载完成！共 ${examIndex.length} 个题目`, 'success');
             updateOverview();
             updateBrowseView();
+            // 重置加载状态
+            window._libraryLoadingInProgress = false;
         }
 
         function checkLibraryUpdates() {
-            showMessage('检查更新', 'info', '正在检查题库更新...');
+            showMessage('正在检查题库更新...', 'info');
             setTimeout(() => {
-                showMessage('已是最新版本', 'success', '题库已是最新版本');
+                showMessage('已是最新版本', 'success');
             }, 2000);
         }
 
@@ -2220,7 +2278,7 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
 
-            showMessage('备份创建成功', 'success', '数据备份已保存到下载文件夹');
+            showMessage('备份创建成功', 'success');
         }
 
         function importData() {
@@ -2343,10 +2401,10 @@
                         updateBrowseView();
                         updatePracticeView();
 
-                        showMessage('数据导入成功', 'success', `成功导入 ${importedExamCount} 道题目和 ${importedRecordCount} 条练习记录`);
+                        showMessage(`成功导入 ${importedExamCount} 道题目和 ${importedRecordCount} 条练习记录`, 'success');
                     } catch (error) {
                         console.error('Import error:', error);
-                        showMessage('导入失败', 'error', '文件格式错误或数据损坏: ' + error.message);
+                        showMessage('导入失败: ' + error.message, 'error');
                     }
                 };
                 reader.readAsText(file);
@@ -2401,7 +2459,7 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
 
-            showMessage('导出成功', 'success', `已导出 ${practiceRecords.length} 条练习记录和 ${examIndex.length} 道题目`);
+            showMessage(`已导出 ${practiceRecords.length} 条练习记录和 ${examIndex.length} 道题目`, 'success');
         }
 
         function clearPracticeData() {
@@ -2410,7 +2468,7 @@
                 localStorage.removeItem('practice_records');
                 updatePracticeView();
                 updateOverview();
-                showMessage('记录已清除', 'success', '所有练习记录已清除');
+                showMessage('记录已清除', 'success');
             }
         }
 
@@ -2445,14 +2503,14 @@ IELTS 学术练习管理系统
         }
 
         function showUsageStatistics() {
-            showMessage('使用统计', 'info', '详细使用统计功能开发中...');
+            showMessage('详细使用统计功能开发中...', 'info');
         }
 
         // Show message function
-        function showMessage(type, severity = 'info', text = '') {
+        function showMessage(message, type = 'info', duration = 2000) {
             const messageContainer = document.getElementById('message-container');
             const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${severity}`;
+            messageDiv.className = `message ${type}`;
 
             const iconMap = {
                 'success': 'fas fa-check-circle',
@@ -2461,19 +2519,18 @@ IELTS 学术练习管理系统
                 'info': 'fas fa-info-circle'
             };
 
-            const icon = iconMap[severity] || 'fas fa-info-circle';
+            const icon = iconMap[type] || 'fas fa-info-circle';
 
             messageDiv.innerHTML = `
                 <i class="${icon} message-icon"></i>
                 <div class="message-content">
-                    <div class="message-title">${type}</div>
-                    <div class="message-text">${text}</div>
+                    <div class="message-title">${message}</div>
                 </div>
             `;
 
             messageContainer.appendChild(messageDiv);
 
-            // Auto-remove after 5 seconds
+            // Auto-remove after duration
             setTimeout(() => {
                 if (messageDiv.parentNode) {
                     messageDiv.style.animation = 'slideIn 0.3s ease-out reverse';
@@ -2483,11 +2540,19 @@ IELTS 学术练习管理系统
                         }
                     }, 300);
                 }
-            }, 5000);
+            }, duration);
         }
 
-        // Sync practice records with storage
+        // Sync practice records with storage - 添加防重复调用
+        window._syncInProgress = false;
         function syncPracticeRecords() {
+            // 防止重复同步
+            if (window._syncInProgress) {
+                console.log('[Sync] 同步已在进行中，跳过重复调用');
+                return;
+            }
+            window._syncInProgress = true;
+
             try {
                 const records = JSON.parse(localStorage.getItem('practice_records') || '[]');
 
@@ -2509,13 +2574,15 @@ IELTS 学术练习管理系统
             } catch (error) {
                 console.error('Failed to sync practice records:', error);
                 practiceRecords = [];
+            } finally {
+                window._syncInProgress = false;
             }
         }
 
         // Listen for practice completion messages
         window.addEventListener('message', function(event) {
             if (event.data && (event.data.type === 'PRACTICE_COMPLETE' || event.data.type === 'practice_completed')) {
-                showMessage('练习完成', 'success', '练习已完成，正在更新记录...');
+                showMessage('练习已完成，正在更新记录...', 'success');
                 setTimeout(syncPracticeRecords, 1000);
             }
         });
@@ -2567,7 +2634,7 @@ IELTS 学术练习管理系统
         // Initialize on page load
         window.addEventListener('load', function() {
             console.log('IELTS Academic Practice System initialized');
-            showMessage('系统就绪', 'success', 'IELTS学术练习管理系统已就绪');
+            showMessage('系统就绪', 'success');
         });
     </script>
 
@@ -2657,7 +2724,7 @@ IELTS 学术练习管理系统
 
         window.batchDeleteSelected = function(){
             var ids = Array.from(window.selectedRecordIds || []);
-            if (ids.length === 0) { try { showMessage('未选择记录', 'warning', '请先选择要删除的记录'); } catch(_) {} return; }
+            if (ids.length === 0) { try { showMessage('请先选择要删除的记录', 'warning'); } catch(_) {} return; }
             if (!confirm('确定要删除选中的 ' + ids.length + ' 条记录吗？此操作不可撤销。')) return;
             try {
                 var list = JSON.parse(localStorage.getItem('practice_records')||'[]');
@@ -2669,7 +2736,7 @@ IELTS 学术练习管理系统
             window.selectedRecordIds.clear();
             try { updatePracticeView(); } catch(_) {}
             try { updateOverview(); } catch(_) {}
-            try { showMessage('删除成功', 'success', '已删除选中记录'); } catch(_) {}
+            try { showMessage('已删除选中记录', 'success'); } catch(_) {}
         };
 
         // 3) 增强导入：兼容 exam_system_practice_records 结构
@@ -2757,7 +2824,7 @@ IELTS 学术练习管理系统
                             try { updateOverview(); } catch(_) {}
                             try { updateBrowseView(); } catch(_) {}
                             try { updatePracticeView(); } catch(_) {}
-                            try { showMessage('数据导入成功', 'success', '成功导入 ' + importedExamCount + ' 道题目和 ' + importedRecordCount + ' 条练习记录'); } catch(_) {}
+                            try { showMessage('成功导入 ' + importedExamCount + ' 道题目和 ' + importedRecordCount + ' 条练习记录', 'success'); } catch(_) {}
                         } catch (err) {
                             console.error('[Import] 失败:', err);
                             if (window.showMessage) window.showMessage('导入失败: ' + err.message, 'error');
@@ -2806,7 +2873,7 @@ IELTS 学术练习管理系统
         */
         };
 
-        // 安全重写：使用模板字符串，避免引号转义问题
+        // 4) 主题切换弹窗
         window.showThemeSwitcher = function(){
             const html = `
             <div id="theme-switcher" class="modal-overlay show">
@@ -2822,7 +2889,6 @@ IELTS 学术练习管理系统
                     <p><i class="fas fa-info-circle" style="color: var(--color-primary); margin-right: var(--space-2);"></i>
                     选择您喜欢的主题风格，不同的主题提供不同的视觉体验和学习氛围。</p>
                   </div>
-
                   <div class="theme-card active">
                     <div class="theme-info">
                       <div class="theme-details">
@@ -2835,7 +2901,6 @@ IELTS 学术练习管理系统
                       </div>
                     </div>
                   </div>
-
                   <div class="theme-card">
                     <div class="theme-info">
                       <div class="theme-details">
@@ -2851,7 +2916,6 @@ IELTS 学术练习管理系统
                       </div>
                     </div>
                   </div>
-
                   <div class="theme-card">
                     <div class="theme-info">
                       <div class="theme-details">
@@ -2886,7 +2950,7 @@ IELTS 学术练习管理系统
         window.bulkDeleteAction = function(){
             if (!window.bulkDeleteMode) {
                 setBulkDeleteMode(true);
-                try { showMessage('批量选择已开启', 'info', '点击记录行可选择；完成后再次点击完成选择'); } catch(_) {}
+                try { showMessage('点击记录行可选择；完成后再次点击完成选择', 'info'); } catch(_) {}
             } else {
                 // 完成选择 -> 执行删除
                 const ids = Array.from(selectedRecordIds || []);
@@ -2902,7 +2966,7 @@ IELTS 学术练习管理系统
                 try { updatePracticeView(); } catch(_) {}
                 try { updateOverview(); } catch(_) {}
                 setBulkDeleteMode(false);
-                try { showMessage('删除成功', 'success', '已删除所选记录'); } catch(_) {}
+                try { showMessage('已删除所选记录', 'success'); } catch(_) {}
             }
         };
 
