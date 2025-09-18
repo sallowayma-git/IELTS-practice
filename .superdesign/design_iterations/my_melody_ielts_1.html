@@ -10,6 +10,7 @@
     <script src="../../assets/scripts/complete-exam-data.js"></script>
     <script src="../../assets/scripts/listening-exam-data.js"></script>
     <script src="../../js/components/PerformanceOptimizer.js"></script>
+    <script src="../../js/boot-fallbacks.js"></script>
     <style>
         /* 美乐蒂主题色彩 */
         :root {
@@ -4237,6 +4238,60 @@
         if (m < 60) return `${m}分钟`;
         const h = Math.floor(m / 60), mm = m % 60;
         return `${h}小时${mm}分钟`;
+      };
+
+      // 强化“刷新题库”逻辑：忽略空缓存，优先从全局索引重建
+      window.refreshExamList = function(){
+        try { loadRealExamLibrary(true); } catch (e) { console.warn(e); }
+      };
+
+      // 覆盖加载题库函数：当缓存为空或forceFresh时，尝试从全局索引加载
+      window.loadRealExamLibrary = function(forceFresh){
+        const startTime = performance.now();
+        const activeConfigKey = getActiveLibraryConfigurationKey();
+        const cachedData = storage.get(activeConfigKey);
+
+        if (!forceFresh && Array.isArray(cachedData) && cachedData.length > 0) {
+          app.examData = cachedData;
+          finishRealLibraryLoading(startTime);
+          return;
+        }
+
+        if (app && typeof app.showNotification === 'function') {
+          app.showNotification('正在加载题库索引...');
+        }
+
+        const tryBuildFromGlobals = (attempt = 1) => {
+          let readingExams = [];
+          let listeningExams = [];
+          if (Array.isArray(window.completeExamIndex)) {
+            readingExams = window.completeExamIndex.map(exam => ({ ...exam, type: 'reading' }));
+          }
+          if (Array.isArray(window.listeningExamIndex)) {
+            listeningExams = window.listeningExamIndex;
+          }
+          const merged = [...readingExams, ...listeningExams];
+
+          if (merged.length > 0) {
+            app.examData = merged;
+            storage.set(activeConfigKey, app.examData);
+            finishRealLibraryLoading(startTime);
+            return;
+          }
+
+          if (attempt < 5) {
+            setTimeout(() => tryBuildFromGlobals(attempt + 1), 150);
+          } else {
+            // 不落盘空数组，避免把“空索引”固化为缓存
+            app.examData = [];
+            finishRealLibraryLoading(startTime);
+            if (app && typeof app.showNotification === 'function') {
+              app.showNotification('题库脚本尚未加载，稍后重试或刷新');
+            }
+          }
+        };
+
+        tryBuildFromGlobals(1);
       };
     })();
     </script>
