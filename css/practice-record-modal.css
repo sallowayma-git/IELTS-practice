@@ -1,5 +1,5 @@
-/* 练习记录详情弹窗样式 */
-.modal-overlay {
+/* 练习记录详情弹窗样式 - 独立样式以避免冲突 */
+#practice-record-modal.modal-overlay {
     position: fixed;
     top: 0;
     left: 0;
@@ -12,35 +12,39 @@
     z-index: 1000;
     opacity: 0;
     transition: opacity 0.3s ease;
+    overflow: hidden !important;
 }
 
-.modal-overlay.show {
+#practice-record-modal.modal-overlay.show {
     opacity: 1;
 }
 
-.modal-container {
+#practice-record-modal .modal-container {
     background: white;
     border-radius: 12px;
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
     max-width: 800px;
     width: 90%;
     max-height: 90vh;
-    overflow: hidden;
+    display: flex;
+    flex-direction: column;
     transform: translateY(-20px);
     transition: transform 0.3s ease;
+    overflow: hidden !important;
 }
 
-.modal-overlay.show .modal-container {
+#practice-record-modal.modal-overlay.show .modal-container {
     transform: translateY(0);
 }
 
-.modal-header {
+#practice-record-modal .modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 20px 24px;
     border-bottom: 1px solid #e5e7eb;
     background: #f9fafb;
+    flex-shrink: 0;
 }
 
 .modal-title {
@@ -66,10 +70,38 @@
     color: #374151;
 }
 
-.modal-body {
+#practice-record-modal .modal-body {
     padding: 24px;
-    max-height: 60vh;
-    overflow-y: auto;
+    flex: 1;
+    overflow-y: auto !important;
+    min-height: 0;
+    overflow-x: hidden !important;
+
+    /* 甜美可爱的滚动条样式 */
+    scrollbar-width: thin;
+    scrollbar-color: #f9c6d1 #fce8ec;
+}
+
+#practice-record-modal .modal-body::-webkit-scrollbar {
+    width: 8px;
+}
+
+#practice-record-modal .modal-body::-webkit-scrollbar-track {
+    background: #fce8ec;
+    border-radius: 10px;
+    border: 2px solid #f9c6d1;
+}
+
+#practice-record-modal .modal-body::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #f9c6d1 0%, #f8b5d1 100%);
+    border-radius: 8px;
+    border: 1px solid #f8a5c1;
+    min-height: 40px;
+}
+
+#practice-record-modal .modal-body::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, #f8b5d1 0%, #f7a4c1 100%);
+    border: 1px solid #f794b1;
 }
 
 .record-summary h4 {
@@ -124,33 +156,39 @@
     border-bottom: 2px solid #e5e7eb;
 }
 
-.answer-table-container {
-    overflow-x: auto;
+#practice-record-modal .answer-table-container {
     border-radius: 8px;
     border: 1px solid #e5e7eb;
+    width: 100%;
 }
 
-.answer-table {
+#practice-record-modal .answer-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.9rem;
+    table-layout: fixed;
 }
 
 .answer-table thead {
     background: #f8fafc;
 }
 
-.answer-table th {
-    padding: 12px 16px;
+#practice-record-modal .answer-table th {
+    padding: 8px 12px;
     text-align: left;
     font-weight: 600;
     color: #374151;
     border-bottom: 2px solid #e5e7eb;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.answer-table td {
-    padding: 12px 16px;
+#practice-record-modal .answer-table td {
+    padding: 8px 12px;
     border-bottom: 1px solid #f1f5f9;
+    vertical-align: top;
+    line-height: 1.4;
 }
 
 .answer-row.correct {
@@ -161,29 +199,39 @@
     background: #fef2f2;
 }
 
-.question-num {
+#practice-record-modal .question-num {
     font-weight: 600;
     color: #1e293b;
     text-align: center;
-    width: 80px;
+    width: 60px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
-.user-answer {
+#practice-record-modal .user-answer {
     color: #1e293b;
     font-family: 'Courier New', monospace;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    max-width: 200px;
 }
 
-.correct-answer {
+#practice-record-modal .correct-answer {
     color: #059669;
     font-family: 'Courier New', monospace;
     font-weight: 500;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    max-width: 200px;
 }
 
-.result {
+#practice-record-modal .result {
     text-align: center;
     font-weight: bold;
     font-size: 1.1em;
-    width: 60px;
+    width: 50px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 .result.correct {
@@ -204,44 +252,7 @@
     margin: 0;
 }
 
-.modal-footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 12px;
-    padding: 20px 24px;
-    border-top: 1px solid #e5e7eb;
-    background: #f9fafb;
-}
 
-.modal-footer .btn {
-    padding: 8px 16px;
-    border-radius: 6px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    border: none;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.btn-primary {
-    background: #3b82f6;
-    color: white;
-}
-
-.btn-primary:hover {
-    background: #2563eb;
-}
-
-.btn-secondary {
-    background: #6b7280;
-    color: white;
-}
-
-.btn-secondary:hover {
-    background: #4b5563;
-}
 
 /* 响应式设计 */
 @media (max-width: 768px) {
@@ -275,15 +286,7 @@
         padding: 8px 12px;
     }
     
-    .modal-footer {
-        flex-direction: column;
     }
-    
-    .modal-footer .btn {
-        width: 100%;
-        justify-content: center;
-    }
-}
 
 /* 可点击的练习记录标题样式 */
 .practice-record-title {
