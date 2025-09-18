@@ -130,15 +130,6 @@ class PracticeRecordModal {
                             ${answerTable}
                         </div>
                     </div>
-                    
-                    <div class="modal-footer">
-                        <button class="btn btn-secondary" onclick="window.practiceRecordModal.exportSingle('${record.id}')">
-                            <i class="fas fa-download"></i> 导出此记录
-                        </button>
-                        <button class="btn btn-primary" onclick="window.practiceRecordModal.hide()">
-                            关闭
-                        </button>
-                    </div>
                 </div>
             </div>
         `;
@@ -192,11 +183,18 @@ class PracticeRecordModal {
             const result = isCorrect ? '✓' : '✗';
             const resultClass = isCorrect ? 'correct' : 'incorrect';
             
+            // 截断过长的答案文本
+            const truncateAnswer = (answer, maxLength = 50) => {
+                if (!answer) return 'No Answer';
+                if (answer.length <= maxLength) return answer;
+                return answer.substring(0, maxLength) + '...';
+            };
+
             table += `
                 <tr class="answer-row ${resultClass}">
                     <td class="question-num">${qNum}</td>
-                    <td class="user-answer">${userAnswer || 'No Answer'}</td>
-                    <td class="correct-answer">${correctAnswer || 'N/A'}</td>
+                    <td class="user-answer" title="${userAnswer || ''}">${truncateAnswer(userAnswer)}</td>
+                    <td class="correct-answer" title="${correctAnswer || ''}">${truncateAnswer(correctAnswer)}</td>
                     <td class="result ${resultClass}">${result}</td>
                 </tr>
             `;
@@ -246,11 +244,18 @@ class PracticeRecordModal {
             const result = comparison.isCorrect ? '✓' : '✗';
             const resultClass = comparison.isCorrect ? 'correct' : 'incorrect';
             
+            // 截断过长的答案文本
+            const truncateAnswer = (answer, maxLength = 50) => {
+                if (!answer) return 'No Answer';
+                if (answer.length <= maxLength) return answer;
+                return answer.substring(0, maxLength) + '...';
+            };
+
             table += `
                 <tr class="answer-row ${resultClass}">
                     <td class="question-num">${questionNum}</td>
-                    <td class="user-answer">${comparison.userAnswer || 'No Answer'}</td>
-                    <td class="correct-answer">${comparison.correctAnswer || 'N/A'}</td>
+                    <td class="user-answer" title="${comparison.userAnswer || ''}">${truncateAnswer(comparison.userAnswer)}</td>
+                    <td class="correct-answer" title="${comparison.correctAnswer || ''}">${truncateAnswer(comparison.correctAnswer)}</td>
                     <td class="result ${resultClass}">${result}</td>
                 </tr>
             `;

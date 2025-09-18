@@ -706,12 +706,166 @@
             background: #6BB6D6;
         }
 
+        /* My Melody 风格的操作按钮容器 */
+        .melody-action-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            align-items: flex-start;
+            margin-top: 0;
+            padding: 12px 16px;
+            background: linear-gradient(135deg, rgba(255, 182, 225, 0.08), rgba(221, 160, 221, 0.08));
+            border-radius: 16px;
+            border: 2px solid var(--my-melody-pink);
+            box-shadow: 0 4px 12px rgba(255, 182, 225, 0.12);
+            align-self: flex-start;
+            height: fit-content;
+        }
+
+        .melody-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-weight: 600;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            min-width: 80px;
+            box-shadow: 0 3px 8px rgba(255, 182, 225, 0.15);
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(135deg, #ffb6e1, #dda0dd);
+            color: #8b4f8b;
+        }
+
+        .melody-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .melody-btn:hover::before {
+            left: 100%;
+        }
+
+        .melody-btn:hover {
+            transform: translateY(-2px) scale(1.03);
+            box-shadow: 0 6px 16px rgba(255, 182, 225, 0.25);
+            background: linear-gradient(135deg, #dda0dd, #ffb6e1);
+        }
+
+        .melody-btn:active {
+            transform: translateY(-1px) scale(1.01);
+        }
+
+        .melody-btn-icon {
+            font-size: 1.2rem;
+            margin-bottom: 2px;
+            filter: drop-shadow(0 1px 2px rgba(255, 182, 225, 0.2));
+            opacity: 0.9;
+        }
+
+        .melody-btn-text {
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            text-shadow: 0 1px 2px rgba(255, 182, 225, 0.1);
+        }
+
+        /* 危险操作按钮 - 红色系 (美乐蒂主题) */
+        .melody-btn-danger {
+            background: linear-gradient(135deg, #ffb6c1, #ff8fa3);
+            color: #8b0000;
+            border: 2px solid #ffb6c1;
+        }
+
+        .melody-btn-danger:hover {
+            background: linear-gradient(135deg, #ff8fa3, #ff69b4);
+            border-color: #ff69b4;
+            box-shadow: 0 6px 16px rgba(255, 182, 193, 0.3);
+            color: #8b0000;
+        }
+
+        /* 主要操作按钮 - 蓝色系 (美乐蒂主题) */
+        .melody-btn-primary {
+            background: linear-gradient(135deg, #87ceeb, #6bb6d6);
+            color: #2e5984;
+            border: 2px solid #87ceeb;
+        }
+
+        .melody-btn-primary:hover {
+            background: linear-gradient(135deg, #6bb6d6, #4fc3f7);
+            border-color: #4fc3f7;
+            box-shadow: 0 6px 16px rgba(135, 206, 235, 0.3);
+            color: #2e5984;
+        }
+
+        /* 成功操作按钮 - 绿色系 (美乐蒂主题) */
+        .melody-btn-success {
+            background: linear-gradient(135deg, #98fb98, #78c878);
+            color: #2e7d32;
+            border: 2px solid #98fb98;
+        }
+
+        .melody-btn-success:hover {
+            background: linear-gradient(135deg, #78c878, #66bb6a);
+            border-color: #66bb6a;
+            box-shadow: 0 6px 16px rgba(152, 251, 152, 0.3);
+            color: #2e7d32;
+        }
+
+        /* 过滤器 */
+        .filters {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
         /* 练习记录列表 */
         .record-list {
             background: white;
             border-radius: 20px;
             overflow: hidden;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            max-height: 500px;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        /* 虚拟滚动优化 */
+        .record-list::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .record-list::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 4px;
+        }
+
+        .record-list::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+
+        .record-list::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
         }
 
         .record-item {
@@ -733,6 +887,129 @@
 
         .record-checkbox {
             margin-right: 15px;
+        }
+
+        /* 蝴蝶结复选框样式 */
+        .bowtie-checkbox-wrapper {
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            margin-right: 12px;
+            padding-top: 2px;
+        }
+
+        .bowtie-checkbox-input {
+            position: absolute;
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .bowtie-checkbox-label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .bowtie-checkbox {
+            width: 18px;
+            height: 12px;
+            position: relative;
+            display: inline-block;
+            margin-right: 6px;
+        }
+
+        .bowtie-checkbox::before,
+        .bowtie-checkbox::after {
+            content: '';
+            position: absolute;
+            width: 8px;
+            height: 12px;
+            border: 2px solid var(--my-melody-lavender);
+            border-radius: 2px;
+            background: linear-gradient(135deg, #ffffff, #faf9ff);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .bowtie-checkbox::before {
+            left: 0;
+            transform-origin: right center;
+        }
+
+        .bowtie-checkbox::after {
+            right: 0;
+            transform-origin: left center;
+        }
+
+        .bowtie-checkbox-input:hover + .bowtie-checkbox-label .bowtie-checkbox::before,
+        .bowtie-checkbox-input:hover + .bowtie-checkbox-label .bowtie-checkbox::after {
+            border-color: var(--my-melody-pink);
+            background: linear-gradient(135deg, #fff0f6, #fefbff);
+        }
+
+        .bowtie-checkbox-input:checked + .bowtie-checkbox-label .bowtie-checkbox::before,
+        .bowtie-checkbox-input:checked + .bowtie-checkbox-label .bowtie-checkbox::after {
+            background: linear-gradient(135deg, var(--my-melody-pink), var(--my-melody-purple));
+            border-color: var(--my-melody-purple);
+            box-shadow: 0 2px 8px rgba(236, 72, 153, 0.4);
+        }
+
+        .bowtie-checkbox-input:checked + .bowtie-checkbox-label .bowtie-checkbox::before {
+            transform: scale(0.9) rotate(-5deg);
+        }
+
+        .bowtie-checkbox-input:checked + .bowtie-checkbox-label .bowtie-checkbox::after {
+            transform: scale(0.9) rotate(5deg);
+        }
+
+        /* 蝴蝶结中心装饰 */
+        .bowtie-checkbox-input:checked + .bowtie-checkbox-label .bowtie-checkbox::before {
+            box-shadow:
+                0 2px 8px rgba(236, 72, 153, 0.4),
+                inset 0 0 0 2px rgba(255, 255, 255, 0.6);
+        }
+
+        .bowtie-checkbox-input:checked + .bowtie-checkbox-label .bowtie-checkbox::after {
+            box-shadow:
+                0 2px 8px rgba(236, 72, 153, 0.4),
+                inset 0 0 0 2px rgba(255, 255, 255, 0.6);
+        }
+
+        /* 勾选标记 */
+        .bowtie-checkbox-input:checked + .bowtie-checkbox-label .bowtie-checkbox::before {
+            content: '✓';
+            color: white;
+            font-size: 8px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        .bowtie-checkbox-input:checked + .bowtie-checkbox-label .bowtie-checkbox::after {
+            content: '✓';
+            color: white;
+            font-size: 8px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        /* 为全选复选框添加文本样式 */
+        .bowtie-checkbox-text {
+            font-size: 0.9rem;
+            color: var(--text-primary);
+            font-weight: 500;
+            margin-left: 4px;
+        }
+
+        .bowtie-checkbox-input:hover + .bowtie-checkbox-label .bowtie-checkbox-text {
+            color: var(--my-melody-pink);
         }
 
         .record-info {
@@ -986,10 +1263,11 @@
             animation: fadeIn 0.3s ease;
         }
 
-        .modal.show {
-            display: flex;
-            align-items: center;
-            justify-content: center;
+        .modal.show,
+        .modal[style*="flex"] {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
         }
 
         .modal-content {
@@ -997,8 +1275,8 @@
             border-radius: 20px;
             max-width: 600px;
             width: 90%;
-            max-height: 80vh;
-            overflow-y: auto;
+            max-height: 90vh;
+            overflow: hidden;
             box-shadow: 0 20px 60px rgba(236, 72, 153, 0.3);
             border: 2px solid #ec4899;
             animation: slideUp 0.3s ease;
@@ -1042,6 +1320,34 @@
 
         .modal-body {
             padding: 20px;
+            max-height: calc(90vh - 100px);
+            overflow-y: auto;
+
+            /* 甜美可爱的滚动条样式 */
+            scrollbar-width: thin;
+            scrollbar-color: #f9c6d1 #fce8ec;
+        }
+
+        .modal-body::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .modal-body::-webkit-scrollbar-track {
+            background: #fce8ec;
+            border-radius: 10px;
+            border: 2px solid #f9c6d1;
+        }
+
+        .modal-body::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, #f9c6d1 0%, #f8b5d1 100%);
+            border-radius: 8px;
+            border: 1px solid #f8a5c1;
+            min-height: 40px;
+        }
+
+        .modal-body::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(135deg, #f8b5d1 0%, #f7a4c1 100%);
+            border: 1px solid #f794b1;
         }
 
         .modal-footer {
@@ -1189,8 +1495,8 @@
         }
 
         .table-body {
-            max-height: 300px;
-            overflow-y: auto;
+            overflow: visible !important;
+            max-height: none !important;
         }
 
         .table-row {
@@ -1249,13 +1555,15 @@
             gap: 15px;
             margin-bottom: 20px;
             flex-wrap: wrap;
-            align-items: center;
+            align-items: flex-start;
+            justify-content: space-between;
         }
 
         .filter-group {
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             gap: 8px;
+            padding-top: 12px;
         }
 
         .filter-select {
@@ -1265,6 +1573,83 @@
             background: white;
             color: var(--text-primary);
             font-size: 0.9rem;
+        }
+
+        /* My Melody 风格的过滤器样式 */
+        .melody-filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            background: linear-gradient(135deg, rgba(255, 182, 193, 0.1), rgba(221, 160, 221, 0.1));
+            padding: 12px 16px;
+            border-radius: 16px;
+            border: 2px solid var(--my-melody-pink);
+            box-shadow: 0 4px 12px rgba(236, 72, 153, 0.15);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .melody-filter-group:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(236, 72, 153, 0.25);
+            border-color: var(--my-melody-purple);
+        }
+
+        .melody-filter-label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--my-melody-purple);
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            letter-spacing: 0.5px;
+        }
+
+        .melody-select-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .melody-select {
+            width: 100%;
+            padding: 10px 16px 10px 12px;
+            border: 2px solid var(--my-melody-lavender);
+            border-radius: 12px;
+            background: linear-gradient(135deg, #ffffff, #faf9ff);
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            font-weight: 500;
+            appearance: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            outline: none;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
+        }
+
+        .melody-select:focus {
+            border-color: var(--my-melody-pink);
+            box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.2), inset 0 2px 4px rgba(0, 0, 0, 0.06);
+            background: linear-gradient(135deg, #ffffff, #fefbff);
+        }
+
+        .melody-select:hover {
+            border-color: var(--my-melody-purple);
+            background: linear-gradient(135deg, #ffffff, #faf9ff);
+        }
+
+        .melody-select-arrow {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--my-melody-purple);
+            font-size: 0.75rem;
+            font-weight: bold;
+            pointer-events: none;
+            transition: transform 0.3s ease;
+        }
+
+        .melody-select-wrapper:hover .melody-select-arrow {
+            transform: translateY(-50%) rotate(180deg);
+            color: var(--my-melody-pink);
         }
 
         .search-box {
@@ -1469,6 +1854,24 @@
             margin-bottom: 20px;
             font-size: 1.5rem;
             font-weight: 600;
+        }
+        
+        /* 主要标题间距优化 */
+        .page > h2 {
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        /* 响应式调整 */
+        @media (max-width: 768px) {
+            .page > h2 {
+                margin-bottom: 15px;
+                font-size: 1.5rem;
+            }
         }
     </style>
 </head>
@@ -1710,30 +2113,52 @@
             </div>
 
             <div class="filters">
-                <div class="filter-group">
-                    <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this)">
-                    <label for="selectAllCheckbox">全选</label>
+                <div class="filter-group" style="align-self: flex-start;">
+                    <div class="bowtie-checkbox-wrapper">
+                        <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this)" class="bowtie-checkbox-input">
+                        <label for="selectAllCheckbox" class="bowtie-checkbox-label">
+                            <span class="bowtie-checkbox"></span>
+                            <span class="bowtie-checkbox-text">全选</span>
+                        </label>
+                    </div>
                 </div>
-                <div class="filter-group">
-                    <label>时间范围:</label>
-                    <select class="filter-select" id="timeFilter">
-                        <option value="all">全部</option>
-                        <option value="today">今天</option>
-                        <option value="week">本周</option>
-                        <option value="month">本月</option>
-                    </select>
+                <div class="melody-filter-group">
+                    <div class="melody-filter-label">🕐 时间范围</div>
+                    <div class="melody-select-wrapper">
+                        <select class="melody-select" id="timeFilter">
+                            <option value="all">全部时间</option>
+                            <option value="today">今天</option>
+                            <option value="week">本周</option>
+                            <option value="month">本月</option>
+                        </select>
+                        <div class="melody-select-arrow">▼</div>
+                    </div>
                 </div>
-                <div class="filter-group">
-                    <label>类型:</label>
-                    <select class="filter-select" id="recordTypeFilter">
-                        <option value="all">全部</option>
-                        <option value="reading">阅读</option>
-                        <option value="listening">听力</option>
-                    </select>
+                <div class="melody-filter-group">
+                    <div class="melody-filter-label">📝 题目类型</div>
+                    <div class="melody-select-wrapper">
+                        <select class="melody-select" id="recordTypeFilter">
+                            <option value="all">全部类型</option>
+                            <option value="reading">阅读理解</option>
+                            <option value="listening">听力训练</option>
+                        </select>
+                        <div class="melody-select-arrow">▼</div>
+                    </div>
                 </div>
-                <button class="btn" onclick="clearAllRecords()">🗑️ 清空记录</button>
-                <button class="btn btn-secondary" onclick="exportRecords()">📤 导出记录</button>
-                <button class="btn btn-secondary" onclick="importRecords()">📥 导入记录</button>
+                <div class="melody-action-buttons" style="margin-left: auto;">
+                    <button class="melody-btn melody-btn-danger" onclick="clearAllRecords()">
+                        <span class="melody-btn-icon">🗑️</span>
+                        <span class="melody-btn-text">清空记录</span>
+                    </button>
+                    <button class="melody-btn melody-btn-primary" onclick="exportRecords()">
+                        <span class="melody-btn-icon">📤</span>
+                        <span class="melody-btn-text">导出记录</span>
+                    </button>
+                    <button class="melody-btn melody-btn-success" onclick="importRecords()">
+                        <span class="melody-btn-icon">📥</span>
+                        <span class="melody-btn-text">导入记录</span>
+                    </button>
+                </div>
             </div>
 
             <div class="record-list" id="recordList"></div>
@@ -1784,11 +2209,7 @@
                     <span>成绩统计</span>
                     <div class="toggle active" id="statisticsToggle"></div>
                 </div>
-                <div class="setting-item">
-                    <span>学习报告</span>
-                    <div class="toggle" id="reportToggle"></div>
-                </div>
-            </div>
+                            </div>
 
             <div class="settings-section">
                 <h3>📚 题库管理</h3>
@@ -1847,10 +2268,7 @@
                     <!-- 详情内容将通过JavaScript动态生成 -->
                 </div>
             </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeRecordDetails()">关闭</button>
-            </div>
-        </div>
+                    </div>
     </div>
 
     <script>
@@ -1867,8 +2285,7 @@
                     autoSave: true,
                     reminders: false,
                     darkMode: false,
-                    statistics: true,
-                    reports: false
+                    statistics: true
                 };
                 this.init();
             }
@@ -2183,7 +2600,12 @@
                     const scoreClass = this.getScoreClass(record.score);
                     return `
                         <div class="record-item" data-record-id="${record.id}">
-                            <input type="checkbox" class="record-checkbox" onchange="onRecordCheckboxChange(this)">
+                            <div class="bowtie-checkbox-wrapper">
+                                <input type="checkbox" class="record-checkbox bowtie-checkbox-input" onchange="onRecordCheckboxChange(this)" id="record-${record.id}">
+                                <label for="record-${record.id}" class="bowtie-checkbox-label">
+                                    <span class="bowtie-checkbox"></span>
+                                </label>
+                            </div>
                             <div class="record-info">
                                 <div class="record-title">${record.title}</div>
                                 <div class="record-meta">
@@ -2248,8 +2670,7 @@
                 document.getElementById('reminderToggle')?.classList.toggle('active', this.settings.reminders);
                 document.getElementById('darkModeToggle')?.classList.toggle('active', this.settings.darkMode);
                 document.getElementById('statisticsToggle')?.classList.toggle('active', this.settings.statistics);
-                document.getElementById('reportToggle')?.classList.toggle('active', this.settings.reports);
-            }
+                            }
 
             // 切换设置
             toggleSetting(element, setting) {
@@ -2299,7 +2720,7 @@
                 const container = document.getElementById('particles');
                 const particles = ['✨', '🌟', '💫', '⭐', '🌸', '🌺', '🌼', '🌻', '🦋', '🌈'];
 
-                for (let i = 0; i < 15; i++) {
+                for (let i = 0; i < 25; i++) {
                     const particle = document.createElement('div');
                     particle.className = 'particle';
                     particle.textContent = particles[Math.floor(Math.random() * particles.length)];
@@ -2316,6 +2737,8 @@
                 this.updateOverview();
                 // 确保最近练习列表也被更新
                 this.updateRecentPractice();
+                // 更新当前页面的内容
+                this.updatePageContent(this.currentPage);
             }
 
             // 开始数据同步
@@ -2799,24 +3222,36 @@
 
                             // 转换记录格式并导入
                             records.forEach(record => {
-                                // 检查是否已存在
-                                if (!app.practiceRecords.find(r => r.id === record.id)) {
+                                // 检查是否已存在（使用多个可能的ID字段）
+                                const existingId = record.id || record.examId || Date.now() + Math.random();
+                                const exists = app.practiceRecords.find(r =>
+                                    r.id === existingId ||
+                                    r.id === record.id ||
+                                    r.examId === record.examId
+                                );
+
+                                if (!exists) {
                                     // 标准化记录格式
                                     const normalizedRecord = {
-                                        id: record.id,
-                                        examId: record.examId,
-                                        title: record.title,
+                                        id: existingId,
+                                        examId: record.examId || existingId,
+                                        title: record.title || '未知题目',
                                         type: record.category === 'P1' || record.category === 'P2' || record.category === 'P3' ? 'reading' : 'listening',
-                                        category: record.category,
+                                        category: record.category || 'unknown',
                                         date: new Date(record.startTime || record.date || Date.now()).toISOString(),
                                         duration: Math.round((record.duration || 0) / 1000 / 60), // 转换为分钟
-                                        score: record.percentage || record.accuracy * 100 || 0,
+                                        score: Math.round(record.percentage || (record.accuracy || 0) * 100 || 0),
                                         dataSource: 'real'
                                     };
 
                                     // 如果有realData，保留详细信息
                                     if (record.realData) {
                                         normalizedRecord.realData = record.realData;
+                                    }
+
+                                    // 保留原始数据的其他字段
+                                    if (record.frequency) {
+                                        normalizedRecord.frequency = record.frequency;
                                     }
 
                                     app.practiceRecords.push(normalizedRecord);
@@ -2923,25 +3358,40 @@
             console.log('[Details] Button clicked for record ID:', recordId);
 
             try {
-                // 查找记录
+                // 查找记录 - 增强ID匹配逻辑
                 let record = null;
 
-                // 从多个数据源查找记录
+                // 从多个数据源查找记录，使用多种ID匹配方式
                 if (app && app.practiceRecords) {
-                    record = app.practiceRecords.find(r => r.id === recordId);
+                    record = app.practiceRecords.find(r =>
+                        r.id === recordId ||
+                        r.examId === recordId ||
+                        String(r.id) === String(recordId) ||
+                        String(r.examId) === String(recordId)
+                    );
                 }
 
                 if (!record) {
                     const savedRecords = localStorage.getItem('myMelodyPracticeRecords');
                     if (savedRecords) {
                         const allRecords = JSON.parse(savedRecords);
-                        record = allRecords.find(r => r.id === recordId);
+                        record = allRecords.find(r =>
+                            r.id === recordId ||
+                            r.examId === recordId ||
+                            String(r.id) === String(recordId) ||
+                            String(r.examId) === String(recordId)
+                        );
                     }
                 }
 
                 if (!record && window.storage) {
                     const practiceRecords = storage.get('practice_records', []);
-                    record = practiceRecords.find(r => r.id === recordId);
+                    record = practiceRecords.find(r =>
+                        r.id === recordId ||
+                        r.examId === recordId ||
+                        String(r.id) === String(recordId) ||
+                        String(r.examId) === String(recordId)
+                    );
                 }
 
                 console.log('[Details] Found record:', record);
@@ -2949,6 +3399,8 @@
                 if (record) {
                     showRecordDetailsModal(record);
                 } else {
+                    console.warn('[Details] Record not found for ID:', recordId);
+                    console.warn('[Details] Available records:', app?.practiceRecords?.map(r => ({ id: r.id, examId: r.examId, title: r.title })));
                     alert('找不到该练习记录，请刷新页面后重试。');
                 }
             } catch (error) {
@@ -2970,7 +3422,48 @@
                     return;
                 }
 
-                // 简化的内容生成
+                // 生成详细内容
+                let questionTableHtml = '';
+                if (record.realData && record.realData.answers && record.realData.correctAnswers) {
+                    const userAnswers = record.realData.answers;
+                    const correctAnswers = record.realData.correctAnswers;
+
+                    // 生成表格HTML
+                    questionTableHtml = `
+                        <div class="questions-section">
+                            <h5>📋 题目详情</h5>
+                            <div class="questions-table">
+                                <div class="table-header">
+                                    <div>序号</div>
+                                    <div>用户答案</div>
+                                    <div>正确答案</div>
+                                    <div>正误</div>
+                                </div>
+                                <div class="table-body">
+                                    ${Object.keys(userAnswers).map(questionId => {
+                                        const userAnswer = userAnswers[questionId] || '';
+                                        const correctAnswer = correctAnswers[questionId] || '';
+                                        const isCorrect = userAnswer === correctAnswer;
+                                        const statusClass = isCorrect ? 'correct' : 'incorrect';
+                                        const statusText = isCorrect ? '✓' : '✗';
+
+                                        return `
+                                            <div class="table-row">
+                                                <div class="table-cell">${questionId}</div>
+                                                <div class="table-cell user-answer">${userAnswer}</div>
+                                                <div class="table-cell correct-answer">${correctAnswer}</div>
+                                                <div class="table-cell">
+                                                    <span class="status-badge ${statusClass}">${statusText}</span>
+                                                </div>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
                 content.innerHTML = `
                     <div class="record-summary">
                         <h4>🎀 ${record.title || '未知题目'}</h4>
@@ -2994,11 +3487,18 @@
                             <span class="detail-label">🕐 练习时间</span>
                             <span class="detail-value">${new Date(record.date).toLocaleTimeString('zh-CN')}</span>
                         </div>
+                        <div class="detail-item">
+                            <span class="detail-label">📝 题目类型</span>
+                            <span class="detail-value">${record.type === 'reading' ? '阅读' : '听力'} - ${record.category || ''}</span>
+                        </div>
                     </div>
+                    ${questionTableHtml}
                 `;
 
-                // 强制显示弹窗
+                // 居中显示弹窗
                 modal.style.display = 'flex';
+                modal.style.alignItems = 'center';
+                modal.style.justifyContent = 'center';
                 modal.style.zIndex = '9999';
                 modal.style.opacity = '1';
                 modal.style.visibility = 'visible';
@@ -3083,8 +3583,7 @@
                     autoSave: true,
                     reminders: false,
                     darkMode: false,
-                    statistics: true,
-                    reports: false
+                    statistics: true
                 };
                 app.saveData();
                 app.updateSettingsUI();
@@ -3536,8 +4035,7 @@
             document.getElementById('reminderToggle')?.addEventListener('click', (e) => app.toggleSetting(e.target, 'reminders'));
             document.getElementById('darkModeToggle')?.addEventListener('click', (e) => app.toggleSetting(e.target, 'darkMode'));
             document.getElementById('statisticsToggle')?.addEventListener('click', (e) => app.toggleSetting(e.target, 'statistics'));
-            document.getElementById('reportToggle')?.addEventListener('click', (e) => app.toggleSetting(e.target, 'reports'));
-        }
+                    }
     </script>
 </body>
 </html>
