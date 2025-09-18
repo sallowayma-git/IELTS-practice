@@ -548,18 +548,24 @@ if (!window.practicePageEnhancer) {
             
             // 增强的change事件监听
             document.addEventListener('change', function(e) {
-                self.recordAnswer(e.target);
+                if (!self.isExcludedControl(e.target)) {
+                    self.recordAnswer(e.target);
+                }
             });
 
             // 增强的input事件监听
             document.addEventListener('input', function(e) {
-                self.recordAnswer(e.target);
+                if (!self.isExcludedControl(e.target)) {
+                    self.recordAnswer(e.target);
+                }
             });
 
             // 点击事件监听（用于单选框、复选框）
             document.addEventListener('click', function(e) {
                 if (e.target.type === 'radio' || e.target.type === 'checkbox') {
-                    setTimeout(() => self.recordAnswer(e.target), 10);
+                    if (!self.isExcludedControl(e.target)) {
+                        setTimeout(() => self.recordAnswer(e.target), 10);
+                    }
                 }
             });
 
@@ -597,8 +603,24 @@ if (!window.practicePageEnhancer) {
             console.log('[PracticeEnhancer] 增强答案监听器设置完成');
         },
 
+        // 判断是否为应当排除的非答题控件（如播放速度、音量滑条等）
+        isExcludedControl: function(element) {
+            try {
+                if (!element) return false;
+                // 明确排除的控件ID与区域
+                if (element.matches && (element.matches('#volume-slider') || element.matches('#playback-speed'))) {
+                    return true;
+                }
+                if (element.closest && (element.closest('#speed-control') || element.closest('#volume-container'))) {
+                    return true;
+                }
+            } catch (_) { /* no-op */ }
+            return false;
+        },
+
         recordAnswer: function(element) {
             if (!element) return;
+            if (this.isExcludedControl(element)) return;
 
             let questionId = null;
             let value = null;
@@ -804,8 +826,9 @@ if (!window.practicePageEnhancer) {
             
             const beforeCount = Object.keys(this.answers).length;
 
-            // 1. 收集所有输入元素（更广泛的选择器）
-            const allInputs = document.querySelectorAll('input, textarea, select');
+            // 1. 收集所有输入元素（更广泛的选择器），同时过滤非答题控件
+            const allInputs = Array.from(document.querySelectorAll('input, textarea, select'))
+                .filter(el => !this.isExcludedControl(el));
             console.log('[PracticeEnhancer] 找到输入元素总数:', allInputs.length);
             
             allInputs.forEach((input, index) => {
@@ -856,6 +879,8 @@ if (!window.practicePageEnhancer) {
 
         getQuestionId: function(input) {
             // 尝试多种方式获取问题ID
+            // 先过滤排除控件
+            if (this.isExcludedControl(input)) return null;
             if (input.name) return input.name;
             if (input.id) return input.id.replace(/_input$|-input$|_answer$/, '');
             if (input.dataset.question) return input.dataset.question;
@@ -900,7 +925,8 @@ if (!window.practicePageEnhancer) {
                 console.log(`[PracticeEnhancer] 处理问题容器 ${index}:`, container.className, container.id);
                 
                 // 在容器内查找输入元素
-                const inputs = container.querySelectorAll('input, textarea, select');
+                const inputs = Array.from(container.querySelectorAll('input, textarea, select'))
+                    .filter(el => !this.isExcludedControl(el));
                 inputs.forEach(input => {
                     const questionId = this.getQuestionId(input) || `q${index + 1}`;
                     const value = this.getInputValue(input);
