@@ -164,6 +164,14 @@ function loadLibrary(forceReload = false) {
 function finishLibraryLoading(startTime) {
     const loadTime = performance.now() - startTime;
     showMessage(`题库加载完成！共 ${examIndex.length} 个题目 - ${Math.round(loadTime)}ms`, 'success');
+    
+    // 生成搜索文本字段以优化搜索性能
+    examIndex.forEach(exam => {
+        if (!exam.searchText) {
+            exam.searchText = `${exam.title || ''} ${exam.category || ''}`.toLowerCase().trim();
+        }
+    });
+    
     updateOverview();
     updateSystemInfo();
     window.dispatchEvent(new CustomEvent('examIndexLoaded'));
@@ -407,7 +415,8 @@ function loadExamList() {
         examsToShow = examsToShow.filter(exam => exam.category === currentCategory);
     }
     
-    displayExams(examsToShow);
+    filteredExams = examsToShow;
+    displayExams(filteredExams);
 }
 
 function displayExams(exams) {
@@ -933,10 +942,11 @@ async function buildIndexFromFiles(files, type, label = '') {
 // --- Functions Restored from Backup ---
 
 function searchExams(query) {
-    if (window.performanceOptimizer) {
+    if (window.performanceOptimizer && typeof window.performanceOptimizer.debounce === 'function') {
         const debouncedSearch = window.performanceOptimizer.debounce(performSearch, 300, 'exam_search');
         debouncedSearch(query);
     } else {
+        // Fallback: direct call if optimizer not available
         performSearch(query);
     }
 }
@@ -944,13 +954,24 @@ function searchExams(query) {
 function performSearch(query) {
     const normalizedQuery = query.toLowerCase().trim();
     if (!normalizedQuery) {
-        displayExams(filteredExams);
+        displayExams(filteredExams || examIndex);
         return;
     }
-    const searchResults = filteredExams.filter(exam => 
-        (exam.searchText && exam.searchText.includes(normalizedQuery)) ||
-        (!exam.searchText && (exam.title.toLowerCase().includes(normalizedQuery) || exam.category.toLowerCase().includes(normalizedQuery)))
-    );
+    
+    // 调试日志
+    console.log('[Search] 执行搜索，查询词:', normalizedQuery);
+    console.log('[Search] 当前 filteredExams 数量:', (filteredExams || []).length);
+    
+    const searchResults = (filteredExams || examIndex).filter(exam => {
+        if (exam.searchText) {
+            return exam.searchText.includes(normalizedQuery);
+        }
+        // Fallback 匹配
+        return (exam.title && exam.title.toLowerCase().includes(normalizedQuery)) ||
+               (exam.category && exam.category.toLowerCase().includes(normalizedQuery));
+    });
+    
+    console.log('[Search] 搜索结果数量:', searchResults.length);
     displayExams(searchResults);
 }
 
