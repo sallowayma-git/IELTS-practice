@@ -932,6 +932,166 @@
         .records-table tbody tr.selected { background: #fef2f2 !important; }
         #practice-view.bulk-mode .record-row { cursor: pointer; }
         #practice-view.bulk-mode .record-row:hover { background: #fee2e2; }
+
+        /* 主题切换弹窗居中定位和学术风格设计 */
+        #theme-switcher.modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(30, 58, 138, 0.15);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            backdrop-filter: blur(2px);
+        }
+
+        #theme-switcher .modal-container {
+            background: var(--color-white);
+            border: 1px solid var(--color-gray-200);
+            border-radius: var(--radius-lg);
+            box-shadow:
+                0 20px 25px -5px rgba(0, 0, 0, 0.1),
+                0 10px 10px -5px rgba(0, 0, 0, 0.04),
+                0 0 0 1px rgba(30, 58, 138, 0.05);
+            max-width: 600px;
+            width: 90%;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        #theme-switcher .modal-header {
+            background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+            color: var(--color-white);
+            padding: var(--space-4) var(--space-6);
+            border-bottom: 1px solid var(--color-gray-200);
+        }
+
+        #theme-switcher .modal-title {
+            color: var(--color-white);
+            font-family: 'Georgia', serif;
+            font-size: var(--font-size-2xl);
+            font-weight: var(--font-weight-bold);
+            margin: 0;
+            letter-spacing: -0.025em;
+        }
+
+        #theme-switcher .modal-body {
+            padding: var(--space-6);
+            background: var(--color-parchment);
+        }
+
+        #theme-switcher .theme-card {
+            background: var(--color-white);
+            border: 1px solid var(--color-gray-200);
+            border-radius: var(--radius-lg);
+            padding: var(--space-5);
+            margin-bottom: var(--space-4);
+            transition: all var(--transition-normal);
+            position: relative;
+            overflow: hidden;
+        }
+
+        #theme-switcher .theme-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--color-primary);
+            transition: width var(--transition-normal);
+        }
+
+        #theme-switcher .theme-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--color-primary);
+        }
+
+        #theme-switcher .theme-card:hover::before {
+            width: 6px;
+        }
+
+        #theme-switcher .theme-card.active {
+            border-color: var(--color-primary);
+            background: linear-gradient(135deg, rgba(30, 58, 138, 0.02) 0%, rgba(59, 130, 246, 0.05) 100%);
+        }
+
+        #theme-switcher .theme-card.active::before {
+            width: 6px;
+            background: var(--color-primary);
+        }
+
+        #theme-switcher .theme-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #theme-switcher .theme-details h4 {
+            color: var(--color-primary);
+            font-family: 'Georgia', serif;
+            font-size: var(--font-size-lg);
+            font-weight: var(--font-weight-bold);
+            margin: 0 0 var(--space-2) 0;
+            letter-spacing: -0.025em;
+        }
+
+        #theme-switcher .theme-details p {
+            color: var(--color-gray-600);
+            font-family: 'Source Sans Pro', sans-serif;
+            font-size: var(--font-size-sm);
+            margin: 0;
+            line-height: var(--line-height-normal);
+        }
+
+        #theme-switcher .theme-actions {
+            display: flex;
+            gap: var(--space-3);
+            align-items: center;
+        }
+
+        #theme-switcher .current-badge {
+            background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+            color: var(--color-white);
+            padding: var(--space-2) var(--space-4);
+            border-radius: var(--radius-full);
+            font-size: var(--font-size-xs);
+            font-weight: var(--font-weight-semibold);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-family: 'Source Sans Pro', sans-serif;
+        }
+
+        #theme-switcher .modal-footer {
+            background: var(--color-gray-50);
+            border-top: 1px solid var(--color-gray-200);
+            padding: var(--space-3) var(--space-6);
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        #theme-switcher .theme-description {
+            background: var(--color-gray-50);
+            border-left: 3px solid var(--color-accent);
+            padding: var(--space-4);
+            border-radius: 0 var(--radius-md) var(--radius-md) 0;
+            margin-bottom: var(--space-5);
+            font-family: 'Source Sans Pro', sans-serif;
+        }
+
+        #theme-switcher .theme-description p {
+            color: var(--color-gray-700);
+            font-size: var(--font-size-sm);
+            margin: 0;
+            line-height: var(--line-height-relaxed);
+        }
     </style>
 </head>
 
@@ -1127,7 +1287,7 @@
                         <div class="settings-actions">
                             <button class="btn btn-primary" onclick="fixedClearCache()">
                                 <i class="fas fa-broom"></i>
-                                清除缓存
+                                清除缓存和记录
                             </button>
                             <button class="btn btn-secondary" onclick="clearTemporaryFiles()">
                                 <i class="fas fa-file-archive"></i>
@@ -1954,6 +2114,24 @@
             }
         }
 
+        // Fixed clear cache function that also clears practice records
+        function fixedClearCache() {
+            if (confirm('确定要清除所有缓存数据和练习记录吗？此操作不可撤销。')) {
+                localStorage.clear();
+                sessionStorage.clear();
+                // Also clear practice records from any other storage
+                try {
+                    if (window.storage && typeof storage.clear === 'function') {
+                        storage.clear();
+                    }
+                } catch (e) {
+                    console.warn('Failed to clear storage:', e);
+                }
+                showMessage('缓存和练习记录已清除', 'success', '所有数据已成功清除');
+                setTimeout(() => location.reload(), 1500);
+            }
+        }
+
         function clearTemporaryFiles() {
             showMessage('清理完成', 'success', '临时文件已清理完毕');
         }
@@ -2632,38 +2810,68 @@ IELTS 学术练习管理系统
         window.showThemeSwitcher = function(){
             const html = `
             <div id="theme-switcher" class="modal-overlay show">
-              <div class="modal-container" style="max-width:560px;">
+              <div class="modal-container">
                 <div class="modal-header">
-                  <h3 class="modal-title"><i class="fas fa-palette"></i> 主题切换</h3>
-                  <button class="modal-close" onclick="document.getElementById('theme-switcher').remove()"><i class="fas fa-times"></i></button>
+                  <h3 class="modal-title">
+                    <i class="fas fa-palette" style="margin-right: var(--space-3);"></i>
+                    主题切换
+                  </h3>
                 </div>
                 <div class="modal-body">
-                  <div style="display:grid;gap:12px;">
-                    <div style="border:1px solid var(--color-gray-200);border-radius:8px;padding:12px;background:var(--color-gray-50);display:flex;justify-content:space-between;align-items:center;">
-                      <div>
-                        <div style="color:var(--color-primary);font-weight:600;">Academic (专业 高效 可靠)</div>
-                        <div style="color:var(--color-gray-600);font-size:0.9rem;">当前主题</div>
+                  <div class="theme-description">
+                    <p><i class="fas fa-info-circle" style="color: var(--color-primary); margin-right: var(--space-2);"></i>
+                    选择您喜欢的主题风格，不同的主题提供不同的视觉体验和学习氛围。</p>
+                  </div>
+
+                  <div class="theme-card active">
+                    <div class="theme-info">
+                      <div class="theme-details">
+                        <h4><i class="fas fa-graduation-cap" style="margin-right: var(--space-2);"></i>Academic</h4>
+                        <p>专业 · 高效 · 可靠<br>
+                        <span style="color: var(--color-gray-500); font-size: var(--font-size-xs);">深蓝配色，适合专注学习和专业训练</span></p>
                       </div>
-                      <span class="score-badge score-good">当前</span>
+                      <div class="theme-actions">
+                        <span class="current-badge">当前主题</span>
+                      </div>
                     </div>
-                    <div style="border:1px solid var(--color-gray-200);border-radius:8px;padding:12px;display:flex;justify-content:space-between;align-items:center;">
-                      <div>
-                        <div style="color:#a16207;font-weight:600;">Bloom (秋日 暖阳)</div>
-                        <div style="color:var(--color-gray-600);font-size:0.9rem;">温暖配色，适合放松阅读</div>
+                  </div>
+
+                  <div class="theme-card">
+                    <div class="theme-info">
+                      <div class="theme-details">
+                        <h4><i class="fas fa-leaf" style="margin-right: var(--space-2); color: #a16207;"></i>Bloom</h4>
+                        <p>秋日 · 暖阳 · 温馨<br>
+                        <span style="color: var(--color-gray-500); font-size: var(--font-size-xs);">温暖配色，适合放松阅读</span></p>
                       </div>
-                      <button class="btn btn-primary" onclick="window.location.href='../../index.html'">切换</button>
+                      <div class="theme-actions">
+                        <button class="btn btn-primary" onclick="window.location.href='../../index.html'">
+                          <i class="fas fa-exchange-alt" style="margin-right: var(--space-2);"></i>
+                          切换主题
+                        </button>
+                      </div>
                     </div>
-                    <div style="border:1px solid var(--color-gray-200);border-radius:8px;padding:12px;display:flex;justify-content:space-between;align-items:center;">
-                      <div>
-                        <div style="color:#ec4899;font-weight:600;">Melody (美乐蒂)</div>
-                        <div style="color:var(--color-gray-600);font-size:0.9rem;">可爱粉色主题，温馨学习体验</div>
+                  </div>
+
+                  <div class="theme-card">
+                    <div class="theme-info">
+                      <div class="theme-details">
+                        <h4><i class="fas fa-heart" style="margin-right: var(--space-2); color: #ec4899;"></i>Melody</h4>
+                        <p>美乐蒂 · 可爱 · 温馨<br>
+                        <span style="color: var(--color-gray-500); font-size: var(--font-size-xs);">粉色主题，温馨学习体验</span></p>
                       </div>
-                      <button class="btn btn-primary" onclick="window.location.href='../../.superdesign/design_iterations/my_melody_ielts_1.html'">切换</button>
+                      <div class="theme-actions">
+                        <button class="btn btn-primary" onclick="window.location.href='../../.superdesign/design_iterations/my_melody_ielts_1.html'">
+                          <i class="fas fa-exchange-alt" style="margin-right: var(--space-2);"></i>
+                          切换主题
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
                 <div class="modal-footer">
-                  <button class="btn btn-secondary" onclick="document.getElementById('theme-switcher').remove()">关闭</button>
+                  <button class="btn btn-secondary" onclick="document.getElementById('theme-switcher').remove()">
+                    关闭
+                  </button>
                 </div>
               </div>
             </div>`;
