@@ -1438,7 +1438,7 @@
                 var _showMessage = window.showMessage;
                 if (typeof _showMessage === 'function' && !_showMessage.__designPatched) {
                     window.showMessage = function (message, type, duration) {
-                        var d = (typeof duration === 'number' && isFinite(duration)) ? duration : 2000;
+                        var d = (typeof duration === 'number' && isFinite(duration)) ? duration : 3000;
                         return _showMessage(message, type, d);
                     };
                     window.showMessage.__designPatched = true;
@@ -1524,7 +1524,7 @@
 
         // 优化 showMessage 函数，防止短时间内重复显示相同消息
         const originalShowMessage = window.showMessage || function() {};
-        window.showMessage = function(message, type = 'info', duration = 2000) {
+        window.showMessage = function(message, type = 'info', duration = 3000) {
             const now = Date.now();
             const messageKey = `${message}-${type}`;
 
@@ -2507,7 +2507,7 @@ IELTS 学术练习管理系统
         }
 
         // Show message function
-        function showMessage(message, type = 'info', duration = 2000) {
+        function showMessage(message, type = 'info', duration = 3000) {
             const messageContainer = document.getElementById('message-container');
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${type}`;
