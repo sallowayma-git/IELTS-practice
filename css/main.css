@@ -2035,6 +2035,11 @@ body.bloom-dark-mode {
     --blue-accent-500: #05DBF2;
     --blue-success: #BAF241;
     --blue-bg-tint: #C4E1F2;
+    /* container half-width approximation for boat path */
+    --blue-container-half: min(600px, 46vw);
+    --blue-boat-outside: 12vw; /* how far boat starts/ends outside container */
+    --blue-boat-width: 140px;
+    --blue-boat-half: 70px;
 }
 
 /* Base */
@@ -2062,11 +2067,12 @@ body.theme-blue {
         #FFF7E6 100%
       );
     background-repeat: repeat-x, repeat-x, repeat-x, repeat-x, no-repeat, no-repeat, no-repeat, no-repeat;
-    background-attachment: fixed, fixed, fixed, fixed, fixed, fixed, fixed, fixed;
+    background-attachment: scroll, scroll, fixed, fixed, fixed, fixed, fixed, fixed;
     background-size: 1200px 160px, 1000px 200px, 800px 220px, 700px 120px, 100% 100%, 140% 140%, 140% 140%, 100% 100%;
     background-position: 0 100%, 0 calc(100% - 60px), 0 calc(100% - 220px), 0 8%, center, 0% 0%, 100% 100%, center;
-    animation: blueSeaSlide 28s linear infinite, blueWaveFlow 40s ease-in-out infinite alternate;
+    animation: blueSeaSlide 18s linear infinite;
     color: var(--color-gray-900);
+    will-change: background-position;
 }
 
 @keyframes blueWaveFlow {
@@ -2077,7 +2083,75 @@ body.theme-blue {
 
 @keyframes blueSeaSlide {
     0% { background-position: 0 100%, 0 calc(100% - 60px), 0 calc(100% - 220px), 0 8%, center, 0% 0%, 100% 100%, center; }
-    100% { background-position: 1200px 100%, 1000px calc(100% - 60px), 800px calc(100% - 220px), 700px 8%, center, 0% 0%, 100% 100%, center; }
+    100% { background-position: 200% 100%, 200% calc(100% - 60px), 0 calc(100% - 220px), 0 8%, center, 0% 0%, 100% 100%, center; }
+}
+
+/* Boat element: behind all content, drifting right->left with gentle bobbing */
+:root[data-theme="blue"] body::before,
+body.theme-blue::before {
+    content: "";
+    position: fixed;
+    top: 46vh; /* middle blue band center */
+    left: calc(100vw + var(--blue-boat-outside));
+    width: var(--blue-boat-width);
+    height: 80px;
+    pointer-events: none;
+    z-index: 0;
+    background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='80' viewBox='0 0 140 80'><g><path d='M12 60 L128 60 L110 75 L30 75 Z' fill='%230788D9' fill-opacity='0.85' stroke='%230554F2' stroke-width='2'/><rect x='70' y='18' width='3.5' height='42' fill='%230554F2'/><path d='M72 20 L72 58 L110 40 Z' fill='%23FFFFFF' fill-opacity='0.95' stroke='%2305C7F2' stroke-width='1.5'/><circle cx='92' cy='46' r='1.5' fill='%2305C7F2'/></g></svg>") center/contain no-repeat;
+    transform: translateY(0) rotate(-2deg);
+    transform-origin: 50% 60%;
+    animation: boatDrift 26s cubic-bezier(0.55, 0.05, 0.45, 0.95) infinite;
+}
+
+@keyframes boatDrift {
+    /* Start fully off-screen right */
+    0% {
+        left: calc(100vw + var(--blue-boat-outside));
+        transform: translateY(0) rotate(-2deg);
+        animation-timing-function: cubic-bezier(0.33, 0.0, 0.2, 1);
+    }
+    /* Slow near right edge */
+    10% {
+        left: calc(100vw - 2vw);
+        transform: translateY(-3px) rotate(1.2deg);
+        animation-timing-function: cubic-bezier(0.7, 0.0, 0.3, 1);
+    }
+    /* Faster through middle */
+    45% {
+        left: calc(50vw - var(--blue-boat-half));
+        transform: translateY(2px) rotate(-1.2deg);
+        animation-timing-function: cubic-bezier(0.8, 0.0, 0.2, 1);
+    }
+    /* Slow near left edge */
+    92% {
+        left: -2vw;
+        transform: translateY(-3px) rotate(1.4deg);
+        animation-timing-function: cubic-bezier(0.4, 0.0, 0.2, 1);
+    }
+    /* Fully off-screen left, then pause */
+    96% {
+        left: calc(-1 * (var(--blue-boat-width) + var(--blue-boat-outside)));
+        transform: translateY(0) rotate(0deg);
+    }
+    100% {
+        left: calc(-1 * (var(--blue-boat-width) + var(--blue-boat-outside)));
+        transform: translateY(0) rotate(0deg);
+    }
+}
+
+/* Ensure content paints above the boat pseudo element */
+:root[data-theme="blue"] .container,
+body.theme-blue .container,
+:root[data-theme="blue"] .view,
+body.theme-blue .view,
+:root[data-theme="blue"] header,
+body.theme-blue header,
+:root[data-theme="blue"] nav,
+body.theme-blue nav,
+:root[data-theme="blue"] footer,
+body.theme-blue footer {
+    position: relative;
+    z-index: 1;
 }
 
 /* Header */
@@ -2265,10 +2339,10 @@ body.theme-blue.blue-dark-mode,
       /* dark tints */ radial-gradient(1200px 700px at 0% 100%, rgba(7,176,242,0.14), transparent 60%),
       radial-gradient(1000px 600px at 100% 0%, rgba(5,199,242,0.12), transparent 60%),
       /* dark sea/beach base */ linear-gradient(180deg, #0d203f 0%, #0e3c66 38%, #0d2a4e 54%, #0e3359 62%, #091322 70%);
-    background-attachment: fixed, fixed, fixed, fixed, fixed, fixed, fixed, fixed;
+    background-attachment: scroll, scroll, fixed, fixed, fixed, fixed, fixed, fixed;
     background-size: 1200px 160px, 1000px 200px, 800px 220px, 700px 120px, 100% 100%, 160% 160%, 160% 160%, 100% 100%;
     background-position: 0 100%, 0 calc(100% - 60px), 0 calc(100% - 220px), 0 8%, center, 0% 0%, 100% 100%, center;
-    animation: blueSeaSlide 30s linear infinite, blueWaveFlow 30s ease-in-out infinite alternate;
+    animation: blueSeaSlide 20s linear infinite;
     color: #e8f2ff;
 }
 
