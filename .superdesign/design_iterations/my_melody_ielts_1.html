@@ -7,10 +7,13 @@
 
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <script src="../../assets/scripts/complete-exam-data.js"></script>
-    <script src="../../assets/scripts/listening-exam-data.js"></script>
+    <!-- 使用同步加载确保数据在应用初始化前加载完成 -->
+    <script src="../../assets/scripts/complete-exam-data.js" onload="console.log('[Debug] complete-exam-data.js 加载完成')"></script>
+    <script src="../../assets/scripts/listening-exam-data.js" onload="console.log('[Debug] listening-exam-data.js 加载完成')"></script>
     <script src="../../js/components/PerformanceOptimizer.js"></script>
     <script src="../../js/boot-fallbacks.js"></script>
+    <!-- 仅影响后续动态生成链接的相对解析，不影响上文已加载资源 -->
+    <base href="../../">
     <style>
         /* 美乐蒂主题色彩 */
         :root {
@@ -1896,6 +1899,11 @@
         #examGrid .exam-meta { font-size: 0.85rem; margin-bottom: 8px; }
         #examGrid .btn { padding: 6px 12px; font-size: 0.85rem; border-radius: 10px; }
         .best-score { font-weight: 700; color: var(--my-melody-purple); }
+        .is-hidden { display: none !important; }
+        .exam-grid {
+            max-height: 520px;
+            overflow: auto;
+        }
 
     </style>
 </head>
@@ -2241,6 +2249,7 @@
                     <button class="btn" onclick="loadLibrary()">🔄 重新加载题库</button>
                     <button class="btn btn-secondary" onclick="checkLibraryUpdates()">📋 检查更新</button>
                     <button class="btn btn-secondary" onclick="libraryInfo()">ℹ️ 题库信息</button>
+                    <button class="btn btn-warning" onclick="testDataMatching()">🧪 测试数据匹配</button>
                 </div>
             </div>
 
@@ -2530,47 +2539,7 @@
                 this.renderExams(filtered);
             }
 
-            // 渲染题目列表
-            renderExams(exams) {
-                const container = document.getElementById('examGrid');
-
-                if (exams.length === 0) {
-                    container.innerHTML = `
-                        <div class="empty-state">
-                            <div class="empty-icon">📚</div>
-                            <div class="empty-title">没有找到题目</div>
-                            <div class="empty-description">尝试调整搜索条件</div>
-                        </div>
-                    `;
-                    return;
-                }
-
-                container.innerHTML = exams.map(exam => {
-                    const isCompleted = this.practiceRecords.some(record => record.examId === exam.id);
-                    const bestScore = isCompleted ?
-                        Math.max(...this.practiceRecords
-                            .filter(record => record.examId === exam.id)
-                            .map(record => record.score)) : 0;
-
-                    return `
-                        <div class="exam-card" onclick="startExam(${exam.id})">
-                            <div class="exam-title">${exam.title}</div>
-                            <div class="exam-meta">
-                                <span>${exam.type === 'reading' ? '📖 阅读' : '🎧 听力'}</span>
-                                <span>${exam.difficulty === 'easy' ? '简单' : exam.difficulty === 'medium' ? '中等' : '困难'}</span>
-                                <span>${exam.questions}题</span>
-                            </div>
-                            <div class="exam-actions">
-                                <button class="btn" onclick="event.stopPropagation(); startExam(${exam.id})">
-                                    ${isCompleted ? '重新练习' : '开始练习'}
-                                </button>
-                                ${isCompleted ? `<span style="color: var(--my-melody-purple); font-weight: bold;">最佳: ${bestScore}%</span>` : ''}
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-            }
-
+            
             // 更新练习记录页面
             updatePractice() {
                 this.filterRecords();
@@ -2999,14 +2968,60 @@
             });
         }
 
+        // 数据加载验证函数
+        function verifyDataLoading() {
+          console.log(`[Debug] 验证数据加载状态...`);
+
+          const readingData = window.completeExamIndex;
+          const listeningData = window.listeningExamIndex;
+
+          console.log(`[Debug] 阅读数据:`, Array.isArray(readingData) ? `${readingData.length} 项` : '未加载');
+          console.log(`[Debug] 听力数据:`, Array.isArray(listeningData) ? `${listeningData.length} 项` : '未加载');
+
+          if (Array.isArray(readingData)) {
+            console.log(`[Debug] 阅读数据样本:`, readingData.slice(0, 1));
+          }
+
+          if (Array.isArray(listeningData)) {
+            console.log(`[Debug] 听力数据样本:`, listeningData.slice(0, 1));
+          }
+
+          return Array.isArray(readingData) && Array.isArray(listeningData);
+        }
+
         // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', () => {
-            app = new MyMelodyIELTSApp();
+            console.log('[Debug] DOM内容加载完成，开始初始化应用...');
 
-            // 延迟初始化页面效果，确保DOM完全加载
+            // 首先验证数据加载状态
+            const dataLoaded = verifyDataLoading();
+            if (!dataLoaded) {
+              console.log('[Debug] 数据未加载完成，等待500ms后重试...');
+              setTimeout(() => {
+                if (verifyDataLoading()) {
+                  console.log('[Debug] 数据延迟加载成功');
+                } else {
+                  console.log('[Debug] 数据仍然未加载，继续初始化');
+                }
+              }, 500);
+            } else {
+              console.log('[Debug] 数据加载验证成功');
+            }
+
+            app = new MyMelodyIELTSApp();
+            window.app = app; // 确保全局可访问
+
+            console.log(`[Debug] app 对象已创建，examData 长度:`, app.examData.length);
+            console.log(`[Debug] window.app.examData 长度:`, window.app.examData.length);
+
+            // 延迟加载题库数据，确保应用初始化完成
             setTimeout(() => {
+                console.log(`[Debug] 延迟加载题库数据...`);
+                if (typeof window.loadRealExamLibrary === 'function') {
+                    window.loadRealExamLibrary(true);
+                }
                 initializePageEffects();
-            }, 50);
+            }, 100);
         });
 
         // 全局函数定义
@@ -3043,7 +3058,7 @@
             }
 
             const randomExam = app.examData[Math.floor(Math.random() * app.examData.length)];
-            startExam(randomExam.id);
+            openRealExam(randomExam.id, randomExam.type);
         }
 
         function goToBrowse() {
@@ -3746,50 +3761,7 @@
             return storage.get('active_exam_index_key', 'exam_index');
         }
 
-        // 加载真实题库数据
-        function loadRealExamLibrary() {
-            const startTime = performance.now();
-            const activeConfigKey = getActiveLibraryConfigurationKey();
-            let cachedData = storage.get(activeConfigKey);
-
-            if (cachedData) {
-                app.examData = cachedData;
-                console.log(`[System] 使用localStorage中的缓存，key为 '${activeConfigKey}'`);
-                finishRealLibraryLoading(startTime);
-                return;
-            }
-
-            console.log('[System] 正在加载题库索引...');
-            app.showNotification('正在加载题库索引...');
-
-            try {
-                // 读取真实题库数据
-                let readingExams = [];
-                let listeningExams = [];
-
-                // 尝试从全局变量读取题库数据
-                if (window.completeExamIndex && Array.isArray(window.completeExamIndex)) {
-                    readingExams = window.completeExamIndex.map(exam => ({ ...exam, type: 'reading' }));
-                    console.log(`[Library] 加载阅读题库: ${readingExams.length} 项`);
-                }
-
-                if (window.listeningExamIndex && Array.isArray(window.listeningExamIndex)) {
-                    listeningExams = window.listeningExamIndex;
-                    console.log(`[Library] 加载听力题库: ${listeningExams.length} 项`);
-                }
-
-                app.examData = [...readingExams, ...listeningExams];
-                storage.set(activeConfigKey, app.examData);
-
-                finishRealLibraryLoading(startTime);
-
-            } catch (error) {
-                console.error('[Library] 加载题库失败:', error);
-                app.examData = [];
-                finishRealLibraryLoading(startTime);
-            }
-        }
-
+        
         function finishRealLibraryLoading(startTime) {
             const loadTime = performance.now() - startTime;
             app.showNotification(`题库加载完成！共 ${app.examData.length} 个题目 - ${Math.round(loadTime)}ms`);
@@ -3797,89 +3769,11 @@
             updateOverview();
         }
 
-        // 更新分类统计
-        function updateCategoryStats() {
-            const categories = ['reading', 'listening'];
-            const parts = ['P1', 'P2', 'P3'];
-
-            categories.forEach(type => {
-                parts.forEach(part => {
-                    const exams = app.examData.filter(exam => exam.type === type && exam.category === part);
-                    const totalCount = exams.length;
-
-                    // 计算完成数量和平均分
-                    const completedRecords = app.practiceRecords.filter(record =>
-                        exams.some(exam => exam.id === record.examId || exam.title === record.title)
-                    );
-                    const completedCount = completedRecords.length;
-                    const avgScore = completedCount > 0 ?
-                        Math.round(completedRecords.reduce((sum, record) => sum + (record.percentage || 0), 0) / completedCount) : 0;
-
-                    // 更新UI
-                    const countElement = document.getElementById(`${type}-${part.toLowerCase()}-count`);
-                    const completedElement = document.getElementById(`${type}-${part.toLowerCase()}-completed`);
-                    const avgElement = document.getElementById(`${type}-${part.toLowerCase()}-avg`);
-
-                    if (countElement) countElement.textContent = totalCount;
-                    if (completedElement) completedElement.textContent = completedCount;
-                    if (avgElement) avgElement.textContent = avgScore + '%';
-                });
-            });
-        }
-
-        // 显示分类题目列表
-        function showCategoryExams(type, category) {
-            const exams = app.examData.filter(exam => exam.type === type && exam.category === category);
-            const typeText = type === 'reading' ? '阅读' : '听力';
-
-            document.getElementById('modalTitle').textContent = `${category} ${typeText}题目列表`;
-
-            const examListContainer = document.getElementById('modalExamList');
-
-            if (exams.length === 0) {
-                examListContainer.innerHTML = `
-                    <div style="text-align: center; padding: 40px;">
-                        <div style="font-size: 3rem; margin-bottom: 15px;">📂</div>
-                        <p>此分类暂无题目</p>
-                    </div>
-                `;
-            } else {
-                examListContainer.innerHTML = exams.map(exam => {
-                    const isCompleted = app.practiceRecords.some(record =>
-                        record.examId === exam.id || record.title === exam.title
-                    );
-                    const bestScore = isCompleted ?
-                        Math.max(...app.practiceRecords
-                            .filter(record => record.examId === exam.id || record.title === exam.title)
-                            .map(record => record.percentage || 0)) : 0;
-
-                    return `
-                        <div class="exam-item">
-                            <div class="exam-title">${exam.title || '无标题'}</div>
-                            <div class="exam-meta">
-                                <span>${type === 'reading' ? '📖 阅读' : '🎧 听力'}</span>
-                                <span>${exam.category || 'P1'}</span>
-                                ${exam.fileCount ? `<span>${exam.fileCount}个文件</span>` : ''}
-                            </div>
-                            <div class="exam-actions">
-                                <button class="btn" onclick="openRealExam('${exam.id}', '${type}')">
-                                    ${isCompleted ? '重新练习' : '开始练习'}
-                                </button>
-                                ${isCompleted ? `<span style="color: var(--my-melody-purple); font-weight: bold;">最佳: ${bestScore}%</span>` : ''}
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-            }
-
-            document.getElementById('examListModal').style.display = 'flex';
-        }
-
-        // 关闭题目列表模态框
+    // 关闭题目列表模态框
         function closeExamListModal() {
             document.getElementById('examListModal').style.display = 'none';
         }
-
+  
         // 主题切换弹窗
         function showThemeSwitcher() {
             const html = `
@@ -3924,25 +3818,24 @@
 
         // 构建资源路径
         function buildResourcePath(exam, kind = 'html') {
-            if (!exam || !exam.path) {
+            if (!exam) {
                 console.warn('[Resource] Invalid exam data:', exam);
                 return '#';
             }
 
-            // 确保路径格式正确
-            let basePath = exam.path.replace(/\\/g, '/');
-            if (!basePath.endsWith('/')) {
-                basePath += '/';
-            }
+            const type = String(exam.type || '').toLowerCase().trim();
+            let basePath = String(exam.path || '').replace(/\\/g, '/');
+            if (basePath && !basePath.endsWith('/')) basePath += '/';
+
+            const ROOT_LISTENING = '';
+            const ROOT_READING = '睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/';
+            const root = (type === 'listening') ? ROOT_LISTENING : ROOT_READING;
 
             let fileName;
-            if (kind === 'html') {
-                fileName = exam.category === 'P3' && exam.type === 'listening' ? 'academic.html' : 'index.html';
-            } else {
-                fileName = exam.fileName || 'content.pdf';
-            }
+            if (kind === 'html') fileName = exam.filename || exam.fileName || 'index.html';
+            else fileName = exam.pdfFilename || exam.fileName || 'content.pdf';
 
-            return basePath + fileName;
+            return encodeURI(root + basePath + fileName);
         }
 
         // 打开真实题目
@@ -3953,9 +3846,36 @@
                 return;
             }
 
+            // file:// 协议兼容：直接依据路径规则打开，避免 HEAD 判存
+            if (location.protocol === 'file:') {
+                if (exam.hasHtml === false || !exam.filename) {
+                    // 直接打开 PDF
+                    const pdfPath = buildResourcePath(exam, 'pdf');
+                    window.open(pdfPath, '_blank');
+                    app.showNotification(`正在打开PDF: ${exam.title}`);
+                } else {
+                    // 直接打开 HTML
+                    const htmlPath = buildResourcePath(exam, 'html');
+                    const examWindow = window.open(htmlPath, '_blank');
+
+                    // 监听练习完成消息
+                    const messageHandler = (event) => {
+                        if (event.data && (event.data.type === 'PRACTICE_COMPLETE' || event.data.type === 'practice_completed')) {
+                            console.log('[System] 收到练习完成消息');
+                            syncRealPracticeRecords();
+                            window.removeEventListener('message', messageHandler);
+                        }
+                    };
+
+                    window.addEventListener('message', messageHandler);
+                    app.showNotification(`正在打开: ${exam.title}`);
+                }
+                return;
+            }
+
+            // http(s) 协议：保留 HEAD 判存逻辑
             const fullPath = buildResourcePath(exam, 'html');
 
-            // 检查文件是否存在
             fetch(fullPath, { method: 'HEAD' })
                 .then(response => {
                     if (response.ok) {
@@ -3972,7 +3892,6 @@
                         };
 
                         window.addEventListener('message', messageHandler);
-
                         app.showNotification(`正在打开: ${exam.title}`);
                     } else {
                         // 如果HTML文件不存在，尝试PDF
@@ -4094,12 +4013,70 @@
       };
 
       window.updateCategoryStats = function() {
-        const categories = ['reading', 'listening'];
-        categories.forEach(type => {
-          const parts = (type === 'reading') ? ['P1','P2','P3'] : ['P3','P4'];
+        // 归一化分类匹配：reading=`['P1','P2','P3']`；listening=`['P3','P4']`
+        const categoryParts = {
+          reading: ['P1', 'P2', 'P3'],
+          listening: ['P3', 'P4']
+        };
+
+        // 先输出所有题目的结构用于调试
+        console.log(`[Debug] 所有题目数据结构:`);
+        (window.app && window.app.examData || []).forEach((exam, index) => {
+          if (index < 5) { // 只输出前5个
+            console.log(`[Debug] 题目${index + 1}:`, {
+              id: exam.id,
+              title: exam.title,
+              type: exam.type,
+              category: exam.category,
+              part: exam.part,
+              normalizedType: (exam.type || '').toLowerCase().trim(),
+              normalizedCategory: (exam.category || exam.part || '').toUpperCase().trim()
+            });
+          }
+        });
+
+        Object.entries(categoryParts).forEach(([type, parts]) => {
           parts.forEach(part => {
-            const exams = (window.app && window.app.examData || []).filter(exam => exam.type === type && exam.category === part);
+            // 归一化匹配：type和category都进行归一化处理
+            const exams = (window.app && window.app.examData || []).filter(exam => {
+              const typ = (exam.type || '').toLowerCase().trim();
+              const cat = (exam.category || exam.part || '').toUpperCase().trim();
+              const match = typ === type && cat === part;
+              if (match) { // 输出所有匹配的题目用于调试
+                console.log(`[Debug] 匹配成功: ${exam.title} (type: ${typ}, category: ${cat})`);
+              }
+              return match;
+            });
             const totalCount = exams.length;
+            console.log(`[Debug] ${type}-${part}: 找到 ${totalCount} 个题目`);
+
+            // 如果没有找到题目，输出该分类下的所有题目用于调试
+            if (totalCount === 0) {
+              console.log(`[Debug] 检查 ${type} 类型的所有题目:`);
+              (window.app && window.app.examData || [])
+                .filter(exam => (exam.type || '').toLowerCase().trim() === type)
+                .slice(0, 5)
+                .forEach((exam, index) => {
+                  console.log(`[Debug] ${type}题目${index + 1}:`, {
+                    id: exam.id,
+                    title: exam.title,
+                    category: exam.category,
+                    part: exam.part,
+                    rawCategory: exam.category,
+                    rawPart: exam.part,
+                    normalizedCategory: (exam.category || exam.part || '').toUpperCase().trim(),
+                    expectedPart: part
+                  });
+                });
+
+              // 额外调试：检查所有题目的原始分类值
+              console.log(`[Debug] 所有 ${type} 题目的分类值:`);
+              (window.app && window.app.examData || [])
+                .filter(exam => (exam.type || '').toLowerCase().trim() === type)
+                .forEach(exam => {
+                  console.log(`[Debug] - ${exam.title}: category="${exam.category}", part="${exam.part}"`);
+                });
+            }
             const completedRecords = (window.app && window.app.practiceRecords || []).filter(record =>
               exams.some(exam => exam.id === record.examId || exam.title === record.title)
             );
@@ -4117,7 +4094,12 @@
       };
 
       window.showCategoryExams = function(type, category) {
-        const exams = (window.app && window.app.examData || []).filter(exam => exam.type === type && exam.category === category);
+        // 归一化匹配：type和category都进行归一化处理
+        const exams = (window.app && window.app.examData || []).filter(exam => {
+          const typ = (exam.type || '').toLowerCase().trim();
+          const cat = (exam.category || exam.part || '').toUpperCase().trim();
+          return typ === type && cat === category;
+        });
         const typeText = type === 'reading' ? '阅读' : '听力';
         document.getElementById('modalTitle').textContent = `${category} ${typeText}题目列表`;
         const examListContainer = document.getElementById('modalExamList');
@@ -4246,13 +4228,98 @@
       };
 
       // 覆盖加载题库函数：当缓存为空或forceFresh时，尝试从全局索引加载
+      // 测试数据匹配函数
+      window.testDataMatching = function() {
+        console.log(`[Test] 开始测试数据匹配逻辑...`);
+
+        // 检查全局数据
+        console.log(`[Test] 全局阅读数据:`, window.completeExamIndex?.length || 0, '项');
+        console.log(`[Test] 全局听力数据:`, window.listeningExamIndex?.length || 0, '项');
+        console.log(`[Test] 应用数据:`, window.app?.examData?.length || 0, '项');
+
+        // 检查数据加载状态
+        if (!window.app || !window.app.examData) {
+          console.log(`[Test] 应用数据未加载，正在加载...`);
+          window.loadRealExamLibrary(true);
+          setTimeout(() => testDataMatching(), 1000);
+          return;
+        }
+
+        // 输出所有数据的结构
+        console.log(`[Test] 应用数据结构详情:`);
+        window.app.examData.forEach((exam, index) => {
+          if (index < 10) { // 只显示前10个
+            console.log(`[Test] ${index + 1}.`, {
+              id: exam.id,
+              title: exam.title?.substring(0, 30) + '...',
+              type: exam.type,
+              category: exam.category,
+              part: exam.part,
+              normalizedType: (exam.type || '').toLowerCase().trim(),
+              normalizedCategory: (exam.category || exam.part || '').toUpperCase().trim()
+            });
+          }
+        });
+
+        // 测试匹配逻辑
+        const testMatches = [
+          { type: 'reading', category: 'P1' },
+          { type: 'reading', category: 'P2' },
+          { type: 'reading', category: 'P3' },
+          { type: 'listening', category: 'P3' },
+          { type: 'listening', category: 'P4' }
+        ];
+
+        testMatches.forEach(({ type, category }) => {
+          const matches = window.app.examData.filter(exam => {
+            const typ = (exam.type || '').toLowerCase().trim();
+            const cat = (exam.category || exam.part || '').toUpperCase().trim();
+            return typ === type && cat === category;
+          });
+
+          console.log(`[Test] ${type}-${category}: 匹配 ${matches.length} 个题目`);
+          if (matches.length > 0 && matches.length <= 5) {
+            matches.forEach(match => {
+              console.log(`[Test]   - ${match.title}`);
+            });
+          }
+        });
+
+        // 测试原始数据结构
+        console.log(`[Test] 原始阅读数据样本:`);
+        if (window.completeExamIndex) {
+          window.completeExamIndex.slice(0, 3).forEach((exam, index) => {
+            console.log(`[Test] 阅读${index + 1}:`, {
+              id: exam.id,
+              category: exam.category,
+              hasTypeField: 'type' in exam
+            });
+          });
+        }
+
+        console.log(`[Test] 原始听力数据样本:`);
+        if (window.listeningExamIndex) {
+          window.listeningExamIndex.slice(0, 3).forEach((exam, index) => {
+            console.log(`[Test] 听力${index + 1}:`, {
+              id: exam.id,
+              type: exam.type,
+              category: exam.category
+            });
+          });
+        }
+      };
+
       window.loadRealExamLibrary = function(forceFresh){
         const startTime = performance.now();
         const activeConfigKey = getActiveLibraryConfigurationKey();
         const cachedData = storage.get(activeConfigKey);
 
+        console.log(`[Debug] 开始加载题库，forceFresh: ${forceFresh}`);
+        console.log(`[Debug] 缓存数据:`, Array.isArray(cachedData) ? `${cachedData.length} 项` : '无缓存');
+
         if (!forceFresh && Array.isArray(cachedData) && cachedData.length > 0) {
           app.examData = cachedData;
+          console.log(`[Debug] 使用缓存数据: ${cachedData.length} 项`);
           finishRealLibraryLoading(startTime);
           return;
         }
@@ -4262,28 +4329,81 @@
         }
 
         const tryBuildFromGlobals = (attempt = 1) => {
+          console.log(`[Debug] 尝试从全局索引加载数据，第 ${attempt} 次尝试`);
+
+          // 检查全局索引状态
+          console.log(`[Debug] window.completeExamIndex:`, Array.isArray(window.completeExamIndex) ? `${window.completeExamIndex.length} 项` : '未加载');
+          console.log(`[Debug] window.listeningExamIndex:`, Array.isArray(window.listeningExamIndex) ? `${window.listeningExamIndex.length} 项` : '未加载');
+
           let readingExams = [];
           let listeningExams = [];
+
           if (Array.isArray(window.completeExamIndex)) {
             readingExams = window.completeExamIndex.map(exam => ({ ...exam, type: 'reading' }));
+            console.log(`[Debug] 加载阅读题库: ${readingExams.length} 项`);
+
+            // 输出阅读数据样本
+            if (readingExams.length > 0) {
+              console.log(`[Debug] 阅读数据样本:`);
+              readingExams.slice(0, 2).forEach((exam, index) => {
+                console.log(`[Debug] 阅读${index + 1}:`, {
+                  id: exam.id,
+                  title: exam.title?.substring(0, 30),
+                  category: exam.category,
+                  type: exam.type
+                });
+              });
+            }
+          } else {
+            console.log(`[Debug] 阅读数据索引未加载或不是数组`);
           }
+
           if (Array.isArray(window.listeningExamIndex)) {
-            listeningExams = window.listeningExamIndex;
+            listeningExams = window.listeningExamIndex.map(exam => ({ ...exam, type: 'listening' }));
+            console.log(`[Debug] 加载听力题库: ${listeningExams.length} 项`);
+
+            // 输出听力数据样本
+            if (listeningExams.length > 0) {
+              console.log(`[Debug] 听力数据样本:`);
+              listeningExams.slice(0, 2).forEach((exam, index) => {
+                console.log(`[Debug] 听力${index + 1}:`, {
+                  id: exam.id,
+                  title: exam.title?.substring(0, 30),
+                  category: exam.category,
+                  type: exam.type
+                });
+              });
+            }
+          } else {
+            console.log(`[Debug] 听力数据索引未加载或不是数组`);
           }
+
           const merged = [...readingExams, ...listeningExams];
+          console.log(`[Debug] 合并题库: ${merged.length} 项`);
 
           if (merged.length > 0) {
-            app.examData = merged;
-            storage.set(activeConfigKey, app.examData);
+            // 设置数据到app对象
+            if (window.app) {
+              window.app.examData = merged;
+              console.log(`[Debug] 题库数据已设置到 window.app.examData，长度:`, merged.length);
+            } else {
+              console.log(`[Debug] window.app 不存在，无法设置数据`);
+            }
+
+            storage.set(activeConfigKey, merged);
+            console.log(`[Debug] 题库数据已保存到缓存`);
+
             finishRealLibraryLoading(startTime);
             return;
           }
 
           if (attempt < 5) {
+            console.log(`[Debug] 数据未加载，150ms后重试...`);
             setTimeout(() => tryBuildFromGlobals(attempt + 1), 150);
           } else {
-            // 不落盘空数组，避免把“空索引”固化为缓存
+            // 不落盘空数组，避免把"空索引"固化为缓存
             app.examData = [];
+            console.log(`[Debug] 数据加载失败，设置为空数组`);
             finishRealLibraryLoading(startTime);
             if (app && typeof app.showNotification === 'function') {
               app.showNotification('题库脚本尚未加载，稍后重试或刷新');
@@ -4294,6 +4414,12 @@
         tryBuildFromGlobals(1);
       };
     })();
+
+    // 简化的页面加载完成检查
+    window.addEventListener('load', function() {
+      console.log(`[Debug] 页面加载完成`);
+      // 移除可能导致循环调用的重新加载逻辑
+    });
     </script>
 </body>
 </html>
