@@ -154,26 +154,77 @@
     @keyframes nameShow { from { opacity: 0; } to { opacity: 1; } }
     @keyframes nameShow { from { opacity: 0; } to { opacity: 1; } }
 
-    /* Side scrolls (decorative) */
+    /* Side scrolls (decorative, parchment with blotchy tones refined) */
     .side-scroll {
       position: absolute;
       top: 0; bottom: 0;
       width: 0px; /* JS sets actual width */
       pointer-events: none;
       z-index: 0;
-      background:
-        linear-gradient(to right, rgba(0,0,0,0.25), rgba(0,0,0,0.05) 10px, transparent 30px),
-        repeating-linear-gradient(
-          0deg,
-          rgba(255,255,255,0.06), rgba(255,255,255,0.06) 2px,
-          rgba(0,0,0,0.02) 2px, rgba(0,0,0,0.02) 4px
-        );
-      background-color: #e7d9b6; /* parchment */
-      box-shadow: inset 0 0 60px rgba(0,0,0,0.35);
+      left: 0;
+      /* lighter parchment base */
+      background-color: #ceb083;
+      /* scatter darker tones toward edges, reduce dense dark cores */
+      background-image:
+        radial-gradient(60% 55% at -12% 15%, rgba(176,139,88,0.18) 0%, rgba(176,139,88,0.0) 60%), /* #b08b58 */
+        radial-gradient(58% 50% at 112% 28%, rgba(162,120,79,0.18) 0%, rgba(162,120,79,0.0) 60%),  /* #a2784f */
+        radial-gradient(56% 50% at 50% -14%, rgba(192,158,103,0.16) 0%, rgba(192,158,103,0.0) 58%), /* #c09e67 */
+        radial-gradient(56% 50% at 50% 114%, rgba(191,163,123,0.16) 0%, rgba(191,163,123,0.0) 58%), /* #bfa37b */
+        radial-gradient(52% 48% at 0% 65%, rgba(201,174,131,0.14) 0%, rgba(201,174,131,0.0) 58%),  /* #c9ae83 */
+        radial-gradient(52% 48% at 100% 40%, rgba(200,167,117,0.14) 0%, rgba(200,167,117,0.0) 58%),/* #c8a775 */
+        radial-gradient(50% 46% at 80% 85%, rgba(212,190,157,0.16) 0%, rgba(212,190,157,0.0) 60%), /* #d4be9d */
+        /* subtle vignette to add depth, minimal center dark */
+        linear-gradient(to right, rgba(80,67,47,0.25), rgba(100,84,59,0.14) 25%, rgba(120,100,70,0.06) 65%, rgba(160,134,94,0.04));
+      background-blend-mode: multiply, multiply, multiply, multiply, multiply, multiply, multiply, normal;
+      box-shadow: inset 0 0 50px rgba(0,0,0,0.25), inset 0 0 120px rgba(0,0,0,0.15);
+      overflow: hidden;
+      /* Apply irregular torn edge to whole scroll */
+      -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1000 1000'><defs><filter id='f'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' seed='7'/><feDisplacementMap in='SourceGraphic' scale='60'/></filter></defs><rect width='1000' height='1000' fill='white' filter='url(%23f)'/></svg>");
+      mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1000 1000'><defs><filter id='f'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' seed='7'/><feDisplacementMap in='SourceGraphic' scale='60'/></filter></defs><rect width='1000' height='1000' fill='white' filter='url(%23f)'/></svg>");
+      -webkit-mask-size: cover; mask-size: cover;
+      -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+      -webkit-mask-position: center; mask-position: center;
     }
-    .side-scroll.right {
-      left: auto; right: 0;
-      transform: scaleX(-1); /* mirror inner shading */
+    .side-scroll.right { left: auto; right: 0; }
+
+    /* Irregular torn edge mask */
+    .side-scroll .torn-mask {
+      position: absolute; inset: 0;
+      -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1000 1000'><defs><filter id='f'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' seed='7'/><feDisplacementMap in='SourceGraphic' scale='60'/></filter></defs><rect width='1000' height='1000' fill='white' filter='url(%23f)'/></svg>");
+      mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1000 1000'><defs><filter id='f'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' seed='7'/><feDisplacementMap in='SourceGraphic' scale='60'/></filter></defs><rect width='1000' height='1000' fill='white' filter='url(%23f)'/></svg>");
+      -webkit-mask-size: cover; mask-size: cover;
+      -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+      -webkit-mask-position: center; mask-position: center;
+      background: inherit;
+    }
+
+    /* Rolled inner edge shading */
+    .side-scroll::before {
+      content: "";
+      position: absolute; top: 0; bottom: 0; width: 48px;
+      pointer-events: none;
+    }
+    .side-scroll.left::before {
+      right: 0;
+      background: linear-gradient(to left, rgba(80,67,47,0.40), rgba(100,84,59,0.30) 40%, rgba(120,100,70,0.12) 70%, rgba(0,0,0,0.0) 100%);
+    }
+    .side-scroll.right::before {
+      left: 0;
+      background: linear-gradient(to right, rgba(80,67,47,0.40), rgba(100,84,59,0.30) 40%, rgba(120,100,70,0.12) 70%, rgba(0,0,0,0.0) 100%);
+    }
+    /* Pixelated rough parchment noise + torn edge */
+    .side-scroll::after {
+      content: "";
+      position: absolute; inset: 0;
+      background-image:
+        url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/><feComponentTransfer><feFuncA type='table' tableValues='0 0.07'/></feComponentTransfer></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"),
+        repeating-linear-gradient( 14deg, rgba(0,0,0,0.02), rgba(0,0,0,0.02) 3px, rgba(255,255,255,0.012) 3px, rgba(255,255,255,0.012) 7px ),
+        repeating-linear-gradient( -12deg, rgba(0,0,0,0.018), rgba(0,0,0,0.018) 3px, rgba(255,255,255,0.01) 3px, rgba(255,255,255,0.01) 7px );
+      background-size: 140px 140px, auto, auto;
+      image-rendering: pixelated;
+      mix-blend-mode: multiply, multiply, multiply;
+      opacity: 0.6;
+      pointer-events: none;
     }
 
     /* Image map hit layer and effects */
@@ -226,11 +277,11 @@
     }
     .snitch-container.active #snitch { opacity: 1; animation: fly-path 1.5s linear infinite; }
     @keyframes fly-path {
-      0% { top: 23%; left: 77%; }
-      25% { top: 26%; left: 83%; }
-      50% { top: 22%; left: 84%; }
-      75% { top: 25%; left: 76%; }
-      100% { top: 23%; left: 77%; }
+      0% { top: 23%; left: 69%; }
+      25% { top: 26%; left: 75%; }
+      50% { top: 22%; left: 76%; }
+      75% { top: 25%; left: 68%; }
+      100% { top: 23%; left: 69%; }
     }
 
     /* Gear effect (Azkaban) */
@@ -250,6 +301,8 @@
 </head>
 <body>
   <div class="map-viewport" id="viewport">
+    <div class="side-scroll left" id="sideLeft"><div class="torn-mask"></div></div>
+    <div class="side-scroll right" id="sideRight"><div class="torn-mask"></div></div>
     <div class="stage" id="stage">
       <div class="map">
         <div id="mapMask" class="mask"></div>
@@ -259,13 +312,13 @@
       <img class="map-hit" src="../../assets/images/The-Marauders-Map-main/map.png" width="1440" height="900" usemap="#hp-map" alt="Harry Potter Map" />
       <map name="hp-map">
         <!-- Hogwarts (Overview) - scaled from 1200x750 by 1.2 -->
-        <area shape="poly" coords="552,258, 648,288, 828,360, 780,432, 660,408, 564,402" href="#overview" alt="Hogwarts" title="前往总览">
-        <!-- The Burrow (Records) -->
-        <area shape="poly" coords="234,228, 336,252, 330,312, 276,300, 240,318" href="#records" alt="The Burrow" title="查看练习记录">
-        <!-- Quidditch Pitch (Question Bank) -->
-        <area shape="poly" coords="1152,192, 1212,210, 1224,240, 1200,270, 1140,276, 1086,258, 1074,228, 1098,204" href="#questions" alt="Quidditch Pitch" title="进入题库">
-        <!-- Azkaban (Settings) rect x1,y1,x2,y2 -->
-        <area shape="rect" coords="348,618, 426,792" href="#settings" alt="Azkaban" title="打开设置">
+        <area shape="poly" coords="552,198, 648,228, 828,300, 780,372, 660,348, 564,342" href="#overview" alt="Hogwarts" title="前往总览">
+        <!-- The Burrow (Records) - nudged right-down -->
+        <area shape="poly" coords="246,270, 348,294, 342,354, 288,342, 252,360" href="#records" alt="The Burrow" title="查看练习记录">
+        <!-- Quidditch Pitch (Question Bank) - nudged left -->
+        <area shape="poly" coords="1048,192, 1108,210, 1120,240, 1096,270, 1036,276, 982,258, 970,228, 994,204" href="#questions" alt="Quidditch Pitch" title="进入题库">
+        <!-- Azkaban (Settings) rect x1,y1,x2,y2 - nudged left -->
+        <area shape="rect" coords="306,558, 384,732" href="#settings" alt="Azkaban" title="打开设置">
       </map>
 
       <!-- Effects Layer (not interactive) -->
@@ -296,7 +349,7 @@
         </g>
       </svg>
       <div id="track" class="track">
-        <div id="name" class="name-banner">Icochi</div>
+        <div id="name" class="name-banner">Shui</div>
       </div>
     </div>
   </div>
@@ -315,10 +368,22 @@
       const DESIGN_H = 900;
       const $viewport = document.getElementById('viewport');
       const $stage = document.getElementById('stage');
+      const $sideLeft = document.getElementById('sideLeft');
+      const $sideRight = document.getElementById('sideRight');
 
       function applyScale() {
-        const scale = Math.min($viewport.clientWidth / DESIGN_W, $viewport.clientHeight / DESIGN_H);
+        const vw = $viewport.clientWidth;
+        const vh = $viewport.clientHeight;
+        const scale = Math.min(vw / DESIGN_W, vh / DESIGN_H);
         $stage.style.setProperty('--scale', scale);
+        // Side scrolls width: fill leftover space when aspect ratio wider than 16:10 (1440x900)
+        const scaledW = DESIGN_W * scale;
+        const leftover = Math.max(0, vw - scaledW);
+        const sideWidth = leftover / 2;
+        [$sideLeft, $sideRight].forEach(el => {
+          if (!el) return;
+          el.style.width = sideWidth + 'px';
+        });
       }
 
       window.addEventListener('resize', applyScale);

@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🦁 格兰芬多魔法学习系统 - The Marauder's Map</title>
+
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Google Fonts for Harry Potter style -->
+    <link href="https://fonts.googleapis.com/css2?family=Harry+P&family=Merriweather:wght@300;400;700&family=Crimson+Text:wght@400;600&display=swap" rel="stylesheet">
+
+    <style>
+        /* 格兰芬多主题色彩 */
+        :root {
+            /* 主色调 - 深灰黑与金色 */
+            --gryffindor-primary: #8B0000;
+            --gryffindor-gold: #FFD700;
+            --gryffindor-dark: #2C2C2C;
+            --gryffindor-light: #F5F5DC;
+            --gryffindor-accent: #CD853F;
+
+            /* 文本颜色 */
+            --text-primary: #F5F5DC;
+            --text-secondary: #D4AF37;
+            --text-muted: #A0A0A0;
+            --text-inverse: #2C2C2C;
+
+            /* 背景颜色 */
+            --bg-primary: #1A1A1A;
+            --bg-secondary: #2C2C2C;
+            --bg-overlay: rgba(26, 26, 26, 0.95);
+            --bg-card: rgba(44, 44, 44, 0.9);
+            --bg-parchment: #F4E4C1;
+
+            /* 边框颜色 */
+            --border-primary: #8B0000;
+            --border-secondary: #CD853F;
+            --border-card: #FFD700;
+
+            /* 阴影 */
+            --shadow-soft: 0 8px 32px rgba(139, 0, 0, 0.3);
+            --shadow-strong: 0 12px 48px rgba(0, 0, 0, 0.6);
+            --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.4);
+            --shadow-gold: 0 0 20px rgba(255, 215, 0, 0.3);
+
+            /* 渐变背景 - 羊皮纸质感 */
+            --gradient-bg: linear-gradient(135deg, #2C2416 0%, #3A3020 25%, #2C2416 50%, #1F1810 75%, #2A2015 100%);
+
+            /* 动画时间 */
+            --transition-fast: 300ms;
+            --transition-medium: 500ms;
+            --transition-slow: 800ms;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Crimson Text', serif;
+            background: var(--gradient-bg);
+            background-size: 400% 400%;
+            animation: magicalFlow 20s ease infinite;
+            color: var(--text-primary);
+            line-height: 1.6;
+            position: relative;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* 噪点纹理背景 */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                repeating-linear-gradient(45deg, transparent, transparent 35px, rgba(255, 215, 0, 0.02) 35px, rgba(255, 215, 0, 0.02) 70px),
+                repeating-linear-gradient(-45deg, transparent, transparent 35px, rgba(139, 0, 0, 0.02) 35px, rgba(139, 0, 0, 0.02) 70px);
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        @keyframes magicalFlow {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            position: relative;
+            z-index: 2;
+        }
+
+        /* 头部样式 */
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 40px 20px;
+            background: var(--bg-card);
+            border-radius: 8px;
+            border: 2px solid var(--border-card);
+            box-shadow: var(--shadow-card);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255, 215, 0, 0.1) 0%, transparent 70%);
+            animation: magicalGlow 4s ease-in-out infinite;
+        }
+
+        @keyframes magicalGlow {
+            0%, 100% { transform: scale(1) rotate(0deg); }
+            50% { transform: scale(1.1) rotate(180deg); }
+        }
+
+        .header h1 {
+            font-family: 'Harry P', 'Merriweather', serif;
+            font-size: 48px;
+            color: var(--gryffindor-gold);
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            margin-bottom: 16px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .header p {
+            font-size: 18px;
+            color: var(--text-secondary);
+            position: relative;
+            z-index: 1;
+        }
+
+        /* 导航栏样式 */
+        .main-nav {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+        }
+
+        .nav-btn {
+            padding: 15px 30px;
+            background: var(--bg-card);
+            border: 2px solid var(--border-primary);
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            font-family: 'Merriweather', serif;
+            font-size: 16px;
+            position: relative;
+            overflow: hidden;
+            clip-path: polygon(0 0, 90% 0, 100% 50%, 90% 100%, 0 100%, 10% 50%);
+            transform: rotate(-2deg);
+        }
+
+        .nav-btn:nth-child(even) {
+            clip-path: polygon(10% 0, 100% 0, 90% 50%, 100% 100%, 10% 100%, 0 50%);
+            transform: rotate(2deg);
+        }
+
+        .nav-btn:nth-child(3n) {
+            clip-path: polygon(0 0, 100% 0, 100% 40%, 80% 100%, 0 100%);
+            transform: rotate(-1deg);
+        }
+
+        .nav-btn:nth-child(4n) {
+            clip-path: polygon(20% 0, 100% 0, 100% 100%, 0 100%, 0 60%);
+            transform: rotate(1deg);
+        }
+
+        .nav-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 215, 0, 0.3), transparent);
+            transition: left var(--transition-fast);
+        }
+
+        .nav-btn:hover::before {
+            left: 100%;
+        }
+
+        .nav-btn:hover, .nav-btn.active {
+            background: var(--gryffindor-primary);
+            border-color: var(--gryffindor-gold);
+            color: var(--text-inverse);
+            box-shadow: var(--shadow-gold);
+            transform: translateY(-2px);
+        }
+
+        /* 不规则旗帜形状卡片 */
+        .card {
+            background: var(--bg-card);
+            padding: 24px;
+            margin-bottom: 24px;
+            border: 1px solid var(--border-secondary);
+            box-shadow: var(--shadow-card);
+            transition: all var(--transition-fast);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* 旗帜形状 */
+        .card.flag-shape {
+            clip-path: polygon(0 0, 100% 0, 95% 50%, 100% 100%, 0 100%, 5% 50%);
+            background: linear-gradient(135deg, var(--bg-card) 0%, var(--gryffindor-primary) 100%);
+            border: 2px solid var(--gryffindor-gold);
+        }
+
+        /* 羊皮纸卷轴形状 */
+        .card.parchment-scroll {
+            background: linear-gradient(180deg, var(--bg-parchment) 0%, var(--bg-card) 2%, var(--bg-card) 98%, var(--bg-parchment) 100%);
+            border-radius: 20px;
+            border: 3px solid var(--gryffindor-accent);
+            position: relative;
+        }
+
+        .card.parchment-scroll::before,
+        .card.parchment-scroll::after {
+            content: '';
+            position: absolute;
+            width: 30px;
+            height: 100%;
+            background: var(--gryffindor-accent);
+            border-radius: 15px;
+        }
+
+        .card.parchment-scroll::before {
+            left: -3px;
+            top: 0;
+        }
+
+        .card.parchment-scroll::after {
+            right: -3px;
+            top: 0;
+        }
+
+        /* 盾牌形状 */
+        .card.shield-shape {
+            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+            background: radial-gradient(circle at center, var(--bg-card) 0%, var(--gryffindor-primary) 100%);
+            border: 2px solid var(--gryffindor-gold);
+        }
+
+        /* 不规则魔法书形状 */
+        .card.magic-book {
+            clip-path: polygon(0 0, 90% 0, 100% 10%, 100% 100%, 10% 100%, 0 90%);
+            background: linear-gradient(45deg, var(--bg-card) 0%, var(--gryffindor-primary) 50%, var(--bg-card) 100%);
+            border: 2px solid var(--gryffindor-gold);
+            transform: rotate(-1deg);
+        }
+
+        .card.magic-book:hover {
+            transform: rotate(0deg) translateY(-4px);
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-strong);
+            border-color: var(--border-card);
+        }
+
+        .card h2, .card h3 {
+            font-family: 'Merriweather', serif;
+            color: var(--gryffindor-gold);
+            margin-bottom: 16px;
+            font-size: 24px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        /* 统计卡片 */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 32px;
+        }
+
+        .stat-card {
+            background: var(--bg-secondary);
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid var(--border-primary);
+            transition: all var(--transition-fast);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-gold);
+        }
+
+        .stat-number {
+            font-size: 36px;
+            font-weight: 700;
+            color: var(--gryffindor-gold);
+            margin-bottom: 8px;
+            font-family: 'Merriweather', serif;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* 表格样式 */
+        .table-container {
+            background: var(--bg-card);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--border-secondary);
+            margin-bottom: 24px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-secondary);
+        }
+
+        th {
+            background: var(--gryffindor-primary);
+            color: var(--text-inverse);
+            font-family: 'Merriweather', serif;
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        tr:hover {
+            background: rgba(255, 215, 0, 0.1);
+        }
+
+        /* 按钮样式 - 旗帜形状 */
+        .btn {
+            padding: 12px 24px;
+            background: var(--gryffindor-primary);
+            color: var(--text-inverse);
+            border: none;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            font-size: 14px;
+            margin: 6px;
+            position: relative;
+            overflow: hidden;
+            clip-path: polygon(0 0, 100% 0, 95% 50%, 100% 100%, 0 100%, 5% 50%);
+            font-family: 'Merriweather', serif;
+            font-weight: 600;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 215, 0, 0.4), transparent);
+            transition: left var(--transition-fast);
+        }
+
+        .btn:hover::before {
+            left: 100%;
+        }
+
+        .btn:hover {
+            background: var(--gryffindor-gold);
+            color: var(--text-inverse);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-gold);
+        }
+
+        .btn-secondary {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-secondary);
+            color: var(--text-primary);
+            clip-path: polygon(0 0, 100% 0, 95% 50%, 100% 100%, 0 100%, 5% 50%);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border-secondary);
+        }
+
+        .btn-warning {
+            background: #DC143C;
+        }
+
+        .btn-warning:hover {
+            background: #B91C1C;
+        }
+
+        .btn-info {
+            background: var(--gryffindor-accent);
+        }
+
+        .btn-info:hover {
+            background: #CD853F;
+        }
+
+
+        .btn-secondary {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-secondary);
+            color: var(--text-primary);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border-secondary);
+        }
+
+        .btn-warning {
+            background: #CD853F;
+        }
+
+        .btn-warning:hover {
+            background: #D2691E;
+        }
+
+        /* 搜索框样式 */
+        .search-box {
+            margin-bottom: 24px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 16px;
+            background: var(--bg-card);
+            border: 2px solid var(--border-secondary);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 16px;
+            transition: all var(--transition-fast);
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--gryffindor-gold);
+            box-shadow: var(--shadow-gold);
+        }
+
+        /* 展开详情样式 */
+        .expandable-row {
+            cursor: pointer;
+            transition: background var(--transition-fast);
+        }
+
+        .expandable-row:hover {
+            background: rgba(255, 215, 0, 0.1);
+        }
+
+        .expandable-content {
+            display: none;
+            background: var(--bg-secondary);
+            padding: 16px;
+            border-top: 1px solid var(--border-primary);
+        }
+
+        .expandable-content.show {
+            display: block;
+            animation: slideDown var(--transition-medium) ease-out;
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 批量操作样式 */
+        .bulk-actions {
+            display: none;
+            padding: 16px;
+            background: var(--gryffindor-primary);
+            border-radius: 8px;
+            margin-bottom: 16px;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .bulk-actions.show {
+            display: flex;
+        }
+
+        .checkbox {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--gryffindor-gold);
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 36px;
+            }
+
+            .main-nav {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .nav-btn {
+                width: 100%;
+                max-width: 300px;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            table {
+                font-size: 14px;
+            }
+
+            th, td {
+                padding: 12px 8px;
+            }
+        }
+
+        /* 加载动画 */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+
+        .spinner {
+            border: 4px solid var(--border-secondary);
+            border-top: 4px solid var(--gryffindor-gold);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* 魔法装饰元素 */
+        .magic-decoration {
+            position: absolute;
+            opacity: 0.1;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .magic-sparkle {
+            width: 4px;
+            height: 4px;
+            background: var(--gryffindor-gold);
+            border-radius: 50%;
+            animation: sparkle 2s ease-in-out infinite;
+        }
+
+        @keyframes sparkle {
+            0%, 100% { opacity: 0.1; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(1.5); }
+        }
+
+        /* 主题切换按钮 */
+        .theme-switcher {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+
+        .theme-btn {
+            padding: 8px 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            border-radius: 20px;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            font-size: 12px;
+        }
+
+        .theme-btn:hover {
+            background: var(--gryffindor-primary);
+            color: var(--text-inverse);
+        }
+    </style>
+</head>
+<body>
+    <!-- 主题切换按钮 -->
+    <div class="theme-switcher">
+        <button class="theme-btn" onclick="location.href='hp_theme_2.html'">🦅 拉文克劳</button>
+        <button class="theme-btn" onclick="location.href='hp_theme_3.html'">🐍 斯莱特林</button>
+    </div>
+
+    <div class="container">
+        <!-- 头部 -->
+        <div class="header">
+            <h1>🦁 格兰芬多魔法学习系统</h1>
+            <p>The Marauder's Map - 霍格沃茨特快列车</p>
+            <div class="magic-sparkle magic-decoration" style="top: 20px; left: 10%;"></div>
+            <div class="magic-sparkle magic-decoration" style="top: 60px; right: 15%; animation-delay: 0.5s;"></div>
+            <div class="magic-sparkle magic-decoration" style="bottom: 30px; left: 20%; animation-delay: 1s;"></div>
+        </div>
+
+        <!-- 导航栏 -->
+        <nav class="main-nav">
+            <button class="nav-btn active" onclick="showView('overview')">📊 学习总览</button>
+            <button class="nav-btn" onclick="showView('browse')">📚 魔法书库</button>
+            <button class="nav-btn" onclick="showView('practice')">📝 练习记录</button>
+            <button class="nav-btn" onclick="showView('settings')">⚙️ 系统设置</button>
+        </nav>
+
+        <!-- 学习总览页面 -->
+        <div id="overview-view" class="view active">
+            <div class="card parchment-scroll">
+                <h2>📊 魔法学习总览</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number">42</div>
+                        <div class="stat-label">已掌握咒语</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">87%</div>
+                        <div class="stat-label">平均准确率</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">156</div>
+                        <div class="stat-label">学习时长(分钟)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">7</div>
+                        <div class="stat-label">连续学习天数</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card parchment-scroll">
+                <h3>🏆 最近成就</h3>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>日期</th>
+                                <th>成就</th>
+                                <th>分数</th>
+                                <th>时长</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="expandable-row" onclick="toggleExpand(this)">
+                                <td>2024-09-18</td>
+                                <td>🦁 格兰芬多勇气测试</td>
+                                <td>95%</td>
+                                <td>25分钟</td>
+                                <td><button class="btn">查看详情</button></td>
+                            </tr>
+                            <tr class="expandable-content">
+                                <td colspan="5">
+                                    <h4>详细信息：</h4>
+                                    <p>完成格兰芬多勇气魔法测试，正确率优秀，展现了真正的格兰芬多精神！</p>
+                                    <p><strong>答对题目：</strong>19/20<br>
+                                    <strong>用时：</strong>25分32秒<br>
+                                    <strong>魔法熟练度：</strong>精通</p>
+                                </td>
+                            </tr>
+                            <tr class="expandable-row" onclick="toggleExpand(this)">
+                                <td>2024-09-17</td>
+                                <td>⚡ 魔咒练习</td>
+                                <td>88%</td>
+                                <td>18分钟</td>
+                                <td><button class="btn">查看详情</button></td>
+                            </tr>
+                            <tr class="expandable-content">
+                                <td colspan="5">
+                                    <h4>详细信息：</h4>
+                                    <p>基础魔咒练习，掌握了除你武器、昏昏倒地等基础咒语。</p>
+                                    <p><strong>答对题目：</strong>15/17<br>
+                                    <strong>用时：</strong>18分45秒<br>
+                                    <strong>魔法熟练度：</strong>熟练</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 魔法书库页面 -->
+        <div id="browse-view" class="view" style="display: none;">
+            <div class="card parchment-scroll">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2>📚 魔法书库</h2>
+                    <div>
+                        <button class="btn">全部</button>
+                        <button class="btn parchment">防御术</button>
+                        <button class="btn">魔咒学</button>
+                    </div>
+                </div>
+
+                <div class="search-box">
+                    <input type="text" class="search-input" placeholder="搜索魔法书籍...">
+                </div>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" class="checkbox" onchange="toggleSelectAll(this)"></th>
+                                <th>书名</th>
+                                <th>类别</th>
+                                <th>难度</th>
+                                <th>进度</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><input type="checkbox" class="checkbox"></td>
+                                <td>🦁 格兰芬多的勇气</td>
+                                <td>防御术</td>
+                                <td>⭐⭐⭐</td>
+                                <td>85%</td>
+                                <td>
+                                    <button class="btn">开始学习</button>
+                                    <button class="btn parchment">详情</button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><input type="checkbox" class="checkbox"></td>
+                                <td>⚡ 标准咒语，一级</td>
+                                <td>魔咒学</td>
+                                <td>⭐⭐</td>
+                                <td>92%</td>
+                                <td>
+                                    <button class="btn">开始学习</button>
+                                    <button class="btn">详情</button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><input type="checkbox" class="checkbox"></td>
+                                <td>🔮 魔法史</td>
+                                <td>历史</td>
+                                <td>⭐</td>
+                                <td>100%</td>
+                                <td>
+                                    <button class="btn">复习</button>
+                                    <button class="btn parchment">详情</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="bulk-actions">
+                    <span>已选择 3 项</span>
+                    <button class="btn btn-warning">🗑️ 批量删除</button>
+                    <button class="btn btn-secondary">📥 批量导出</button>
+                    <button class="btn btn-secondary" onclick="hideBulkActions()">取消</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 练习记录页面 -->
+        <div id="practice-view" class="view" style="display: none;">
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2>📝 练习记录</h2>
+                    <div>
+                        <button class="btn btn-secondary">📄 导出Markdown</button>
+                        <button class="btn btn-info" onclick="toggleBulkDelete()">📝 批量删除</button>
+                        <button class="btn btn-warning">🗑️ 清除记录</button>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" class="checkbox"></th>
+                                <th>日期</th>
+                                <th>练习内容</th>
+                                <th>分数</th>
+                                <th>时长</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="expandable-row" onclick="toggleExpand(this)">
+                                <td><input type="checkbox" class="checkbox"></td>
+                                <td>2024-09-18 14:30</td>
+                                <td>🦁 格兰芬多勇气测试</td>
+                                <td>95%</td>
+                                <td>25分钟</td>
+                                <td>
+                                    <button class="btn btn-secondary">查看详情</button>
+                                    <button class="btn btn-warning">删除</button>
+                                </td>
+                            </tr>
+                            <tr class="expandable-content">
+                                <td colspan="6">
+                                    <h4>练习详情：</h4>
+                                    <p><strong>题目：</strong>格兰芬多勇气魔法测试<br>
+                                    <strong>正确率：</strong>95% (19/20)<br>
+                                    <strong>用时：</strong>25分32秒<br>
+                                    <strong>表现评价：</strong>展现了真正的格兰芬多精神！</p>
+                                </td>
+                            </tr>
+                            <tr class="expandable-row" onclick="toggleExpand(this)">
+                                <td><input type="checkbox" class="checkbox"></td>
+                                <td>2024-09-17 16:45</td>
+                                <td>⚡ 基础魔咒练习</td>
+                                <td>88%</td>
+                                <td>18分钟</td>
+                                <td>
+                                    <button class="btn btn-secondary">查看详情</button>
+                                    <button class="btn btn-warning">删除</button>
+                                </td>
+                            </tr>
+                            <tr class="expandable-content">
+                                <td colspan="6">
+                                    <h4>练习详情：</h4>
+                                    <p><strong>题目：</strong>基础魔咒练习<br>
+                                    <strong>正确率：</strong>88% (15/17)<br>
+                                    <strong>用时：</strong>18分45秒<br>
+                                    <strong>表现评价：</strong>魔咒掌握熟练，需加强复杂咒语练习</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 系统设置页面 -->
+        <div id="settings-view" class="view" style="display: none;">
+            <div class="card">
+                <h2>⚙️ 系统设置</h2>
+
+                <div style="margin-bottom: 32px;">
+                    <h3>🔧 系统管理</h3>
+                    <p style="margin: 15px 0; opacity: 0.9;">魔法系统工具和设置选项</p>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="btn btn-warning">🗑️ 清除缓存</button>
+                        <button class="btn">📂 加载魔法书库</button>
+                        <button class="btn btn-info">⚙️ 书库配置切换</button>
+                        <button class="btn btn-warning">🔄 强制刷新</button>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 32px;">
+                    <h3>💾 数据管理</h3>
+                    <p style="margin: 15px 0; opacity: 0.9;">数据备份、导入导出和完整性检查</p>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="btn">💾 创建备份</button>
+                        <button class="btn btn-secondary">📋 备份列表</button>
+                        <button class="btn btn-info">📤 导出数据</button>
+                        <button class="btn btn-warning">📥 导入数据</button>
+                    </div>
+                </div>
+
+                <div>
+                    <h3>📊 系统信息</h3>
+                    <div style="margin-top: 15px; line-height: 1.8; font-weight: bold;">
+                        <div style="color: #FFD700;">魔法书库状态: 已加载完整索引</div>
+                        <div>咒语总数: <span>147</span></div>
+                        <div>HTML咒语: <span>147</span></div>
+                        <div>PDF咒语: <span>147</span></div>
+                        <div>最后更新: <span>2024/9/18 14:47:09</span></div>
+                    </div>
+
+                    <div style="margin-top: 25px;">
+                        <button class="btn btn-secondary">🎨 主题切换</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 视图切换功能
+        function showView(viewName) {
+            // 隐藏所有视图
+            const views = document.querySelectorAll('.view');
+            views.forEach(view => view.style.display = 'none');
+
+            // 显示选中的视图
+            document.getElementById(viewName + '-view').style.display = 'block';
+
+            // 更新导航按钮状态
+            const navBtns = document.querySelectorAll('.nav-btn');
+            navBtns.forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+
+        // 展开/收起功能
+        function toggleExpand(row) {
+            const content = row.nextElementSibling;
+            if (content && content.classList.contains('expandable-content')) {
+                content.classList.toggle('show');
+            }
+        }
+
+        // 批量选择功能
+        function toggleSelectAll(checkbox) {
+            const checkboxes = document.querySelectorAll('.checkbox');
+            checkboxes.forEach(cb => {
+                if (cb !== checkbox) {
+                    cb.checked = checkbox.checked;
+                }
+            });
+            updateBulkActions();
+        }
+
+        // 更新批量操作按钮显示
+        function updateBulkActions() {
+            const checkedBoxes = document.querySelectorAll('.checkbox:checked');
+            const bulkActions = document.querySelector('.bulk-actions');
+            if (checkedBoxes.length > 0 && bulkActions) {
+                bulkActions.classList.add('show');
+                bulkActions.querySelector('span').textContent = `已选择 ${checkedBoxes.length} 项`;
+            } else if (bulkActions) {
+                bulkActions.classList.remove('show');
+            }
+        }
+
+        // 隐藏批量操作
+        function hideBulkActions() {
+            const bulkActions = document.querySelector('.bulk-actions');
+            if (bulkActions) {
+                bulkActions.classList.remove('show');
+            }
+            // 清除所有选择
+            document.querySelectorAll('.checkbox').forEach(cb => cb.checked = false);
+        }
+
+        // 批量删除功能
+        function toggleBulkDelete() {
+            alert('批量删除功能：选择要删除的记录后点击批量删除按钮');
+        }
+
+        // 导出Markdown功能
+        function exportMarkdown() {
+            const data = [
+                ['# 格兰芬多学习记录'],
+                ['## 学习统计'],
+                ['- 总学习时间: 156分钟'],
+                ['- 平均准确率: 87%'],
+                ['- 连续学习天数: 7天'],
+                ['## 详细记录'],
+                ['| 日期 | 内容 | 分数 | 时长 |'],
+                ['|------|------|------|------|'],
+                ['| 2024-09-18 | 格兰芬多勇气测试 | 95% | 25分钟 |'],
+                ['| 2024-09-17 | 基础魔咒练习 | 88% | 18分钟 |']
+            ];
+
+            const markdown = data.map(row => row.join('\n')).join('\n');
+            const blob = new Blob([markdown], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = '格兰芬多学习记录.md';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // 监听复选框变化
+        document.addEventListener('change', function(e) {
+            if (e.target.classList.contains('checkbox')) {
+                updateBulkActions();
+            }
+        });
+
+        // 搜索功能
+        document.querySelector('.search-input')?.addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            const rows = document.querySelectorAll('tbody tr:not(.expandable-content)');
+
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(searchTerm) ? '' : 'none';
+            });
+        });
+
+        // 添加魔法粒子效果
+        function createMagicParticle() {
+            const particle = document.createElement('div');
+            particle.className = 'magic-sparkle magic-decoration';
+            particle.style.left = Math.random() * 100 + '%';
+            particle.style.top = Math.random() * 100 + '%';
+            particle.style.animationDelay = Math.random() * 2 + 's';
+            document.body.appendChild(particle);
+
+            setTimeout(() => {
+                particle.remove();
+            }, 2000);
+        }
+
+        // 定期创建魔法粒子
+        setInterval(createMagicParticle, 3000);
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 创建初始魔法粒子
+            for (let i = 0; i < 5; i++) {
+                setTimeout(createMagicParticle, i * 500);
+            }
+        });
+    </script>
+</body>
+</html>

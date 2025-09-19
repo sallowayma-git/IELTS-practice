@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🐍 斯莱特林魔法学习系统 - Slytherin Academy</title>
+
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Google Fonts for Slytherin style -->
+    <link href="https://fonts.googleapis.com/css2?family=MedievalSharp&family=Cormorant+Garamond:wght@300;400;600&family=Bebas+Neue&display=swap" rel="stylesheet">
+
+    <style>
+        /* 斯莱特林主题色彩 */
+        :root {
+            /* 主色调 - 翡翠绿与深灰金属 */
+            --slytherin-primary: #1A5F3F;
+            --slytherin-silver: #C0C0C0;
+            --slytherin-green: #2E8B57;
+            --slytherin-dark: #1C1C1C;
+            --slytherin-accent: #3CB371;
+
+            /* 文本颜色 */
+            --text-primary: #E8F5E9;
+            --text-secondary: #C0C0C0;
+            --text-muted: #7CB342;
+            --text-inverse: #1A5F3F;
+
+            /* 背景颜色 */
+            --bg-primary: #0D1117;
+            --bg-secondary: #1A5F3F;
+            --bg-overlay: rgba(13, 17, 23, 0.95);
+            --bg-card: rgba(26, 95, 63, 0.8);
+            --bg-parchment: #1A1A1A;
+
+            /* 边框颜色 */
+            --border-primary: #2E8B57;
+            --border-secondary: #3CB371;
+            --border-card: #C0C0C0;
+
+            /* 阴影 */
+            --shadow-soft: 0 8px 32px rgba(46, 139, 87, 0.3);
+            --shadow-strong: 0 12px 48px rgba(0, 0, 0, 0.6);
+            --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.4);
+            --shadow-emerald: 0 0 20px rgba(60, 179, 113, 0.3);
+
+            /* 渐变背景 - 蛇穴与神秘 */
+            --gradient-bg: linear-gradient(135deg, #0D1117 0%, #1A5F3F 25%, #0F1419 50%, #0D1117 75%, #1A5F3F 100%);
+
+            /* 动画时间 */
+            --transition-fast: 300ms;
+            --transition-medium: 500ms;
+            --transition-slow: 800ms;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Cormorant Garamond', serif;
+            background: var(--gradient-bg);
+            background-size: 400% 400%;
+            animation: serpentFlow 20s ease infinite;
+            color: var(--text-primary);
+            line-height: 1.6;
+            position: relative;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* 蛇形纹理背景 */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                repeating-linear-gradient(45deg, transparent, transparent 35px, rgba(60, 179, 113, 0.02) 35px, rgba(60, 179, 113, 0.02) 70px),
+                repeating-linear-gradient(-45deg, transparent, transparent 35px, rgba(26, 95, 63, 0.02) 35px, rgba(26, 95, 63, 0.02) 70px);
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        @keyframes serpentFlow {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            position: relative;
+            z-index: 2;
+        }
+
+        /* 头部样式 */
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 40px 20px;
+            background: var(--bg-card);
+            border-radius: 8px;
+            border: 2px solid var(--border-card);
+            box-shadow: var(--shadow-card);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(60, 179, 113, 0.1) 0%, transparent 70%);
+            animation: serpentGlow 4s ease-in-out infinite;
+        }
+
+        @keyframes serpentGlow {
+            0%, 100% { transform: scale(1) rotate(0deg); }
+            50% { transform: scale(1.1) rotate(180deg); }
+        }
+
+        .header h1 {
+            font-family: 'MedievalSharp', cursive;
+            font-size: 48px;
+            color: var(--slytherin-silver);
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            margin-bottom: 16px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .header p {
+            font-size: 18px;
+            color: var(--text-secondary);
+            position: relative;
+            z-index: 1;
+        }
+
+        /* 斯莱特林不规则卡片样式 */
+        .card {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 24px;
+            border: 1px solid var(--border-secondary);
+            box-shadow: var(--shadow-card);
+            transition: all var(--transition-fast);
+        }
+
+        /* 羊皮纸卷轴形状 */
+        .card.parchment-scroll {
+            background: linear-gradient(180deg, #2F4F2F 0%, #1C3A1C 50%, #2F4F2F 100%);
+            border: 3px solid #3CB371;
+            border-radius: 12px;
+            position: relative;
+            color: #E8F5E9;
+        }
+
+        .card.parchment-scroll::before {
+            content: '';
+            position: absolute;
+            top: -3px;
+            left: 20px;
+            right: 20px;
+            height: 6px;
+            background: linear-gradient(90deg, #3CB371, #2E8B57, #3CB371);
+            border-radius: 3px;
+        }
+
+        .card.parchment-scroll::after {
+            content: '';
+            position: absolute;
+            bottom: -3px;
+            left: 20px;
+            right: 20px;
+            height: 6px;
+            background: linear-gradient(90deg, #3CB371, #2E8B57, #3CB371);
+            border-radius: 3px;
+        }
+
+        .card.parchment-scroll h2,
+        .card.parchment-scroll h3 {
+            color: #E8F5E9;
+            text-shadow: none;
+        }
+
+        /* 导航栏样式 */
+        .main-nav {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+        }
+
+        .nav-btn {
+            padding: 15px 30px;
+            background: var(--bg-card);
+            border: 2px solid var(--border-primary);
+            border-radius: 8px;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            font-family: 'Bebas Neue', cursive;
+            font-size: 16px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .nav-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(192, 192, 192, 0.3), transparent);
+            transition: left var(--transition-fast);
+        }
+
+        .nav-btn:hover::before {
+            left: 100%;
+        }
+
+        .nav-btn:hover, .nav-btn.active {
+            background: var(--slytherin-primary);
+            border-color: var(--slytherin-silver);
+            color: var(--text-inverse);
+            box-shadow: var(--shadow-emerald);
+            transform: translateY(-2px);
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-strong);
+            border-color: var(--border-card);
+        }
+
+        .card.serpent-shape:hover {
+            transform: translateY(-4px) rotate(1deg);
+        }
+
+        .card.shield-shape:hover {
+            transform: translateY(-4px) scale(1.02);
+        }
+
+        .card.fang-shape:hover {
+            transform: translateY(-4px) rotate(-1deg);
+        }
+
+        .card h2, .card h3 {
+            font-family: 'Bebas Neue', cursive;
+            color: var(--slytherin-silver);
+            margin-bottom: 16px;
+            font-size: 28px;
+            letter-spacing: 1px;
+        }
+
+        /* 统计卡片 */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 32px;
+        }
+
+        .stat-card {
+            background: var(--bg-secondary);
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid var(--border-primary);
+            transition: all var(--transition-fast);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-emerald);
+        }
+
+        .stat-number {
+            font-size: 36px;
+            font-weight: 700;
+            color: var(--slytherin-silver);
+            margin-bottom: 8px;
+            font-family: 'Bebas Neue', cursive;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* 表格样式 */
+        .table-container {
+            background: var(--bg-card);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--border-secondary);
+            margin-bottom: 24px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-secondary);
+        }
+
+        th {
+            background: var(--slytherin-primary);
+            color: var(--text-inverse);
+            font-family: 'Bebas Neue', cursive;
+            font-weight: 600;
+            font-size: 18px;
+            letter-spacing: 1px;
+        }
+
+        tr:hover {
+            background: rgba(60, 179, 113, 0.1);
+        }
+
+        /* 斯莱特林按钮样式 */
+        .btn {
+            padding: 12px 24px;
+            background: var(--slytherin-primary);
+            color: var(--text-inverse);
+            border: none;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            font-size: 14px;
+            margin: 6px;
+            position: relative;
+            overflow: hidden;
+            clip-path: polygon(0 0, 100% 0, 95% 50%, 100% 100%, 0 100%, 5% 50%);
+            font-family: 'Bebas Neue', cursive;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: rgba(192, 192, 192, 0.3);
+            border-radius: 50%;
+            transition: all var(--transition-fast);
+            transform: translate(-50%, -50%);
+        }
+
+        .btn:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .btn:hover {
+            background: var(--slytherin-silver);
+            color: var(--text-inverse);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-emerald);
+        }
+
+        .btn-secondary {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-secondary);
+            color: var(--text-primary);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border-secondary);
+        }
+
+        .btn-warning {
+            background: #3CB371;
+        }
+
+        .btn-warning:hover {
+            background: #2E8B57;
+        }
+
+        /* 搜索框样式 */
+        .search-box {
+            margin-bottom: 24px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 16px;
+            background: var(--bg-card);
+            border: 2px solid var(--border-secondary);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 16px;
+            transition: all var(--transition-fast);
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--slytherin-silver);
+            box-shadow: var(--shadow-emerald);
+        }
+
+        /* 展开详情样式 */
+        .expandable-row {
+            cursor: pointer;
+            transition: background var(--transition-fast);
+        }
+
+        .expandable-row:hover {
+            background: rgba(60, 179, 113, 0.1);
+        }
+
+        .expandable-content {
+            display: none;
+            background: var(--bg-secondary);
+            padding: 16px;
+            border-top: 1px solid var(--border-primary);
+        }
+
+        .expandable-content.show {
+            display: block;
+            animation: slideDown var(--transition-medium) ease-out;
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 批量操作样式 */
+        .bulk-actions {
+            display: none;
+            padding: 16px;
+            background: var(--slytherin-primary);
+            border-radius: 8px;
+            margin-bottom: 16px;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .bulk-actions.show {
+            display: flex;
+        }
+
+        .checkbox {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--slytherin-silver);
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 36px;
+            }
+
+            .main-nav {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .nav-btn {
+                width: 100%;
+                max-width: 300px;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            table {
+                font-size: 14px;
+            }
+
+            th, td {
+                padding: 12px 8px;
+            }
+        }
+
+        /* 加载动画 */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+
+        .spinner {
+            border: 4px solid var(--border-secondary);
+            border-top: 4px solid var(--slytherin-silver);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* 蛇形装饰元素 */
+        .serpent-decoration {
+            position: absolute;
+            opacity: 0.1;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .serpent-scale {
+            width: 6px;
+            height: 6px;
+            background: var(--slytherin-silver);
+            border-radius: 50%;
+            animation: serpentShimmer 3s ease-in-out infinite;
+        }
+
+        @keyframes serpentShimmer {
+            0%, 100% { opacity: 0.1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.3); }
+        }
+
+        /* 主题切换按钮 */
+        .theme-switcher {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+
+        .theme-btn {
+            padding: 8px 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            border-radius: 20px;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            font-size: 12px;
+        }
+
+        .theme-btn:hover {
+            background: var(--slytherin-primary);
+            color: var(--text-inverse);
+        }
+
+        /* 蛇形流动效果 */
+        .serpent-trail {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--slytherin-silver);
+            border-radius: 50%;
+            opacity: 0.3;
+            animation: serpentMove 8s linear infinite;
+        }
+
+        @keyframes serpentMove {
+            0% { transform: translateY(0) translateX(0); }
+            25% { transform: translateY(-50px) translateX(20px); }
+            50% { transform: translateY(-100px) translateX(-10px); }
+            75% { transform: translateY(-150px) translateX(30px); }
+            100% { transform: translateY(-200px) translateX(0); }
+        }
+
+        /* 蛇院徽章效果 */
+        .serpent-emblem {
+            position: relative;
+            display: inline-block;
+            margin: 0 10px;
+        }
+
+        .serpent-emblem::after {
+            content: '🐍';
+            position: absolute;
+            top: -20px;
+            right: -10px;
+            font-size: 20px;
+            animation: serpentSway 3s ease-in-out infinite;
+        }
+
+        @keyframes serpentSway {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(10deg); }
+        }
+    </style>
+</head>
+<body>
+    <!-- 主题切换按钮 -->
+    <div class="theme-switcher">
+        <button class="theme-btn" onclick="location.href='hp_theme_1.html'">🦁 格兰芬多</button>
+        <button class="theme-btn" onclick="location.href='hp_theme_2.html'">🦅 拉文克劳</button>
+    </div>
+
+    <div class="container">
+        <!-- 头部 -->
+        <div class="header">
+            <h1>🐍 斯莱特林魔法学习系统</h1>
+            <p>Slytherin Academy - 雄心与力量的殿堂</p>
+            <div class="serpent-emblem">
+                <span class="serpent-scale serpent-decoration" style="top: 20px; left: 10%;"></span>
+            </div>
+            <div class="serpent-scale serpent-decoration" style="top: 60px; right: 15%; animation-delay: 0.5s;"></div>
+            <div class="serpent-scale serpent-decoration" style="bottom: 30px; left: 20%; animation-delay: 1s;"></div>
+        </div>
+
+        <!-- 导航栏 -->
+        <nav class="main-nav">
+            <button class="nav-btn active" onclick="showView('overview')">📊 雄心总览</button>
+            <button class="nav-btn" onclick="showView('browse')">📚 魔法典籍</button>
+            <button class="nav-btn" onclick="showView('practice')">📝 学习记录</button>
+            <button class="nav-btn" onclick="showView('settings')">⚙️ 系统设置</button>
+        </nav>
+
+        <!-- 雄心总览页面 -->
+        <div id="overview-view" class="view active">
+            <div class="card parchment-scroll">
+                <h2>📊 雄心学习总览</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number">48</div>
+                        <div class="stat-label">掌握咒语数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">85%</div>
+                        <div class="stat-label">力量准确率</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">178</div>
+                        <div class="stat-label">学习时长(分钟)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">8</div>
+                        <div class="stat-label">连续学习天数</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card parchment-scroll">
+                <h3>🏆 雄心成就</h3>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>日期</th>
+                                <th>成就</th>
+                                <th>分数</th>
+                                <th>时长</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="expandable-row" onclick="toggleExpand(this)">
+                                <td>2024-09-18</td>
+                                <td>🐍 斯莱特林雄心测试</td>
+                                <td>93%</td>
+                                <td>28分钟</td>
+                                <td><button class="btn">查看详情</button></td>
+                            </tr>
+                            <tr class="expandable-content">
+                                <td colspan="5">
+                                    <h4>详细信息：</h4>
+                                    <p>完成斯莱特林雄心魔法测试，展现了强大的力量和决心！</p>
+                                    <p><strong>答对题目：</strong>21/22<br>
+                                    <strong>用时：</strong>28分42秒<br>
+                                    <strong>力量等级：</strong>卓越</p>
+                                </td>
+                            </tr>
+                            <tr class="expandable-row" onclick="toggleExpand(this)">
+                                <td>2024-09-17</td>
+                                <td>🐍 黑魔法防御</td>
+                                <td>87%</td>
+                                <td>20分钟</td>
+                                <td><button class="btn">查看详情</button></td>
+                            </tr>
+                            <tr class="expandable-content">
+                                <td colspan="5">
+                                    <h4>详细信息：</h4>
+                                    <p>黑魔法防御术练习，掌握了多种防御咒语。</p>
+                                    <p><strong>答对题目：</strong>16/18<br>
+                                    <strong>用时：</strong>20分15秒<br>
+                                    <strong>力量等级：</strong>优秀</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 魔法典籍页面 -->
+        <div id="browse-view" class="view" style="display: none;">
+            <div class="card parchment-scroll">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2>📚 魔法典籍</h2>
+                    <div style="padding: 15px; background: transparent; border: none;">
+                        <button class="btn">全部</button>
+                        <button class="btn">黑魔法</button>
+                        <button class="btn">魔药学</button>
+                    </div>
+                </div>
+
+                <div class="search-box" style="padding: 15px; margin-bottom: 25px;">
+                    <input type="text" class="search-input" placeholder="搜索魔法典籍...">
+                </div>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" class="checkbox" onchange="toggleSelectAll(this)"></th>
+                                <th>书名</th>
+                                <th>类别</th>
+                                <th>难度</th>
+                                <th>进度</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><input type="checkbox" class="checkbox"></td>
+                                <td>🐍 斯莱特林的雄心</td>
+                                <td>黑魔法</td>
+                                <td>⭐⭐⭐⭐</td>
+                                <td>88%</td>
+                                <td>
+                                    <button class="btn">开始学习</button>
+                                    <button class="btn">详情</button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><input type="checkbox" class="checkbox"></td>
+                                <td>🧪 高级魔药学</td>
+                                <td>魔药学</td>
+                                <td>⭐⭐⭐</td>
+                                <td>92%</td>
+                                <td>
+                                    <button class="btn">开始学习</button>
+                                    <button class="btn">详情</button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><input type="checkbox" class="checkbox"></td>
+                                <td>🛡️ 黑魔法防御术</td>
+                                <td>防御术</td>
+                                <td>⭐⭐</td>
+                                <td>100%</td>
+                                <td>
+                                    <button class="btn">复习</button>
+                                    <button class="btn">详情</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="bulk-actions" style="padding: 20px; background: var(--slytherin-primary);">
+                    <span>已选择 3 项</span>
+                    <button class="btn">🗑️ 批量删除</button>
+                    <button class="btn">📥 批量导出</button>
+                    <button class="btn" onclick="hideBulkActions()">取消</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 学习记录页面 -->
+        <div id="practice-view" class="view" style="display: none;">
+            <div class="card parchment-scroll">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2>📝 学习记录</h2>
+                    <div style="padding: 10px; background: transparent; border: none;">
+                        <button class="btn">📄 导出Markdown</button>
+                        <button class="btn" onclick="toggleBulkDelete()">📝 批量删除</button>
+                        <button class="btn">🗑️ 清除记录</button>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" class="checkbox"></th>
+                                <th>日期</th>
+                                <th>学习内容</th>
+                                <th>分数</th>
+                                <th>时长</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="expandable-row" onclick="toggleExpand(this)">
+                                <td><input type="checkbox" class="checkbox"></td>
+                                <td>2024-09-18 14:30</td>
+                                <td>🐍 斯莱特林雄心测试</td>
+                                <td>93%</td>
+                                <td>28分钟</td>
+                                <td>
+                                    <button class="btn">查看详情</button>
+                                    <button class="btn">删除</button>
+                                </td>
+                            </tr>
+                            <tr class="expandable-content">
+                                <td colspan="6">
+                                    <h4>学习详情：</h4>
+                                    <p><strong>题目：</strong>斯莱特林雄心魔法测试<br>
+                                    <strong>正确率：</strong>93% (21/22)<br>
+                                    <strong>用时：</strong>28分42秒<br>
+                                    <strong>表现评价：</strong>展现了斯莱特林的雄心和实力！</p>
+                                </td>
+                            </tr>
+                            <tr class="expandable-row" onclick="toggleExpand(this)">
+                                <td><input type="checkbox" class="checkbox"></td>
+                                <td>2024-09-17 16:45</td>
+                                <td>🧪 高级魔药学</td>
+                                <td>87%</td>
+                                <td>20分钟</td>
+                                <td>
+                                    <button class="btn">查看详情</button>
+                                    <button class="btn">删除</button>
+                                </td>
+                            </tr>
+                            <tr class="expandable-content">
+                                <td colspan="6">
+                                    <h4>学习详情：</h4>
+                                    <p><strong>题目：</strong>高级魔药学学习<br>
+                                    <strong>正确率：</strong>87% (16/18)<br>
+                                    <strong>用时：</strong>20分15秒<br>
+                                    <strong>表现评价：</strong>魔药学知识扎实，继续努力！</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 系统设置页面 -->
+        <div id="settings-view" class="view" style="display: none;">
+            <div class="card parchment-scroll">
+                <h2>⚙️ 系统设置</h2>
+
+                <div style="margin-bottom: 32px; padding: 20px;">
+                    <h3>🔧 系统管理</h3>
+                    <p style="margin: 15px 0; opacity: 0.9;">魔法系统工具和设置选项</p>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="btn">🗑️ 清除缓存</button>
+                        <button class="btn">📂 加载魔法典籍</button>
+                        <button class="btn">⚙️ 典籍配置切换</button>
+                        <button class="btn">🔄 强制刷新</button>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 32px; padding: 20px;">
+                    <h3>💾 数据管理</h3>
+                    <p style="margin: 15px 0; opacity: 0.9;">数据备份、导入导出和完整性检查</p>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="btn">💾 创建备份</button>
+                        <button class="btn">📋 备份列表</button>
+                        <button class="btn">📤 导出数据</button>
+                        <button class="btn">📥 导入数据</button>
+                    </div>
+                </div>
+
+                <div style="padding: 20px;">
+                    <h3>📊 系统信息</h3>
+                    <div style="margin-top: 15px; line-height: 1.8; font-weight: bold;">
+                        <div style="color: var(--slytherin-silver);">魔法典籍状态: 已加载完整索引</div>
+                        <div>咒语总数: <span>147</span></div>
+                        <div>HTML咒语: <span>147</span></div>
+                        <div>PDF咒语: <span>147</span></div>
+                        <div>最后更新: <span>2024/9/18 14:47:09</span></div>
+                    </div>
+
+                    <div style="margin-top: 25px;">
+                        <button class="btn" style="padding: 12px 24px; font-size: 14px;">🎨 主题切换</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 视图切换功能
+        function showView(viewName) {
+            // 隐藏所有视图
+            const views = document.querySelectorAll('.view');
+            views.forEach(view => view.style.display = 'none');
+
+            // 显示选中的视图
+            document.getElementById(viewName + '-view').style.display = 'block';
+
+            // 更新导航按钮状态
+            const navBtns = document.querySelectorAll('.nav-btn');
+            navBtns.forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+
+        // 展开/收起功能
+        function toggleExpand(row) {
+            const content = row.nextElementSibling;
+            if (content && content.classList.contains('expandable-content')) {
+                content.classList.toggle('show');
+            }
+        }
+
+        // 批量选择功能
+        function toggleSelectAll(checkbox) {
+            const checkboxes = document.querySelectorAll('.checkbox');
+            checkboxes.forEach(cb => {
+                if (cb !== checkbox) {
+                    cb.checked = checkbox.checked;
+                }
+            });
+            updateBulkActions();
+        }
+
+        // 更新批量操作按钮显示
+        function updateBulkActions() {
+            const checkedBoxes = document.querySelectorAll('.checkbox:checked');
+            const bulkActions = document.querySelector('.bulk-actions');
+            if (checkedBoxes.length > 0 && bulkActions) {
+                bulkActions.classList.add('show');
+                bulkActions.querySelector('span').textContent = `已选择 ${checkedBoxes.length} 项`;
+            } else if (bulkActions) {
+                bulkActions.classList.remove('show');
+            }
+        }
+
+        // 隐藏批量操作
+        function hideBulkActions() {
+            const bulkActions = document.querySelector('.bulk-actions');
+            if (bulkActions) {
+                bulkActions.classList.remove('show');
+            }
+            // 清除所有选择
+            document.querySelectorAll('.checkbox').forEach(cb => cb.checked = false);
+        }
+
+        // 批量删除功能
+        function toggleBulkDelete() {
+            alert('批量删除功能：选择要删除的记录后点击批量删除按钮');
+        }
+
+        // 导出Markdown功能
+        function exportMarkdown() {
+            const data = [
+                ['# 斯莱特林学习记录'],
+                ['## 学习统计'],
+                ['- 总学习时间: 178分钟'],
+                ['- 平均准确率: 85%'],
+                ['- 连续学习天数: 8天'],
+                ['## 详细记录'],
+                ['| 日期 | 内容 | 分数 | 时长 |'],
+                ['|------|------|------|------|'],
+                ['| 2024-09-18 | 斯莱特林雄心测试 | 93% | 28分钟 |'],
+                ['| 2024-09-17 | 高级魔药学 | 87% | 20分钟 |']
+            ];
+
+            const markdown = data.map(row => row.join('\n')).join('\n');
+            const blob = new Blob([markdown], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = '斯莱特林学习记录.md';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // 监听复选框变化
+        document.addEventListener('change', function(e) {
+            if (e.target.classList.contains('checkbox')) {
+                updateBulkActions();
+            }
+        });
+
+        // 搜索功能
+        document.querySelector('.search-input')?.addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            const rows = document.querySelectorAll('tbody tr:not(.expandable-content)');
+
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(searchTerm) ? '' : 'none';
+            });
+        });
+
+        // 添加蛇形粒子效果
+        function createSerpentParticle() {
+            const particle = document.createElement('div');
+            particle.className = 'serpent-scale serpent-decoration';
+            particle.style.left = Math.random() * 100 + '%';
+            particle.style.top = Math.random() * 100 + '%';
+            particle.style.animationDelay = Math.random() * 3 + 's';
+            document.body.appendChild(particle);
+
+            setTimeout(() => {
+                particle.remove();
+            }, 3000);
+        }
+
+        // 添加蛇形轨迹效果
+        function createSerpentTrail() {
+            const trail = document.createElement('div');
+            trail.className = 'serpent-trail';
+            trail.style.left = Math.random() * 100 + '%';
+            trail.style.top = '100%';
+            trail.style.animationDuration = (Math.random() * 3 + 5) + 's';
+            document.body.appendChild(trail);
+
+            setTimeout(() => {
+                trail.remove();
+            }, 8000);
+        }
+
+        // 定期创建蛇形效果
+        setInterval(createSerpentParticle, 5000);
+        setInterval(createSerpentTrail, 7000);
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 创建初始蛇形粒子
+            for (let i = 0; i < 5; i++) {
+                setTimeout(createSerpentParticle, i * 800);
+            }
+            for (let i = 0; i < 3; i++) {
+                setTimeout(createSerpentTrail, i * 2000);
+            }
+        });
+    </script>
+</body>
+</html>
