@@ -2040,32 +2040,44 @@ body.bloom-dark-mode {
 /* Base */
 :root[data-theme="blue"] body,
 body.theme-blue {
-    /* Sea scene: waves + islands + seagulls + soft tints, all as background layers */
+    /* Sea scene: waves + islands + seagulls + foam transition + soft tints + sea/beach base */
     background-image:
       /* wave front */ url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='160' viewBox='0 0 1200 160' preserveAspectRatio='none'><path fill='%2307B0F2' fill-opacity='0.30' d='M0,72 C 100,104 200,40 300,72 C 400,104 500,40 600,72 C 700,104 800,40 900,72 C 1000,104 1100,40 1200,72 L1200,160 L0,160 Z'/></svg>"),
       /* wave back */  url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1000' height='200' viewBox='0 0 1000 200' preserveAspectRatio='none'><path fill='%2305C7F2' fill-opacity='0.40' d='M0,112 C 120,144 240,80 360,112 C 480,144 600,80 720,112 C 840,144 960,80 1080,112 L1080,200 L0,200 Z'/></svg>"),
       /* islands + palms */ url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='800' height='220' viewBox='0 0 800 220'><defs><g id='island'><ellipse cx='70' cy='190' rx='65' ry='16' fill='%2305B0F2' fill-opacity='0.25'/><ellipse cx='70' cy='186' rx='55' ry='10' fill='%2305DBF2' fill-opacity='0.35'/><rect x='66' y='130' width='6' height='50' fill='%230788D9' /><path d='M69 130 l-18 12 l20 -6 l18 12 l-14 -18 l-6 0 z' fill='%2307B0F2' fill-opacity='0.9'/></g></defs><use href='%23island' x='0' y='0'/><use href='%23island' x='220' y='-8'/><use href='%23island' x='440' y='6'/><use href='%23island' x='660' y='-4'/></svg>"),
       /* seagulls */ url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='700' height='120' viewBox='0 0 700 120'><path d='M20 40 q 20 -20 40 0' stroke='%2305C7F2' stroke-width='2' fill='none' stroke-opacity='0.6'/><path d='M80 50 q 18 -18 36 0' stroke='%2307B0F2' stroke-width='2' fill='none' stroke-opacity='0.5'/><path d='M160 30 q 22 -22 44 0' stroke='%2305DBF2' stroke-width='2' fill='none' stroke-opacity='0.5'/><path d='M240 45 q 20 -20 40 0' stroke='%2307B0F2' stroke-width='2' fill='none' stroke-opacity='0.5'/><path d='M320 35 q 20 -20 40 0' stroke='%2305C7F2' stroke-width='2' fill='none' stroke-opacity='0.5'/><path d='M400 42 q 18 -18 36 0' stroke='%2307B0F2' stroke-width='2' fill='none' stroke-opacity='0.5'/><path d='M480 28 q 22 -22 44 0' stroke='%2305DBF2' stroke-width='2' fill='none' stroke-opacity='0.5'/><path d='M560 46 q 20 -20 40 0' stroke='%2307B0F2' stroke-width='2' fill='none' stroke-opacity='0.5'/></svg>"),
+      /* foam transition band */ linear-gradient(180deg, transparent 66%, rgba(255,255,255,0.95) 69%, rgba(255,255,255,0.85) 72%, transparent 76%),
       /* soft tints */ radial-gradient(1200px 700px at 0% 100%, rgba(7,176,242,0.10), transparent 60%),
       radial-gradient(1000px 600px at 100% 0%, rgba(5,199,242,0.08), transparent 60%),
-      /* sea base */ linear-gradient(180deg, #C4E1F2 0%, #07B0F2 100%);
-    background-repeat: repeat-x, repeat-x, repeat-x, repeat-x, no-repeat, no-repeat, no-repeat;
-    background-attachment: fixed, fixed, fixed, fixed, fixed, fixed, fixed;
-    background-size: 1200px 160px, 1000px 200px, 800px 220px, 700px 120px, 140% 140%, 140% 140%, 100% 100%;
-    background-position: 0 100%, 0 calc(100% - 60px), 0 calc(100% - 220px), 0 8%, 0% 0%, 100% 100%, center;
+      /* sea + beach base */ linear-gradient(180deg,
+        #FFFFFF 0%,
+        #F5FAFF 12%,
+        #CFEAFB 22%,
+        #07B0F2 42%,
+        #4FC3F7 58%,
+        #E9F7FF 64%,
+        #FFFDF8 70%,
+        #FFF5D6 82%,
+        #FFF0C2 92%,
+        #FFF7E6 100%
+      );
+    background-repeat: repeat-x, repeat-x, repeat-x, repeat-x, no-repeat, no-repeat, no-repeat, no-repeat;
+    background-attachment: fixed, fixed, fixed, fixed, fixed, fixed, fixed, fixed;
+    background-size: 1200px 160px, 1000px 200px, 800px 220px, 700px 120px, 100% 100%, 140% 140%, 140% 140%, 100% 100%;
+    background-position: 0 100%, 0 calc(100% - 60px), 0 calc(100% - 220px), 0 8%, center, 0% 0%, 100% 100%, center;
     animation: blueSeaSlide 28s linear infinite, blueWaveFlow 40s ease-in-out infinite alternate;
     color: var(--color-gray-900);
 }
 
 @keyframes blueWaveFlow {
-    0% { background-position: 0 100%, 0 calc(100% - 60px), 0 calc(100% - 220px), 0 8%, 0% 0%, 100% 100%, center; }
-    50% { background-position: 0 100%, 0 calc(100% - 60px), 0 calc(100% - 220px), 0 8%, 45% 20%, 55% 80%, center; }
-    100% { background-position: 0 100%, 0 calc(100% - 60px), 0 calc(100% - 220px), 0 8%, 100% 0%, 0% 100%, center; }
+    0% { background-position: 0 100%, 0 calc(100% - 60px), 0 calc(100% - 220px), 0 8%, center, 0% 0%, 100% 100%, center; }
+    50% { background-position: 0 100%, 0 calc(100% - 60px), 0 calc(100% - 220px), 0 8%, center, 45% 20%, 55% 80%, center; }
+    100% { background-position: 0 100%, 0 calc(100% - 60px), 0 calc(100% - 220px), 0 8%, center, 100% 0%, 0% 100%, center; }
 }
 
 @keyframes blueSeaSlide {
-    0% { background-position: 0 100%, 0 calc(100% - 60px), 0 calc(100% - 220px), 0 8%, 0% 0%, 100% 100%, center; }
-    100% { background-position: 1200px 100%, 1000px calc(100% - 60px), 800px calc(100% - 220px), 700px 8%, 0% 0%, 100% 100%, center; }
+    0% { background-position: 0 100%, 0 calc(100% - 60px), 0 calc(100% - 220px), 0 8%, center, 0% 0%, 100% 100%, center; }
+    100% { background-position: 1200px 100%, 1000px calc(100% - 60px), 800px calc(100% - 220px), 700px 8%, center, 0% 0%, 100% 100%, center; }
 }
 
 /* Header */
@@ -2249,12 +2261,13 @@ body.theme-blue.blue-dark-mode,
       /* wave back */  url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1000' height='200' viewBox='0 0 1000 200' preserveAspectRatio='none'><path fill='%2305C7F2' fill-opacity='0.30' d='M0,112 C 120,144 240,80 360,112 C 480,144 600,80 720,112 C 840,144 960,80 1080,112 L1080,200 L0,200 Z'/></svg>"),
       /* islands + palms */ url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='800' height='220' viewBox='0 0 800 220'><defs><g id='island'><ellipse cx='70' cy='190' rx='65' ry='16' fill='%2305B0F2' fill-opacity='0.18'/><ellipse cx='70' cy='186' rx='55' ry='10' fill='%2305DBF2' fill-opacity='0.25'/><rect x='66' y='130' width='6' height='50' fill='%230788D9' /><path d='M69 130 l-18 12 l20 -6 l18 12 l-14 -18 l-6 0 z' fill='%2307B0F2' fill-opacity='0.8'/></g></defs><use href='%23island' x='0' y='0'/><use href='%23island' x='220' y='-8'/><use href='%23island' x='440' y='6'/><use href='%23island' x='660' y='-4'/></svg>"),
       /* seagulls */ url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='700' height='120' viewBox='0 0 700 120'><path d='M20 40 q 20 -20 40 0' stroke='%2305C7F2' stroke-width='2' fill='none' stroke-opacity='0.35'/><path d='M80 50 q 18 -18 36 0' stroke='%2307B0F2' stroke-width='2' fill='none' stroke-opacity='0.3'/><path d='M160 30 q 22 -22 44 0' stroke='%2305DBF2' stroke-width='2' fill='none' stroke-opacity='0.3'/><path d='M240 45 q 20 -20 40 0' stroke='%2307B0F2' stroke-width='2' fill='none' stroke-opacity='0.3'/><path d='M320 35 q 20 -20 40 0' stroke='%2305C7F2' stroke-width='2' fill='none' stroke-opacity='0.3'/><path d='M400 42 q 18 -18 36 0' stroke='%2307B0F2' stroke-width='2' fill='none' stroke-opacity='0.3'/><path d='M480 28 q 22 -22 44 0' stroke='%2305DBF2' stroke-width='2' fill='none' stroke-opacity='0.3'/><path d='M560 46 q 20 -20 40 0' stroke='%2307B0F2' stroke-width='2' fill='none' stroke-opacity='0.3'/></svg>"),
+      /* foam transition band */ linear-gradient(180deg, transparent 66%, rgba(255,255,255,0.85) 69%, rgba(255,255,255,0.75) 72%, transparent 76%),
       /* dark tints */ radial-gradient(1200px 700px at 0% 100%, rgba(7,176,242,0.14), transparent 60%),
       radial-gradient(1000px 600px at 100% 0%, rgba(5,199,242,0.12), transparent 60%),
-      linear-gradient(180deg, #0b1f3f 0%, #081226 100%);
-    background-attachment: fixed, fixed, fixed, fixed, fixed, fixed, fixed;
-    background-size: 1200px 160px, 1000px 200px, 800px 220px, 700px 120px, 160% 160%, 160% 160%, 100% 100%;
-    background-position: 0 100%, 0 calc(100% - 60px), 0 calc(100% - 220px), 0 8%, 0% 0%, 100% 100%, center;
+      /* dark sea/beach base */ linear-gradient(180deg, #0d203f 0%, #0e3c66 38%, #0d2a4e 54%, #0e3359 62%, #091322 70%);
+    background-attachment: fixed, fixed, fixed, fixed, fixed, fixed, fixed, fixed;
+    background-size: 1200px 160px, 1000px 200px, 800px 220px, 700px 120px, 100% 100%, 160% 160%, 160% 160%, 100% 100%;
+    background-position: 0 100%, 0 calc(100% - 60px), 0 calc(100% - 220px), 0 8%, center, 0% 0%, 100% 100%, center;
     animation: blueSeaSlide 30s linear infinite, blueWaveFlow 30s ease-in-out infinite alternate;
     color: #e8f2ff;
 }
