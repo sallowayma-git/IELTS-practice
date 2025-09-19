@@ -8,8 +8,8 @@
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <!-- 使用同步加载确保数据在应用初始化前加载完成 -->
-    <script src="../../assets/scripts/complete-exam-data.js" onload="console.log('[Debug] complete-exam-data.js 加载完成')"></script>
-    <script src="../../assets/scripts/listening-exam-data.js" onload="console.log('[Debug] listening-exam-data.js 加载完成')"></script>
+    <script src="../../assets/scripts/complete-exam-data.js"></script>
+    <script src="../../assets/scripts/listening-exam-data.js"></script>
     <script src="../../js/components/PerformanceOptimizer.js"></script>
     <script src="../../js/boot-fallbacks.js"></script>
     <!-- 仅影响后续动态生成链接的相对解析，不影响上文已加载资源 -->
@@ -2614,7 +2614,7 @@
                             <div class="record-score">
                                 <span class="score-badge ${scoreClass}">${record.score}%</span>
                             </div>
-                            <button class="btn btn-secondary" onclick="console.log('Details button clicked, record ID:', '${record.id}'); viewRecordDetails('${record.id}')">详情</button>
+                            <button class="btn btn-secondary" onclick="viewRecordDetails('${record.id}')">详情</button>
                             <button class="btn" onclick="deleteRecord('${record.id}')">删除</button>
                         </div>
                     `;
@@ -2867,11 +2867,9 @@
             const header = document.querySelector('.header');
             if (!header) return;
 
-            console.log('[Emoji Cloud] 初始化滑动效果...');
 
             header.addEventListener('mouseenter', () => {
                 emojiCloud.style.opacity = '0.9';
-                console.log('[Emoji Cloud] 鼠标进入，开始滑动动画');
 
                 // 触发所有emoji的滑动动画
                 const emojiParticles = emojiCloud.querySelectorAll('.emoji-particle');
@@ -2897,7 +2895,6 @@
 
             header.addEventListener('mouseleave', () => {
                 emojiCloud.style.opacity = '0';
-                console.log('[Emoji Cloud] 鼠标离开，隐藏emoji云');
 
                 // 停止所有动画并重置位置
                 const emojiParticles = emojiCloud.querySelectorAll('.emoji-particle');
@@ -2907,7 +2904,6 @@
                 });
             });
 
-            console.log('[Emoji Cloud] 滑动效果已设置完成');
         }
 
         // 初始化页面效果
@@ -2970,20 +2966,15 @@
 
         // 数据加载验证函数
         function verifyDataLoading() {
-          console.log(`[Debug] 验证数据加载状态...`);
 
           const readingData = window.completeExamIndex;
           const listeningData = window.listeningExamIndex;
 
-          console.log(`[Debug] 阅读数据:`, Array.isArray(readingData) ? `${readingData.length} 项` : '未加载');
-          console.log(`[Debug] 听力数据:`, Array.isArray(listeningData) ? `${listeningData.length} 项` : '未加载');
 
           if (Array.isArray(readingData)) {
-            console.log(`[Debug] 阅读数据样本:`, readingData.slice(0, 1));
           }
 
           if (Array.isArray(listeningData)) {
-            console.log(`[Debug] 听力数据样本:`, listeningData.slice(0, 1));
           }
 
           return Array.isArray(readingData) && Array.isArray(listeningData);
@@ -2991,32 +2982,24 @@
 
         // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', () => {
-            console.log('[Debug] DOM内容加载完成，开始初始化应用...');
 
             // 首先验证数据加载状态
             const dataLoaded = verifyDataLoading();
             if (!dataLoaded) {
-              console.log('[Debug] 数据未加载完成，等待500ms后重试...');
               setTimeout(() => {
                 if (verifyDataLoading()) {
-                  console.log('[Debug] 数据延迟加载成功');
                 } else {
-                  console.log('[Debug] 数据仍然未加载，继续初始化');
                 }
               }, 500);
             } else {
-              console.log('[Debug] 数据加载验证成功');
             }
 
             app = new MyMelodyIELTSApp();
             window.app = app; // 确保全局可访问
 
-            console.log(`[Debug] app 对象已创建，examData 长度:`, app.examData.length);
-            console.log(`[Debug] window.app.examData 长度:`, window.app.examData.length);
 
             // 延迟加载题库数据，确保应用初始化完成
             setTimeout(() => {
-                console.log(`[Debug] 延迟加载题库数据...`);
                 if (typeof window.loadRealExamLibrary === 'function') {
                     window.loadRealExamLibrary(true);
                 }
@@ -3073,6 +3056,7 @@
             if (confirm('确定要删除这条练习记录吗？')) {
                 app.practiceRecords = app.practiceRecords.filter(record => record.id !== recordId);
                 app.saveData();
+                storage.set('practice_records', app.practiceRecords);
                 app.updatePractice();
                 app.showNotification('记录已删除');
             }
@@ -3082,6 +3066,9 @@
             if (confirm('确定要清空所有练习记录吗？此操作不可恢复！')) {
                 app.practiceRecords = [];
                 app.saveData();
+                storage.set('practice_records', []);
+                localStorage.removeItem('myMelodyPracticeRecords');
+                localStorage.removeItem('exam_system_practice_records');
                 app.updatePractice();
                 app.showNotification('所有练习记录已清空');
             }
@@ -3124,6 +3111,7 @@
                 app.practiceRecords = data.practiceRecords || [];
                 app.settings = { ...app.settings, ...data.settings };
                 app.saveData();
+                storage.set('practice_records', app.practiceRecords);
                 app.updateUI();
                 app.showNotification('数据恢复成功');
             } else {
@@ -3143,6 +3131,9 @@
                     reminders: false
                 };
                 app.saveData();
+                storage.set('practice_records', []);
+                localStorage.removeItem('myMelodyPracticeRecords');
+                localStorage.removeItem('exam_system_practice_records');
                 app.updateUI();
                 app.showNotification('所有数据已清空');
             }
@@ -3221,6 +3212,7 @@
                             if (data.settings) app.settings = { ...app.settings, ...data.settings };
 
                             app.saveData();
+                            storage.set('practice_records', app.practiceRecords);
                             app.updateUI();
                             if (importedCount > 0) {
                                 app.showNotification(`数据导入成功，导入 ${importedCount} 条练习记录`);
@@ -3304,6 +3296,7 @@
 
                             if (importedCount > 0) {
                                 app.saveData();
+                                storage.set('practice_records', app.practiceRecords);
                                 app.updateUI();
                                 app.showNotification(`成功导入 ${importedCount} 条练习记录`);
                             } else {
@@ -3398,7 +3391,6 @@
         }
 
         function viewRecordDetails(recordId) {
-            console.log('[Details] Button clicked for record ID:', recordId);
 
             try {
                 // 查找记录 - 增强ID匹配逻辑
@@ -3437,7 +3429,6 @@
                     );
                 }
 
-                console.log('[Details] Found record:', record);
 
                 if (record) {
                     showRecordDetailsModal(record);
@@ -3454,7 +3445,6 @@
 
         function showRecordDetailsModal(record) {
             try {
-                console.log('[Details] Showing modal for record:', record);
 
                 const modal = document.getElementById('record-details-modal');
                 const content = document.getElementById('record-details-content');
@@ -3546,7 +3536,6 @@
                 modal.style.opacity = '1';
                 modal.style.visibility = 'visible';
 
-                console.log('[Details] Modal should now be visible');
 
             } catch (error) {
                 console.error('[Details] Error in showRecordDetailsModal:', error);
@@ -3861,7 +3850,6 @@
                     // 监听练习完成消息
                     const messageHandler = (event) => {
                         if (event.data && (event.data.type === 'PRACTICE_COMPLETE' || event.data.type === 'practice_completed')) {
-                            console.log('[System] 收到练习完成消息');
                             syncRealPracticeRecords();
                             window.removeEventListener('message', messageHandler);
                         }
@@ -3885,8 +3873,7 @@
                         // 监听练习完成消息
                         const messageHandler = (event) => {
                             if (event.data && (event.data.type === 'PRACTICE_COMPLETE' || event.data.type === 'practice_completed')) {
-                                console.log('[System] 收到练习完成消息');
-                                syncRealPracticeRecords();
+                                    syncRealPracticeRecords();
                                 window.removeEventListener('message', messageHandler);
                             }
                         };
@@ -3910,11 +3897,9 @@
 
         // 同步真实练习记录
         function syncRealPracticeRecords() {
-            console.log('[System] 正在从存储中同步练习记录...');
             const records = storage.get('practice_records', []);
 
             app.practiceRecords = records;
-            console.log(`[System] ${records.length} 条练习记录已加载到内存。`);
 
             updateCategoryStats();
             updateOverview();
@@ -3945,7 +3930,6 @@
                 const data = event.data || {};
                 const type = data.type;
                 if (type === 'PRACTICE_COMPLETE' || type === 'practice_completed') {
-                    console.log('[System] 收到练习完成消息，正在同步记录...');
                     app.showNotification('练习已完成，正在更新记录...');
                     setTimeout(syncRealPracticeRecords, 300);
                 }
@@ -3988,22 +3972,7 @@
     <script>
     // Overrides per MyMelody_IELTS_Fix_Guide
     (function(){
-      function buildResourcePath(exam, kind = 'html') {
-        if (!exam || !exam.path) {
-          console.warn('[Resource] Invalid exam data:', exam);
-          return '#';
-        }
-        let basePath = exam.path.replace(/\\/g, '/');
-        if (!basePath.endsWith('/')) basePath += '/';
-        let fileName;
-        if (kind === 'html') {
-          fileName = exam.filename || exam.fileName || 'index.html';
-        } else {
-          fileName = exam.pdfFilename || exam.fileName || 'content.pdf';
-        }
-        return basePath + fileName;
-      }
-      window.buildResourcePath = buildResourcePath;
+            window.buildResourcePath = buildResourcePath;
 
       window.openExamPDF = function(examId) {
         const exam = (window.app && window.app.examData || []).find(e => String(e.id) === String(examId));
@@ -4019,21 +3988,7 @@
           listening: ['P3', 'P4']
         };
 
-        // 先输出所有题目的结构用于调试
-        console.log(`[Debug] 所有题目数据结构:`);
-        (window.app && window.app.examData || []).forEach((exam, index) => {
-          if (index < 5) { // 只输出前5个
-            console.log(`[Debug] 题目${index + 1}:`, {
-              id: exam.id,
-              title: exam.title,
-              type: exam.type,
-              category: exam.category,
-              part: exam.part,
-              normalizedType: (exam.type || '').toLowerCase().trim(),
-              normalizedCategory: (exam.category || exam.part || '').toUpperCase().trim()
-            });
-          }
-        });
+        // 调试代码已清理
 
         Object.entries(categoryParts).forEach(([type, parts]) => {
           parts.forEach(part => {
@@ -4041,42 +3996,11 @@
             const exams = (window.app && window.app.examData || []).filter(exam => {
               const typ = (exam.type || '').toLowerCase().trim();
               const cat = (exam.category || exam.part || '').toUpperCase().trim();
-              const match = typ === type && cat === part;
-              if (match) { // 输出所有匹配的题目用于调试
-                console.log(`[Debug] 匹配成功: ${exam.title} (type: ${typ}, category: ${cat})`);
-              }
-              return match;
+              return typ === type && cat === part;
             });
             const totalCount = exams.length;
-            console.log(`[Debug] ${type}-${part}: 找到 ${totalCount} 个题目`);
 
-            // 如果没有找到题目，输出该分类下的所有题目用于调试
-            if (totalCount === 0) {
-              console.log(`[Debug] 检查 ${type} 类型的所有题目:`);
-              (window.app && window.app.examData || [])
-                .filter(exam => (exam.type || '').toLowerCase().trim() === type)
-                .slice(0, 5)
-                .forEach((exam, index) => {
-                  console.log(`[Debug] ${type}题目${index + 1}:`, {
-                    id: exam.id,
-                    title: exam.title,
-                    category: exam.category,
-                    part: exam.part,
-                    rawCategory: exam.category,
-                    rawPart: exam.part,
-                    normalizedCategory: (exam.category || exam.part || '').toUpperCase().trim(),
-                    expectedPart: part
-                  });
-                });
-
-              // 额外调试：检查所有题目的原始分类值
-              console.log(`[Debug] 所有 ${type} 题目的分类值:`);
-              (window.app && window.app.examData || [])
-                .filter(exam => (exam.type || '').toLowerCase().trim() === type)
-                .forEach(exam => {
-                  console.log(`[Debug] - ${exam.title}: category="${exam.category}", part="${exam.part}"`);
-                });
-            }
+            // 调试代码已清理
             const completedRecords = (window.app && window.app.practiceRecords || []).filter(record =>
               exams.some(exam => exam.id === record.examId || exam.title === record.title)
             );
@@ -4230,36 +4154,18 @@
       // 覆盖加载题库函数：当缓存为空或forceFresh时，尝试从全局索引加载
       // 测试数据匹配函数
       window.testDataMatching = function() {
-        console.log(`[Test] 开始测试数据匹配逻辑...`);
 
         // 检查全局数据
-        console.log(`[Test] 全局阅读数据:`, window.completeExamIndex?.length || 0, '项');
-        console.log(`[Test] 全局听力数据:`, window.listeningExamIndex?.length || 0, '项');
-        console.log(`[Test] 应用数据:`, window.app?.examData?.length || 0, '项');
 
         // 检查数据加载状态
         if (!window.app || !window.app.examData) {
-          console.log(`[Test] 应用数据未加载，正在加载...`);
           window.loadRealExamLibrary(true);
           setTimeout(() => testDataMatching(), 1000);
           return;
         }
 
         // 输出所有数据的结构
-        console.log(`[Test] 应用数据结构详情:`);
-        window.app.examData.forEach((exam, index) => {
-          if (index < 10) { // 只显示前10个
-            console.log(`[Test] ${index + 1}.`, {
-              id: exam.id,
-              title: exam.title?.substring(0, 30) + '...',
-              type: exam.type,
-              category: exam.category,
-              part: exam.part,
-              normalizedType: (exam.type || '').toLowerCase().trim(),
-              normalizedCategory: (exam.category || exam.part || '').toUpperCase().trim()
-            });
-          }
-        });
+        // 调试代码已清理
 
         // 测试匹配逻辑
         const testMatches = [
@@ -4277,36 +4183,15 @@
             return typ === type && cat === category;
           });
 
-          console.log(`[Test] ${type}-${category}: 匹配 ${matches.length} 个题目`);
-          if (matches.length > 0 && matches.length <= 5) {
+            if (matches.length > 0 && matches.length <= 5) {
             matches.forEach(match => {
-              console.log(`[Test]   - ${match.title}`);
             });
           }
         });
 
-        // 测试原始数据结构
-        console.log(`[Test] 原始阅读数据样本:`);
-        if (window.completeExamIndex) {
-          window.completeExamIndex.slice(0, 3).forEach((exam, index) => {
-            console.log(`[Test] 阅读${index + 1}:`, {
-              id: exam.id,
-              category: exam.category,
-              hasTypeField: 'type' in exam
-            });
-          });
-        }
+        // 调试代码已清理
 
-        console.log(`[Test] 原始听力数据样本:`);
-        if (window.listeningExamIndex) {
-          window.listeningExamIndex.slice(0, 3).forEach((exam, index) => {
-            console.log(`[Test] 听力${index + 1}:`, {
-              id: exam.id,
-              type: exam.type,
-              category: exam.category
-            });
-          });
-        }
+        // 调试代码已清理
       };
 
       window.loadRealExamLibrary = function(forceFresh){
@@ -4314,12 +4199,9 @@
         const activeConfigKey = getActiveLibraryConfigurationKey();
         const cachedData = storage.get(activeConfigKey);
 
-        console.log(`[Debug] 开始加载题库，forceFresh: ${forceFresh}`);
-        console.log(`[Debug] 缓存数据:`, Array.isArray(cachedData) ? `${cachedData.length} 项` : '无缓存');
 
         if (!forceFresh && Array.isArray(cachedData) && cachedData.length > 0) {
           app.examData = cachedData;
-          console.log(`[Debug] 使用缓存数据: ${cachedData.length} 项`);
           finishRealLibraryLoading(startTime);
           return;
         }
@@ -4329,81 +4211,45 @@
         }
 
         const tryBuildFromGlobals = (attempt = 1) => {
-          console.log(`[Debug] 尝试从全局索引加载数据，第 ${attempt} 次尝试`);
 
           // 检查全局索引状态
-          console.log(`[Debug] window.completeExamIndex:`, Array.isArray(window.completeExamIndex) ? `${window.completeExamIndex.length} 项` : '未加载');
-          console.log(`[Debug] window.listeningExamIndex:`, Array.isArray(window.listeningExamIndex) ? `${window.listeningExamIndex.length} 项` : '未加载');
 
           let readingExams = [];
           let listeningExams = [];
 
           if (Array.isArray(window.completeExamIndex)) {
             readingExams = window.completeExamIndex.map(exam => ({ ...exam, type: 'reading' }));
-            console.log(`[Debug] 加载阅读题库: ${readingExams.length} 项`);
-
-            // 输出阅读数据样本
-            if (readingExams.length > 0) {
-              console.log(`[Debug] 阅读数据样本:`);
-              readingExams.slice(0, 2).forEach((exam, index) => {
-                console.log(`[Debug] 阅读${index + 1}:`, {
-                  id: exam.id,
-                  title: exam.title?.substring(0, 30),
-                  category: exam.category,
-                  type: exam.type
-                });
-              });
-            }
           } else {
-            console.log(`[Debug] 阅读数据索引未加载或不是数组`);
+            console.warn('[Library] 阅读数据索引未加载或不是数组');
           }
 
           if (Array.isArray(window.listeningExamIndex)) {
             listeningExams = window.listeningExamIndex.map(exam => ({ ...exam, type: 'listening' }));
-            console.log(`[Debug] 加载听力题库: ${listeningExams.length} 项`);
-
-            // 输出听力数据样本
-            if (listeningExams.length > 0) {
-              console.log(`[Debug] 听力数据样本:`);
-              listeningExams.slice(0, 2).forEach((exam, index) => {
-                console.log(`[Debug] 听力${index + 1}:`, {
-                  id: exam.id,
-                  title: exam.title?.substring(0, 30),
-                  category: exam.category,
-                  type: exam.type
-                });
-              });
-            }
           } else {
-            console.log(`[Debug] 听力数据索引未加载或不是数组`);
+            console.warn('[Library] 听力数据索引未加载或不是数组');
           }
 
           const merged = [...readingExams, ...listeningExams];
-          console.log(`[Debug] 合并题库: ${merged.length} 项`);
 
           if (merged.length > 0) {
             // 设置数据到app对象
             if (window.app) {
               window.app.examData = merged;
-              console.log(`[Debug] 题库数据已设置到 window.app.examData，长度:`, merged.length);
             } else {
-              console.log(`[Debug] window.app 不存在，无法设置数据`);
+              console.warn('[Library] window.app 不存在，无法设置数据');
             }
 
             storage.set(activeConfigKey, merged);
-            console.log(`[Debug] 题库数据已保存到缓存`);
 
             finishRealLibraryLoading(startTime);
             return;
           }
 
           if (attempt < 5) {
-            console.log(`[Debug] 数据未加载，150ms后重试...`);
             setTimeout(() => tryBuildFromGlobals(attempt + 1), 150);
           } else {
             // 不落盘空数组，避免把"空索引"固化为缓存
             app.examData = [];
-            console.log(`[Debug] 数据加载失败，设置为空数组`);
             finishRealLibraryLoading(startTime);
             if (app && typeof app.showNotification === 'function') {
               app.showNotification('题库脚本尚未加载，稍后重试或刷新');
@@ -4417,7 +4263,6 @@
 
     // 简化的页面加载完成检查
     window.addEventListener('load', function() {
-      console.log(`[Debug] 页面加载完成`);
       // 移除可能导致循环调用的重新加载逻辑
     });
     </script>
