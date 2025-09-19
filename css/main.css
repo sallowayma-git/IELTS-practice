@@ -2100,42 +2100,27 @@ body.theme-blue::before {
     background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='80' viewBox='0 0 140 80'><g><path d='M12 60 L128 60 L110 75 L30 75 Z' fill='%230788D9' fill-opacity='0.85' stroke='%230554F2' stroke-width='2'/><rect x='70' y='18' width='3.5' height='42' fill='%230554F2'/><path d='M72 20 L72 58 L110 40 Z' fill='%23FFFFFF' fill-opacity='0.95' stroke='%2305C7F2' stroke-width='1.5'/><circle cx='92' cy='46' r='1.5' fill='%2305C7F2'/></g></svg>") center/contain no-repeat;
     transform: translateY(0) rotate(-2deg);
     transform-origin: 50% 60%;
-    animation: boatDrift 26s cubic-bezier(0.55, 0.05, 0.45, 0.95) infinite;
+    animation: boatDrift 26s linear infinite;
 }
 
 @keyframes boatDrift {
-    /* Start fully off-screen right */
+    /* Uniform speed leftward, with gentler bow bob/tilt */
     0% {
         left: calc(100vw + var(--blue-boat-outside));
         transform: translateY(0) rotate(-2deg);
-        animation-timing-function: cubic-bezier(0.33, 0.0, 0.2, 1);
     }
-    /* Slow near right edge */
-    10% {
-        left: calc(100vw - 2vw);
-        transform: translateY(-3px) rotate(1.2deg);
-        animation-timing-function: cubic-bezier(0.7, 0.0, 0.3, 1);
-    }
-    /* Faster through middle */
-    45% {
-        left: calc(50vw - var(--blue-boat-half));
-        transform: translateY(2px) rotate(-1.2deg);
-        animation-timing-function: cubic-bezier(0.8, 0.0, 0.2, 1);
-    }
-    /* Slow near left edge */
-    92% {
-        left: -2vw;
-        transform: translateY(-3px) rotate(1.4deg);
-        animation-timing-function: cubic-bezier(0.4, 0.0, 0.2, 1);
-    }
-    /* Fully off-screen left, then pause */
-    96% {
-        left: calc(-1 * (var(--blue-boat-width) + var(--blue-boat-outside)));
-        transform: translateY(0) rotate(0deg);
-    }
+    10% { transform: translateY(-3px) rotate(2.5deg); }
+    20% { transform: translateY(3px) rotate(-2.5deg); }
+    30% { transform: translateY(-3px) rotate(3deg); }
+    40% { transform: translateY(3px) rotate(-2deg); }
+    50% { transform: translateY(-3px) rotate(3deg); }
+    60% { transform: translateY(3px) rotate(-2.5deg); }
+    70% { transform: translateY(-3px) rotate(2deg); }
+    80% { transform: translateY(3px) rotate(-2deg); }
+    90% { transform: translateY(-3px) rotate(2deg); }
     100% {
         left: calc(-1 * (var(--blue-boat-width) + var(--blue-boat-outside)));
-        transform: translateY(0) rotate(0deg);
+        transform: translateY(0) rotate(-2deg);
     }
 }
 
@@ -2393,4 +2378,36 @@ body.theme-blue ::-webkit-scrollbar-thumb {
     background: var(--blue-primary-400);
     border: 3px solid #ffffff;
     border-radius: 10px;
+}
+/* Sail overlay: separate pseudo-element for fluttering */
+:root[data-theme="blue"] body::after,
+body.theme-blue::after {
+    content: "";
+    position: fixed;
+    top: 46vh;
+    left: calc(100vw + var(--blue-boat-outside));
+    width: var(--blue-boat-width);
+    height: 80px;
+    pointer-events: none;
+    z-index: 0;
+    background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='80' viewBox='0 0 140 80'><g>
+      <path d='M72 20 L72 58 L110 40 Z' fill='%23FFFFFF' fill-opacity='0.96' stroke='%2305C7F2' stroke-width='1.2'/>
+      <path d='M72 24 L100 40' stroke='%2305C7F2' stroke-width='0.8' stroke-opacity='0.6'/>
+      <path d='M72 30 L98 42' stroke='%2305C7F2' stroke-width='0.6' stroke-opacity='0.5'/>
+    </g></svg>") center/contain no-repeat;
+    transform-origin: 68% 30%;
+    animation: sailDrift 26s linear infinite, sailFlutter 1s ease-in-out infinite alternate;
+}
+
+@keyframes sailDrift {
+    0% { left: calc(100vw + var(--blue-boat-outside)); }
+    100% { left: calc(-1 * (var(--blue-boat-width) + var(--blue-boat-outside))); }
+}
+
+@keyframes sailFlutter {
+    0%   { transform: rotate(0deg) skewX(0deg); }
+    25%  { transform: rotate(12deg) skewX(8deg); }
+    50%  { transform: rotate(-10deg) skewX(-6deg); }
+    75%  { transform: rotate(12deg) skewX(8deg); }
+    100% { transform: rotate(-10deg) skewX(-6deg); }
 }
