@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(start:*)"
+      "Bash(start:*)",
+      "Bash(ls:*)"
     ],
     "deny": [],
     "ask": []
