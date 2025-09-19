@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🦁 格兰芬多魔法学习系统 - The Marauder's Map</title>
+    <title>🦁 格兰芬多学习系统 - The Marauder's Map</title>
 
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -606,6 +606,95 @@
             background: var(--gryffindor-primary);
             color: var(--text-inverse);
         }
+
+        /* 主题切换弹窗样式 */
+        .theme-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .theme-modal-content {
+            background: var(--bg-card);
+            border: 2px solid var(--border-primary);
+            border-radius: 15px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: var(--shadow-strong);
+        }
+
+        .theme-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            border-bottom: 1px solid var(--border-secondary);
+        }
+
+        .theme-modal-header h3 {
+            margin: 0;
+            color: var(--text-primary);
+        }
+
+        .theme-modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: var(--text-primary);
+            cursor: pointer;
+            padding: 5px;
+        }
+
+        .theme-modal-body {
+            padding: 20px;
+        }
+
+        .theme-options {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .theme-option {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-secondary);
+            border-radius: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .theme-option:hover {
+            background: var(--border-secondary);
+            transform: translateY(-2px);
+        }
+
+        .theme-info {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .theme-name {
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+
+        .theme-desc {
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
     </style>
 </head>
 <body>
@@ -618,8 +707,8 @@
     <div class="container">
         <!-- 头部 -->
         <div class="header">
-            <h1>🦁 格兰芬多魔法学习系统</h1>
-            <p>The Marauder's Map - 霍格沃茨特快列车</p>
+            <h1>🦁 格兰芬多学习系统</h1>
+            <p>Their daring, nerve and chivalry set Gryffindors apart</p>
             <div class="magic-sparkle magic-decoration" style="top: 20px; left: 10%;"></div>
             <div class="magic-sparkle magic-decoration" style="top: 60px; right: 15%; animation-delay: 0.5s;"></div>
             <div class="magic-sparkle magic-decoration" style="bottom: 30px; left: 20%; animation-delay: 1s;"></div>
@@ -628,7 +717,7 @@
         <!-- 导航栏 -->
         <nav class="main-nav">
             <button class="nav-btn active" onclick="showView('overview')">📊 学习总览</button>
-            <button class="nav-btn" onclick="showView('browse')">📚 魔法书库</button>
+            <button class="nav-btn" onclick="showView('browse')">📚 学习书库</button>
             <button class="nav-btn" onclick="showView('practice')">📝 练习记录</button>
             <button class="nav-btn" onclick="showView('settings')">⚙️ 系统设置</button>
         </nav>
@@ -636,22 +725,22 @@
         <!-- 学习总览页面 -->
         <div id="overview-view" class="view active">
             <div class="card parchment-scroll">
-                <h2>📊 魔法学习总览</h2>
+                <h2>📊 学习总览</h2>
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <div class="stat-number">42</div>
-                        <div class="stat-label">已掌握咒语</div>
+                        <div class="stat-number" id="total-records">0</div>
+                        <div class="stat-label">练习记录</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-number">87%</div>
-                        <div class="stat-label">平均准确率</div>
+                        <div class="stat-number" id="average-score">0%</div>
+                        <div class="stat-label">平均分数</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-number">156</div>
+                        <div class="stat-number" id="total-time">0</div>
                         <div class="stat-label">学习时长(分钟)</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-number">7</div>
+                        <div class="stat-number" id="streak-days">0</div>
                         <div class="stat-label">连续学习天数</div>
                     </div>
                 </div>
@@ -681,10 +770,10 @@
                             <tr class="expandable-content">
                                 <td colspan="5">
                                     <h4>详细信息：</h4>
-                                    <p>完成格兰芬多勇气魔法测试，正确率优秀，展现了真正的格兰芬多精神！</p>
+                                    <p>完成格兰芬多勇气测试，正确率优秀，展现了真正的格兰芬多精神！</p>
                                     <p><strong>答对题目：</strong>19/20<br>
                                     <strong>用时：</strong>25分32秒<br>
-                                    <strong>魔法熟练度：</strong>精通</p>
+                                    <strong>熟练度：</strong>精通</p>
                                 </td>
                             </tr>
                             <tr class="expandable-row" onclick="toggleExpand(this)">
@@ -713,16 +802,21 @@
         <div id="browse-view" class="view" style="display: none;">
             <div class="card parchment-scroll">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h2>📚 魔法书库</h2>
+                    <h2>📚 学习书库</h2>
                     <div>
-                        <button class="btn">全部</button>
-                        <button class="btn parchment">防御术</button>
-                        <button class="btn">魔咒学</button>
+                        <button class="btn" onclick="filterExams('all')">全部</button>
+                        <button class="btn parchment" onclick="filterExams('防御术')">防御术</button>
+                        <button class="btn" onclick="filterExams('魔咒学')">魔咒学</button>
                     </div>
                 </div>
 
                 <div class="search-box">
-                    <input type="text" class="search-input" placeholder="搜索魔法书籍...">
+                    <input type="text" class="search-input" placeholder="搜索题库..." oninput="searchExams(this.value)">
+                </div>
+
+                <div style="margin: 10px 0;">
+                    <button class="btn btn-info" onclick="loadLibrary(true); showMessage('题库已重新加载', 'success')">📂 重新加载题库</button>
+                    <span class="status-text" style="color: #FFD700;">题库状态: 加载中...</span>
                 </div>
 
                 <div class="table-container">
@@ -730,47 +824,15 @@
                         <thead>
                             <tr>
                                 <th><input type="checkbox" class="checkbox" onchange="toggleSelectAll(this)"></th>
-                                <th>书名</th>
+                                <th>题目名称</th>
                                 <th>类别</th>
                                 <th>难度</th>
                                 <th>进度</th>
                                 <th>操作</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            <tr>
-                                <td><input type="checkbox" class="checkbox"></td>
-                                <td>🦁 格兰芬多的勇气</td>
-                                <td>防御术</td>
-                                <td>⭐⭐⭐</td>
-                                <td>85%</td>
-                                <td>
-                                    <button class="btn">开始学习</button>
-                                    <button class="btn parchment">详情</button>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td><input type="checkbox" class="checkbox"></td>
-                                <td>⚡ 标准咒语，一级</td>
-                                <td>魔咒学</td>
-                                <td>⭐⭐</td>
-                                <td>92%</td>
-                                <td>
-                                    <button class="btn">开始学习</button>
-                                    <button class="btn">详情</button>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td><input type="checkbox" class="checkbox"></td>
-                                <td>🔮 魔法史</td>
-                                <td>历史</td>
-                                <td>⭐</td>
-                                <td>100%</td>
-                                <td>
-                                    <button class="btn">复习</button>
-                                    <button class="btn parchment">详情</button>
-                                </td>
-                            </tr>
+                        <tbody id="exam-library-tbody">
+                            <!-- 动态生成的题库内容将在这里显示 -->
                         </tbody>
                     </table>
                 </div>
@@ -790,9 +852,10 @@
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                     <h2>📝 练习记录</h2>
                     <div>
-                        <button class="btn btn-secondary">📄 导出Markdown</button>
+                        <button class="btn btn-secondary" onclick="exportMarkdown()">📄 导出Markdown</button>
                         <button class="btn btn-info" onclick="toggleBulkDelete()">📝 批量删除</button>
-                        <button class="btn btn-warning">🗑️ 清除记录</button>
+                        <button class="btn btn-warning" onclick="clearData()">🗑️ 清除记录</button>
+                        <button class="btn btn-primary" onclick="startNewPractice()">🚀 开始新练习</button>
                     </div>
                 </div>
 
@@ -808,47 +871,8 @@
                                 <th>操作</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            <tr class="expandable-row" onclick="toggleExpand(this)">
-                                <td><input type="checkbox" class="checkbox"></td>
-                                <td>2024-09-18 14:30</td>
-                                <td>🦁 格兰芬多勇气测试</td>
-                                <td>95%</td>
-                                <td>25分钟</td>
-                                <td>
-                                    <button class="btn btn-secondary">查看详情</button>
-                                    <button class="btn btn-warning">删除</button>
-                                </td>
-                            </tr>
-                            <tr class="expandable-content">
-                                <td colspan="6">
-                                    <h4>练习详情：</h4>
-                                    <p><strong>题目：</strong>格兰芬多勇气魔法测试<br>
-                                    <strong>正确率：</strong>95% (19/20)<br>
-                                    <strong>用时：</strong>25分32秒<br>
-                                    <strong>表现评价：</strong>展现了真正的格兰芬多精神！</p>
-                                </td>
-                            </tr>
-                            <tr class="expandable-row" onclick="toggleExpand(this)">
-                                <td><input type="checkbox" class="checkbox"></td>
-                                <td>2024-09-17 16:45</td>
-                                <td>⚡ 基础魔咒练习</td>
-                                <td>88%</td>
-                                <td>18分钟</td>
-                                <td>
-                                    <button class="btn btn-secondary">查看详情</button>
-                                    <button class="btn btn-warning">删除</button>
-                                </td>
-                            </tr>
-                            <tr class="expandable-content">
-                                <td colspan="6">
-                                    <h4>练习详情：</h4>
-                                    <p><strong>题目：</strong>基础魔咒练习<br>
-                                    <strong>正确率：</strong>88% (15/17)<br>
-                                    <strong>用时：</strong>18分45秒<br>
-                                    <strong>表现评价：</strong>魔咒掌握熟练，需加强复杂咒语练习</p>
-                                </td>
-                            </tr>
+                        <tbody id="practice-history-tbody">
+                            <!-- 动态生成的练习记录将在这里显示 -->
                         </tbody>
                     </table>
                 </div>
@@ -862,11 +886,11 @@
 
                 <div style="margin-bottom: 32px;">
                     <h3>🔧 系统管理</h3>
-                    <p style="margin: 15px 0; opacity: 0.9;">魔法系统工具和设置选项</p>
+                    <p style="margin: 15px 0; opacity: 0.9;">系统工具和设置选项</p>
                     <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                         <button class="btn btn-warning">🗑️ 清除缓存</button>
-                        <button class="btn">📂 加载魔法书库</button>
-                        <button class="btn btn-info">⚙️ 书库配置切换</button>
+                        <button class="btn">📂 加载学习书库</button>
+                        <button class="btn btn-info">⚙️ 学习库配置切换</button>
                         <button class="btn btn-warning">🔄 强制刷新</button>
                     </div>
                 </div>
@@ -885,7 +909,7 @@
                 <div>
                     <h3>📊 系统信息</h3>
                     <div style="margin-top: 15px; line-height: 1.8; font-weight: bold;">
-                        <div style="color: #FFD700;">魔法书库状态: 已加载完整索引</div>
+                        <div style="color: #FFD700;">学习书库状态: 已加载完整索引</div>
                         <div>咒语总数: <span>147</span></div>
                         <div>HTML咒语: <span>147</span></div>
                         <div>PDF咒语: <span>147</span></div>
@@ -893,14 +917,550 @@
                     </div>
 
                     <div style="margin-top: 25px;">
-                        <button class="btn btn-secondary">🎨 主题切换</button>
+                        <button class="btn btn-secondary" onclick="showThemeSwitcherModal()">🎨 主题切换</button>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- 主题切换弹窗 -->
+    <div id="theme-switcher-modal" class="theme-modal" style="display: none;">
+        <div class="theme-modal-content">
+            <div class="theme-modal-header">
+                <h3>🎨 主题切换</h3>
+                <button class="theme-modal-close" onclick="hideThemeSwitcherModal()">×</button>
+            </div>
+            <div class="theme-modal-body">
+                <div class="theme-options">
+                    <div class="theme-option">
+                        <div class="theme-info">
+                            <div class="theme-name" style="color: #740001;">🦁 Gryffindor</div>
+                            <div class="theme-desc" style="color: #740001;">格兰芬多</div>
+                        </div>
+                        <button class="btn btn-sm" style="background: #740001; border-color: #740001;" aria-label="格兰芬多主题" onclick="window.location.href='hp_theme_1.html'">切换</button>
+                    </div>
+                    <div class="theme-option">
+                        <div class="theme-info">
+                            <div class="theme-name" style="color: #0E1A40;">🦅 Ravenclaw</div>
+                            <div class="theme-desc" style="color: #0E1A40;">拉文克劳</div>
+                        </div>
+                        <button class="btn btn-sm" style="background: #0E1A40; border-color: #0E1A40;" aria-label="拉文克劳主题" onclick="window.location.href='hp_theme_2.html'">切换</button>
+                    </div>
+                    <div class="theme-option">
+                        <div class="theme-info">
+                            <div class="theme-name" style="color: #1A472A;">🐍 Slytherin</div>
+                            <div class="theme-desc" style="color: #1A472A;">斯莱特林</div>
+                        </div>
+                        <button class="btn btn-sm" style="background: #1A472A; border-color: #1A472A;" aria-label="斯莱特林主题" onclick="window.location.href='hp_theme_3.html'">切换</button>
+                    </div>
+                    <div class="theme-option">
+                        <div class="theme-info">
+                            <div class="theme-name" style="color: #6a2bbf;">🗺️ Marauders</div>
+                            <div class="theme-desc" style="color: #6a2bbf;">活点地图</div>
+                        </div>
+                        <button class="btn btn-sm" style="background: #6a2bbf; border-color: #6a2bbf;" aria-label="活点地图主题" onclick="window.location.href='HarryPoter.html'">切换</button>
+                    </div>
+                    <div class="theme-option">
+                        <div class="theme-info">
+                            <div class="theme-name">📚 Academic</div>
+                            <div class="theme-desc">专业 高效 可靠</div>
+                        </div>
+                        <button class="btn btn-sm" onclick="window.location.href='../../index.html'">切换</button>
+                    </div>
+                    <div class="theme-option">
+                        <div class="theme-info">
+                            <div class="theme-name">🍂 Bloom</div>
+                            <div class="theme-desc">秋日 暖阳</div>
+                        </div>
+                        <button class="btn btn-sm" onclick="window.location.href='../../index.html'">切换</button>
+                    </div>
+                    <div class="theme-option">
+                        <div class="theme-info">
+                            <div class="theme-name" style="color: #ec4899;">🎀 Melody</div>
+                            <div class="theme-desc" style="color: #ec4899;">美乐蒂</div>
+                        </div>
+                        <button class="btn btn-sm" style="background: #ec4899; border-color: #ec4899;" onclick="window.location.href='my_melody_ielts_1.html'">切换</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 尝试加载核心脚本，如果失败则使用备用方案 -->
     <script>
+        // 测试脚本加载
+        console.log('开始加载脚本...');
+
+        // 简单的测试函数
+        function testButtonClick() {
+            console.log('按钮点击测试成功！');
+            alert('按钮点击测试成功！');
+        }
+
+        // 为所有按钮添加测试功能
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM内容已加载');
+
+            // 为导航按钮添加点击事件
+            const navBtns = document.querySelectorAll('.nav-btn');
+            navBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    console.log('导航按钮被点击:', this.textContent);
+                    const viewName = this.getAttribute('onclick').match(/showView\('([^']+)'\)/)[1];
+                    showView(viewName);
+                });
+            });
+
+            console.log('导航按钮事件已绑定');
+        });
+
+        // 临时定义showView函数
+        function showView(viewName) {
+            console.log('切换到视图:', viewName);
+            // 隐藏所有视图
+            const views = document.querySelectorAll('.view');
+            views.forEach(view => view.style.display = 'none');
+
+            // 显示选中的视图
+            const selectedView = document.getElementById(viewName + '-view');
+            if (selectedView) {
+                selectedView.style.display = 'block';
+                console.log('视图切换成功:', viewName);
+            } else {
+                console.error('找不到视图:', viewName);
+            }
+
+            // 更新导航按钮状态
+            const navBtns = document.querySelectorAll('.nav-btn');
+            navBtns.forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+    </script>
+
+    <!-- 加载题库数据 -->
+    <script src="../../assets/scripts/complete-exam-data.js"></script>
+    <script src="../../assets/scripts/listening-exam-data.js"></script>
+
+  <!-- 加载工具函数 -->
+    <script src="../../js/utils/helpers.js"></script>
+    <script src="../../js/utils/storage.js"></script>
+
+  <!-- 延迟加载核心脚本 -->
+    <script src="../../js/core/scoreStorage.js" onload="console.log('scoreStorage.js 加载成功')" onerror="console.error('scoreStorage.js 加载失败')"></script>
+    <script src="../../js/core/practiceRecorder.js" onload="console.log('practiceRecorder.js 加载成功')" onerror="console.error('practiceRecorder.js 加载失败')"></script>
+    <script src="../../js/components/practiceRecordModal.js" onload="console.log('practiceRecordModal.js 加载成功')" onerror="console.error('practiceRecordModal.js 加载失败')"></script>
+    <script src="../../js/components/practiceHistoryEnhancer.js" onload="console.log('practiceHistoryEnhancer.js 加载成功')" onerror="console.error('practiceHistoryEnhancer.js 加载失败')"></script>
+
+    <script>
+        // 初始化数据库和练习记录系统
+    let scoreStorage;
+    let practiceRecorder;
+    let practiceRecords = [];
+    let examIndex = [];
+
+    // 页面加载完成后初始化系统
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeDatabase();
+        loadStoredData();
+        loadLibrary(); // 加载题库
+        updateStatistics();
+        displayPracticeRecords();
+        displayExamLibrary(); // 显示题库
+
+        // 创建初始魔法粒子
+        for (let i = 0; i < 5; i++) {
+            setTimeout(createMagicParticle, i * 500);
+        }
+    });
+
+    // 加载题库函数
+    function loadLibrary(forceReload = false) {
+        console.log(`[System] ${forceReload ? '强制' : '正常'}加载题库索引...`);
+
+        try {
+            // 检查是否有预定义的题库索引
+            if (typeof window.completeExamIndex !== 'undefined') {
+                examIndex = window.completeExamIndex;
+                console.log(`[System] 从预定义数据加载了 ${examIndex.length} 道题目`);
+            } else if (typeof window.listeningExamIndex !== 'undefined') {
+                examIndex = window.listeningExamIndex;
+                console.log(`[System] 从听力题库加载了 ${examIndex.length} 道题目`);
+            } else {
+                // 尝试从localStorage加载
+                const storedExamIndex = localStorage.getItem('exam_index');
+                if (storedExamIndex) {
+                    examIndex = JSON.parse(storedExamIndex);
+                    console.log(`[System] 从localStorage加载了 ${examIndex.length} 道题目`);
+                } else {
+                    console.warn('[System] 没有找到题库数据，使用空数组');
+                    examIndex = [];
+                }
+            }
+
+            // 保存到localStorage
+            if (examIndex.length > 0) {
+                localStorage.setItem('exam_index', JSON.stringify(examIndex));
+            }
+
+            // 更新题库状态显示
+            updateLibraryStatus();
+
+        } catch (error) {
+            console.error('[System] 加载题库失败:', error);
+            examIndex = [];
+        }
+    }
+
+    // 更新题库状态显示
+    function updateLibraryStatus() {
+        const statusEl = document.querySelector('#browse-view .status-text');
+        if (statusEl) {
+            statusEl.textContent = `题库状态: 已加载 ${examIndex.length} 道题目`;
+        }
+    }
+
+    // 显示题库内容
+    function displayExamLibrary() {
+        const tbody = document.querySelector('#exam-library-tbody');
+        if (!tbody) return;
+
+        tbody.innerHTML = '';
+
+        if (examIndex.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center">暂无题库数据，请点击"加载题库"按钮</td></tr>';
+            return;
+        }
+
+        // 显示前20个题目
+        const displayExams = examIndex.slice(0, 20);
+
+        displayExams.forEach(exam => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td><input type="checkbox" class="checkbox" data-id="${exam.id}"></td>
+                <td>${exam.title || '未知题目'}</td>
+                <td>${exam.category || '未分类'}</td>
+                <td>${getDifficultyStars(exam.frequency || exam.difficulty || 'medium')}</td>
+                <td>${exam.progress || 0}%</td>
+                <td>
+                    <button class="btn" onclick="startExam('${exam.id}')">开始练习</button>
+                    <button class="btn" onclick="viewExamDetails('${exam.id}')">详情</button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    // 获取难度星级显示
+    function getDifficultyStars(difficulty) {
+        const levels = { low: '⭐', medium: '⭐⭐', high: '⭐⭐⭐' };
+        return levels[difficulty] || '⭐⭐';
+    }
+
+    // 开始考试
+    function startExam(examId) {
+        const exam = examIndex.find(e => e.id === examId);
+        if (exam) {
+            if (exam.hasHtml && exam.filename) {
+                // 如果有HTML文件，直接打开
+                window.open(exam.path + exam.filename, '_blank');
+            } else {
+                // 否则开始练习会话
+                startPracticeSession(exam.title || '未知题目');
+                showMessage(`开始练习: ${exam.title}`, 'success');
+            }
+        } else {
+            showMessage('题目不存在', 'error');
+        }
+    }
+
+    // 查看题目详情
+    function viewExamDetails(examId) {
+        const exam = examIndex.find(e => e.id === examId);
+        if (exam) {
+            const details = `
+题目详情：
+标题：${exam.title || '未知'}
+类别：${exam.category || '未分类'}
+难度：${getDifficultyStars(exam.frequency || exam.difficulty || 'medium')}
+路径：${exam.path || 'N/A'}
+文件：${exam.filename || 'N/A'}
+            `;
+            alert(details);
+        } else {
+            showMessage('题目不存在', 'error');
+        }
+    }
+
+    // 搜索题目
+    function searchExams(searchTerm) {
+        const rows = document.querySelectorAll('#exam-library-tbody tr');
+        const term = searchTerm.toLowerCase();
+
+        rows.forEach(row => {
+            const text = row.textContent.toLowerCase();
+            row.style.display = text.includes(term) ? '' : 'none';
+        });
+    }
+
+    // 筛选题目
+    function filterExams(category) {
+        const rows = document.querySelectorAll('#exam-library-tbody tr');
+
+        if (category === 'all') {
+            rows.forEach(row => row.style.display = '');
+        } else {
+            rows.forEach(row => {
+                const categoryCell = row.cells[2]; // 类别列
+                if (categoryCell && categoryCell.textContent.includes(category)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        }
+    }
+
+    // 初始化数据库系统
+    function initializeDatabase() {
+        if (typeof ScoreStorage !== 'undefined') {
+            scoreStorage = new ScoreStorage();
+            console.log('ScoreStorage initialized successfully');
+        } else {
+            console.error('ScoreStorage not found');
+            // 使用localStorage作为备用方案
+            window.scoreStorage = {
+                savePracticeRecord: function(record) {
+                    const records = JSON.parse(localStorage.getItem('practice_records') || '[]');
+                    records.push(record);
+                    localStorage.setItem('practice_records', JSON.stringify(records));
+                    return true;
+                },
+                getPracticeRecords: function() {
+                    return JSON.parse(localStorage.getItem('practice_records') || '[]');
+                },
+                getStatistics: function() {
+                    const records = this.getPracticeRecords();
+                    return {
+                        totalRecords: records.length,
+                        averageScore: records.length > 0 ? records.reduce((sum, r) => sum + (r.score || 0), 0) / records.length : 0,
+                        totalTime: records.reduce((sum, r) => sum + (r.duration || 0), 0)
+                    };
+                }
+            };
+        }
+
+        if (typeof PracticeRecorder !== 'undefined') {
+            practiceRecorder = new PracticeRecorder();
+            console.log('PracticeRecorder initialized successfully');
+        } else {
+            console.error('PracticeRecorder not found');
+        }
+    }
+
+    // 加载存储的数据
+    function loadStoredData() {
+        try {
+            // 加载题目索引
+            const storedExamIndex = localStorage.getItem('exam_index');
+            if (storedExamIndex) {
+                examIndex = JSON.parse(storedExamIndex);
+                console.log('Loaded exam index from localStorage:', examIndex.length, 'items');
+            }
+
+            // 加载练习记录
+            const storedPracticeRecords = localStorage.getItem('practice_records');
+            if (storedPracticeRecords) {
+                practiceRecords = JSON.parse(storedPracticeRecords);
+                console.log('Loaded practice records from localStorage:', practiceRecords.length, 'items');
+            }
+        } catch (error) {
+            console.error('Failed to load data from localStorage:', error);
+        }
+    }
+
+    // 更新统计信息
+    function updateStatistics() {
+        const stats = scoreStorage ? scoreStorage.getStatistics() : {
+            totalRecords: practiceRecords.length,
+            averageScore: practiceRecords.length > 0 ? Math.round(practiceRecords.reduce((sum, r) => sum + (r.score || 0), 0) / practiceRecords.length) : 0,
+            totalTime: practiceRecords.reduce((sum, r) => sum + (r.duration || 0), 0)
+        };
+
+        // 更新统计显示
+        const totalRecordsEl = document.getElementById('total-records');
+        const avgScoreEl = document.getElementById('average-score');
+        const totalTimeEl = document.getElementById('total-time');
+
+        if (totalRecordsEl) totalRecordsEl.textContent = stats.totalRecords;
+        if (avgScoreEl) avgScoreEl.textContent = Math.round(stats.averageScore) + '%';
+        if (totalTimeEl) totalTimeEl.textContent = Math.round(stats.totalTime / 60) + '分钟';
+    }
+
+    // 显示练习记录
+    function displayPracticeRecords() {
+        const tbody = document.querySelector('#practice-history-tbody');
+        if (!tbody) return;
+
+        const safePracticeRecords = practiceRecords || [];
+        tbody.innerHTML = '';
+
+        if (safePracticeRecords.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center">暂无练习记录</td></tr>';
+            return;
+        }
+
+        const sortedRecords = [...safePracticeRecords].sort((a, b) => {
+            return new Date(b.timestamp || b.date) - new Date(a.timestamp || a.date);
+        });
+
+        sortedRecords.forEach(record => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td><input type="checkbox" class="checkbox" data-id="${record.id || record.timestamp}"></td>
+                <td>${new Date(record.timestamp || record.date).toLocaleDateString()}</td>
+                <td>${record.topic || record.category || '未分类'}</td>
+                <td>${record.score || 0}%</td>
+                <td>${record.duration || 0}分钟</td>
+                <td>
+                    <button class="btn btn-sm" onclick="viewRecord('${record.id || record.timestamp}')">查看</button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    // 查看记录详情
+    function viewRecord(recordId) {
+        const record = practiceRecords.find(r => (r.id || r.timestamp) === recordId);
+        if (record) {
+            if (window.practiceRecordModal && typeof window.practiceRecordModal.showById === 'function') {
+                window.practiceRecordModal.showById(recordId);
+            } else {
+                alert(`记录详情：\n日期：${new Date(record.timestamp || record.date).toLocaleString()}\n主题：${record.topic || '未分类'}\n分数：${record.score || 0}%\n时长：${record.duration || 0}分钟`);
+            }
+        }
+    }
+
+    // 导出数据
+    function exportData() {
+        const data = {
+            practice_records: practiceRecords.map(record => ({
+                id: record.id || record.timestamp,
+                date: record.timestamp || record.date,
+                topic: record.topic || record.category,
+                score: record.score || 0,
+                duration: record.duration || 0,
+                details: record.details || ''
+            })),
+            exam_index: examIndex,
+            export_date: new Date().toISOString()
+        };
+
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = '格兰芬多学习数据.json';
+        a.click();
+        URL.revokeObjectURL(url);
+
+        showMessage(`已导出 ${practiceRecords.length} 条练习记录和 ${examIndex.length} 道题目`, 'success');
+    }
+
+    // 清除数据
+    function clearData() {
+        if (confirm('确定要清除所有学习数据吗？此操作不可撤销。')) {
+            practiceRecords = [];
+            examIndex = [];
+            localStorage.removeItem('practice_records');
+            localStorage.removeItem('exam_index');
+
+            if (scoreStorage && typeof scoreStorage.clearAllData === 'function') {
+                scoreStorage.clearAllData();
+            } else {
+                localStorage.clear();
+            }
+
+            updateStatistics();
+            displayPracticeRecords();
+            showMessage('数据已清除', 'success');
+        }
+    }
+
+    // 显示消息
+    function showMessage(message, type = 'info') {
+        const messageEl = document.createElement('div');
+        messageEl.className = `message message-${type}`;
+        messageEl.textContent = message;
+        messageEl.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            background: ${type === 'success' ? '#4CAF50' : type === 'error' ? '#f44336' : '#2196F3'};
+            color: white;
+            border-radius: 4px;
+            z-index: 10000;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        `;
+        document.body.appendChild(messageEl);
+
+        setTimeout(() => {
+            messageEl.remove();
+        }, 3000);
+    }
+
+    // 保存练习记录
+    function savePracticeRecord(record) {
+        if (!record.id) {
+            record.id = Date.now().toString();
+        }
+        if (!record.timestamp) {
+            record.timestamp = new Date().toISOString();
+        }
+
+        practiceRecords.push(record);
+
+        if (scoreStorage && typeof scoreStorage.savePracticeRecord === 'function') {
+            scoreStorage.savePracticeRecord(record);
+        } else {
+            localStorage.setItem('practice_records', JSON.stringify(practiceRecords));
+        }
+
+        updateStatistics();
+        displayPracticeRecords();
+        showMessage('练习记录已保存', 'success');
+
+        return record.id;
+    }
+
+    // 启动练习会话
+    function startPracticeSession(topic, difficulty = 'medium') {
+        if (practiceRecorder && typeof practiceRecorder.startPracticeSession === 'function') {
+            practiceRecorder.startPracticeSession({
+                topic: topic,
+                difficulty: difficulty,
+                theme: 'gryffindor'
+            });
+        } else {
+            // 简单的练习会话实现
+            const sessionId = Date.now().toString();
+            console.log(`Starting practice session: ${sessionId}`);
+            showMessage('练习会话已启动', 'success');
+        }
+    }
+
+    // 主题切换弹窗功能
+        function showThemeSwitcherModal() {
+            document.getElementById('theme-switcher-modal').style.display = 'flex';
+        }
+
+        function hideThemeSwitcherModal() {
+            document.getElementById('theme-switcher-modal').style.display = 'none';
+        }
+
         // 视图切换功能
         function showView(viewName) {
             // 隐藏所有视图
@@ -959,23 +1519,66 @@
 
         // 批量删除功能
         function toggleBulkDelete() {
-            alert('批量删除功能：选择要删除的记录后点击批量删除按钮');
+            const checkedBoxes = document.querySelectorAll('.checkbox:checked');
+            if (checkedBoxes.length === 0) {
+                alert('请先选择要删除的记录');
+                return;
+            }
+
+            if (confirm(`确定要删除选中的 ${checkedBoxes.length} 条记录吗？`)) {
+                const idsToDelete = Array.from(checkedBoxes).map(cb => cb.dataset.id);
+
+                practiceRecords = practiceRecords.filter(record => {
+                    return !idsToDelete.includes(String(record.id || record.timestamp));
+                });
+
+                // 保存到localStorage
+                localStorage.setItem('practice_records', JSON.stringify(practiceRecords));
+
+                // 如果有scoreStorage，也同步保存
+                if (scoreStorage && typeof scoreStorage.savePracticeRecords === 'function') {
+                    scoreStorage.savePracticeRecords(practiceRecords);
+                }
+
+                updateStatistics();
+                displayPracticeRecords();
+                hideBulkActions();
+                showMessage(`已删除 ${idsToDelete.length} 条记录`, 'success');
+            }
         }
 
         // 导出Markdown功能
         function exportMarkdown() {
+            const stats = scoreStorage ? scoreStorage.getStatistics() : {
+                totalRecords: practiceRecords.length,
+                averageScore: practiceRecords.length > 0 ? Math.round(practiceRecords.reduce((sum, r) => sum + (r.score || 0), 0) / practiceRecords.length) : 0,
+                totalTime: practiceRecords.reduce((sum, r) => sum + (r.duration || 0), 0)
+            };
+
             const data = [
                 ['# 格兰芬多学习记录'],
                 ['## 学习统计'],
-                ['- 总学习时间: 156分钟'],
-                ['- 平均准确率: 87%'],
-                ['- 连续学习天数: 7天'],
+                [`- 总练习记录: ${stats.totalRecords} 条`],
+                [`- 平均分数: ${Math.round(stats.averageScore)}%`],
+                [`- 总学习时长: ${Math.round(stats.totalTime / 60)} 分钟`],
                 ['## 详细记录'],
-                ['| 日期 | 内容 | 分数 | 时长 |'],
-                ['|------|------|------|------|'],
-                ['| 2024-09-18 | 格兰芬多勇气测试 | 95% | 25分钟 |'],
-                ['| 2024-09-17 | 基础魔咒练习 | 88% | 18分钟 |']
+                ['| 日期 | 主题 | 分数 | 时长 |'],
+                ['|------|------|------|------|']
             ];
+
+            // 添加实际的练习记录
+            const sortedRecords = [...practiceRecords].sort((a, b) => {
+                return new Date(b.timestamp || b.date) - new Date(a.timestamp || a.date);
+            }).slice(0, 20); // 只显示最近20条
+
+            sortedRecords.forEach(record => {
+                data.push([
+                    `| ${new Date(record.timestamp || record.date).toLocaleDateString()}`,
+                    `| ${record.topic || record.category || '未分类'}`,
+                    `| ${record.score || 0}%`,
+                    `| ${record.duration || 0}分钟 |`
+                ].join(''));
+            });
 
             const markdown = data.map(row => row.join('\n')).join('\n');
             const blob = new Blob([markdown], { type: 'text/markdown' });
@@ -985,6 +1588,46 @@
             a.download = '格兰芬多学习记录.md';
             a.click();
             URL.revokeObjectURL(url);
+
+            showMessage('学习记录已导出为Markdown文件', 'success');
+        }
+
+        // 开始新练习
+        function startNewPractice() {
+            const topics = [
+                '格兰芬多勇气测试',
+                '基础魔咒练习',
+                '魔法防御术',
+                '变形术基础',
+                '魔法史知识',
+                '魁地奇规则'
+            ];
+
+            const topic = prompt('选择练习主题：\\n' + topics.map((t, i) => `${i + 1}. ${t}`).join('\\n') + '\\n\\n请输入序号或自定义主题：');
+
+            if (topic) {
+                let selectedTopic = topic;
+                if (!isNaN(topic) && topics[parseInt(topic) - 1]) {
+                    selectedTopic = topics[parseInt(topic) - 1];
+                }
+
+                startPracticeSession(selectedTopic);
+
+                // 模拟练习完成，保存示例记录
+                setTimeout(() => {
+                    const mockRecord = {
+                        id: Date.now().toString(),
+                        timestamp: new Date().toISOString(),
+                        topic: selectedTopic,
+                        score: Math.floor(Math.random() * 30) + 70, // 70-100分
+                        duration: Math.floor(Math.random() * 20) + 15, // 15-35分钟
+                        details: `完成了${selectedTopic}练习，表现良好。`
+                    };
+
+                    savePracticeRecord(mockRecord);
+                    showMessage(`练习完成！得分：${mockRecord.score}%`, 'success');
+                }, 2000);
+            }
         }
 
         // 监听复选框变化
@@ -1021,14 +1664,6 @@
 
         // 定期创建魔法粒子
         setInterval(createMagicParticle, 3000);
-
-        // 初始化
-        document.addEventListener('DOMContentLoaded', function() {
-            // 创建初始魔法粒子
-            for (let i = 0; i < 5; i++) {
-                setTimeout(createMagicParticle, i * 500);
-            }
-        });
     </script>
 </body>
 </html>

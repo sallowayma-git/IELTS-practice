@@ -1,4 +1,13 @@
 // Theme switching functionality
+function applyTheme(theme) {
+    const root = document.documentElement;
+    if (!theme) return;
+    try {
+        root.setAttribute('data-theme', theme);
+        document.body.classList.toggle('theme-blue', theme === 'blue');
+        localStorage.setItem('theme', theme);
+    } catch (e) {}
+}
 function showThemeSwitcherModal() {
     const modal = document.getElementById('theme-switcher-modal');
     if (modal) {
@@ -60,7 +69,13 @@ function initializeBloomTheme() {
 
 // Initialize theme switcher when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize bloom theme mode
+    // Restore general theme (e.g., 'blue', 'harry', etc.)
+    try {
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme) applyTheme(savedTheme);
+    } catch (e) {}
+
+    // Initialize bloom theme mode (independent dark/light toggle)
     initializeBloomTheme();
 
     // Close modal when clicking outside
