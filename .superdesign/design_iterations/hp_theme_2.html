@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🦅 拉文克劳智慧学习系统 - Ravenclaw Academy</title>
+
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Google Fonts for Ravenclaw style -->
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Libre+Baskerville:wght@400;700&family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        /* 拉文克劳主题色彩 */
+        :root {
+            /* 主色调 - 宝石蓝与银灰 */
+            --ravenclaw-primary: #1E3A8A;
+            --ravenclaw-silver: #C0C0C0;
+            --ravenclaw-blue: #4169E1;
+            --ravenclaw-light: #E8F4FD;
+            --ravenclaw-accent: #6495ED;
+
+            /* 文本颜色 */
+            --text-primary: #E8F4FD;
+            --text-secondary: #C0C0C0;
+            --text-muted: #8B9DC3;
+            --text-inverse: #1E3A8A;
+
+            /* 背景颜色 */
+            --bg-primary: #0F172A;
+            --bg-secondary: #1E3A8A;
+            --bg-overlay: rgba(15, 23, 42, 0.95);
+            --bg-card: rgba(30, 58, 138, 0.8);
+            --bg-parchment: #F8FAFC;
+
+            /* 边框颜色 */
+            --border-primary: #4169E1;
+            --border-secondary: #6495ED;
+            --border-card: #C0C0C0;
+
+            /* 阴影 */
+            --shadow-soft: 0 8px 32px rgba(65, 105, 225, 0.3);
+            --shadow-strong: 0 12px 48px rgba(0, 0, 0, 0.6);
+            --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.4);
+            --shadow-silver: 0 0 20px rgba(192, 192, 192, 0.3);
+
+            /* 渐变背景 - 智慧与天空 */
+            --gradient-bg: linear-gradient(135deg, #0F172A 0%, #1E3A8A 25%, #1E293B 50%, #0F172A 75%, #1E3A8A 100%);
+
+            /* 动画时间 */
+            --transition-fast: 300ms;
+            --transition-medium: 500ms;
+            --transition-slow: 800ms;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Libre Baskerville', serif;
+            background: var(--gradient-bg);
+            background-size: 400% 400%;
+            animation: wisdomFlow 20s ease infinite;
+            color: var(--text-primary);
+            line-height: 1.6;
+            position: relative;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* 羽毛纹理背景 */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                repeating-linear-gradient(45deg, transparent, transparent 35px, rgba(192, 192, 192, 0.02) 35px, rgba(192, 192, 192, 0.02) 70px),
+                repeating-linear-gradient(-45deg, transparent, transparent 35px, rgba(65, 105, 225, 0.02) 35px, rgba(65, 105, 225, 0.02) 70px);
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        @keyframes wisdomFlow {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            position: relative;
+            z-index: 2;
+        }
+
+        /* 头部样式 */
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 40px 20px;
+            background: var(--bg-card);
+            border-radius: 8px;
+            border: 2px solid var(--border-card);
+            box-shadow: var(--shadow-card);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(192, 192, 192, 0.1) 0%, transparent 70%);
+            animation: wisdomGlow 4s ease-in-out infinite;
+        }
+
+        @keyframes wisdomGlow {
+            0%, 100% { transform: scale(1) rotate(0deg); }
+            50% { transform: scale(1.1) rotate(180deg); }
+        }
+
+        .header h1 {
+            font-family: 'Cinzel', serif;
+            font-size: 48px;
+            color: var(--ravenclaw-silver);
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            margin-bottom: 16px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .header p {
+            font-size: 18px;
+            color: var(--text-secondary);
+            position: relative;
+            z-index: 1;
+        }
+
+        /* 拉文克劳导航栏样式 */
+        .main-nav {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+        }
+
+        .nav-btn {
+            padding: 15px 30px;
+            background: var(--bg-card);
+            border: 2px solid var(--border-primary);
+            border-radius: 8px;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            font-family: 'Playfair Display', serif;
+            font-size: 16px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .nav-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(192, 192, 192, 0.3), transparent);
+            transition: left var(--transition-fast);
+        }
+
+        .nav-btn:hover::before {
+            left: 100%;
+        }
+
+        .nav-btn:hover, .nav-btn.active {
+            background: var(--ravenclaw-primary);
+            border-color: var(--ravenclaw-silver);
+            color: var(--text-inverse);
+            box-shadow: var(--shadow-silver);
+            transform: translateY(-2px);
+        }
+
+        /* 拉文克劳不规则卡片样式 */
+        .card {
+            background: var(--bg-card);
+            padding: 24px;
+            margin-bottom: 24px;
+            border: 1px solid var(--border-secondary);
+            box-shadow: var(--shadow-card);
+            transition: all var(--transition-fast);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* 羊皮纸卷轴形状 */
+        .card.parchment-scroll {
+            background: linear-gradient(180deg, #F0F8FF 0%, #E6F3FF 50%, #F0F8FF 100%);
+            border: 3px solid #4682B4;
+            border-radius: 12px;
+            position: relative;
+            color: #2F4F4F;
+        }
+
+        .card.parchment-scroll::before {
+            content: '';
+            position: absolute;
+            top: -3px;
+            left: 20px;
+            right: 20px;
+            height: 6px;
+            background: linear-gradient(90deg, #4682B4, #6495ED, #4682B4);
+            border-radius: 3px;
+        }
+
+        .card.parchment-scroll::after {
+            content: '';
+            position: absolute;
+            bottom: -3px;
+            left: 20px;
+            right: 20px;
+            height: 6px;
+            background: linear-gradient(90deg, #4682B4, #6495ED, #4682B4);
+            border-radius: 3px;
+        }
+
+        .card.parchment-scroll h2,
+        .card.parchment-scroll h3 {
+            color: #2F4F4F;
+            text-shadow: none;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-strong);
+            border-color: var(--border-card);
+        }
+
+        .card h2, .card h3 {
+            font-family: 'Playfair Display', serif;
+            color: var(--ravenclaw-silver);
+            margin-bottom: 16px;
+            font-size: 24px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        /* 统计卡片 */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 32px;
+        }
+
+        .stat-card {
+            background: var(--bg-secondary);
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid var(--border-primary);
+            transition: all var(--transition-fast);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-silver);
+        }
+
+        .stat-number {
+            font-size: 36px;
+            font-weight: 700;
+            color: var(--ravenclaw-silver);
+            margin-bottom: 8px;
+            font-family: 'Playfair Display', serif;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* 表格样式 */
+        .table-container {
+            background: var(--bg-card);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--border-secondary);
+            margin-bottom: 24px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-secondary);
+        }
+
+        th {
+            background: var(--ravenclaw-primary);
+            color: var(--text-inverse);
+            font-family: 'Playfair Display', serif;
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        tr:hover {
+            background: rgba(192, 192, 192, 0.1);
+        }
+
+        /* 拉文克劳按钮样式 */
+        .btn {
+            padding: 12px 24px;
+            background: var(--ravenclaw-primary);
+            color: var(--text-inverse);
+            border: none;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            font-size: 14px;
+            margin: 6px;
+            position: relative;
+            overflow: hidden;
+            clip-path: polygon(0 0, 100% 0, 95% 50%, 100% 100%, 0 100%, 5% 50%);
+            font-family: 'Playfair Display', serif;
+            font-weight: 600;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(192, 192, 192, 0.4), transparent);
+            transition: left var(--transition-fast);
+        }
+
+        .btn:hover::before {
+            left: 100%;
+        }
+
+        .btn:hover {
+            background: var(--ravenclaw-silver);
+            color: var(--text-inverse);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-silver);
+        }
+
+        .btn-secondary {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-secondary);
+            color: var(--text-primary);
+            clip-path: polygon(0 0, 100% 0, 95% 50%, 100% 100%, 0 100%, 5% 50%);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border-secondary);
+        }
+
+        .btn-warning {
+            background: #6495ED;
+        }
+
+        .btn-warning:hover {
+            background: #4169E1;
+        }
+
+        .btn-info {
+            background: var(--ravenclaw-accent);
+        }
+
+        .btn-info:hover {
+            background: #6495ED;
+        }
+
+    
+        /* 搜索框样式 */
+        .search-box {
+            margin-bottom: 24px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 16px;
+            background: var(--bg-card);
+            border: 2px solid var(--border-secondary);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 16px;
+            transition: all var(--transition-fast);
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--ravenclaw-silver);
+            box-shadow: var(--shadow-silver);
+        }
+
+        /* 展开详情样式 */
+        .expandable-row {
+            cursor: pointer;
+            transition: background var(--transition-fast);
+        }
+
+        .expandable-row:hover {
+            background: rgba(192, 192, 192, 0.1);
+        }
+
+        .expandable-content {
+            display: none;
+            background: var(--bg-secondary);
+            padding: 16px;
+            border-top: 1px solid var(--border-primary);
+        }
+
+        .expandable-content.show {
+            display: block;
+            animation: slideDown var(--transition-medium) ease-out;
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 批量操作样式 */
+        .bulk-actions {
+            display: none;
+            padding: 16px;
+            background: var(--ravenclaw-primary);
+            border-radius: 8px;
+            margin-bottom: 16px;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .bulk-actions.show {
+            display: flex;
+        }
+
+        .checkbox {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--ravenclaw-silver);
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 36px;
+            }
+
+            .main-nav {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .nav-btn {
+                width: 100%;
+                max-width: 300px;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            table {
+                font-size: 14px;
+            }
+
+            th, td {
+                padding: 12px 8px;
+            }
+        }
+
+        /* 加载动画 */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+
+        .spinner {
+            border: 4px solid var(--border-secondary);
+            border-top: 4px solid var(--ravenclaw-silver);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* 智慧装饰元素 */
+        .wisdom-decoration {
+            position: absolute;
+            opacity: 0.1;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .wisdom-feather {
+            width: 4px;
+            height: 20px;
+            background: var(--ravenclaw-silver);
+            border-radius: 50%;
+            animation: featherFloat 3s ease-in-out infinite;
+        }
+
+        @keyframes featherFloat {
+            0%, 100% { opacity: 0.1; transform: translateY(0px) rotate(0deg); }
+            50% { opacity: 0.6; transform: translateY(-10px) rotate(10deg); }
+        }
+
+        /* 主题切换按钮 */
+        .theme-switcher {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+
+        .theme-btn {
+            padding: 8px 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            border-radius: 20px;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            font-size: 12px;
+        }
+
+        .theme-btn:hover {
+            background: var(--ravenclaw-primary);
+            color: var(--text-inverse);
+        }
+
+        /* 智慧之书效果 */
+        .book-spine {
+            background: linear-gradient(180deg, var(--ravenclaw-primary) 0%, var(--ravenclaw-blue) 100%);
+            border-radius: 2px;
+            padding: 2px;
+            margin: 2px 0;
+        }
+
+        /* 拉文克劳铜像效果 */
+        .raven-statue {
+            position: relative;
+            display: inline-block;
+            margin: 0 10px;
+        }
+
+        .raven-statue::after {
+            content: '🦅';
+            position: absolute;
+            top: -20px;
+            right: -10px;
+            font-size: 20px;
+            animation: ravenFly 4s ease-in-out infinite;
+        }
+
+        @keyframes ravenFly {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-5px); }
+        }
+    </style>
+</head>
+<body>
+    <!-- 主题切换按钮 -->
+    <div class="theme-switcher">
+        <button class="theme-btn" onclick="location.href='hp_theme_1.html'">🦁 格兰芬多</button>
+        <button class="theme-btn" onclick="location.href='hp_theme_3.html'">🐍 斯莱特林</button>
+    </div>
+
+    <div class="container">
+        <!-- 头部 -->
+        <div class="header">
+            <h1>🦅 拉文克劳智慧学习系统</h1>
+            <p>Ravenclaw Academy - 智慧与知识的殿堂</p>
+            <div class="raven-statue">
+                <span class="wisdom-feather wisdom-decoration" style="top: 20px; left: 10%;"></span>
+            </div>
+            <div class="wisdom-feather wisdom-decoration" style="top: 60px; right: 15%; animation-delay: 0.5s;"></div>
+            <div class="wisdom-feather wisdom-decoration" style="bottom: 30px; left: 20%; animation-delay: 1s;"></div>
+        </div>
+
+        <!-- 导航栏 -->
+        <nav class="main-nav">
+            <button class="nav-btn active" onclick="showView('overview')">📊 智慧总览</button>
+            <button class="nav-btn" onclick="showView('browse')">📚 智慧书库</button>
+            <button class="nav-btn" onclick="showView('practice')">📝 学习记录</button>
+            <button class="nav-btn" onclick="showView('settings')">⚙️ 系统设置</button>
+        </nav>
+
+        <!-- 智慧总览页面 -->
+        <div id="overview-view" class="view active">
+            <div class="card parchment-scroll">
+                <h2>📊 智慧学习总览</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number">56</div>
+                        <div class="stat-label">掌握咒语数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">92%</div>
+                        <div class="stat-label">知识准确率</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">203</div>
+                        <div class="stat-label">学习时长(分钟)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">10</div>
+                        <div class="stat-label">连续学习天数</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card parchment-scroll">
+                <h3>🏆 智慧成就</h3>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>日期</th>
+                                <th>成就</th>
+                                <th>分数</th>
+                                <th>时长</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="expandable-row" onclick="toggleExpand(this)">
+                                <td>2024-09-18</td>
+                                <td>🦅 拉文克劳智慧测试</td>
+                                <td>96%</td>
+                                <td>30分钟</td>
+                                <td><button class="btn gem">查看详情</button></td>
+                            </tr>
+                            <tr class="expandable-content">
+                                <td colspan="5">
+                                    <h4>详细信息：</h4>
+                                    <p>完成拉文克劳智慧魔法测试，展现了卓越的智慧和知识储备！</p>
+                                    <p><strong>答对题目：</strong>24/25<br>
+                                    <strong>用时：</strong>30分15秒<br>
+                                    <strong>智慧等级：</strong>卓越</p>
+                                </td>
+                            </tr>
+                            <tr class="expandable-row" onclick="toggleExpand(this)">
+                                <td>2024-09-17</td>
+                                <td>📚 古代魔法史</td>
+                                <td>89%</td>
+                                <td>22分钟</td>
+                                <td><button class="btn feather">查看详情</button></td>
+                            </tr>
+                            <tr class="expandable-content">
+                                <td colspan="5">
+                                    <h4>详细信息：</h4>
+                                    <p>古代魔法史知识测试，对霍格沃茨历史有深入了解。</p>
+                                    <p><strong>答对题目：</strong>17/19<br>
+                                    <strong>用时：</strong>22分30秒<br>
+                                    <strong>智慧等级：</strong>优秀</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 智慧书库页面 -->
+        <div id="browse-view" class="view" style="display: none;">
+            <div class="card parchment-scroll">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2>📚 智慧书库</h2>
+                    <div style="padding: 15px; background: transparent; border: none;">
+                        <button class="btn">全部</button>
+                        <button class="btn">古代魔法</button>
+                        <button class="btn">魔法理论</button>
+                    </div>
+                </div>
+
+                <div class="search-box" style="padding: 15px; margin-bottom: 25px;">
+                    <input type="text" class="search-input" placeholder="搜索智慧书籍...">
+                </div>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" class="checkbox" onchange="toggleSelectAll(this)"></th>
+                                <th>书名</th>
+                                <th>类别</th>
+                                <th>难度</th>
+                                <th>进度</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><input type="checkbox" class="checkbox"></td>
+                                <td>🦅 拉文克劳的智慧</td>
+                                <td>魔法理论</td>
+                                <td>⭐⭐⭐⭐</td>
+                                <td>90%</td>
+                                <td>
+                                    <button class="btn">开始学习</button>
+                                    <button class="btn">详情</button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><input type="checkbox" class="checkbox"></td>
+                                <td>📜 霍格沃茨历史</td>
+                                <td>古代魔法</td>
+                                <td>⭐⭐⭐</td>
+                                <td>95%</td>
+                                <td>
+                                    <button class="btn">开始学习</button>
+                                    <button class="btn">详情</button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><input type="checkbox" class="checkbox"></td>
+                                <td>🔮 预言术基础</td>
+                                <td>神秘学</td>
+                                <td>⭐⭐</td>
+                                <td>100%</td>
+                                <td>
+                                    <button class="btn">复习</button>
+                                    <button class="btn">详情</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="bulk-actions" style="padding: 20px; background: var(--ravenclaw-primary);">
+                    <span>已选择 3 项</span>
+                    <button class="btn">🗑️ 批量删除</button>
+                    <button class="btn">📥 批量导出</button>
+                    <button class="btn" onclick="hideBulkActions()">取消</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 学习记录页面 -->
+        <div id="practice-view" class="view" style="display: none;">
+            <div class="card parchment-scroll">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2>📝 学习记录</h2>
+                    <div style="padding: 10px; background: transparent; border: none;">
+                        <button class="btn">📄 导出Markdown</button>
+                        <button class="btn" onclick="toggleBulkDelete()">📝 批量删除</button>
+                        <button class="btn">🗑️ 清除记录</button>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" class="checkbox"></th>
+                                <th>日期</th>
+                                <th>学习内容</th>
+                                <th>分数</th>
+                                <th>时长</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="expandable-row" onclick="toggleExpand(this)">
+                                <td><input type="checkbox" class="checkbox"></td>
+                                <td>2024-09-18 14:30</td>
+                                <td>🦅 拉文克劳智慧测试</td>
+                                <td>96%</td>
+                                <td>30分钟</td>
+                                <td>
+                                    <button class="btn">查看详情</button>
+                                    <button class="btn">删除</button>
+                                </td>
+                            </tr>
+                            <tr class="expandable-content">
+                                <td colspan="6">
+                                    <h4>学习详情：</h4>
+                                    <p><strong>题目：</strong>拉文克劳智慧魔法测试<br>
+                                    <strong>正确率：</strong>96% (24/25)<br>
+                                    <strong>用时：</strong>30分15秒<br>
+                                    <strong>表现评价：</strong>智慧超群，展现了拉文克劳的卓越品质！</p>
+                                </td>
+                            </tr>
+                            <tr class="expandable-row" onclick="toggleExpand(this)">
+                                <td><input type="checkbox" class="checkbox"></td>
+                                <td>2024-09-17 16:45</td>
+                                <td>📚 古代魔法史学习</td>
+                                <td>89%</td>
+                                <td>22分钟</td>
+                                <td>
+                                    <button class="btn">查看详情</button>
+                                    <button class="btn">删除</button>
+                                </td>
+                            </tr>
+                            <tr class="expandable-content">
+                                <td colspan="6">
+                                    <h4>学习详情：</h4>
+                                    <p><strong>题目：</strong>古代魔法史学习<br>
+                                    <strong>正确率：</strong>89% (17/19)<br>
+                                    <strong>用时：</strong>22分30秒<br>
+                                    <strong>表现评价：</strong>对魔法历史有深入了解，继续保持！</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 系统设置页面 -->
+        <div id="settings-view" class="view" style="display: none;">
+            <div class="card parchment-scroll">
+                <h2>⚙️ 系统设置</h2>
+
+                <div style="margin-bottom: 32px; padding: 20px;">
+                    <h3>🔧 系统管理</h3>
+                    <p style="margin: 15px 0; opacity: 0.9;">智慧系统工具和设置选项</p>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="btn">🗑️ 清除缓存</button>
+                        <button class="btn">📂 加载智慧书库</button>
+                        <button class="btn">⚙️ 书库配置切换</button>
+                        <button class="btn">🔄 强制刷新</button>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 32px; padding: 20px;">
+                    <h3>💾 数据管理</h3>
+                    <p style="margin: 15px 0; opacity: 0.9;">数据备份、导入导出和完整性检查</p>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="btn">💾 创建备份</button>
+                        <button class="btn">📋 备份列表</button>
+                        <button class="btn">📤 导出数据</button>
+                        <button class="btn">📥 导入数据</button>
+                    </div>
+                </div>
+
+                <div style="padding: 20px;">
+                    <h3>📊 系统信息</h3>
+                    <div style="margin-top: 15px; line-height: 1.8; font-weight: bold;">
+                        <div style="color: var(--ravenclaw-silver);">智慧书库状态: 已加载完整索引</div>
+                        <div>咒语总数: <span>147</span></div>
+                        <div>HTML咒语: <span>147</span></div>
+                        <div>PDF咒语: <span>147</span></div>
+                        <div>最后更新: <span>2024/9/18 14:47:09</span></div>
+                    </div>
+
+                    <div style="margin-top: 25px;">
+                        <button class="btn" style="padding: 12px 24px; font-size: 14px;">🎨 主题切换</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 视图切换功能
+        function showView(viewName) {
+            // 隐藏所有视图
+            const views = document.querySelectorAll('.view');
+            views.forEach(view => view.style.display = 'none');
+
+            // 显示选中的视图
+            document.getElementById(viewName + '-view').style.display = 'block';
+
+            // 更新导航按钮状态
+            const navBtns = document.querySelectorAll('.nav-btn');
+            navBtns.forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+
+        // 展开/收起功能
+        function toggleExpand(row) {
+            const content = row.nextElementSibling;
+            if (content && content.classList.contains('expandable-content')) {
+                content.classList.toggle('show');
+            }
+        }
+
+        // 批量选择功能
+        function toggleSelectAll(checkbox) {
+            const checkboxes = document.querySelectorAll('.checkbox');
+            checkboxes.forEach(cb => {
+                if (cb !== checkbox) {
+                    cb.checked = checkbox.checked;
+                }
+            });
+            updateBulkActions();
+        }
+
+        // 更新批量操作按钮显示
+        function updateBulkActions() {
+            const checkedBoxes = document.querySelectorAll('.checkbox:checked');
+            const bulkActions = document.querySelector('.bulk-actions');
+            if (checkedBoxes.length > 0 && bulkActions) {
+                bulkActions.classList.add('show');
+                bulkActions.querySelector('span').textContent = `已选择 ${checkedBoxes.length} 项`;
+            } else if (bulkActions) {
+                bulkActions.classList.remove('show');
+            }
+        }
+
+        // 隐藏批量操作
+        function hideBulkActions() {
+            const bulkActions = document.querySelector('.bulk-actions');
+            if (bulkActions) {
+                bulkActions.classList.remove('show');
+            }
+            // 清除所有选择
+            document.querySelectorAll('.checkbox').forEach(cb => cb.checked = false);
+        }
+
+        // 批量删除功能
+        function toggleBulkDelete() {
+            alert('批量删除功能：选择要删除的记录后点击批量删除按钮');
+        }
+
+        // 导出Markdown功能
+        function exportMarkdown() {
+            const data = [
+                ['# 拉文克劳学习记录'],
+                ['## 学习统计'],
+                ['- 总学习时间: 203分钟'],
+                ['- 平均准确率: 92%'],
+                ['- 连续学习天数: 10天'],
+                ['## 详细记录'],
+                ['| 日期 | 内容 | 分数 | 时长 |'],
+                ['|------|------|------|------|'],
+                ['| 2024-09-18 | 拉文克劳智慧测试 | 96% | 30分钟 |'],
+                ['| 2024-09-17 | 古代魔法史学习 | 89% | 22分钟 |']
+            ];
+
+            const markdown = data.map(row => row.join('\n')).join('\n');
+            const blob = new Blob([markdown], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = '拉文克劳学习记录.md';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // 监听复选框变化
+        document.addEventListener('change', function(e) {
+            if (e.target.classList.contains('checkbox')) {
+                updateBulkActions();
+            }
+        });
+
+        // 搜索功能
+        document.querySelector('.search-input')?.addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            const rows = document.querySelectorAll('tbody tr:not(.expandable-content)');
+
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(searchTerm) ? '' : 'none';
+            });
+        });
+
+        // 添加智慧粒子效果
+        function createWisdomParticle() {
+            const particle = document.createElement('div');
+            particle.className = 'wisdom-feather wisdom-decoration';
+            particle.style.left = Math.random() * 100 + '%';
+            particle.style.top = Math.random() * 100 + '%';
+            particle.style.animationDelay = Math.random() * 3 + 's';
+            document.body.appendChild(particle);
+
+            setTimeout(() => {
+                particle.remove();
+            }, 3000);
+        }
+
+        // 定期创建智慧粒子
+        setInterval(createWisdomParticle, 4000);
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 创建初始智慧粒子
+            for (let i = 0; i < 5; i++) {
+                setTimeout(createWisdomParticle, i * 600);
+            }
+        });
+    </script>
+</body>
+</html>
