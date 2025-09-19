@@ -2040,25 +2040,32 @@ body.bloom-dark-mode {
 /* Base */
 :root[data-theme="blue"] body,
 body.theme-blue {
-    /* Multi-layer animated waves */
+    /* Sea scene: waves + islands + seagulls + soft tints, all as background layers */
     background-image:
-      radial-gradient(1200px 700px at 0% 100%, rgba(7,176,242,0.10), transparent 60%),
+      /* wave front */ url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='160' viewBox='0 0 1200 160' preserveAspectRatio='none'><path fill='%2307B0F2' fill-opacity='0.30' d='M0,72 C 100,104 200,40 300,72 C 400,104 500,40 600,72 C 700,104 800,40 900,72 C 1000,104 1100,40 1200,72 L1200,160 L0,160 Z'/></svg>"),
+      /* wave back */  url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1000' height='200' viewBox='0 0 1000 200' preserveAspectRatio='none'><path fill='%2305C7F2' fill-opacity='0.40' d='M0,112 C 120,144 240,80 360,112 C 480,144 600,80 720,112 C 840,144 960,80 1080,112 L1080,200 L0,200 Z'/></svg>"),
+      /* islands + palms */ url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='800' height='220' viewBox='0 0 800 220'><defs><g id='island'><ellipse cx='70' cy='190' rx='65' ry='16' fill='%2305B0F2' fill-opacity='0.25'/><ellipse cx='70' cy='186' rx='55' ry='10' fill='%2305DBF2' fill-opacity='0.35'/><rect x='66' y='130' width='6' height='50' fill='%230788D9' /><path d='M69 130 l-18 12 l20 -6 l18 12 l-14 -18 l-6 0 z' fill='%2307B0F2' fill-opacity='0.9'/></g></defs><use href='%23island' x='0' y='0'/><use href='%23island' x='220' y='-8'/><use href='%23island' x='440' y='6'/><use href='%23island' x='660' y='-4'/></svg>"),
+      /* seagulls */ url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='700' height='120' viewBox='0 0 700 120'><path d='M20 40 q 20 -20 40 0' stroke='%2305C7F2' stroke-width='2' fill='none' stroke-opacity='0.6'/><path d='M80 50 q 18 -18 36 0' stroke='%2307B0F2' stroke-width='2' fill='none' stroke-opacity='0.5'/><path d='M160 30 q 22 -22 44 0' stroke='%2305DBF2' stroke-width='2' fill='none' stroke-opacity='0.5'/><path d='M240 45 q 20 -20 40 0' stroke='%2307B0F2' stroke-width='2' fill='none' stroke-opacity='0.5'/><path d='M320 35 q 20 -20 40 0' stroke='%2305C7F2' stroke-width='2' fill='none' stroke-opacity='0.5'/><path d='M400 42 q 18 -18 36 0' stroke='%2307B0F2' stroke-width='2' fill='none' stroke-opacity='0.5'/><path d='M480 28 q 22 -22 44 0' stroke='%2305DBF2' stroke-width='2' fill='none' stroke-opacity='0.5'/><path d='M560 46 q 20 -20 40 0' stroke='%2307B0F2' stroke-width='2' fill='none' stroke-opacity='0.5'/></svg>"),
+      /* soft tints */ radial-gradient(1200px 700px at 0% 100%, rgba(7,176,242,0.10), transparent 60%),
       radial-gradient(1000px 600px at 100% 0%, rgba(5,199,242,0.08), transparent 60%),
-      linear-gradient(180deg, rgba(196,225,242,0.35) 0%, rgba(5,84,242,0.06) 100%),
-      #ffffff;
-    background-attachment: fixed, fixed, fixed, fixed;
-    background-size: 140% 140%, 140% 140%, 100% 100%, auto;
-    background-position: 0% 0%, 100% 100%, center, center;
-    position: relative;
-    z-index: 0; /* create stacking context for pseudo waves */
-    animation: blueWaveFlow 26s ease-in-out infinite alternate;
+      /* sea base */ linear-gradient(180deg, #C4E1F2 0%, #07B0F2 100%);
+    background-repeat: repeat-x, repeat-x, repeat-x, repeat-x, no-repeat, no-repeat, no-repeat;
+    background-attachment: fixed, fixed, fixed, fixed, fixed, fixed, fixed;
+    background-size: 1200px 160px, 1000px 200px, 800px 220px, 700px 120px, 140% 140%, 140% 140%, 100% 100%;
+    background-position: 0 100%, 0 calc(100% - 60px), 0 calc(100% - 220px), 0 8%, 0% 0%, 100% 100%, center;
+    animation: blueSeaSlide 28s linear infinite, blueWaveFlow 40s ease-in-out infinite alternate;
     color: var(--color-gray-900);
 }
 
 @keyframes blueWaveFlow {
-    0% { background-position: 0% 0%, 100% 100%, center, center; }
-    50% { background-position: 45% 20%, 55% 80%, center, center; }
-    100% { background-position: 100% 0%, 0% 100%, center, center; }
+    0% { background-position: 0 100%, 0 calc(100% - 60px), 0 calc(100% - 220px), 0 8%, 0% 0%, 100% 100%, center; }
+    50% { background-position: 0 100%, 0 calc(100% - 60px), 0 calc(100% - 220px), 0 8%, 45% 20%, 55% 80%, center; }
+    100% { background-position: 0 100%, 0 calc(100% - 60px), 0 calc(100% - 220px), 0 8%, 100% 0%, 0% 100%, center; }
+}
+
+@keyframes blueSeaSlide {
+    0% { background-position: 0 100%, 0 calc(100% - 60px), 0 calc(100% - 220px), 0 8%, 0% 0%, 100% 100%, center; }
+    100% { background-position: 1200px 100%, 1000px calc(100% - 60px), 800px calc(100% - 220px), 700px 8%, 0% 0%, 100% 100%, center; }
 }
 
 /* Header */
@@ -2238,13 +2245,17 @@ body.theme-blue .record-percentage {
 body.theme-blue.blue-dark-mode,
 :root[data-theme="blue"] body.blue-dark-mode {
     background-image:
-      radial-gradient(1200px 700px at 0% 100%, rgba(7,176,242,0.14), transparent 60%),
+      /* wave front */ url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='160' viewBox='0 0 1200 160' preserveAspectRatio='none'><path fill='%2307B0F2' fill-opacity='0.25' d='M0,72 C 100,104 200,40 300,72 C 400,104 500,40 600,72 C 700,104 800,40 900,72 C 1000,104 1100,40 1200,72 L1200,160 L0,160 Z'/></svg>"),
+      /* wave back */  url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1000' height='200' viewBox='0 0 1000 200' preserveAspectRatio='none'><path fill='%2305C7F2' fill-opacity='0.30' d='M0,112 C 120,144 240,80 360,112 C 480,144 600,80 720,112 C 840,144 960,80 1080,112 L1080,200 L0,200 Z'/></svg>"),
+      /* islands + palms */ url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='800' height='220' viewBox='0 0 800 220'><defs><g id='island'><ellipse cx='70' cy='190' rx='65' ry='16' fill='%2305B0F2' fill-opacity='0.18'/><ellipse cx='70' cy='186' rx='55' ry='10' fill='%2305DBF2' fill-opacity='0.25'/><rect x='66' y='130' width='6' height='50' fill='%230788D9' /><path d='M69 130 l-18 12 l20 -6 l18 12 l-14 -18 l-6 0 z' fill='%2307B0F2' fill-opacity='0.8'/></g></defs><use href='%23island' x='0' y='0'/><use href='%23island' x='220' y='-8'/><use href='%23island' x='440' y='6'/><use href='%23island' x='660' y='-4'/></svg>"),
+      /* seagulls */ url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='700' height='120' viewBox='0 0 700 120'><path d='M20 40 q 20 -20 40 0' stroke='%2305C7F2' stroke-width='2' fill='none' stroke-opacity='0.35'/><path d='M80 50 q 18 -18 36 0' stroke='%2307B0F2' stroke-width='2' fill='none' stroke-opacity='0.3'/><path d='M160 30 q 22 -22 44 0' stroke='%2305DBF2' stroke-width='2' fill='none' stroke-opacity='0.3'/><path d='M240 45 q 20 -20 40 0' stroke='%2307B0F2' stroke-width='2' fill='none' stroke-opacity='0.3'/><path d='M320 35 q 20 -20 40 0' stroke='%2305C7F2' stroke-width='2' fill='none' stroke-opacity='0.3'/><path d='M400 42 q 18 -18 36 0' stroke='%2307B0F2' stroke-width='2' fill='none' stroke-opacity='0.3'/><path d='M480 28 q 22 -22 44 0' stroke='%2305DBF2' stroke-width='2' fill='none' stroke-opacity='0.3'/><path d='M560 46 q 20 -20 40 0' stroke='%2307B0F2' stroke-width='2' fill='none' stroke-opacity='0.3'/></svg>"),
+      /* dark tints */ radial-gradient(1200px 700px at 0% 100%, rgba(7,176,242,0.14), transparent 60%),
       radial-gradient(1000px 600px at 100% 0%, rgba(5,199,242,0.12), transparent 60%),
       linear-gradient(180deg, #0b1f3f 0%, #081226 100%);
-    background-attachment: fixed, fixed, fixed;
-    background-size: 160% 160%, 160% 160%, 100% 100%;
-    background-position: 0% 0%, 100% 100%, center;
-    animation: blueWaveFlow 28s ease-in-out infinite alternate;
+    background-attachment: fixed, fixed, fixed, fixed, fixed, fixed, fixed;
+    background-size: 1200px 160px, 1000px 200px, 800px 220px, 700px 120px, 160% 160%, 160% 160%, 100% 100%;
+    background-position: 0 100%, 0 calc(100% - 60px), 0 calc(100% - 220px), 0 8%, 0% 0%, 100% 100%, center;
+    animation: blueSeaSlide 30s linear infinite, blueWaveFlow 30s ease-in-out infinite alternate;
     color: #e8f2ff;
 }
 
@@ -2281,58 +2292,7 @@ body.theme-blue.blue-dark-mode .btn:hover:not(:disabled) {
     box-shadow: 0 8px 20px rgba(17,84,217,0.28);
 }
 
-/* =====================
-   Blue Waves (visible left-to-right motion)
-   Two parallax wave layers as body pseudo-elements
-   ===================== */
-:root[data-theme="blue"] body::before,
-body.theme-blue::before {
-    content: "";
-    position: fixed;
-    left: 0; right: 0; bottom: 0; top: auto;
-    height: 34vh;
-    pointer-events: none;
-    z-index: 2;
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1440' height='160' viewBox='0 0 1440 160' preserveAspectRatio='none'><path fill='%2307B0F2' fill-opacity='0.30' d='M0,72 C 120,104 240,40 360,72 C 480,104 600,40 720,72 C 840,104 960,40 1080,72 C 1200,104 1320,40 1440,72 L1440,160 L0,160 Z'/></svg>");
-    background-repeat: repeat-x;
-    background-size: 1200px 160px;
-    background-position: 0% 100%;
-    animation: blueWaveSlide1 14s linear infinite;
-    opacity: 0.55;
-}
-
-:root[data-theme="blue"] body::after,
-body.theme-blue::after {
-    content: "";
-    position: fixed;
-    left: 0; right: 0; bottom: 0; top: auto;
-    height: 40vh;
-    pointer-events: none;
-    z-index: 1;
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1440' height='200' viewBox='0 0 1440 200' preserveAspectRatio='none'><path fill='%2305C7F2' fill-opacity='0.40' d='M0,112 C 160,144 320,80 480,112 C 640,144 800,80 960,112 C 1120,144 1280,80 1440,112 L1440,200 L0,200 Z'/></svg>");
-    background-repeat: repeat-x;
-    background-size: 1000px 200px;
-    background-position: 0% calc(100% - 60px);
-    animation: blueWaveSlide2 22s linear infinite reverse;
-    opacity: 0.45;
-}
-
-@keyframes blueWaveSlide1 {
-    from { background-position-x: 0; }
-    to   { background-position-x: 1200px; }
-}
-@keyframes blueWaveSlide2 {
-    from { background-position-x: 0; }
-    to   { background-position-x: 1000px; }
-}
-
-/* Dark mode: deepen wave tones */
-body.theme-blue.blue-dark-mode::before {
-    opacity: 0.35;
-}
-body.theme-blue.blue-dark-mode::after {
-    opacity: 0.50;
-}
+/* Blue waves now drawn as body background layers; pseudo-elements removed to ensure waves stay behind content. */
 
 /* Footer or subtle tinted sections */
 :root[data-theme="blue"] footer,
