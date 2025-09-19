@@ -2013,3 +2013,183 @@ body.bloom-dark-mode {
     background: linear-gradient(135deg, #ffd89b, #ffcc80);
     border-color: #ffb347;
 }
+
+/* =====================
+   Blue Theme Overrides
+   Palette:
+   #0554F2 #1154D9 #57B7F2 #C4E1F2 #BAF241 #0788D9 #07B0F2 #05C7F2 #05DBF2
+   ===================== */
+:root[data-theme="blue"], body.theme-blue {
+    /* Override brand tokens to drive existing gradient usages */
+    --color-brand-primary: #0554F2;
+    --color-brand-secondary: #1154D9;
+    --color-brand-gradient: linear-gradient(135deg, #0554F2 0%, #1154D9 100%);
+
+    /* Additional semantic tokens for overrides */
+    --blue-primary: #0554F2;
+    --blue-primary-600: #1154D9;
+    --blue-primary-400: #0788D9;
+    --blue-secondary: #57B7F2;
+    --blue-accent: #07B0F2;
+    --blue-accent-600: #05C7F2;
+    --blue-accent-500: #05DBF2;
+    --blue-success: #BAF241;
+    --blue-bg-tint: #C4E1F2;
+}
+
+/* Base */
+:root[data-theme="blue"] body,
+body.theme-blue {
+    background: linear-gradient(180deg, rgba(196,225,242,0.35) 0%, rgba(5,84,242,0.06) 100%), #ffffff;
+    color: var(--color-gray-900);
+}
+
+/* Header */
+:root[data-theme="blue"] .header,
+body.theme-blue .header {
+    background: #ffffff;
+    border: 1px solid rgba(5, 84, 242, 0.22);
+}
+
+:root[data-theme="blue"] .header h1,
+body.theme-blue .header h1 {
+    color: #0B1F33;
+}
+
+/* Views */
+:root[data-theme="blue"] .view,
+body.theme-blue .view {
+    background: #ffffff;
+    border: 1px solid rgba(5, 84, 242, 0.18);
+}
+
+/* Category/Card */
+:root[data-theme="blue"] .category-card,
+body.theme-blue .category-card {
+    background: #ffffff;
+    border: 1px solid rgba(5, 84, 242, 0.18);
+    box-shadow: 0 10px 24px rgba(17, 84, 217, 0.08);
+}
+
+:root[data-theme="blue"] .category-card::before,
+body.theme-blue .category-card::before {
+    background: var(--color-brand-gradient);
+    opacity: 1;
+}
+
+/* Exam items */
+:root[data-theme="blue"] .exam-item,
+body.theme-blue .exam-item {
+    background: #ffffff;
+    border: 1px solid rgba(5, 84, 242, 0.18);
+}
+
+:root[data-theme="blue"] .exam-item:hover,
+body.theme-blue .exam-item:hover {
+    border-color: rgba(5, 84, 242, 0.35);
+    box-shadow: 0 6px 18px rgba(17, 84, 217, 0.10);
+}
+
+/* Buttons */
+:root[data-theme="blue"] .btn,
+body.theme-blue .btn {
+    background: var(--blue-primary);
+    color: #ffffff;
+    border-color: var(--blue-primary-600);
+}
+
+:root[data-theme="blue"] .btn:hover:not(:disabled),
+body.theme-blue .btn:hover:not(:disabled) {
+    background: var(--blue-primary-600);
+    box-shadow: 0 8px 20px rgba(17, 84, 217, 0.18);
+}
+
+:root[data-theme="blue"] .btn-primary,
+body.theme-blue .btn-primary {
+    background: var(--blue-primary);
+    border-color: var(--blue-primary-600);
+}
+
+:root[data-theme="blue"] .btn-secondary,
+body.theme-blue .btn-secondary {
+    background: var(--blue-secondary);
+    border-color: var(--blue-primary-400);
+}
+
+:root[data-theme="blue"] .btn-info,
+body.theme-blue .btn-info {
+    background: var(--blue-accent);
+    border-color: var(--blue-accent-600);
+}
+
+:root[data-theme="blue"] .btn-success,
+body.theme-blue .btn-success {
+    background: var(--blue-success);
+    color: #0B1F33;
+    border-color: #98D936;
+}
+
+:root[data-theme="blue"] .btn-warning,
+body.theme-blue .btn-warning {
+    background: var(--blue-accent-500);
+    border-color: var(--blue-accent-600);
+}
+
+/* Search input, inputs */
+:root[data-theme="blue"] .search-input,
+:root[data-theme="blue"] input,
+:root[data-theme="blue"] select,
+:root[data-theme="blue"] textarea,
+body.theme-blue .search-input,
+body.theme-blue input,
+body.theme-blue select,
+body.theme-blue textarea {
+    border: 1px solid rgba(5, 84, 242, 0.22);
+    background: #ffffff;
+    color: var(--color-gray-900);
+}
+
+:root[data-theme="blue"] .search-input:focus,
+:root[data-theme="blue"] input:focus,
+:root[data-theme="blue"] select:focus,
+:root[data-theme="blue"] textarea:focus,
+body.theme-blue .search-input:focus,
+body.theme-blue input:focus,
+body.theme-blue select:focus,
+body.theme-blue textarea:focus {
+    border-color: var(--blue-primary-400);
+    box-shadow: 0 0 0 3px rgba(17, 84, 217, 0.18);
+    outline: none;
+}
+
+/* Nav buttons use brand gradient via tokens */
+:root[data-theme="blue"] .nav-btn:hover,
+body.theme-blue .nav-btn:hover {
+    border-color: var(--color-brand-primary);
+}
+
+:root[data-theme="blue"] .nav-btn.active,
+body.theme-blue .nav-btn.active {
+    background: var(--color-brand-gradient);
+}
+
+/* Panels/Stats */
+:root[data-theme="blue"] .stat-card,
+body.theme-blue .stat-card {
+    background: #ffffff;
+    border: 1px solid rgba(5, 84, 242, 0.18);
+}
+
+/* Footer or subtle tinted sections */
+:root[data-theme="blue"] footer,
+body.theme-blue footer {
+    background: var(--blue-bg-tint);
+}
+
+/* Scrollbar */
+:root[data-theme="blue"] ::-webkit-scrollbar-thumb,
+body.theme-blue ::-webkit-scrollbar-thumb {
+    background: var(--blue-primary-400);
+    border: 3px solid #ffffff;
+    border-radius: 10px;
+}
