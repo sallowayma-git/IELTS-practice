@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Marauder's Map</title>
+    <style>
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+        }
+
+        .map-container {
+            width: 1440px;
+            height: 900px;
+            background-image: url('./map-bg.png');
+        }
+
+        .map {
+            width: 100%;
+            height: 100%;
+            background-image: url('./map.png');
+            mix-blend-mode: multiply;
+            filter: grayscale(1);
+        }
+
+        .map .mask {
+            width: 100%;
+            height: 100%;
+            background-image: url("./cloud.png");
+            mix-blend-mode: lighten;
+            animation: 3s linear 0s magic forwards;
+        }
+
+        .track {
+            position: absolute;
+            top: 0;
+            width: 1440px;
+            height: 900px;
+            mix-blend-mode: multiply;
+            opacity: .7;
+        }
+
+        .footprint {
+            position: absolute;
+        }
+
+        .footprint .foot {
+            position: absolute;
+            width: 10px;
+            height: 22px;
+            background-image: url('./footprints.png');
+            background-size: 40px;
+            background-repeat: no-repeat;
+            background-position-x: 10px;
+            animation: 1s linear 0s footsteps forwards;
+        }
+
+        .footprint .foot::after {
+            display: block;
+            content: '';
+            width: 100%;
+            height: 100%;
+            background-image: url('./footprints-cloud.png');
+            background-repeat: no-repeat;
+            background-size: 20px 22px;
+            mix-blend-mode: lighten;
+            animation: 8s linear 1s footHide forwards;
+            opacity: 0;
+        }
+
+        .footprint.last .foot::after {
+            animation-play-state: paused;
+        }
+
+        @keyframes footHide {
+            0% {
+                opacity: 0;
+            }
+
+            25% {
+                opacity: 1;
+                filter: brightness(1);
+            }
+
+            100% {
+                opacity: 1;
+                filter: brightness(10);
+            }
+        }
+
+        .footprint .foot.right::after {
+            background-position-x: -10px;
+        }
+
+
+        @keyframes footsteps {
+            0% {
+                background-position-x: 0px;
+            }
+
+            25% {
+                background-position-x: 0px;
+            }
+
+            25.1% {
+                background-position-x: -10px;
+            }
+
+            50% {
+                background-position-x: -10px;
+            }
+
+            50.1% {
+                background-position-x: -20px;
+            }
+
+            75% {
+                background-position-x: -20px;
+            }
+
+            75.1% {
+                background-position-x: -30px;
+            }
+
+            100% {
+                background-position-x: -30px;
+            }
+        }
+
+        .footprint .foot.left {
+            left: -5px;
+            top: 7px;
+        }
+
+        .footprint .foot.right {
+            left: 5px;
+            top: -7px;
+            background-position-y: -22px;
+            animation-delay: 1s;
+        }
+
+        @keyframes magic {
+            from {
+                filter: brightness(10);
+            }
+
+            to {
+                filter: brightness(0);
+            }
+        }
+
+        .name-banner {
+            position: absolute;
+            width: 160px;
+            height: 40px;
+            background-image: url('./banner.svg');
+            background-repeat: no-repeat;
+            background-size: 160px 40px;
+            text-align: center;
+            line-height: 30px;
+            font-family: 'Apple Chancery';
+            z-index: 1;
+            display: none;
+            animation: 1s linear 0s nameShow forwards;
+        }
+
+        @keyframes nameShow {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="map-container">
+        <div class="map">
+            <div id="mapMask" class="mask"></div>
+        </div>
+        <svg class="path" width="1440px" height="900px" viewBox="0 0 1440 900" version="1.1"
+            xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+            <title>path</title>
+            <g id="页面-1" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd" stroke-opacity="0">
+                <g id="编组" stroke="#FFFFFF">
+                    <rect id="矩形" x="0.5" y="0.5" width="1439" height="899"></rect>
+                    <polyline id="path"
+                        points="130.896846 440.973055 77.5736485 440.973055 37.1505202 369.443329 37.1505202 356.479448 51.9044918 351.186423 224.12596 351.186423 231.548286 330.534893 224.12596 255.156304 231.548286 207.572814 384.619482 213.802866 484.122309 199.455275 653.112882 162.545157 670.983559 247.421636 670.983559 364.482797 638.20106 369.443329 631.544477 406.417259 608.545342 415.874847 608.545342 467.454973 622.076813 475.219868 670.983559 467.454973 670.983559 429.285411">
+                    </polyline>
+                </g>
+            </g>
+        </svg>
+        <div id="track" class="track">
+            <div id="name" class="name-banner">Icochi</div>
+        </div>
+    </div>
+    <script>
+        (function () {
+            function createFootprint() {
+                const footprint = document.createElement('div');
+                footprint.className = 'footprint';
+
+                const footLeft = document.createElement('div');
+                const footRight = document.createElement('div');
+
+                footLeft.classList = 'foot left'
+                footRight.classList = 'foot right'
+
+                footprint.appendChild(footLeft);
+                footprint.appendChild(footRight);
+                return footprint;
+            }
+
+            const $path = document.querySelector('#path');
+            const pathLen = $path.getTotalLength();
+
+            const $track = document.querySelector('#track');
+            const $name = document.querySelector('#name');
+
+            let tempLen = 0;
+            let interval;
+            function drawFootprint() {
+                const point = $path.getPointAtLength(tempLen);
+                $name.style.left = `${point.x + 25}px`;
+                $name.style.top = `${point.y + 25}px`;
+
+                if (tempLen % 40 === 0) {
+                    const footprint = createFootprint();
+                    footprint.style.left = `${point.x}px`;
+                    footprint.style.top = `${point.y}px`;
+
+                    const prePoint = $path.getPointAtLength(tempLen - 20);
+                    const nextPoint = $path.getPointAtLength(tempLen + 20);
+                    const angle = getAngle(prePoint, nextPoint);
+                    footprint.style.rotate = `${angle + Math.PI / 2}rad`;
+
+                    $track.appendChild(footprint);
+                    if (tempLen > pathLen) {
+                        clearInterval(interval);
+                        footprint.classList.add('last');
+                    } else {
+                        setTimeout(() => {
+                            footprint.remove();
+                        }, 15000)
+                    }
+                }
+                tempLen += 1;
+            }
+
+            function getAngle(p0, p1) {
+                const deltaX = p1.x - p0.x;
+                const deltaY = p1.y - p0.y;
+                const angle = Math.atan2(deltaY, deltaX);
+                return angle;
+            }
+
+            const $mapMask = document.querySelector('#mapMask');
+            $mapMask.addEventListener('animationend', (e) => {
+                drawFootprint();
+                $name.style.display = 'block';
+                interval = setInterval(() => {
+                    drawFootprint();
+                }, 50);
+            })
+        })();
+    </script>
+</body>
+
+</html>

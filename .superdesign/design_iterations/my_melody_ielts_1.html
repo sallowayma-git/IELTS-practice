@@ -3816,18 +3816,167 @@
             let basePath = String(exam.path || '').replace(/\\/g, '/');
             if (basePath && !basePath.endsWith('/')) basePath += '/';
 
-            const ROOT_LISTENING = '';
-            const ROOT_READING = '睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/';
-            const root = (type === 'listening') ? ROOT_LISTENING : ROOT_READING;
+            // base标签="../../"已设置，基准路径为项目根目录
+            // 因此路径应该从根目录开始
+            let root;
+            if (type === 'listening') {
+                root = ''; // ListeningPractice已经在exam.path中
+            } else {
+                root = '睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/';
+            }
 
             let fileName;
             if (kind === 'html') fileName = exam.filename || exam.fileName || 'index.html';
             else fileName = exam.pdfFilename || exam.fileName || 'content.pdf';
 
-            return encodeURI(root + basePath + fileName);
+            const fullPath = root + basePath + fileName;
+            console.log('[Resource] Building path:', { type, basePath, root, fileName, fullPath, baseHref: document.baseURI });
+            return encodeURI(fullPath);
         }
 
         // 打开真实题目
+        function startExamHandshake(childWin, exam) {
+            const sessionId = `${exam.id}-${Date.now()}`;
+            window._lastOpenedSessionId = sessionId; // 保存sessionId供后续使用
+            window._lastOpenedExamId = exam.id; // 保存examId
+
+            let tries = 0, maxTries = 40; // ~12s
+            const timer = setInterval(() => {
+                tries++;
+                try {
+                    childWin.postMessage({ type: 'INIT_SESSION', data: { sessionId, examId: exam.id } }, '*');
+                    childWin.postMessage({ type: 'init_exam_session', data: { sessionId, examId: exam.id } }, '*');
+                } catch (_) {}
+                if (tries >= maxTries) clearInterval(timer);
+            }, 300);
+
+            const onMsg = (ev) => {
+                const t = ev?.data?.type;
+                if (t === 'SESSION_READY' || t === 'session_started') {
+                    clearInterval(timer);
+                    window.removeEventListener('message', onMsg);
+                }
+            };
+            window.addEventListener('message', onMsg);
+
+            console.log('[Handshake] Started for exam:', exam.id, 'sessionId:', sessionId);
+        }
+
+        function normalizePracticeResult(msg, exam) {
+            const d = msg?.data || {};
+            const pct = Number(d.percentage ?? (d.correct && d.total ? Math.round(d.correct*100/d.total) : 0)) || 0;
+
+            // 使用子页面的sessionId，如果没有则使用父页的握手sessionId
+            let sessionId = d.sessionId;
+            if (!sessionId && window._lastOpenedSessionId) {
+                sessionId = window._lastOpenedSessionId;
+            } else if (!sessionId && window._lastOpenedExamId) {
+                sessionId = `${window._lastOpenedExamId}-${Date.now()}`;
+            } else if (!sessionId) {
+                sessionId = `${exam.id}-${Date.now()}`;
+            }
+
+            console.log('[Record] Normalizing result:', {
+                sessionId,
+                examId: exam.id,
+                percentage: pct,
+                hasSessionId: !!d.sessionId,
+                hasLastOpenedSessionId: !!window._lastOpenedSessionId,
+                hasLastOpenedExamId: !!window._lastOpenedExamId
+            });
+
+            return {
+                id: String(sessionId),
+                examId: String(exam.id),
+                title: String(exam.title || ''),
+                type: String(exam.type || ''),
+                score: pct,
+                percentage: pct,
+                date: new Date().toISOString(),
+                duration: Number(d.duration || 0)
+            };
+        }
+
+        function upsertPracticeRecord(rec) {
+            console.log('[Record] Starting upsert for:', rec);
+
+            // 获取当前的记录列表
+            let list = storage.get('practice_records', []);
+            const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+
+            // 1. 按sessionId去重
+            const bySessionId = (r) => String(r.id) === String(rec.id);
+            const sessionIdx = list.findIndex(bySessionId);
+
+            if (sessionIdx >= 0) {
+                // 找到相同sessionId的记录，直接更新
+                list[sessionIdx] = rec;
+                console.log('[Record] Updated existing record by sessionId:', rec.id);
+            } else {
+                // 2. 按examId和时间窗口去重（5分钟内）
+                const duplicateIdx = list.findIndex(r =>
+                    String(r.examId) === String(rec.examId) &&
+                    new Date(r.date) > fiveMinutesAgo
+                );
+
+                if (duplicateIdx >= 0) {
+                    // 找到相近时间的重复记录，替换
+                    list[duplicateIdx] = rec;
+                    console.log('[Record] Replaced duplicate record by time window:', rec.examId);
+                } else {
+                    // 没有重复，添加新记录
+                    list.push(rec);
+                    console.log('[Record] Added new record:', rec.id);
+                }
+            }
+
+            // 同步到storage
+            storage.set('practice_records', list);
+
+            // 更新app.practiceRecords，确保不重复
+            if (app && app.practiceRecords) {
+                // 创建一个基于storage记录的新列表
+                const finalRecords = [...list];
+
+                // 只添加app.practiceRecords中确实不在storage中的记录
+                // 并且这些记录不是刚刚处理过的记录
+                app.practiceRecords.forEach(oldRecord => {
+                    const existsInStorage = list.find(r => r.id === oldRecord.id);
+                    const isNewRecord = oldRecord.id === rec.id;
+
+                    if (!existsInStorage && !isNewRecord) {
+                        // 检查是否有重复的examId在相近时间内
+                        const isDuplicate = finalRecords.find(r =>
+                            String(r.examId) === String(oldRecord.examId) &&
+                            Math.abs(new Date(r.date) - new Date(oldRecord.date)) < 5 * 60 * 1000
+                        );
+
+                        if (!isDuplicate) {
+                            finalRecords.push(oldRecord);
+                        }
+                    }
+                });
+
+                // 按日期排序，最新的在前面
+                finalRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+                app.practiceRecords = finalRecords;
+                console.log('[Record] Final records count:', finalRecords.length);
+            } else {
+                app.practiceRecords = list;
+            }
+
+            // 保存数据并更新UI
+            if (app && app.saveData) {
+                app.saveData();
+            }
+            if (app && app.updateUI) {
+                app.updateUI();
+            }
+
+            console.log('[Record] Total records after update:', app.practiceRecords ? app.practiceRecords.length : 'unknown');
+        }
+
         function openRealExam(examId, type) {
             const exam = app.examData.find(e => e.id === examId);
             if (!exam) {
@@ -3846,16 +3995,9 @@
                     // 直接打开 HTML
                     const htmlPath = buildResourcePath(exam, 'html');
                     const examWindow = window.open(htmlPath, '_blank');
-
-                    // 监听练习完成消息
-                    const messageHandler = (event) => {
-                        if (event.data && (event.data.type === 'PRACTICE_COMPLETE' || event.data.type === 'practice_completed')) {
-                            syncRealPracticeRecords();
-                            window.removeEventListener('message', messageHandler);
-                        }
-                    };
-
-                    window.addEventListener('message', messageHandler);
+                    window._lastOpenedExam = exam;
+                    window._lastOpenedExamId = exam.id;
+                    startExamHandshake(examWindow, exam);
                     app.showNotification(`正在打开: ${exam.title}`);
                 }
                 return;
@@ -3869,16 +4011,9 @@
                     if (response.ok) {
                         // 在新窗口中打开题目
                         const examWindow = window.open(fullPath, '_blank');
-
-                        // 监听练习完成消息
-                        const messageHandler = (event) => {
-                            if (event.data && (event.data.type === 'PRACTICE_COMPLETE' || event.data.type === 'practice_completed')) {
-                                    syncRealPracticeRecords();
-                                window.removeEventListener('message', messageHandler);
-                            }
-                        };
-
-                        window.addEventListener('message', messageHandler);
+                        window._lastOpenedExam = exam;
+                        window._lastOpenedExamId = exam.id;
+                        startExamHandshake(examWindow, exam);
                         app.showNotification(`正在打开: ${exam.title}`);
                     } else {
                         // 如果HTML文件不存在，尝试PDF
@@ -3897,9 +4032,28 @@
 
         // 同步真实练习记录
         function syncRealPracticeRecords() {
-            const records = storage.get('practice_records', []);
+            const storageRecords = storage.get('practice_records', []);
 
-            app.practiceRecords = records;
+            // 智能合并storage记录和app.practiceRecords
+            if (app && app.practiceRecords) {
+                const mergedRecords = [...storageRecords];
+
+                // 保留app.practiceRecords中独有的记录（可能是导入的）
+                app.practiceRecords.forEach(existingRecord => {
+                    const existsInStorage = storageRecords.find(r => r.id === existingRecord.id);
+                    if (!existsInStorage) {
+                        mergedRecords.push(existingRecord);
+                    }
+                });
+
+                // 按日期排序，最新的在前面
+                mergedRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+                app.practiceRecords = mergedRecords;
+                console.log('[Sync] Merged records count:', mergedRecords.length);
+            } else {
+                app.practiceRecords = storageRecords;
+            }
 
             updateCategoryStats();
             updateOverview();
@@ -3920,18 +4074,27 @@
             syncRealPracticeRecords();
 
             // 设置消息监听器
+            // 父页全局消息监听（可放 initializeRealData 内部）
             window.addEventListener('message', (event) => {
+                const t = event?.data?.type;
+                if (!t) return;
+
+                // 安全检查：file:// 允许 null origin；http(s) 仅允许同源或白名单
                 try {
-                    if (event.origin && event.origin !== 'null' && event.origin !== window.location.origin) {
+                    if (location.protocol !== 'file:' && event.origin && event.origin !== 'null' && event.origin !== window.location.origin) {
                         return;
                     }
                 } catch (_) {}
 
-                const data = event.data || {};
-                const type = data.type;
-                if (type === 'PRACTICE_COMPLETE' || type === 'practice_completed') {
-                    app.showNotification('练习已完成，正在更新记录...');
-                    setTimeout(syncRealPracticeRecords, 300);
+                if (t === 'PRACTICE_COMPLETE' || t === 'practice_completed' || t === 'session_completed') {
+                    try {
+                        const last = window._lastOpenedExam || {}; // 在 openRealExam 中赋值
+                        const rec = normalizePracticeResult(event, last);
+                        upsertPracticeRecord(rec);
+                        app && app.showNotification && app.showNotification('练习完成，记录已保存');
+                    } catch (e) {
+                        console.warn('Save record failed:', e);
+                    }
                 }
             });
         }
