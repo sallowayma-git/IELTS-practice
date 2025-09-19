@@ -2040,8 +2040,25 @@ body.bloom-dark-mode {
 /* Base */
 :root[data-theme="blue"] body,
 body.theme-blue {
-    background: linear-gradient(180deg, rgba(196,225,242,0.35) 0%, rgba(5,84,242,0.06) 100%), #ffffff;
+    /* Multi-layer animated waves */
+    background-image:
+      radial-gradient(1200px 700px at 0% 100%, rgba(7,176,242,0.10), transparent 60%),
+      radial-gradient(1000px 600px at 100% 0%, rgba(5,199,242,0.08), transparent 60%),
+      linear-gradient(180deg, rgba(196,225,242,0.35) 0%, rgba(5,84,242,0.06) 100%),
+      #ffffff;
+    background-attachment: fixed, fixed, fixed, fixed;
+    background-size: 140% 140%, 140% 140%, 100% 100%, auto;
+    background-position: 0% 0%, 100% 100%, center, center;
+    position: relative;
+    z-index: 0; /* create stacking context for pseudo waves */
+    animation: blueWaveFlow 26s ease-in-out infinite alternate;
     color: var(--color-gray-900);
+}
+
+@keyframes blueWaveFlow {
+    0% { background-position: 0% 0%, 100% 100%, center, center; }
+    50% { background-position: 45% 20%, 55% 80%, center, center; }
+    100% { background-position: 100% 0%, 0% 100%, center, center; }
 }
 
 /* Header */
@@ -2178,6 +2195,143 @@ body.theme-blue .nav-btn.active {
 body.theme-blue .stat-card {
     background: #ffffff;
     border: 1px solid rgba(5, 84, 242, 0.18);
+}
+
+/* Settings sections */
+:root[data-theme="blue"] #settings-view > div > div,
+body.theme-blue #settings-view > div > div {
+    background: #ffffff;
+    border: 1px solid rgba(5,84,242,0.18);
+    box-shadow: 0 8px 20px rgba(17,84,217,0.08);
+}
+
+/* Practice history container + items */
+:root[data-theme="blue"] .practice-history,
+body.theme-blue .practice-history {
+    background: linear-gradient(135deg, var(--blue-bg-tint) 0%, #ffffff 60%, var(--blue-bg-tint) 100%);
+    border: 1px solid rgba(5,84,242,0.18);
+}
+
+:root[data-theme="blue"] .history-item,
+body.theme-blue .history-item {
+    background: #ffffff;
+    border: 1px solid rgba(5,84,242,0.18);
+    color: #0B1F33;
+}
+
+:root[data-theme="blue"] .history-item:hover,
+body.theme-blue .history-item:hover {
+    border-color: rgba(5,84,242,0.35);
+    box-shadow: 0 6px 18px rgba(17,84,217,0.10);
+}
+
+:root[data-theme="blue"] .record-meta-line,
+body.theme-blue .record-meta-line {
+    color: #274b6f;
+}
+:root[data-theme="blue"] .record-percentage,
+body.theme-blue .record-percentage {
+    color: #0B1F33;
+}
+
+/* Blue Dark Mode (toggle via .blue-dark-mode on body) */
+body.theme-blue.blue-dark-mode,
+:root[data-theme="blue"] body.blue-dark-mode {
+    background-image:
+      radial-gradient(1200px 700px at 0% 100%, rgba(7,176,242,0.14), transparent 60%),
+      radial-gradient(1000px 600px at 100% 0%, rgba(5,199,242,0.12), transparent 60%),
+      linear-gradient(180deg, #0b1f3f 0%, #081226 100%);
+    background-attachment: fixed, fixed, fixed;
+    background-size: 160% 160%, 160% 160%, 100% 100%;
+    background-position: 0% 0%, 100% 100%, center;
+    animation: blueWaveFlow 28s ease-in-out infinite alternate;
+    color: #e8f2ff;
+}
+
+body.theme-blue.blue-dark-mode .header,
+body.theme-blue.blue-dark-mode .view,
+body.theme-blue.blue-dark-mode .category-card,
+body.theme-blue.blue-dark-mode .exam-item,
+body.theme-blue.blue-dark-mode .stat-card,
+body.theme-blue.blue-dark-mode #settings-view > div > div,
+body.theme-blue.blue-dark-mode .practice-history,
+body.theme-blue.blue-dark-mode .history-item {
+    background: rgba(12, 26, 54, 0.85);
+    border: 1px solid rgba(87, 183, 242, 0.28);
+    color: #e8f2ff;
+}
+
+body.theme-blue.blue-dark-mode .record-meta-line,
+body.theme-blue.blue-dark-mode .record-percentage,
+body.theme-blue.blue-dark-mode .category-title,
+body.theme-blue.blue-dark-mode .category-meta {
+    color: #cfe4ff;
+}
+
+body.theme-blue.blue-dark-mode .btn,
+body.theme-blue.blue-dark-mode .btn-primary,
+body.theme-blue.blue-dark-mode .btn-info {
+    background: #0554F2;
+    border-color: #1154D9;
+    color: #ffffff;
+}
+
+body.theme-blue.blue-dark-mode .btn:hover:not(:disabled) {
+    background: #1154D9;
+    box-shadow: 0 8px 20px rgba(17,84,217,0.28);
+}
+
+/* =====================
+   Blue Waves (visible left-to-right motion)
+   Two parallax wave layers as body pseudo-elements
+   ===================== */
+:root[data-theme="blue"] body::before,
+body.theme-blue::before {
+    content: "";
+    position: fixed;
+    left: 0; right: 0; bottom: 0; top: auto;
+    height: 34vh;
+    pointer-events: none;
+    z-index: 2;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1440' height='160' viewBox='0 0 1440 160' preserveAspectRatio='none'><path fill='%2307B0F2' fill-opacity='0.30' d='M0,72 C 120,104 240,40 360,72 C 480,104 600,40 720,72 C 840,104 960,40 1080,72 C 1200,104 1320,40 1440,72 L1440,160 L0,160 Z'/></svg>");
+    background-repeat: repeat-x;
+    background-size: 1200px 160px;
+    background-position: 0% 100%;
+    animation: blueWaveSlide1 14s linear infinite;
+    opacity: 0.55;
+}
+
+:root[data-theme="blue"] body::after,
+body.theme-blue::after {
+    content: "";
+    position: fixed;
+    left: 0; right: 0; bottom: 0; top: auto;
+    height: 40vh;
+    pointer-events: none;
+    z-index: 1;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1440' height='200' viewBox='0 0 1440 200' preserveAspectRatio='none'><path fill='%2305C7F2' fill-opacity='0.40' d='M0,112 C 160,144 320,80 480,112 C 640,144 800,80 960,112 C 1120,144 1280,80 1440,112 L1440,200 L0,200 Z'/></svg>");
+    background-repeat: repeat-x;
+    background-size: 1000px 200px;
+    background-position: 0% calc(100% - 60px);
+    animation: blueWaveSlide2 22s linear infinite reverse;
+    opacity: 0.45;
+}
+
+@keyframes blueWaveSlide1 {
+    from { background-position-x: 0; }
+    to   { background-position-x: 1200px; }
+}
+@keyframes blueWaveSlide2 {
+    from { background-position-x: 0; }
+    to   { background-position-x: 1000px; }
+}
+
+/* Dark mode: deepen wave tones */
+body.theme-blue.blue-dark-mode::before {
+    opacity: 0.35;
+}
+body.theme-blue.blue-dark-mode::after {
+    opacity: 0.50;
 }
 
 /* Footer or subtle tinted sections */
