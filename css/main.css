@@ -2395,8 +2395,8 @@ body.theme-blue::after {
       <path d='M72 24 L100 40' stroke='%2305C7F2' stroke-width='0.8' stroke-opacity='0.6'/>
       <path d='M72 30 L98 42' stroke='%2305C7F2' stroke-width='0.6' stroke-opacity='0.5'/>
     </g></svg>") center/contain no-repeat;
-    transform-origin: 68% 30%;
-    animation: sailDrift 26s linear infinite, sailFlutter 1s ease-in-out infinite alternate;
+    transform-origin: 72% 28%;
+    animation: sailDrift 26s linear infinite, sailFlutter 0.85s cubic-bezier(0.36, 0.07, 0.19, 0.97) infinite;
 }
 
 @keyframes sailDrift {
@@ -2405,9 +2405,11 @@ body.theme-blue::after {
 }
 
 @keyframes sailFlutter {
-    0%   { transform: rotate(0deg) skewX(0deg); }
-    25%  { transform: rotate(12deg) skewX(8deg); }
-    50%  { transform: rotate(-10deg) skewX(-6deg); }
-    75%  { transform: rotate(12deg) skewX(8deg); }
-    100% { transform: rotate(-10deg) skewX(-6deg); }
+    0%   { transform: rotate(0deg) skewX(0deg) scaleX(1);      transform-origin: 70% 28%; }
+    15%  { transform: rotate(12deg) skewX(8deg) scaleX(0.985); transform-origin: 74% 26%; }
+    30%  { transform: rotate(-16deg) skewX(-11deg) scaleX(1.03); transform-origin: 68% 30%; }
+    45%  { transform: rotate(14deg) skewX(9deg) scaleX(0.99);  transform-origin: 75% 27%; }
+    60%  { transform: rotate(-12deg) skewX(-8deg) scaleX(1.02); transform-origin: 69% 30%; }
+    75%  { transform: rotate(10deg) skewX(7deg) scaleX(0.99);  transform-origin: 72% 28%; }
+    100% { transform: rotate(-10deg) skewX(-7deg) scaleX(1.01); transform-origin: 70% 29%; }
 }
