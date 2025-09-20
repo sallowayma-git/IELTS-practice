@@ -469,28 +469,49 @@ function renderExamItem(exam) {
 
 function resolveExamBasePath(exam) {
   let basePath = (exam && exam.path) ? String(exam.path) : "";
-  // Hotfix: 强制修正阅读题库根路径，避免常量乱码导致路径拼接失败
-  (function(){
-    try {
-      const readingRootFixed = '睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/';
-      if (exam && exam.type === 'reading' && basePath && !basePath.includes('睡着过项目组(9.4)[134篇]/')) {
-        basePath = readingRootFixed + basePath;
+
+  // Use path-map for normalization instead of hard-coded paths
+  try {
+    const pathMap = getPathMap();
+    if (exam && exam.type && pathMap[exam.type] && pathMap[exam.type].root) {
+      const rootPath = pathMap[exam.type].root;
+      if (basePath && !basePath.includes(rootPath)) {
+        basePath = rootPath + basePath;
       }
-    } catch (_) {}
-  })();
-  const readingRoot = '睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/';
-  
-  if (exam && exam.type === 'reading' && !basePath.includes('睡着过项目组(9.4)[134篇]')) {
-      basePath = readingRoot + basePath;
+    }
+  } catch (error) {
+    console.warn('[PathNormalization] Failed to apply path map:', error);
   }
 
-  // 听力路径在数据文件中似乎是完整的，不需要修改
-  
   if (!basePath.endsWith('/')) {
     basePath += "/";
   }
   basePath = basePath.replace(/\\/g, "/").replace(/\/+/g, "/");
   return basePath;
+}
+
+function getPathMap() {
+  try {
+    // Try to load from JSON file first
+    if (window.pathMap) {
+      return window.pathMap;
+    }
+
+    // Fallback to embedded path map
+    return {
+      reading: {
+        root: '睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/',
+        exceptions: {}
+      },
+      listening: {
+        root: 'ListeningPractice/',
+        exceptions: {}
+      }
+    };
+  } catch (error) {
+    console.warn('[PathNormalization] Failed to load path map:', error);
+    return {};
+  }
 }
 
 function buildResourcePath(exam, kind = 'html') {

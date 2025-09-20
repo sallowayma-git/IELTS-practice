@@ -2249,7 +2249,6 @@
                     <button class="btn" onclick="loadLibrary()">🔄 重新加载题库</button>
                     <button class="btn btn-secondary" onclick="checkLibraryUpdates()">📋 检查更新</button>
                     <button class="btn btn-secondary" onclick="libraryInfo()">ℹ️ 题库信息</button>
-                    <button class="btn btn-warning" onclick="testDataMatching()">🧪 测试数据匹配</button>
                 </div>
             </div>
 
@@ -2261,6 +2260,7 @@
                     <button class="btn btn-secondary" onclick="clearAllData()">🗑️ 清空数据</button>
                     <button class="btn btn-secondary" onclick="exportData()">📋 导出数据</button>
                     <button class="btn btn-secondary" onclick="importData()">📥 导入数据</button>
+                    <button class="btn btn-warning" onclick="manageStorage()">🗂️ 存储管理</button>
                 </div>
             </div>
 
@@ -2330,6 +2330,7 @@
                 this.updateUI();
                 this.startDataSync();
                 this.initPracticeReminders();
+                this.initStorageMonitoring();
             }
 
             // 数据加载
@@ -2406,9 +2407,70 @@
 
             // 数据保存
             saveData() {
-                localStorage.setItem('myMelodyExamData', JSON.stringify(this.examData));
-                localStorage.setItem('myMelodyPracticeRecords', JSON.stringify(this.practiceRecords));
-                localStorage.setItem('myMelodySettings', JSON.stringify(this.settings));
+                try {
+                    // 检查存储空间
+                    const totalSize = JSON.stringify(this.examData).length +
+                                    JSON.stringify(this.practiceRecords).length +
+                                    JSON.stringify(this.settings).length;
+
+                    // 如果数据量过大，清理旧的练习记录
+                    if (totalSize > 4 * 1024 * 1024) { // 超过4MB
+                        this.cleanupOldRecords();
+                    }
+
+                    localStorage.setItem('myMelodyExamData', JSON.stringify(this.examData));
+                    localStorage.setItem('myMelodyPracticeRecords', JSON.stringify(this.practiceRecords));
+                    localStorage.setItem('myMelodySettings', JSON.stringify(this.settings));
+
+                    // 定期清理缓存
+                    this.cleanupCache();
+                } catch (error) {
+                    console.error('[Storage] Save failed:', error);
+                    this.handleStorageQuotaExceeded(error);
+                }
+            }
+
+            // 清理旧的练习记录
+            cleanupOldRecords() {
+                if (this.practiceRecords.length > 100) {
+                    // 只保留最近100条记录
+                    this.practiceRecords = this.practiceRecords
+                        .sort((a, b) => new Date(b.date) - new Date(a.date))
+                        .slice(0, 100);
+                    console.log('[Storage] Cleaned up old records, kept 100 most recent');
+                }
+            }
+
+            // 清理缓存数据
+            cleanupCache() {
+                const keysToRemove = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && (key.includes('cache') || key.includes('temp') || key.startsWith('debug_'))) {
+                        keysToRemove.push(key);
+                    }
+                }
+                keysToRemove.forEach(key => localStorage.removeItem(key));
+            }
+
+            // 处理存储配额超限
+            handleStorageQuotaExceeded(error) {
+                if (error.name === 'QuotaExceededError') {
+                    console.warn('[Storage] Storage quota exceeded, attempting cleanup...');
+
+                    // 清理旧记录
+                    this.cleanupOldRecords();
+
+                    // 再次尝试保存
+                    try {
+                        localStorage.setItem('myMelodyPracticeRecords', JSON.stringify(this.practiceRecords));
+                        localStorage.setItem('myMelodySettings', JSON.stringify(this.settings));
+                        console.log('[Storage] Data saved after cleanup');
+                    } catch (retryError) {
+                        console.error('[Storage] Still cannot save after cleanup:', retryError);
+                        this.showNotification('存储空间不足，请清理浏览器数据或导出记录', 5000);
+                    }
+                }
             }
 
             // 设置事件监听器
@@ -2812,6 +2874,85 @@
                 setTimeout(() => {
                     notification.classList.remove('show', 'bouncing');
                 }, duration);
+            }
+
+            // 初始化存储监控
+            initStorageMonitoring() {
+                // 启动时检查存储空间
+                this.checkStorageQuota();
+
+                // 定期检查存储空间 (每10分钟)
+                setInterval(() => {
+                    this.checkStorageQuota();
+                }, 10 * 60 * 1000);
+
+                // 监听存储变化
+                window.addEventListener('storage', (e) => {
+                    if (e.key === 'myMelodyPracticeRecords' || e.key === 'myMelodyExamData') {
+                        this.checkStorageQuota();
+                    }
+                });
+            }
+
+            // 检查存储配额
+            checkStorageQuota() {
+                try {
+                    const storageInfo = this.getStorageInfo();
+
+                    // 如果使用超过80%，显示警告
+                    const usagePercent = (storageInfo.total / (5 * 1024 * 1024)) * 100;
+                    if (usagePercent > 80) {
+                        console.warn(`[Storage] High usage: ${usagePercent.toFixed(1)}%`);
+                        this.showStorageWarning(usagePercent);
+                    }
+
+                    // 如果记录超过200条，自动清理
+                    if (this.practiceRecords.length > 200) {
+                        console.log('[Storage] Auto-cleanup: too many records');
+                        this.cleanupOldRecords();
+                        this.showNotification('已自动清理旧记录以释放存储空间', 3000);
+                    }
+
+                } catch (error) {
+                    console.error('[Storage] Quota check failed:', error);
+                }
+            }
+
+            // 显示存储警告
+            showStorageWarning(usagePercent) {
+                // 避免频繁显示警告
+                const lastWarning = localStorage.getItem('myMelodyStorageWarningTime');
+                const now = Date.now();
+
+                if (lastWarning && (now - parseInt(lastWarning)) < 30 * 60 * 1000) { // 30分钟内不重复警告
+                    return;
+                }
+
+                localStorage.setItem('myMelodyStorageWarningTime', now.toString());
+
+                this.showBouncingNotification(
+                    `存储空间使用率已达 ${usagePercent.toFixed(0)}%，建议清理旧数据`,
+                    8000
+                );
+            }
+
+            // 获取存储信息（复用之前定义的函数）
+            getStorageInfo() {
+                const records = JSON.stringify(this.practiceRecords);
+                const exams = JSON.stringify(this.examData);
+                const settings = JSON.stringify(this.settings);
+
+                const recordsSize = new Blob([records]).size;
+                const examsSize = new Blob([exams]).size;
+                const settingsSize = new Blob([settings]).size;
+                const total = recordsSize + examsSize + settingsSize;
+
+                return {
+                    records: { count: this.practiceRecords.length, size: recordsSize },
+                    exams: { count: this.examData.length, size: examsSize },
+                    settings: { size: settingsSize },
+                    total: total
+                };
             }
         }
 
@@ -3457,9 +3598,38 @@
 
                 // 生成详细内容
                 let questionTableHtml = '';
-                if (record.realData && record.realData.answers && record.realData.correctAnswers) {
-                    const userAnswers = record.realData.answers;
-                    const correctAnswers = record.realData.correctAnswers;
+
+                // 检查是否有答案数据（支持多种格式）
+                const hasAnswers = record.realData && (
+                    (record.realData.answers && record.realData.correctAnswers) ||
+                    (record.realData.answerComparison && Object.keys(record.realData.answerComparison).length > 0)
+                );
+
+                if (hasAnswers) {
+                    let userAnswers = {};
+                    let correctAnswers = {};
+
+                    // 处理不同格式的答案数据
+                    if (record.realData.answers && record.realData.correctAnswers) {
+                        // 直接使用answers和correctAnswers格式
+                        userAnswers = record.realData.answers;
+                        correctAnswers = record.realData.correctAnswers;
+                    } else if (record.realData.answerComparison) {
+                        // 从answerComparison对象中提取答案
+                        Object.keys(record.realData.answerComparison).forEach(questionId => {
+                            const comparison = record.realData.answerComparison[questionId];
+                            if (comparison && typeof comparison === 'object') {
+                                userAnswers[questionId] = comparison.userAnswer || comparison.user_answer || comparison.user || '—';
+                                correctAnswers[questionId] = comparison.correctAnswer || comparison.correct_answer || comparison.correct || '';
+                            }
+                        });
+                    }
+
+                    // 获取所有题目ID（去重）
+                    const allQuestionIds = [...new Set([
+                        ...Object.keys(userAnswers),
+                        ...Object.keys(correctAnswers)
+                    ])].sort();
 
                     // 生成表格HTML
                     questionTableHtml = `
@@ -3473,10 +3643,10 @@
                                     <div>正误</div>
                                 </div>
                                 <div class="table-body">
-                                    ${Object.keys(userAnswers).map(questionId => {
+                                    ${allQuestionIds.map(questionId => {
                                         const userAnswer = userAnswers[questionId] || '';
                                         const correctAnswer = correctAnswers[questionId] || '';
-                                        const isCorrect = userAnswer === correctAnswer;
+                                        const isCorrect = userAnswer === correctAnswer && userAnswer !== '' && userAnswer !== '—';
                                         const statusClass = isCorrect ? 'correct' : 'incorrect';
                                         const statusText = isCorrect ? '✓' : '✗';
 
@@ -3492,6 +3662,19 @@
                                         `;
                                     }).join('')}
                                 </div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    // 如果没有详细答案数据，显示提示信息
+                    questionTableHtml = `
+                        <div class="questions-section">
+                            <h5>📋 题目详情</h5>
+                            <div style="background: white; border-radius: 12px; padding: 20px; text-align: center; box-shadow: 0 4px 12px rgba(236, 72, 153, 0.1);">
+                                <div style="font-size: 3rem; margin-bottom: 15px; opacity: 0.5;">📝</div>
+                                <p style="color: #6b7280; margin-bottom: 10px;">暂无详细答题记录</p>
+                                <p style="color: #9ca3af; font-size: 0.9rem;">下次练习时将保存详细的答案信息</p>
+                                ${record.dataSource === 'real' ? '<p style="color: #ec4899; font-size: 0.8rem; margin-top: 10px;">💡 提示：请确保在练习页面完成答题后点击"提交"按钮</p>' : ''}
                             </div>
                         </div>
                     `;
@@ -3724,6 +3907,167 @@
             alert(help);
         }
 
+        // 存储管理功能
+        function manageStorage() {
+            const storageInfo = getStorageInfo();
+            const html = `
+            <div id="storage-manager" class="modal-overlay show">
+              <div class="modal-container" style="max-width:600px;">
+                <div class="modal-header">
+                  <h3 class="modal-title"><i class="fas fa-database"></i> 存储管理</h3>
+                  <button class="modal-close" onclick="document.getElementById('storage-manager').remove()">✖</button>
+                </div>
+                <div class="modal-body">
+                  <div style="margin-bottom: 20px;">
+                    <h4>📊 存储使用情况</h4>
+                    <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px; margin: 10px 0;">
+                      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                        <div>练习记录: <strong>${storageInfo.records.count} 条</strong></div>
+                        <div>大小: <strong>${formatBytes(storageInfo.records.size)}</strong></div>
+                      </div>
+                      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                        <div>题目数据: <strong>${storageInfo.exams.count} 项</strong></div>
+                        <div>大小: <strong>${formatBytes(storageInfo.exams.size)}</strong></div>
+                      </div>
+                      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div>总使用: <strong>${formatBytes(storageInfo.total)}</strong></div>
+                        <div>剩余空间: <strong>${formatBytes(storageInfo.remaining)}</strong></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style="margin-bottom: 20px;">
+                    <h4>🧹 清理选项</h4>
+                    <div style="display: grid; gap: 10px;">
+                      <button class="btn" onclick="cleanupRecords(30)" style="text-align: left;">
+                        🗑️ 保留最近30天记录 (当前: ${app.practiceRecords.length} 条)
+                      </button>
+                      <button class="btn btn-secondary" onclick="cleanupRecords(7)" style="text-align: left;">
+                        🗑️ 保留最近7天记录
+                      </button>
+                      <button class="btn btn-warning" onclick="clearOldRecords()" style="text-align: left;">
+                        🗑️ 清理3个月前记录
+                      </button>
+                      <button class="btn btn-info" onclick="compactStorage()" style="text-align: left;">
+                        🔧 压缩存储空间
+                      </button>
+                    </div>
+                  </div>
+
+                  <div style="background: rgba(255,193,7,0.1); padding: 15px; border-radius: 10px; border-left: 4px solid #ffc107;">
+                    <h4 style="color: #856404; margin: 0 0 10px 0;">⚠️ 注意事项</h4>
+                    <ul style="margin: 0; padding-left: 20px; color: #856404;">
+                      <li>清理操作不可恢复，请先导出重要数据</li>
+                      <li>建议定期清理以保持系统性能</li>
+                      <li>系统会自动保留最近的重要记录</li>
+                    </ul>
+                  </div>
+                </div>
+                <div class="modal-footer">
+                  <button class="btn btn-secondary" onclick="document.getElementById('storage-manager').remove()">关闭</button>
+                </div>
+              </div>
+            </div>`;
+
+            document.body.insertAdjacentHTML('beforeend', html);
+        }
+
+        // 获取存储信息
+        function getStorageInfo() {
+            const records = JSON.stringify(app.practiceRecords);
+            const exams = JSON.stringify(app.examData);
+            const settings = JSON.stringify(app.settings);
+
+            const recordsSize = new Blob([records]).size;
+            const examsSize = new Blob([exams]).size;
+            const settingsSize = new Blob([settings]).size;
+            const total = recordsSize + examsSize + settingsSize;
+
+            // 估算localStorage剩余空间 (通常5-10MB)
+            const estimatedQuota = 5 * 1024 * 1024; // 5MB
+            const remaining = Math.max(0, estimatedQuota - total);
+
+            return {
+                records: { count: app.practiceRecords.length, size: recordsSize },
+                exams: { count: app.examData.length, size: examsSize },
+                settings: { size: settingsSize },
+                total: total,
+                remaining: remaining
+            };
+        }
+
+        // 格式化字节大小
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // 清理指定天数外的记录
+        function cleanupRecords(daysToKeep) {
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+
+            const originalCount = app.practiceRecords.length;
+            app.practiceRecords = app.practiceRecords.filter(record => {
+                const recordDate = new Date(record.date);
+                return recordDate >= cutoffDate;
+            });
+
+            const removedCount = originalCount - app.practiceRecords.length;
+            app.saveData();
+            app.updateUI();
+
+            // 关闭模态框并显示结果
+            const modal = document.getElementById('storage-manager');
+            if (modal) modal.remove();
+
+            app.showNotification(`已清理 ${removedCount} 条旧记录，保留最近 ${daysToKeep} 天的数据`);
+        }
+
+        // 清理3个月前记录
+        function clearOldRecords() {
+            const cutoffDate = new Date();
+            cutoffDate.setMonth(cutoffDate.getMonth() - 3);
+
+            const originalCount = app.practiceRecords.length;
+            app.practiceRecords = app.practiceRecords.filter(record => {
+                const recordDate = new Date(record.date);
+                return recordDate >= cutoffDate;
+            });
+
+            const removedCount = originalCount - app.practiceRecords.length;
+            app.saveData();
+            app.updateUI();
+
+            const modal = document.getElementById('storage-manager');
+            if (modal) modal.remove();
+
+            app.showNotification(`已清理 ${removedCount} 条3个月前记录`);
+        }
+
+        // 压缩存储空间
+        function compactStorage() {
+            // 重新整理数据，移除无用字段
+            app.practiceRecords = app.practiceRecords.map(record => {
+                const cleanRecord = { ...record };
+                // 移除可能存在的冗余字段
+                delete cleanRecord.debugInfo;
+                delete cleanRecord.tempData;
+                return cleanRecord;
+            });
+
+            app.saveData();
+            app.updateUI();
+
+            const modal = document.getElementById('storage-manager');
+            if (modal) modal.remove();
+
+            app.showNotification('存储空间已压缩优化');
+        }
+
         // 题库系统真实功能集成
         // Simple storage utility
         const storage = {
@@ -3889,8 +4233,101 @@
                 percentage: pct,
                 hasSessionId: !!d.sessionId,
                 hasLastOpenedSessionId: !!window._lastOpenedSessionId,
-                hasLastOpenedExamId: !!window._lastOpenedExamId
+                hasLastOpenedExamId: !!window._lastOpenedExamId,
+                hasAnswers: !!d.answers,
+                hasCorrectAnswers: !!d.correctAnswers
             });
+
+            // 构建realData对象，包含详细的答案信息
+            let realData = null;
+            let answers = {};
+            let correctAnswers = {};
+
+            console.log('[Debug] normalizePracticeResult - Input data:', {
+                hasAnswers: !!d.answers,
+                hasCorrectAnswers: !!d.correctAnswers,
+                hasAnswerComparison: !!d.answerComparison,
+                answersType: typeof d.answers,
+                correctAnswersType: typeof d.correctAnswers,
+                answerComparisonType: typeof d.answerComparison,
+                total: d.total,
+                correct: d.correct
+            });
+
+            // 处理不同格式的答案数据
+            if (d.answers && typeof d.answers === 'object' && !Array.isArray(d.answers)) {
+                Object.assign(answers, d.answers);
+                console.log('[Debug] Added answers from d.answers:', Object.keys(answers).length);
+            }
+
+            if (d.correctAnswers && typeof d.correctAnswers === 'object' && !Array.isArray(d.correctAnswers)) {
+                Object.assign(correctAnswers, d.correctAnswers);
+                console.log('[Debug] Added correctAnswers from d.correctAnswers:', Object.keys(correctAnswers).length);
+            }
+
+            // 处理answerComparison格式的数据
+            if (d.answerComparison && typeof d.answerComparison === 'object' && !Array.isArray(d.answerComparison)) {
+                console.log('[Debug] Processing answerComparison data:', Object.keys(d.answerComparison).length, 'questions');
+                Object.keys(d.answerComparison).forEach(questionId => {
+                    const comparison = d.answerComparison[questionId];
+                    if (comparison && typeof comparison === 'object') {
+                        // 从answerComparison对象中提取答案
+                        answers[questionId] = comparison.userAnswer || comparison.user_answer || comparison.user || '—';
+                        correctAnswers[questionId] = comparison.correctAnswer || comparison.correct_answer || comparison.correct || '';
+                        console.log(`[Debug] Processed Q${questionId}: user=${answers[questionId]}, correct=${correctAnswers[questionId]}`);
+                    }
+                });
+            }
+
+            // 如果有答案数据，构建realData对象
+            if (Object.keys(answers).length > 0 || Object.keys(correctAnswers).length > 0) {
+                realData = {
+                    answers: answers,
+                    correctAnswers: correctAnswers,
+                    totalQuestions: d.total || Object.keys(answers).length || Object.keys(correctAnswers).length,
+                    correctCount: d.correct || Object.keys(answers).filter(qid =>
+                        answers[qid] && correctAnswers[qid] &&
+                        answers[qid] !== '—' && answers[qid] !== '' &&
+                        answers[qid] === correctAnswers[qid]
+                    ).length
+                };
+
+                // 添加其他可能的详细信息
+                if (d.questionDetails) {
+                    realData.questionDetails = d.questionDetails;
+                }
+                if (d.startTime) {
+                    realData.startTime = d.startTime;
+                }
+                if (d.endTime) {
+                    realData.endTime = d.endTime;
+                }
+
+                // 保存answerComparison数据以供详情页面使用
+                if (d.answerComparison) {
+                    realData.answerComparison = d.answerComparison;
+                }
+
+                // 保存其他可能的答案相关数据
+                if (d.scoreInfo) {
+                    realData.scoreInfo = d.scoreInfo;
+                }
+                if (d.questionStats) {
+                    realData.questionStats = d.questionStats;
+                }
+
+                console.log('[Debug] Built realData object:', {
+                    hasAnswers: !!realData.answers,
+                    hasCorrectAnswers: !!realData.correctAnswers,
+                    hasAnswerComparison: !!realData.answerComparison,
+                    answerCount: Object.keys(realData.answers || {}).length,
+                    correctAnswerCount: Object.keys(realData.correctAnswers || {}).length,
+                    totalQuestions: realData.totalQuestions,
+                    correctCount: realData.correctCount
+                });
+            } else {
+                console.log('[Debug] No answer data found, realData will be null');
+            }
 
             return {
                 id: String(sessionId),
@@ -3900,7 +4337,9 @@
                 score: pct,
                 percentage: pct,
                 date: new Date().toISOString(),
-                duration: Number(d.duration || 0)
+                duration: Number(d.duration || 0),
+                realData: realData,
+                dataSource: 'real'
             };
         }
 
@@ -4097,10 +4536,22 @@
                     try {
                         const last = window._lastOpenedExam || {}; // 在 openRealExam 中赋值
                         const rec = normalizePracticeResult(event, last);
+
+                        // 确保答案数据被正确保存
+                        if (event.data && (event.data.answers || event.data.correctAnswers)) {
+                            console.log('[Record] Saving detailed answer data:', {
+                                hasAnswers: !!event.data.answers,
+                                hasCorrectAnswers: !!event.data.correctAnswers,
+                                answerCount: event.data.answers ? Object.keys(event.data.answers).length : 0,
+                                correctAnswerCount: event.data.correctAnswers ? Object.keys(event.data.correctAnswers).length : 0
+                            });
+                        }
+
                         upsertPracticeRecord(rec);
                         app && app.showNotification && app.showNotification('练习完成，记录已保存');
                     } catch (e) {
                         console.warn('Save record failed:', e);
+                        console.error('[Record] Error details:', event.data);
                     }
                 }
             });
@@ -4118,6 +4569,41 @@
             app.updateUI();
         }
 
+        // 调试函数：检查练习记录数据结构
+        function debugPracticeRecords() {
+            if (!app || !app.practiceRecords) {
+                console.log('[Debug] No app or practice records found');
+                return;
+            }
+
+            console.log('[Debug] Total practice records:', app.practiceRecords.length);
+
+            app.practiceRecords.forEach((record, index) => {
+                console.log(`[Debug] Record ${index + 1}:`, {
+                    id: record.id,
+                    title: record.title,
+                    type: record.type,
+                    score: record.score,
+                    hasRealData: !!record.realData,
+                    realDataKeys: record.realData ? Object.keys(record.realData) : [],
+                    hasAnswers: !!(record.realData && record.realData.answers),
+                    hasCorrectAnswers: !!(record.realData && record.realData.correctAnswers),
+                    answerCount: record.realData && record.realData.answers ? Object.keys(record.realData.answers).length : 0,
+                    correctAnswerCount: record.realData && record.realData.correctAnswers ? Object.keys(record.realData.correctAnswers).length : 0,
+                    dataSource: record.dataSource
+                });
+
+                // 如果有答案数据，显示前几个答案作为示例
+                if (record.realData && record.realData.answers) {
+                    const answerKeys = Object.keys(record.realData.answers);
+                    console.log(`[Debug] Sample answers for record ${record.id}:`);
+                    answerKeys.slice(0, 3).forEach(key => {
+                        console.log(`  Q${key}: User=${record.realData.answers[key]}, Correct=${record.realData.correctAnswers ? record.realData.correctAnswers[key] : 'N/A'}`);
+                    });
+                }
+            });
+        }
+
         // 页面加载时初始化真实数据
         document.addEventListener('DOMContentLoaded', () => {
             // 确保app对象创建完成后再设置事件监听器
@@ -4125,6 +4611,10 @@
                 initializeRealData();
                 // 重新设置设置页面的事件监听器
                 setupSettingsEventListeners();
+
+                // 添加调试函数到全局，方便用户调试
+                window.debugPracticeRecords = debugPracticeRecords;
+                console.log('[Debug] Debug function available: debugPracticeRecords()');
             }, 100);
         });
 
