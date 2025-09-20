@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="utf-8"/>
+    <base href="./">
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>IELTS Prep - Potter Style</title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
@@ -68,7 +69,7 @@
 <header class="bg-card-light dark:bg-card-dark shadow-md sticky top-0 z-50">
 <div class="container mx-auto px-6 py-3 flex justify-between items-center">
 <div class="flex items-center">
-<span class="font-display text-2xl font-bold text-primary">IELTS Prep</span>
+<span class="font-display text-2xl font-bold text-primary">Wizarding World IELTS Prep</span>
 <span class="material-icons text-primary ml-2">auto_stories</span>
 </div>
 <nav class="hidden md:flex items-center space-x-8">
@@ -95,37 +96,17 @@
                         Embark on your magical journey to IELTS success. Sharpen your skills in the arts of Reading and Listening, and may your results be as dazzling as a Patronus charm.
                     </p>
 </section>
-<section class="mt-16 grid grid-cols-1 md:grid-cols-2 gap-8">
-<div class="bg-card-light dark:bg-card-dark rounded-lg shadow-lg p-8 flex flex-col items-center justify-center text-center border border-border-light dark:border-border-dark transform hover:scale-105 transition-transform duration-300">
-<span class="material-icons text-7xl text-primary mb-4">menu_book</span>
-<h2 class="font-display text-3xl font-bold mb-2">Reading</h2>
-<p class="mb-6">Delve into ancient texts and modern scrolls. Enhance your comprehension and speed.</p>
-<a class="font-display inline-block bg-primary text-white py-3 px-8 rounded-full uppercase tracking-wider font-semibold hover:bg-opacity-90 transition-colors" href="#">Start Reading Practice</a>
+<!-- 练习类型卡片区域 - 由插件动态渲染 -->
+<div id="practice-cards-container" class="mt-16 grid grid-cols-1 md:grid-cols-2 gap-8">
+<!-- 插件将在这里渲染练习类型卡片 -->
 </div>
-<div class="bg-card-light dark:bg-card-dark rounded-lg shadow-lg p-8 flex flex-col items-center justify-center text-center border border-border-light dark:border-border-dark transform hover:scale-105 transition-transform duration-300">
-<span class="material-icons text-7xl text-primary mb-4">headset</span>
-<h2 class="font-display text-3xl font-bold mb-2">Listening</h2>
-<p class="mb-6">Hone your ears to the whispers of lectures and conversations from across the wizarding world.</p>
-<a class="font-display inline-block bg-primary text-white py-3 px-8 rounded-full uppercase tracking-wider font-semibold hover:bg-opacity-90 transition-colors" href="#">Start Listening Practice</a>
-</div>
-</section>
-<section class="mt-16 bg-card-light dark:bg-card-dark rounded-lg shadow-lg p-8 border border-border-light dark:border-border-dark">
+<!-- 进度统计区域 - 由插件动态渲染 -->
+<div id="progress-stats-container" class="mt-16 bg-card-light dark:bg-card-dark rounded-lg shadow-lg p-8 border border-border-light dark:border-border-dark">
 <h2 class="font-display text-2xl font-bold text-center mb-6">Your Progress at a Glance</h2>
-<div class="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
-<div>
-<p class="text-4xl font-bold text-primary font-display">12</p>
-<p class="text-sm uppercase tracking-wider mt-1">Tests Taken</p>
-</div>
-<div>
-<p class="text-4xl font-bold text-primary font-display">7.5</p>
-<p class="text-sm uppercase tracking-wider mt-1">Average Score</p>
-</div>
-<div>
-<p class="text-4xl font-bold text-primary font-display">48h</p>
-<p class="text-sm uppercase tracking-wider mt-1">Time Studied</p>
+<div id="progress-stats-grid" class="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
+<!-- 插件将在这里渲染进度统计 -->
 </div>
 </div>
-</section>
 </div>
 </main>
 <footer class="bg-card-light dark:bg-card-dark mt-16 border-t border-border-light dark:border-border-dark">
@@ -165,5 +146,43 @@
             }
         });
     </script>
+
+<!-- 练习统计（可隐藏�?-->
+
+<!-- 历史列表容器（可隐藏�?-->
+
+<!-- 系统信息（可隐藏�?-->
+
+<!-- 消息容器（如无则�?boot-fallbacks 自动补齐�?-->
+
+<!-- 系统脚本（通用） -->
+<script src="../../../assets/scripts/complete-exam-data.js"></script>
+<script src="../../../assets/scripts/listening-exam-data.js"></script>
+<script src="../../../js/utils/helpers.js"></script>
+<script src="../../../js/utils/storage.js"></script>
+<script src="../../../js/utils/asyncExportHandler.js"></script>
+<script src="../../../js/core/scoreStorage.js"></script>
+<script src="../../../js/core/practiceRecorder.js"></script>
+<script src="../../../js/components/PDFHandler.js"></script>
+<script src="../../../js/components/IndexValidator.js"></script>
+<script src="../../../js/components/CommunicationTester.js"></script>
+<script src="../../../js/components/ErrorFixer.js"></script>
+<script src="../../../js/components/CommunicationRecovery.js"></script>
+<script src="../../../js/components/PerformanceOptimizer.js"></script>
+<script src="../../../js/components/DataIntegrityManager.js"></script>
+<script src="../../../js/components/BrowseStateManager.js"></script>
+<script src="../../../js/utils/dataConsistencyManager.js"></script>
+<script src="../../../js/utils/markdownExporter.js"></script>
+<script src="../../../js/components/practiceRecordModal.js"></script>
+<script src="../../../js/components/practiceHistoryEnhancer.js"></script>
+<script src="../../../js/utils/componentChecker.js"></script>
+<script src="../../../js/theme-switcher.js"></script>
+<script src="../../../js/main.js"></script>
+<script src="../../../js/boot-fallbacks.js"></script>
+<script src="../../../js/app.js"></script>
+
+<!-- HP 插件脚本（Welcome） -->
+<script src="../../../js/plugins/hp/hp-core-bridge.js"></script>
+<script src="../../../js/plugins/hp/hp-welcome-ui.js"></script>
 
 </body></html>
