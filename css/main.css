@@ -2379,25 +2379,6 @@ body.theme-blue ::-webkit-scrollbar-thumb {
     border: 3px solid #ffffff;
     border-radius: 10px;
 }
-/* Sail overlay: separate pseudo-element for fluttering */
-:root[data-theme="blue"] body::after,
-body.theme-blue::after {
-    content: "";
-    position: fixed;
-    top: 46vh;
-    left: calc(100vw + var(--blue-boat-outside));
-    width: var(--blue-boat-width);
-    height: 80px;
-    pointer-events: none;
-    z-index: 0;
-    background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='80' viewBox='0 0 140 80'><g>
-      <path d='M72 20 L72 58 L110 40 Z' fill='%23FFFFFF' fill-opacity='0.96' stroke='%2305C7F2' stroke-width='1.2'/>
-      <path d='M72 24 L100 40' stroke='%2305C7F2' stroke-width='0.8' stroke-opacity='0.6'/>
-      <path d='M72 30 L98 42' stroke='%2305C7F2' stroke-width='0.6' stroke-opacity='0.5'/>
-    </g></svg>") center/contain no-repeat;
-    transform-origin: 72% 28%;
-    animation: sailDrift 26s linear infinite, sailFlutter 0.85s cubic-bezier(0.36, 0.07, 0.19, 0.97) infinite;
-}
 
 @keyframes sailDrift {
     0% { left: calc(100vw + var(--blue-boat-outside)); }
