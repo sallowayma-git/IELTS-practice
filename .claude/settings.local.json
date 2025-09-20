@@ -3,7 +3,10 @@
     "allow": [
       "Bash(start:*)",
       "Bash(ls:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(dir:*)",
+      "Bash(mkdir:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

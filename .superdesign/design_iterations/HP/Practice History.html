@@ -1,6 +1,7 @@
 <html>
   <head>
     <meta charset="UTF-8" />
+    <base href="./">
     <link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin="" />
     <link
       rel="stylesheet"
@@ -11,8 +12,7 @@
 
     <title>Stitch Design</title>
     <link rel="icon" type="image/x-icon" href="data:image/x-icon;base64," />
-
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+        <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
   </head>
   <body>
     <div
@@ -107,183 +107,99 @@
               </button>
             </div>
 
-            <div class="px-4 py-6">
+            <!-- 成就区域 - 由插件动态渲染 -->
+            <div id="achievements-container" class="flex flex-wrap gap-4 px-4 py-6">
               <h3 class="text-white text-lg font-bold leading-tight tracking-[-0.015em] px-0 pb-2 pt-4">Achievements</h3>
-              <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                <div class="bg-[#271c1d] rounded-lg p-4 border border-[#543b3f] flex flex-col items-center text-center">
-                  <div class="w-16 h-16 rounded-full bg-gradient-to-r from-yellow-400 to-orange-500 flex items-center justify-center mb-3">
-                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                  </div>
-                  <p class="text-white text-sm font-bold leading-normal">First Session</p>
-                  <p class="text-gray-400 text-xs mt-1">Complete your first practice session.</p>
-                </div>
-                <div class="bg-[#271c1d] rounded-lg p-4 border border-[#543b3f] flex flex-col items-center text-center">
-                  <div class="w-16 h-16 rounded-full bg-gradient-to-r from-blue-400 to-cyan-500 flex items-center justify-center mb-3">
-                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                  </div>
-                  <p class="text-white text-sm font-bold leading-normal">Score Master</p>
-                  <p class="text-gray-400 text-xs mt-1">Achieve a score of 7.0 or higher.</p>
-                </div>
-                <div class="bg-[#271c1d] rounded-lg p-4 border border-[#543b3f] flex flex-col items-center text-center">
-                  <div class="w-16 h-16 rounded-full bg-gradient-to-r from-green-400 to-lime-500 flex items-center justify-center mb-3">
-                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7m-8-8a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                  </div>
-                  <p class="text-white text-sm font-bold leading-normal">Consistent Learner</p>
-                  <p class="text-gray-400 text-xs mt-1">Complete 5 practice sessions in a week.</p>
-                </div>
-                <div class="bg-[#271c1d] rounded-lg p-4 border border-[#543b3f] flex flex-col items-center text-center">
-                  <div class="w-16 h-16 rounded-full bg-gradient-to-r from-red-400 to-pink-500 flex items-center justify-center mb-3">
-                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 21a9 9 0 010-18 9 9 0 010 18zm0 0a9 9 0 000-18"></path>
-                    </svg>
-                  </div>
-                  <p class="text-white text-sm font-bold leading-normal">Perfect Score</p>
-                  <p class="text-gray-400 text-xs mt-1">Achieve a perfect score in any section.</p>
-                </div>
+              <div id="achievements-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 w-full">
+                <!-- 插件将在这里渲染成就卡片 -->
+              </div>
+
+              <!-- 加载状态 -->
+              <div id="achievements-loading" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>正在加载成就数据...</p>
+              </div>
+
+              <!-- 空状态 -->
+              <div id="achievements-empty" class="empty-state" style="display: none;">
+                <div class="empty-icon">🏆</div>
+                <div class="empty-title">暂无成就</div>
+                <div class="empty-description">继续练习以解锁更多成就</div>
               </div>
             </div>
 
-            <h3 class="text-white text-lg font-bold leading-tight tracking-[-0.015em] px-4 pb-2 pt-4">Practice History</h3>
-            <div class="px-4 py-3 @container">
-              <div class="flex overflow-hidden rounded-lg border border-[#543b3f] bg-[#181112]">
-                <table class="flex-1">
-                  <thead>
-                    <tr class="bg-[#271c1d]">
-                      <th class="table-eaff8dac-207b-44b0-be37-c7da5a0d2a67-column-120 px-4 py-3 text-left text-white w-[400px] text-sm font-medium leading-normal">Date</th>
-                      <th class="table-eaff8dac-207b-44b0-be37-c7da5a0d2a67-column-240 px-4 py-3 text-left text-white w-[400px] text-sm font-medium leading-normal">Subject</th>
-                      <th class="table-eaff8dac-207b-44b0-be37-c7da5a0d2a67-column-360 px-4 py-3 text-left text-white w-[400px] text-sm font-medium leading-normal">Score</th>
-                      <th class="table-eaff8dac-207b-44b0-be37-c7da5a0d2a67-column-480 px-4 py-3 text-left text-white w-[400px] text-sm font-medium leading-normal">Time Spent</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr class="border-t border-t-[#543b3f]">
-                      <td class="table-eaff8dac-207b-44b0-be37-c7da5a0d2a67-column-120 h-[72px] px-4 py-2 w-[400px] text-[#b99da1] text-sm font-normal leading-normal">
-                        2024-07-20
-                      </td>
-                      <td class="table-eaff8dac-207b-44b0-be37-c7da5a0d2a67-column-240 h-[72px] px-4 py-2 w-[400px] text-[#b99da1] text-sm font-normal leading-normal">Reading</td>
-                      <td class="table-eaff8dac-207b-44b0-be37-c7da5a0d2a67-column-360 h-[72px] px-4 py-2 w-[400px] text-[#b99da1] text-sm font-normal leading-normal">7.5</td>
-                      <td class="table-eaff8dac-207b-44b0-be37-c7da5a0d2a67-column-480 h-[72px] px-4 py-2 w-[400px] text-[#b99da1] text-sm font-normal leading-normal">
-                        1 hour 15 minutes
-                      </td>
-                    </tr>
-                    <tr class="border-t border-t-[#543b3f]">
-                      <td class="table-eaff8dac-207b-44b0-be37-c7da5a0d2a67-column-120 h-[72px] px-4 py-2 w-[400px] text-[#b99da1] text-sm font-normal leading-normal">
-                        2024-07-18
-                      </td>
-                      <td class="table-eaff8dac-207b-44b0-be37-c7da5a0d2a67-column-240 h-[72px] px-4 py-2 w-[400px] text-[#b99da1] text-sm font-normal leading-normal">
-                        Listening
-                      </td>
-                      <td class="table-eaff8dac-207b-44b0-be37-c7da5a0d2a67-column-360 h-[72px] px-4 py-2 w-[400px] text-[#b99da1] text-sm font-normal leading-normal">6.0</td>
-                      <td class="table-eaff8dac-207b-44b0-be37-c7da5a0d2a67-column-480 h-[72px] px-4 py-2 w-[400px] text-[#b99da1] text-sm font-normal leading-normal">
-                        45 minutes
-                      </td>
-                    </tr>
-                    <tr class="border-t border-t-[#543b3f]">
-                      <td class="table-eaff8dac-207b-44b0-be37-c7da5a0d2a67-column-120 h-[72px] px-4 py-2 w-[400px] text-[#b99da1] text-sm font-normal leading-normal">
-                        2024-07-15
-                      </td>
-                      <td class="table-eaff8dac-207b-44b0-be37-c7da5a0d2a67-column-240 h-[72px] px-4 py-2 w-[400px] text-[#b99da1] text-sm font-normal leading-normal">Reading</td>
-                      <td class="table-eaff8dac-207b-44b0-be37-c7da5a0d2a67-column-360 h-[72px] px-4 py-2 w-[400px] text-[#b99da1] text-sm font-normal leading-normal">8.0</td>
-                      <td class="table-eaff8dac-207b-44b0-be37-c7da5a0d2a67-column-480 h-[72px] px-4 py-2 w-[400px] text-[#b99da1] text-sm font-normal leading-normal">
-                        1 hour 10 minutes
-                      </td>
-                    </tr>
-                    <tr class="border-t border-t-[#543b3f]">
-                      <td class="table-eaff8dac-207b-44b0-be37-c7da5a0d2a67-column-120 h-[72px] px-4 py-2 w-[400px] text-[#b99da1] text-sm font-normal leading-normal">
-                        2024-07-12
-                      </td>
-                      <td class="table-eaff8dac-207b-44b0-be37-c7da5a0d2a67-column-240 h-[72px] px-4 py-2 w-[400px] text-[#b99da1] text-sm font-normal leading-normal">
-                        Listening
-                      </td>
-                      <td class="table-eaff8dac-207b-44b0-be37-c7da5a0d2a67-column-360 h-[72px] px-4 py-2 w-[400px] text-[#b99da1] text-sm font-normal leading-normal">7.0</td>
-                      <td class="table-eaff8dac-207b-44b0-be37-c7da5a0d2a67-column-480 h-[72px] px-4 py-2 w-[400px] text-[#b99da1] text-sm font-normal leading-normal">
-                        40 minutes
-                      </td>
-                    </tr>
-                    <tr class="border-t border-t-[#543b3f]">
-                      <td class="table-eaff8dac-207b-44b0-be37-c7da5a0d2a67-column-120 h-[72px] px-4 py-2 w-[400px] text-[#b99da1] text-sm font-normal leading-normal">
-                        2024-07-10
-                      </td>
-                      <td class="table-eaff8dac-207b-44b0-be37-c7da5a0d2a67-column-240 h-[72px] px-4 py-2 w-[400px] text-[#b99da1] text-sm font-normal leading-normal">Reading</td>
-                      <td class="table-eaff8dac-207b-44b0-be37-c7da5a0d2a67-column-360 h-[72px] px-4 py-2 w-[400px] text-[#b99da1] text-sm font-normal leading-normal">6.5</td>
-                      <td class="table-eaff8dac-207b-44b0-be37-c7da5a0d2a67-column-480 h-[72px] px-4 py-2 w-[400px] text-[#b99da1] text-sm font-normal leading-normal">
-                        1 hour 20 minutes
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <style>
-                @container(max-width:120px){.table-eaff8dac-207b-44b0-be37-c7da5a0d2a67-column-120{display: none;}}
-                @container(max-width:240px){.table-eaff8dac-207b-44b0-be37-c7da5a0d2a67-column-240{display: none;}}
-                @container(max-width:360px){.table-eaff8dac-207b-44b0-be37-c7da5a0d2a67-column-360{display: none;}}
-                @container(max-width:480px){.table-eaff8dac-207b-44b0-be37-c7da5a0d2a67-column-480{display: none;}}
-              </style>
-            </div>
-            <h3 class="text-white text-lg font-bold leading-tight tracking-[-0.015em] px-4 pb-2 pt-4">Practice Trend</h3>
-            <div class="flex flex-wrap gap-4 px-4 py-6">
-              <div class="flex min-w-72 flex-1 flex-col gap-2 rounded-lg border border-[#543b3f] p-6">
-                <p class="text-white text-base font-medium leading-normal">Average Score Over Time</p>
-                <p class="text-white tracking-light text-[32px] font-bold leading-tight truncate">7.0</p>
-                <div class="flex gap-1">
-                  <p class="text-[#b99da1] text-base font-normal leading-normal">Last 3 Months</p>
-                  <p class="text-[#0bda92] text-base font-medium leading-normal">+5%</p>
-                </div>
-                <div class="flex min-h-[180px] flex-1 flex-col gap-8 py-4">
-                  <svg width="100%" height="148" viewBox="-3 0 478 150" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
-                    <path
-                      d="M0 109C18.1538 109 18.1538 21 36.3077 21C54.4615 21 54.4615 41 72.6154 41C90.7692 41 90.7692 93 108.923 93C127.077 93 127.077 33 145.231 33C163.385 33 163.385 101 181.538 101C199.692 101 199.692 61 217.846 61C236 61 236 45 254.154 45C272.308 45 272.308 121 290.462 121C308.615 121 308.615 149 326.769 149C344.923 149 344.923 1 363.077 1C381.231 1 381.231 81 399.385 81C417.538 81 417.538 129 435.692 129C453.846 129 453.846 25 472 25V149H326.769H0V109Z"
-                      fill="url(#paint0_linear_1131_5935)"
-                    ></path>
-                    <path
-                      d="M0 109C18.1538 109 18.1538 21 36.3077 21C54.4615 21 54.4615 41 72.6154 41C90.7692 41 90.7692 93 108.923 93C127.077 93 127.077 33 145.231 33C163.385 33 163.385 101 181.538 101C199.692 101 199.692 61 217.846 61C236 61 236 45 254.154 45C272.308 45 272.308 121 290.462 121C308.615 121 308.615 149 326.769 149C344.923 149 344.923 1 363.077 1C381.231 1 381.231 81 399.385 81C417.538 81 417.538 129 435.692 129C453.846 129 453.846 25 472 25"
-                      stroke="#b99da1"
-                      stroke-width="3"
-                      stroke-linecap="round"
-                    ></path>
-                    <defs>
-                      <linearGradient id="paint0_linear_1131_5935" x1="236" y1="1" x2="236" y2="149" gradientUnits="userSpaceOnUse">
-                        <stop stop-color="#39282b"></stop>
-                        <stop offset="1" stop-color="#39282b" stop-opacity="0"></stop>
-                      </linearGradient>
-                    </defs>
-                  </svg>
-                  <div class="flex justify-around">
-                    <p class="text-[#b99da1] text-[13px] font-bold leading-normal tracking-[0.015em]">Week 1</p>
-                    <p class="text-[#b99da1] text-[13px] font-bold leading-normal tracking-[0.015em]">Week 2</p>
-                    <p class="text-[#b99da1] text-[13px] font-bold leading-normal tracking-[0.015em]">Week 3</p>
-                    <p class="text-[#b99da1] text-[13px] font-bold leading-normal tracking-[0.015em]">Week 4</p>
-                    <p class="text-[#b99da1] text-[13px] font-bold leading-normal tracking-[0.015em]">Week 5</p>
-                    <p class="text-[#b99da1] text-[13px] font-bold leading-normal tracking-[0.015em]">Week 6</p>
-                    <p class="text-[#b99da1] text-[13px] font-bold leading-normal tracking-[0.015em]">Week 7</p>
-                  </div>
-                </div>
+            <!-- 练习历史表格区域 - 由插件动态渲染 -->
+            <div id="practice-history-container" class="px-4 py-3 @container">
+              <h3 class="text-white text-lg font-bold leading-tight tracking-[-0.015em] px-0 pb-2 pt-4">Practice History</h3>
+              <div id="practice-history-table" class="flex overflow-hidden rounded-lg border border-[#543b3f] bg-[#181112]">
+                <!-- 插件将在这里渲染练习历史表格 -->
               </div>
 
-              <div class="flex min-w-72 flex-1 flex-col gap-2 rounded-lg border border-[#543b3f] p-6">
-                <p class="text-white text-base font-medium leading-normal">Session Streak</p>
-                <p class="text-white tracking-light text-[32px] font-bold leading-tight truncate">12 Days</p>
-                <div class="flex gap-1">
-                  <p class="text-[#b99da1] text-base font-normal leading-normal">Current Streak</p>
-                  <p class="text-[#0bda92] text-base font-medium leading-normal">🔥</p>
-                </div>
-                <div class="flex min-h-[180px] flex-1 flex-col gap-8 py-4 justify-center items-center">
-                  <svg class="w-24 h-24 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7m-8-8a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                  </svg>
-                  <p class="text-white text-sm font-bold">You're on a roll!</p>
-                </div>
+              <!-- 加载状态 -->
+              <div id="practice-history-loading" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>正在加载练习历史...</p>
+              </div>
+
+              <!-- 空状态 -->
+              <div id="practice-history-empty" class="empty-state" style="display: none;">
+                <div class="empty-icon">📝</div>
+                <div class="empty-title">暂无练习历史</div>
+                <div class="empty-description">开始练习后将显示历史记录</div>
+              </div>
+            </div>
+            <!-- 练习趋势区域 - 由插件动态渲染 -->
+            <div id="practice-trend-container" class="flex flex-wrap gap-4 px-4 py-6">
+              <h3 class="text-white text-lg font-bold leading-tight tracking-[-0.015em] px-0 pb-2 pt-4">Practice Trend</h3>
+              <div id="practice-trend-grid" class="flex flex-wrap gap-4 w-full">
+                <!-- 插件将在这里渲染练习趋势图表 -->
+              </div>
+
+              <!-- 加载状态 -->
+              <div id="practice-trend-loading" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>正在加载趋势数据...</p>
+              </div>
+
+              <!-- 空状态 -->
+              <div id="practice-trend-empty" class="empty-state" style="display: none;">
+                <div class="empty-icon">📈</div>
+                <div class="empty-title">暂无趋势数据</div>
+                <div class="empty-description">需要更多练习记录来生成趋势图表</div>
               </div>
             </div>
           </div>
         </div>
       </div>
     </div>
-  </body>
-</html>
+  
+<!-- ϵͳ�ű� -->
+<script src="../../../assets/scripts/complete-exam-data.js"></script>
+<script src="../../../assets/scripts/listening-exam-data.js"></script>
+<script src="../../../js/utils/helpers.js"></script>
+<script src="../../../js/utils/storage.js"></script>
+<script src="../../../js/utils/asyncExportHandler.js"></script>
+<script src="../../../js/core/scoreStorage.js"></script>
+<script src="../../../js/core/practiceRecorder.js"></script>
+<script src="../../../js/components/PDFHandler.js"></script>
+<script src="../../../js/components/IndexValidator.js"></script>
+<script src="../../../js/components/CommunicationTester.js"></script>
+<script src="../../../js/components/ErrorFixer.js"></script>
+<script src="../../../js/components/CommunicationRecovery.js"></script>
+<script src="../../../js/components/PerformanceOptimizer.js"></script>
+<script src="../../../js/components/DataIntegrityManager.js"></script>
+<script src="../../../js/components/BrowseStateManager.js"></script>
+<script src="../../../js/utils/dataConsistencyManager.js"></script>
+<script src="../../../js/utils/markdownExporter.js"></script>
+<script src="../../../js/components/practiceRecordModal.js"></script>
+<script src="../../../js/components/practiceHistoryEnhancer.js"></script>
+<script src="../../../js/utils/componentChecker.js"></script>
+<script src="../../../js/theme-switcher.js"></script>
+<script src="../../../js/main.js"></script>
+<script src="../../../js/boot-fallbacks.js"></script>
+<script src="../../../js/app.js"></script>
+
+<!-- HP 插件脚本（History） -->
+<script src="../../../js/plugins/hp/hp-core-bridge.js"></script>
+<script src="../../../js/plugins/hp/hp-history-table.js"></script>
+</body></html>

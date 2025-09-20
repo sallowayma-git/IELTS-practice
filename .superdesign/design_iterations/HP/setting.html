@@ -1,6 +1,7 @@
 <html>
   <head>
     <meta charset="UTF-8" />
+    <base href="./">
     <link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin="" />
     <link
       rel="stylesheet"
@@ -11,8 +12,7 @@
 
     <title>Stitch Design</title>
     <link rel="icon" type="image/x-icon" href="data:image/x-icon;base64," />
-
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+        <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
   </head>
   <body>
     <div class="relative flex h-auto min-h-screen w-full flex-col bg-[#181112] dark group/design-root overflow-x-hidden" style='font-family: Newsreader, "Noto Sans", sans-serif;'>
@@ -27,7 +27,7 @@
                 ></path>
               </svg>
             </div>
-            <h2 class="text-white text-lg font-bold leading-tight tracking-[-0.015em]">奇幻世界雅思备考</h2>
+            <h2 class="text-white text-lg font-bold leading-tight tracking-[-0.015em]">Wizarding World IELTS Prep</h2>
           </div>
           <div class="flex flex-1 justify-end gap-8">
             <div class="flex items-center gap-9">
@@ -103,40 +103,29 @@
               </div>
             </div>
             <h3 class="text-white text-lg font-bold leading-tight tracking-[-0.015em] px-4 pb-2 pt-4">系统信息</h3>
-            <div class="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              <div class="bg-[#39282b] rounded-lg p-4 text-center">
-                <p class="text-[#b99da1] text-sm font-normal leading-normal mb-2">题目总数</p>
-                <p class="text-white text-5xl font-bold leading-tight">1200</p>
-                <div class="w-full bg-gray-700 rounded-full h-2.5 mt-4">
-                  <div class="bg-blue-500 h-2.5 rounded-full w-full"></div>
-                </div>
+            <!-- 系统信息网格容器 - 由插件动态渲染 -->
+            <div id="system-info-container" class="p-4">
+              <div id="system-info-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- 插件将在这里渲染真实的系统信息卡片 -->
               </div>
-              <div class="bg-[#39282b] rounded-lg p-4 text-center">
-                <p class="text-[#b99da1] text-sm font-normal leading-normal mb-2">网页题目</p>
-                <p class="text-white text-5xl font-bold leading-tight">800</p>
-                <div class="w-full bg-gray-700 rounded-full h-2.5 mt-4">
-                  <div class="bg-green-500 h-2.5 rounded-full w-4/6"></div>
-                </div>
+
+              <!-- 加载状态 -->
+              <div id="system-info-loading" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>正在加载系统信息...</p>
               </div>
-              <div class="bg-[#39282b] rounded-lg p-4 text-center">
-                <p class="text-[#b99da1] text-sm font-normal leading-normal mb-2">PDF题目</p>
-                <p class="text-white text-5xl font-bold leading-tight">400</p>
-                <div class="w-full bg-gray-700 rounded-full h-2.5 mt-4">
-                  <div class="bg-yellow-500 h-2.5 rounded-full w-2/6"></div>
-                </div>
-              </div>
-              <div class="bg-[#39282b] rounded-lg p-4 text-center col-span-1 sm:col-span-2 lg:col-span-1">
-                <p class="text-[#b99da1] text-sm font-normal leading-normal mb-2">最后更新</p>
-                <p class="text-white text-5xl font-bold leading-tight">2024-01-01</p>
-                <div class="mt-4 flex justify-center items-center gap-2">
-                  <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                  <p class="text-[#b99da1] text-sm font-normal leading-normal">已更新</p>
-                </div>
+
+              <!-- 空状态 -->
+              <div id="system-info-empty" class="empty-state" style="display: none;">
+                <div class="empty-icon">📊</div>
+                <div class="empty-title">暂无系统信息</div>
+                <div class="empty-description">请检查数据连接或刷新页面</div>
               </div>
             </div>
             <div class="flex px-4 py-3 justify-start">
               <button
                 class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#39282b] text-white text-sm font-bold leading-normal tracking-[0.015em]"
+                onclick="window.HPTheme && window.HPTheme.open()"
               >
                 <span class="truncate">主题切换</span>
               </button>
@@ -145,5 +134,35 @@
         </div>
       </div>
     </div>
-  </body>
-</html>
+  
+<!-- ϵͳ�ű� -->
+<script src="../../../assets/scripts/complete-exam-data.js"></script>
+<script src="../../../assets/scripts/listening-exam-data.js"></script>
+<script src="../../../js/utils/helpers.js"></script>
+<script src="../../../js/utils/storage.js"></script>
+<script src="../../../js/utils/asyncExportHandler.js"></script>
+<script src="../../../js/core/scoreStorage.js"></script>
+<script src="../../../js/core/practiceRecorder.js"></script>
+<script src="../../../js/components/PDFHandler.js"></script>
+<script src="../../../js/components/IndexValidator.js"></script>
+<script src="../../../js/components/CommunicationTester.js"></script>
+<script src="../../../js/components/ErrorFixer.js"></script>
+<script src="../../../js/components/CommunicationRecovery.js"></script>
+<script src="../../../js/components/PerformanceOptimizer.js"></script>
+<script src="../../../js/components/DataIntegrityManager.js"></script>
+<script src="../../../js/components/BrowseStateManager.js"></script>
+<script src="../../../js/utils/dataConsistencyManager.js"></script>
+<script src="../../../js/utils/markdownExporter.js"></script>
+<script src="../../../js/components/practiceRecordModal.js"></script>
+<script src="../../../js/components/practiceHistoryEnhancer.js"></script>
+<script src="../../../js/utils/componentChecker.js"></script>
+<script src="../../../js/theme-switcher.js"></script>
+<script src="../../../js/main.js"></script>
+<script src="../../../js/boot-fallbacks.js"></script>
+<script src="../../../js/app.js"></script>
+
+<!-- HP 插件脚本（Settings） -->
+<script src="../../../js/plugins/hp/hp-core-bridge.js"></script>
+<script src="../../../js/plugins/hp/hp-settings-theme-modal.js"></script>
+<script src="../../../js/plugins/hp/hp-settings-bridge.js"></script>
+</body></html>
