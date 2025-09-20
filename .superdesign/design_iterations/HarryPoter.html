@@ -453,9 +453,32 @@
       bindHover('area[alt="Quidditch Pitch"]', document.getElementById('quidditch-effects'));
       bindHover('area[alt="Azkaban"]', document.getElementById('azkaban-effects'));
 
-      // Prevent default anchor jumps for now (routes TBD)
+      // Handle navigation for each clickable area
       document.querySelectorAll('map[name="hp-map"] area').forEach(a => {
-        a.addEventListener('click', (e) => { e.preventDefault(); /* TODO: integrate router */ });
+        a.addEventListener('click', (e) => {
+          e.preventDefault();
+
+          // Get the href attribute to determine destination
+          const href = a.getAttribute('href');
+
+          // Navigate based on the destination
+          switch(href) {
+            case '#overview':
+              window.location.href = 'HP/Welcome.html';
+              break;
+            case '#records':
+              window.location.href = 'HP/Practice History.html';
+              break;
+            case '#questions':
+              window.location.href = 'HP/practice.html';
+              break;
+            case '#settings':
+              window.location.href = 'HP/setting.html';
+              break;
+            default:
+              console.log('Unknown destination:', href);
+          }
+        });
       });
     })();
   </script>
