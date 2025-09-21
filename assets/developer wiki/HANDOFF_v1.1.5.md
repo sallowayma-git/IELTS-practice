@@ -9,6 +9,7 @@ This handoff summarizes the current status, required changes, constraints, verif
   - Exams list requires “Force refresh” to appear.
   - No handshake (SESSION_READY), no PRACTICE_COMPLETE write‑back.
   - Errors: “filter is not a function” (records not array), “Assignment to const variable” (PracticeRecorder), potential header garbage (e.g., `xu is not defined`).
+  - New reports: “await is only valid…” when opening exams; Browse buttons (Open/PDF) ineffective; Practice details error “practiceRecords.find is not a function”.
 - Strategy: Fix data scripts, async usage, load order, array coercion, and one const reassignment.
 
 ## Constraints
@@ -54,11 +55,14 @@ This handoff summarizes the current status, required changes, constraints, verif
   - `finishLibraryLoading`: `try { window.examIndex = examIndex; } catch(_) {}` before UI updates; emit `examIndexLoaded`.
   - Bind `examIndexLoaded` to call `loadExamList()` and hide spinner; add delayed fallback.
   - In `syncPracticeRecords` and `updatePracticeView`, always coerce practiceRecords into an array before `filter`.
+  - Path map: In `getPathMap()` set `reading.root` to empty string ('') to avoid wrong prefix under file://; keep `listening.root: 'ListeningPractice/'`.
+  - Resource path validation: Use `buildResourcePath(exam,'html'|'pdf')` in Console to verify path resolves.
 - `index.html`
   - Ensure script order: data scripts first → utils/storage → core/components → business entry; `js/app.js` last.
 - `js/app.js`
   - Mark `openExam` as `async` and await: active key read, index read, and `startPracticeSession`.
   - Use `await storage.get/set` in: `loadUserStats`, `updateOverviewStats`, `saveRealPracticeData`, notifications that read `exam_index`, session cleanup (`active_sessions`), and error loggers (`injection_errors`, `collection_errors`).
+  - Fix await syntax error: inside `injectDataCollectionScript`, change inner `injectScript` to `async` (or mark the method itself async) so that the line `const enhancerScript = await fetch(...).then(...)` is valid under file://.
 - `js/core/practiceRecorder.js`
   - In `restoreActiveSessions`, do not reassign a `const`. Use `let` or a new variable to hold the normalized sessions array.
 - Header garbage removal
@@ -81,10 +85,12 @@ This handoff summarizes the current status, required changes, constraints, verif
   - `loadExamList()` callable; spinner hidden after rendering
 - Handshake
   - Parent Console shows INIT messages and `SESSION_READY`
-- Write‑back
+- Write-back
   - After completion: `await storage.get('practice_records', [])` shows incremented count
 - Errors
   - No Uncaught SyntaxError/ReferenceError; no “Assignment to const variable”
+  - Opening exam does not throw “await is only valid…”; Browse “打开/PDF” buttons open HTML/PDF successfully
+  - Practice details open without “practiceRecords.find is not a function”
 
 ## Known Issues & Mitigations
 - Stuck spinner despite index loaded
@@ -115,4 +121,9 @@ This handoff summarizes the current status, required changes, constraints, verif
 ## Handoff Notes
 - No new files were added for runtime except this documentation. All code changes are to be applied within existing files as per this guide.
 - If any step fails, capture the exact Console output and the affected function’s current code; apply the smallest change indicated in the guide.
+- `js/components/practiceRecordModal.js`
+  - Make `exportSingle(recordId)` async and change synchronous `window.storage.get(...)` calls to `await window.storage.get(...)` for both practice records and exam index.
+  - Change compatibility wrapper `window.practiceRecordModal.showById = function(recordId)` to `async function(recordId)` and use `await window.storage.get('practice_records', [])` before `.find(...)`.
 
+- `js/components/practiceHistoryEnhancer.js`
+  - Make `showRecordDetails(recordId)` async; change both `window.storage.get('practice_records', [])` reads to `await window.storage.get('practice_records', [])` before calling `.find(...)`.
