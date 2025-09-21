@@ -1490,3 +1490,12 @@ async function exportPracticeData() {
         console.error('[Export] failed', e);
     }
 }
+
+// Auto-refresh browse list when exam index is loaded
+window.addEventListener('examIndexLoaded', () => {
+  try {
+    if (typeof loadExamList === 'function') loadExamList();
+    const loading = document.querySelector('#browse-view .loading');
+    if (loading) loading.style.display = 'none';
+  } catch (_) {}
+});
