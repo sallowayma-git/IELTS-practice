@@ -1007,34 +1007,26 @@ class ExamSystemApp {
                 console.log('[DataInjection] 开始加载脚本文件...');
 
                 // 加载练习页面增强脚本
-                fetch('./js/practice-page-enhancer.js')
-                    .then(r => r.text())
-                    .then(enhancerScript => {
-                        console.log('[DataInjection] 增强脚本加载完成，开始注入...');
+                const enhancerScript = await fetch('./js/practice-page-enhancer.js').then(r => r.text());
+                console.log('[DataInjection] 增强脚本加载完成，开始注入...');
 
-                        // 注入练习页面增强脚本
-                        const enhancerScriptEl = doc.createElement('script');
-                        enhancerScriptEl.type = 'text/javascript';
-                        enhancerScriptEl.textContent = enhancerScript;
-                        doc.head.appendChild(enhancerScriptEl);
+                // 注入练习页面增强脚本
+                const enhancerScriptEl = doc.createElement('script');
+                enhancerScriptEl.type = 'text/javascript';
+                enhancerScriptEl.textContent = enhancerScript;
+                doc.head.appendChild(enhancerScriptEl);
 
-                        console.log('[DataInjection] 练习页面增强脚本已注入');
+                console.log('[DataInjection] 练习页面增强脚本已注入');
 
-                        // 等待脚本初始化完成后发送会话信息
-                        setTimeout(() => {
-                            this.initializePracticeSession(examWindow, examId);
-                        }, 1500); // 增加等待时间确保脚本完全初始化
-                    })
-                    .catch(error => {
-                        console.error('[DataInjection] 脚本加载失败:', error);
-                        // 降级到内联脚本注入
-                        this.injectInlineScript(examWindow, examId);
-                    });
+                // 等待脚本初始化完成后发送会话信息
+                setTimeout(() => {
+                    this.initializePracticeSession(examWindow, examId);
+                }, 1500); // 增加等待时间确保脚本完全初始化
 
             } catch (error) {
                 console.error('[DataInjection] 脚本注入失败:', error);
-                // 记录错误但不中断练习流程
-                this.handleInjectionError(examId, error);
+                // 降级到内联脚本注入
+                this.injectInlineScript(examWindow, examId);
             }
         };
 
