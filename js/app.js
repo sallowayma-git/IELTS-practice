@@ -1371,11 +1371,11 @@ class ExamSystemApp {
      */
     createFallbackRecorder() {
         return {
-            handleRealPracticeData: (examId, realData) => {
+            handleRealPracticeData: async (examId, realData) => {
                 console.log('[FallbackRecorder] 处理真实练习数据:', examId, realData);
                 try {
                     // 获取题目信息
-                    const examIndex = storage.get('exam_index', []);
+                    const examIndex = await storage.get('exam_index', []);
                     const exam = examIndex.find(e => e.id === examId);
 
                     if (!exam) {
@@ -1387,14 +1387,14 @@ class ExamSystemApp {
                     const practiceRecord = this.createSimplePracticeRecord(exam, realData);
 
                     // 直接保存到localStorage
-                    const records = storage.get('practice_records', []);
+                    const records = await storage.get('practice_records', []);
                     records.unshift(practiceRecord);
 
                     if (records.length > 1000) {
                         records.splice(1000);
                     }
 
-                    storage.set('practice_records', records);
+                    await storage.set('practice_records', records);
                     console.log('[FallbackRecorder] 记录已保存:', practiceRecord.id);
 
                     return practiceRecord;
@@ -1415,10 +1415,10 @@ class ExamSystemApp {
                 };
             },
 
-            getPracticeRecords: (filters = {}) => {
+            getPracticeRecords: async (filters = {}) => {
                 console.log('[FallbackRecorder] 获取练习记录');
                 try {
-                    const records = storage.get('practice_records', []);
+                    const records = await storage.get('practice_records', []);
                     
                     if (Object.keys(filters).length === 0) {
                         return records;
@@ -1540,7 +1540,7 @@ class ExamSystemApp {
      * 开始练习会话
      */
     async startPracticeSession(examId) {
-        const examIndex = storage.get('exam_index', []);
+        const examIndex = await storage.get('exam_index', []);
         const exam = examIndex.find(e => e.id === examId);
 
         if (!exam) {
@@ -1582,9 +1582,9 @@ class ExamSystemApp {
                     sessionId: this.generateSessionId()
                 };
 
-                const activeSessions = storage.get('active_sessions', []);
+                const activeSessions = await storage.get('active_sessions', []);
                 activeSessions.push(sessionData);
-                storage.set('active_sessions', activeSessions);
+                await storage.set('active_sessions', activeSessions);
             }
 
             // 更新题目状态
@@ -1601,7 +1601,7 @@ class ExamSystemApp {
     /**
      * 降级启动练习会话
      */
-    startPracticeSessionFallback(examId, exam) {
+    async startPracticeSessionFallback(examId, exam) {
         console.log('[App] 使用最终降级方案启动练习');
         
         const sessionData = {
@@ -1611,9 +1611,9 @@ class ExamSystemApp {
             sessionId: this.generateSessionId()
         };
 
-        const activeSessions = storage.get('active_sessions', []);
+        const activeSessions = await storage.get('active_sessions', []);
         activeSessions.push(sessionData);
-        storage.set('active_sessions', activeSessions);
+        await storage.set('active_sessions', activeSessions);
         
         // 更新题目状态
         this.updateExamStatus(examId, 'in-progress');
@@ -1723,7 +1723,7 @@ class ExamSystemApp {
                 if (typeof window.syncPracticeRecords === 'function') {
                     window.syncPracticeRecords();
                 } else if (window.storage) {
-                    const latest = window.storage.get('practice_records', []);
+                    const latest = await window.storage.get('practice_records', []);
                     window.practiceRecords = latest;
                 }
             } catch (syncErr) {
@@ -1754,7 +1754,7 @@ class ExamSystemApp {
     /**
      * 处理数据采集错误
      */
-    handleDataCollectionError(examId, data) {
+    async handleDataCollectionError(examId, data) {
         console.error('[DataCollection] 数据采集错误:', examId, data);
 
         // 记录错误但不中断用户体验
@@ -1765,12 +1765,12 @@ class ExamSystemApp {
             type: 'data_collection_error'
         };
 
-        const errorLogs = storage.get('collection_errors', []);
+        const errorLogs = await storage.get('collection_errors', []);
         errorLogs.push(errorInfo);
         if (errorLogs.length > 50) {
             errorLogs.splice(0, errorLogs.length - 50);
         }
-        storage.set('collection_errors', errorLogs);
+        await storage.set('collection_errors', errorLogs);
 
         // 标记该会话使用模拟数据
         if (this.examWindows && this.examWindows.has(examId)) {
@@ -1817,7 +1817,7 @@ class ExamSystemApp {
         try {
             console.log('[DataCollection] 开始保存真实练习数据:', examId, realData);
             
-            const examIndex = storage.get('exam_index', []);
+            const examIndex = await storage.get('exam_index', []);
             const exam = examIndex.find(e => e.id === examId);
 
             if (!exam) {
@@ -1909,7 +1909,7 @@ class ExamSystemApp {
             }
 
             // 直接保存到localStorage（与旧版本完全相同的方式）
-            const practiceRecords = storage.get('practice_records', []);
+            const practiceRecords = await storage.get('practice_records', []);
             console.log('[DataCollection] 当前记录数量:', practiceRecords.length);
             
             practiceRecords.unshift(practiceRecord);
@@ -1923,7 +1923,7 @@ class ExamSystemApp {
             console.log('[DataCollection] 保存结果:', saveResult);
 
             // 立即验证保存是否成功
-            const verifyRecords = storage.get('practice_records', []);
+            const verifyRecords = await storage.get('practice_records', []);
             const savedRecord = verifyRecords.find(r => r.id === practiceRecord.id);
             
             if (savedRecord) {
@@ -1941,8 +1941,8 @@ class ExamSystemApp {
     /**
      * 显示真实完成通知
      */
-    showRealCompletionNotification(examId, realData) {
-        const examIndex = storage.get('exam_index', []);
+    async showRealCompletionNotification(examId, realData) {
+        const examIndex = await storage.get('exam_index', []);
         const exam = examIndex.find(e => e.id === examId);
 
         if (!exam) return;
@@ -2043,8 +2043,8 @@ class ExamSystemApp {
     /**
      * 显示题目完成通知
      */
-    showExamCompletionNotification(examId, resultData) {
-        const examIndex = storage.get('exam_index', []);
+    async showExamCompletionNotification(examId, resultData) {
+        const examIndex = await storage.get('exam_index', []);
         const exam = examIndex.find(e => e.id === examId);
 
         if (!exam) return;
@@ -2061,8 +2061,8 @@ class ExamSystemApp {
     /**
      * 显示详细结果
      */
-    showDetailedResults(examId, resultData) {
-        const examIndex = storage.get('exam_index', []);
+    async showDetailedResults(examId, resultData) {
+        const examIndex = await storage.get('exam_index', []);
         const exam = examIndex.find(e => e.id === examId);
 
         if (!exam) return;
@@ -2147,7 +2147,7 @@ class ExamSystemApp {
     /**
      * 清理题目会话
      */
-    cleanupExamSession(examId) {
+    async cleanupExamSession(examId) {
         // 清理窗口引用
         if (this.examWindows && this.examWindows.has(examId)) {
             this.examWindows.delete(examId);
@@ -2161,9 +2161,9 @@ class ExamSystemApp {
         }
 
         // 清理活动会话
-        const activeSessions = storage.get('active_sessions', []);
+        const activeSessions = await storage.get('active_sessions', []);
         const updatedSessions = activeSessions.filter(session => session.examId !== examId);
-        storage.set('active_sessions', updatedSessions);
+        await storage.set('active_sessions', updatedSessions);
     }
 
     /**
@@ -2220,8 +2220,8 @@ class ExamSystemApp {
     /**
      * 显示练习完成通知
      */
-    showPracticeCompletionNotification(examId, practiceRecord) {
-        const examIndex = storage.get('exam_index', []);
+    async showPracticeCompletionNotification(examId, practiceRecord) {
+        const examIndex = await storage.get('exam_index', []);
         const exam = examIndex.find(e => e.id === examId);
 
         if (!exam) return;
@@ -2242,8 +2242,8 @@ class ExamSystemApp {
     /**
      * 显示详细练习结果
      */
-    showDetailedPracticeResults(examId, practiceRecord) {
-        const examIndex = storage.get('exam_index', []);
+    async showDetailedPracticeResults(examId, practiceRecord) {
+        const examIndex = await storage.get('exam_index', []);
         const exam = examIndex.find(e => e.id === examId);
 
         if (!exam) return;
@@ -2368,9 +2368,9 @@ class ExamSystemApp {
     /**
      * 显示活动会话详情
      */
-    showActiveSessionsDetails() {
-        const activeSessions = storage.get('active_sessions', []);
-        const examIndex = storage.get('exam_index', []);
+    async showActiveSessionsDetails() {
+        const activeSessions = await storage.get('active_sessions', []);
+        const examIndex = await storage.get('exam_index', []);
 
         if (activeSessions.length === 0) {
             window.showMessage('当前没有活动的练习会话', 'info');
@@ -2460,8 +2460,8 @@ class ExamSystemApp {
     /**
      * 关闭所有题目会话
      */
-    closeAllExamSessions() {
-        const activeSessions = storage.get('active_sessions', []);
+    async closeAllExamSessions() {
+        const activeSessions = await storage.get('active_sessions', []);
 
         activeSessions.forEach(session => {
             this.closeExamSession(session.examId);

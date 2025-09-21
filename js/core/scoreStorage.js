@@ -619,7 +619,7 @@ class ScoreStorage {
         };
         
         // 获取现有备份
-        const backups = storage.get(this.storageKeys.backupData, []);
+        const backups = await storage.get(this.storageKeys.backupData, []);
         
         // 添加新备份
         backups.push(backupData);
@@ -630,7 +630,7 @@ class ScoreStorage {
         }
         
         // 保存备份
-        storage.set(this.storageKeys.backupData, backups);
+        await storage.set(this.storageKeys.backupData, backups);
         
         console.log('Backup created:', backupId);
         return backupId;
@@ -738,7 +738,7 @@ class ScoreStorage {
             }
             
             // 创建备份
-            const backupId = this.createBackup('pre_import_backup');
+            const backupId = await this.createBackup('pre_import_backup');
             
             if (options.merge) {
                 // 合并模式：添加新记录
