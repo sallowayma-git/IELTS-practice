@@ -8,31 +8,34 @@ class PracticeRecorder {
         this.sessionListeners = new Map();
         this.autoSaveInterval = 30000; // 30秒自动保存
         this.autoSaveTimer = null;
-        
+
         // 初始化存储系统
         this.scoreStorage = new ScoreStorage();
-        
-        this.initialize();
+
+        // 异步初始化
+        this.initialize().catch(error => {
+            console.error('[PracticeRecorder] 初始化失败:', error);
+        });
     }
 
     /**
      * 初始化练习记录器
      */
-    initialize() {
+    async initialize() {
         console.log('PracticeRecorder initialized');
-        
+
         // 恢复活动会话
-        this.restoreActiveSessions();
-        
+        await this.restoreActiveSessions();
+
         // 恢复临时存储的记录
         this.recoverTemporaryRecords();
-        
+
         // 设置消息监听器
         this.setupMessageListeners();
-        
+
         // 启动自动保存
         this.startAutoSave();
-        
+
         // 页面卸载时保存数据
         window.addEventListener('beforeunload', () => {
             this.saveAllSessions();
@@ -42,14 +45,9 @@ class PracticeRecorder {
     /**
      * 恢复活动会话
      */
-    restoreActiveSessions() {
-        const storedSessions = storage.get('active_sessions', []);
-
-        // 确保storedSessions是数组
-        if (!Array.isArray(storedSessions)) {
-            console.warn('[PracticeRecorder] storedSessions不是数组，使用空数组替代');
-            storedSessions = [];
-        }
+    async restoreActiveSessions() {
+        const raw = await storage.get('active_sessions', []);
+        const storedSessions = Array.isArray(raw) ? raw : [];
 
         storedSessions.forEach(sessionData => {
             this.activeSessions.set(sessionData.examId, {
