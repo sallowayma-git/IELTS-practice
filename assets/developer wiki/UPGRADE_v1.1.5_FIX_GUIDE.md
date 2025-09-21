@@ -30,7 +30,11 @@
 - 验证数据脚本是否就绪（控制台执行）：
   - `Array.isArray(window.completeExamIndex) && window.completeExamIndex.length > 0`
   - `Array.isArray(window.listeningExamIndex) && window.listeningExamIndex.length > 0`
-- 触发重建：刷新页面（或点击“强制刷新题库”按钮，若有）。
+  - 预期输出示例：
+    - `true`（completeExamIndex 验证）
+    - `true`（listeningExamIndex 验证）
+    - 若为 `false`，检查数据脚本是否正确加载
+- 触发重建：刷新页面（或点击"强制刷新题库"按钮，若有）。
 - 构建逻辑位置：`js/main.js:125-170`（`loadLibrary`）
   - 命中缓存时直接使用
   - 否则从 `window.completeExamIndex`（映射为 `type:'reading'`）和 `window.listeningExamIndex`（已含 `type:'listening'`）合并
@@ -52,10 +56,23 @@
   - 设置 `window.practiceRecords` 并调用 `updatePracticeView()`（`js/main.js:116-123`）
 - 记录渲染：`js/main.js:308-375`（`updatePracticeView`）
   - 无记录时显示“暂无任何练习记录”（`js/main.js:364-367`）
-- 如出现 “Assignment to constant variable” 错误（已在仓库发现潜在点）：
+- 如出现 "Assignment to constant variable" 错误（已在仓库发现潜在点）：
   - 文件：`js/core/practiceRecorder.js:46`，`restoreActiveSessions()` 中 `const storedSessions = ...` 后续被重新赋值
   - 最小修复：将 `const` 改为 `let`，并保留后续归一化
-    - 示例：`let storedSessions = storage.get('active_sessions', []); if (!Array.isArray(storedSessions)) storedSessions = [];`
+    - 完整修复代码片段：
+      ```javascript
+      // 修改前（第46行附近）：
+      const storedSessions = storage.get('active_sessions', []);
+      if (!Array.isArray(storedSessions)) {
+        storedSessions = [];
+      }
+
+      // 修改后：
+      let storedSessions = storage.get('active_sessions', []);
+      if (!Array.isArray(storedSessions)) {
+        storedSessions = [];
+      }
+      ```
   - 注意：不在此处引入 `await`，避免再次触发 await 语法错误（函数体未标记 async）
 
 五、file:// 本地运行注意（仅核验，不改结构）
@@ -102,5 +119,65 @@ B. 练习记录“点击详情”报错：practiceRecords.find is not a function
   - 文件：`js/components/practiceHistoryEnhancer.js`
   - 将 `showRecordDetails(recordId)` 改为 `async showRecordDetails(recordId)`，并把两处 `window.storage.get('practice_records', [])` 改为 `await window.storage.get('practice_records', [])`。
 - 验证：
-  - 刷新后进入“练习记录”页，点击任意记录标题或“详情”应可正常弹出详情，不再出现 `find is not a function`。
+  - 刷新后进入"练习记录"页，点击任意记录标题或"详情"应可正常弹出详情，不再出现 `find is not a function`。
+
+七、浏览器兼容性检查
+- 推荐浏览器版本：
+  - Chrome 90+（最佳兼容性，支持 ES6+ 模块和 async/await）
+  - Firefox 88+（支持现代 JavaScript 特性）
+  - Edge 90+（基于 Chromium，支持本地 file:// 协议）
+- 禁用安全策略命令（仅用于本地开发测试）：
+  - Chrome：`chrome.exe --disable-web-security --user-data-dir="C:\temp\chrome_dev" --allow-file-access-from-files`
+  - Firefox：`firefox.exe -profile "C:\temp\firefox_dev" -no-remote`
+  - Edge：`msedge.exe --disable-web-security --user-data-dir="C:\temp\edge_dev"`
+- 注意：生产环境请勿使用禁用安全策略的浏览器，file:// 协议在现代浏览器中受限，建议使用本地服务器（如 http-server）运行。
+
+八、数据脚本加载失败处理
+- 诊断步骤：
+  - 打开开发者工具（F12）→ Console 标签页
+  - 刷新页面，检查是否有 "Failed to load resource" 或 "Script error" 相关错误
+  - 验证数据脚本路径：`index.html:291-292` 中的 `<script src="assets/scripts/complete-exam-data.js"></script>` 和 `<script src="assets/scripts/listening-exam-data.js"></script>`
+- 手动加载指导：
+  - 确认文件存在：`assets/scripts/complete-exam-data.js` 和 `assets/scripts/listening-exam-data.js`
+  - 检查文件内容：确保 `window.completeExamIndex` 和 `window.listeningExamIndex` 被正确定义
+  - 临时验证：在 Console 执行 `console.log(window.completeExamIndex); console.log(window.listeningExamIndex);`
+  - 若加载失败，尝试绝对路径：修改 index.html 中的 script src 为绝对路径（如 `file:///C:/path/to/project/assets/scripts/...`）
+- 常见原因：浏览器安全策略阻止本地文件加载，或文件路径错误。
+
+九、回滚指南
+- 恢复原始代码：
+  - 如果使用 Git：`git checkout HEAD~1 -- js/app.js js/main.js js/core/practiceRecorder.js js/components/practiceRecordModal.js js/components/practiceHistoryEnhancer.js`
+  - 手动恢复：从备份文件或版本控制系统恢复上述文件的原始版本
+- 清空缓存步骤：
+  - 浏览器缓存：开发者工具 → Application → Storage → Local Storage → 清除所有
+  - 控制台执行：`localStorage.clear(); sessionStorage.clear();`
+  - 强制刷新：Ctrl+F5 或 Cmd+Shift+R
+- 验证回滚：确认所有修改点已恢复，页面功能回到修复前状态。
+
+十、更新日志
+- 2025-09-21：修复 await 语法错误（js/app.js:974）
+- 2025-09-21：修复练习记录异步存储兼容性（js/components/practiceRecordModal.js, js/components/practiceHistoryEnhancer.js）
+- 2025-09-21：修正题库路径映射（js/main.js:505-514）
+- 2025-09-21：修复活动会话常量重赋值错误（js/core/practiceRecorder.js:46）
+- 2025-09-21：添加浏览器兼容性检查章节
+- 2025-09-21：添加数据脚本加载失败处理章节
+- 2025-09-21：扩展控制台输出示例和代码片段
+- 2025-09-21：添加回滚指南和更新日志
+
+十一、常见错误排查
+- 调试步骤：
+  1. 打开开发者工具（F12）
+  2. 切换到 Console 标签页，清除现有日志
+  3. 刷新页面，观察错误信息
+  4. 检查 Network 标签页，确认所有资源加载成功（状态 200）
+  5. 在 Console 执行关键验证命令：
+     - `Array.isArray(window.examIndex) && window.examIndex.length > 0`
+     - `Array.isArray(window.practiceRecords) && window.practiceRecords.length >= 0`
+     - `typeof window.storage !== 'undefined'`
+  6. 若有错误，复制完整错误信息到搜索引擎或技术论坛寻求帮助
+- 常见问题：
+  - "Uncaught ReferenceError: window is not defined"：确保脚本在 DOM 加载后执行
+  - "CORS error"：本地 file:// 协议限制，使用本地服务器运行
+  - "Module not found"：检查文件路径和大小写
+  - "Promise rejected"：检查异步操作的错误处理
 
