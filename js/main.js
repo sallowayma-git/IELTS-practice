@@ -58,7 +58,8 @@ async function syncPracticeRecords() {
         // Prefer normalized records from ScoreStorage via PracticeRecorder
         const pr = window.app && window.app.components && window.app.components.practiceRecorder;
         if (pr && typeof pr.getPracticeRecords === 'function') {
-            records = pr.getPracticeRecords();
+            const maybePromise = pr.getPracticeRecords();
+            records = (typeof maybePromise?.then === 'function') ? await maybePromise : maybePromise;
         } else {
             // Fallback: read raw storage and defensively normalize minimal fields
             const raw = await storage.get('practice_records', []) || [];
