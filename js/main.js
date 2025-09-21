@@ -108,7 +108,7 @@ function setupMessageListener() {
 async function loadLibrary(forceReload = false) {
     const startTime = performance.now();
     const activeConfigKey = getActiveLibraryConfigurationKey();
-    let cachedData = storage.get(activeConfigKey);
+    let cachedData = await storage.get(activeConfigKey);
 
     if (!forceReload && cachedData) {
         console.log(`[System] 使用localStorage中的缓存，key为 '${activeConfigKey}'`);
@@ -997,9 +997,9 @@ function performSearch(query) {
 }
 
 /* Replaced by robust exporter below */
-function exportPracticeData() {
+async function exportPracticeData() {
     try {
-        const records = window.storage ? window.storage.get('practice_records', []) : (window.practiceRecords || []);
+        const records = window.storage ? (await window.storage.get('practice_records', [])) : (window.practiceRecords || []);
         const stats = window.app && window.app.userStats ? window.app.userStats : (window.practiceStats || {});
 
         if (!records || records.length === 0) {
@@ -1463,7 +1463,7 @@ async function showLibraryConfigListV2() {
 
 
 // Safe exporter (compat with old UI)
-function exportPracticeData() {
+async function exportPracticeData() {
     try {
         if (window.dataIntegrityManager && typeof window.dataIntegrityManager.exportData === 'function') {
             window.dataIntegrityManager.exportData();
@@ -1472,7 +1472,7 @@ function exportPracticeData() {
         }
     } catch(_) {}
     try {
-        var records = (window.storage && storage.get) ? storage.get('practice_records', []) : (window.practiceRecords || []);
+        var records = (window.storage && storage.get) ? (await storage.get('practice_records', [])) : (window.practiceRecords || []);
         var blob = new Blob([JSON.stringify(records, null, 2)], { type: 'application/json' });
         var url = URL.createObjectURL(blob);
         var a = document.createElement('a'); a.href = url; a.download = 'practice-records.json';

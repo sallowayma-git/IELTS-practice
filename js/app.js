@@ -612,7 +612,7 @@ class ExamSystemApp {
      * 加载用户统计数据
      */
     async loadUserStats() {
-        const stats = storage.get('user_stats', {
+        const stats = await storage.get('user_stats', {
             totalPractices: 0,
             totalTimeSpent: 0,
             averageScore: 0,
@@ -630,9 +630,9 @@ class ExamSystemApp {
     /**
      * 更新总览页面统计信息
      */
-    updateOverviewStats() {
-        const examIndex = storage.get('exam_index', []);
-        let practiceRecords = storage.get('practice_records', []);
+    async updateOverviewStats() {
+        const examIndex = await storage.get('exam_index', []);
+        let practiceRecords = await storage.get('practice_records', []);
 
         // 确保practiceRecords是数组
         if (!Array.isArray(practiceRecords)) {
@@ -838,9 +838,9 @@ class ExamSystemApp {
     /**
      * 开始分类练习
      */
-    startCategoryPractice(category) {
+    async startCategoryPractice(category) {
         // 获取该分类的题目
-        const examIndex = storage.get('exam_index', []);
+        const examIndex = await storage.get('exam_index', []);
         const categoryExams = examIndex.filter(exam => exam.category === category);
 
         if (categoryExams.length === 0) {
@@ -856,17 +856,17 @@ class ExamSystemApp {
     /**
      * 打开指定题目进行练习
      */
-    openExam(examId) {
+    async openExam(examId) {
         // 使用活动题库配置键，保证全量/增量切换后仍能打开
         let examIndex = [];
         try {
-            const activeKey = storage.get('active_exam_index_key', 'exam_index');
-            examIndex = storage.get(activeKey, []) || [];
+            const activeKey = await storage.get('active_exam_index_key', 'exam_index');
+            examIndex = await storage.get(activeKey, []) || [];
             if ((!examIndex || examIndex.length === 0) && activeKey !== 'exam_index') {
-                examIndex = storage.get('exam_index', []);
+                examIndex = await storage.get('exam_index', []);
             }
         } catch (_) {
-            examIndex = storage.get('exam_index', []);
+            examIndex = await storage.get('exam_index', []);
         }
         const exam = examIndex.find(e => e.id === examId);
 
@@ -877,7 +877,7 @@ class ExamSystemApp {
 
         try {
             // 记录练习开始
-            this.startPracticeSession(examId);
+            await this.startPracticeSession(examId);
 
             // 构造题目URL
             const examUrl = this.buildExamUrl(exam);
@@ -1185,7 +1185,7 @@ class ExamSystemApp {
     /**
      * 处理注入错误
      */
-    handleInjectionError(examId, error) {
+    async handleInjectionError(examId, error) {
         console.error('[DataInjection] 注入错误:', error);
 
         // 记录错误信息
@@ -1197,12 +1197,12 @@ class ExamSystemApp {
         };
 
         // 保存错误日志到本地存储
-        const errorLogs = storage.get('injection_errors', []);
+        const errorLogs = await storage.get('injection_errors', []);
         errorLogs.push(errorInfo);
         if (errorLogs.length > 50) {
             errorLogs.splice(0, errorLogs.length - 50); // 保留最近50条错误
         }
-        storage.set('injection_errors', errorLogs);
+        await storage.set('injection_errors', errorLogs);
 
         // 不显示错误给用户，静默处理
         console.warn('[DataInjection] 将使用模拟数据模式');
