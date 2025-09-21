@@ -975,7 +975,7 @@ class ExamSystemApp {
         console.log('[DataInjection] 开始注入数据采集脚本:', examId);
 
         // 等待页面加载完成后注入脚本
-        const injectScript = () => {
+        const injectScript = async () => {
             try {
                 // 检查窗口是否仍然存在
                 if (examWindow.closed) {
