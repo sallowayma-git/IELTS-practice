@@ -108,10 +108,11 @@ function setupMessageListener() {
 
 async function loadLibrary(forceReload = false) {
     const startTime = performance.now();
-    const activeConfigKey = getActiveLibraryConfigurationKey();
+    const activeConfigKey = await getActiveLibraryConfigurationKey();
     let cachedData = await storage.get(activeConfigKey);
 
-    if (!forceReload && cachedData) {
+    // 仅当缓存为非空数组时才直接使用；否则回退到内置脚本重建索引
+    if (!forceReload && Array.isArray(cachedData) && cachedData.length > 0) {
         console.log(`[System] 使用localStorage中的缓存，key为 '${activeConfigKey}'`);
         examIndex = cachedData;
         // 确保默认题库配置的记录存在
@@ -173,6 +174,9 @@ function finishLibraryLoading(startTime) {
         }
     });
     
+    // 将索引暴露到全局，供依赖 window.examIndex 的模块使用（如 CommunicationTester 等）
+    try { window.examIndex = examIndex; } catch (_) {}
+
     updateOverview();
     updateSystemInfo();
     window.dispatchEvent(new CustomEvent('examIndexLoaded'));
@@ -1155,8 +1159,8 @@ function clearCache() {
     }
 }
 
-function showLibraryConfigList() {
-    const configs = getLibraryConfigurations();
+async function showLibraryConfigList() {
+    const configs = await getLibraryConfigurations();
 
     if (configs.length === 0) {
         showMessage('暂无题库配置记录', 'info');
@@ -1169,9 +1173,10 @@ function showLibraryConfigList() {
                     <div style="max-height: 300px; overflow-y: auto; margin: 15px 0;">
             `;
 
+    const activeKey = await getActiveLibraryConfigurationKey();
     configs.forEach(config => {
         const date = new Date(config.timestamp).toLocaleString();
-        const isActive = getActiveLibraryConfigurationKey() === config.key;
+        const isActive = activeKey === config.key;
         const activeIndicator = isActive ? ' (当前)' : '';
 
         configHtml += `
@@ -1422,9 +1427,10 @@ async function showLibraryConfigListV2() {
             <h3 style="margin:0 0 10px; color: #000000;">📚 题库配置列表</h3>
             <div style="max-height: 320px; overflow-y: auto; margin: 10px 0;">
     `;
+    const activeKey = await getActiveLibraryConfigurationKey();
     configs.forEach(cfg => {
         const date = new Date(cfg.timestamp).toLocaleString();
-        const isActive = getActiveLibraryConfigurationKey() === cfg.key;
+        const isActive = activeKey === cfg.key;
         const isDefault = cfg.key === 'exam_index';
         const label = isDefault ? '默认题库' : (cfg.name || cfg.key);
         const activeIndicator = isActive ? '（当前）' : '';
