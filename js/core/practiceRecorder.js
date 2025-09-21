@@ -44,7 +44,13 @@ class PracticeRecorder {
      */
     restoreActiveSessions() {
         const storedSessions = storage.get('active_sessions', []);
-        
+
+        // 确保storedSessions是数组
+        if (!Array.isArray(storedSessions)) {
+            console.warn('[PracticeRecorder] storedSessions不是数组，使用空数组替代');
+            storedSessions = [];
+        }
+
         storedSessions.forEach(sessionData => {
             this.activeSessions.set(sessionData.examId, {
                 ...sessionData,
@@ -52,7 +58,7 @@ class PracticeRecorder {
                 lastActivity: new Date().toISOString()
             });
         });
-        
+
         console.log(`Restored ${storedSessions.length} active sessions`);
     }
 

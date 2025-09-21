@@ -51,7 +51,7 @@ function initializeLegacyComponents() {
 
 // --- Data Loading and Management ---
 
-function syncPracticeRecords() {
+async function syncPracticeRecords() {
     console.log('[System] 正在从存储中同步练习记录...');
     let records = [];
     try {
@@ -61,7 +61,7 @@ function syncPracticeRecords() {
             records = pr.getPracticeRecords();
         } else {
             // Fallback: read raw storage and defensively normalize minimal fields
-            const raw = storage.get('practice_records', []) || [];
+            const raw = await storage.get('practice_records', []) || [];
             records = raw.map(r => {
                 const rd = (r && r.realData) || {};
                 const sInfo = r && (r.scoreInfo || rd.scoreInfo) || {};
@@ -75,7 +75,7 @@ function syncPracticeRecords() {
         }
     } catch (e) {
         console.warn('[System] 同步记录时发生错误，使用存储原始数据:', e);
-        records = storage.get('practice_records', []);
+        records = await storage.get('practice_records', []);
     }
 
     // Ensure the global variable is the single source of truth for the UI
@@ -105,7 +105,7 @@ function setupMessageListener() {
     });
 }
 
-function loadLibrary(forceReload = false) {
+async function loadLibrary(forceReload = false) {
     const startTime = performance.now();
     const activeConfigKey = getActiveLibraryConfigurationKey();
     let cachedData = storage.get(activeConfigKey);
@@ -115,14 +115,14 @@ function loadLibrary(forceReload = false) {
         examIndex = cachedData;
         // 确保默认题库配置的记录存在
         try {
-            const configs = storage.get('exam_index_configurations', []);
+            const configs = await storage.get('exam_index_configurations', []);
             const exists = configs.some(c => c.key === 'exam_index');
             if (!exists) {
                 configs.push({ name: '默认题库', key: 'exam_index', examCount: examIndex.length || 0, timestamp: Date.now() });
-                storage.set('exam_index_configurations', configs);
+                await storage.set('exam_index_configurations', configs);
             }
-            const activeKey = storage.get('active_exam_index_key');
-            if (!activeKey) storage.set('active_exam_index_key', 'exam_index');
+            const activeKey = await storage.get('active_exam_index_key');
+            if (!activeKey) await storage.set('active_exam_index_key', 'exam_index');
         } catch (e) { console.warn('[LibraryConfig] 确保默认配置存在失败:', e); }
         finishLibraryLoading(startTime);
         return;
@@ -149,9 +149,9 @@ function loadLibrary(forceReload = false) {
         }
 
         examIndex = [...readingExams, ...listeningExams];
-        storage.set(activeConfigKey, examIndex); // 始终保存到缓存
-        saveLibraryConfiguration('默认题库', activeConfigKey, examIndex.length);
-        setActiveLibraryConfiguration(activeConfigKey);
+        await storage.set(activeConfigKey, examIndex); // 始终保存到缓存
+        await saveLibraryConfiguration('默认题库', activeConfigKey, examIndex.length);
+        await setActiveLibraryConfiguration(activeConfigKey);
         
         finishLibraryLoading(startTime);
 
@@ -661,16 +661,16 @@ function showMessage(message, type = 'info', duration = 4000) {
 }
 
 // Other functions from the original file (simplified or kept as is)
-function getActiveLibraryConfigurationKey() { 
-    return storage.get('active_exam_index_key', 'exam_index'); 
+async function getActiveLibraryConfigurationKey() {
+    return await storage.get('active_exam_index_key', 'exam_index');
 }
-function getLibraryConfigurations() {
-    return storage.get('exam_index_configurations', []);
+async function getLibraryConfigurations() {
+    return await storage.get('exam_index_configurations', []);
 }
-function saveLibraryConfiguration(name, key, examCount) { 
+async function saveLibraryConfiguration(name, key, examCount) {
     // Persist a record of available exam index configurations
     try {
-        const configs = storage.get('exam_index_configurations', []);
+        const configs = await storage.get('exam_index_configurations', []);
         const newEntry = { name, key, examCount, timestamp: Date.now() };
         const idx = configs.findIndex(c => c.key === key);
         if (idx >= 0) {
@@ -678,14 +678,14 @@ function saveLibraryConfiguration(name, key, examCount) {
         } else {
             configs.push(newEntry);
         }
-        storage.set('exam_index_configurations', configs);
+        await storage.set('exam_index_configurations', configs);
     } catch (e) {
         console.error('[LibraryConfig] 保存题库配置失败:', e);
     }
 }
-function setActiveLibraryConfiguration(key) { 
+async function setActiveLibraryConfiguration(key) {
     try {
-        storage.set('active_exam_index_key', key);
+        await storage.set('active_exam_index_key', key);
     } catch (e) {
         console.error('[LibraryConfig] 设置活动题库配置失败:', e);
     }
@@ -830,8 +830,8 @@ async function handleLibraryUpload(options, files) {
             return;
         }
 
-        const activeKey = getActiveLibraryConfigurationKey();
-        const currentIndex = storage.get(activeKey, examIndex) || [];
+        const activeKey = await getActiveLibraryConfigurationKey();
+        const currentIndex = await storage.get(activeKey, examIndex) || [];
 
         let newIndex;
         if (mode === 'full') {
@@ -858,9 +858,9 @@ async function handleLibraryUpload(options, files) {
                 if (otherType === 'listening' && window.listeningExamIndex) fallback = window.listeningExamIndex;
                 newIndex = [...newIndex, ...fallback];
             }
-            storage.set(targetKey, newIndex);
-            saveLibraryConfiguration(configName, targetKey, newIndex.length);
-            setActiveLibraryConfiguration(targetKey);
+            await storage.set(targetKey, newIndex);
+            await saveLibraryConfiguration(configName, targetKey, newIndex.length);
+            await setActiveLibraryConfiguration(targetKey);
             // 导出为时间命名脚本，便于统一管理
             try { exportExamIndexToScriptFile(newIndex, configName); } catch(_) {}
             showMessage('新的题库配置已创建并激活；正在重新加载...', 'success');
@@ -875,18 +875,18 @@ async function handleLibraryUpload(options, files) {
             // Create a new configuration so as not to affect default
             targetKey = `exam_index_${Date.now()}`;
             configName = `${type === 'reading' ? '阅读' : '听力'}增量-${new Date().toLocaleString()}`;
-            storage.set(targetKey, newIndex);
-            saveLibraryConfiguration(configName, targetKey, newIndex.length);
-            setActiveLibraryConfiguration(targetKey);
+            await storage.set(targetKey, newIndex);
+            await saveLibraryConfiguration(configName, targetKey, newIndex.length);
+            await setActiveLibraryConfiguration(targetKey);
             showMessage('新的题库配置已创建并激活；正在重新加载...', 'success');
             setTimeout(() => { location.reload(); }, 800);
             return;
         }
 
         // Save to the current active key（非默认配置下的增量更新）
-        storage.set(targetKey, newIndex);
+        await storage.set(targetKey, newIndex);
         const incName = `${type === 'reading' ? '阅读' : '听力'}增量-${new Date().toLocaleString()}`;
-        saveLibraryConfiguration(incName, targetKey, newIndex.length);
+        await saveLibraryConfiguration(incName, targetKey, newIndex.length);
         showMessage('索引已更新；正在刷新界面...', 'success');
         examIndex = newIndex;
         // 也导出一次，便于归档
@@ -1064,13 +1064,13 @@ function toggleBulkDelete() {
     updatePracticeView();
 }
 
-function bulkDeleteRecords() {
-    const records = storage.get('practice_records', []);
+async function bulkDeleteRecords() {
+    const records = await storage.get('practice_records', []);
     const recordsToKeep = records.filter(record => !selectedRecords.has(record.id));
 
     const deletedCount = records.length - recordsToKeep.length;
 
-    storage.set('practice_records', recordsToKeep);
+    await storage.set('practice_records', recordsToKeep);
     practiceRecords = recordsToKeep;
 
     syncPracticeRecords(); // Re-sync and update UI
@@ -1091,13 +1091,13 @@ function toggleRecordSelection(recordId) {
 }
 
 
-function deleteRecord(recordId) {
+async function deleteRecord(recordId) {
     if (!recordId) {
         showMessage('记录ID无效', 'error');
         return;
     }
 
-    const records = storage.get('practice_records', []);
+    const records = await storage.get('practice_records', []);
     const recordIndex = records.findIndex(record => String(record.id) === String(recordId));
 
     if (recordIndex === -1) {
@@ -1112,11 +1112,11 @@ function deleteRecord(recordId) {
         const historyItem = document.querySelector(`[data-record-id="${recordId}"]`);
         if (historyItem) {
             historyItem.classList.add('deleting');
-            setTimeout(() => {
+            setTimeout(async () => {
                 historyItem.classList.add('deleted');
-                setTimeout(() => {
+                setTimeout(async () => {
                     records.splice(recordIndex, 1);
-                    storage.set('practice_records', records);
+                    await storage.set('practice_records', records);
                     syncPracticeRecords(); // Re-sync and update UI
                     showMessage('记录已删除', 'success');
                 }, 300);
@@ -1124,17 +1124,17 @@ function deleteRecord(recordId) {
         } else {
             // Fallback if element not found
             records.splice(recordIndex, 1);
-            storage.set('practice_records', records);
+            await storage.set('practice_records', records);
             syncPracticeRecords();
             showMessage('记录已删除', 'success');
         }
     }
 }
 
-function clearPracticeData() {
+async function clearPracticeData() {
     if (confirm('确定要清除所有练习记录吗？此操作不可恢复。')) {
         practiceRecords = [];
-        storage.set('practice_records', []); // Use storage helper
+        await storage.set('practice_records', []); // Use storage helper
         processedSessions.clear();
         updatePracticeView();
         showMessage('练习记录已清除', 'success');
@@ -1207,9 +1207,9 @@ function showLibraryConfigList() {
 }
 
 // 切换题库配置
-function switchLibraryConfig(configKey) {
+async function switchLibraryConfig(configKey) {
     if (confirm('确定要切换到这个题库配置吗？页面将会刷新。')) {
-        setActiveLibraryConfiguration(configKey);
+        await setActiveLibraryConfiguration(configKey);
         showMessage('正在切换题库配置，页面将刷新...', 'info');
         setTimeout(() => {
             location.reload();
@@ -1218,16 +1218,16 @@ function switchLibraryConfig(configKey) {
 }
 
 // 删除题库配置
-function deleteLibraryConfig(configKey) {
+async function deleteLibraryConfig(configKey) {
     if (configKey === 'exam_index') {
         showMessage('默认题库不可删除', 'warning');
         return;
     }
     if (confirm("确定要删除这个题库配置吗？此操作不可恢复。")) {
-        let configs = getLibraryConfigurations();
+        let configs = await getLibraryConfigurations();
         configs = configs.filter(config => config.key !== configKey);
-        storage.set('exam_index_configurations', configs);
-        storage.remove(configKey); // 移除实际的题库数据
+        await storage.set('exam_index_configurations', configs);
+        await storage.remove(configKey); // 移除实际的题库数据
 
         
         showMessage('题库配置已删除', 'success');
@@ -1404,14 +1404,15 @@ function startRandomPractice(category, type = 'reading') {
 }
 
 // 改进版：题库配置列表（默认题库不可删除，可切换）
-function showLibraryConfigListV2() {
-    let configs = getLibraryConfigurations();
+async function showLibraryConfigListV2() {
+    let configs = await getLibraryConfigurations();
     if (configs.length === 0) {
         try {
             const count = Array.isArray(window.examIndex) ? window.examIndex.length : 0;
             configs = [{ name: '默认题库', key: 'exam_index', examCount: count, timestamp: Date.now() }];
-            storage.set('exam_index_configurations', configs);
-            if (!storage.get('active_exam_index_key')) storage.set('active_exam_index_key', 'exam_index');
+            await storage.set('exam_index_configurations', configs);
+            const activeKey = await storage.get('active_exam_index_key');
+            if (!activeKey) await storage.set('active_exam_index_key', 'exam_index');
         } catch (_) {}
     }
 

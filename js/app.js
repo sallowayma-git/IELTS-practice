@@ -1,4 +1,4 @@
-/**
+xu/**
  * 主应用程序
  * 负责应用的初始化和整体协调
  */
@@ -632,7 +632,13 @@ class ExamSystemApp {
      */
     updateOverviewStats() {
         const examIndex = storage.get('exam_index', []);
-        const practiceRecords = storage.get('practice_records', []);
+        let practiceRecords = storage.get('practice_records', []);
+
+        // 确保practiceRecords是数组
+        if (!Array.isArray(practiceRecords)) {
+            console.warn('[App] practiceRecords不是数组，使用空数组替代');
+            practiceRecords = [];
+        }
 
         // 更新总体统计
         const totalExams = examIndex.length;
@@ -1244,7 +1250,7 @@ class ExamSystemApp {
      */
     setupExamWindowCommunication(examWindow, examId) {
         // 监听来自题目窗口的消息
-        const messageHandler = (event) => {
+        const messageHandler = async (event) => {
             // 验证消息数据格式
             if (!event.data || typeof event.data !== 'object') return;
 
@@ -1282,7 +1288,7 @@ class ExamSystemApp {
                     this.handleProgressUpdate(examId, data);
                     break;
                 case 'PRACTICE_COMPLETE':
-                    this.handlePracticeComplete(examId, data);
+                    await this.handlePracticeComplete(examId, data);
                     break;
                 case 'ERROR_OCCURRED':
                     this.handleDataCollectionError(examId, data);
@@ -1703,14 +1709,14 @@ class ExamSystemApp {
     /**
      * 处理练习完成（真实数据）
      */
-    handlePracticeComplete(examId, data) {
+    async handlePracticeComplete(examId, data) {
         console.log('[DataCollection] 练习完成（真实数据）:', examId, data);
         console.log('[DataCollection] PracticeRecorder状态:', !!this.components.practiceRecorder);
 
         try {
             // 直接保存真实数据（采用旧版本的简单方式）
             console.log('[DataCollection] 直接保存真实数据');
-            this.saveRealPracticeData(examId, data);
+            await this.saveRealPracticeData(examId, data);
 
             // 刷新内存中的练习记录，确保无需手动刷新即可看到
             try {
@@ -1807,7 +1813,7 @@ class ExamSystemApp {
     /**
      * 保存真实练习数据（采用旧版本的简单直接方式）
      */
-    saveRealPracticeData(examId, realData) {
+    async saveRealPracticeData(examId, realData) {
         try {
             console.log('[DataCollection] 开始保存真实练习数据:', examId, realData);
             
@@ -1913,7 +1919,7 @@ class ExamSystemApp {
                 practiceRecords.splice(100);
             }
 
-            const saveResult = storage.set('practice_records', practiceRecords);
+            const saveResult = await storage.set('practice_records', practiceRecords);
             console.log('[DataCollection] 保存结果:', saveResult);
 
             // 立即验证保存是否成功
@@ -2818,6 +2824,7 @@ class ExamSystemApp {
 
         this.isInitialized = false;
     }
+
 }
 
 // 应用启动
