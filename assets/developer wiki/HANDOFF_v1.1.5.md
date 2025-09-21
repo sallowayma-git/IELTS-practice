@@ -121,6 +121,30 @@ This handoff summarizes the current status, required changes, constraints, verif
 ## Handoff Notes
 - No new files were added for runtime except this documentation. All code changes are to be applied within existing files as per this guide.
 - If any step fails, capture the exact Console output and the affected function’s current code; apply the smallest change indicated in the guide.
+
+
+---
+
+Update (Current Task Report): Browse Open/PDF + Practice Details
+
+- What changed
+  - Added a focused fix guide for the two active issues. See: `assets/developer wiki/UPGRADE_v1.1.5_FIX_GUIDE.md` (overwritten; only current fixes retained).
+
+- What to do (in order)
+  1) Practice details error `practiceRecords.find is not a function`:
+     - Make `exportSingle(recordId)` in `js/components/practiceRecordModal.js` async and await both `storage.get` calls.
+     - Make compatibility method `practiceRecordModal.showById` async and await `storage.get('practice_records', [])`.
+     - Make `showRecordDetails(recordId)` in `js/components/practiceHistoryEnhancer.js` async and await both `storage.get('practice_records', [])` reads.
+  2) Browse Open/PDF and `examIndex.find is not a function`:
+     - In `js/app.js` `openExam`: coerce the loaded value to array before `.find(...)` and fall back to `window.examIndex` when needed.
+     - In `js/main.js` `openExam`: same array coercion before `.find(...)`.
+     - If `await is only valid...` appears when opening: mark `injectScript` as async in `injectDataCollectionScript`.
+     - In `js/main.js` `getPathMap()`: set `reading.root` to empty string; keep `listening.root: 'ListeningPractice/'`.
+
+- Verification
+  - Buttons “打开/PDF” in Browse open HTML/PDF in a new window.
+  - Practice details open without errors.
+  - No `await is only valid...` nor `.find is not a function` errors.
 - `js/components/practiceRecordModal.js`
   - Make `exportSingle(recordId)` async and change synchronous `window.storage.get(...)` calls to `await window.storage.get(...)` for both practice records and exam index.
   - Change compatibility wrapper `window.practiceRecordModal.showById = function(recordId)` to `async function(recordId)` and use `await window.storage.get('practice_records', [])` before `.find(...)`.
