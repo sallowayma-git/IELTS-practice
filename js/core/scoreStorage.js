@@ -21,94 +21,98 @@ class ScoreStorage {
     /**
      * 初始化存储系统
      */
-    initialize() {
+    async initialize() {
         console.log('ScoreStorage initialized');
-        
+
         // 检查存储版本并迁移数据
-        this.checkStorageVersion();
-        
+        await this.checkStorageVersion();
+
         // 初始化数据结构
-        this.initializeDataStructures();
-        
+        await this.initializeDataStructures();
+
         // 设置自动备份
         this.setupAutoBackup();
-        
+
         // 暂时禁用清理过期数据，避免误删新记录
-        // this.cleanupExpiredData();
+        // await this.cleanupExpiredData();
     }
 
     /**
      * 检查存储版本
      */
-    checkStorageVersion() {
-        const storedVersion = storage.get(this.storageKeys.storageVersion);
-        
+    async checkStorageVersion() {
+        const storedVersion = await storage.get(this.storageKeys.storageVersion);
+
         if (!storedVersion) {
             // 首次使用，设置版本
-            storage.set(this.storageKeys.storageVersion, this.currentVersion);
+            await storage.set(this.storageKeys.storageVersion, this.currentVersion);
             console.log('Storage version initialized:', this.currentVersion);
         } else if (storedVersion !== this.currentVersion) {
             // 版本不匹配，执行数据迁移
-            this.migrateData(storedVersion, this.currentVersion);
+            await this.migrateData(storedVersion, this.currentVersion);
         }
     }
 
     /**
      * 数据迁移
      */
-    migrateData(fromVersion, toVersion) {
+    async migrateData(fromVersion, toVersion) {
         console.log(`Migrating data from ${fromVersion} to ${toVersion}`);
-        
+
         try {
             // 备份当前数据
-            this.createBackup('migration_backup');
-            
+            await this.createBackup('migration_backup');
+
             // 根据版本执行相应的迁移逻辑
             if (fromVersion < '1.0.0') {
-                this.migrateToV1();
+                await this.migrateToV1();
             }
-            
+
             // 更新版本号
-            storage.set(this.storageKeys.storageVersion, toVersion);
+            await storage.set(this.storageKeys.storageVersion, toVersion);
             console.log('Data migration completed successfully');
-            
+
         } catch (error) {
             console.error('Data migration failed:', error);
             // 恢复备份数据
-            this.restoreBackup('migration_backup');
+            try {
+                await this.restoreBackup('migration_backup');
+            } catch (restoreError) {
+                console.error('Failed to restore backup:', restoreError);
+            }
         }
     }
 
     /**
      * 迁移到版本1.0.0
      */
-    migrateToV1() {
+    async migrateToV1() {
         // 标准化练习记录格式
-        const records = storage.get(this.storageKeys.practiceRecords, []);
+        const records = await storage.get(this.storageKeys.practiceRecords, []);
         const standardizedRecords = records.map(record => this.standardizeRecord(record));
-        storage.set(this.storageKeys.practiceRecords, standardizedRecords);
-        
+        await storage.set(this.storageKeys.practiceRecords, standardizedRecords);
+
         // 重新计算用户统计
-        this.recalculateUserStats();
+        await this.recalculateUserStats();
     }
 
     /**
      * 初始化数据结构
      */
-    initializeDataStructures() {
+    async initializeDataStructures() {
         // 确保基础数据结构存在
-        const existingRecords = storage.get(this.storageKeys.practiceRecords);
+        const existingRecords = await storage.get(this.storageKeys.practiceRecords);
         if (existingRecords === null || existingRecords === undefined) {
             console.log('[ScoreStorage] 初始化练习记录数组');
-            storage.set(this.storageKeys.practiceRecords, []);
+            await storage.set(this.storageKeys.practiceRecords, []);
         } else {
             console.log(`[ScoreStorage] 保留现有练习记录: ${existingRecords.length} 条`);
         }
-        
-        const existingStats = storage.get(this.storageKeys.userStats);
+
+        const existingStats = await storage.get(this.storageKeys.userStats);
         if (existingStats === null || existingStats === undefined) {
             console.log('[ScoreStorage] 初始化用户统计');
-            storage.set(this.storageKeys.userStats, this.getDefaultUserStats());
+            await storage.set(this.storageKeys.userStats, this.getDefaultUserStats());
         } else {
             console.log('[ScoreStorage] 保留现有用户统计');
         }
@@ -135,7 +139,7 @@ class ScoreStorage {
     /**
      * 保存练习记录
      */
-    savePracticeRecord(recordData) {
+    async savePracticeRecord(recordData) {
         try {
             // 标准化记录格式
             const standardizedRecord = this.standardizeRecord(recordData);
@@ -144,8 +148,8 @@ class ScoreStorage {
             this.validateRecord(standardizedRecord);
             
             // 获取现有记录
-            const records = storage.get(this.storageKeys.practiceRecords, []);
-            
+            const records = await storage.get(this.storageKeys.practiceRecords, []);
+
             // 检查是否已存在相同ID的记录
             const existingIndex = records.findIndex(r => r.id === standardizedRecord.id);
             if (existingIndex !== -1) {
@@ -155,20 +159,20 @@ class ScoreStorage {
                 // 添加新记录到开头（保持最新记录在前）
                 records.unshift(standardizedRecord);
             }
-            
+
             // 维护记录数量限制
             if (records.length > this.maxRecords) {
                 records.splice(this.maxRecords);
             }
-            
+
             // 保存记录
-            const saveResult = storage.set(this.storageKeys.practiceRecords, records);
+            const saveResult = await storage.set(this.storageKeys.practiceRecords, records);
             if (!saveResult) {
                 throw new Error('Failed to save records to storage');
             }
-            
+
             // 更新用户统计
-            this.updateUserStats(standardizedRecord);
+            await this.updateUserStats(standardizedRecord);
             
             console.log('Practice record saved:', standardizedRecord.id);
             return standardizedRecord;
@@ -270,8 +274,8 @@ class ScoreStorage {
     /**
      * 更新用户统计
      */
-    updateUserStats(practiceRecord) {
-        const stats = storage.get(this.storageKeys.userStats, this.getDefaultUserStats());
+    async updateUserStats(practiceRecord) {
+        const stats = await storage.get(this.storageKeys.userStats, this.getDefaultUserStats());
         
         // 更新基础统计
         stats.totalPractices += 1;
@@ -297,7 +301,7 @@ class ScoreStorage {
         stats.updatedAt = new Date().toISOString();
         
         // 保存统计数据
-        storage.set(this.storageKeys.userStats, stats);
+        await storage.set(this.storageKeys.userStats, stats);
         
         console.log('User stats updated');
     }
@@ -432,8 +436,8 @@ class ScoreStorage {
     /**
      * 获取练习记录
      */
-    getPracticeRecords(filters = {}) {
-        const raw = storage.get(this.storageKeys.practiceRecords, []);
+    async getPracticeRecords(filters = {}) {
+        const raw = await storage.get(this.storageKeys.practiceRecords, []);
         // Normalize each record to ensure UI can rely on a stable shape
         const records = raw.map(r => this.normalizeRecordFields(r));
 
@@ -466,24 +470,24 @@ class ScoreStorage {
     /**
      * 获取用户统计
      */
-    getUserStats() {
-        return storage.get(this.storageKeys.userStats, this.getDefaultUserStats());
+    async getUserStats() {
+        return await storage.get(this.storageKeys.userStats, this.getDefaultUserStats());
     }
 
     /**
      * 重新计算用户统计
      */
-    recalculateUserStats() {
+    async recalculateUserStats() {
         console.log('Recalculating user stats...');
-        
-        const records = (storage.get(this.storageKeys.practiceRecords, []) || []).map(r => this.normalizeRecordFields(r));
+
+        const records = (await storage.get(this.storageKeys.practiceRecords, []) || []).map(r => this.normalizeRecordFields(r));
         const stats = this.getDefaultUserStats();
-        
+
         // 重新计算所有统计数据
-        records.forEach(record => {
-            this.updateUserStats(record);
-        });
-        
+        for (const record of records) {
+            await this.updateUserStats(record);
+        }
+
         console.log('User stats recalculated');
     }
 
@@ -599,7 +603,7 @@ class ScoreStorage {
     /**
      * 创建数据备份
      */
-    createBackup(backupName = null) {
+    async createBackup(backupName = null) {
         const timestamp = new Date().toISOString();
         const backupId = backupName || `backup_${timestamp.replace(/[:.]/g, '-')}`;
         
@@ -608,9 +612,9 @@ class ScoreStorage {
             timestamp,
             version: this.currentVersion,
             data: {
-                practiceRecords: storage.get(this.storageKeys.practiceRecords, []),
-                userStats: storage.get(this.storageKeys.userStats, {}),
-                storageVersion: storage.get(this.storageKeys.storageVersion)
+                practiceRecords: await storage.get(this.storageKeys.practiceRecords, []),
+                userStats: await storage.get(this.storageKeys.userStats, {}),
+                storageVersion: await storage.get(this.storageKeys.storageVersion)
             }
         };
         
@@ -635,8 +639,8 @@ class ScoreStorage {
     /**
      * 恢复数据备份
      */
-    restoreBackup(backupId) {
-        const backups = storage.get(this.storageKeys.backupData, []);
+    async restoreBackup(backupId) {
+        const backups = await storage.get(this.storageKeys.backupData, []);
         const backup = backups.find(b => b.id === backupId);
         
         if (!backup) {
@@ -645,13 +649,13 @@ class ScoreStorage {
         
         try {
             // 恢复数据
-            storage.set(this.storageKeys.practiceRecords, backup.data.practiceRecords);
-            storage.set(this.storageKeys.userStats, backup.data.userStats);
-            storage.set(this.storageKeys.storageVersion, backup.data.storageVersion);
-            
+            await storage.set(this.storageKeys.practiceRecords, backup.data.practiceRecords);
+            await storage.set(this.storageKeys.userStats, backup.data.userStats);
+            await storage.set(this.storageKeys.storageVersion, backup.data.storageVersion);
+
             console.log('Backup restored:', backupId);
             return true;
-            
+
         } catch (error) {
             console.error('Failed to restore backup:', error);
             throw error;
@@ -661,21 +665,21 @@ class ScoreStorage {
     /**
      * 获取备份列表
      */
-    getBackups() {
-        return storage.get(this.storageKeys.backupData, [])
+    async getBackups() {
+        return (await storage.get(this.storageKeys.backupData, []))
             .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     }
 
     /**
      * 导出数据
      */
-    exportData(format = 'json') {
+    async exportData(format = 'json') {
         const exportData = {
             exportDate: new Date().toISOString(),
             version: this.currentVersion,
-            practiceRecords: storage.get(this.storageKeys.practiceRecords, []),
-            userStats: storage.get(this.storageKeys.userStats, {}),
-            backups: storage.get(this.storageKeys.backupData, [])
+            practiceRecords: await storage.get(this.storageKeys.practiceRecords, []),
+            userStats: await storage.get(this.storageKeys.userStats, {}),
+            backups: await storage.get(this.storageKeys.backupData, [])
         };
         
         switch (format.toLowerCase()) {
@@ -724,7 +728,7 @@ class ScoreStorage {
     /**
      * 导入数据
      */
-    importData(importData, options = {}) {
+    async importData(importData, options = {}) {
         try {
             const data = typeof importData === 'string' ? JSON.parse(importData) : importData;
             
@@ -738,29 +742,29 @@ class ScoreStorage {
             
             if (options.merge) {
                 // 合并模式：添加新记录
-                const existingRecords = storage.get(this.storageKeys.practiceRecords, []);
+                const existingRecords = await storage.get(this.storageKeys.practiceRecords, []);
                 const existingIds = new Set(existingRecords.map(r => r.id));
-                
+
                 const newRecords = data.practiceRecords.filter(r => !existingIds.has(r.id));
                 const mergedRecords = [...existingRecords, ...newRecords];
-                
-                storage.set(this.storageKeys.practiceRecords, mergedRecords);
-                
+
+                await storage.set(this.storageKeys.practiceRecords, mergedRecords);
+
                 // 重新计算统计
-                this.recalculateUserStats();
-                
+                await this.recalculateUserStats();
+
                 console.log(`Imported ${newRecords.length} new records`);
-                
+
             } else {
                 // 替换模式：完全替换数据
-                storage.set(this.storageKeys.practiceRecords, data.practiceRecords);
-                
+                await storage.set(this.storageKeys.practiceRecords, data.practiceRecords);
+
                 if (data.userStats) {
-                    storage.set(this.storageKeys.userStats, data.userStats);
+                    await storage.set(this.storageKeys.userStats, data.userStats);
                 } else {
-                    this.recalculateUserStats();
+                    await this.recalculateUserStats();
                 }
-                
+
                 console.log(`Imported ${data.practiceRecords.length} records (replace mode)`);
             }
             
@@ -775,28 +779,28 @@ class ScoreStorage {
     /**
      * 设置自动备份
      */
-    setupAutoBackup() {
+    async setupAutoBackup() {
         // 检查上次备份时间
-        const lastBackup = this.getLastBackupTime();
+        const lastBackup = await this.getLastBackupTime();
         const now = Date.now();
-        
+
         if (!lastBackup || (now - lastBackup) > this.backupInterval) {
-            this.createBackup();
+            await this.createBackup();
         }
-        
+
         // 设置定期备份
-        setInterval(() => {
-            this.createBackup();
+        setInterval(async () => {
+            await this.createBackup();
         }, this.backupInterval);
     }
 
     /**
      * 获取最后备份时间
      */
-    getLastBackupTime() {
-        const backups = storage.get(this.storageKeys.backupData, []);
+    async getLastBackupTime() {
+        const backups = await storage.get(this.storageKeys.backupData, []);
         if (backups.length === 0) return null;
-        
+
         const lastBackup = backups[backups.length - 1];
         return new Date(lastBackup.timestamp).getTime();
     }
@@ -804,29 +808,29 @@ class ScoreStorage {
     /**
      * 清理过期数据
      */
-    cleanupExpiredData() {
+    async cleanupExpiredData() {
         // 清理超过1年的练习记录
         const oneYearAgo = new Date();
         oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-        
-        const records = storage.get(this.storageKeys.practiceRecords, []);
-        const validRecords = records.filter(record => 
+
+        const records = await storage.get(this.storageKeys.practiceRecords, []);
+        const validRecords = records.filter(record =>
             new Date(record.startTime) > oneYearAgo
         );
-        
+
         if (validRecords.length !== records.length) {
-            storage.set(this.storageKeys.practiceRecords, validRecords);
+            await storage.set(this.storageKeys.practiceRecords, validRecords);
             console.log(`Cleaned up ${records.length - validRecords.length} expired records`);
         }
-        
+
         // 清理过期备份
-        const backups = storage.get(this.storageKeys.backupData, []);
-        const validBackups = backups.filter(backup => 
+        const backups = await storage.get(this.storageKeys.backupData, []);
+        const validBackups = backups.filter(backup =>
             new Date(backup.timestamp) > oneYearAgo
         );
-        
+
         if (validBackups.length !== backups.length) {
-            storage.set(this.storageKeys.backupData, validBackups);
+            await storage.set(this.storageKeys.backupData, validBackups);
             console.log(`Cleaned up ${backups.length - validBackups.length} expired backups`);
         }
     }
@@ -841,30 +845,30 @@ class ScoreStorage {
     /**
      * 获取存储统计信息
      */
-    getStorageStats() {
-        const records = storage.get(this.storageKeys.practiceRecords, []);
-        const backups = storage.get(this.storageKeys.backupData, []);
-        
+    async getStorageStats() {
+        const records = await storage.get(this.storageKeys.practiceRecords, []);
+        const backups = await storage.get(this.storageKeys.backupData, []);
+
         return {
             totalRecords: records.length,
             totalBackups: backups.length,
             oldestRecord: records.length > 0 ? records[0].startTime : null,
             newestRecord: records.length > 0 ? records[records.length - 1].startTime : null,
-            storageVersion: storage.get(this.storageKeys.storageVersion),
-            estimatedSize: this.estimateStorageSize()
+            storageVersion: await storage.get(this.storageKeys.storageVersion),
+            estimatedSize: await this.estimateStorageSize()
         };
     }
 
     /**
      * 估算存储大小
      */
-    estimateStorageSize() {
+    async estimateStorageSize() {
         const data = {
-            practiceRecords: storage.get(this.storageKeys.practiceRecords, []),
-            userStats: storage.get(this.storageKeys.userStats, {}),
-            backupData: storage.get(this.storageKeys.backupData, [])
+            practiceRecords: await storage.get(this.storageKeys.practiceRecords, []),
+            userStats: await storage.get(this.storageKeys.userStats, {}),
+            backupData: await storage.get(this.storageKeys.backupData, [])
         };
-        
+
         const jsonString = JSON.stringify(data);
         return jsonString.length; // 字节数的近似值
     }
@@ -872,9 +876,9 @@ class ScoreStorage {
     /**
      * 销毁存储系统
      */
-    destroy() {
+    async destroy() {
         // 创建最终备份
-        this.createBackup('final_backup');
+        await this.createBackup('final_backup');
         console.log('ScoreStorage destroyed');
     }
 }
