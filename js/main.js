@@ -25,7 +25,7 @@ function initializeLegacyComponents() {
     if (folderPicker) {
         folderPicker.addEventListener('change', handleFolderSelection);
     }
-    
+
     // Initialize components
     if (window.PDFHandler) {
         pdfHandler = new PDFHandler();
@@ -42,10 +42,26 @@ function initializeLegacyComponents() {
         console.warn('[System] DataIntegrityManager类未加载');
     }
 
+    // Clean up old cache and configurations for v1.1.0 upgrade
+    cleanupOldCache();
+
     // Load data and setup listeners
     loadLibrary();
     syncPracticeRecords(); // Load initial records and update UI
     setupMessageListener(); // Listen for updates from child windows
+}
+
+// Clean up old cache and configurations
+async function cleanupOldCache() {
+    try {
+        console.log('[System] 正在清理旧缓存与配置...');
+        await storage.remove('exam_index');
+        await storage.remove('active_exam_index_key');
+        await storage.set('exam_index_configurations', []);
+        console.log('[System] 旧缓存清理完成');
+    } catch (error) {
+        console.warn('[System] 清理旧缓存时出错:', error);
+    }
 }
 
 
@@ -111,52 +127,46 @@ async function loadLibrary(forceReload = false) {
     const activeConfigKey = await getActiveLibraryConfigurationKey();
     let cachedData = await storage.get(activeConfigKey);
 
-    // 仅当缓存为非空数组时才直接使用；否则回退到内置脚本重建索引
+    // 仅当缓存为非空数组时使用缓存
     if (!forceReload && Array.isArray(cachedData) && cachedData.length > 0) {
-        console.log(`[System] 使用localStorage中的缓存，key为 '${activeConfigKey}'`);
         examIndex = cachedData;
-        // 确保默认题库配置的记录存在
         try {
             const configs = await storage.get('exam_index_configurations', []);
-            const exists = configs.some(c => c.key === 'exam_index');
-            if (!exists) {
+            if (!configs.some(c => c.key === 'exam_index')) {
                 configs.push({ name: '默认题库', key: 'exam_index', examCount: examIndex.length || 0, timestamp: Date.now() });
                 await storage.set('exam_index_configurations', configs);
             }
             const activeKey = await storage.get('active_exam_index_key');
             if (!activeKey) await storage.set('active_exam_index_key', 'exam_index');
-        } catch (e) { console.warn('[LibraryConfig] 确保默认配置存在失败:', e); }
+        } catch (_) {}
         finishLibraryLoading(startTime);
         return;
     }
 
-    console.log(`[System] ${forceReload ? '强制' : '正常'}加载题库索引...`);
-    showMessage('正在加载题库索引...', 'info');
-
+    // 从脚本重建索引（阅读+听力），若两者皆无则不写入空索引
     try {
         let readingExams = [];
-        if (window.completeExamIndex && Array.isArray(window.completeExamIndex)) {
+        if (Array.isArray(window.completeExamIndex)) {
             readingExams = window.completeExamIndex.map(exam => ({ ...exam, type: 'reading' }));
-            console.log(`[Library] 加载阅读题库: ${readingExams.length} 项`);
         }
 
         let listeningExams = [];
-        if (window.listeningExamIndex && Array.isArray(window.listeningExamIndex)) {
-            listeningExams = window.listeningExamIndex; // type is already in the data
-            console.log(`[Library] 加载听力题库: ${listeningExams.length} 项 (P3: ${listeningExams.filter(e => e.category === 'P3').length}, P4: ${listeningExams.filter(e => e.category === 'P4').length})`);
+        if (Array.isArray(window.listeningExamIndex)) {
+            listeningExams = window.listeningExamIndex; // 已含 type: 'listening'
         }
 
         if (readingExams.length === 0 && listeningExams.length === 0) {
-            console.warn('[Library] 未检测到内置题库数据，将使用空索引继续');
+            examIndex = [];
+            finishLibraryLoading(startTime); // 不写入空索引，避免污染缓存
+            return;
         }
 
         examIndex = [...readingExams, ...listeningExams];
-        await storage.set(activeConfigKey, examIndex); // 始终保存到缓存
+        await storage.set(activeConfigKey, examIndex);
         await saveLibraryConfiguration('默认题库', activeConfigKey, examIndex.length);
         await setActiveLibraryConfiguration(activeConfigKey);
-        
-        finishLibraryLoading(startTime);
 
+        finishLibraryLoading(startTime);
     } catch (error) {
         console.error('[Library] 加载题库失败:', error);
         examIndex = [];
@@ -165,18 +175,7 @@ async function loadLibrary(forceReload = false) {
 }
 function finishLibraryLoading(startTime) {
     const loadTime = performance.now() - startTime;
-    showMessage(`题库加载完成！共 ${examIndex.length} 个题目 - ${Math.round(loadTime)}ms`, 'success');
-    
-    // 生成搜索文本字段以优化搜索性能
-    examIndex.forEach(exam => {
-        if (!exam.searchText) {
-            exam.searchText = `${exam.title || ''} ${exam.category || ''}`.toLowerCase().trim();
-        }
-    });
-    
-    // 将索引暴露到全局，供依赖 window.examIndex 的模块使用（如 CommunicationTester 等）
     try { window.examIndex = examIndex; } catch (_) {}
-
     updateOverview();
     updateSystemInfo();
     window.dispatchEvent(new CustomEvent('examIndexLoaded'));
