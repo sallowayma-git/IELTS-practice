@@ -161,7 +161,7 @@ class PracticeRecorder {
         const { examId, sessionId, metadata } = data;
         
         if (this.activeSessions.has(examId)) {
-            const session = this.activeSessions.get(examId);
+            let session = this.activeSessions.get(examId);
             session.sessionId = sessionId;
             session.status = 'active';
             session.lastActivity = new Date().toISOString();
@@ -185,7 +185,7 @@ class PracticeRecorder {
         
         if (!this.activeSessions.has(examId)) return;
         
-        const session = this.activeSessions.get(examId);
+        let session = this.activeSessions.get(examId);
         session.lastActivity = new Date().toISOString();
         session.progress = { ...session.progress, ...progress };
         
@@ -207,7 +207,7 @@ class PracticeRecorder {
         
         if (!this.activeSessions.has(examId)) return;
         
-        const session = this.activeSessions.get(examId);
+        let session = this.activeSessions.get(examId);
         const endTime = new Date().toISOString();
         
         // 计算总用时
@@ -257,7 +257,7 @@ class PracticeRecorder {
         
         if (!this.activeSessions.has(examId)) return;
         
-        const session = this.activeSessions.get(examId);
+        let session = this.activeSessions.get(examId);
         session.status = 'paused';
         session.lastActivity = new Date().toISOString();
         
@@ -275,7 +275,7 @@ class PracticeRecorder {
         
         if (!this.activeSessions.has(examId)) return;
         
-        const session = this.activeSessions.get(examId);
+        let session = this.activeSessions.get(examId);
         session.status = 'active';
         session.lastActivity = new Date().toISOString();
         
@@ -293,7 +293,7 @@ class PracticeRecorder {
         
         if (!this.activeSessions.has(examId)) return;
         
-        const session = this.activeSessions.get(examId);
+        let session = this.activeSessions.get(examId);
         session.status = 'error';
         session.error = error;
         session.lastActivity = new Date().toISOString();
@@ -313,7 +313,7 @@ class PracticeRecorder {
     endPracticeSession(examId, reason = 'completed') {
         if (!this.activeSessions.has(examId)) return;
         
-        const session = this.activeSessions.get(examId);
+        let session = this.activeSessions.get(examId);
         
         // 如果会话未完成，创建中断记录
         if (reason !== 'completed' && session.status !== 'completed') {
@@ -377,7 +377,7 @@ class PracticeRecorder {
     checkSessionActivity(examId) {
         if (!this.activeSessions.has(examId)) return;
         
-        const session = this.activeSessions.get(examId);
+        let session = this.activeSessions.get(examId);
         const now = new Date();
         const lastActivity = new Date(session.lastActivity);
         const inactiveTime = now - lastActivity;
@@ -491,9 +491,9 @@ class PracticeRecorder {
             // 标准化记录格式，确保与ScoreStorage兼容
             const standardizedRecord = this.standardizeRecordForFallback(record);
             
-            const records = storage.get('practice_records', []);
+            let records = [...storage.get('practice_records', [])];
             console.log('[PracticeRecorder] 当前记录数量:', records.length);
-            
+
             // 检查是否已存在相同ID的记录
             const existingIndex = records.findIndex(r => r.id === standardizedRecord.id);
             if (existingIndex !== -1) {
@@ -503,12 +503,12 @@ class PracticeRecorder {
                 // 新记录添加到开头（保持时间顺序）
                 records.unshift(standardizedRecord);
             }
-            
+
             // 限制记录数量
             if (records.length > 1000) {
-                records.splice(1000);
+                records = records.slice(0, 1000);
             }
-            
+
             // 保存记录
             const saveSuccess = storage.set('practice_records', records);
             if (!saveSuccess) {
@@ -656,7 +656,7 @@ class PracticeRecorder {
      */
     saveToTemporaryStorage(record) {
         try {
-            const tempRecords = storage.get('temp_practice_records', []);
+            const tempRecords = [...storage.get('temp_practice_records', [])];
             tempRecords.push({
                 ...record,
                 tempSavedAt: new Date().toISOString(),
@@ -664,11 +664,9 @@ class PracticeRecorder {
             });
             
             // 限制临时记录数量
-            if (tempRecords.length > 50) {
-                tempRecords.splice(0, tempRecords.length - 50);
-            }
-            
-            storage.set('temp_practice_records', tempRecords);
+            const finalTempRecords = tempRecords.length > 50 ? tempRecords.slice(-50) : tempRecords;
+
+            storage.set('temp_practice_records', finalTempRecords);
             console.log('[PracticeRecorder] 记录已保存到临时存储:', record.id);
             
         } catch (error) {
@@ -680,15 +678,13 @@ class PracticeRecorder {
      * 保存中断记录
      */
     saveInterruptedRecord(record) {
-        const records = storage.get('interrupted_records', []);
+        const records = [...storage.get('interrupted_records', [])];
         records.push(record);
         
         // 保持最近100条中断记录
-        if (records.length > 100) {
-            records.splice(0, records.length - 100);
-        }
-        
-        storage.set('interrupted_records', records);
+        const finalRecords = records.length > 100 ? records.slice(-100) : records;
+
+        storage.set('interrupted_records', finalRecords);
         console.log(`Interrupted record saved: ${record.id}`);
     }
 
@@ -1218,7 +1214,7 @@ class PracticeRecorder {
         
         // 检查是否有活动会话
         if (this.activeSessions.has(examId)) {
-            const session = this.activeSessions.get(examId);
+            let session = this.activeSessions.get(examId);
             
             // 生成模拟结果
             const simulatedResults = this.generateSimulatedResults(session);
