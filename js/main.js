@@ -52,6 +52,19 @@ function initializeLegacyComponents() {
       }
     } catch(_) {}
 
+    // 防止索引在每次加载时被清空 - 新增修复3A
+    try {
+      const cleanupDone = localStorage.getItem('upgrade_v1_1_0_cleanup_done');
+      if (!cleanupDone) {
+        console.log('[System] 首次运行，执行升级清理...');
+        cleanupOldCache().finally(() => {
+          try { localStorage.setItem('upgrade_v1_1_0_cleanup_done','1'); } catch(_) {}
+        });
+      } else {
+        console.log('[System] 升级清理已完成，跳过重复清理');
+      }
+    } catch(_) {}
+
 
     // Load data and setup listeners
     loadLibrary();
@@ -103,7 +116,7 @@ async function syncPracticeRecords() {
         records = await storage.get('practice_records', []);
     }
 
-    // Ensure the global variable is the single source of truth for the UI
+    // 新增修复3D：确保全局变量是UI的单一数据源
     window.practiceRecords = records;
     practiceRecords = records; // also update the local-scoped variable
 
@@ -151,7 +164,7 @@ async function loadLibrary(forceReload = false) {
         return;
     }
 
-    // 从脚本重建索引（阅读+听力），若两者皆无则不写入空索引
+    // 新增修复3B：从脚本重建索引（阅读+听力），若两者皆无则不写入空索引
     try {
         let readingExams = [];
         if (Array.isArray(window.completeExamIndex)) {
@@ -184,6 +197,7 @@ async function loadLibrary(forceReload = false) {
 function finishLibraryLoading(startTime) {
     const loadTime = performance.now() - startTime;
     try { window.examIndex = examIndex; } catch (_) {}
+    // 新增修复3C：触发UI渲染链路 - 先设置window.examIndex，再updateOverview()，最后派发examIndexLoaded事件
     updateOverview();
     updateSystemInfo();
     window.dispatchEvent(new CustomEvent('examIndexLoaded'));
@@ -520,6 +534,7 @@ function getPathMap() {
       return window.pathMap;
     }
 
+    // 新增修复3F：路径映射修复 - 将reading.root置为''
     // Fallback to embedded path map
     return {
       reading: {
@@ -1515,7 +1530,7 @@ async function exportPracticeData() {
     }
 }
 
-// Auto-refresh browse list when exam index is loaded
+// 新增修复3C：在js/main.js末尾添加监听examIndexLoaded事件，调用loadExamList()并隐藏浏览页spinner
 window.addEventListener('examIndexLoaded', () => {
   try {
     if (typeof loadExamList === 'function') loadExamList();
