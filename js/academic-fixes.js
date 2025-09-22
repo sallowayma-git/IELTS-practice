@@ -5,38 +5,28 @@
  */
 
 // 修复函数 - 确保在页面加载早期就可用
-function safeGetRecords() {
+async function safeGetRecords() {
     try {
         if (window.storage && typeof storage.get === 'function') {
-            return storage.get('practice_records', []) || [];
+            return await storage.get('practice_records', []) || [];
         }
     } catch (e) {
         console.warn('[Fix] storage.get failed:', e);
     }
-    try {
-        return JSON.parse(localStorage.getItem('practice_records') || '[]');
-    } catch (e) {
-        console.warn('[Fix] localStorage fallback failed:', e);
-        return [];
-    }
+    return [];
 }
 
-function safeSetRecords(list) {
+async function safeSetRecords(list) {
     try {
         if (window.storage && typeof storage.set === 'function') {
-            storage.set('practice_records', list || []);
+            await storage.set('practice_records', list || []);
             console.log('[Fix] Records saved via storage.set');
             return;
         }
     } catch (e) {
         console.warn('[Fix] storage.set failed:', e);
     }
-    try {
-        localStorage.setItem('practice_records', JSON.stringify(list || []));
-        console.log('[Fix] Records saved via localStorage');
-    } catch(e) {
-        console.error('[Fix] All storage methods failed:', e);
-    }
+    console.error('[Fix] All storage methods failed');
 }
 
 function normalizeRecord(r) {
@@ -130,10 +120,10 @@ window.forceReloadLibrary = function() {
 };
 
 // 修复练习记录同步功能
-window.fixedSyncPracticeRecords = function() {
+window.fixedSyncPracticeRecords = async function() {
     console.log('[Fix] fixedSyncPracticeRecords called');
     try {
-        var records = safeGetRecords();
+        var records = await safeGetRecords();
         console.log('[Fix] Found', records.length, 'records');
         window.practiceRecords = (records || []).map(normalizeRecord);
 
@@ -156,7 +146,7 @@ window.fixedSyncPracticeRecords = function() {
 };
 
 // 修复批量删除功能
-window.fixedBulkDeleteAction = function() {
+window.fixedBulkDeleteAction = async function() {
     console.log('[Fix] fixedBulkDeleteAction called');
     if (!window.bulkDeleteMode) {
         console.log('[Fix] Not in bulk delete mode');
@@ -171,13 +161,13 @@ window.fixedBulkDeleteAction = function() {
         return;
     }
 
-    var list = safeGetRecords();
+    var list = await safeGetRecords();
     var setIds = new Set(ids);
     var newList = (list || []).filter(r => !setIds.has(String(r.id || r.timestamp)));
 
     console.log('[Fix] Records before:', list.length, 'after:', newList.length);
 
-    safeSetRecords(newList);
+    await safeSetRecords(newList);
 
     // 同步内存并刷新
     try {
@@ -249,7 +239,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // 立即同步一次练习记录
     setTimeout(function() {
         try {
-            window.fixedSyncPracticeRecords();
+            await window.fixedSyncPracticeRecords();
         } catch (e) {
             console.warn('[Fix] Initial sync failed:', e);
         }
@@ -283,7 +273,7 @@ if (document.readyState === 'loading') {
     // 立即同步一次练习记录
     setTimeout(function() {
         try {
-            window.fixedSyncPracticeRecords();
+            await window.fixedSyncPracticeRecords();
         } catch (e) {
             console.warn('[Fix] Initial sync failed:', e);
         }

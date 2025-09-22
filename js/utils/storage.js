@@ -21,6 +21,10 @@ class StorageManager {
             localStorage.removeItem(testKey);
             console.log('[Storage] localStorage 可用，将使用 localStorage 作为主要存储');
 
+            // 强制初始化 IndexedDB 以实现 Hybrid 模式，并在版本检查前确保 DB ready
+            console.log('[Storage] 强制初始化 IndexedDB 以实现 Hybrid 模式');
+            await this.initializeIndexedDBStorage();
+
             // 初始化版本信息
             const currentVersion = await this.get('system_version');
             console.log(`[Storage] 当前版本: ${currentVersion}, 目标版本: ${this.version}`);
@@ -37,66 +41,85 @@ class StorageManager {
                 console.log('[Storage] 版本匹配，跳过初始化');
             }
 
-            // 强制初始化 IndexedDB 以实现 Hybrid 模式
-            console.log('[Storage] 强制初始化 IndexedDB 以实现 Hybrid 模式');
-            this.initializeIndexedDBStorage();
+            // 添加恢复逻辑
+            if ((await this.get('practice_records') || []).length === 0 && !(await this.get('data_restored'))) {
+                await this.restoreFromBackup();
+                await this.set('data_restored', true);
+            }
+
         } catch (error) {
             console.warn('[Storage] localStorage 不可用，fallback 到 IndexedDB:', error);
-            this.initializeIndexedDBStorage();
+            await this.initializeIndexedDBStorage();
         }
     }
 
     /**
      * 初始化IndexedDB存储
      */
-    async initializeIndexedDBStorage() {
+    initializeIndexedDBStorage() {
         console.log('[Storage] 开始初始化 IndexedDB');
-        try {
-            // 检查IndexedDB支持
-            if (!window.indexedDB) {
-                console.warn('[Storage] IndexedDB 不支持，fallback 到内存存储');
-                this.fallbackStorage = new Map();
-                return;
-            }
-
-            this.dbName = 'ExamSystemDB';
-            this.dbVersion = 1;
-
-            console.log(`[Storage] 打开 IndexedDB 数据库: ${this.dbName}, 版本: ${this.dbVersion}`);
-            const request = indexedDB.open(this.dbName, this.dbVersion);
-
-            request.onerror = (event) => {
-                console.error('[Storage] IndexedDB 打开失败:', event.target.error);
-                this.fallbackStorage = new Map();
-            };
-
-            request.onupgradeneeded = (event) => {
-                console.log('[Storage] IndexedDB 升级事件触发，旧版本:', event.oldVersion, '新版本:', event.newVersion);
-                const db = event.target.result;
-
-                // 创建存储对象
-                if (!db.objectStoreNames.contains('keyValueStore')) {
-                    console.log('[Storage] 创建 objectStore: keyValueStore');
-                    const store = db.createObjectStore('keyValueStore', { keyPath: 'key' });
-                    store.createIndex('timestamp', 'timestamp', { unique: false });
-                    console.log('[Storage] objectStore 创建成功');
-                } else {
-                    console.log('[Storage] objectStore 已存在，跳过创建');
+        return new Promise((resolve, reject) => {
+            try {
+                // 检查IndexedDB支持
+                if (!window.indexedDB) {
+                    console.warn('[Storage] IndexedDB 不支持，fallback 到内存存储');
+                    this.fallbackStorage = new Map();
+                    resolve(); // 即使不支持也 resolve，允许 fallback
+                    return;
                 }
-            };
 
-            request.onsuccess = (event) => {
-                this.indexedDB = event.target.result;
-                console.log('[Storage] IndexedDB 初始化成功，数据库:', this.indexedDB.name, '版本:', this.indexedDB.version);
+                this.dbName = 'ExamSystemDB';
+                this.dbVersion = 1;
 
-                // 迁移localStorage数据到IndexedDB
-                console.log('[Storage] 开始从 localStorage 迁移数据');
-                this.migrateFromLocalStorage();
-            };
+                console.log(`[Storage] 打开 IndexedDB 数据库: ${this.dbName}, 版本: ${this.dbVersion}`);
+                const request = indexedDB.open(this.dbName, this.dbVersion);
 
-        } catch (error) {
-            console.error('[Storage] IndexedDB 初始化失败:', error);
-            this.fallbackStorage = new Map();
+                request.onerror = (event) => {
+                    console.error('[Storage] IndexedDB 打开失败:', event.target.error);
+                    this.fallbackStorage = new Map();
+                    reject(event.target.error);
+                };
+
+                request.onupgradeneeded = (event) => {
+                    console.log('[Storage] IndexedDB 升级事件触发，旧版本:', event.oldVersion, '新版本:', event.newVersion);
+                    const db = event.target.result;
+
+                    // 创建存储对象
+                    if (!db.objectStoreNames.contains('keyValueStore')) {
+                        console.log('[Storage] 创建 objectStore: keyValueStore');
+                        const store = db.createObjectStore('keyValueStore', { keyPath: 'key' });
+                        store.createIndex('timestamp', 'timestamp', { unique: false });
+                        console.log('[Storage] objectStore 创建成功');
+                    } else {
+                        console.log('[Storage] objectStore 已存在，跳过创建');
+                    }
+                };
+
+                request.onsuccess = (event) => {
+                    this.indexedDB = event.target.result;
+                    console.log('[Storage] IndexedDB 初始化成功，数据库:', this.indexedDB.name, '版本:', this.indexedDB.version);
+
+                    // 迁移localStorage数据到IndexedDB
+                    console.log('[Storage] 开始从 localStorage 迁移数据');
+                    this.migrateFromLocalStorage();
+                    resolve();
+                };
+
+            } catch (error) {
+                console.error('[Storage] IndexedDB 初始化失败:', error);
+                this.fallbackStorage = new Map();
+                reject(error);
+            }
+        });
+    }
+
+    /**
+     * 确保 IndexedDB 已 ready
+     */
+    async ensureIndexedDBReady() {
+        if (!this.indexedDB) {
+            console.log('[Storage] 等待 IndexedDB ready');
+            await this.initializeIndexedDBStorage();
         }
     }
 
@@ -422,6 +445,7 @@ class StorageManager {
      */
     async set(key, value) {
         try {
+            await this.ensureIndexedDBReady();
             console.log(`[Storage] 开始设置键: ${key}`);
             // 压缩数据以减少存储空间
             const compressedValue = this.compressData(value);
@@ -503,9 +527,6 @@ class StorageManager {
     }
 
     /**
-     * 获取数据
-     */
-    /**
      * 向数组追加新项
      * @param {string} key - 存储键名
      * @param {*} value - 要追加的项
@@ -513,6 +534,7 @@ class StorageManager {
      */
     async append(key, value) {
         try {
+            await this.ensureIndexedDBReady();
             let existing = await this.get(key) || [];
             if (!Array.isArray(existing)) {
                 console.warn(`[Storage] Key ${key} 不是数组，创建新数组`);
@@ -549,8 +571,10 @@ class StorageManager {
             return false;
         }
     }
+
     async get(key, defaultValue = null) {
         try {
+            await this.ensureIndexedDBReady();
             let serializedValue;
 
             if (this.fallbackStorage) {
@@ -584,6 +608,7 @@ class StorageManager {
      */
     async remove(key) {
         try {
+            await this.ensureIndexedDBReady();
             if (this.fallbackStorage) {
                 this.fallbackStorage.delete(this.getKey(key));
                 return true;
@@ -612,6 +637,7 @@ class StorageManager {
      */
     async clear() {
         try {
+            await this.ensureIndexedDBReady();
             // 清空内存存储
             if (this.fallbackStorage) {
                 this.fallbackStorage.clear();
@@ -890,9 +916,22 @@ class StorageManager {
                         continue;
                     }
 
+                    if (legacyData.length === 0) {
+                        console.log('[Storage] 旧数据为空，跳过迁移');
+                        continue;
+                    }
+
                     // 对应新键（去除 old_prefix_ 如果存在）
                     let newKey = oldKey.replace(/^old_prefix_/, '');
                     const current = await this.get(newKey, []);
+
+                    // 对于关键键额外检查
+                    const criticalKeys = ['practice_records'];
+                    if (criticalKeys.includes(newKey) && legacyData.length === 0 && current.length > 0) {
+                        console.log('[Storage] 发现空旧数据但新数据存在，跳过以避免覆盖');
+                        continue;
+                    }
+
                     const merged = this.mergeRecords(current, legacyData);
                     await this.set(newKey, merged);
 
@@ -911,6 +950,34 @@ class StorageManager {
             console.error('[Storage] 迁移遗留数据失败:', error);
             // 即使失败也设置标志，避免无限重试
             await this.set('migration_completed', true);
+        }
+    }
+
+    /**
+     * 从备份文件恢复数据
+     */
+    async restoreFromBackup() {
+        console.log('[Storage] 开始从备份恢复数据');
+        try {
+            const backupPath = 'assets/data/backup-practice-records.json';
+            const response = await fetch(backupPath);
+            if (!response.ok) {
+                console.warn('[Storage] 无备份可用，数据可能丢失，请手动恢复');
+                return false;
+            }
+            const backupData = await response.json();
+            if (!backupData || !Array.isArray(backupData.practice_records)) {
+                console.warn('[Storage] 备份数据格式无效');
+                return false;
+            }
+            // 恢复 practice_records
+            await this.set('practice_records', backupData.practice_records);
+            console.log('[Storage] 从备份恢复 practice_records 成功');
+            return true;
+        } catch (error) {
+            console.error('[Storage] 备份恢复失败:', error);
+            console.warn('[Storage] 无备份可用，数据可能丢失，请手动恢复');
+            return false;
         }
     }
 
@@ -1173,7 +1240,6 @@ class StorageManager {
             }
         });
     }
-
 }
 
 // 创建全局存储实例

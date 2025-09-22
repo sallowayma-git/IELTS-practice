@@ -50,22 +50,22 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Load data from localStorage
-function loadFromLocalStorage() {
+async function loadFromLocalStorage() {
    try {
-       const storedExamIndex = localStorage.getItem('exam_index');
-       const storedPracticeRecords = localStorage.getItem('practice_records');
+       const storedExamIndex = await storage.get('exam_index', []);
+       const storedPracticeRecords = await storage.get('practice_records', []);
 
-       if (storedExamIndex) {
-           examIndex = JSON.parse(storedExamIndex);
-           console.log('Loaded exam index from localStorage:', examIndex.length, 'items');
+       if (storedExamIndex.length > 0) {
+           examIndex = storedExamIndex;
+           console.log('Loaded exam index from storage:', examIndex.length, 'items');
        }
 
-       if (storedPracticeRecords) {
-           practiceRecords = JSON.parse(storedPracticeRecords);
-           console.log('Loaded practice records from localStorage:', practiceRecords.length, 'items');
+       if (storedPracticeRecords.length > 0) {
+           practiceRecords = storedPracticeRecords;
+           console.log('Loaded practice records from storage:', practiceRecords.length, 'items');
        }
    } catch (error) {
-       console.error('Failed to load data from localStorage:', error);
+       console.error('Failed to load data from storage:', error);
    }
 }
 
@@ -401,11 +401,7 @@ async function updatePracticeRecords() {
     // 从practice_records存储键读取数据，确保与主系统一致
     let records = [];
     try {
-        if (window.storage && typeof window.storage.get === 'function') {
-            records = await window.storage.get('practice_records', []);
-        } else {
-            records = JSON.parse(localStorage.getItem('practice_records') || '[]');
-        }
+        records = await storage.get('practice_records', []);
         records = Array.isArray(records) ? records : [];
     } catch (error) {
         console.warn('[Academic] 读取练习记录失败:', error);
@@ -853,16 +849,16 @@ function createBackup() {
    showMessage('备份创建成功', 'success');
 }
 
-function importData() {
+async function importData() {
    const input = document.createElement('input');
    input.type = 'file';
    input.accept = '.json';
-   input.onchange = function(e) {
+   input.onchange = async function(e) {
        const file = e.target.files[0];
        if (!file) return;
 
        const reader = new FileReader();
-       reader.onload = function(e) {
+       reader.onload = async function(e) {
            try {
                const data = JSON.parse(e.target.result);
                console.log('Import data structure:', data);
@@ -896,7 +892,7 @@ function importData() {
                    });
 
                    practiceRecords = importedRecords;
-                   localStorage.setItem('practice_records', JSON.stringify(practiceRecords));
+                   await storage.set('practice_records', practiceRecords);
                    importedRecordCount = importedRecords.length;
                }
                // Also check for nested practice_records in data.data
@@ -923,7 +919,7 @@ function importData() {
                    });
 
                    practiceRecords = importedRecords;
-                   localStorage.setItem('practice_records', JSON.stringify(practiceRecords));
+                   await storage.set('practice_records', practiceRecords);
                    importedRecordCount = importedRecords.length;
                }
 
@@ -945,20 +941,20 @@ function importData() {
                    }));
 
                    examIndex = importedExams;
-                   localStorage.setItem('exam_index', JSON.stringify(examIndex));
+                   await storage.set('exam_index', examIndex);
                    importedExamCount = importedExams.length;
                }
                // Fallback to direct format
                else if (data.examIndex) {
                    examIndex = data.examIndex;
-                   localStorage.setItem('exam_index', JSON.stringify(examIndex));
+                   await storage.set('exam_index', examIndex);
                    importedExamCount = examIndex.length;
                }
 
                // Fallback to direct practice records format
                if (data.practiceRecords) {
                    practiceRecords = data.practiceRecords;
-                   localStorage.setItem('practice_records', JSON.stringify(practiceRecords));
+                   await storage.set('practice_records', practiceRecords);
                    importedRecordCount = practiceRecords.length;
                }
 
@@ -1034,10 +1030,14 @@ function exportPracticeData() {
    showMessage(`已导出 ${practiceRecords.length} 条练习记录和 ${examIndex.length} 道题目`, 'success');
 }
 
-function clearPracticeData() {
+async function clearPracticeData() {
    if (confirm('确定要清除所有练习记录吗？此操作不可撤销！')) {
-       practiceRecords = [];
-       localStorage.removeItem('practice_records');
+       try {
+           practiceRecords = [];
+           await storage.remove('practice_records');
+       } catch (e) {
+           console.warn('清除练习记录失败:', e);
+       }
        updatePracticeView();
        updateOverview();
        showMessage('记录已清除', 'success');
@@ -1117,7 +1117,7 @@ function showMessage(message, type = 'info', duration = 3000) {
 
 // Sync practice records with storage - 添加防重复调用
 window._syncInProgress = false;
-function syncPracticeRecords() {
+async function syncPracticeRecords() {
    // 防止重复同步
    if (window._syncInProgress) {
        console.log('[Sync] 同步已在进行中，跳过重复调用');
@@ -1126,7 +1126,7 @@ function syncPracticeRecords() {
    window._syncInProgress = true;
 
    try {
-       const records = JSON.parse(localStorage.getItem('practice_records') || '[]');
+       const records = await storage.get('practice_records', []);
 
        // Ensure records have the required fields
        practiceRecords = records.map(record => ({
@@ -1190,16 +1190,25 @@ document.addEventListener('keydown', function(e) {
 });
 
 // Auto-save functionality
-setInterval(() => {
+setInterval(async () => {
    if (practiceRecords.length > 0) {
-       localStorage.setItem('practice_records', JSON.stringify(practiceRecords));
+       try {
+           await storage.set('practice_records', practiceRecords);
+       } catch (e) {
+           console.warn('Auto-save failed:', e);
+       }
    }
 }, 30000); // Auto-save every 30 seconds
 
 // Handle window unload
-window.addEventListener('beforeunload', function(e) {
+window.addEventListener('beforeunload', async function(e) {
    if (practiceRecords.length > 0) {
-       localStorage.setItem('practice_records', JSON.stringify(practiceRecords));
+       try {
+           await storage.set('practice_records', practiceRecords);
+       } catch (e) {
+           console.warn('Unload save failed:', e);
+           localStorage.setItem('practice_records', JSON.stringify(practiceRecords));
+       }
    }
 });
 

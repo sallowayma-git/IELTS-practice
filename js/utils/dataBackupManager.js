@@ -20,11 +20,11 @@ class DataBackupManager {
     /**
      * 初始化备份管理器
      */
-    initialize() {
+    async initialize() {
         console.log('DataBackupManager initialized');
         
         // 初始化设置
-        this.initializeSettings();
+        await this.initializeSettings();
         
         // 设置定期清理
         this.setupPeriodicCleanup();
@@ -33,7 +33,7 @@ class DataBackupManager {
     /**
      * 初始化备份设置
      */
-    initializeSettings() {
+    async initializeSettings() {
         const defaultSettings = {
             autoBackup: true,
             backupInterval: 24, // 小时
@@ -43,14 +43,14 @@ class DataBackupManager {
             lastAutoBackup: null
         };
         
-        const settings = storage.get(this.storageKeys.backupSettings, defaultSettings);
-        storage.set(this.storageKeys.backupSettings, settings);
+        const settings = await storage.get(this.storageKeys.backupSettings, defaultSettings);
+        await storage.set(this.storageKeys.backupSettings, settings);
     }
 
     /**
      * 导出练习记录数据
      */
-    exportPracticeRecords(options = {}) {
+    async exportPracticeRecords(options = {}) {
         try {
             const {
                 format = 'json',
@@ -71,7 +71,7 @@ class DataBackupManager {
             if (window.practiceRecorder) {
                 practiceRecords = window.practiceRecorder.getPracticeRecords();
             } else {
-                practiceRecords = storage.get('practice_records', []);
+                practiceRecords = await storage.get('practice_records', []);
             }
 
             // 应用筛选条件
@@ -102,7 +102,7 @@ class DataBackupManager {
                 if (window.practiceRecorder) {
                     exportData.userStats = window.practiceRecorder.getUserStats();
                 } else {
-                    exportData.userStats = storage.get('user_stats', {});
+                    exportData.userStats = await storage.get('user_stats', {});
                 }
             }
 
@@ -112,7 +112,7 @@ class DataBackupManager {
             }
 
             // 记录导出历史
-            this.recordExportHistory(exportData.exportInfo);
+            await this.recordExportHistory(exportData.exportInfo);
 
             // 根据格式返回数据
             switch (format.toLowerCase()) {
@@ -200,7 +200,7 @@ class DataBackupManager {
     /**
      * 导入练习数据
      */
-    importPracticeData(importData, options = {}) {
+    async importPracticeData(importData, options = {}) {
         try {
             const {
                 mergeMode = 'merge', // 'merge' | 'replace' | 'skip'
@@ -212,7 +212,7 @@ class DataBackupManager {
             // 创建导入前备份
             let backupId = null;
             if (createBackup) {
-                backupId = this.createPreImportBackup();
+                backupId = await this.createPreImportBackup();
             }
 
             // 解析导入数据
@@ -224,14 +224,14 @@ class DataBackupManager {
             }
 
             // 执行导入
-            const result = this.executeImport(parsedData, {
+            const result = await this.executeImport(parsedData, {
                 mergeMode,
                 preserveIds,
                 backupId
             });
 
             // 记录导入历史
-            this.recordImportHistory({
+            await this.recordImportHistory({
                 timestamp: new Date().toISOString(),
                 recordCount: result.importedCount,
                 mergeMode: mergeMode,
@@ -239,13 +239,18 @@ class DataBackupManager {
                 success: true
             });
 
+            // 显示导入完成消息
+            if (window.showMessage && result.importedCount > 0) {
+                window.showMessage(`导入完成：新增 ${result.importedCount} 条记录`);
+            }
+
             return result;
 
         } catch (error) {
             console.error('Import failed:', error);
             
             // 记录失败的导入历史
-            this.recordImportHistory({
+            await this.recordImportHistory({
                 timestamp: new Date().toISOString(),
                 error: error.message,
                 success: false
@@ -309,7 +314,7 @@ class DataBackupManager {
     /**
      * 执行导入操作
      */
-    executeImport(data, options) {
+    async executeImport(data, options) {
         const { mergeMode, preserveIds, backupId } = options;
         
         try {
@@ -329,11 +334,13 @@ class DataBackupManager {
                 
             } else {
                 // 直接操作storage的降级处理
-                const existingRecords = storage.get('practice_records', []);
+                let existingRecords = await storage.get('practice_records', []);
+                // 规范化现有记录
+                existingRecords = existingRecords.map(record => this.normalizeRecord(record));
                 
                 if (mergeMode === 'replace') {
                     // 替换模式
-                    storage.set('practice_records', data.practiceRecords);
+                    await storage.set('practice_records', data.practiceRecords);
                     importedCount = data.practiceRecords.length;
                     
                 } else if (mergeMode === 'merge') {
@@ -341,7 +348,10 @@ class DataBackupManager {
                     const existingIds = new Set(existingRecords.map(r => r.id));
                     const newRecords = [];
                     
-                    data.practiceRecords.forEach(record => {
+                    // 规范化新记录
+                    const normalizedRecords = data.practiceRecords.map(record => this.normalizeRecord(record));
+                    
+                    normalizedRecords.forEach(record => {
                         if (!existingIds.has(record.id)) {
                             newRecords.push(record);
                             importedCount++;
@@ -350,12 +360,16 @@ class DataBackupManager {
                         }
                     });
                     
-                    storage.set('practice_records', [...existingRecords, ...newRecords]);
+                    const mergedRecords = [...existingRecords, ...newRecords];
+                    await storage.set('practice_records', mergedRecords);
                     
                 } else if (mergeMode === 'skip') {
                     // 跳过模式 - 只导入不存在的记录
+                    // 规范化新记录
+                    const normalizedRecords = data.practiceRecords.map(record => this.normalizeRecord(record));
+                    
                     const existingIds = new Set(existingRecords.map(r => r.id));
-                    const newRecords = data.practiceRecords.filter(record => {
+                    const newRecords = normalizedRecords.filter(record => {
                         if (!existingIds.has(record.id)) {
                             importedCount++;
                             return true;
@@ -365,12 +379,13 @@ class DataBackupManager {
                         }
                     });
                     
-                    storage.set('practice_records', [...existingRecords, ...newRecords]);
+                    const mergedRecords = [...existingRecords, ...newRecords];
+                    await storage.set('practice_records', mergedRecords);
                 }
 
                 // 导入用户统计（如果存在）
                 if (data.userStats && mergeMode === 'replace') {
-                    storage.set('user_stats', data.userStats);
+                    await storage.set('user_stats', data.userStats);
                 }
             }
 
@@ -386,7 +401,7 @@ class DataBackupManager {
             // 如果导入失败，尝试恢复备份
             if (backupId) {
                 try {
-                    this.restoreBackup(backupId);
+                    await this.restoreBackup(backupId);
                     console.log('Backup restored after import failure');
                 } catch (restoreError) {
                     console.error('Failed to restore backup:', restoreError);
@@ -400,7 +415,7 @@ class DataBackupManager {
     /**
      * 创建导入前备份
      */
-    createPreImportBackup() {
+    async createPreImportBackup() {
         try {
             if (window.practiceRecorder) {
                 return window.practiceRecorder.createBackup('pre_import_backup');
@@ -410,13 +425,13 @@ class DataBackupManager {
                     id: `pre_import_${Date.now()}`,
                     timestamp: new Date().toISOString(),
                     data: {
-                        practice_records: storage.get('practice_records', []),
-                        user_stats: storage.get('user_stats', {}),
-                        exam_index: storage.get('exam_index', [])
+                        practice_records: await storage.get('practice_records', []),
+                        user_stats: await storage.get('user_stats', {}),
+                        exam_index: await storage.get('exam_index', [])
                     }
                 };
                 
-                const backups = storage.get('manual_backups', []);
+                const backups = await storage.get('manual_backups', []);
                 backups.push(backupData);
                 
                 // 保持最近10个备份
@@ -424,7 +439,7 @@ class DataBackupManager {
                     backups.splice(0, backups.length - 10);
                 }
                 
-                storage.set('manual_backups', backups);
+                await storage.set('manual_backups', backups);
                 return backupData.id;
             }
         } catch (error) {
@@ -436,7 +451,7 @@ class DataBackupManager {
     /**
      * 数据清理和重置选项
      */
-    clearData(options = {}) {
+    async clearData(options = {}) {
         const {
             clearPracticeRecords = false,
             clearUserStats = false,
@@ -449,7 +464,7 @@ class DataBackupManager {
             // 创建清理前备份
             let backupId = null;
             if (createBackup) {
-                backupId = this.createPreImportBackup();
+                backupId = await this.createPreImportBackup();
             }
 
             const clearedItems = [];
@@ -482,7 +497,7 @@ class DataBackupManager {
 
             // 重新初始化默认数据
             if (clearPracticeRecords || clearUserStats) {
-                storage.initializeDefaultData();
+                await storage.initializeDefaultData();
             }
 
             console.log('Data cleared:', clearedItems);
@@ -523,8 +538,8 @@ class DataBackupManager {
     /**
      * 记录导出历史
      */
-    recordExportHistory(exportInfo) {
-        const history = storage.get(this.storageKeys.exportHistory, []);
+    async recordExportHistory(exportInfo) {
+        const history = await storage.get(this.storageKeys.exportHistory, []);
         
         history.push({
             ...exportInfo,
@@ -536,14 +551,14 @@ class DataBackupManager {
             history.splice(0, history.length - this.maxExportHistory);
         }
 
-        storage.set(this.storageKeys.exportHistory, history);
+        await storage.set(this.storageKeys.exportHistory, history);
     }
 
     /**
      * 记录导入历史
      */
-    recordImportHistory(importInfo) {
-        const history = storage.get(this.storageKeys.importHistory, []);
+    async recordImportHistory(importInfo) {
+        const history = await storage.get(this.storageKeys.importHistory, []);
         
         history.push({
             ...importInfo,
@@ -555,35 +570,35 @@ class DataBackupManager {
             history.splice(0, history.length - this.maxExportHistory);
         }
 
-        storage.set(this.storageKeys.importHistory, history);
+        await storage.set(this.storageKeys.importHistory, history);
     }
 
     /**
      * 获取导出历史
      */
-    getExportHistory() {
-        return storage.get(this.storageKeys.exportHistory, [])
-            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    async getExportHistory() {
+        const history = await storage.get(this.storageKeys.exportHistory, []);
+        return history.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     }
 
     /**
      * 获取导入历史
      */
-    getImportHistory() {
-        return storage.get(this.storageKeys.importHistory, [])
-            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    async getImportHistory() {
+        const history = await storage.get(this.storageKeys.importHistory, []);
+        return history.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     }
 
     /**
      * 恢复备份
      */
-    restoreBackup(backupId) {
+    async restoreBackup(backupId) {
         try {
             if (window.practiceRecorder) {
                 return window.practiceRecorder.restoreBackup(backupId);
             } else {
                 // 降级处理：从手动备份恢复
-                const backups = storage.get('manual_backups', []);
+                const backups = await storage.get('manual_backups', []);
                 const backup = backups.find(b => b.id === backupId);
                 
                 if (!backup) {
@@ -591,9 +606,9 @@ class DataBackupManager {
                 }
                 
                 // 恢复数据
-                Object.entries(backup.data).forEach(([key, value]) => {
-                    storage.set(key, value);
-                });
+                for (const [key, value] of Object.entries(backup.data)) {
+                    await storage.set(key, value);
+                }
                 
                 return true;
             }
@@ -615,36 +630,36 @@ class DataBackupManager {
      */
     setupPeriodicCleanup() {
         // 每天清理一次过期数据
-        setInterval(() => {
-            this.cleanupExpiredData();
+        setInterval(async () => {
+            await this.cleanupExpiredData();
         }, 24 * 60 * 60 * 1000);
     }
 
     /**
      * 清理过期数据
      */
-    cleanupExpiredData() {
+    async cleanupExpiredData() {
         try {
             // 清理过期的导出历史
-            const exportHistory = storage.get(this.storageKeys.exportHistory, []);
+            const exportHistory = await storage.get(this.storageKeys.exportHistory, []);
             const validExports = exportHistory.filter(item => {
                 const age = Date.now() - new Date(item.timestamp).getTime();
                 return age < (30 * 24 * 60 * 60 * 1000); // 保留30天
             });
             
             if (validExports.length !== exportHistory.length) {
-                storage.set(this.storageKeys.exportHistory, validExports);
+                await storage.set(this.storageKeys.exportHistory, validExports);
             }
 
             // 清理过期的导入历史
-            const importHistory = storage.get(this.storageKeys.importHistory, []);
+            const importHistory = await storage.get(this.storageKeys.importHistory, []);
             const validImports = importHistory.filter(item => {
                 const age = Date.now() - new Date(item.timestamp).getTime();
                 return age < (30 * 24 * 60 * 60 * 1000); // 保留30天
             });
             
             if (validImports.length !== importHistory.length) {
-                storage.set(this.storageKeys.importHistory, validImports);
+                await storage.set(this.storageKeys.importHistory, validImports);
             }
 
             console.log('Expired data cleaned up');
@@ -652,17 +667,58 @@ class DataBackupManager {
         } catch (error) {
             console.error('Cleanup failed:', error);
         }
+    
+        /**
+         * 规范化记录数据
+         * @param {Object} record - 原始记录
+         * @returns {Object} 规范化后的记录
+         */
+        normalizeRecord(record) {
+            if (!record) return record;
+            
+            const normalized = { ...record };
+            
+            // 标准化日期格式
+            if (normalized.startTime) {
+                normalized.startTime = new Date(normalized.startTime).toISOString();
+            }
+            if (normalized.endTime) {
+                normalized.endTime = new Date(normalized.endTime).toISOString();
+            }
+            if (normalized.createdAt) {
+                normalized.createdAt = new Date(normalized.createdAt).toISOString();
+            }
+            
+            // 确保必需字段存在
+            normalized.id = normalized.id || `record_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            normalized.examId = normalized.examId || 'unknown';
+            normalized.status = normalized.status || 'completed';
+            
+            // 标准化数值字段
+            normalized.score = parseFloat(normalized.score) || 0;
+            normalized.totalQuestions = parseInt(normalized.totalQuestions) || 0;
+            normalized.correctAnswers = parseInt(normalized.correctAnswers) || 0;
+            normalized.accuracy = parseFloat(normalized.accuracy) || 0;
+            
+            // 清理无效数据
+            if (normalized.metadata) {
+                normalized.metadata.category = normalized.metadata.category || 'general';
+                normalized.metadata.frequency = parseInt(normalized.metadata.frequency) || 1;
+            }
+            
+            return normalized;
+        }
     }
 
     /**
      * 获取数据统计信息
      */
-    getDataStats() {
+    async getDataStats() {
         try {
-            const practiceRecords = storage.get('practice_records', []);
-            const userStats = storage.get('user_stats', {});
-            const exportHistory = this.getExportHistory();
-            const importHistory = this.getImportHistory();
+            const practiceRecords = await storage.get('practice_records', []);
+            const userStats = await storage.get('user_stats', {});
+            const exportHistory = await this.getExportHistory();
+            const importHistory = await this.getImportHistory();
 
             return {
                 practiceRecords: {
@@ -683,7 +739,7 @@ class DataBackupManager {
                     count: importHistory.length,
                     lastImport: importHistory.length > 0 ? importHistory[0].timestamp : null
                 },
-                storage: storage.getStorageInfo()
+                storage: await storage.getStorageInfo()
             };
         } catch (error) {
             console.error('Failed to get data stats:', error);

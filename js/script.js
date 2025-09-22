@@ -324,7 +324,7 @@ window.__legacyBrowseType = window.__legacyBrowseType || 'all';
 window.__browseFilter = window.__browseFilter || { category: 'all', type: 'all' };
 
 // 练习记录数据（使用统一的键名）
-let practiceRecords = JSON.parse(localStorage.getItem('practice_records') || '[]');
+let practiceRecords = await storage.get('practice_records', []);
 let practiceStats = {
     totalPracticed: 0,
     totalScore: 0,
@@ -1985,8 +1985,8 @@ function hideDeveloperTeam() {
 
 
 // 修复不完整的标题
-function fixIncompleteTitles() {
-    const records = storage.get('practice_records', []);
+async function fixIncompleteTitles() {
+    const records = await storage.get('practice_records', []);
     let fixedCount = 0;
 
     records.forEach(record => {
@@ -2060,7 +2060,7 @@ function fixIncompleteTitles() {
     });
 
     if (fixedCount > 0) {
-        storage.set('practice_records', records);
+        await storage.set('practice_records', records);
         practiceRecords = records;
         showMessage(`已修复 ${fixedCount} 个不完整的标题`, 'success');
         updatePracticeView();
