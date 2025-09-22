@@ -854,8 +854,8 @@ class ExamSystemApp {
     }
 
     /**
-     * 打开指定题目进行练习
-     */
+      * 打开指定题目进行练习
+      */
     async openExam(examId) {
         // 使用活动题库配置键，保证全量/增量切换后仍能打开
         let examIndex = [];
@@ -868,7 +868,10 @@ class ExamSystemApp {
         } catch (_) {
             examIndex = await storage.get('exam_index', []);
         }
-        const exam = examIndex.find(e => e.id === examId);
+
+        // 增加数组化防御
+        let list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
+        const exam = list.find(e => e.id === examId);
 
         if (!exam) {
             window.showMessage('题目不存在', 'error');
@@ -969,8 +972,8 @@ class ExamSystemApp {
     }
 
     /**
-     * 注入数据采集脚本到练习页面
-     */
+      * 注入数据采集脚本到练习页面
+      */
     injectDataCollectionScript(examWindow, examId) {
         console.log('[DataInjection] 开始注入数据采集脚本:', examId);
 
@@ -2822,8 +2825,7 @@ class ExamSystemApp {
 // 应用启动
 document.addEventListener('DOMContentLoaded', async () => {
     try {
-        window.app = new ExamSystemApp();
-        await window.app.initialize();
+        (function(){ try { window.app = new ExamSystemApp(); window.app.initialize(); } catch(e) { console.error('[App] 初始化失败:', e); } })();
     } catch (error) {
         console.error('Failed to start application:', error);
         if (window.handleError) {

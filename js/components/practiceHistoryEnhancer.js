@@ -313,22 +313,22 @@ class PracticeHistoryEnhancer {
     }
 
     /**
-     * 显示记录详情
-     */
-    showRecordDetails(recordId) {
+      * 显示记录详情
+      */
+    async showRecordDetails(recordId) {
         try {
             // 尝试从不同的数据源获取记录
             let record = null;
-            
+
             // 首先尝试从storage获取（兼容数值/字符串ID）
             const toIdStr = (v) => v == null ? '' : String(v);
             const targetIdStr = toIdStr(recordId);
 
             if (window.storage) {
-                const practiceRecords = window.storage.get('practice_records', []);
+                const practiceRecords = await window.storage.get('practice_records', []);
                 record = practiceRecords.find(r => r.id === recordId || toIdStr(r.id) === targetIdStr);
             }
-            
+
             // 如果storage中没有，尝试从全局变量获取
             if (!record && window.practiceRecords) {
                 record = window.practiceRecords.find(r => r.id === recordId || toIdStr(r.id) === targetIdStr);
@@ -336,7 +336,7 @@ class PracticeHistoryEnhancer {
 
             // 额外降级：尝试按会话ID匹配
             if (!record && window.storage) {
-                const practiceRecords = window.storage.get('practice_records', []);
+                const practiceRecords = await window.storage.get('practice_records', []);
                 record = practiceRecords.find(r => toIdStr(r.sessionId) === targetIdStr);
             }
             

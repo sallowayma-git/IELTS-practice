@@ -42,8 +42,16 @@ function initializeLegacyComponents() {
         console.warn('[System] DataIntegrityManager类未加载');
     }
 
-    // Clean up old cache and configurations for v1.1.0 upgrade
-    cleanupOldCache();
+    // Clean up old cache and configurations for v1.1.0 upgrade (one-time only)
+    try {
+      const done = localStorage.getItem('upgrade_v1_1_0_cleanup_done');
+      if (!done) {
+        cleanupOldCache().finally(() => {
+          try { localStorage.setItem('upgrade_v1_1_0_cleanup_done','1'); } catch(_) {}
+        });
+      }
+    } catch(_) {}
+
 
     // Load data and setup listeners
     loadLibrary();
@@ -383,7 +391,18 @@ function browseCategory(category, type = 'reading') {
     currentExamType = type;
     const typeText = type === 'listening' ? '听力' : '阅读';
     document.getElementById('browse-title').textContent = `📚 ${category} ${typeText}题库浏览`;
-    showView('browse', false);
+    // Navigate to browse view safely without relying on legacy showView
+    if (window.app && typeof window.app.navigateToView === 'function') {
+      window.app.navigateToView('browse');
+    } else if (typeof window.showView === 'function') {
+      showView('browse', false);
+    } else {
+      try {
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        const target = document.getElementById('browse-view');
+        if (target) target.classList.add('active');
+      } catch(_) {}
+    }
     loadExamList(); // Ensure exam list is loaded when browsing category
 }
 
@@ -504,7 +523,7 @@ function getPathMap() {
     // Fallback to embedded path map
     return {
       reading: {
-        root: '睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/',
+        root: '', // 置为空串，保持file://下资源定位正确
         exceptions: {}
       },
       listening: {
@@ -540,9 +559,12 @@ function openExam(examId) {
       console.warn('[Main] app.openExam 调用失败，将使用简化打开逻辑:', e);
     }
   }
-    const exam = examIndex.find(e => e.id === examId);
-    if (!exam) return showMessage('未找到题目', 'error');
-    if (!exam.hasHtml) return viewPDF(examId);
+
+  // 增加数组化防御
+  const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
+  const exam = list.find(e => e.id === examId);
+  if (!exam) return showMessage('未找到题目', 'error');
+  if (!exam.hasHtml) return viewPDF(examId);
 
     const fullPath = buildResourcePath(exam, 'html');
     const examWindow = window.open(fullPath, `exam_${exam.id}`, 'width=1200,height=800,scrollbars=yes,resizable=yes');
@@ -555,7 +577,9 @@ function openExam(examId) {
 }
 
 function viewPDF(examId) {
-    const exam = examIndex.find(e => e.id === examId);
+    // 增加数组化防御
+    const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
+    const exam = list.find(e => e.id === examId);
     if (!exam || !exam.pdfFilename) return showMessage('未找到PDF文件', 'error');
     
     const fullPath = buildResourcePath(exam, 'pdf');

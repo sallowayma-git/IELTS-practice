@@ -503,21 +503,21 @@ class PracticeRecordModal {
     }
 
     /**
-     * 导出单个记录
-     */
-    exportSingle(recordId) {
+      * 导出单个记录
+      */
+    async exportSingle(recordId) {
         try {
-            const practiceRecords = window.storage.get('practice_records', []);
+            const practiceRecords = await window.storage.get('practice_records', []);
             const record = practiceRecords.find(r => r.id === recordId);
-            
+
             if (!record) {
                 throw new Error('记录不存在');
             }
-            
+
             // 使用 MarkdownExporter 导出单个记录
             const exporter = new MarkdownExporter();
-            const examIndex = window.storage.get('exam_index', []);
-            
+            const examIndex = await window.storage.get('exam_index', []);
+
             // 增强记录信息
             const exam = examIndex.find(e => e.id === record.examId);
             const enhancedRecord = {
@@ -579,11 +579,11 @@ window.practiceRecordModal = new PracticeRecordModal();
 
 // 兼容方法：通过ID显示（用于主应用桥接和历史增强器）
 if (!window.practiceRecordModal.showById) {
-  window.practiceRecordModal.showById = function(recordId) {
+  window.practiceRecordModal.showById = async function(recordId) {
     try {
       const toIdStr = (v) => v == null ? '' : String(v);
       const targetIdStr = toIdStr(recordId);
-      const records = (window.storage && window.storage.get('practice_records', [])) || [];
+      const records = (window.storage ? (await window.storage.get('practice_records', [])) : []) || [];
       let record = records.find(r => r.id === recordId || toIdStr(r.id) === targetIdStr) ||
                    records.find(r => toIdStr(r.sessionId) === targetIdStr);
       if (!record) throw new Error('记录不存在');
