@@ -208,4 +208,25 @@
       wire('#listening-inc-btn','#listening-inc-input','listening','incremental');
     };
   }
+
+  // DOMContentLoaded handler to ensure showView('overview') is called after DOM is loaded
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+      // Try to call showView('overview') as the default view
+      if (typeof window.showView === 'function') {
+        window.showView('overview');
+      } else if (typeof window.app !== 'undefined' && typeof window.app.navigateToView === 'function') {
+        // Fallback to app.navigateToView if showView is not available
+        window.app.navigateToView('overview');
+      }
+    });
+  } else {
+    // DOM is already loaded, call showView immediately
+    if (typeof window.showView === 'function') {
+      window.showView('overview');
+    } else if (typeof window.app !== 'undefined' && typeof window.app.navigateToView === 'function') {
+      // Fallback to app.navigateToView if showView is not available
+      window.app.navigateToView('overview');
+    }
+  }
 })();
