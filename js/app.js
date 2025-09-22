@@ -881,19 +881,24 @@ class ExamSystemApp {
         }
 
         try {
-            // 记录练习开始
-            await this.startPracticeSession(examId);
+            // 若无HTML，直接打开PDF
+            if (exam.hasHtml === false) {
+                const pdfUrl = (typeof window.buildResourcePath === 'function')
+                    ? window.buildResourcePath(exam, 'pdf')
+                    : ((exam.path || '').replace(/\\/g,'/').replace(/\/+\//g,'/') + (exam.pdfFilename || '') );
+                const pdfWin = window.open(pdfUrl, `pdf_${exam.id}`, 'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes');
+                if (!pdfWin) throw new Error('无法打开PDF窗口，请检查弹窗设置');
+                window.showMessage(`正在打开PDF: ${exam.title}`, 'info');
+                return;
+            }
 
-            // 构造题目URL
+            // 先构造URL并立即打开窗口（保持用户手势，避免被浏览器拦截）
             const examUrl = this.buildExamUrl(exam);
-
-            // 在新窗口中打开题目
             const examWindow = this.openExamWindow(examUrl, exam);
 
-            // 新增：注入数据采集脚本
+            // 再进行会话记录与脚本注入
+            await this.startPracticeSession(examId);
             this.injectDataCollectionScript(examWindow, examId);
-
-            // 设置窗口管理
             this.setupExamWindowManagement(examWindow, examId);
 
             window.showMessage(`正在打开题目: ${exam.title}`, 'info');
