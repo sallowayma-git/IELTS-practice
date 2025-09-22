@@ -14,6 +14,8 @@ let practiceListScroller = null;
 const processedSessions = new Set();
 let bulkDeleteMode = false;
 let selectedRecords = new Set();
+// 降级握手映射：sessionId -> { examId, timer }
+const fallbackExamSessions = new Map();
 
 
 // --- Initialization ---
@@ -135,12 +137,90 @@ function setupMessageListener() {
 
         const data = event.data || {};
         const type = data.type;
-        if (type === 'PRACTICE_COMPLETE' || type === 'practice_completed') {
-            console.log('[System] 收到练习完成消息，正在同步记录...');
-            showMessage('练习已完成，正在更新记录...', 'success');
-            setTimeout(syncPracticeRecords, 300);
+        if (type === 'SESSION_READY') {
+            // 子页未携带 sessionId，这里基于 event.source 匹配对应会话并停止握手重试
+            try {
+                for (const [sid, rec] of fallbackExamSessions.entries()) {
+                    if (rec && rec.win === event.source) {
+                        if (rec.timer) clearInterval(rec.timer);
+                        console.log('[Fallback] 会话就绪(匹配到窗口):', sid);
+                        break;
+                    }
+                }
+            } catch (_) {}
+        } else if (type === 'PRACTICE_COMPLETE' || type === 'practice_completed') {
+            const sessionId = (data && data.sessionId) || null;
+            const rec = sessionId ? fallbackExamSessions.get(sessionId) : null;
+            if (rec) {
+                console.log('[Fallback] 收到练习完成（降级路径），保存真实数据');
+                savePracticeRecordFallback(rec.examId, data).finally(() => {
+                    try { if (rec && rec.timer) clearInterval(rec.timer); } catch(_) {}
+                    try { fallbackExamSessions.delete(sessionId); } catch(_) {}
+                    showMessage('练习已完成，正在更新记录...', 'success');
+                    setTimeout(syncPracticeRecords, 300);
+                });
+            } else {
+                console.log('[System] 收到练习完成消息，正在同步记录...');
+                showMessage('练习已完成，正在更新记录...', 'success');
+                setTimeout(syncPracticeRecords, 300);
+            }
         }
     });
+}
+
+// 降级保存：将 PRACTICE_COMPLETE 的真实数据写入 practice_records（与旧视图字段兼容）
+async function savePracticeRecordFallback(examId, realData) {
+  try {
+    const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
+    const exam = list.find(e => e.id === examId) || {};
+
+    const sInfo = realData && realData.scoreInfo ? realData.scoreInfo : {};
+    const correct = typeof sInfo.correct === 'number' ? sInfo.correct : 0;
+    const total = typeof sInfo.total === 'number' ? sInfo.total : (realData.answers ? Object.keys(realData.answers).length : 0);
+    const acc = typeof sInfo.accuracy === 'number' ? sInfo.accuracy : (total > 0 ? correct / total : 0);
+    const pct = typeof sInfo.percentage === 'number' ? sInfo.percentage : Math.round(acc * 100);
+
+    const record = {
+      id: Date.now(),
+      examId: examId,
+      title: exam.title || realData.title || '',
+      category: exam.category,
+      frequency: exam.frequency,
+      realData: {
+        score: correct,
+        totalQuestions: total,
+        accuracy: acc,
+        percentage: pct,
+        duration: realData.duration,
+        answers: realData.answers || {},
+        correctAnswers: realData.correctAnswers || {},
+        interactions: realData.interactions || [],
+        isRealData: true,
+        source: sInfo.source || 'fallback'
+      },
+      dataSource: 'real',
+      date: new Date().toISOString(),
+      sessionId: realData.sessionId,
+      timestamp: Date.now(),
+      // 兼容旧视图字段
+      score: correct,
+      correctAnswers: correct,
+      totalQuestions: total,
+      accuracy: acc,
+      percentage: pct,
+      answers: realData.answers || {},
+      startTime: new Date((realData.startTime ?? (Date.now() - (realData.duration || 0) * 1000))).toISOString(),
+      endTime: new Date((realData.endTime ?? Date.now())).toISOString()
+    };
+
+    const records = await storage.get('practice_records', []);
+    const arr = Array.isArray(records) ? records : [];
+    arr.push(record);
+    await storage.set('practice_records', arr);
+    console.log('[Fallback] 真实数据已保存到 practice_records');
+  } catch (e) {
+    console.error('[Fallback] 保存练习记录失败:', e);
+  }
 }
 
 async function loadLibrary(forceReload = false) {
@@ -570,24 +650,60 @@ function openExam(examId) {
       window.app.openExam(examId);
       return;
     } catch (e) {
-      console.warn('[Main] app.openExam 调用失败，将使用简化打开逻辑:', e);
+      console.warn('[Main] app.openExam 调用失败，启用降级握手路径:', e);
     }
   }
 
-  // 增加数组化防御
+  // 降级：本地完成打开 + 握手重试，确保 sessionId 下发
   const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
   const exam = list.find(e => e.id === examId);
   if (!exam) return showMessage('未找到题目', 'error');
   if (!exam.hasHtml) return viewPDF(examId);
 
-    const fullPath = buildResourcePath(exam, 'html');
-    const examWindow = window.open(fullPath, `exam_${exam.id}`, 'width=1200,height=800,scrollbars=yes,resizable=yes');
-    if (examWindow) {
-        showMessage('正在打开: ' + exam.title, 'success');
-        // Communication setup will be handled by the script in the child window
-    } else {
-        showMessage('无法打开窗口，请检查弹窗设置', 'error');
-    }
+  const fullPath = buildResourcePath(exam, 'html');
+  const examWindow = window.open(fullPath, `exam_${exam.id}`, 'width=1200,height=800,scrollbars=yes,resizable=yes');
+  if (!examWindow) {
+    return showMessage('无法打开窗口，请检查弹窗设置', 'error');
+  }
+  showMessage('正在打开: ' + exam.title, 'success');
+
+  startHandshakeFallback(examWindow, examId);
+}
+
+// 降级握手：循环发送 INIT_SESSION，直至收到 SESSION_READY
+function startHandshakeFallback(examWindow, examId) {
+  try {
+    const sessionId = `${examId}_${Date.now()}`;
+    const initPayload = { examId, parentOrigin: window.location.origin, sessionId };
+    fallbackExamSessions.set(sessionId, { examId, timer: null, win: examWindow });
+
+    let attempts = 0;
+    const maxAttempts = 30; // ~9s
+    const tick = () => {
+      if (examWindow && !examWindow.closed) {
+        try {
+          if (attempts === 0) {
+            console.log('[Fallback] 发送初始化消息到练习页面:', { type: 'INIT_SESSION', data: initPayload });
+          }
+          examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
+          examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
+        } catch (_) {}
+      }
+      attempts++;
+      if (attempts >= maxAttempts) {
+        const rec = fallbackExamSessions.get(sessionId);
+        if (rec && rec.timer) clearInterval(rec.timer);
+        fallbackExamSessions.delete(sessionId);
+        console.warn('[Fallback] 握手超时，练习页可能未加载增强器');
+      }
+    };
+    const timer = setInterval(tick, 300);
+    const rec = fallbackExamSessions.get(sessionId);
+    if (rec) rec.timer = timer;
+    tick();
+  } catch (e) {
+    console.warn('[Fallback] 启动握手失败:', e);
+  }
 }
 
 function viewPDF(examId) {

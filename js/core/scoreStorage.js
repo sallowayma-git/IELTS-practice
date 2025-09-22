@@ -798,11 +798,16 @@ class ScoreStorage {
      * 获取最后备份时间
      */
     async getLastBackupTime() {
-        const backups = await storage.get(this.storageKeys.backupData, []);
-        if (backups.length === 0) return null;
-
-        const lastBackup = backups[backups.length - 1];
-        return new Date(lastBackup.timestamp).getTime();
+        try {
+            const backupsRaw = await storage.get(this.storageKeys.backupData, []);
+            const backups = Array.isArray(backupsRaw) ? backupsRaw : [];
+            if (backups.length === 0) return null;
+            const lastBackup = backups[backups.length - 1] || {};
+            const ts = (lastBackup && lastBackup.timestamp) ? lastBackup.timestamp : null;
+            return ts ? new Date(ts).getTime() : null;
+        } catch (e) {
+            return null;
+        }
     }
 
     /**
