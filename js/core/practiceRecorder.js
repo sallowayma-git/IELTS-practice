@@ -1,20 +1,20 @@
 /**
- * 练习记录管理�?
- * 负责练习会话管理、成绩记录和数据持久�?
+ * 练习记录管理器
+ * 负责练习会话管理、成绩记录和数据持久化
  */
 class PracticeRecorder {
     constructor() {
         this.activeSessions = new Map();
         this.sessionListeners = new Map();
-        this.autoSaveInterval = 30000; // 30秒自动保�?
+        this.autoSaveInterval = 30000; // 30秒自动保存
         this.autoSaveTimer = null;
 
-        // 初始化存储系�?
+        // 初始化存储系统
         this.scoreStorage = new ScoreStorage();
 
-        // 异步初始�?
+        // 异步初始化
         this.initialize().catch(error => {
-            console.error('[PracticeRecorder] 初始化失�?', error);
+            console.error('[PracticeRecorder] 初始化失败', error);
         });
     }
 
@@ -27,16 +27,16 @@ class PracticeRecorder {
         // 恢复活动会话
         await this.restoreActiveSessions();
 
-        // 恢复临时存储的记�?
+        // 恢复临时存储的记录
         await this.recoverTemporaryRecords();
 
-        // 设置消息监听�?
+        // 设置消息监听器
         this.setupMessageListeners();
 
         // 启动自动保存
         this.startAutoSave();
 
-        // 页面卸载时保存数�?
+        // 页面卸载时保存数据
         window.addEventListener('beforeunload', () => {
             this.saveAllSessions();
         });
@@ -61,15 +61,15 @@ class PracticeRecorder {
     }
 
     /**
-     * 设置消息监听�?
+     * 设置消息监听器
      */
     setupMessageListeners() {
-        // 监听来自考试窗口的消�?
+        // 监听来自考试窗口的消息
         window.addEventListener('message', (event) => {
             this.handleExamMessage(event);
         });
         
-        // 监听页面可见性变�?
+        // 监听页面可见性变化
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden) {
                 this.checkSessionStatus();
@@ -78,7 +78,7 @@ class PracticeRecorder {
     }
 
     /**
-     * 处理来自考试窗口的消�?
+     * 处理来自考试窗口的消息
      */
     handleExamMessage(event) {
         const { type, data } = event.data || {};
@@ -108,7 +108,7 @@ class PracticeRecorder {
     }
 
     /**
-     * 开始练习会�?
+     * 开始练习会话
      */
     startPracticeSession(examId, examData = {}) {
         const sessionId = this.generateSessionId();
@@ -141,7 +141,7 @@ class PracticeRecorder {
         this.activeSessions.set(examId, sessionData);
         this.saveActiveSessions();
         
-        // 设置会话监听�?
+        // 设置会话监听器
         this.setupSessionListener(examId);
         
         console.log(`Practice session started for exam: ${examId}`);
@@ -153,7 +153,7 @@ class PracticeRecorder {
     }
 
     /**
-     * 处理会话开�?
+     * 处理会话开始
      */
     handleSessionStarted(data) {
         const { examId, sessionId, metadata } = data;
@@ -208,7 +208,7 @@ class PracticeRecorder {
         let session = this.activeSessions.get(examId);
         const endTime = new Date().toISOString();
         
-        // 计算总用�?
+        // 计算总用时
         const duration = new Date(endTime) - new Date(session.startTime);
         
         // 创建练习记录
@@ -218,7 +218,7 @@ class PracticeRecorder {
             sessionId: session.sessionId,
             startTime: session.startTime,
             endTime,
-            duration: Math.floor(duration / 1000), // �?
+            duration: Math.floor(duration / 1000), // 秒
             status: 'completed',
             score: results.score || 0,
             totalQuestions: results.totalQuestions || session.progress.totalQuestions,
@@ -348,19 +348,19 @@ class PracticeRecorder {
     }
 
     /**
-     * 设置会话监听�?
+     * 设置会话监听器
      */
     setupSessionListener(examId) {
-        // 定期检查会话状�?
+        // 定期检查会话状态
         const listener = setInterval(() => {
             this.checkSessionActivity(examId);
-        }, 60000); // 每分钟检查一�?
+        }, 60000); // 每分钟检查一次
         
         this.sessionListeners.set(examId, listener);
     }
 
     /**
-     * 清理会话监听�?
+     * 清理会话监听器
      */
     cleanupSessionListener(examId) {
         if (this.sessionListeners.has(examId)) {
@@ -370,7 +370,7 @@ class PracticeRecorder {
     }
 
     /**
-     * 检查会话活动状�?
+     * 检查会话活动状态
      */
     checkSessionActivity(examId) {
         if (!this.activeSessions.has(examId)) return;
@@ -380,7 +380,7 @@ class PracticeRecorder {
         const lastActivity = new Date(session.lastActivity);
         const inactiveTime = now - lastActivity;
         
-        // 如果超过30分钟无活动，标记为超�?
+        // 如果超过30分钟无活动，标记为超时
         if (inactiveTime > 30 * 60 * 1000) {
             console.warn(`Session timeout detected for exam: ${examId}`);
             this.endPracticeSession(examId, 'timeout');
@@ -388,7 +388,7 @@ class PracticeRecorder {
     }
 
     /**
-     * 检查所有会话状�?
+     * 检查所有会话状态
      */
     checkSessionStatus() {
         for (const examId of this.activeSessions.keys()) {
@@ -410,7 +410,7 @@ class PracticeRecorder {
     }
 
     /**
-     * 保存所有会�?
+     * 保存所有会�?
      */
     saveAllSessions() {
         this.saveActiveSessions();
@@ -418,7 +418,7 @@ class PracticeRecorder {
     }
 
     /**
-     * 保存活动会话到存�?
+     * 保存活动会话到存�?
      */
     saveActiveSessions() {
         const sessionsArray = Array.from(this.activeSessions.values());
@@ -436,7 +436,7 @@ class PracticeRecorder {
             attempt++;
             
             try {
-                console.log(`[PracticeRecorder] 开始保存练习记�?(尝试 ${attempt}/${maxRetries}):`, record.id);
+                console.log(`[PracticeRecorder] 开始保存练习记�?(尝试 ${attempt}/${maxRetries}):`, record.id);
                 
                 // 首先尝试使用ScoreStorage保存记录
                 if (this.scoreStorage && typeof this.scoreStorage.savePracticeRecord === 'function') {
@@ -448,7 +448,7 @@ class PracticeRecorder {
                         console.log('[PracticeRecorder] 记录保存验证成功');
                         return savedRecord;
                     } else {
-                        console.warn('[PracticeRecorder] ScoreStorage保存验证失败，尝试降级保�?);
+                        console.warn('[PracticeRecorder] ScoreStorage保存验证失败，尝试降级保存');
                         throw new Error('ScoreStorage save verification failed');
                     }
                 } else {
@@ -458,14 +458,14 @@ class PracticeRecorder {
             } catch (error) {
                 console.error(`[PracticeRecorder] ScoreStorage保存失败 (尝试 ${attempt}):`, error);
                 
-                // 如果是最后一次尝试或者是严重错误，使用降级保�?
+                // 如果是最后一次尝试或者是严重错误，使用降级保�?
                 if (attempt === maxRetries || this.isCriticalError(error)) {
                     return this.fallbackSavePracticeRecord(record);
                 }
                 
                 // 等待一段时间后重试
                 if (attempt < maxRetries) {
-                    console.log(`[PracticeRecorder] 等待 ${attempt * 100}ms 后重�?..`);
+                    console.log(`[PracticeRecorder] 等待 ${attempt * 100}ms 后重�?..`);
                     // 同步等待（在实际应用中可能需要异步处理）
                     const start = Date.now();
                     while (Date.now() - start < attempt * 100) {
@@ -475,7 +475,7 @@ class PracticeRecorder {
             }
         }
         
-        // 如果所有尝试都失败，使用降级保�?
+        // 如果所有尝试都失败，使用降级保�?
         return this.fallbackSavePracticeRecord(record);
     }
 
@@ -492,13 +492,13 @@ class PracticeRecorder {
             let records = [...storage.get('practice_records', [])];
             console.log('[PracticeRecorder] 当前记录数量:', records.length);
 
-            // 检查是否已存在相同ID的记�?
+            // 检查是否已存在相同ID的记�?
             const existingIndex = records.findIndex(r => r.id === standardizedRecord.id);
             if (existingIndex !== -1) {
-                console.log('[PracticeRecorder] 发现重复记录，更新现有记�?);
+                console.log('[PracticeRecorder] 发现重复记录，更新现有记录');
                 records[existingIndex] = standardizedRecord;
             } else {
-                // 新记录添加到开头（保持时间顺序�?
+                // 新记录添加到开头（保持时间顺序）
                 records.unshift(standardizedRecord);
             }
 
@@ -533,13 +533,13 @@ class PracticeRecorder {
             // 最后的备用方案：保存到临时存储
             this.saveToTemporaryStorage(record);
             
-            // 抛出错误，但不阻止用户继续使�?
+            // 抛出错误，但不阻止用户继续使�?
             throw new Error(`All save methods failed: ${error.message}`);
         }
     }
 
     /**
-     * 标准化记录格式（用于降级保存�?
+     * 标准化记录格式（用于降级保存�?
      */
     standardizeRecordForFallback(recordData) {
         const now = new Date().toISOString();
@@ -566,7 +566,7 @@ class PracticeRecorder {
             answers: recordData.answers || [],
             questionTypePerformance: recordData.questionTypePerformance || {},
             
-            // 元数�?
+            // 元数�?
             metadata: {
                 examTitle: '',
                 category: '',
@@ -586,7 +586,7 @@ class PracticeRecorder {
     }
 
     /**
-     * 验证记录是否已保�?
+     * 验证记录是否已保�?
      */
     verifyRecordSaved(recordId) {
         try {
@@ -594,13 +594,13 @@ class PracticeRecorder {
             const found = records.find(r => r.id === recordId);
             return !!found;
         } catch (error) {
-            console.error('[PracticeRecorder] 验证记录保存时出�?', error);
+            console.error('[PracticeRecorder] 验证记录保存时出错', error);
             return false;
         }
     }
 
     /**
-     * 判断是否为严重错�?
+     * 判断是否为严重错�?
      */
     isCriticalError(error) {
         const criticalMessages = [
@@ -638,7 +638,7 @@ class PracticeRecorder {
             const totalScore = (stats.averageScore * (stats.totalPractices - 1)) + practiceRecord.accuracy;
             stats.averageScore = totalScore / stats.totalPractices;
             
-            // 更新时间�?
+            // 更新时间戳
             stats.updatedAt = new Date().toISOString();
             
             storage.set('user_stats', stats);
@@ -650,7 +650,7 @@ class PracticeRecorder {
     }
 
     /**
-     * 保存到临时存�?
+     * 保存到临时存�?
      */
     saveToTemporaryStorage(record) {
         try {
@@ -668,7 +668,7 @@ class PracticeRecorder {
             console.log('[PracticeRecorder] 记录已保存到临时存储:', record.id);
             
         } catch (error) {
-            console.error('[PracticeRecorder] 临时存储也失�?', error);
+            console.error('[PracticeRecorder] 临时存储也失败', error);
         }
     }
 
@@ -679,7 +679,7 @@ class PracticeRecorder {
         const records = [...storage.get('interrupted_records', [])];
         records.push(record);
         
-        // 保持最�?00条中断记�?
+        // 保持最多100条中断记录
         const finalRecords = records.length > 100 ? records.slice(-100) : records;
 
         storage.set('interrupted_records', finalRecords);
@@ -929,11 +929,11 @@ class PracticeRecorder {
         console.log('[PracticeRecorder] 处理真实练习数据:', examId, realData);
         
         try {
-            // 验证数据完整�?
+            // 验证数据完整性
             const validatedData = this.validateRealData(realData);
             
             if (!validatedData) {
-                console.warn('[PracticeRecorder] 数据验证失败，使用模拟数�?);
+                console.warn('[PracticeRecorder] 数据验证失败，使用模拟数据');
                 return this.handleFallbackData(examId);
             }
             
@@ -949,7 +949,7 @@ class PracticeRecorder {
             // 构造增强的练习记录
             const practiceRecord = this.createRealPracticeRecord(exam, validatedData);
             
-            // 保存记录 - 这里ScoreStorage会自动更新用户统�?
+            // 保存记录 - 这里ScoreStorage会自动更新用户统�?
             this.savePracticeRecord(practiceRecord);
             
             // 清理活动会话
@@ -980,7 +980,7 @@ class PracticeRecorder {
             return null;
         }
         
-        // 必需字段检�?
+        // 必需字段检�?
         const requiredFields = ['sessionId', 'duration'];
         for (const field of requiredFields) {
             if (!realData.hasOwnProperty(field)) {
@@ -989,26 +989,26 @@ class PracticeRecorder {
             }
         }
         
-        // 数据类型检�?
+        // 数据类型检�?
         if (typeof realData.duration !== 'number' || realData.duration < 0) {
-            console.warn('[PracticeRecorder] 无效的练习时�?);
+            console.warn('[PracticeRecorder] 无效的练习时间');
             return null;
         }
         
-        // 答案数据检�?
+        // 答案数据检�?
         if (realData.answers && typeof realData.answers !== 'object') {
-            console.warn('[PracticeRecorder] 无效的答案数据格�?);
+            console.warn('[PracticeRecorder] 无效的答案数据格式');
             return null;
         }
         
-        // 分数信息检�?
+        // 分数信息检�?
         if (realData.scoreInfo) {
             const { correct, total, accuracy, percentage } = realData.scoreInfo;
             
             if (correct !== undefined && total !== undefined) {
                 if (typeof correct !== 'number' || typeof total !== 'number' || 
                     correct < 0 || total < 0 || correct > total) {
-                    console.warn('[PracticeRecorder] 无效的分数数�?);
+                    console.warn('[PracticeRecorder] 无效的分数数据');
                     return null;
                 }
             }
@@ -1053,14 +1053,14 @@ class PracticeRecorder {
             status: 'completed',
             score: score,
             totalQuestions: totalQuestions,
-            correctAnswers: score, // 正确答案数等于分�?
+            correctAnswers: score, // 正确答案数等于分数
             accuracy: accuracy,
             
-            // 答题详情 - 转换为ScoreStorage期望的格�?
+            // 答题详情 - 转换为ScoreStorage期望的格式
             answers: this.convertAnswersFormat(realData.answers || {}),
             questionTypePerformance: this.extractQuestionTypePerformance(realData),
             
-            // 元数�?- 与ScoreStorage兼容
+            // 元数据 - 与ScoreStorage兼容
             metadata: {
                 examTitle: exam.title || '',
                 category: exam.category || '',
@@ -1070,7 +1070,7 @@ class PracticeRecorder {
                 processingTime: Date.now()
             },
             
-            // 额外的真实数据信�?
+            // 额外的真实数据信息
             realData: {
                 sessionId: realData.sessionId,
                 answers: realData.answers || {},
@@ -1118,7 +1118,7 @@ class PracticeRecorder {
             return realData.questionTypePerformance;
         }
         
-        // 如果有scoreInfo，尝试从中提�?
+        // 如果有scoreInfo，尝试从中提�?
         if (realData.scoreInfo) {
             const { correct, total } = realData.scoreInfo;
             if (correct !== undefined && total !== undefined) {
@@ -1142,7 +1142,7 @@ class PracticeRecorder {
         let quality = 'good';
         const issues = [];
         
-        // 检查数据完整�?
+        // 检查数据完整性
         if (!realData.scoreInfo) {
             issues.push('no_score_info');
             quality = 'fair';
@@ -1158,7 +1158,7 @@ class PracticeRecorder {
             if (quality === 'good') quality = 'fair';
         }
         
-        // 检查时间合理�?
+        // 检查时间合理性
         if (realData.duration < 60) { // 少于1分钟
             issues.push('too_short');
             quality = 'questionable';
@@ -1175,7 +1175,7 @@ class PracticeRecorder {
     }
 
     /**
-     * 计算数据可信�?
+     * 计算数据可信度
      */
     calculateConfidence(quality, issues) {
         const baseConfidence = {
@@ -1188,7 +1188,7 @@ class PracticeRecorder {
         
         let confidence = baseConfidence[quality] || 0.50;
         
-        // 根据问题调整可信�?
+        // 根据问题调整可信度
         const penaltyMap = {
             'no_score_info': 0.10,
             'no_answers': 0.20,
@@ -1205,7 +1205,7 @@ class PracticeRecorder {
     }
 
     /**
-     * 处理降级数据（当真实数据不可用时�?
+     * 处理降级数据（当真实数据不可用时）
      */
     handleFallbackData(examId) {
         console.log('[PracticeRecorder] 使用降级数据处理');
@@ -1235,7 +1235,7 @@ class PracticeRecorder {
         const duration = Math.floor((Date.now() - new Date(session.startTime).getTime()) / 1000);
         const estimatedQuestions = session.progress.totalQuestions || 13;
         
-        // 生成合理的模拟分�?
+        // 生成合理的模拟分�?
         const baseScore = Math.floor(estimatedQuestions * 0.7); // 70%基准
         const variation = Math.floor(Math.random() * (estimatedQuestions * 0.3)); // ±30%变化
         const score = Math.max(0, Math.min(estimatedQuestions, baseScore + variation - estimatedQuestions * 0.15));
@@ -1258,7 +1258,7 @@ class PracticeRecorder {
         console.log('[PracticeRecorder] 建立练习页面通信:', sessionId);
         
         // 这个方法可以被ExamSystemApp调用来建立通信
-        // 实际的消息处理已经在initialize()中设�?
+        // 实际的消息处理已经在initialize()中设�?
         
         // 可以在这里添加特定于会话的通信设置
         if (examWindow && !examWindow.closed) {
@@ -1274,7 +1274,7 @@ class PracticeRecorder {
     }
 
     /**
-     * 恢复临时存储的记�?
+     * 恢复临时存储的记�?
      */
     async recoverTemporaryRecords() {
         try {
@@ -1285,7 +1285,7 @@ class PracticeRecorder {
                 return;
             }
             
-            console.log(`[PracticeRecorder] 发现 ${tempRecords.length} 条临时记录，开始恢�?..`);
+            console.log(`[PracticeRecorder] 发现 ${tempRecords.length} 条临时记录，开始恢复`);
             
             let recoveredCount = 0;
             const failedRecords = [];
@@ -1310,19 +1310,19 @@ class PracticeRecorder {
             // 清理已恢复的临时记录
             if (failedRecords.length === 0) {
                 storage.remove('temp_practice_records');
-                console.log(`[PracticeRecorder] 所�?${recoveredCount} 条临时记录恢复成功`);
+                console.log(`[PracticeRecorder] 所�?${recoveredCount} 条临时记录恢复成功`);
             } else {
                 storage.set('temp_practice_records', failedRecords);
-                console.log(`[PracticeRecorder] 恢复�?${recoveredCount} 条记录，${failedRecords.length} 条失败`);
+                console.log(`[PracticeRecorder] 恢复了${recoveredCount} 条记录，${failedRecords.length} 条失败`);
             }
             
         } catch (error) {
-            console.error('[PracticeRecorder] 恢复临时记录时出�?', error);
+            console.error('[PracticeRecorder] 恢复临时记录时出错', error);
         }
     }
 
     /**
-     * 获取数据完整性报�?
+     * 获取数据完整性报�?
      */
     getDataIntegrityReport() {
         try {
@@ -1348,7 +1348,7 @@ class PracticeRecorder {
                 }
             };
             
-            // 检查练习记�?
+            // 检查练习记�?
             const records = storage.get('practice_records', []);
             report.practiceRecords.total = records.length;
             
@@ -1360,25 +1360,25 @@ class PracticeRecorder {
                 }
             });
             
-            // 检查临时记�?
+            // 检查临时记�?
             const tempRecords = storage.get('temp_practice_records', []);
             report.temporaryRecords.total = tempRecords.length;
             report.temporaryRecords.needsRecovery = tempRecords.filter(r => r.needsRecovery).length;
             
-            // 检查活动会�?
+            // 检查活动会�?
             const now = Date.now();
             this.activeSessions.forEach(session => {
                 const lastActivity = new Date(session.lastActivity).getTime();
                 const inactiveTime = now - lastActivity;
                 
-                if (inactiveTime < 30 * 60 * 1000) { // 30分钟�?
+                if (inactiveTime < 30 * 60 * 1000) { // 30分钟内
                     report.activeSessions.active++;
                 } else {
                     report.activeSessions.stale++;
                 }
             });
             
-            // 检查存储状�?
+            // 检查存储状�?
             try {
                 const storageInfo = storage.getStorageInfo();
                 report.storage.quota = storageInfo;
@@ -1389,13 +1389,13 @@ class PracticeRecorder {
             return report;
             
         } catch (error) {
-            console.error('[PracticeRecorder] 生成完整性报告失�?', error);
+            console.error('[PracticeRecorder] 生成完整性报告失败', error);
             return null;
         }
     }
 
     /**
-     * 验证记录完整�?
+     * 验证记录完整�?
      */
     validateRecordIntegrity(record) {
         const requiredFields = ['id', 'examId', 'startTime', 'endTime'];
@@ -1414,7 +1414,7 @@ class PracticeRecorder {
             return false;
         }
         
-        // 验证数值范�?
+        // 验证数值范�?
         if (record.accuracy !== undefined && (record.accuracy < 0 || record.accuracy > 1)) {
             return false;
         }
@@ -1430,18 +1430,18 @@ class PracticeRecorder {
      * 销毁练习记录器
      */
     destroy() {
-        // 清理定时�?
+        // 清理定时�?
         if (this.autoSaveTimer) {
             clearInterval(this.autoSaveTimer);
         }
         
-        // 清理会话监听�?
+        // 清理会话监听�?
         for (const listener of this.sessionListeners.values()) {
             clearInterval(listener);
         }
         this.sessionListeners.clear();
         
-        // 保存所有数�?
+        // 保存所有数�?
         this.saveAllSessions();
         
         console.log('PracticeRecorder destroyed');
