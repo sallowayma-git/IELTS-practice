@@ -294,7 +294,38 @@
     <!-- 加载工具函数 -->
     
     <script src="js/utils/storage.js"></script>
-    
+
+    <!-- 设置共享命名空间 -->
+    <script>
+      // 确保存储初始化完成后设置命名空间
+      if (window.storage && typeof window.storage.setNamespace === 'function') {
+        window.storage.setNamespace('exam_system');
+        console.log('主页面已设置共享命名空间: exam_system');
+
+        // 验证命名空间设置是否生效
+        setTimeout(() => {
+          const testKey = 'namespace_test';
+          const testValue = 'test_value_' + Date.now();
+          window.storage.set(testKey, testValue).then(() => {
+            window.storage.get(testKey).then((retrievedValue) => {
+              if (retrievedValue === testValue) {
+                console.log('✅ 命名空间设置验证成功: 存储和读取正常');
+              } else {
+                console.warn('❌ 命名空间设置验证失败: 读取值不匹配');
+              }
+              // 清理测试数据
+              window.storage.remove(testKey);
+            }).catch((error) => {
+              console.error('❌ 命名空间设置验证失败: 读取错误', error);
+            });
+          }).catch((error) => {
+            console.error('❌ 命名空间设置验证失败: 存储错误', error);
+          });
+        }, 1000);
+      } else {
+        console.warn('存储管理器未加载或setNamespace方法不可用');
+      }
+    </script>
 
     <!-- 加载核心组件 -->
     <script src="js/core/scoreStorage.js"></script>

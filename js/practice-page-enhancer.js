@@ -302,6 +302,36 @@ if (!window.practicePageEnhancer) {
                 return;
             }
             console.log('[PracticeEnhancer] 开始初始化');
+
+            // 设置共享命名空间
+            if (window.storage && typeof window.storage.setNamespace === 'function') {
+                window.storage.setNamespace('exam_system');
+                console.log('[PracticeEnhancer] 已设置共享命名空间: exam_system');
+
+                // 验证命名空间设置是否生效
+                setTimeout(() => {
+                    const testKey = 'namespace_test_enhancer';
+                    const testValue = 'test_value_enhancer_' + Date.now();
+                    window.storage.set(testKey, testValue).then(() => {
+                        window.storage.get(testKey).then((retrievedValue) => {
+                            if (retrievedValue === testValue) {
+                                console.log('✅ 增强器命名空间设置验证成功: 存储和读取正常');
+                            } else {
+                                console.warn('❌ 增强器命名空间设置验证失败: 读取值不匹配');
+                            }
+                            // 清理测试数据
+                            window.storage.remove(testKey);
+                        }).catch((error) => {
+                            console.error('❌ 增强器命名空间设置验证失败: 读取错误', error);
+                        });
+                    }).catch((error) => {
+                        console.error('❌ 增强器命名空间设置验证失败: 存储错误', error);
+                    });
+                }, 1000);
+            } else {
+                console.warn('[PracticeEnhancer] 存储管理器未加载或setNamespace方法不可用');
+            }
+
             this.setupCommunication();
             this.setupAnswerListeners();
             this.extractCorrectAnswers(); // 新增：提取正确答案

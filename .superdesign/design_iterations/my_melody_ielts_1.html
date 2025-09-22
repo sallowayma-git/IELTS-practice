@@ -2810,6 +2810,12 @@
                     }
                 });
 
+                window.addEventListener('storage-sync', (event) => {
+                    console.log('[Theme] 收到存储同步事件，正在更新练习记录...', event.detail);
+                    this.loadData();
+                    this.updateUI();
+                });
+
                 // 定期保存数据
                 setInterval(() => {
                     if (this.settings.autoSave) {
