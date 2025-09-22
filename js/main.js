@@ -1,4 +1,4 @@
-﻿// Main JavaScript logic for the application
+// Main JavaScript logic for the application
 // This file is the result of refactoring the inline script from improved-working-system.html
 
 // --- Global State & Variables ---
@@ -14,13 +14,13 @@ let practiceListScroller = null;
 const processedSessions = new Set();
 let bulkDeleteMode = false;
 let selectedRecords = new Set();
-// 闄嶇骇鎻℃墜鏄犲皠锛歴essionId -> { examId, timer }
+// 降级握手映射：sessionId -> { examId, timer }
 const fallbackExamSessions = new Map();
 
 
 // --- Initialization ---
 function initializeLegacyComponents() {
-    try { showMessage('绯荤粺鍑嗗灏辩华', 'success'); } catch(_) {}
+    try { showMessage('系统准备就绪', 'success'); } catch(_) {}
 
     // Setup UI Listeners
     const folderPicker = document.getElementById('folder-picker');
@@ -31,17 +31,17 @@ function initializeLegacyComponents() {
     // Initialize components
     if (window.PDFHandler) {
         pdfHandler = new PDFHandler();
-        console.log('[System] PDF澶勭悊鍣ㄥ凡鍒濆鍖?);
+        console.log('[System] PDF处理器已初始化');
     }
     if (window.BrowseStateManager) {
         browseStateManager = new BrowseStateManager();
-        console.log('[System] 娴忚鐘舵€佺鐞嗗櫒宸插垵濮嬪寲');
+        console.log('[System] 浏览状态管理器已初始化');
     }
     if (window.DataIntegrityManager) {
         window.dataIntegrityManager = new DataIntegrityManager();
-        console.log('[System] 鏁版嵁瀹屾暣鎬х鐞嗗櫒宸插垵濮嬪寲');
+        console.log('[System] 数据完整性管理器已初始化');
     } else {
-        console.warn('[System] DataIntegrityManager绫绘湭鍔犺浇');
+        console.warn('[System] DataIntegrityManager类未加载');
     }
 
     // Clean up old cache and configurations for v1.1.0 upgrade (one-time only)
@@ -54,16 +54,16 @@ function initializeLegacyComponents() {
       }
     } catch(_) {}
 
-    // 闃叉绱㈠紩鍦ㄦ瘡娆″姞杞芥椂琚竻绌?- 鏂板淇3A
+    // 防止索引在每次加载时被清空 - 新增修复3A
     try {
       const cleanupDone = localStorage.getItem('upgrade_v1_1_0_cleanup_done');
       if (!cleanupDone) {
-        console.log('[System] 棣栨杩愯锛屾墽琛屽崌绾ф竻鐞?..');
+        console.log('[System] 首次运行，执行升级清理...');
         cleanupOldCache().finally(() => {
           try { localStorage.setItem('upgrade_v1_1_0_cleanup_done','1'); } catch(_) {}
         });
       } else {
-        console.log('[System] 鍗囩骇娓呯悊宸插畬鎴愶紝璺宠繃閲嶅娓呯悊');
+        console.log('[System] 升级清理已完成，跳过重复清理');
       }
     } catch(_) {}
 
@@ -77,13 +77,13 @@ function initializeLegacyComponents() {
 // Clean up old cache and configurations
 async function cleanupOldCache() {
     try {
-        console.log('[System] 姝ｅ湪娓呯悊鏃х紦瀛樹笌閰嶇疆...');
+        console.log('[System] 正在清理旧缓存与配置...');
         await storage.remove('exam_index');
         await storage.remove('active_exam_index_key');
         await storage.set('exam_index_configurations', []);
-        console.log('[System] 鏃х紦瀛樻竻鐞嗗畬鎴?);
+        console.log('[System] 旧缓存清理完成');
     } catch (error) {
-        console.warn('[System] 娓呯悊鏃х紦瀛樻椂鍑洪敊:', error);
+        console.warn('[System] 清理旧缓存时出错:', error);
     }
 }
 
@@ -91,7 +91,7 @@ async function cleanupOldCache() {
 // --- Data Loading and Management ---
 
 async function syncPracticeRecords() {
-    console.log('[System] 姝ｅ湪浠庡瓨鍌ㄤ腑鍚屾缁冧範璁板綍...');
+    console.log('[System] 正在从存储中同步练习记录...');
     let records = [];
     try {
         // Prefer normalized records from ScoreStorage via PracticeRecorder
@@ -116,22 +116,23 @@ async function syncPracticeRecords() {
             });
         }
     } catch (e) {
-        console.warn('[System] 鍚屾璁板綍鏃跺彂鐢熼敊璇紝浣跨敤瀛樺偍鍘熷鏁版嵁:', e);
+        console.warn('[System] 同步记录时发生错误，使用存储原始数据:', e);
         const raw = await storage.get('practice_records', []);
         records = Array.isArray(raw) ? raw : [];
     }
 
-    // 鏂板淇3D锛氱‘淇濆叏灞€鍙橀噺鏄疷I鐨勫崟涓€鏁版嵁婧?
+    // 新增修复3D：确保全局变量是UI的单一数据源
     window.practiceRecords = records;
     practiceRecords = records; // also update the local-scoped variable
 
-    console.log(`[System] ${records.length} 鏉＄粌涔犺褰曞凡鍔犺浇鍒板唴瀛樸€俙);
+    console.log(`[System] ${records.length} 条练习记录已加载到内存。`);
     updatePracticeView();
 }
 
 function setupMessageListener() {
     window.addEventListener('message', (event) => {
-        // 鏇村吋瀹圭殑瀹夊叏妫€鏌ワ細鍏佽鍚屾簮鎴杅ile鍗忚涓嬬殑瀛愮獥鍙?        try {
+        // 更兼容的安全检查：允许同源或file协议下的子窗口
+        try {
             if (event.origin && event.origin !== 'null' && event.origin !== window.location.origin) {
                 return;
             }
@@ -140,11 +141,12 @@ function setupMessageListener() {
         const data = event.data || {};
         const type = data.type;
         if (type === 'SESSION_READY') {
-            // 瀛愰〉鏈惡甯?sessionId锛岃繖閲屽熀浜?event.source 鍖归厤瀵瑰簲浼氳瘽骞跺仠姝㈡彙鎵嬮噸璇?            try {
+            // 子页未携带 sessionId，这里基于 event.source 匹配对应会话并停止握手重试
+            try {
                 for (const [sid, rec] of fallbackExamSessions.entries()) {
                     if (rec && rec.win === event.source) {
                         if (rec.timer) clearInterval(rec.timer);
-                        console.log('[Fallback] 浼氳瘽灏辩华(鍖归厤鍒扮獥鍙?:', sid);
+                        console.log('[Fallback] 会话就绪(匹配到窗口):', sid);
                         break;
                     }
                 }
@@ -153,23 +155,23 @@ function setupMessageListener() {
             const sessionId = (data && data.sessionId) || null;
             const rec = sessionId ? fallbackExamSessions.get(sessionId) : null;
             if (rec) {
-                console.log('[Fallback] 鏀跺埌缁冧範瀹屾垚锛堥檷绾ц矾寰勶級锛屼繚瀛樼湡瀹炴暟鎹?);
+                console.log('[Fallback] 收到练习完成（降级路径），保存真实数据');
                 savePracticeRecordFallback(rec.examId, data).finally(() => {
                     try { if (rec && rec.timer) clearInterval(rec.timer); } catch(_) {}
                     try { fallbackExamSessions.delete(sessionId); } catch(_) {}
-                    showMessage('缁冧範宸插畬鎴愶紝姝ｅ湪鏇存柊璁板綍...', 'success');
+                    showMessage('练习已完成，正在更新记录...', 'success');
                     setTimeout(syncPracticeRecords, 300);
                 });
             } else {
-                console.log('[System] 鏀跺埌缁冧範瀹屾垚娑堟伅锛屾鍦ㄥ悓姝ヨ褰?..');
-                showMessage('缁冧範宸插畬鎴愶紝姝ｅ湪鏇存柊璁板綍...', 'success');
+                console.log('[System] 收到练习完成消息，正在同步记录...');
+                showMessage('练习已完成，正在更新记录...', 'success');
                 setTimeout(syncPracticeRecords, 300);
             }
         }
     });
 }
 
-// 闄嶇骇淇濆瓨锛氬皢 PRACTICE_COMPLETE 鐨勭湡瀹炴暟鎹啓鍏?practice_records锛堜笌鏃ц鍥惧瓧娈靛吋瀹癸級
+// 降级保存：将 PRACTICE_COMPLETE 的真实数据写入 practice_records（与旧视图字段兼容）
 async function savePracticeRecordFallback(examId, realData) {
   try {
     const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
@@ -203,7 +205,8 @@ async function savePracticeRecordFallback(examId, realData) {
       date: new Date().toISOString(),
       sessionId: realData.sessionId,
       timestamp: Date.now(),
-      // 鍏煎鏃ц鍥惧瓧娈?      score: correct,
+      // 兼容旧视图字段
+      score: correct,
       correctAnswers: correct,
       totalQuestions: total,
       accuracy: acc,
@@ -217,9 +220,9 @@ async function savePracticeRecordFallback(examId, realData) {
     const arr = Array.isArray(records) ? records : [];
     arr.push(record);
     await storage.set('practice_records', arr);
-    console.log('[Fallback] 鐪熷疄鏁版嵁宸蹭繚瀛樺埌 practice_records');
+    console.log('[Fallback] 真实数据已保存到 practice_records');
   } catch (e) {
-    console.error('[Fallback] 淇濆瓨缁冧範璁板綍澶辫触:', e);
+    console.error('[Fallback] 保存练习记录失败:', e);
   }
 }
 
@@ -228,13 +231,13 @@ async function loadLibrary(forceReload = false) {
     const activeConfigKey = await getActiveLibraryConfigurationKey();
     let cachedData = await storage.get(activeConfigKey);
 
-    // 浠呭綋缂撳瓨涓洪潪绌烘暟缁勬椂浣跨敤缂撳瓨
+    // 仅当缓存为非空数组时使用缓存
     if (!forceReload && Array.isArray(cachedData) && cachedData.length > 0) {
-        examIndex = normalizeExamIndex(cachedData);
+        examIndex = cachedData;
         try {
             const configs = await storage.get('exam_index_configurations', []);
             if (!configs.some(c => c.key === 'exam_index')) {
-                configs.push({ name: '榛樿棰樺簱', key: 'exam_index', examCount: examIndex.length || 0, timestamp: Date.now() });
+                configs.push({ name: '默认题库', key: 'exam_index', examCount: examIndex.length || 0, timestamp: Date.now() });
                 await storage.set('exam_index_configurations', configs);
             }
             const activeKey = await storage.get('active_exam_index_key');
@@ -244,7 +247,7 @@ async function loadLibrary(forceReload = false) {
         return;
     }
 
-    // 鏂板淇3B锛氫粠鑴氭湰閲嶅缓绱㈠紩锛堥槄璇?鍚姏锛夛紝鑻ヤ袱鑰呯殕鏃犲垯涓嶅啓鍏ョ┖绱㈠紩
+    // 新增修复3B：从脚本重建索引（阅读+听力），若两者皆无则不写入空索引
     try {
         let readingExams = [];
         if (Array.isArray(window.completeExamIndex)) {
@@ -253,23 +256,23 @@ async function loadLibrary(forceReload = false) {
 
         let listeningExams = [];
         if (Array.isArray(window.listeningExamIndex)) {
-            listeningExams = window.listeningExamIndex.map(exam => ({ ...exam, type: exam.type || 'listening' }));
+            listeningExams = window.listeningExamIndex; // 已含 type: 'listening'
         }
 
         if (readingExams.length === 0 && listeningExams.length === 0) {
             examIndex = [];
-            finishLibraryLoading(startTime); // 涓嶅啓鍏ョ┖绱㈠紩锛岄伩鍏嶆薄鏌撶紦瀛?
+            finishLibraryLoading(startTime); // 不写入空索引，避免污染缓存
             return;
-        examIndex = normalizeExamIndex([...readingExams, ...listeningExams]);
+        }
 
         examIndex = [...readingExams, ...listeningExams];
         await storage.set(activeConfigKey, examIndex);
-        await saveLibraryConfiguration('榛樿棰樺簱', activeConfigKey, examIndex.length);
+        await saveLibraryConfiguration('默认题库', activeConfigKey, examIndex.length);
         await setActiveLibraryConfiguration(activeConfigKey);
 
         finishLibraryLoading(startTime);
     } catch (error) {
-        console.error('[Library] 鍔犺浇棰樺簱澶辫触:', error);
+        console.error('[Library] 加载题库失败:', error);
         examIndex = [];
         finishLibraryLoading(startTime);
     }
@@ -277,7 +280,7 @@ async function loadLibrary(forceReload = false) {
 function finishLibraryLoading(startTime) {
     const loadTime = performance.now() - startTime;
     try { window.examIndex = examIndex; } catch (_) {}
-    // 淇棰樺簱绱㈠紩鍔犺浇閾捐矾闂锛氶『搴忎负璁剧疆window.examIndex 鈫?updateOverview() 鈫?dispatchEvent('examIndexLoaded')
+    // 修复题库索引加载链路问题：顺序为设置window.examIndex → updateOverview() → dispatchEvent('examIndexLoaded')
     updateOverview();
     window.dispatchEvent(new CustomEvent('examIndexLoaded'));
 }
@@ -296,46 +299,46 @@ function updateOverview() {
         if (exam.category && listeningStats[exam.category]) {
             listeningStats[exam.category].total++;
         } else {
-            console.warn('[Overview] 鏈煡鍚姏绫诲埆:', exam.category, exam);
+            console.warn('[Overview] 未知听力类别:', exam.category, exam);
         }
     });
 
     const categoryContainer = document.getElementById('category-overview');
-    let html = '<h3 style="grid-column: 1 / -1;">闃呰</h3>';
+    let html = '<h3 style="grid-column: 1 / -1;">阅读</h3>';
     ['P1','P2','P3'].forEach(cat => {
         html += ''
         + '<div class="category-card">'
         +   '<div class="category-header">'
-        +     '<div class="category-icon">馃摉</div>'
+        +     '<div class="category-icon">📖</div>'
         +     '<div>'
-        +       '<div class="category-title">' + cat + ' 闃呰</div>'
-        +       '<div class="category-meta">' + (readingStats[cat] ? readingStats[cat].total : 0) + ' 绡?/div>'
+        +       '<div class="category-title">' + cat + ' 阅读</div>'
+        +       '<div class="category-meta">' + (readingStats[cat] ? readingStats[cat].total : 0) + ' 篇</div>'
         +     '</div>'
         +   '</div>'
         +   '<div class="category-actions" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: nowrap;">'
-        +     '<button class="btn" onclick="browseCategory(\'' + cat + '\', \'reading\')">馃摎 娴忚棰樺簱</button>'
-        +     '<button class="btn btn-secondary" onclick="startRandomPractice(\'' + cat + '\', \'reading\')">馃幉 闅忔満缁冧範</button>'
+        +     '<button class="btn" onclick="browseCategory(\'' + cat + '\', \'reading\')">📚 浏览题库</button>'
+        +     '<button class="btn btn-secondary" onclick="startRandomPractice(\'' + cat + '\', \'reading\')">🎲 随机练习</button>'
         +   '</div>'
         + '</div>';
     });
 
     if (listeningExams.length > 0) {
-        html += '<h3 style="margin-top: 40px; grid-column: 1 / -1;">鍚姏</h3>';
+        html += '<h3 style="margin-top: 40px; grid-column: 1 / -1;">听力</h3>';
         ['P3','P4'].forEach(cat => {
             const count = listeningStats[cat] ? listeningStats[cat].total : 0;
             if (count > 0) {
                 html += ''
                 + '<div class="category-card">'
                 +   '<div class="category-header">'
-                +     '<div class="category-icon">馃帶</div>'
+                +     '<div class="category-icon">🎧</div>'
                 +     '<div>'
-                +       '<div class="category-title">' + cat + ' 鍚姏</div>'
-                +       '<div class="category-meta">' + count + ' 绡?/div>'
+                +       '<div class="category-title">' + cat + ' 听力</div>'
+                +       '<div class="category-meta">' + count + ' 篇</div>'
                 +     '</div>'
                 +   '</div>'
                 +   '<div class="category-actions" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: nowrap;">'
-                +     '<button class="btn" onclick="browseCategory(\'' + cat + '\', \'listening\')">馃摎 娴忚棰樺簱</button>'
-                +     '<button class="btn btn-secondary" onclick="startRandomPractice(\'' + cat + '\', \'listening\')">馃幉 闅忔満缁冧範</button>'
+                +     '<button class="btn" onclick="browseCategory(\'' + cat + '\', \'listening\')">📚 浏览题库</button>'
+                +     '<button class="btn btn-secondary" onclick="startRandomPractice(\'' + cat + '\', \'listening\')">🎲 随机练习</button>'
                 +   '</div>'
                 + '</div>';
             }
@@ -354,12 +357,12 @@ function getScoreColor(percentage) {
 
 function formatDurationShort(seconds) {
     const s = Math.max(0, Math.floor(seconds || 0));
-    if (s < 60) return `${s}绉抈;
+    if (s < 60) return `${s}秒`;
     const m = Math.floor(s / 60);
-    if (m < 60) return `${m}鍒嗛挓`;
+    if (m < 60) return `${m}分钟`;
     const h = Math.floor(m / 60);
     const mm = m % 60;
-    return `${h}灏忔椂${mm}鍒嗛挓`;
+    return `${h}小时${mm}分钟`;
 }
 
 function getDurationColor(seconds) {
@@ -384,7 +387,7 @@ function renderPracticeRecordItem(record) {
     item.dataset.recordId = record.id;
     item.onclick = () => { if (bulkDeleteMode) toggleRecordSelection(record.id); };
 
-    const title = record.title || "鏃犳爣棰?;
+    const title = record.title || "无标题";
     const dateText = new Date(record.date).toLocaleString();
     const percentage = (typeof record.percentage === 'number') ? record.percentage : Math.round(((record.accuracy || 0) * 100));
 
@@ -393,14 +396,14 @@ function renderPracticeRecordItem(record) {
         +   '<a href="#" class="practice-record-title" onclick="event.stopPropagation(); showRecordDetails(\'' + record.id + '\'); return false;"><strong>' + title + '</strong></a>'
         +   '<div class="record-meta-line">'
         +     '<small class="record-date">' + dateText + '</small>'
-        +     '<small class="record-duration-value"><strong>鐢ㄦ椂</strong><strong class="duration-time" style="color: ' + durationColor + ';">' + durationStr + '</strong></small>'
+        +     '<small class="record-duration-value"><strong>用时</strong><strong class="duration-time" style="color: ' + durationColor + ';">' + durationStr + '</strong></small>'
         +   '</div>'
         + '</div>'
         + '<div class="record-percentage-container" style="flex-grow: 1; text-align: right; padding-right: 5px;">'
         +   '<div class="record-percentage" style="color: ' + getScoreColor(percentage) + ';">' + percentage + '%</div>'
         + '</div>'
         + '<div class="record-actions-container" style="flex-shrink: 0;">'
-        +   (bulkDeleteMode ? '' : '<button class="delete-record-btn" onclick="event.stopPropagation(); deleteRecord(\'' + record.id + '\')" title="鍒犻櫎姝よ褰?>馃棏锔?/button>')
+        +   (bulkDeleteMode ? '' : '<button class="delete-record-btn" onclick="event.stopPropagation(); deleteRecord(\'' + record.id + '\')" title="删除此记录">🗑️</button>')
         + '</div>';
 
     return item;
@@ -451,7 +454,7 @@ function updatePracticeView() {
 
     if (currentExamType !== 'all') {
         recordsToShow = recordsToShow.filter(record => {
-            // 澧炲姞鏁扮粍鍖栭槻寰?
+            // 增加数组化防御
             const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
             const exam = list.find(e => e.id === record.examId || e.title === record.title);
             return exam && exam.type === currentExamType;
@@ -465,12 +468,12 @@ function updatePracticeView() {
     }
 
     if (recordsToShow.length === 0) {
-        historyContainer.innerHTML = `<div style="text-align: center; padding: 40px; opacity: 0.7;"><div style="font-size: 3em; margin-bottom: 15px;">馃搨</div><p>鏆傛棤浠讳綍缁冧範璁板綍</p></div>`;
+        historyContainer.innerHTML = `<div style="text-align: center; padding: 40px; opacity: 0.7;"><div style="font-size: 3em; margin-bottom: 15px;">📂</div><p>暂无任何练习记录</p></div>`;
         return;
     }
     
     if (window.VirtualScroller) {
-        practiceListScroller = new VirtualScroller(historyContainer, recordsToShow, renderPracticeRecordItem, { itemHeight: 100, containerHeight: 650 }); // 澧炲姞itemHeight浠ュ尮閰嶆柊鐨刧ap鍜宲adding
+        practiceListScroller = new VirtualScroller(historyContainer, recordsToShow, renderPracticeRecordItem, { itemHeight: 100, containerHeight: 650 }); // 增加itemHeight以匹配新的gap和padding
     } else {
         // Fallback to simple rendering if VirtualScroller is not available
         historyContainer.innerHTML = recordsToShow.map(record => renderPracticeRecordItem(record).outerHTML).join('');
@@ -484,8 +487,8 @@ function updatePracticeView() {
 function browseCategory(category, type = 'reading') {
     currentCategory = category;
     currentExamType = type;
-    const typeText = type === 'listening' ? '鍚姏' : '闃呰';
-    document.getElementById('browse-title').textContent = `馃摎 ${category} ${typeText}棰樺簱娴忚`;
+    const typeText = type === 'listening' ? '听力' : '阅读';
+    document.getElementById('browse-title').textContent = `📚 ${category} ${typeText}题库浏览`;
     // Navigate to browse view safely without relying on legacy showView
     if (window.app && typeof window.app.navigateToView === 'function') {
       window.app.navigateToView('browse');
@@ -504,23 +507,25 @@ function browseCategory(category, type = 'reading') {
 function filterByType(type) {
     currentExamType = type;
     currentCategory = 'all';
-    document.getElementById('browse-title').textContent = '馃摎 棰樺簱娴忚';
+    document.getElementById('browse-title').textContent = '📚 题库浏览';
     loadExamList();
 }
 
-// 搴旂敤鍒嗙被绛涢€夛紙渚?App/鎬昏璋冪敤锛?function applyBrowseFilter(category = 'all', type = null) {
+// 应用分类筛选（供 App/总览调用）
+function applyBrowseFilter(category = 'all', type = null) {
     try {
-        // 褰掍竴鍖栬緭鍏ワ細鍏煎 "P1 闃呰"/"P2 鍚姏" 杩欑被鏂囨
+        // 归一化输入：兼容 "P1 阅读"/"P2 听力" 这类文案
         const raw = String(category || 'all');
         let normalizedCategory = 'all';
         const m = raw.match(/\bP[1-4]\b/i);
         if (m) normalizedCategory = m[0].toUpperCase();
 
-        // 鑻ユ湭鏄惧紡缁欏嚭绫诲瀷锛屼粠鏂囨鎴栭搴撴帹鏂?        if (!type || type === 'all') {
-            if (/闃呰/.test(raw)) type = 'reading';
-            else if (/鍚姏/.test(raw)) type = 'listening';
+        // 若未显式给出类型，从文案或题库推断
+        if (!type || type === 'all') {
+            if (/阅读/.test(raw)) type = 'reading';
+            else if (/听力/.test(raw)) type = 'listening';
         }
-        // 鑻ユ湭鏄惧紡缁欏嚭绫诲瀷锛屽垯鏍规嵁褰撳墠棰樺簱鎺ㄦ柇锛堝悓鏃跺瓨鍦ㄦ椂涓嶉檺瀹氱被鍨嬶級
+        // 若未显式给出类型，则根据当前题库推断（同时存在时不限定类型）
         if (!type || type === 'all') {
             try {
                 const hasReading = (examIndex || []).some(e => e.category === normalizedCategory && e.type === 'reading');
@@ -537,16 +542,18 @@ function filterByType(type) {
             window.__browseFilter = { category: normalizedCategory, type };
         } catch (_) {}
 
-        // 淇濇寔鏍囬绠€娲?        const titleEl = document.getElementById('browse-title');
-        if (titleEl) titleEl.textContent = '馃摎 棰樺簱娴忚';
+        // 保持标题简洁
+        const titleEl = document.getElementById('browse-title');
+        if (titleEl) titleEl.textContent = '📚 题库浏览';
 
-        // 鑻ユ湭鍦ㄦ祻瑙堣鍥撅紝鍒欏敖鍔涘垏鎹?        if (typeof window.showView === 'function' && !document.getElementById('browse-view')?.classList.contains('active')) {
+        // 若未在浏览视图，则尽力切换
+        if (typeof window.showView === 'function' && !document.getElementById('browse-view')?.classList.contains('active')) {
             window.showView('browse', false);
         }
 
         loadExamList();
     } catch (e) {
-        console.warn('[Browse] 搴旂敤绛涢€夊け璐ワ紝鍥為€€鍒伴粯璁ゅ垪琛?', e);
+        console.warn('[Browse] 应用筛选失败，回退到默认列表:', e);
         currentExamType = 'all';
         currentCategory = 'all';
         loadExamList();
@@ -558,11 +565,11 @@ function initializeBrowseView() {
     console.log('[System] Initializing browse view...');
     currentCategory = 'all';
     currentExamType = 'all';
-    document.getElementById('browse-title').textContent = '馃摎 棰樺簱娴忚';
+    document.getElementById('browse-title').textContent = '📚 题库浏览';
     loadExamList();
 }
 
-// 鍏ㄥ眬妗ユ帴锛欻TML 鎸夐挳 onclick="browseCategory('P1','reading')"
+// 全局桥接：HTML 按钮 onclick="browseCategory('P1','reading')"
 if (typeof window.browseCategory !== 'function') {
     window.browseCategory = function(category, type) {
         try {
@@ -571,7 +578,8 @@ if (typeof window.browseCategory !== 'function') {
                 return;
             }
         } catch (_) {}
-        // 鍥為€€锛氱洿鎺ュ簲鐢ㄧ瓫閫?        try { applyBrowseFilter(category, type); } catch (_) {}
+        // 回退：直接应用筛选
+        try { applyBrowseFilter(category, type); } catch (_) {}
     };
 }
 
@@ -600,7 +608,7 @@ function displayExams(exams) {
     const loadingIndicator = document.querySelector('#browse-view .loading');
 
     if (exams.length === 0) {
-        container.innerHTML = `<div style="text-align: center; padding: 40px;"><p>鏈壘鍒板尮閰嶇殑棰樼洰</p></div>`;
+        container.innerHTML = `<div style="text-align: center; padding: 40px;"><p>未找到匹配的题目</p></div>`;
     } else {
         container.innerHTML = `<div class="exam-list">${exams.map(renderExamItem).join('')}</div>`;
     }
@@ -636,7 +644,7 @@ function renderExamItem(exam) {
                 </div>
             </div>
             <div class="exam-actions">
-                <button class="btn exam-item-action-btn" onclick="openExam('${exam.id}')">寮€濮?/button>
+                <button class="btn exam-item-action-btn" onclick="openExam('${exam.id}')">开始</button>
                 <button class="btn btn-secondary exam-item-action-btn" onclick="viewPDF('${exam.id}')">PDF</button>
             </div>
         </div>
@@ -650,7 +658,7 @@ function resolveExamBasePath(exam) {
     const type = exam && exam.type;
     const root = type && pathMap[type] && pathMap[type].root ? String(pathMap[type].root) : "";
     if (root) {
-      // 閬垮厤閲嶅鍓嶇紑锛堝 ListeningPractice/ 宸插湪 path 涓級
+      // 避免重复前缀（如 ListeningPractice/ 已在 path 中）
       const normalizedBase = basePath.replace(/\\/g, '/');
       const normalizedRoot = root.replace(/\\/g, '/');
       if (!normalizedBase.startsWith(normalizedRoot)) {
@@ -670,18 +678,18 @@ function getPathMap() {
       return window.pathMap;
     }
 
-    // 鏂板淇3F锛氳矾寰勬槧灏勪慨澶?- 灏唕eading.root缃负''
+    // 新增修复3F：路径映射修复 - 将reading.root置为''
     // Fallback to embedded path map
     return {
       reading: {
-        // 灏嗛槄璇婚鐩牴璺緞鎸囧悜瀹為檯鏁版嵁鎵€鍦ㄧ洰褰?
-        // 璇存槑锛氭暟鎹剼鏈腑鐨?exam.path 浠呬负瀛愮洰褰曞悕锛堝 "1. P1 - A Brief History.../"锛夛紝
-        // 闇€瑕佸湪杩愯鏃舵嫾鎺ュ埌鐪熷疄鏍圭洰褰曚笅
-        root: '鐫＄潃杩囬」鐩粍(9.4)[134绡嘳/3. 鎵€鏈夋枃绔?9.4)[134绡嘳/',
+        // 将阅读题目根路径指向实际数据所在目录
+        // 说明：数据脚本中的 exam.path 仅为子目录名（如 "1. P1 - A Brief History.../"），
+        // 需要在运行时拼接到真实根目录下
+        root: '睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/',
         exceptions: {}
       },
       listening: {
-        // 濡傛湰鍦颁笉瀛樺湪 ListeningPractice 鐩綍锛屽垯 PDF/HTML 灏嗘棤娉曟墦寮€锛堣纭璧勬簮宸插氨浣嶏級
+        // 如本地不存在 ListeningPractice 目录，则 PDF/HTML 将无法打开（请确认资源已就位）
         root: 'ListeningPractice/',
         exceptions: {}
       }
@@ -702,10 +710,11 @@ function sanitizeFilename(name, kind) {
     if (!name) return '';
     const s = String(name);
     if (/\.html?$/i.test(s) || /\.pdf$/i.test(s)) return s;
-    // html 鎯呭喌涓嬶紝濡傛灉璇粰浜?.pdf 缁撳熬锛屼紭鍏堝皾璇?pdf.html 鍖呰椤?    if (kind === 'html' && /\.pdf$/i.test(s)) return s.replace(/\.pdf$/i, '.pdf.html');
+    // html 情况下，如果误给了 .pdf 结尾，优先尝试 pdf.html 包装页
+    if (kind === 'html' && /\.pdf$/i.test(s)) return s.replace(/\.pdf$/i, '.pdf.html');
     if (/html$/i.test(s)) return s.replace(/html$/i, '.html');
     if (/pdf$/i.test(s)) return s.replace(/pdf$/i, '.pdf');
-    // 鑻ユ湭鍖呭惈鎵╁睍鍚嶏紝鎸?kind 杩藉姞
+    // 若未包含扩展名，按 kind 追加
     if (kind === 'pdf') return s + '.pdf';
     return s + '.html';
 }
@@ -714,32 +723,33 @@ window.resolveExamBasePath = resolveExamBasePath;
 window.buildResourcePath = buildResourcePath;
 
 function openExam(examId) {
-  // 浼樺厛浣跨敤App娴佺▼锛堝甫浼氳瘽涓庨€氫俊锛?  if (window.app && typeof window.app.openExam === 'function') {
+  // 优先使用App流程（带会话与通信）
+  if (window.app && typeof window.app.openExam === 'function') {
     try {
       window.app.openExam(examId);
       return;
     } catch (e) {
-      console.warn('[Main] app.openExam 璋冪敤澶辫触锛屽惎鐢ㄩ檷绾ф彙鎵嬭矾寰?', e);
+      console.warn('[Main] app.openExam 调用失败，启用降级握手路径:', e);
     }
   }
 
-  // 闄嶇骇锛氭湰鍦板畬鎴愭墦寮€ + 鎻℃墜閲嶈瘯锛岀‘淇?sessionId 涓嬪彂
+  // 降级：本地完成打开 + 握手重试，确保 sessionId 下发
   const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
   const exam = list.find(e => e.id === examId);
-  if (!exam) return showMessage('鏈壘鍒伴鐩?, 'error');
+  if (!exam) return showMessage('未找到题目', 'error');
   if (!exam.hasHtml) return viewPDF(examId);
 
   const fullPath = buildResourcePath(exam, 'html');
   const examWindow = window.open(fullPath, `exam_${exam.id}`, 'width=1200,height=800,scrollbars=yes,resizable=yes');
   if (!examWindow) {
-    return showMessage('鏃犳硶鎵撳紑绐楀彛锛岃妫€鏌ュ脊绐楄缃?, 'error');
+    return showMessage('无法打开窗口，请检查弹窗设置', 'error');
   }
-  showMessage('姝ｅ湪鎵撳紑: ' + exam.title, 'success');
+  showMessage('正在打开: ' + exam.title, 'success');
 
   startHandshakeFallback(examWindow, examId);
 }
 
-// 闄嶇骇鎻℃墜锛氬惊鐜彂閫?INIT_SESSION锛岀洿鑷虫敹鍒?SESSION_READY
+// 降级握手：循环发送 INIT_SESSION，直至收到 SESSION_READY
 function startHandshakeFallback(examWindow, examId) {
   try {
     const sessionId = `${examId}_${Date.now()}`;
@@ -752,7 +762,7 @@ function startHandshakeFallback(examWindow, examId) {
       if (examWindow && !examWindow.closed) {
         try {
           if (attempts === 0) {
-            console.log('[Fallback] 鍙戦€佸垵濮嬪寲娑堟伅鍒扮粌涔犻〉闈?', { type: 'INIT_SESSION', data: initPayload });
+            console.log('[Fallback] 发送初始化消息到练习页面:', { type: 'INIT_SESSION', data: initPayload });
           }
           examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
           examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
@@ -763,7 +773,7 @@ function startHandshakeFallback(examWindow, examId) {
         const rec = fallbackExamSessions.get(sessionId);
         if (rec && rec.timer) clearInterval(rec.timer);
         fallbackExamSessions.delete(sessionId);
-        console.warn('[Fallback] 鎻℃墜瓒呮椂锛岀粌涔犻〉鍙兘鏈姞杞藉寮哄櫒');
+        console.warn('[Fallback] 握手超时，练习页可能未加载增强器');
       }
     };
     const timer = setInterval(tick, 300);
@@ -771,15 +781,15 @@ function startHandshakeFallback(examWindow, examId) {
     if (rec) rec.timer = timer;
     tick();
   } catch (e) {
-    console.warn('[Fallback] 鍚姩鎻℃墜澶辫触:', e);
+    console.warn('[Fallback] 启动握手失败:', e);
   }
 }
 
 function viewPDF(examId) {
-    // 澧炲姞鏁扮粍鍖栭槻寰?
+    // 增加数组化防御
     const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
     const exam = list.find(e => e.id === examId);
-    if (!exam || !exam.pdfFilename) return showMessage('鏈壘鍒癙DF鏂囦欢', 'error');
+    if (!exam || !exam.pdfFilename) return showMessage('未找到PDF文件', 'error');
     
     const fullPath = buildResourcePath(exam, 'pdf');
     openPDFSafely(fullPath, exam.title);
@@ -792,7 +802,7 @@ function showRecordDetails(recordId) {
     } else if (window.practiceRecordModal && typeof window.practiceRecordModal.showById === 'function') {
         window.practiceRecordModal.showById(recordId);
     } else {
-        alert('鏃犳硶鏄剧ず璁板綍璇︽儏锛氱粍浠舵湭鍔犺浇');
+        alert('无法显示记录详情：组件未加载');
     }
 }
 
@@ -808,19 +818,19 @@ function openPDFSafely(pdfPath, examTitle = 'PDF') {
         } catch (_) {}
         if (!pdfWindow) {
             try {
-                // 闄嶇骇锛氬綋鍓嶇獥鍙ｆ墦寮€
+                // 降级：当前窗口打开
                 window.location.href = pdfPath;
                 return window;
             } catch (e) {
-                showMessage('鏃犳硶鎵撳紑PDF绐楀彛锛岃妫€鏌ュ脊绐楄缃?, 'error');
+                showMessage('无法打开PDF窗口，请检查弹窗设置', 'error');
                 return null;
             }
         }
-        showMessage('姝ｅ湪鎵撳紑PDF...', 'info');
+        showMessage('正在打开PDF...', 'info');
         return pdfWindow;
     } catch (error) {
-        console.error('[PDF] 鎵撳紑澶辫触:', error);
-        showMessage('鎵撳紑PDF澶辫触', 'error');
+        console.error('[PDF] 打开失败:', error);
+        showMessage('打开PDF失败', 'error');
         return null;
     }
 }
@@ -837,7 +847,7 @@ function exportExamIndexToScriptFile(fullIndex, noteLabel = '') {
         const pad = (n) => String(n).padStart(2, '0');
         const d = new Date();
         const ts = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
-        const header = `// 棰樺簱閰嶇疆瀵煎嚭 ${d.toLocaleString()}\n// 璇存槑: 淇濆瓨姝ゆ枃浠跺埌 assets/scripts/ 骞跺湪闇€瑕佹椂鎵嬪姩鍦?index.html 寮曞叆浠ヨ鐩栧唴缃暟鎹甛n`;
+        const header = `// 题库配置导出 ${d.toLocaleString()}\n// 说明: 保存此文件到 assets/scripts/ 并在需要时手动在 index.html 引入以覆盖内置数据\n`;
         const content = `${header}window.completeExamIndex = ${JSON.stringify(reading, null, 2)};\n\nwindow.listeningExamIndex = ${JSON.stringify(listening, null, 2)};\n`;
 
         const blob = new Blob([content], { type: 'application/javascript' });
@@ -849,33 +859,20 @@ function exportExamIndexToScriptFile(fullIndex, noteLabel = '') {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        try { showMessage(`棰樺簱閰嶇疆宸插鍑? exam-index-${ts}.js锛堣绉诲姩鍒?assets/scripts/锛塦, 'success'); } catch(_) {}
+        try { showMessage(`题库配置已导出: exam-index-${ts}.js（请移动到 assets/scripts/）`, 'success'); } catch(_) {}
     } catch (e) {
-        console.error('[LibraryExport] 棰樺簱閰嶇疆瀵煎嚭澶辫触:', e);
-        try { showMessage('棰樺簱閰嶇疆瀵煎嚭澶辫触: ' + (e && e.message || e), 'error'); } catch(_) {}
+        console.error('[LibraryExport] 题库配置导出失败:', e);
+        try { showMessage('题库配置导出失败: ' + (e && e.message || e), 'error'); } catch(_) {}
     }
 }
 
 // --- Helper Functions ---
-function normalizeExamIndex(list) {
-    const listeningIds = new Set(Array.isArray(window.listeningExamIndex) ? window.listeningExamIndex.map(exam => exam.id) : []);
-    return (Array.isArray(list) ? list : []).map(exam => {
-        const normalized = { ...exam };
-        if (!normalized.type) {
-            normalized.type = listeningIds.has(normalized.id) ? 'listening' : 'reading';
-        }
-        if (!normalized.searchText) {
-            normalized.searchText = `${normalized.title || ''} ${normalized.category || ''}`.toLowerCase();
-        }
-        return normalized;
-    });
-}
 function getViewName(viewName) {
     switch (viewName) {
-        case 'overview': return '鎬昏';
-        case 'browse': return '棰樺簱娴忚';
-        case 'practice': return '缁冧範璁板綍';
-        case 'settings': return '璁剧疆';
+        case 'overview': return '总览';
+        case 'browse': return '题库浏览';
+        case 'practice': return '练习记录';
+        case 'settings': return '设置';
         default: return '';
     }
 }
@@ -901,7 +898,7 @@ function showMessage(message, type = 'info', duration = 4000) {
     if (!container) return;
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${type}`;
-    messageDiv.innerHTML = '<strong>' + (type === 'error' ? '閿欒' : '鎴愬姛') + '</strong> ' + (message || '');
+    messageDiv.innerHTML = '<strong>' + (type === 'error' ? '错误' : '成功') + '</strong> ' + (message || '');
     container.appendChild(messageDiv);
     setTimeout(() => {
         messageDiv.style.opacity = '0';
@@ -929,14 +926,14 @@ async function saveLibraryConfiguration(name, key, examCount) {
         }
         await storage.set('exam_index_configurations', configs);
     } catch (e) {
-        console.error('[LibraryConfig] 淇濆瓨棰樺簱閰嶇疆澶辫触:', e);
+        console.error('[LibraryConfig] 保存题库配置失败:', e);
     }
 }
 async function setActiveLibraryConfiguration(key) {
     try {
         await storage.set('active_exam_index_key', key);
     } catch (e) {
-        console.error('[LibraryConfig] 璁剧疆娲诲姩棰樺簱閰嶇疆澶辫触:', e);
+        console.error('[LibraryConfig] 设置活动题库配置失败:', e);
     }
 }
 function triggerFolderPicker() { document.getElementById('folder-picker').click(); }
@@ -967,48 +964,48 @@ function showLibraryLoaderModal() {
     modal.style.backdropFilter = 'blur(20px)';
     modal.innerHTML = `
         <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 20px 20px 0 0;">
-            <h2 style="margin: 0; font-size: 1.5em; font-weight: 600;">馃摎 鍔犺浇棰樺簱</h2>
-            <button class="modal-close" aria-label="鍏抽棴" style="background: rgba(255,255,255,0.2); border: none; color: white; width: 32px; height: 32px; border-radius: 50%; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;">脳</button>
+            <h2 style="margin: 0; font-size: 1.5em; font-weight: 600;">📚 加载题库</h2>
+            <button class="modal-close" aria-label="关闭" style="background: rgba(255,255,255,0.2); border: none; color: white; width: 32px; height: 32px; border-radius: 50%; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;">×</button>
         </div>
         <div class="modal-body" style="padding: 30px;">
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
                 <div style="border: 2px solid rgba(102, 126, 234, 0.2); border-radius: 16px; padding: 24px; background: linear-gradient(135deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05)); transition: all 0.3s ease;">
-                    <h3 style="margin: 0 0 12px 0; color: #667eea; font-size: 1.2em;">馃摉 闃呰棰樺簱鍔犺浇</h3>
-                    <p style="margin: 0 0 20px 0; color: #64748b; line-height: 1.6;">鏀寔鍏ㄩ噺閲嶈浇涓庡閲忔洿鏂般€傝涓婁紶鍖呭惈棰樼洰HTML/PDF鐨勬牴鏂囦欢澶广€?/p>
+                    <h3 style="margin: 0 0 12px 0; color: #667eea; font-size: 1.2em;">📖 阅读题库加载</h3>
+                    <p style="margin: 0 0 20px 0; color: #64748b; line-height: 1.6;">支持全量重载与增量更新。请上传包含题目HTML/PDF的根文件夹。</p>
                     <div style="display:flex; gap:12px; flex-wrap: wrap;">
-                        <button class="btn" id="reading-full-btn" style="background: linear-gradient(135deg, #667eea, #764ba2); border: none; color: white; padding: 12px 20px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">鍏ㄩ噺閲嶈浇</button>
-                        <button class="btn btn-secondary" id="reading-inc-btn" style="background: rgba(102, 126, 234, 0.1); border: 2px solid rgba(102, 126, 234, 0.3); color: #667eea; padding: 12px 20px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">澧為噺鏇存柊</button>
+                        <button class="btn" id="reading-full-btn" style="background: linear-gradient(135deg, #667eea, #764ba2); border: none; color: white; padding: 12px 20px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">全量重载</button>
+                        <button class="btn btn-secondary" id="reading-inc-btn" style="background: rgba(102, 126, 234, 0.1); border: 2px solid rgba(102, 126, 234, 0.3); color: #667eea; padding: 12px 20px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">增量更新</button>
                     </div>
                     <input type="file" id="reading-full-input" webkitdirectory multiple style="display:none;" />
                     <input type="file" id="reading-inc-input" webkitdirectory multiple style="display:none;" />
                     <div style="margin-top:16px; font-size: 0.85em; color: #94a3b8;">
-                        馃挕 寤鸿璺緞锛?../3. 鎵€鏈夋枃绔?9.4)[134绡嘳/...
+                        💡 建议路径：.../3. 所有文章(9.4)[134篇]/...
                     </div>
                 </div>
                 <div style="border: 2px solid rgba(118, 75, 162, 0.2); border-radius: 16px; padding: 24px; background: linear-gradient(135deg, rgba(118, 75, 162, 0.05), rgba(102, 126, 234, 0.05)); transition: all 0.3s ease;">
-                    <h3 style="margin: 0 0 12px 0; color: #764ba2; font-size: 1.2em;">馃帶 鍚姏棰樺簱鍔犺浇</h3>
-                    <p style="margin: 0 0 20px 0; color: #64748b; line-height: 1.6;">鏀寔鍏ㄩ噺閲嶈浇涓庡閲忔洿鏂般€傝涓婁紶鍖呭惈棰樼洰HTML/PDF/闊抽鐨勬牴鏂囦欢澶广€?/p>
+                    <h3 style="margin: 0 0 12px 0; color: #764ba2; font-size: 1.2em;">🎧 听力题库加载</h3>
+                    <p style="margin: 0 0 20px 0; color: #64748b; line-height: 1.6;">支持全量重载与增量更新。请上传包含题目HTML/PDF/音频的根文件夹。</p>
                     <div style="display:flex; gap:12px; flex-wrap: wrap;">
-                        <button class="btn" id="listening-full-btn" style="background: linear-gradient(135deg, #764ba2, #667eea); border: none; color: white; padding: 12px 20px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">鍏ㄩ噺閲嶈浇</button>
-                        <button class="btn btn-secondary" id="listening-inc-btn" style="background: rgba(118, 75, 162, 0.1); border: 2px solid rgba(118, 75, 162, 0.3); color: #764ba2; padding: 12px 20px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">澧為噺鏇存柊</button>
+                        <button class="btn" id="listening-full-btn" style="background: linear-gradient(135deg, #764ba2, #667eea); border: none; color: white; padding: 12px 20px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">全量重载</button>
+                        <button class="btn btn-secondary" id="listening-inc-btn" style="background: rgba(118, 75, 162, 0.1); border: 2px solid rgba(118, 75, 162, 0.3); color: #764ba2; padding: 12px 20px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">增量更新</button>
                     </div>
                     <input type="file" id="listening-full-input" webkitdirectory multiple style="display:none;" />
                     <input type="file" id="listening-inc-input" webkitdirectory multiple style="display:none;" />
                     <div style="margin-top:16px; font-size: 0.85em; color: #94a3b8;">
-                        馃挕 寤鸿璺緞锛歀isteningPractice/P3 鎴?ListeningPractice/P4
+                        💡 建议路径：ListeningPractice/P3 或 ListeningPractice/P4
                     </div>
                 </div>
             </div>
             <div style="margin-top:24px; padding: 20px; background: linear-gradient(135deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05)); border-radius: 12px; border: 1px solid rgba(102, 126, 234, 0.1);">
-                <div style="font-weight:600; color: #1e293b; margin-bottom: 12px; font-size: 1.1em;">馃搵 鎿嶄綔璇存槑</div>
+                <div style="font-weight:600; color: #1e293b; margin-bottom: 12px; font-size: 1.1em;">📋 操作说明</div>
                 <ul style="margin:0; padding-left: 20px; line-height:1.7; color: #64748b;">
-                    <li>鍏ㄩ噺閲嶈浇浼氭浛鎹㈠綋鍓嶉厤缃腑瀵瑰簲绫诲瀷锛堥槄璇?鍚姏锛夌殑鍏ㄩ儴绱㈠紩锛屽苟淇濈暀鍙︿竴绫诲瀷鍘熸湁鏁版嵁銆?/li>
-                    <li>澧為噺鏇存柊浼氬皢鏂版枃浠剁敓鎴愮殑鏂扮储寮曡拷鍔犲埌褰撳墠閰嶇疆銆傝嫢褰撳墠涓洪粯璁ら厤缃紝鍒欎細鑷姩澶嶅埗涓烘柊閰嶇疆鍚庡啀杩藉姞锛岀‘淇濋粯璁ら厤缃笉琚奖鍝嶃€?/li>
+                    <li>全量重载会替换当前配置中对应类型（阅读/听力）的全部索引，并保留另一类型原有数据。</li>
+                    <li>增量更新会将新文件生成的新索引追加到当前配置。若当前为默认配置，则会自动复制为新配置后再追加，确保默认配置不被影响。</li>
                 </ul>
             </div>
         </div>
         <div class="modal-footer" style="padding: 20px 30px; background: rgba(248, 250, 252, 0.8); border-radius: 0 0 20px 20px; border-top: 1px solid rgba(226, 232, 240, 0.5);">
-            <button class="btn btn-secondary" id="close-loader" style="background: rgba(100, 116, 139, 0.1); border: 2px solid rgba(100, 116, 139, 0.2); color: #64748b; padding: 12px 24px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">鍏抽棴</button>
+            <button class="btn btn-secondary" id="close-loader" style="background: rgba(100, 116, 139, 0.1); border: 2px solid rgba(100, 116, 139, 0.2); color: #64748b; padding: 12px 24px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">关闭</button>
         </div>
     `;
 
@@ -1062,20 +1059,20 @@ async function handleLibraryUpload(options, files) {
     try {
         let label = '';
         if (mode === 'incremental') {
-            label = prompt('涓烘娆″閲忔洿鏂拌緭鍏ヤ竴涓枃浠跺す鏍囩', '澧為噺-' + new Date().toISOString().slice(0,10)) || '';
+            label = prompt('为此次增量更新输入一个文件夹标签', '增量-' + new Date().toISOString().slice(0,10)) || '';
             if (label) {
-                showMessage('浣跨敤鏍囩: ' + label, 'info');
+                showMessage('使用标签: ' + label, 'info');
             }
             if (!detectFolderPlacement(files, type)) {
-                const proceed = confirm('妫€娴嬪埌鏂囦欢澶逛笉鍦ㄦ帹鑽愮殑缁撴瀯涓€俓n闃呰: ...\n鍚姏: ListeningPractice/P3 or P4\n鏄惁缁х画?');
+                const proceed = confirm('检测到文件夹不在推荐的结构中。\n阅读: ...\n听力: ListeningPractice/P3 or P4\n是否继续?');
                 if (!proceed) return;
             }
         }
 
-        showMessage('姝ｅ湪瑙ｆ瀽鏂囦欢骞舵瀯寤虹储寮?..', 'info');
+        showMessage('正在解析文件并构建索引...', 'info');
         const additions = await buildIndexFromFiles(files, type, label);
         if (additions.length === 0) {
-            showMessage('浠庢墍閫夋枃浠朵腑鏈娴嬪埌浠讳綍棰樼洰', 'warning');
+            showMessage('从所选文件中未检测到任何题目', 'warning');
             return;
         }
 
@@ -1094,11 +1091,11 @@ async function handleLibraryUpload(options, files) {
             newIndex = [...currentIndex, ...dedupAdd];
         }
 
-        // 瀵逛簬鍏ㄩ噺閲嶈浇锛屽垱寤轰竴涓柊鐨勯搴撻厤缃苟鑷姩鍒囨崲
+        // 对于全量重载，创建一个新的题库配置并自动切换
         if (mode === 'full') {
             const targetKey = `exam_index_${Date.now()}`;
-            const configName = `${type === 'reading' ? '闃呰' : '鍚姏'}鍏ㄩ噺-${new Date().toLocaleString()}`;
-            // 纭繚鍙︿竴绫诲瀷瀛樺湪锛屽涓嶅瓨鍦ㄥ垯琛ラ綈榛樿宓屽叆鏁版嵁
+            const configName = `${type === 'reading' ? '阅读' : '听力'}全量-${new Date().toLocaleString()}`;
+            // 确保另一类型存在，如不存在则补齐默认嵌入数据
             const otherType = type === 'reading' ? 'listening' : 'reading';
             const hasOther = newIndex.some(e => e.type === otherType);
             if (!hasOther) {
@@ -1110,9 +1107,9 @@ async function handleLibraryUpload(options, files) {
             await storage.set(targetKey, newIndex);
             await saveLibraryConfiguration(configName, targetKey, newIndex.length);
             await setActiveLibraryConfiguration(targetKey);
-            // 瀵煎嚭涓烘椂闂村懡鍚嶈剼鏈紝渚夸簬缁熶竴绠＄悊
+            // 导出为时间命名脚本，便于统一管理
             try { exportExamIndexToScriptFile(newIndex, configName); } catch(_) {}
-            showMessage('鏂扮殑棰樺簱閰嶇疆宸插垱寤哄苟婵€娲伙紱姝ｅ湪閲嶆柊鍔犺浇...', 'success');
+            showMessage('新的题库配置已创建并激活；正在重新加载...', 'success');
             setTimeout(() => { location.reload(); }, 800);
             return;
         }
@@ -1123,37 +1120,37 @@ async function handleLibraryUpload(options, files) {
         if (mode === 'incremental' && isDefault) {
             // Create a new configuration so as not to affect default
             targetKey = `exam_index_${Date.now()}`;
-            configName = `${type === 'reading' ? '闃呰' : '鍚姏'}澧為噺-${new Date().toLocaleString()}`;
+            configName = `${type === 'reading' ? '阅读' : '听力'}增量-${new Date().toLocaleString()}`;
             await storage.set(targetKey, newIndex);
             await saveLibraryConfiguration(configName, targetKey, newIndex.length);
             await setActiveLibraryConfiguration(targetKey);
-            showMessage('鏂扮殑棰樺簱閰嶇疆宸插垱寤哄苟婵€娲伙紱姝ｅ湪閲嶆柊鍔犺浇...', 'success');
+            showMessage('新的题库配置已创建并激活；正在重新加载...', 'success');
             setTimeout(() => { location.reload(); }, 800);
             return;
         }
 
-        // Save to the current active key锛堥潪榛樿閰嶇疆涓嬬殑澧為噺鏇存柊锛?
+        // Save to the current active key（非默认配置下的增量更新）
         await storage.set(targetKey, newIndex);
-        const incName = `${type === 'reading' ? '闃呰' : '鍚姏'}澧為噺-${new Date().toLocaleString()}`;
+        const incName = `${type === 'reading' ? '阅读' : '听力'}增量-${new Date().toLocaleString()}`;
         await saveLibraryConfiguration(incName, targetKey, newIndex.length);
-        showMessage('绱㈠紩宸叉洿鏂帮紱姝ｅ湪鍒锋柊鐣岄潰...', 'success');
+        showMessage('索引已更新；正在刷新界面...', 'success');
         examIndex = newIndex;
-        // 涔熷鍑轰竴娆★紝渚夸簬褰掓。
+        // 也导出一次，便于归档
         try { exportExamIndexToScriptFile(newIndex, incName); } catch(_) {}
         updateOverview();
         if (document.getElementById('browse-view')?.classList.contains('active')) {
             loadExamList();
         }
     } catch (error) {
-        console.error('[LibraryLoader] 澶勭悊棰樺簱涓婁紶澶辫触:', error);
-        showMessage('棰樺簱澶勭悊澶辫触: ' + error.message, 'error');
+        console.error('[LibraryLoader] 处理题库上传失败:', error);
+        showMessage('题库处理失败: ' + error.message, 'error');
     }
 }
 
 function detectFolderPlacement(files, type) {
     const paths = files.map(f => f.webkitRelativePath || f.name);
     if (type === 'reading') {
-        return paths.some(p => /鐫＄潃杩囬」鐩粍\(9\.4\)\[134绡嘰]\/3\. 鎵€鏈夋枃绔燶(9\.4\)\[134绡嘰]\//.test(p));
+        return paths.some(p => /睡着过项目组\(9\.4\)\[134篇\]\/3\. 所有文章\(9\.4\)\[134篇\]\//.test(p));
     } else {
         return paths.some(p => /^ListeningPractice\/(P3|P4)\//.test(p));
     }
@@ -1211,7 +1208,7 @@ async function buildIndexFromFiles(files, type, label = '') {
 // ... other utility and management functions can be moved here ...
 // --- Functions Restored from Backup ---
 
-// 鍏煎瀵煎叆锛氭敮鎸佸绉嶆棫鏍煎紡锛坮ecords/practice_records 椤跺眰/宓屽锛夛紝鑷姩褰掍竴鍖栧苟鍚堝苟
+// 兼容导入：支持多种旧格式（records/practice_records 顶层/嵌套），自动归一化并合并
 async function importData() {
     try {
         const input = document.createElement('input');
@@ -1223,11 +1220,12 @@ async function importData() {
             const text = await file.text();
             let json;
             try { json = JSON.parse(text); } catch (err) {
-                showMessage('瀵煎叆澶辫触锛欽SON 瑙ｆ瀽閿欒', 'error');
+                showMessage('导入失败：JSON 解析错误', 'error');
                 return;
             }
 
-            // 鎻愬彇璁板綍鏁扮粍锛堝敖鍙兘鍏煎锛?            let imported = [];
+            // 提取记录数组（尽可能兼容）
+            let imported = [];
             if (Array.isArray(json)) {
                 imported = json;
             } else if (Array.isArray(json.records)) {
@@ -1242,17 +1240,18 @@ async function importData() {
 
             if (!Array.isArray(imported)) imported = [];
 
-            // 褰掍竴鍖栨瘡鏉¤褰曪紝淇濈暀瀛楁浠ラ€傞厤褰撳墠 UI/缁熻
+            // 归一化每条记录，保留字段以适配当前 UI/统计
             const normalized = imported.map((r) => {
                 try {
                     const base = { ...r };
-                    // 缁熶竴 id 绫诲瀷
+                    // 统一 id 类型
                     if (base.id == null) base.id = Date.now() + Math.random().toString(36).slice(2,9);
-                    // 鏃堕棿涓庢椂闀?                    if (!base.startTime && base.date) base.startTime = base.date;
+                    // 时间与时长
+                    if (!base.startTime && base.date) base.startTime = base.date;
                     if (!base.endTime && base.startTime && typeof base.duration === 'number') {
                         base.endTime = new Date(new Date(base.startTime).getTime() + (base.duration*1000)).toISOString();
                     }
-                    // 缁熻瀛楁
+                    // 统计字段
                     const rd = base.realData || {};
                     const sInfo = base.scoreInfo || rd.scoreInfo || {};
                     const correct = typeof base.correctAnswers === 'number' ? base.correctAnswers : (typeof base.score === 'number' ? base.score : (typeof sInfo.correct === 'number' ? sInfo.correct : 0));
@@ -1264,17 +1263,19 @@ async function importData() {
                     base.totalQuestions = total;
                     base.accuracy = acc;
                     base.percentage = pct;
-                    // 纭繚 answers/answerComparison 缁撴瀯瀛樺湪
+                    // 确保 answers/answerComparison 结构存在
                     if (!base.answers && rd.answers) base.answers = rd.answers;
                     if (!base.answerComparison && rd.answerComparison) base.answerComparison = rd.answerComparison;
-                    // 鏈€缁堜繚璇佸繀瑕佸瓧娈?                    if (!base.date && base.startTime) base.date = base.startTime;
+                    // 最终保证必要字段
+                    if (!base.date && base.startTime) base.date = base.startTime;
                     return base;
                 } catch (_) {
                     return r;
                 }
             });
 
-            // 鍚堝苟鍏ュ簱锛堝幓閲嶏細鎸?id/sessionId锛?            let existing = await storage.get('practice_records', []);
+            // 合并入库（去重：按 id/sessionId）
+            let existing = await storage.get('practice_records', []);
             existing = Array.isArray(existing) ? existing : [];
             const byId = new Map(existing.map(x => [String(x.id), true]));
             const bySession = new Map(existing.map(x => [String(x.sessionId||''), true]));
@@ -1287,13 +1288,13 @@ async function importData() {
             }
 
             await storage.set('practice_records', merged);
-            showMessage(`瀵煎叆瀹屾垚锛氭柊澧?${merged.length - existing.length} 鏉¤褰昤, 'success');
+            showMessage(`导入完成：新增 ${merged.length - existing.length} 条记录`, 'success');
             syncPracticeRecords();
         };
         input.click();
     } catch (e) {
-        console.error('瀵煎叆澶辫触:', e);
-        showMessage('瀵煎叆澶辫触: ' + e.message, 'error');
+        console.error('导入失败:', e);
+        showMessage('导入失败: ' + e.message, 'error');
     }
 }
 
@@ -1314,20 +1315,20 @@ function performSearch(query) {
         return;
     }
     
-    // 璋冭瘯鏃ュ織
-    console.log('[Search] 鎵ц鎼滅储锛屾煡璇㈣瘝:', normalizedQuery);
-    console.log('[Search] 褰撳墠 filteredExams 鏁伴噺:', (filteredExams || []).length);
+    // 调试日志
+    console.log('[Search] 执行搜索，查询词:', normalizedQuery);
+    console.log('[Search] 当前 filteredExams 数量:', (filteredExams || []).length);
     
     const searchResults = (filteredExams || examIndex).filter(exam => {
         if (exam.searchText) {
             return exam.searchText.includes(normalizedQuery);
         }
-        // Fallback 鍖归厤
+        // Fallback 匹配
         return (exam.title && exam.title.toLowerCase().includes(normalizedQuery)) ||
                (exam.category && exam.category.toLowerCase().includes(normalizedQuery));
     });
     
-    console.log('[Search] 鎼滅储缁撴灉鏁伴噺:', searchResults.length);
+    console.log('[Search] 搜索结果数量:', searchResults.length);
     displayExams(searchResults);
 }
 
@@ -1338,11 +1339,11 @@ async function exportPracticeData() {
         const stats = window.app && window.app.userStats ? window.app.userStats : (window.practiceStats || {});
 
         if (!records || records.length === 0) {
-            showMessage('娌℃湁缁冧範鏁版嵁鍙鍑?, 'info');
+            showMessage('没有练习数据可导出', 'info');
             return;
         }
 
-        showMessage('姝ｅ湪鍑嗗瀵煎嚭...', 'info');
+        showMessage('正在准备导出...', 'info');
         setTimeout(() => {
             try {
                 const data = {
@@ -1361,15 +1362,15 @@ async function exportPracticeData() {
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
 
-                showMessage('瀵煎嚭瀹屾垚', 'success');
+                showMessage('导出完成', 'success');
             } catch (error) {
-                console.error('瀵煎嚭澶辫触:', error);
-                showMessage('瀵煎嚭澶辫触: ' + error.message, 'error');
+                console.error('导出失败:', error);
+                showMessage('导出失败: ' + error.message, 'error');
             }
         }, 100);
     } catch (e) {
-        console.error('瀵煎嚭澶辫触:', e);
-        showMessage('瀵煎嚭澶辫触: ' + e.message, 'error');
+        console.error('导出失败:', e);
+        showMessage('导出失败: ' + e.message, 'error');
     }
 }
 function toggleBulkDelete() {
@@ -1377,18 +1378,18 @@ function toggleBulkDelete() {
     const btn = document.getElementById('bulk-delete-btn');
 
     if (bulkDeleteMode) {
-        btn.textContent = '鉁?瀹屾垚閫夋嫨';
+        btn.textContent = '✓ 完成选择';
         btn.classList.remove('btn-info');
         btn.classList.add('btn-success');
         selectedRecords.clear();
-        showMessage('鎵归噺绠＄悊妯″紡宸插紑鍚紝鐐瑰嚮璁板綍杩涜閫夋嫨', 'info');
+        showMessage('批量管理模式已开启，点击记录进行选择', 'info');
     } else {
-        btn.textContent = '馃摑 鎵归噺绠＄悊';
+        btn.textContent = '📝 批量管理';
         btn.classList.remove('btn-success');
         btn.classList.add('btn-info');
 
         if (selectedRecords.size > 0) {
-            const confirmMessage = `纭畾瑕佸垹闄ら€変腑鐨?${selectedRecords.size} 鏉¤褰曞悧锛熸鎿嶄綔涓嶅彲鎭㈠銆俙;
+            const confirmMessage = `确定要删除选中的 ${selectedRecords.size} 条记录吗？此操作不可恢复。`;
             if (confirm(confirmMessage)) {
                 bulkDeleteRecords();
             }
@@ -1410,8 +1411,8 @@ async function bulkDeleteRecords() {
 
     syncPracticeRecords(); // Re-sync and update UI
 
-    showMessage(`宸插垹闄?${deletedCount} 鏉¤褰昤, 'success');
-    console.log(`[System] 鎵归噺鍒犻櫎浜?${deletedCount} 鏉＄粌涔犺褰昤);
+    showMessage(`已删除 ${deletedCount} 条记录`, 'success');
+    console.log(`[System] 批量删除了 ${deletedCount} 条练习记录`);
 }
 
 function toggleRecordSelection(recordId) {
@@ -1428,7 +1429,7 @@ function toggleRecordSelection(recordId) {
 
 async function deleteRecord(recordId) {
     if (!recordId) {
-        showMessage('璁板綍ID鏃犳晥', 'error');
+        showMessage('记录ID无效', 'error');
         return;
     }
 
@@ -1436,12 +1437,12 @@ async function deleteRecord(recordId) {
     const recordIndex = records.findIndex(record => String(record.id) === String(recordId));
 
     if (recordIndex === -1) {
-        showMessage('鏈壘鍒拌褰?, 'error');
+        showMessage('未找到记录', 'error');
         return;
     }
 
     const record = records[recordIndex];
-    const confirmMessage = `纭畾瑕佸垹闄よ繖鏉＄粌涔犺褰曞悧锛焅n\n棰樼洰: ${record.title}\n鏃堕棿: ${new Date(record.date).toLocaleString()}\n\n姝ゆ搷浣滀笉鍙仮澶嶃€俙;
+    const confirmMessage = `确定要删除这条练习记录吗？\n\n题目: ${record.title}\n时间: ${new Date(record.date).toLocaleString()}\n\n此操作不可恢复。`;
 
     if (confirm(confirmMessage)) {
         const historyItem = document.querySelector(`[data-record-id="${recordId}"]`);
@@ -1453,7 +1454,7 @@ async function deleteRecord(recordId) {
                     records.splice(recordIndex, 1);
                     await storage.set('practice_records', records);
                     syncPracticeRecords(); // Re-sync and update UI
-                    showMessage('璁板綍宸插垹闄?, 'success');
+                    showMessage('记录已删除', 'success');
                 }, 300);
             }, 200);
         } else {
@@ -1461,30 +1462,30 @@ async function deleteRecord(recordId) {
             records.splice(recordIndex, 1);
             await storage.set('practice_records', records);
             syncPracticeRecords();
-            showMessage('璁板綍宸插垹闄?, 'success');
+            showMessage('记录已删除', 'success');
         }
     }
 }
 
 async function clearPracticeData() {
-    if (confirm('纭畾瑕佹竻闄ゆ墍鏈夌粌涔犺褰曞悧锛熸鎿嶄綔涓嶅彲鎭㈠銆?)) {
+    if (confirm('确定要清除所有练习记录吗？此操作不可恢复。')) {
         practiceRecords = [];
         await storage.set('practice_records', []); // Use storage helper
         processedSessions.clear();
         updatePracticeView();
-        showMessage('缁冧範璁板綍宸叉竻闄?, 'success');
+        showMessage('练习记录已清除', 'success');
     }
 }
 
 function clearCache() {
-    if (confirm('纭畾瑕佹竻闄ゆ墍鏈夌紦瀛樻暟鎹悧锛?)) {
+    if (confirm('确定要清除所有缓存数据吗？')) {
         localStorage.clear();
         sessionStorage.clear();
         if (window.performanceOptimizer) {
             // This assumes performanceOptimizer has a cleanup method
             // window.performanceOptimizer.cleanup(); 
         }
-        showMessage('缂撳瓨宸叉竻闄?, 'success');
+        showMessage('缓存已清除', 'success');
         setTimeout(() => { location.reload(); }, 1000);
     }
 }
@@ -1493,13 +1494,13 @@ async function showLibraryConfigList() {
     const configs = await getLibraryConfigurations();
 
     if (configs.length === 0) {
-        showMessage('鏆傛棤棰樺簱閰嶇疆璁板綍', 'info');
+        showMessage('暂无题库配置记录', 'info');
         return;
     }
 
     let configHtml = `
                 <div style="background: rgba(255, 255, 255, 0.1); padding: 20px; border-radius: 10px; margin: 20px 0;">
-                    <h3>馃摎 棰樺簱閰嶇疆鍒楄〃</h3>
+                    <h3>📚 题库配置列表</h3>
                     <div style="max-height: 300px; overflow-y: auto; margin: 15px 0;">
             `;
 
@@ -1507,17 +1508,17 @@ async function showLibraryConfigList() {
     configs.forEach(config => {
         const date = new Date(config.timestamp).toLocaleString();
         const isActive = activeKey === config.key;
-        const activeIndicator = isActive ? ' (褰撳墠)' : '';
+        const activeIndicator = isActive ? ' (当前)' : '';
 
         configHtml += `
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.1);">
                         <div>
                             <strong>${config.name}</strong> ${activeIndicator}<br>
-                            <small>${date} - ${config.examCount} 涓鐩?/small>
+                            <small>${date} - ${config.examCount} 个题目</small>
                         </div>
                         <div>
-                            <button class="btn btn-secondary" onclick="switchLibraryConfig('${config.key}')" style="margin-left: 10px;" ${isActive ? 'disabled' : ''}>鍒囨崲</button>
-                            <button class="btn btn-warning" onclick="deleteLibraryConfig('${config.key}')" style="margin-left: 10px;" ${isActive ? 'disabled' : ''}>鍒犻櫎</button>
+                            <button class="btn btn-secondary" onclick="switchLibraryConfig('${config.key}')" style="margin-left: 10px;" ${isActive ? 'disabled' : ''}>切换</button>
+                            <button class="btn btn-warning" onclick="deleteLibraryConfig('${config.key}')" style="margin-left: 10px;" ${isActive ? 'disabled' : ''}>删除</button>
                         </div>
                     </div>
                 `;
@@ -1525,11 +1526,11 @@ async function showLibraryConfigList() {
 
     configHtml += `
                     </div>
-                    <button class="btn btn-secondary" onclick="this.parentElement.remove()">鍏抽棴</button>
+                    <button class="btn btn-secondary" onclick="this.parentElement.remove()">关闭</button>
                 </div>
             `;
 
-    // 鏄剧ず閰嶇疆鍒楄〃
+    // 显示配置列表
     const container = document.getElementById('settings-view');
     const existingList = container.querySelector('.library-config-list');
     if (existingList) {
@@ -1542,60 +1543,60 @@ async function showLibraryConfigList() {
     container.appendChild(listDiv);
 }
 
-// 鍒囨崲棰樺簱閰嶇疆
+// 切换题库配置
 async function switchLibraryConfig(configKey) {
-    if (confirm('纭畾瑕佸垏鎹㈠埌杩欎釜棰樺簱閰嶇疆鍚楋紵椤甸潰灏嗕細鍒锋柊銆?)) {
+    if (confirm('确定要切换到这个题库配置吗？页面将会刷新。')) {
         await setActiveLibraryConfiguration(configKey);
-        showMessage('姝ｅ湪鍒囨崲棰樺簱閰嶇疆锛岄〉闈㈠皢鍒锋柊...', 'info');
+        showMessage('正在切换题库配置，页面将刷新...', 'info');
         setTimeout(() => {
             location.reload();
         }, 1000);
     }
 }
 
-// 鍒犻櫎棰樺簱閰嶇疆
+// 删除题库配置
 async function deleteLibraryConfig(configKey) {
     if (configKey === 'exam_index') {
-        showMessage('榛樿棰樺簱涓嶅彲鍒犻櫎', 'warning');
+        showMessage('默认题库不可删除', 'warning');
         return;
     }
-    if (confirm("纭畾瑕佸垹闄よ繖涓搴撻厤缃悧锛熸鎿嶄綔涓嶅彲鎭㈠銆?)) {
+    if (confirm("确定要删除这个题库配置吗？此操作不可恢复。")) {
         let configs = await getLibraryConfigurations();
         configs = configs.filter(config => config.key !== configKey);
         await storage.set('exam_index_configurations', configs);
-        await storage.remove(configKey); // 绉婚櫎瀹為檯鐨勯搴撴暟鎹?
+        await storage.remove(configKey); // 移除实际的题库数据
 
         
-        showMessage('棰樺簱閰嶇疆宸插垹闄?, 'success');
+        showMessage('题库配置已删除', 'success');
     }
 }
 
 function createManualBackup() {
     if (!window.dataIntegrityManager) {
-        showMessage('鏁版嵁绠＄悊妯″潡鏈垵濮嬪寲', 'error');
+        showMessage('数据管理模块未初始化', 'error');
         return;
     }
     (async () => {
         try {
             const backup = await window.dataIntegrityManager.createBackup(null, 'manual');
             if (backup && backup.external) {
-                showMessage('鏈湴瀛樺偍绌洪棿涓嶈冻锛屽凡灏嗗浠戒笅杞戒负鏂囦欢', 'warning');
+                showMessage('本地存储空间不足，已将备份下载为文件', 'warning');
             } else {
-                showMessage(`澶囦唤鍒涘缓鎴愬姛: ${backup.id}`, 'success');
+                showMessage(`备份创建成功: ${backup.id}`, 'success');
             }
-            // 鍒锋柊澶囦唤鍒楄〃锛堝鏋滅敤鎴锋墦寮€浜嗚缃〉锛?
+            // 刷新备份列表（如果用户打开了设置页）
             try { showBackupList(); } catch (_) {}
         } catch (error) {
             if (isQuotaExceeded(error)) {
                 try {
                     window.dataIntegrityManager.exportData();
-                    showMessage('瀛樺偍绌洪棿涓嶈冻锛氬凡灏嗘暟鎹鍑轰负鏂囦欢', 'warning');
+                    showMessage('存储空间不足：已将数据导出为文件', 'warning');
                 } catch (e2) {
-                    showMessage('澶囦唤澶辫触涓斿鍑哄け璐? ' + (e2 && e2.message ? e2.message : e2), 'error');
+                    showMessage('备份失败且导出失败: ' + (e2 && e2.message ? e2.message : e2), 'error');
                 }
             } else {
                 
-                showMessage('澶囦唤鍒涘缓澶辫触: ' + (error && error.message ? error.message : error), 'error');
+                showMessage('备份创建失败: ' + (error && error.message ? error.message : error), 'error');
             }
         }
     })();
@@ -1611,27 +1612,27 @@ function isQuotaExceeded(error) {
 
 function showBackupList() {
     if (!window.dataIntegrityManager) {
-        showMessage('鏁版嵁瀹屾暣鎬х鐞嗗櫒鏈垵濮嬪寲', 'error');
+        showMessage('数据完整性管理器未初始化', 'error');
         return;
     }
 
     const backups = window.dataIntegrityManager.getBackupList();
 
     if (backups.length === 0) {
-        showMessage('鏆傛棤澶囦唤璁板綍', 'info');
+        showMessage('暂无备份记录', 'info');
         return;
     }
 
     let backupHtml = `
                 <div style="background: rgba(255, 255, 255, 0.1); padding: 20px; border-radius: 10px; margin: 20px 0;">
-                    <h3>馃搵 澶囦唤鍒楄〃</h3>
+                    <h3>📋 备份列表</h3>
                     <div style="max-height: 300px; overflow-y: auto; margin: 15px 0;">
             `;
 
     backups.forEach(backup => {
         const date = new Date(backup.timestamp).toLocaleString();
         const sizeKB = Math.round(backup.size / 1024);
-        const typeIcon = backup.type === 'auto' ? '馃攧' : backup.type === 'manual' ? '馃懁' : '鈿狅笍';
+        const typeIcon = backup.type === 'auto' ? '🔄' : backup.type === 'manual' ? '👤' : '⚠️';
 
         backupHtml += `
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.1);">
@@ -1639,18 +1640,18 @@ function showBackupList() {
                             <strong>${typeIcon} ${backup.id}</strong><br>
                             <small>${date} - ${sizeKB} KB - v${backup.version}</small>
                         </div>
-                        <button class="btn btn-secondary" onclick="restoreBackup('${backup.id}')" style="margin-left: 10px;">鎭㈠</button>
+                        <button class="btn btn-secondary" onclick="restoreBackup('${backup.id}')" style="margin-left: 10px;">恢复</button>
                     </div>
                 `;
     });
 
     backupHtml += `
                     </div>
-                    <button class="btn btn-secondary" onclick="this.parentElement.remove()">鍏抽棴</button>
+                    <button class="btn btn-secondary" onclick="this.parentElement.remove()">关闭</button>
                 </div>
             `;
 
-    // 鏄剧ず澶囦唤鍒楄〃
+    // 显示备份列表
     const container = document.getElementById('settings-view');
     const existingList = container.querySelector('.backup-list');
     if (existingList) {
@@ -1663,34 +1664,34 @@ function showBackupList() {
     container.appendChild(listDiv);
 }
 
-// 鎭㈠澶囦唤
+// 恢复备份
 async function restoreBackup(backupId) {
     if (!window.dataIntegrityManager) {
-        showMessage('鏁版嵁瀹屾暣鎬х鐞嗗櫒鏈垵濮嬪寲', 'error');
+        showMessage('数据完整性管理器未初始化', 'error');
         return;
     }
 
-    if (!confirm(`纭畾瑕佹仮澶嶅浠?${backupId} 鍚楋紵褰撳墠鏁版嵁灏嗚瑕嗙洊銆俙)) {
+    if (!confirm(`确定要恢复备份 ${backupId} 吗？当前数据将被覆盖。`)) {
         return;
     }
 
     try {
-        showMessage('姝ｅ湪鎭㈠澶囦唤...', 'info');
+        showMessage('正在恢复备份...', 'info');
         await window.dataIntegrityManager.restoreBackup(backupId);
-        showMessage('澶囦唤鎭㈠鎴愬姛', 'success');
+        showMessage('备份恢复成功', 'success');
         // The page will now sync automatically without a reload.
     } catch (error) {
-        console.error('[DataManagement] 鎭㈠澶囦唤澶辫触:', error);
-        showMessage('澶囦唤鎭㈠澶辫触: ' + error.message, 'error');
+        console.error('[DataManagement] 恢复备份失败:', error);
+        showMessage('备份恢复失败: ' + error.message, 'error');
     }
 }
 
 function exportAllData() {
     if (window.dataIntegrityManager) {
         window.dataIntegrityManager.exportData();
-        showMessage('鏁版嵁瀵煎嚭鎴愬姛', 'success');
+        showMessage('数据导出成功', 'success');
     } else {
-        showMessage('鏁版嵁绠＄悊妯″潡鏈垵濮嬪寲', 'error');
+        showMessage('数据管理模块未初始化', 'error');
     }
 }
 
@@ -1702,19 +1703,19 @@ function importData() {
         input.onchange = async (event) => {
             const file = event.target.files[0];
             if (!file) return;
-            if (confirm('瀵煎叆鏁版嵁灏嗚鐩栧綋鍓嶆暟鎹紝纭畾缁х画鍚楋紵')) {
+            if (confirm('导入数据将覆盖当前数据，确定继续吗？')) {
                 try {
                     const result = await window.dataIntegrityManager.importData(file);
-                    showMessage(`鏁版嵁瀵煎叆鎴愬姛: ${result.importedCount} 涓」鐩甡, 'success');
+                    showMessage(`数据导入成功: ${result.importedCount} 个项目`, 'success');
                     // The page will now sync automatically without a reload.
                 } catch (error) {
-                    showMessage('鏁版嵁瀵煎叆澶辫触: ' + error.message, 'error');
+                    showMessage('数据导入失败: ' + error.message, 'error');
                 }
             }
         };
         input.click();
     } else {
-        showMessage('鏁版嵁绠＄悊妯″潡鏈垵濮嬪寲', 'error');
+        showMessage('数据管理模块未初始化', 'error');
     }
 }
 
@@ -1729,41 +1730,41 @@ function hideDeveloperTeam() {
 }
 
 function startRandomPractice(category, type = 'reading') {
-    // 澧炲姞鏁扮粍鍖栭槻寰?
+    // 增加数组化防御
     const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
     const categoryExams = list.filter(exam => exam.category === category && exam.type === type);
     if (categoryExams.length === 0) {
-        showMessage(`${category} ${type === 'reading' ? '闃呰' : '鍚姏'} 鍒嗙被鏆傛棤鍙敤棰樼洰`, 'error');
+        showMessage(`${category} ${type === 'reading' ? '阅读' : '听力'} 分类暂无可用题目`, 'error');
         return;
     }
     const randomExam = categoryExams[Math.floor(Math.random() * categoryExams.length)];
-    showMessage(`闅忔満閫夋嫨: ${randomExam.title}`, 'info');
+    showMessage(`随机选择: ${randomExam.title}`, 'info');
 
-    // 纭繚寮瑰嚭鏂扮獥鍙ｅ姞杞介鐩紙HTML鎴朠DF锛?
+    // 确保弹出新窗口加载题目（HTML或PDF）
     setTimeout(() => {
         if (randomExam.hasHtml) {
-            // 鏈塇TML鏂囦欢锛屽脊鍑烘柊绐楀彛
+            // 有HTML文件，弹出新窗口
             openExam(randomExam.id);
         } else {
-            // 鍙湁PDF鏂囦欢锛屼篃瑕佸脊鍑烘柊绐楀彛
+            // 只有PDF文件，也要弹出新窗口
             const fullPath = buildResourcePath(randomExam, 'pdf');
             const pdfWindow = window.open(fullPath, `exam_${randomExam.id}`, 'width=1200,height=800,scrollbars=yes,resizable=yes');
             if (pdfWindow) {
-                showMessage('姝ｅ湪鎵撳紑: ' + randomExam.title, 'success');
+                showMessage('正在打开: ' + randomExam.title, 'success');
             } else {
-                showMessage('鏃犳硶鎵撳紑绐楀彛锛岃妫€鏌ュ脊绐楄缃?, 'error');
+                showMessage('无法打开窗口，请检查弹窗设置', 'error');
             }
         }
     }, 1000);
 }
 
-// 鏀硅繘鐗堬細棰樺簱閰嶇疆鍒楄〃锛堥粯璁ら搴撲笉鍙垹闄わ紝鍙垏鎹級
+// 改进版：题库配置列表（默认题库不可删除，可切换）
 async function showLibraryConfigListV2() {
     let configs = await getLibraryConfigurations();
     if (configs.length === 0) {
         try {
             const count = Array.isArray(window.examIndex) ? window.examIndex.length : 0;
-            configs = [{ name: '榛樿棰樺簱', key: 'exam_index', examCount: count, timestamp: Date.now() }];
+            configs = [{ name: '默认题库', key: 'exam_index', examCount: count, timestamp: Date.now() }];
             await storage.set('exam_index_configurations', configs);
             const activeKey = await storage.get('active_exam_index_key');
             if (!activeKey) await storage.set('active_exam_index_key', 'exam_index');
@@ -1772,7 +1773,7 @@ async function showLibraryConfigListV2() {
 
     let html = `
         <div style="background: #D9CBBA; padding: 20px; border-radius: 10px; margin: 20px 0; border:2px solid #737373; box-shadow: 0 10px 30px rgba(0,0,0,0.35); color:#000000;">
-            <h3 style="margin:0 0 10px; color: #000000;">馃摎 棰樺簱閰嶇疆鍒楄〃</h3>
+            <h3 style="margin:0 0 10px; color: #000000;">📚 题库配置列表</h3>
             <div style="max-height: 320px; overflow-y: auto; margin: 10px 0;">
     `;
     const activeKey = await getActiveLibraryConfigurationKey();
@@ -1780,25 +1781,25 @@ async function showLibraryConfigListV2() {
         const date = new Date(cfg.timestamp).toLocaleString();
         const isActive = activeKey === cfg.key;
         const isDefault = cfg.key === 'exam_index';
-        const label = isDefault ? '榛樿棰樺簱' : (cfg.name || cfg.key);
-        const activeIndicator = isActive ? '锛堝綋鍓嶏級' : '';
+        const label = isDefault ? '默认题库' : (cfg.name || cfg.key);
+        const activeIndicator = isActive ? '（当前）' : '';
 
         html += `
             <div style="display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid rgba(0,0,0,0.1); color: #000000; background: linear-gradient(135deg, #BF755A, #a0654a); border-radius: 8px; margin: 5px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                 <div style="line-height:1.3;">
                     <strong style="color: #F2F2F2;">${label}</strong> ${activeIndicator}<br>
-                    <small style="color: #F2F2F2;">${date} - ${cfg.examCount || 0} 涓鐩?/small>
+                    <small style="color: #F2F2F2;">${date} - ${cfg.examCount || 0} 个题目</small>
                 </div>
                 <div>
-                    <button class="btn btn-secondary" onclick="switchLibraryConfig('${cfg.key}')" style="margin-left:10px;" ${isActive ? 'disabled' : ''}>鍒囨崲</button>
-                    ${isDefault ? '' : `<button class="btn btn-warning" onclick="deleteLibraryConfig('${cfg.key}')" style="margin-left:10px;" ${isActive ? 'disabled' : ''}>鍒犻櫎</button>`}
+                    <button class="btn btn-secondary" onclick="switchLibraryConfig('${cfg.key}')" style="margin-left:10px;" ${isActive ? 'disabled' : ''}>切换</button>
+                    ${isDefault ? '' : `<button class="btn btn-warning" onclick="deleteLibraryConfig('${cfg.key}')" style="margin-left:10px;" ${isActive ? 'disabled' : ''}>删除</button>`}
                 </div>
             </div>
         `;
     });
     html += `
             </div>
-            <button class="btn btn-secondary" onclick="this.parentElement.remove()">鍏抽棴</button>
+            <button class="btn btn-secondary" onclick="this.parentElement.remove()">关闭</button>
         </div>
     `;
 
@@ -1812,7 +1813,7 @@ async function showLibraryConfigListV2() {
 }
 
 
-// 锛堝凡绉婚櫎锛夊鍑鸿皟璇曚俊鎭嚱鏁板湪褰撳墠鐗堟湰涓嶅啀鏆撮湶鍒拌缃〉鎸夐挳
+// （已移除）导出调试信息函数在当前版本不再暴露到设置页按钮
 
 
 
@@ -1822,7 +1823,7 @@ async function exportPracticeData() {
     try {
         if (window.dataIntegrityManager && typeof window.dataIntegrityManager.exportData === 'function') {
             window.dataIntegrityManager.exportData();
-            try { showMessage('瀵煎嚭瀹屾垚', 'success'); } catch(_) {}
+            try { showMessage('导出完成', 'success'); } catch(_) {}
             return;
         }
     } catch(_) {}
@@ -1833,14 +1834,14 @@ async function exportPracticeData() {
         var a = document.createElement('a'); a.href = url; a.download = 'practice-records.json';
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        try { showMessage('瀵煎嚭瀹屾垚', 'success'); } catch(_) {}
+        try { showMessage('导出完成', 'success'); } catch(_) {}
     } catch(e) {
-        try { showMessage('瀵煎嚭澶辫触: ' + (e && e.message || e), 'error'); } catch(_) {}
+        try { showMessage('导出失败: ' + (e && e.message || e), 'error'); } catch(_) {}
         console.error('[Export] failed', e);
     }
 }
 
-// 鏂板淇3C锛氬湪js/main.js鏈熬娣诲姞鐩戝惉examIndexLoaded浜嬩欢锛岃皟鐢╨oadExamList()骞堕殣钘忔祻瑙堥〉spinner
+// 新增修复3C：在js/main.js末尾添加监听examIndexLoaded事件，调用loadExamList()并隐藏浏览页spinner
 window.addEventListener('examIndexLoaded', () => {
   try {
     if (typeof loadExamList === 'function') loadExamList();
@@ -1848,5 +1849,3 @@ window.addEventListener('examIndexLoaded', () => {
     if (loading) loading.style.display = 'none';
   } catch (_) {}
 });
-
-
