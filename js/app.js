@@ -784,8 +784,11 @@ class ExamSystemApp {
                 this.refreshOverviewData();
                 break;
             case 'browse':
-                // Initialize browse view when activated
-                if (typeof window.initializeBrowseView === 'function') {
+                // 如果存在待应用的筛选，则优先应用而不重置
+                if (window.__pendingBrowseFilter && typeof window.applyBrowseFilter === 'function') {
+                    const { category, type } = window.__pendingBrowseFilter;
+                    try { window.applyBrowseFilter(category, type); } finally { delete window.__pendingBrowseFilter; }
+                } else if (typeof window.initializeBrowseView === 'function') {
                     window.initializeBrowseView();
                 }
                 break;
@@ -830,16 +833,21 @@ class ExamSystemApp {
      * 浏览分类题目
      */
     browseCategory(category) {
-        if (this.components.examBrowser) {
-            this.components.examBrowser.showCategory(category);
-            this.navigateToView('browse');
+        try {
+            // 记录待应用筛选（类型将由 main.js 基于题库推断）
+            window.__pendingBrowseFilter = { category };
+        } catch (_) {}
 
-            // 更新浏览页面标题
-            const browseTitle = document.getElementById('browse-title');
-            if (browseTitle) {
-                browseTitle.textContent = `${category} 题库浏览`;
+        // 无论是否存在旧的 ExamBrowser，都统一走新浏览视图
+        this.navigateToView('browse');
+
+        // 立即尝试应用（如果浏览视图已在当前激活）
+        try {
+            if (typeof window.applyBrowseFilter === 'function' && document.getElementById('browse-view')?.classList.contains('active')) {
+                window.applyBrowseFilter(category);
+                delete window.__pendingBrowseFilter;
             }
-        }
+        } catch (_) {}
     }
 
     /**
@@ -941,14 +949,23 @@ class ExamSystemApp {
         const windowFeatures = this.calculateWindowFeatures();
 
         // 打开新窗口
-        const examWindow = window.open(
-            examUrl,
-            `exam_${exam.id}`,
-            windowFeatures
-        );
+        let examWindow = null;
+        try {
+            examWindow = window.open(
+                examUrl,
+                `exam_${exam.id}`,
+                windowFeatures
+            );
+        } catch (_) {}
 
+        // 弹窗被拦截时，降级为当前窗口打开，确保用户可进入练习页
         if (!examWindow) {
-            throw new Error('无法打开新窗口，请检查浏览器弹窗设置');
+            try {
+                window.location.href = examUrl;
+                return window; // 以当前窗口作为返回引用
+            } catch (e) {
+                throw new Error('无法打开题目页面，请检查弹窗/文件路径设置');
+            }
         }
 
         return examWindow;

@@ -511,6 +511,41 @@ function filterByType(type) {
     loadExamList();
 }
 
+// 应用分类筛选（供 App/总览调用）
+function applyBrowseFilter(category = 'all', type = null) {
+    try {
+        // 若未显式给出类型，则根据当前题库推断（同时存在时不限定类型）
+        if (!type || type === 'all') {
+            try {
+                const hasReading = (examIndex || []).some(e => e.category === category && e.type === 'reading');
+                const hasListening = (examIndex || []).some(e => e.category === category && e.type === 'listening');
+                if (hasReading && !hasListening) type = 'reading';
+                else if (!hasReading && hasListening) type = 'listening';
+                else type = 'all';
+            } catch (_) { type = 'all'; }
+        }
+
+        currentExamType = type;
+        currentCategory = category || 'all';
+
+        // 保持标题简洁
+        const titleEl = document.getElementById('browse-title');
+        if (titleEl) titleEl.textContent = '📚 题库浏览';
+
+        // 若未在浏览视图，则尽力切换
+        if (typeof window.showView === 'function' && !document.getElementById('browse-view')?.classList.contains('active')) {
+            window.showView('browse', false);
+        }
+
+        loadExamList();
+    } catch (e) {
+        console.warn('[Browse] 应用筛选失败，回退到默认列表:', e);
+        currentExamType = 'all';
+        currentCategory = 'all';
+        loadExamList();
+    }
+}
+
 // Initialize browse view when it's activated
 function initializeBrowseView() {
     console.log('[System] Initializing browse view...');
@@ -736,10 +771,19 @@ function openPDFSafely(pdfPath, examTitle = 'PDF') {
         if (pdfHandler && typeof pdfHandler.openPDF === 'function') {
             return pdfHandler.openPDF(pdfPath, examTitle, { width: 1000, height: 800 });
         }
-        const pdfWindow = window.open(pdfPath, `pdf_${Date.now()}`, 'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes');
+        let pdfWindow = null;
+        try {
+            pdfWindow = window.open(pdfPath, `pdf_${Date.now()}`, 'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes');
+        } catch (_) {}
         if (!pdfWindow) {
-            showMessage('无法打开PDF窗口，请检查弹窗设置', 'error');
-            return null;
+            try {
+                // 降级：当前窗口打开
+                window.location.href = pdfPath;
+                return window;
+            } catch (e) {
+                showMessage('无法打开PDF窗口，请检查弹窗设置', 'error');
+                return null;
+            }
         }
         showMessage('正在打开PDF...', 'info');
         return pdfWindow;
