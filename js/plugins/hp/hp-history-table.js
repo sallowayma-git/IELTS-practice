@@ -57,28 +57,43 @@
     return true;
   }
 
-  function ensureFilterBar(){
+  function setupFilterControls(){
     var cont = document.getElementById('practice-history-container');
     if (!cont) return;
-    if (document.getElementById('hp-history-filters')) return;
-    var bar = document.createElement('div');
-    bar.id = 'hp-history-filters';
-    bar.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin:8px 4px 12px 4px;';
-    function btn(label, t, c){
-      var b = document.createElement('button');
-      b.textContent = label;
-      b.className = 'btn btn-sm';
-      b.style.cssText = 'padding:6px 10px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.08);color:#fff;border-radius:8px;cursor:pointer;';
-      b.addEventListener('click', function(){ currentFilter={ type:t, category:c }; update(); });
-      return b;
+    var selects = cont.querySelectorAll('select');
+    if (!selects || !selects.length) return;
+    var sel = selects[0];
+    // Fill select by scanning examIndex for unique type-category pairs
+    try {
+      var seen = new Set();
+      var optsList = [{ v:'all', t:'全部' }];
+      var idx = (typeof hpCore!=='undefined' && hpCore.getExamIndex) ? hpCore.getExamIndex() : (window.examIndex||[]);
+      (idx||[]).forEach(function(ex){
+        var type = (ex && ex.type || '').toLowerCase();
+        var cat = (ex && (ex.category || ex.part) || '').toUpperCase();
+        if (!type || !cat) return;
+        var key = type+':'+cat;
+        if (seen.has(key)) return; seen.add(key);
+        var label = (type==='reading' ? '阅读 ' : '听力 ') + cat;
+        optsList.push({ v:key, t:label });
+      });
+      if (optsList.length>1) {
+        sel.innerHTML = '';
+        optsList.forEach(function(o){ var opt=document.createElement('option'); opt.value=o.v; opt.textContent=o.t; sel.appendChild(opt); });
+      }
+    } catch(_) {}
+    var btn = Array.from(cont.querySelectorAll('button')).find(function(b){ return (b.textContent||'').trim().toLowerCase()==='apply filters'; });
+    if (btn && sel) {
+      btn.addEventListener('click', function(){
+        var val = sel.value || 'all';
+        if (val==='all') currentFilter = { type:'all', category:'all' };
+        else {
+          var parts = val.split(':');
+          currentFilter = { type: parts[0], category: (parts[1]||'all').toUpperCase() };
+        }
+        update();
+      });
     }
-    bar.appendChild(btn('全部','all','all'));
-    bar.appendChild(btn('阅读 P1','reading','P1'));
-    bar.appendChild(btn('阅读 P2','reading','P2'));
-    bar.appendChild(btn('阅读 P3','reading','P3'));
-    bar.appendChild(btn('听力 P3','listening','P3'));
-    bar.appendChild(btn('听力 P4','listening','P4'));
-    cont.insertBefore(bar, cont.querySelector('#practice-history-table'));
   }
 
   function applyRecordFilter(records, examIndex){
@@ -94,7 +109,7 @@
   }
 
   function update(){
-    ensureFilterBar();
+    setupFilterControls();
     var exams = hpCore.getExamIndex();
     var recs = hpCore.getRecords().slice().sort((a,b)=> (new Date(b.date||b.timestamp))-(new Date(a.date||a.timestamp)));
     recs = applyRecordFilter(recs, exams);

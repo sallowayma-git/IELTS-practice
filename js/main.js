@@ -506,21 +506,17 @@ function renderExamItem(exam) {
 }
 
 function resolveExamBasePath(exam) {
-  let basePath = (exam && exam.path) ? String(exam.path) : "";
-
-  // Use path-map for normalization instead of hard-coded paths
-  try {
+  let basePath = "";
+  if (exam && exam.path) {
     const pathMap = getPathMap();
-    if (exam && exam.type && pathMap[exam.type] && pathMap[exam.type].root) {
-      const rootPath = pathMap[exam.type].root;
-      if (basePath && !basePath.includes(rootPath)) {
-        basePath = rootPath + basePath;
-      }
+    if (exam.type && pathMap[exam.type] && pathMap[exam.type].root) {
+      basePath = pathMap[exam.type].root + String(exam.path);
+    } else {
+      basePath = String(exam.path);
     }
-  } catch (error) {
-    console.warn('[PathNormalization] Failed to apply path map:', error);
   }
 
+  // 最后统一/与\，保证basePath以/结尾
   if (!basePath.endsWith('/')) {
     basePath += "/";
   }
@@ -556,10 +552,7 @@ function getPathMap() {
 function buildResourcePath(exam, kind = 'html') {
     const basePath = resolveExamBasePath(exam);
     const file = kind === 'pdf' ? exam.pdfFilename : exam.filename;
-    const rawPath = basePath + file;
-    // Use encodeURI but avoid double-encoding slashes
-    const fullPath = './' + encodeURI(rawPath).replace(/%252F/g, '/');
-    return fullPath;
+    return './' + encodeURI(basePath + file);
 }
 // expose helpers globally for other modules (e.g., app.js)
 window.resolveExamBasePath = resolveExamBasePath;
