@@ -143,12 +143,10 @@
       try { window.examIndex = list; } catch(_){}
       this.emit('dataUpdated', { examIndex: list, practiceRecords: this.practiceRecords });
     },
-    _loadRecords() {
+    async _loadRecords() {
       try {
         let rec = null;
-        if (window.storage && storage.get) rec = storage.get('practice_records', null);
-        if (!rec) rec = safeJsonParse(localStorage.getItem('practice_records'));
-        if (!rec) rec = safeJsonParse(localStorage.getItem('exam_system_practice_records'));
+        if (window.storage && storage.get) rec = await storage.get('practice_records', null);
         if (!rec) rec = window.practiceRecords || [];
         this._setRecords(coerceArray(rec));
       } catch (e) { console.warn('[hpCore] _loadRecords failed', e); }
@@ -160,7 +158,7 @@
     },
     _installListeners() {
       window.addEventListener('storage', (e) => {
-        if (e && (e.key === 'practice_records' || e.key === 'exam_index' || e.key === 'exam_system_practice_records')) {
+        if (e && (e.key === 'practice_records' || e.key === 'exam_index')) {
           try { this._loadRecords(); this._loadExamIndex(); } catch (_) {}
         }
       });

@@ -13,14 +13,14 @@ let selectedRecordIds = new Set();
     if (!window.selectedRecordIds) window.selectedRecordIds = new Set();
 
     // 1) 查看详情：调用现有 PracticeRecordModal 显示弹窗
-    window.viewRecordDetails = function(recordId) {
+    window.viewRecordDetails = async function(recordId) {
         try {
             if (window.practiceRecordModal && typeof window.practiceRecordModal.showById === 'function') {
                 window.practiceRecordModal.showById(recordId);
             } else if (window.practiceHistoryEnhancer && typeof window.practiceHistoryEnhancer.showRecordDetails === 'function') {
                 window.practiceHistoryEnhancer.showRecordDetails(recordId);
             } else {
-                var recs = JSON.parse(localStorage.getItem('practice_records')||'[]');
+                var recs = await storage.get('practice_records', []);
                 var r = recs.find(function(x){ return String(x.id||x.timestamp) === String(recordId); });
                 alert(r ? ('题目：' + (r.title||'未知') + '\n分数：' + (r.score||0) + '%\n用时：' + (r.duration||0) + '秒') : '记录不存在');
             }
@@ -90,17 +90,17 @@ let selectedRecordIds = new Set();
         master.indeterminate = checkedCount > 0 && checkedCount < cbs.length;
     };
 
-    window.batchDeleteSelected = function(){
+    window.batchDeleteSelected = async function(){
         var ids = Array.from(window.selectedRecordIds || []);
         if (ids.length === 0) { try { showMessage('请先选择要删除的记录', 'warning'); } catch(_) {} return; }
         if (!confirm('确定要删除选中的 ' + ids.length + ' 条记录吗？此操作不可撤销。')) return;
         try {
-            var list = JSON.parse(localStorage.getItem('practice_records')||'[]');
+            var list = await storage.get('practice_records', []);
             var idSet = new Set(ids.map(String));
             list = list.filter(function(r){ return !idSet.has(String(r.id||r.timestamp)); });
-            localStorage.setItem('practice_records', JSON.stringify(list));
+            await storage.set('practice_records', list);
             if (window.practiceRecords) window.practiceRecords = list;
-        } catch (e) { console.warn('[BatchDelete] 本地存储更新失败:', e); }
+        } catch (e) { console.warn('[BatchDelete] 存储更新失败:', e); }
         window.selectedRecordIds.clear();
         try { updatePracticeView(); } catch(_) {}
         try { updateOverview(); } catch(_) {}
@@ -164,11 +164,11 @@ let selectedRecordIds = new Set();
 
                         // exam index sources
                         if (data && data.data && data.data.exam_system_exam_index && Array.isArray(data.data.exam_system_exam_index.data)) {
-                            try { localStorage.setItem('exam_index', JSON.stringify(data.data.exam_system_exam_index.data)); importedExamCount = data.data.exam_system_exam_index.data.length; } catch(_) {}
+                            try { await storage.set('exam_index', data.data.exam_system_exam_index.data); importedExamCount = data.data.exam_system_exam_index.data.length; } catch(_) {}
                         } else if (data && data.exam_system_exam_index && Array.isArray(data.exam_system_exam_index.data)) {
-                            try { localStorage.setItem('exam_index', JSON.stringify(data.exam_system_exam_index.data)); importedExamCount = data.exam_system_exam_index.data.length; } catch(_) {}
+                            try { await storage.set('exam_index', data.exam_system_exam_index.data); importedExamCount = data.exam_system_exam_index.data.length; } catch(_) {}
                         } else if (Array.isArray(data.exam_index)) {
-                            try { localStorage.setItem('exam_index', JSON.stringify(data.exam_index)); importedExamCount = data.exam_index.length; } catch(_) {}
+                            try { await storage.set('exam_index', data.exam_index); importedExamCount = data.exam_index.length; } catch(_) {}
                         }
 
                         // practice records sources
@@ -184,7 +184,7 @@ let selectedRecordIds = new Set();
                         }
 
                         if (importedRecords) {
-                            localStorage.setItem('practice_records', JSON.stringify(importedRecords));
+                            await storage.set('practice_records', importedRecords);
                             if (window.practiceRecords) window.practiceRecords = importedRecords;
                             importedRecordCount = importedRecords.length;
                         }
@@ -293,7 +293,7 @@ let selectedRecordIds = new Set();
     window.decoratePracticeTableForSelection = function(){};
 
     // 切换批量删除模式
-    window.bulkDeleteAction = function(){
+    window.bulkDeleteAction = async function(){
         if (!window.bulkDeleteMode) {
             setBulkDeleteMode(true);
             try { showMessage('点击记录行可选择；完成后再次点击完成选择', 'info'); } catch(_) {}
@@ -302,10 +302,10 @@ let selectedRecordIds = new Set();
             const ids = Array.from(selectedRecordIds || []);
             if (ids.length === 0) { setBulkDeleteMode(false); return; }
             try {
-                let list = JSON.parse(localStorage.getItem('practice_records')||'[]');
+                let list = await storage.get('practice_records', []);
                 const setIds = new Set(ids.map(String));
                 list = list.filter(r => !setIds.has(String(r.id||r.timestamp)));
-                localStorage.setItem('practice_records', JSON.stringify(list));
+                await storage.set('practice_records', list);
                 if (window.practiceRecords) window.practiceRecords = list;
             } catch(e) { console.warn('[BulkDelete] 更新存储失败:', e); }
             selectedRecordIds.clear();

@@ -164,7 +164,7 @@
     } else {
       // Fallback: listen to storage changes
       window.addEventListener('storage', function(e) {
-        if (e.key === 'myMelodyPracticeRecords' || e.key === 'exam_system_practice_records') {
+        if (e.key === 'practice_records') {
           renderTrendChart();
         }
       });
