@@ -1348,7 +1348,7 @@ class PracticeRecorder {
                 }
             };
             
-            // 检查练习记�?
+            // 检查练习记录
             const records = storage.get('practice_records', []);
             report.practiceRecords.total = records.length;
             
@@ -1395,7 +1395,7 @@ class PracticeRecorder {
     }
 
     /**
-     * 验证记录完整�?
+     * 验证记录完整性
      */
     validateRecordIntegrity(record) {
         const requiredFields = ['id', 'examId', 'startTime', 'endTime'];
@@ -1414,7 +1414,7 @@ class PracticeRecorder {
             return false;
         }
         
-        // 验证数值范�?
+        // 验证数值范围
         if (record.accuracy !== undefined && (record.accuracy < 0 || record.accuracy > 1)) {
             return false;
         }
@@ -1430,18 +1430,18 @@ class PracticeRecorder {
      * 销毁练习记录器
      */
     destroy() {
-        // 清理定时�?
+        // 清理定时器
         if (this.autoSaveTimer) {
             clearInterval(this.autoSaveTimer);
         }
         
-        // 清理会话监听�?
+        // 清理会话监听器
         for (const listener of this.sessionListeners.values()) {
             clearInterval(listener);
         }
         this.sessionListeners.clear();
         
-        // 保存所有数�?
+        // 保存所有数据
         this.saveAllSessions();
         
         console.log('PracticeRecorder destroyed');
