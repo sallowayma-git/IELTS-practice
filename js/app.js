@@ -1036,13 +1036,13 @@ class ExamSystemApp {
         };
 
         // 更可靠的页面加载检测
-        const checkAndInject = () => {
+        const checkAndInject = async () => {
             try {
                 if (examWindow.closed) return;
 
                 const doc = examWindow.document;
                 if (doc && (doc.readyState === 'complete' || doc.readyState === 'interactive')) {
-                    injectScript();
+                    await injectScript();
                 } else {
                     // 继续等待
                     setTimeout(checkAndInject, 200);

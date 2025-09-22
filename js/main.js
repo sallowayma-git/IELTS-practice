@@ -1436,14 +1436,32 @@ function hideDeveloperTeam() {
 }
 
 function startRandomPractice(category, type = 'reading') {
-    const categoryExams = examIndex.filter(exam => exam.category === category && exam.type === type);
+    // 增加数组化防御
+    const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
+    const categoryExams = list.filter(exam => exam.category === category && exam.type === type);
     if (categoryExams.length === 0) {
-        showMessage(`${category} 分类暂无可用题目`, 'error');
+        showMessage(`${category} ${type === 'reading' ? '阅读' : '听力'} 分类暂无可用题目`, 'error');
         return;
     }
     const randomExam = categoryExams[Math.floor(Math.random() * categoryExams.length)];
     showMessage(`随机选择: ${randomExam.title}`, 'info');
-    setTimeout(() => openExam(randomExam.id), 1000);
+
+    // 确保弹出新窗口加载题目（HTML或PDF）
+    setTimeout(() => {
+        if (randomExam.hasHtml) {
+            // 有HTML文件，弹出新窗口
+            openExam(randomExam.id);
+        } else {
+            // 只有PDF文件，也要弹出新窗口
+            const fullPath = buildResourcePath(randomExam, 'pdf');
+            const pdfWindow = window.open(fullPath, `exam_${randomExam.id}`, 'width=1200,height=800,scrollbars=yes,resizable=yes');
+            if (pdfWindow) {
+                showMessage('正在打开: ' + randomExam.title, 'success');
+            } else {
+                showMessage('无法打开窗口，请检查弹窗设置', 'error');
+            }
+        }
+    }, 1000);
 }
 
 // 改进版：题库配置列表（默认题库不可删除，可切换）

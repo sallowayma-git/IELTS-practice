@@ -1,394 +1,184 @@
 /**
- * HP页面核心桥接插件
- * 提供系统就绪回调、数据通信、事件监听等核心功能
- *
- * 功能：
- * 1. 系统就绪检测和回调机制
- * 2. 数据更新事件监听
- * 3. 提供获取examIndex和practiceRecords的API
- * 4. 节流功能
- * 5. 跨窗口消息通信支持
+ * HP Core Bridge (stable)
+ * - Event bus (on/off/emit)
+ * - Ready lifecycle (ready(cb))
+ * - Data accessors (getExamIndex/getRecords/getExamById)
+ * - Actions (startExam/viewExamPDF)
+ * - UI helpers (showMessage/showNotification)
+ * - Storage + postMessage listeners
  */
+(function () {
+  'use strict';
 
-(function() {
-    'use strict';
+  if (window.hpCore && window.hpCore.__stable) {
+    try { console.log('[HP Core] Already initialized'); } catch (_) {}
+    return;
+  }
 
-    // 防止重复初始化
-    if (window.hpCore) {
-        console.log('[HP Core] 核心桥接已存在，跳过重复初始化');
-        return;
-    }
+  const events = Object.create(null);
+  const throttleMap = new Map();
 
-    // HP核心桥接对象
-    const hpCore = {
-        // 版本信息
-        version: '1.0.0',
+  function safeJsonParse(v) { try { return JSON.parse(v); } catch (_) { return null; } }
+  function coerceArray(x) { return Array.isArray(x) ? x : (x ? [x] : []); }
+  function markTypes(list, type) {
+    return (list || []).map(function (e) { if (e && !e.type) e.type = type; return e; });
+  }
 
-        // 初始化状态
-        isReady: false,
-        readyCallbacks: [],
-        dataUpdateCallbacks: [],
+  const hpCore = {
+    __stable: true,
+    version: '1.0.1',
 
-        // 数据缓存
-        examIndex: null,
-        practiceRecords: null,
-        lastUpdateTime: 0,
+    // lifecycle
+    isReady: false,
+    _readyQ: [],
 
-        // 节流控制
-        throttleMap: new Map(),
+    // data cache
+    examIndex: [],
+    practiceRecords: [],
+    lastUpdateTime: 0,
 
-        /**
-         * 系统就绪回调
-         * @param {Function} callback - 就绪后的回调函数
-         */
-        ready: function(callback) {
-            if (typeof callback !== 'function') {
-                console.warn('[HP Core] ready() 需要传入回调函数');
-                return;
-            }
+    // event bus
+    on(event, cb) {
+      if (!event || typeof cb !== 'function') return;
+      (events[event] || (events[event] = [])).push(cb);
+    },
+    off(event, cb) {
+      if (!event || !events[event]) return;
+      if (!cb) { delete events[event]; return; }
+      events[event] = events[event].filter(fn => fn !== cb);
+    },
+    emit(event, payload) {
+      const list = events[event];
+      if (list && list.length) {
+        list.slice().forEach(fn => { try { fn(payload); } catch (e) { console.error('[hpCore emit error]', event, e); } });
+      }
+      if (event === 'dataUpdated') {
+        this._broadcastDataUpdated(payload || {});
+      }
+    },
 
-            if (this.isReady) {
-                // 如果已经就绪，立即执行回调
-                callback();
-            } else {
-                // 否则添加到等待队列
-                this.readyCallbacks.push(callback);
-            }
-        },
+    ready(cb) {
+      if (typeof cb !== 'function') return;
+      if (this.isReady) cb(); else this._readyQ.push(cb);
+    },
 
-        /**
-         * 数据更新事件订阅
-         * @param {Function} callback - 数据更新回调函数
-         */
-        onDataUpdated: function(callback) {
-            if (typeof callback !== 'function') {
-                console.warn('[HP Core] onDataUpdated() 需要传入回调函数');
-                return;
-            }
+    // compatibility
+    onDataUpdated(cb) { this.on('dataUpdated', cb); },
 
-            this.dataUpdateCallbacks.push(callback);
+    // data
+    getExamIndex() { return this.examIndex || []; },
+    getRecords() { return this.practiceRecords || []; },
+    getExamById(id) { return (this.examIndex || []).find(e => e && e.id === id); },
 
-            // 如果已有数据，立即触发一次
-            if (this.examIndex || this.practiceRecords) {
-                setTimeout(() => {
-                    callback({
-                        examIndex: this.examIndex,
-                        practiceRecords: this.practiceRecords,
-                        timestamp: Date.now()
-                    });
-                }, 0);
-            }
-        },
+    // utils
+    throttle(func, delay) {
+      if (typeof func !== 'function') return function () {};
+      const key = (func.name || 'fn') + '_' + (delay || 300);
+      return function () {
+        const now = Date.now();
+        const last = throttleMap.get(key) || 0;
+        if (now - last >= delay) { throttleMap.set(key, now); return func.apply(this, arguments); }
+      };
+    },
 
-        /**
-         * 获取题库索引
-         * @returns {Array} 题库数据
-         */
-        getExamIndex: function() {
-            return this.examIndex || [];
-        },
+    // actions
+    startExam(examId) {
+      try {
+        if (typeof window.openExam === 'function') return window.openExam(examId);
+        if (window.app && typeof window.app.openExam === 'function') return window.app.openExam(examId);
+      } catch (e) { console.error('[hpCore.startExam] failed', e); }
+      this.showMessage('无法启动练习：openExam 未就绪', 'error');
+    },
+    viewExamPDF(examId) {
+      try { if (typeof window.viewPDF === 'function') return window.viewPDF(examId); }
+      catch (e) { console.error('[hpCore.viewExamPDF] failed', e); }
+      this.showMessage('未找到查看 PDF 的方法', 'warning');
+    },
 
-        /**
-         * 获取练习记录
-         * @returns {Array} 练习记录数据
-         */
-        getRecords: function() {
-            return this.practiceRecords || [];
-        },
+    // ui
+    showMessage(message, type, duration) {
+      if (typeof window.showMessage === 'function') return window.showMessage(message, type, duration);
+      try { alert((type ? '[' + type + '] ' : '') + (message || '')); } catch (_) {}
+    },
+    showNotification(message, type, duration) { this.showMessage(message, type, duration); },
 
-        /**
-         * 节流函数
-         * @param {Function} func - 要节流的函数
-         * @param {number} delay - 节流延迟(ms)
-         * @returns {Function} 节流后的函数
-         */
-        throttle: function(func, delay) {
-            if (typeof func !== 'function') {
-                console.warn('[HP Core] throttle() 第一个参数需要是函数');
-                return function() {};
-            }
+    getStatus() {
+      return {
+        version: this.version,
+        isReady: this.isReady,
+        examCount: (this.examIndex || []).length,
+        recordCount: (this.practiceRecords || []).length,
+        lastUpdateTime: this.lastUpdateTime
+      };
+    },
 
-            const key = `${func.name || 'anonymous'}_${delay}`;
-
-            return (...args) => {
-                const now = Date.now();
-                const lastCall = this.throttleMap.get(key) || 0;
-
-                if (now - lastCall >= delay) {
-                    this.throttleMap.set(key, now);
-                    return func.apply(this, args);
-                }
-            };
-        },
-
-        /**
-         * 内部方法：标记系统就绪
-         */
-        _markReady: function() {
-            if (this.isReady) return;
-
-            this.isReady = true;
-            console.log('[HP Core] 系统就绪，执行等待回调');
-
-            // 执行所有等待的回调
-            this.readyCallbacks.forEach(callback => {
-                try {
-                    callback();
-                } catch (error) {
-                    console.error('[HP Core] 执行就绪回调失败:', error);
-                }
-            });
-
-            // 清空回调队列
-            this.readyCallbacks = [];
-        },
-
-        /**
-         * 内部方法：触发数据更新事件
-         */
-        _triggerDataUpdate: function(data) {
-            const updateData = {
-                examIndex: data.examIndex || this.examIndex,
-                practiceRecords: data.practiceRecords || this.practiceRecords,
-                timestamp: Date.now()
-            };
-
-            // 更新缓存
-            if (data.examIndex) this.examIndex = data.examIndex;
-            if (data.practiceRecords) this.practiceRecords = data.practiceRecords;
-            this.lastUpdateTime = updateData.timestamp;
-
-            console.log('[HP Core] 触发数据更新事件，回调数量:', this.dataUpdateCallbacks.length);
-
-            // 执行所有数据更新回调
-            this.dataUpdateCallbacks.forEach(callback => {
-                try {
-                    callback(updateData);
-                } catch (error) {
-                    console.error('[HP Core] 执行数据更新回调失败:', error);
-                }
-            });
-        },
-
-        /**
-         * 内部方法：初始化数据监听
-         */
-        _initDataListeners: function() {
-            // 监听storage变化
-            window.addEventListener('storage', (event) => {
-                if (event.key === 'exam_index' || event.key === 'practice_records') {
-                    console.log('[HP Core] 检测到storage变化:', event.key);
-                    this._loadDataFromStorage();
-                }
-            });
-
-            // 监听自定义事件
-            window.addEventListener('hp:dataUpdated', (event) => {
-                console.log('[HP Core] 收到hp:dataUpdated事件');
-                if (event.detail) {
-                    this._triggerDataUpdate(event.detail);
-                }
-            });
-
-            // 监听跨窗口消息
-            window.addEventListener('message', (event) => {
-                // 安全检查
-                if (location.protocol !== 'file:' &&
-                    event.origin &&
-                    event.origin !== 'null' &&
-                    event.origin !== window.location.origin) {
-                    return;
-                }
-
-                const data = event.data;
-                if (data && data.type === 'PRACTICE_COMPLETE') {
-                    console.log('[HP Core] 收到练习完成消息');
-                    // 延迟触发数据更新，给系统时间处理数据
-                    setTimeout(() => {
-                        this._loadDataFromStorage();
-                    }, 1000);
-                }
-            });
-
-            // 监听系统初始化事件
-            window.addEventListener('examIndexLoaded', () => {
-                console.log('[HP Core] 检测到examIndexLoaded事件');
-                this._loadDataFromStorage();
-            });
-        },
-
-        /**
-         * 内部方法：从storage和全局变量加载数据
-         */
-        _loadDataFromStorage: function() {
-            try {
-                // 尝试从storage获取数据
-                let examIndex = null;
-                let practiceRecords = null;
-
-                // 优先从storage获取
-                if (window.storage && typeof window.storage.get === 'function') {
-                    examIndex = window.storage.get('exam_index', null);
-                    practiceRecords = window.storage.get('practice_records', null);
-                }
-
-                // 降级到localStorage
-                if (!examIndex) {
-                    const examIndexStr = localStorage.getItem('exam_index');
-                    if (examIndexStr) {
-                        examIndex = JSON.parse(examIndexStr);
-                    }
-                }
-
-                if (!practiceRecords) {
-                    const recordsStr = localStorage.getItem('practice_records');
-                    if (recordsStr) {
-                        practiceRecords = JSON.parse(recordsStr);
-                    }
-                }
-
-                // 如果storage中没有数据，尝试从全局变量获取
-                if (!examIndex && window.completeExamIndex && Array.isArray(window.completeExamIndex)) {
-                    examIndex = window.completeExamIndex;
-                    console.log('[HP Core] 从全局变量加载题库数据:', examIndex.length, '条');
-
-                    // 立即保存到storage中，确保下次能从storage获取
-                    if (window.storage && typeof window.storage.set === 'function') {
-                        window.storage.set('exam_index', examIndex);
-                        console.log('[HP Core] 题库数据已保存到storage');
-                    }
-                }
-
-                if (!practiceRecords && window.practiceRecords && Array.isArray(window.practiceRecords)) {
-                    practiceRecords = window.practiceRecords;
-                    console.log('[HP Core] 从全局变量加载练习记录:', practiceRecords.length, '条');
-
-                    // 立即保存到storage中，确保下次能从storage获取
-                    if (window.storage && typeof window.storage.set === 'function') {
-                        window.storage.set('practice_records', practiceRecords);
-                        console.log('[HP Core] 练习记录已保存到storage');
-                    }
-                }
-
-                // 触发数据更新
-                if (examIndex || practiceRecords) {
-                    this._triggerDataUpdate({
-                        examIndex: examIndex,
-                        practiceRecords: practiceRecords
-                    });
-                }
-
-                // 如果有数据且系统未就绪，标记为就绪
-                if ((examIndex && examIndex.length > 0) || (practiceRecords && practiceRecords.length > 0)) {
-                    this._markReady();
-                } else if (!this.isReady) {
-                    // 如果没有数据但系统未就绪，也标记为就绪（数据稍后加载）
-                    this._markReady();
-                }
-
-            } catch (error) {
-                console.error('[HP Core] 从storage加载数据失败:', error);
-            }
-        },
-
-        /**
-         * 内部方法：定期检查数据状态
-         */
-        _startDataPolling: function() {
-            // 每5秒检查一次数据状态
-            setInterval(() => {
-                if (!this.isReady) {
-                    this._loadDataFromStorage();
-                }
-            }, 5000);
-        },
-
-        /**
-         * 获取系统状态信息
-         */
-        getStatus: function() {
-            return {
-                version: this.version,
-                isReady: this.isReady,
-                examCount: this.examIndex ? this.examIndex.length : 0,
-                recordCount: this.practiceRecords ? this.practiceRecords.length : 0,
-                lastUpdateTime: this.lastUpdateTime,
-                callbackCount: this.readyCallbacks.length + this.dataUpdateCallbacks.length
-            };
+    // internal
+    _markReady() {
+      if (this.isReady) return;
+      this.isReady = true;
+      const q = this._readyQ.slice();
+      this._readyQ.length = 0;
+      q.forEach(fn => { try { fn(); } catch (e) { console.error('[hpCore ready cb error]', e); } });
+    },
+    _broadcastDataUpdated(data) {
+      if (data && data.examIndex) this.examIndex = data.examIndex;
+      if (data && data.practiceRecords) this.practiceRecords = data.practiceRecords;
+      this.lastUpdateTime = Date.now();
+    },
+    _loadExamIndex() {
+      try {
+        const fromStorage = (window.storage && storage.get) ? storage.get('exam_index', null) : null;
+        if (Array.isArray(fromStorage) && fromStorage.length) return this._setExamIndex(fromStorage);
+        const reading = markTypes(window.completeExamIndex || [], 'reading');
+        const listening = markTypes(window.listeningExamIndex || [], 'listening');
+        const merged = reading.concat(listening);
+        this._setExamIndex(merged);
+        if (window.storage && storage.set) storage.set('exam_index', merged);
+      } catch (e) { console.warn('[hpCore] _loadExamIndex failed', e); }
+    },
+    _setExamIndex(list) {
+      if (!Array.isArray(list)) list = [];
+      this.examIndex = list;
+      this.emit('dataUpdated', { examIndex: list, practiceRecords: this.practiceRecords });
+    },
+    _loadRecords() {
+      try {
+        let rec = null;
+        if (window.storage && storage.get) rec = storage.get('practice_records', null);
+        if (!rec) rec = safeJsonParse(localStorage.getItem('practice_records'));
+        if (!rec) rec = safeJsonParse(localStorage.getItem('exam_system_practice_records'));
+        if (!rec) rec = window.practiceRecords || [];
+        this._setRecords(coerceArray(rec));
+      } catch (e) { console.warn('[hpCore] _loadRecords failed', e); }
+    },
+    _setRecords(list) {
+      if (!Array.isArray(list)) list = [];
+      this.practiceRecords = list;
+      this.emit('dataUpdated', { examIndex: this.examIndex, practiceRecords: list });
+    },
+    _installListeners() {
+      window.addEventListener('storage', (e) => {
+        if (e && (e.key === 'practice_records' || e.key === 'exam_index' || e.key === 'exam_system_practice_records')) {
+          try { this._loadRecords(); this._loadExamIndex(); } catch (_) {}
         }
-    };
-
-    // 初始化
-    hpCore._initDataListeners();
-    hpCore._startDataPolling();
-
-    // 立即尝试加载数据
-    hpCore._loadDataFromStorage();
-
-    // 导出到全局
-    window.hpCore = hpCore;
-
-    console.log('[HP Core] 核心桥接插件初始化完成', hpCore.getStatus());
-
-    /**
-     * 确保全局数据被正确初始化
-     */
-    hpCore._ensureGlobalDataInitialized = function() {
-        // 延迟执行，确保全局脚本已加载
-        setTimeout(() => {
-            try {
-                // 检查全局数据是否可用
-                if (window.completeExamIndex && Array.isArray(window.completeExamIndex)) {
-                    console.log('[HP Core] 检测到全局题库数据:', window.completeExamIndex.length, '条');
-
-                    // 如果storage中没有数据，立即保存全局数据
-                    if (window.storage && typeof window.storage.get === 'function') {
-                        const storedExamIndex = window.storage.get('exam_index', null);
-                        if (!storedExamIndex || storedExamIndex.length === 0) {
-                            window.storage.set('exam_index', window.completeExamIndex);
-                            console.log('[HP Core] 全局题库数据已保存到storage');
-                        }
-                    }
-                }
-
-                if (window.listeningExamIndex && Array.isArray(window.listeningExamIndex)) {
-                    console.log('[HP Core] 检测到全局听力数据:', window.listeningExamIndex.length, '条');
-
-                    // 合并听力数据到题库中
-                    if (window.completeExamIndex && Array.isArray(window.completeExamIndex)) {
-                        const mergedExamIndex = [...window.completeExamIndex, ...window.listeningExamIndex];
-
-                        if (window.storage && typeof window.storage.set === 'function') {
-                            window.storage.set('exam_index', mergedExamIndex);
-                            console.log('[HP Core] 合并后的题库数据已保存到storage:', mergedExamIndex.length, '条');
-                        }
-                    }
-                }
-
-                // 触发数据更新事件
-                if (window.completeExamIndex || window.listeningExamIndex) {
-                    this._triggerDataUpdate({
-                        examIndex: window.completeExamIndex || [],
-                        practiceRecords: window.practiceRecords || []
-                    });
-                }
-
-            } catch (error) {
-                console.error('[HP Core] 全局数据初始化失败:', error);
-            }
-        }, 500); // 延迟500ms确保全局脚本加载完成
-    };
-
-    // 确保全局数据被正确初始化
-    hpCore._ensureGlobalDataInitialized();
-
-    // 开发助手函数
-    if (typeof window !== 'undefined' && window.console) {
-        window.debugHPCore = function() {
-            console.log('[HP Core Debug]', hpCore.getStatus());
-            console.log('Exam Index Sample:', hpCore.getExamIndex().slice(0, 3));
-            console.log('Records Sample:', hpCore.getRecords().slice(0, 3));
-        };
+      });
+      window.addEventListener('message', (ev) => {
+        const d = ev && ev.data;
+        if (d && (d.type === 'PRACTICE_COMPLETE' || d.type === 'SESSION_COMPLETE')) {
+          setTimeout(() => this._loadRecords(), 800);
+        }
+      });
+      document.addEventListener('DOMContentLoaded', () => {
+        this._loadExamIndex();
+        this._loadRecords();
+        this._markReady();
+      });
     }
+  };
 
+  window.hpCore = hpCore;
+  hpCore._installListeners();
+  try { hpCore._loadExamIndex(); hpCore._loadRecords(); hpCore._markReady(); } catch (_) {}
+  try { console.log('[HP Core] Initialized', hpCore.getStatus()); } catch (_) {}
 })();
+
