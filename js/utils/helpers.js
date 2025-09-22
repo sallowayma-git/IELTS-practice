@@ -233,7 +233,14 @@ async function copyToClipboard(text) {
  * 下载文件
  */
 function downloadFile(content, filename, contentType = 'application/octet-stream') {
-    const blob = new Blob([content], { type: contentType });
+    // 对于文本类型的内容，添加UTF-8编码支持
+    const isTextType = contentType.includes('text/') ||
+                      contentType.includes('application/json') ||
+                      contentType.includes('application/javascript') ||
+                      contentType.includes('application/xml');
+
+    const blobOptions = isTextType ? { type: contentType + '; charset=utf-8' } : { type: contentType };
+    const blob = new Blob([content], blobOptions);
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;

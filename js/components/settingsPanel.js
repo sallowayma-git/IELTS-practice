@@ -687,7 +687,7 @@ class SettingsPanel {
         };
         
         const dataStr = JSON.stringify(allSettings, null, 2);
-        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const dataBlob = new Blob([dataStr], { type: 'application/json; charset=utf-8' });
         
         const link = document.createElement('a');
         link.href = URL.createObjectURL(dataBlob);
