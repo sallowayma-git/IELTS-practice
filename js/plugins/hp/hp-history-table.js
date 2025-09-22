@@ -7,13 +7,16 @@
   'use strict';
   if (typeof hpCore === 'undefined') { console.error('[HP-History-Table] hpCore missing'); return; }
 
+  var currentFilter = { type: 'all', category: 'all' };
+
   function fmtDuration(sec){ sec=+sec||0; var m=Math.floor(sec/60), s=sec%60; return (m+':'+String(s).padStart(2,'0')); }
   function badge(score){ score=+score||0; var color = score>=90?'#10b981': score>=80?'#3b82f6': score>=70?'#f59e0b':'#ef4444'; return '<span style="padding:4px 10px;border-radius:16px;background:'+color+';color:#fff;font-weight:700">'+score+'%</span>'; }
 
   function renderCards(records, examIndex){
     var wrap = document.getElementById('practice-history-table');
     if (!wrap) return false;
-    if (!records.length) { wrap.innerHTML = '<div style="text-align:center;padding:40px;opacity:.8"><div style="font-size:3rem;margin-bottom:10px">📝</div><div>暂无练习记录</div></div>'; return true; }
+    wrap.style.color = '#fff';
+    if (!records.length) { wrap.innerHTML = '<div style="text-align:center;padding:40px;opacity:.8;color:#fff"><div style="font-size:3rem;margin-bottom:10px">📝</div><div>暂无练习记录</div></div>'; return true; }
     wrap.innerHTML = records.map(function(r){
       var ex = (examIndex||[]).find(e=> e.id===r.examId) || {};
       var title = ex.title || r.title || r.examName || '未知题目';
@@ -21,10 +24,10 @@
       var score = r.score || r.percentage || 0;
       var dur = r.duration || (r.realData && r.realData.duration) || 0;
       return [
-        '<div class="record-card" style="border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:12px;background:rgba(255,255,255,0.04);display:flex;justify-content:space-between;gap:10px">',
+        '<div class="record-card" style="border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:12px;background:rgba(255,255,255,0.04);display:flex;justify-content:space-between;gap:10px;color:#fff">',
         '  <div>',
-        '    <div style="font-weight:700;margin-bottom:2px">'+title+'</div>',
-        '    <div style="opacity:.75;font-size:12px">'+date.toLocaleString()+' · '+fmtDuration(dur)+'</div>',
+        '    <div style="font-weight:700;margin-bottom:2px;color:#fff">'+title+'</div>',
+        '    <div style="opacity:.9;font-size:12px;color:#fff">'+date.toLocaleString()+' · '+fmtDuration(dur)+'</div>',
         '  </div>',
         '  <div>'+badge(score)+'</div>',
         '</div>'
@@ -54,13 +57,50 @@
     return true;
   }
 
+  function ensureFilterBar(){
+    var cont = document.getElementById('practice-history-container');
+    if (!cont) return;
+    if (document.getElementById('hp-history-filters')) return;
+    var bar = document.createElement('div');
+    bar.id = 'hp-history-filters';
+    bar.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin:8px 4px 12px 4px;';
+    function btn(label, t, c){
+      var b = document.createElement('button');
+      b.textContent = label;
+      b.className = 'btn btn-sm';
+      b.style.cssText = 'padding:6px 10px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.08);color:#fff;border-radius:8px;cursor:pointer;';
+      b.addEventListener('click', function(){ currentFilter={ type:t, category:c }; update(); });
+      return b;
+    }
+    bar.appendChild(btn('全部','all','all'));
+    bar.appendChild(btn('阅读 P1','reading','P1'));
+    bar.appendChild(btn('阅读 P2','reading','P2'));
+    bar.appendChild(btn('阅读 P3','reading','P3'));
+    bar.appendChild(btn('听力 P3','listening','P3'));
+    bar.appendChild(btn('听力 P4','listening','P4'));
+    cont.insertBefore(bar, cont.querySelector('#practice-history-table'));
+  }
+
+  function applyRecordFilter(records, examIndex){
+    if (!records || currentFilter.type==='all') return records;
+    return records.filter(function(r){
+      var type = (r.type || '').toLowerCase();
+      var ex = (examIndex||[]).find(e=> e.id===r.examId);
+      var cat = (r.category || r.part || (ex && (ex.category||ex.part)) || '').toUpperCase();
+      if (currentFilter.type && type !== currentFilter.type) return false;
+      if (currentFilter.category && currentFilter.category!=='all' && cat !== currentFilter.category) return false;
+      return true;
+    });
+  }
+
   function update(){
-    var recs = hpCore.getRecords().slice().sort((a,b)=> (new Date(b.date||b.timestamp))-(new Date(a.date||a.timestamp)));
+    ensureFilterBar();
     var exams = hpCore.getExamIndex();
+    var recs = hpCore.getRecords().slice().sort((a,b)=> (new Date(b.date||b.timestamp))-(new Date(a.date||a.timestamp)));
+    recs = applyRecordFilter(recs, exams);
     if (!renderCards(recs, exams)) renderTable(recs, exams);
   }
 
   hpCore.ready(()=>{ update(); hpCore.on('dataUpdated', update); });
   try { console.log('[HP-History-Table] ready'); } catch(_){}
 })();
-
