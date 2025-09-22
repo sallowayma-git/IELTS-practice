@@ -6,7 +6,7 @@
     'use strict';
     
     // 等待页面加载完成
-    function checkComponents() {
+    async function checkComponents() {
         console.log('=== 组件加载检查 ===');
         
         const components = {
@@ -47,8 +47,13 @@
         console.log(`practiceRecords: ${practiceRecordsCount} 条记录`);
         
         if (window.storage) {
-            const storageRecords = window.storage.get('practice_records', []);
-            console.log(`storage.practice_records: ${storageRecords.length} 条记录`);
+            try {
+                const arr = await window.storage.get('practice_records', []);
+                const count = Array.isArray(arr) ? arr.length : 0;
+                console.log(`storage.practice_records: ${count} 条记录`);
+            } catch (_) {
+                console.log('storage.practice_records: 0 条记录');
+            }
         }
         
         console.log('\n=== 检查完成 ===');
@@ -69,10 +74,10 @@
     // 延迟检查，确保所有脚本都已加载
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
-            setTimeout(checkComponents, 1000);
+            setTimeout(() => { checkComponents(); }, 1000);
         });
     } else {
-        setTimeout(checkComponents, 1000);
+        setTimeout(() => { checkComponents(); }, 1000);
     }
     
     // 提供手动检查功能
