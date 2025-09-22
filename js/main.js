@@ -197,9 +197,8 @@ async function loadLibrary(forceReload = false) {
 function finishLibraryLoading(startTime) {
     const loadTime = performance.now() - startTime;
     try { window.examIndex = examIndex; } catch (_) {}
-    // 新增修复3C：触发UI渲染链路 - 先设置window.examIndex，再updateOverview()，最后派发examIndexLoaded事件
+    // 修复题库索引加载链路问题：顺序为设置window.examIndex → updateOverview() → dispatchEvent('examIndexLoaded')
     updateOverview();
-    updateSystemInfo();
     window.dispatchEvent(new CustomEvent('examIndexLoaded'));
 }
 
