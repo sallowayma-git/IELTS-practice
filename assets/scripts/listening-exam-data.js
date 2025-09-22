@@ -24,7 +24,7 @@ window.listeningExamIndex = [
         filename: '2. PART3 P3 Climate change and allergies.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: 'PART 3 Climate change and allergies.pdf',
+        pdfFilename: 'PART3 Climate change and allergies.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -36,7 +36,7 @@ window.listeningExamIndex = [
         filename: '3. PART 3 Applying the different theoretical business tools for the report.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: 'PART3 What does francis considered the best strength of the company.pdf',
+        pdfFilename: 'PART3 Applying the different theoretical business tools for the report.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -108,7 +108,7 @@ window.listeningExamIndex = [
         filename: '9. PART3 A survey on music students.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: 'Part3 A survey on music students.pdf',
+        pdfFilename: 'PART3 A survey on music students.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -576,7 +576,7 @@ window.listeningExamIndex = [
         filename: '48. PART3 The placement for science teaching.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: 'P3 The placement for science teaching.pdf',
+        pdfFilename: 'PART3 The placement for science teaching.pdf',
         mp3Filename: 'audio.mp3'
     },
     {

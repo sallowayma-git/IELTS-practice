@@ -123,6 +123,7 @@
     _broadcastDataUpdated(data) {
       if (data && data.examIndex) this.examIndex = data.examIndex;
       if (data && data.practiceRecords) this.practiceRecords = data.practiceRecords;
+      try { if (this.examIndex) window.examIndex = this.examIndex; } catch(_){}
       this.lastUpdateTime = Date.now();
     },
     _loadExamIndex() {
@@ -139,6 +140,7 @@
     _setExamIndex(list) {
       if (!Array.isArray(list)) list = [];
       this.examIndex = list;
+      try { window.examIndex = list; } catch(_){}
       this.emit('dataUpdated', { examIndex: list, practiceRecords: this.practiceRecords });
     },
     _loadRecords() {
@@ -180,5 +182,35 @@
   hpCore._installListeners();
   try { hpCore._loadExamIndex(); hpCore._loadRecords(); hpCore._markReady(); } catch (_) {}
   try { console.log('[HP Core] Initialized', hpCore.getStatus()); } catch (_) {}
+  // Override actions with safe fallbacks that do not depend on main.js globals being populated
+  try {
+    hpCore.startExam = function(examId){
+      try { if (typeof window.openExam==='function') return window.openExam(examId); } catch(_){}
+      try { if (window.app && typeof window.app.openExam==='function') return window.app.openExam(examId); } catch(_){}
+      try {
+        var list = (Array.isArray(window.examIndex)? window.examIndex : (this.examIndex||[])) || [];
+        var ex = list.find(function(x){ return x && x.id===examId; });
+        if (!ex) return this.showMessage('未找到题目', 'error');
+        if (!ex.hasHtml) return this.viewExamPDF(examId);
+        var fullPath = (typeof window.buildResourcePath==='function') ? window.buildResourcePath(ex,'html') : ((ex.path||'') + '/' + (ex.filename||''));
+        var w = window.open(fullPath, 'exam_'+examId, 'width=1200,height=800,scrollbars=yes,resizable=yes');
+        if (!w) return this.showMessage('无法打开窗口，请检查弹窗设置', 'error');
+        this.showMessage('正在打开: '+(ex.title||examId), 'info');
+        return w;
+      } catch (e) { try { console.error('[hpCore.startExam fallback] failed', e); } catch(_){} this.showMessage('无法启动练习', 'error'); }
+    };
+    hpCore.viewExamPDF = function(examId){
+      try { if (typeof window.viewPDF==='function') return window.viewPDF(examId); } catch(_){}
+      try {
+        var list = (Array.isArray(window.examIndex)? window.examIndex : (this.examIndex||[])) || [];
+        var ex = list.find(function(x){ return x && x.id===examId; });
+        if (!ex || !ex.pdfFilename) return this.showMessage('未找到PDF文件', 'error');
+        var pdfPath = (typeof window.buildResourcePath==='function') ? window.buildResourcePath(ex,'pdf') : ((ex.path||'') + '/' + (ex.pdfFilename||''));
+        var w = (typeof window.openPDFSafely==='function') ? window.openPDFSafely(pdfPath, ex.title||'PDF') : window.open(pdfPath, 'pdf_'+examId, 'width=1000,height=800,scrollbars=yes,resizable=yes');
+        if (!w) return this.showMessage('无法打开PDF窗口', 'error');
+        return w;
+      } catch (e) { try { console.error('[hpCore.viewExamPDF fallback] failed', e); } catch(_){} this.showMessage('无法打开PDF', 'error'); }
+    };
+  } catch(_){}
 })();
 
