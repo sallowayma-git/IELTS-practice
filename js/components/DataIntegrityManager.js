@@ -546,11 +546,17 @@ class DataIntegrityManager {
             keysToExport.forEach(key => {
                 try {
                     const value = localStorage.getItem(key);
-                    if (value) {
+                    if (value == null) return;
+                    const trimmed = value.trim();
+                    // 仅当看起来是JSON时才解析，否则按原始字符串导出，避免噪音告警
+                    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
                         exportData.data[key] = JSON.parse(value);
+                    } else {
+                        exportData.data[key] = value; // 原样导出简单字符串（如 theme/light 等）
                     }
                 } catch (error) {
-                    console.warn(`[DataIntegrityManager] 导出 ${key} 失败:`, error);
+                    // 解析失败时，降级为原始字符串，不再打警告
+                    try { exportData.data[key] = localStorage.getItem(key); } catch(_) {}
                 }
             });
 

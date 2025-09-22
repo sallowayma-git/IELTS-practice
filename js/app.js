@@ -832,10 +832,10 @@ class ExamSystemApp {
     /**
      * 浏览分类题目
      */
-    browseCategory(category) {
+    browseCategory(category, type = null) {
         try {
-            // 记录待应用筛选（类型将由 main.js 基于题库推断）
-            window.__pendingBrowseFilter = { category };
+            // 记录待应用筛选（可显式传入类型，如 'reading' 或 'listening'）
+            window.__pendingBrowseFilter = { category, type };
         } catch (_) {}
 
         // 无论是否存在旧的 ExamBrowser，都统一走新浏览视图
@@ -844,7 +844,7 @@ class ExamSystemApp {
         // 立即尝试应用（如果浏览视图已在当前激活）
         try {
             if (typeof window.applyBrowseFilter === 'function' && document.getElementById('browse-view')?.classList.contains('active')) {
-                window.applyBrowseFilter(category);
+                window.applyBrowseFilter(category, type);
                 delete window.__pendingBrowseFilter;
             }
         } catch (_) {}

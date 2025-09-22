@@ -514,11 +514,22 @@ function filterByType(type) {
 // 应用分类筛选（供 App/总览调用）
 function applyBrowseFilter(category = 'all', type = null) {
     try {
+        // 归一化输入：兼容 "P1 阅读"/"P2 听力" 这类文案
+        const raw = String(category || 'all');
+        let normalizedCategory = 'all';
+        const m = raw.match(/\bP[1-4]\b/i);
+        if (m) normalizedCategory = m[0].toUpperCase();
+
+        // 若未显式给出类型，从文案或题库推断
+        if (!type || type === 'all') {
+            if (/阅读/.test(raw)) type = 'reading';
+            else if (/听力/.test(raw)) type = 'listening';
+        }
         // 若未显式给出类型，则根据当前题库推断（同时存在时不限定类型）
         if (!type || type === 'all') {
             try {
-                const hasReading = (examIndex || []).some(e => e.category === category && e.type === 'reading');
-                const hasListening = (examIndex || []).some(e => e.category === category && e.type === 'listening');
+                const hasReading = (examIndex || []).some(e => e.category === normalizedCategory && e.type === 'reading');
+                const hasListening = (examIndex || []).some(e => e.category === normalizedCategory && e.type === 'listening');
                 if (hasReading && !hasListening) type = 'reading';
                 else if (!hasReading && hasListening) type = 'listening';
                 else type = 'all';
@@ -526,7 +537,7 @@ function applyBrowseFilter(category = 'all', type = null) {
         }
 
         currentExamType = type;
-        currentCategory = category || 'all';
+        currentCategory = normalizedCategory;
 
         // 保持标题简洁
         const titleEl = document.getElementById('browse-title');
@@ -674,8 +685,21 @@ function getPathMap() {
 
 function buildResourcePath(exam, kind = 'html') {
     const basePath = resolveExamBasePath(exam);
-    const file = kind === 'pdf' ? exam.pdfFilename : exam.filename;
+    const rawName = kind === 'pdf' ? exam.pdfFilename : exam.filename;
+    const file = sanitizeFilename(rawName, kind);
     return './' + encodeURI(basePath + file);
+}
+function sanitizeFilename(name, kind) {
+    if (!name) return '';
+    const s = String(name);
+    if (/\.html?$/i.test(s) || /\.pdf$/i.test(s)) return s;
+    // html 情况下，如果误给了 .pdf 结尾，优先尝试 pdf.html 包装页
+    if (kind === 'html' && /\.pdf$/i.test(s)) return s.replace(/\.pdf$/i, '.pdf.html');
+    if (/html$/i.test(s)) return s.replace(/html$/i, '.html');
+    if (/pdf$/i.test(s)) return s.replace(/pdf$/i, '.pdf');
+    // 若未包含扩展名，按 kind 追加
+    if (kind === 'pdf') return s + '.pdf';
+    return s + '.html';
 }
 // expose helpers globally for other modules (e.g., app.js)
 window.resolveExamBasePath = resolveExamBasePath;

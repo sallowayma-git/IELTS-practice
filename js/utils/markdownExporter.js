@@ -134,19 +134,26 @@ class MarkdownExporter {
             // 让出控制权
             await new Promise(resolve => setTimeout(resolve, 10));
             
-            // 首先尝试从storage获取
-            if (this.storage) {
-                practiceRecords = this.storage.get('practice_records', []);
-                examIndex = this.storage.get('exam_index', []);
+            // 首先尝试从storage获取（注意：storage.get 为异步）
+            if (this.storage && typeof this.storage.get === 'function') {
+                try {
+                    const recs = await this.storage.get('practice_records', []);
+                    const idx = await this.storage.get('exam_index', []);
+                    practiceRecords = Array.isArray(recs) ? recs : [];
+                    examIndex = Array.isArray(idx) ? idx : [];
+                } catch (_) {
+                    practiceRecords = [];
+                    examIndex = [];
+                }
             }
             
             // 如果storage中没有数据，尝试从全局变量获取
-            if (practiceRecords.length === 0 && window.practiceRecords) {
-                practiceRecords = window.practiceRecords;
+            if ((!Array.isArray(practiceRecords) || practiceRecords.length === 0) && window.practiceRecords) {
+                practiceRecords = Array.isArray(window.practiceRecords) ? window.practiceRecords : [];
             }
             
-            if (examIndex.length === 0 && window.examIndex) {
-                examIndex = window.examIndex;
+            if ((!Array.isArray(examIndex) || examIndex.length === 0) && window.examIndex) {
+                examIndex = Array.isArray(window.examIndex) ? window.examIndex : [];
             }
             
             if (practiceRecords.length === 0) {
