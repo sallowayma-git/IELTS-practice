@@ -366,8 +366,10 @@ class DataConsistencyManager {
      * 获取数据质量报告
      */
     getDataQualityReport(records) {
+        const list = Array.isArray(records) ? records : [];
+
         const report = {
-            totalRecords: records.length,
+            totalRecords: list.length,
             validRecords: 0,
             recordsWithCorrectAnswers: 0,
             recordsWithComparison: 0,
@@ -382,7 +384,7 @@ class DataConsistencyManager {
 
         let totalAnswers = 0;
 
-        records.forEach(record => {
+        list.forEach(record => {
             const validation = this.validateRecordData(record);
             
             if (validation.isValid) {
@@ -404,7 +406,7 @@ class DataConsistencyManager {
             report.qualityDistribution[validation.dataQuality]++;
         });
 
-        report.averageAnswerCount = records.length > 0 ? totalAnswers / records.length : 0;
+        report.averageAnswerCount = list.length > 0 ? totalAnswers / list.length : 0;
 
         console.log('[DataConsistencyManager] 数据质量报告:', report);
         return report;

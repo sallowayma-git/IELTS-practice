@@ -399,22 +399,79 @@ class MarkdownExporter {
      * 生成单个记录的 Markdown
      */
     generateRecordMarkdown(record) {
-        const { title, category, frequency, score, totalQuestions, realData } = record;
+        const { title, category, frequency, realData } = record;
+        const metrics = this.resolveScoreMetrics(record);
         
         // 标题行
-        let markdown = `### ${category}-${frequency}-${title} ${score}/${totalQuestions}\n\n`;
+        let markdown = `### ${category}-${frequency}-${title} ${metrics.correct}/${metrics.total} (${metrics.percentage}%)\n\n`;
         
         // 如果有详细答题数据，生成表格
         if (realData && realData.answers && realData.scoreInfo) {
             markdown += this.generateAnswerTable(realData, record);
         } else {
             // 如果没有详细数据，显示基本信息
-            markdown += `**分数:** ${score}/${totalQuestions}\n`;
-            markdown += `**准确率:** ${Math.round((record.accuracy || 0) * 100)}%\n`;
+            markdown += `**分数:** ${metrics.correct}/${metrics.total}\n`;
+            markdown += `**准确率:** ${metrics.percentage}%\n`;
             markdown += `**用时:** ${record.duration || 0}秒\n`;
         }
         
         return markdown;
+    }
+
+    resolveScoreMetrics(record) {
+        const rd = record.realData || {};
+        const scoreInfo = record.scoreInfo || rd.scoreInfo || {};
+
+        const totalFromRecord = typeof record.totalQuestions === 'number' ? record.totalQuestions : null;
+        const totalFromScoreInfo = typeof scoreInfo.total === 'number' ? scoreInfo.total : null;
+        const totalFromAnswers = record.answers ? Object.keys(record.answers).length
+            : (rd.answers ? Object.keys(rd.answers).length : null);
+        const totalFromComparison = record.answerComparison ? Object.keys(record.answerComparison).length : null;
+        let total = totalFromRecord ?? totalFromScoreInfo ?? totalFromAnswers ?? totalFromComparison ?? 0;
+
+        let correct = null;
+        if (typeof record.correctAnswers === 'number') correct = record.correctAnswers;
+        if (correct == null && typeof scoreInfo.correct === 'number') correct = scoreInfo.correct;
+        if (correct == null && typeof record.score === 'number') {
+            if (total && record.score <= total) {
+                correct = record.score;
+            }
+        }
+        if (correct == null && record.answerComparison) {
+            try {
+                correct = Object.values(record.answerComparison).filter(item => item && item.isCorrect).length;
+            } catch (_) {}
+        }
+        if (correct == null) correct = 0;
+
+        let percentage = null;
+        if (typeof record.percentage === 'number') percentage = record.percentage;
+        else if (typeof scoreInfo.percentage === 'number') percentage = scoreInfo.percentage;
+        else if (typeof record.accuracy === 'number') percentage = Math.round(record.accuracy * 100);
+
+        if ((!total || total <= 0) && percentage == null) {
+            total = totalFromAnswers ?? totalFromComparison ?? 0;
+        }
+        if ((!total || total <= 0) && correct > 0) {
+            total = correct;
+        }
+        if (!total || total <= 0) total = 0;
+
+        if ((percentage == null || percentage > 100 || percentage < 0) && total > 0) {
+            percentage = Math.round((correct / total) * 100);
+        }
+        if (percentage == null) percentage = 0;
+
+        if (total > 0 && correct > total) {
+            // 说明 score 字段可能是百分比
+            correct = Math.round((percentage / 100) * total);
+        }
+
+        return {
+            correct,
+            total,
+            percentage: Math.max(0, Math.min(100, Math.round(percentage)))
+        };
     }
 
     /**
