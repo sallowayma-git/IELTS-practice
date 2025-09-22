@@ -252,10 +252,16 @@ class StorageManager {
      */
     compressData(data) {
         try {
-            // 对于大型数据，使用压缩
-            if (typeof data === 'object' && JSON.stringify(data).length > 1000) {
-                // 使用简单的压缩策略：移除不必要的字段
-                return this.compressObject(data);
+            // 切记：不要压缩数组，避免把列表写坏
+            if (Array.isArray(data)) {
+                return data;
+            }
+            // 仅对体积较大的“对象记录”压缩
+            if (data && typeof data === 'object') {
+                const len = JSON.stringify(data).length;
+                if (len > 1000) {
+                    return this.compressObject(data);
+                }
             }
             return data;
         } catch (error) {

@@ -438,8 +438,9 @@ class ScoreStorage {
      */
     async getPracticeRecords(filters = {}) {
         const raw = await storage.get(this.storageKeys.practiceRecords, []);
+        const base = Array.isArray(raw) ? raw : [];
         // Normalize each record to ensure UI can rely on a stable shape
-        const records = raw.map(r => this.normalizeRecordFields(r));
+        const records = base.map(r => this.normalizeRecordFields(r));
 
         if (Object.keys(filters).length === 0) {
             return records.sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
@@ -620,17 +621,18 @@ class ScoreStorage {
         
         // 获取现有备份
         const backups = await storage.get(this.storageKeys.backupData, []);
+        const safeBackups = Array.isArray(backups) ? backups : [];
         
         // 添加新备份
-        backups.push(backupData);
+        safeBackups.push(backupData);
         
         // 保持最近10个备份
-        if (backups.length > 10) {
-            backups.splice(0, backups.length - 10);
+        if (safeBackups.length > 10) {
+            safeBackups.splice(0, safeBackups.length - 10);
         }
         
         // 保存备份
-        await storage.set(this.storageKeys.backupData, backups);
+        await storage.set(this.storageKeys.backupData, safeBackups);
         
         console.log('Backup created:', backupId);
         return backupId;
@@ -641,7 +643,8 @@ class ScoreStorage {
      */
     async restoreBackup(backupId) {
         const backups = await storage.get(this.storageKeys.backupData, []);
-        const backup = backups.find(b => b.id === backupId);
+        const list = Array.isArray(backups) ? backups : [];
+        const backup = list.find(b => b.id === backupId);
         
         if (!backup) {
             throw new Error(`Backup not found: ${backupId}`);
