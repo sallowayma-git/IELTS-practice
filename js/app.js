@@ -1936,7 +1936,9 @@ class ExamSystemApp {
 
             // 立即验证保存是否成功
             const verifyRecords = await storage.get('practice_records', []);
-            const savedRecord = verifyRecords.find(r => r.id === practiceRecord.id);
+            const savedRecord = Array.isArray(verifyRecords)
+                ? verifyRecords.find(r => r.id === practiceRecord.id)
+                : undefined;
             
             if (savedRecord) {
                 console.log('[DataCollection] ✓ 真实练习数据保存成功:', practiceRecord.id);
@@ -1955,7 +1957,8 @@ class ExamSystemApp {
      */
     async showRealCompletionNotification(examId, realData) {
         const examIndex = await storage.get('exam_index', []);
-        const exam = examIndex.find(e => e.id === examId);
+        const list = Array.isArray(examIndex) ? examIndex : [];
+        const exam = list.find(e => e.id === examId);
 
         if (!exam) return;
 

@@ -20,10 +20,10 @@
         </div>
 
         <nav class="main-nav">
-            <button class="nav-btn active" onclick="window.showView && window.showView('overview')">📊 总览</button>
-            <button class="nav-btn" onclick="window.showView && window.showView('browse')">📚 题库浏览</button>
-            <button class="nav-btn" onclick="window.showView && window.showView('practice')">📝 练习记录</button>
-            <button class="nav-btn" onclick="window.showView && window.showView('settings')">⚙️ 设置</button>
+            <button class="nav-btn active" data-view="overview" onclick="window.showView && window.showView('overview')">📊 总览</button>
+            <button class="nav-btn" data-view="browse" onclick="window.showView && window.showView('browse')">📚 题库浏览</button>
+            <button class="nav-btn" data-view="practice" onclick="window.showView && window.showView('practice')">📝 练习记录</button>
+            <button class="nav-btn" data-view="settings" onclick="window.showView && window.showView('settings')">⚙️ 设置</button>
         </nav>
 
         <!-- 总览页面 -->

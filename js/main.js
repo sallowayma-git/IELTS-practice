@@ -98,11 +98,13 @@ async function syncPracticeRecords() {
         const pr = window.app && window.app.components && window.app.components.practiceRecorder;
         if (pr && typeof pr.getPracticeRecords === 'function') {
             const maybePromise = pr.getPracticeRecords();
-            records = (typeof maybePromise?.then === 'function') ? await maybePromise : maybePromise;
+            const res = (typeof maybePromise?.then === 'function') ? await maybePromise : maybePromise;
+            records = Array.isArray(res) ? res : [];
         } else {
             // Fallback: read raw storage and defensively normalize minimal fields
             const raw = await storage.get('practice_records', []) || [];
-            records = raw.map(r => {
+            const base = Array.isArray(raw) ? raw : [];
+            records = base.map(r => {
                 const rd = (r && r.realData) || {};
                 const sInfo = r && (r.scoreInfo || rd.scoreInfo) || {};
                 const correct = (typeof r.correctAnswers === 'number') ? r.correctAnswers : (typeof sInfo.correct === 'number' ? sInfo.correct : (typeof r.score === 'number' ? r.score : 0));
@@ -115,7 +117,8 @@ async function syncPracticeRecords() {
         }
     } catch (e) {
         console.warn('[System] 同步记录时发生错误，使用存储原始数据:', e);
-        records = await storage.get('practice_records', []);
+        const raw = await storage.get('practice_records', []);
+        records = Array.isArray(raw) ? raw : [];
     }
 
     // 新增修复3D：确保全局变量是UI的单一数据源
