@@ -213,6 +213,48 @@ class PracticeRecordModal {
      * 从answerComparison生成表格
      */
     generateTableFromComparison(answerComparison) {
+        // 在渲染前进行一次“字母题段 → 数字题号”的合并，避免重复行且补全用户答案
+        const normalized = (() => {
+            const comp = JSON.parse(JSON.stringify(answerComparison || {}));
+            const letterKeys = Object.keys(comp).filter(k => /^q[a-z]$/i.test(k)).sort();
+            const numericKeys = Object.keys(comp).filter(k => /q\d+$/i.test(k)).sort((a,b)=> (parseInt(a.replace(/\D/g,''))||0) - (parseInt(b.replace(/\D/g,''))||0));
+            if (letterKeys.length === 0 || numericKeys.length === 0) return comp;
+
+            // 尝试在 numericKeys 中找出与 letterKeys 数量相同的连续窗口，用于对齐映射
+            let windowStart = -1;
+            for (let i=0; i+letterKeys.length-1 < numericKeys.length; i++) {
+                const first = parseInt(numericKeys[i].replace(/\D/g,''));
+                const last  = parseInt(numericKeys[i+letterKeys.length-1].replace(/\D/g,''));
+                if (!isNaN(first) && !isNaN(last) && (last - first + 1) === letterKeys.length) {
+                    windowStart = i; break;
+                }
+            }
+            if (windowStart === -1) return comp; // 找不到合理窗口则保持原状
+
+            // 把字母题段的用户答案灌入对应的数字题号，并删除字母键，避免表格重复
+            for (let i=0; i<letterKeys.length; i++) {
+                const lk = letterKeys[i];
+                const nk = numericKeys[windowStart + i];
+                if (!nk) continue;
+                const lItem = comp[lk] || {};
+                const nItem = comp[nk] || {};
+
+                // 优先保留数字题号上的正确答案；若缺失再用字母题段的数据
+                const correctAnswer = (nItem.correctAnswer != null && String(nItem.correctAnswer).trim() !== '')
+                    ? nItem.correctAnswer
+                    : lItem.correctAnswer;
+                // 用户答案：若数字题号缺失，则取字母题段的答案（例如 Q1..Q8 显示 i/ii/…）
+                const userAnswer = (nItem.userAnswer != null && String(nItem.userAnswer).trim() !== '')
+                    ? nItem.userAnswer
+                    : lItem.userAnswer;
+                const isCorrect = (typeof lItem.isCorrect === 'boolean') ? lItem.isCorrect : nItem.isCorrect;
+
+                comp[nk] = { userAnswer: userAnswer || '', correctAnswer: correctAnswer || '', isCorrect: !!isCorrect };
+                delete comp[lk];
+            }
+            return comp;
+        })();
+
         let table = `
             <div class="answer-table-container">
                 <table class="answer-table">
@@ -228,7 +270,7 @@ class PracticeRecordModal {
         `;
         
         // 按问题编号排序（若无数字则按字母序）
-        const sortedKeys = Object.keys(answerComparison).sort((a, b) => {
+        const sortedKeys = Object.keys(normalized).sort((a, b) => {
             const na = parseInt(a.replace(/\D/g, ''));
             const nb = parseInt(b.replace(/\D/g, ''));
             if (!isNaN(na) && !isNaN(nb)) return na - nb;
@@ -236,7 +278,7 @@ class PracticeRecordModal {
         });
         
         sortedKeys.forEach(key => {
-            const comparison = answerComparison[key];
+            const comparison = normalized[key];
             let questionNum = key.replace(/\D/g, '');
             if (!questionNum) {
                 questionNum = key.replace(/^q/i, '');

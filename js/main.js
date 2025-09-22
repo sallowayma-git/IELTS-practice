@@ -1123,6 +1123,96 @@ async function buildIndexFromFiles(files, type, label = '') {
 // ... other utility and management functions can be moved here ...
 // --- Functions Restored from Backup ---
 
+// 兼容导入：支持多种旧格式（records/practice_records 顶层/嵌套），自动归一化并合并
+async function importData() {
+    try {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json,application/json';
+        input.onchange = async (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (!file) return;
+            const text = await file.text();
+            let json;
+            try { json = JSON.parse(text); } catch (err) {
+                showMessage('导入失败：JSON 解析错误', 'error');
+                return;
+            }
+
+            // 提取记录数组（尽可能兼容）
+            let imported = [];
+            if (Array.isArray(json)) {
+                imported = json;
+            } else if (Array.isArray(json.records)) {
+                imported = json.records;
+            } else if (Array.isArray(json.practice_records)) {
+                imported = json.practice_records;
+            } else if (json.data && (Array.isArray(json.data.practice_records) || (json.data.practice_records && Array.isArray(json.data.practice_records.data)))) {
+                imported = Array.isArray(json.data.practice_records) ? json.data.practice_records : (json.data.practice_records.data || []);
+            } else if (json.data && Array.isArray(json.data.records)) {
+                imported = json.data.records;
+            }
+
+            if (!Array.isArray(imported)) imported = [];
+
+            // 归一化每条记录，保留字段以适配当前 UI/统计
+            const normalized = imported.map((r) => {
+                try {
+                    const base = { ...r };
+                    // 统一 id 类型
+                    if (base.id == null) base.id = Date.now() + Math.random().toString(36).slice(2,9);
+                    // 时间与时长
+                    if (!base.startTime && base.date) base.startTime = base.date;
+                    if (!base.endTime && base.startTime && typeof base.duration === 'number') {
+                        base.endTime = new Date(new Date(base.startTime).getTime() + (base.duration*1000)).toISOString();
+                    }
+                    // 统计字段
+                    const rd = base.realData || {};
+                    const sInfo = base.scoreInfo || rd.scoreInfo || {};
+                    const correct = typeof base.correctAnswers === 'number' ? base.correctAnswers : (typeof base.score === 'number' ? base.score : (typeof sInfo.correct === 'number' ? sInfo.correct : 0));
+                    const total = typeof base.totalQuestions === 'number' ? base.totalQuestions : (typeof sInfo.total === 'number' ? sInfo.total : (rd.answers ? Object.keys(rd.answers).length : 0));
+                    const acc = typeof base.accuracy === 'number' ? base.accuracy : (total > 0 ? (correct/total) : 0);
+                    const pct = typeof base.percentage === 'number' ? base.percentage : Math.round(acc*100);
+                    base.score = correct;
+                    base.correctAnswers = correct;
+                    base.totalQuestions = total;
+                    base.accuracy = acc;
+                    base.percentage = pct;
+                    // 确保 answers/answerComparison 结构存在
+                    if (!base.answers && rd.answers) base.answers = rd.answers;
+                    if (!base.answerComparison && rd.answerComparison) base.answerComparison = rd.answerComparison;
+                    // 最终保证必要字段
+                    if (!base.date && base.startTime) base.date = base.startTime;
+                    return base;
+                } catch (_) {
+                    return r;
+                }
+            });
+
+            // 合并入库（去重：按 id/sessionId）
+            let existing = await storage.get('practice_records', []);
+            existing = Array.isArray(existing) ? existing : [];
+            const byId = new Map(existing.map(x => [String(x.id), true]));
+            const bySession = new Map(existing.map(x => [String(x.sessionId||''), true]));
+            const merged = existing.slice();
+            for (const r of normalized) {
+                const idKey = String(r.id);
+                const sidKey = String(r.sessionId||'');
+                if (byId.has(idKey) || (sidKey && bySession.has(sidKey))) continue;
+                merged.push(r);
+            }
+
+            await storage.set('practice_records', merged);
+            showMessage(`导入完成：新增 ${merged.length - existing.length} 条记录`, 'success');
+            syncPracticeRecords();
+        };
+        input.click();
+    } catch (e) {
+        console.error('导入失败:', e);
+        showMessage('导入失败: ' + e.message, 'error');
+    }
+}
+
 function searchExams(query) {
     if (window.performanceOptimizer && typeof window.performanceOptimizer.debounce === 'function') {
         const debouncedSearch = window.performanceOptimizer.debounce(performSearch, 300, 'exam_search');

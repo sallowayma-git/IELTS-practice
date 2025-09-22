@@ -1921,9 +1921,13 @@ class ExamSystemApp {
             }
 
             // 直接保存到localStorage（与旧版本完全相同的方式）
-            const practiceRecords = await storage.get('practice_records', []);
+            let practiceRecords = await storage.get('practice_records', []);
+            if (!Array.isArray(practiceRecords)) {
+                // 迁移修复：历史上可能被错误压缩为对象，这里强制纠正为数组
+                practiceRecords = [];
+            }
             console.log('[DataCollection] 当前记录数量:', practiceRecords.length);
-            
+
             practiceRecords.unshift(practiceRecord);
 
             // 限制记录数量
