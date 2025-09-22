@@ -1362,92 +1362,38 @@
     <!-- Load existing JavaScript files -->
     <script src="../../assets/scripts/complete-exam-data.js"></script>
     <script src="../../assets/scripts/listening-exam-data.js"></script>
-    <script src="../../js/utils/helpers.js"></script>
+
+    <!-- 加载工具函数 -->
     <script src="../../js/utils/storage.js"></script>
-    <script>
-        // 设计页适配：确保 app.js 在首次统计时不会读到 null
-        // storage.js 默认会将 exam_index 初始化为 null，这里在 app 初始化前兜底为 []
-        (function () {
-            try {
-                if (window.storage && typeof storage.get === 'function') {
-                    var idx = storage.get('exam_index', null);
-                    if (idx === null) {
-                        storage.set('exam_index', []);
-                    }
-                    // 也确保活动配置键存在，避免后续读取为空
-                    var activeKey = storage.get('active_exam_index_key', null);
-                    if (!activeKey) {
-                        storage.set('active_exam_index_key', 'exam_index');
-                    }
-                }
-            } catch (e) {
-                console.warn('[Design Adapt] 预填充存储失败:', e);
-            }
-        })();
-    </script>
-    <script src="../../js/utils/asyncExportHandler.js"></script>
+
+    <!-- 加载核心组件 -->
     <script src="../../js/core/scoreStorage.js"></script>
     <script src="../../js/core/practiceRecorder.js"></script>
     <script src="../../js/components/PDFHandler.js"></script>
+
+    <script src="../../js/components/IndexValidator.js"></script>
+    <script src="../../js/components/CommunicationTester.js"></script>
+    <script src="../../js/components/ErrorFixer.js"></script>
+    <script src="../../js/components/CommunicationRecovery.js"></script>
+    <script src="../../js/components/PerformanceOptimizer.js"></script>
     <script src="../../js/components/DataIntegrityManager.js"></script>
+    <script src="../../js/components/BrowseStateManager.js"></script>
+
+    <!-- 新增的 Markdown 导出和记录详情功能 -->
+    <script src="../../js/utils/dataConsistencyManager.js"></script>
     <script src="../../js/utils/markdownExporter.js"></script>
     <script src="../../js/components/practiceRecordModal.js"></script>
     <script src="../../js/components/practiceHistoryEnhancer.js"></script>
+    <script src="../../js/utils/componentChecker.js"></script>
+    <script src="../../js/theme-switcher.js"></script>
+
+    <!-- 加载主脚本 -->
     <script src="../../js/main.js"></script>
-    <script>
-        // 设计页适配：修正资源路径为项目根的绝对 file:// URL（本页位于 .superdesign/design_iterations/ 下）
-        // 使 buildResourcePath 产出的相对路径在子目录内也能正确指向根部资源，且避免 ".." 被 PDFHandler 拒绝
-        (function () {
-            var BASE_URL = new URL('../../', window.location.href);
-            try {
-                var originalBuild = window.buildResourcePath;
-                window.buildResourcePath = function (exam, kind) {
-                    var p = '';
-                    try { p = originalBuild ? originalBuild(exam, kind) : ''; } catch (_) {}
-                    if (typeof p === 'string') {
-                        // 规范化为不含 ".." 的绝对 URL
-                        // 去掉开头的 "./"，并使用 URL 解析为绝对路径
-                        var rel = p.replace(/^\.\//, '');
-                        var abs = new URL(rel, BASE_URL).href;
-                        return abs;
-                    }
-                    return p;
-                };
-
-                // 进一步兜底：若 PDFHandler 已加载，则修正其 openPDF 参数路径
-                if (window.PDFHandler && window.PDFHandler.prototype && !window.PDFHandler.prototype.__designPatched) {
-                    var _openPDF = window.PDFHandler.prototype.openPDF;
-                    window.PDFHandler.prototype.openPDF = function (pdfPath, examTitle, options) {
-                        try {
-                            if (typeof pdfPath === 'string') {
-                                // 将相对路径解析为绝对 file:// URL，消除 ".."，以通过 PDFHandler 的校验
-                                var normalized = pdfPath.replace(/^\.\//, '');
-                                pdfPath = new URL(normalized, BASE_URL).href;
-                            }
-                        } catch (_) {}
-                        return _openPDF.call(this, pdfPath, examTitle, options);
-                    };
-                    window.PDFHandler.prototype.__designPatched = true;
-                }
-            } catch (e) {
-                console.warn('[Design Adapt] 路径适配失败:', e);
-            }
-
-            // 规范化 showMessage 的第三参，避免字符串导致 0ms 立即消失
-            try {
-                var _showMessage = window.showMessage;
-                if (typeof _showMessage === 'function' && !_showMessage.__designPatched) {
-                    window.showMessage = function (message, type, duration) {
-                        var d = (typeof duration === 'number' && isFinite(duration)) ? duration : 3000;
-                        return _showMessage(message, type, d);
-                    };
-                    window.showMessage.__designPatched = true;
-                }
-            } catch (_) {}
-        })();
-    </script>
     <script src="../../js/boot-fallbacks.js"></script>
-    <script src="../../fix-system.js"></script>
+    <!-- 运行时修复补丁（异步存储/恢复兼容、本地file环境增强） -->
+    <script src="../../js/patches/runtime-fixes.js"></script>
+
+    <!-- 加载主应用（最后加载） -->
     <script src="../../js/app.js"></script>
 
     <script>
@@ -2585,6 +2531,11 @@ IELTS 学术练习管理系统
                 showMessage('练习已完成，正在更新记录...', 'success');
                 setTimeout(syncPracticeRecords, 1000);
             }
+        });
+
+        window.addEventListener('storage-sync', (event) => {
+            console.log('[Theme] 收到存储同步事件，正在更新练习记录...', event.detail);
+            syncPracticeRecords();
         });
 
         // Keyboard shortcuts

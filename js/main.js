@@ -17,15 +17,21 @@ let selectedRecords = new Set();
 // 降级握手映射：sessionId -> { examId, timer }
 const fallbackExamSessions = new Map();
 
-// 优先题目映射表：按类别指定优先显示的题目ID
-const preferredFirstExamByCategory = new Map([
-  ['P1_reading', 'A Brief History of Tea 茶叶简史'], // P1阅读类别的优先题目
-  ['P2_reading', 'Bird Migration 鸟类迁徙'], // P2阅读类别的优先题目
-  ['P3_reading', 'Elephant Communication 大象交流'], // P3阅读类别的优先题目
-  ['P3_listening', 'Pacific Navigation and Voyaging 太平洋航海'], // P3听力类别的优先题目
-  ['P4_listening', 'The Underground House'] // P4听力类别的优先题目
-]);
+const preferredFirstExamByCategory = {
+  'P1_reading': { id: 'p1-09', title: 'Listening to the Ocean 海洋探测' },
+  'P2_reading': { id: 'p2-high-12', title: 'The fascinating world of attine ants 切叶蚁' },
+  'P3_reading': { id: 'p3-high-11', title: 'The Fruit Book 果实之书' },
+  'P1_listening': { id: 'listening-p3-01', title: 'Julia and Bob’s science project is due' },
+  'P3_listening': { id: 'listening-p3-02', title: 'Climate change and allergies' }
+};
 
+
+document.addEventListener('click', function(e) {
+    console.log('[DEBUG] Click event on:', e.target.tagName, e.target.className, e.target.textContent.trim());
+    if (e.target.onclick) {
+        console.log('[DEBUG] Target has onclick:', e.target.onclick.toString());
+    }
+}, true);
 
 // --- Initialization ---
 function initializeLegacyComponents() {
@@ -81,6 +87,7 @@ function initializeLegacyComponents() {
     loadLibrary();
     syncPracticeRecords(); // Load initial records and update UI
     setupMessageListener(); // Listen for updates from child windows
+    setupStorageSyncListener(); // Listen for storage changes from other tabs
 }
 
 // Clean up old cache and configurations
@@ -177,6 +184,16 @@ function setupMessageListener() {
                 setTimeout(syncPracticeRecords, 300);
             }
         }
+    });
+}
+
+function setupStorageSyncListener() {
+    window.addEventListener('storage-sync', (event) => {
+        console.log('[System] 收到存储同步事件，正在更新练习记录...', event.detail);
+        //可以选择性地只更新受影响的key，但为了简单起见，我们直接同步所有记录
+        // if (event.detail && event.detail.key === 'practice_records') {
+            syncPracticeRecords();
+        // }
     });
 }
 
@@ -315,6 +332,8 @@ function updateOverview() {
     const categoryContainer = document.getElementById('category-overview');
     let html = '<h3 style="grid-column: 1 / -1;">阅读</h3>';
     ['P1','P2','P3'].forEach(cat => {
+        const onclickStr = "browseCategory('" + cat + "', 'reading')";
+        console.log('[DEBUG] Generated onclick for ' + cat + ' reading: ' + onclickStr);
         html += ''
         + '<div class="category-card">'
         +   '<div class="category-header">'
@@ -325,7 +344,7 @@ function updateOverview() {
         +     '</div>'
         +   '</div>'
         +   '<div class="category-actions" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: nowrap;">'
-        +     '<button class="btn" onclick="browseCategory(\'' + cat + '\', \'reading\')">📚 浏览题库</button>'
+        +     '<button class="btn" onclick="' + onclickStr + '">📚 浏览题库</button>'
         +     '<button class="btn btn-secondary" onclick="startRandomPractice(\'' + cat + '\', \'reading\')">🎲 随机练习</button>'
         +   '</div>'
         + '</div>';
@@ -336,6 +355,8 @@ function updateOverview() {
         ['P3','P4'].forEach(cat => {
             const count = listeningStats[cat] ? listeningStats[cat].total : 0;
             if (count > 0) {
+                const onclickStr = "browseCategory('" + cat + "', 'listening')";
+                console.log('[DEBUG] Generated onclick for ' + cat + ' listening: ' + onclickStr);
                 html += ''
                 + '<div class="category-card">'
                 +   '<div class="category-header">'
@@ -346,7 +367,7 @@ function updateOverview() {
                 +     '</div>'
                 +   '</div>'
                 +   '<div class="category-actions" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: nowrap;">'
-                +     '<button class="btn" onclick="browseCategory(\'' + cat + '\', \'listening\')">📚 浏览题库</button>'
+                +     '<button class="btn" onclick="' + onclickStr + '">📚 浏览题库</button>'
                 +     '<button class="btn btn-secondary" onclick="startRandomPractice(\'' + cat + '\', \'listening\')">🎲 随机练习</button>'
                 +   '</div>'
                 + '</div>';
@@ -494,21 +515,13 @@ function updatePracticeView() {
 
 
 function browseCategory(category, type = 'reading') {
-    // 优先调用 window.app.browseCategory(category, type)
-    if (window.app && typeof window.app.browseCategory === 'function') {
-        try {
-            window.app.browseCategory(category, type);
-            return;
-        } catch (error) {
-            console.warn('[browseCategory] window.app.browseCategory 调用失败，使用降级路径:', error);
-        }
-    }
+    console.log('[DEBUG] browseCategory called with category:', category, 'type:', type);
 
-    // 降级路径：手动处理浏览筛选
+    // 先设置筛选器，确保 App 路径也能获取到筛选参数
     try {
-        // 正确设置筛选器
         currentCategory = category;
         currentExamType = type;
+        console.log('[browseCategory] Set globals: currentCategory=', currentCategory, 'currentExamType=', currentExamType);
 
         // 设置待处理筛选器，确保组件未初始化时筛选不会丢失
         try {
@@ -517,7 +530,25 @@ function browseCategory(category, type = 'reading') {
         } catch (_) {
             // 如果全局变量设置失败，继续执行
         }
+    } catch (error) {
+        console.warn('[browseCategory] 设置筛选器失败:', error);
+    }
 
+    // 优先调用 window.app.browseCategory(category, type)
+    if (window.app && typeof window.app.browseCategory === 'function') {
+        try {
+            window.app.browseCategory(category, type);
+            console.log('[browseCategory] Called app.browseCategory');
+            // 确保过滤应用，即使 app 处理
+            setTimeout(() => loadExamList(), 100);
+            return;
+        } catch (error) {
+            console.warn('[browseCategory] window.app.browseCategory 调用失败，使用降级路径:', error);
+        }
+    }
+
+    // 降级路径：手动处理浏览筛选
+    try {
         // 正确更新标题使用中文字符串
         const typeText = type === 'listening' ? '听力' : '阅读';
         const titleEl = document.getElementById('browse-title');
@@ -637,22 +668,48 @@ function loadExamList() {
     // 使用 Array.from() 创建副本，避免污染全局 examIndex
     let examsToShow = Array.from(examIndex);
 
+    // 先过滤
+    console.log('[Filter] Applying filters: category=', currentCategory, 'type=', currentExamType);
     if (currentExamType !== 'all') {
         examsToShow = examsToShow.filter(exam => exam.type === currentExamType);
+        console.log('[Filter] After type filter:', examsToShow.length, 'items');
     }
     if (currentCategory !== 'all') {
         examsToShow = examsToShow.filter(exam => exam.category === currentCategory);
+        console.log('[Filter] After category filter:', examsToShow.length, 'items');
     }
 
-    // 如果有优先题目映射且当前类别不是'all'，则重新排序
-    if (currentCategory !== 'all' && preferredFirstExamByCategory.has(currentCategory)) {
-        const preferredTitle = preferredFirstExamByCategory.get(currentCategory);
-        const preferredIndex = examsToShow.findIndex(exam => exam.title === preferredTitle);
+    // 然后置顶过滤后的数组
+    if (currentCategory !== 'all' && currentExamType !== 'all') {
+        const key = `${currentCategory}_${currentExamType}`;
+        const preferred = preferredFirstExamByCategory[key];
 
-        if (preferredIndex > 0) {
-            // 将优先题目移到列表开头
-            const preferredExam = examsToShow.splice(preferredIndex, 1)[0];
-            examsToShow.unshift(preferredExam);
+        console.log('[PinTop] For key:', key, 'preferred:', preferred);
+
+        if (preferred) {
+            // 优先通过 preferred.id 在过滤后的 examsToShow 中查找
+            let preferredIndex = examsToShow.findIndex(exam => exam.id === preferred.id);
+            console.log('[PinTop] Preferred index by ID in filtered examsToShow:', preferredIndex);
+
+            // 如果失败，fallback 到 preferred.title + currentCategory + currentExamType 匹配
+            if (preferredIndex === -1) {
+                preferredIndex = examsToShow.findIndex(exam =>
+                    exam.title === preferred.title &&
+                    exam.category === currentCategory &&
+                    exam.type === currentExamType
+                );
+                console.log('[PinTop] Preferred index by fallback title+category+type in filtered examsToShow:', preferredIndex);
+            }
+
+            if (preferredIndex > -1) {
+                const [item] = examsToShow.splice(preferredIndex, 1);
+                examsToShow.unshift(item);
+                console.log('[PinTop] Pinned to filtered examsToShow:', item.title);
+            } else {
+                console.warn('[PinTop] No match found in filtered examsToShow for preferred:', preferred);
+            }
+        } else {
+            console.log('[PinTop] No preferred for key:', key);
         }
     }
 

@@ -13,11 +13,13 @@ class StorageManager {
      * 初始化存储系统
      */
     async initializeStorage() {
+        console.log('[Storage] 开始初始化存储系统');
         try {
             // 检查localStorage可用性
             const testKey = this.prefix + 'test';
             localStorage.setItem(testKey, 'test');
             localStorage.removeItem(testKey);
+            console.log('[Storage] localStorage 可用，将使用 localStorage 作为主要存储');
 
             // 初始化版本信息
             const currentVersion = await this.get('system_version');
@@ -34,8 +36,12 @@ class StorageManager {
             } else {
                 console.log('[Storage] 版本匹配，跳过初始化');
             }
+
+            // 强制初始化 IndexedDB 以实现 Hybrid 模式
+            console.log('[Storage] 强制初始化 IndexedDB 以实现 Hybrid 模式');
+            this.initializeIndexedDBStorage();
         } catch (error) {
-            console.warn('LocalStorage not available, falling back to IndexedDB storage');
+            console.warn('[Storage] localStorage 不可用，fallback 到 IndexedDB:', error);
             this.initializeIndexedDBStorage();
         }
     }
@@ -44,10 +50,11 @@ class StorageManager {
      * 初始化IndexedDB存储
      */
     async initializeIndexedDBStorage() {
+        console.log('[Storage] 开始初始化 IndexedDB');
         try {
             // 检查IndexedDB支持
             if (!window.indexedDB) {
-                console.warn('IndexedDB not supported, falling back to memory storage');
+                console.warn('[Storage] IndexedDB 不支持，fallback 到内存存储');
                 this.fallbackStorage = new Map();
                 return;
             }
@@ -55,33 +62,40 @@ class StorageManager {
             this.dbName = 'ExamSystemDB';
             this.dbVersion = 1;
 
+            console.log(`[Storage] 打开 IndexedDB 数据库: ${this.dbName}, 版本: ${this.dbVersion}`);
             const request = indexedDB.open(this.dbName, this.dbVersion);
 
             request.onerror = (event) => {
-                console.error('IndexedDB error:', event.target.error);
+                console.error('[Storage] IndexedDB 打开失败:', event.target.error);
                 this.fallbackStorage = new Map();
             };
 
-            request.onsuccess = (event) => {
-                this.indexedDB = event.target.result;
-                console.log('[Storage] IndexedDB initialized successfully');
-
-                // 迁移localStorage数据到IndexedDB
-                this.migrateFromLocalStorage();
-            };
-
             request.onupgradeneeded = (event) => {
+                console.log('[Storage] IndexedDB 升级事件触发，旧版本:', event.oldVersion, '新版本:', event.newVersion);
                 const db = event.target.result;
 
                 // 创建存储对象
                 if (!db.objectStoreNames.contains('keyValueStore')) {
+                    console.log('[Storage] 创建 objectStore: keyValueStore');
                     const store = db.createObjectStore('keyValueStore', { keyPath: 'key' });
                     store.createIndex('timestamp', 'timestamp', { unique: false });
+                    console.log('[Storage] objectStore 创建成功');
+                } else {
+                    console.log('[Storage] objectStore 已存在，跳过创建');
                 }
             };
 
+            request.onsuccess = (event) => {
+                this.indexedDB = event.target.result;
+                console.log('[Storage] IndexedDB 初始化成功，数据库:', this.indexedDB.name, '版本:', this.indexedDB.version);
+
+                // 迁移localStorage数据到IndexedDB
+                console.log('[Storage] 开始从 localStorage 迁移数据');
+                this.migrateFromLocalStorage();
+            };
+
         } catch (error) {
-            console.error('Failed to initialize IndexedDB:', error);
+            console.error('[Storage] IndexedDB 初始化失败:', error);
             this.fallbackStorage = new Map();
         }
     }
@@ -90,15 +104,24 @@ class StorageManager {
      * 从localStorage迁移数据到IndexedDB
      */
     async migrateFromLocalStorage() {
+        console.log('[Storage] 开始数据迁移');
         try {
-            if (!this.indexedDB) return;
+            if (!this.indexedDB) {
+                console.warn('[Storage] IndexedDB 不可用，跳过迁移');
+                return;
+            }
 
             const keys = Object.keys(localStorage);
             const migrationKeys = keys.filter(key => key.startsWith(this.prefix));
+            console.log(`[Storage] 发现 ${migrationKeys.length} 条需要迁移的键`);
 
-            if (migrationKeys.length === 0) return;
+            if (migrationKeys.length === 0) {
+                console.log('[Storage] 无数据需要迁移');
+                return;
+            }
 
-            console.log(`[Storage] 迁移 ${migrationKeys.length} 条数据到IndexedDB`);
+            let migratedCount = 0;
+            let failedCount = 0;
 
             for (const key of migrationKeys) {
                 try {
@@ -106,13 +129,16 @@ class StorageManager {
                     if (value) {
                         await this.setToIndexedDB(key, value);
                         localStorage.removeItem(key);
+                        migratedCount++;
+                        console.log(`[Storage] 成功迁移键: ${key}`);
                     }
                 } catch (error) {
                     console.warn(`[Storage] 迁移数据失败: ${key}`, error);
+                    failedCount++;
                 }
             }
 
-            console.log('[Storage] 数据迁移完成');
+            console.log(`[Storage] 数据迁移完成: ${migratedCount} 成功, ${failedCount} 失败`);
         } catch (error) {
             console.error('[Storage] 数据迁移失败:', error);
         }
@@ -201,6 +227,14 @@ class StorageManager {
         }
 
         await this.set('system_version', this.version);
+
+        // 执行遗留数据迁移（只运行一次）
+        if (!await this.get('migration_completed')) {
+            console.log('[Storage] 检测到未完成迁移，开始执行...');
+            await this.migrateLegacyData();
+        } else {
+            console.log('[Storage] 迁移已完成，跳过');
+        }
     }
 
     /**
@@ -237,6 +271,18 @@ class StorageManager {
             } else {
                 console.log(`[Storage] 保留现有数据: ${key} (${Array.isArray(existingValue) ? existingValue.length + ' 项' : typeof existingValue})`);
             }
+        }
+    }
+
+    /**
+     * 设置存储命名空间
+     */
+    setNamespace(namespace) {
+        if (typeof namespace === 'string' && namespace.trim()) {
+            this.prefix = namespace.trim() + '_';
+            console.log('[Storage] 命名空间已设置为:', this.prefix);
+        } else {
+            console.warn('[Storage] 无效的命名空间:', namespace);
         }
     }
 
@@ -300,6 +346,30 @@ class StorageManager {
     }
 
     /**
+     * 合并记录数组，避免重复
+     * 基于 id 去重，保留 timestamp 最新的
+     */
+    mergeRecords(current, legacy) {
+        if (!Array.isArray(current)) current = [];
+        if (!Array.isArray(legacy)) return current;
+
+        const mergedMap = new Map();
+        [...current, ...legacy].forEach(record => {
+            if (record && record.id) {
+                const existing = mergedMap.get(record.id);
+                if (!existing || (record.timestamp > existing.timestamp)) {
+                    mergedMap.set(record.id, record);
+                }
+            } else if (record && record.timestamp) {
+                // 如果无 id，使用 timestamp 过滤
+                mergedMap.set(record.timestamp, record);
+            }
+        });
+
+        return Array.from(mergedMap.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    }
+
+    /**
      * 压缩realData数据
      */
     compressRealData(realData) {
@@ -352,6 +422,7 @@ class StorageManager {
      */
     async set(key, value) {
         try {
+            console.log(`[Storage] 开始设置键: ${key}`);
             // 压缩数据以减少存储空间
             const compressedValue = this.compressData(value);
 
@@ -362,39 +433,57 @@ class StorageManager {
                 compressed: compressedValue !== value // 标记是否被压缩
             });
 
+            const dataSize = serializedValue.length;
+            console.log(`[Storage] 数据大小: ${dataSize} 字节`);
+
             if (this.fallbackStorage) {
+                console.log('[Storage] 使用内存存储 (fallback)');
                 this.fallbackStorage.set(this.getKey(key), serializedValue);
+                // 派发事件，通知其他页面数据已更新
+                window.dispatchEvent(new CustomEvent('storage-sync', { detail: { key } }));
                 return true;
             } else if (this.indexedDB) {
+                console.log('[Storage] 尝试使用 IndexedDB 存储');
                 // 使用IndexedDB存储
                 try {
                     await this.setToIndexedDB(this.getKey(key), serializedValue);
+                    console.log('[Storage] IndexedDB 存储成功');
+                    // 派发事件，通知其他页面数据已更新
+                    window.dispatchEvent(new CustomEvent('storage-sync', { detail: { key } }));
                     return true;
                 } catch (indexedDBError) {
                     console.warn('[Storage] IndexedDB存储失败，尝试localStorage:', indexedDBError);
 
                     // 降级到localStorage
-                    if (!this.checkStorageQuota(serializedValue.length)) {
+                    const quotaCheck = await this.checkStorageQuota(serializedValue.length);
+                    if (!quotaCheck) {
                         console.warn('[Storage] 存储空间不足，尝试清理旧数据');
                         this.cleanupOldData();
 
-                        if (!this.checkStorageQuota(serializedValue.length)) {
+                        const quotaCheckAfterCleanup = await this.checkStorageQuota(serializedValue.length);
+                        if (!quotaCheckAfterCleanup) {
                             console.error('[Storage] 存储空间仍然不足，无法保存数据');
                             this.handleStorageQuotaExceeded(key, value);
                             return false;
                         }
                     }
 
+                    console.log('[Storage] 使用 localStorage 存储 (IndexedDB fallback)');
                     localStorage.setItem(this.getKey(key), serializedValue);
+                    // 派发事件，通知其他页面数据已更新
+                    window.dispatchEvent(new CustomEvent('storage-sync', { detail: { key } }));
                     return true;
                 }
             } else {
+                console.log('[Storage] 使用 localStorage 存储 (主要存储)');
                 // 使用localStorage存储
-                if (!this.checkStorageQuota(serializedValue.length)) {
+                const quotaCheck = await this.checkStorageQuota(serializedValue.length);
+                if (!quotaCheck) {
                     console.warn('[Storage] 存储空间不足，尝试清理旧数据');
                     this.cleanupOldData();
 
-                    if (!this.checkStorageQuota(serializedValue.length)) {
+                    const quotaCheckAfterCleanup = await this.checkStorageQuota(serializedValue.length);
+                    if (!quotaCheckAfterCleanup) {
                         console.error('[Storage] 存储空间仍然不足，无法保存数据');
                         this.handleStorageQuotaExceeded(key, value);
                         return false;
@@ -402,10 +491,12 @@ class StorageManager {
                 }
 
                 localStorage.setItem(this.getKey(key), serializedValue);
+                // 派发事件，通知其他页面数据已更新
+                window.dispatchEvent(new CustomEvent('storage-sync', { detail: { key } }));
                 return true;
             }
         } catch (error) {
-            console.error('Storage set error:', error);
+            console.error('[Storage] set 操作错误:', error);
             this.handleStorageError(key, value, error);
             return false;
         }
@@ -414,6 +505,50 @@ class StorageManager {
     /**
      * 获取数据
      */
+    /**
+     * 向数组追加新项
+     * @param {string} key - 存储键名
+     * @param {*} value - 要追加的项
+     * @returns {Promise<boolean>} 成功返回 true，失败返回 false
+     */
+    async append(key, value) {
+        try {
+            let existing = await this.get(key) || [];
+            if (!Array.isArray(existing)) {
+                console.warn(`[Storage] Key ${key} 不是数组，创建新数组`);
+                existing = [];
+            }
+
+            const newArray = [...existing, value];
+
+            // 估计序列化后的大小
+            const estimatedSize = JSON.stringify({
+                data: newArray,
+                timestamp: Date.now(),
+                version: this.version,
+                compressed: false
+            }).length;
+
+            let quotaOk = await this.checkStorageQuota(estimatedSize);
+            if (!quotaOk) {
+                console.warn('[Storage] 存储空间不足，尝试清理旧数据');
+                await this.cleanupOldData();
+                quotaOk = await this.checkStorageQuota(estimatedSize);
+                if (!quotaOk) {
+                    console.error('[Storage] 存储空间仍然不足，无法追加数据');
+                    this.handleStorageQuotaExceeded(key, newArray);
+                    return false;
+                }
+            }
+
+            const success = await this.set(key, newArray);
+            return success;
+        } catch (error) {
+            console.error('[Storage] Append error:', error);
+            this.handleStorageError(key, value, error);
+            return false;
+        }
+    }
     async get(key, defaultValue = null) {
         try {
             let serializedValue;
@@ -520,17 +655,26 @@ class StorageManager {
      */
     async checkStorageQuota(dataSize) {
         try {
+            console.log(`[Storage] 检查存储配额，需要空间: ${dataSize} 字节`);
             if (this.fallbackStorage) {
+                console.log('[Storage] 内存存储，无配额限制');
                 return true; // 内存存储没有配额限制
             }
 
             const storageInfo = await this.getStorageInfo();
-            if (!storageInfo) return false;
+            if (!storageInfo) {
+                console.warn('[Storage] 无法获取存储信息，拒绝操作');
+                return false;
+            }
+
+            console.log(`[Storage] 当前存储类型: ${storageInfo.type}, 已用: ${storageInfo.used} 字节`);
 
             if (storageInfo.type === 'Hybrid' || storageInfo.type === 'IndexedDB') {
                 // 混合存储或IndexedDB没有固定配额限制，但我们仍然检查数据大小
                 const maxSize = 105 * 1024 * 1024; // 105MB限制 (localStorage 5MB + IndexedDB 100MB)
-                return storageInfo.used + dataSize <= maxSize;
+                const hasSpace = storageInfo.used + dataSize <= maxSize;
+                console.log(`[Storage] Hybrid/IndexedDB 检查: 已用 ${storageInfo.used}, 需要 ${dataSize}, 最大 ${maxSize}, 结果: ${hasSpace}`);
+                return hasSpace;
             }
 
             const currentUsage = storageInfo.used;
@@ -541,11 +685,15 @@ class StorageManager {
             const bufferSpace = quota * 0.2;
             const safeAvailableSpace = availableSpace - bufferSpace;
 
-            console.log(`[Storage] 当前使用: ${(currentUsage / 1024).toFixed(2)}KB, 可用空间: ${(safeAvailableSpace / 1024).toFixed(2)}KB, 需要空间: ${(dataSize / 1024).toFixed(2)}KB`);
+            console.log(`[Storage] localStorage 检查: 当前使用 ${(currentUsage / 1024).toFixed(2)}KB, 总配额 ${quota / 1024}KB, 可用 ${(availableSpace / 1024).toFixed(2)}KB, 安全可用 ${(safeAvailableSpace / 1024).toFixed(2)}KB, 需要 ${(dataSize / 1024).toFixed(2)}KB`);
 
-            return safeAvailableSpace >= dataSize;
+            const hasSpace = safeAvailableSpace >= dataSize;
+            if (!hasSpace) {
+                console.warn('[Storage] localStorage 空间不足');
+            }
+            return hasSpace;
         } catch (error) {
-            console.error('Storage quota check error:', error);
+            console.error('[Storage] 配额检查错误:', error);
             return false;
         }
     }
@@ -700,6 +848,69 @@ class StorageManager {
 
         } catch (error) {
             console.error('[Storage] 清理旧数据失败:', error);
+        }
+    }
+
+    /**
+     * 迁移遗留数据到新命名空间
+     * 只运行一次
+     */
+    async migrateLegacyData() {
+        console.log('[Storage] 开始迁移遗留数据');
+        try {
+            const legacyKeys = Object.keys(localStorage).filter(k =>
+                k === 'practice_records' ||
+                k === 'user_progress' ||
+                k === 'scores' ||
+                k.startsWith('old_prefix_')
+            );
+
+            if (legacyKeys.length === 0) {
+                console.log('[Storage] 无遗留数据需要迁移');
+                await this.set('migration_completed', true);
+                return;
+            }
+
+            let migratedCount = 0;
+            for (const oldKey of legacyKeys) {
+                try {
+                    const legacyDataStr = localStorage.getItem(oldKey);
+                    if (!legacyDataStr) continue;
+
+                    let legacyData;
+                    try {
+                        legacyData = JSON.parse(legacyDataStr);
+                    } catch (parseError) {
+                        console.warn(`[Storage] 解析遗留数据失败: ${oldKey}`, parseError);
+                        continue;
+                    }
+
+                    if (!Array.isArray(legacyData)) {
+                        console.warn(`[Storage] 遗留数据非数组，跳过: ${oldKey}`);
+                        continue;
+                    }
+
+                    // 对应新键（去除 old_prefix_ 如果存在）
+                    let newKey = oldKey.replace(/^old_prefix_/, '');
+                    const current = await this.get(newKey, []);
+                    const merged = this.mergeRecords(current, legacyData);
+                    await this.set(newKey, merged);
+
+                    // 删除旧键
+                    localStorage.removeItem(oldKey);
+                    migratedCount++;
+                    console.log(`[Storage] 成功迁移并合并数据: ${oldKey} -> ${newKey} (${legacyData.length} 项)`);
+                } catch (migrateError) {
+                    console.error(`[Storage] 迁移失败: ${oldKey}`, migrateError);
+                }
+            }
+
+            console.log(`[Storage] 数据迁移完成: ${migratedCount} 个键成功迁移`);
+            await this.set('migration_completed', true);
+        } catch (error) {
+            console.error('[Storage] 迁移遗留数据失败:', error);
+            // 即使失败也设置标志，避免无限重试
+            await this.set('migration_completed', true);
         }
     }
 
