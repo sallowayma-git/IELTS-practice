@@ -631,7 +631,11 @@ class ExamSystemApp {
      * 更新总览页面统计信息
      */
     async updateOverviewStats() {
-        const examIndex = await storage.get('exam_index', []);
+        let examIndex = await storage.get('exam_index', []);
+        if (!Array.isArray(examIndex)) {
+            console.warn('[App] examIndex不是数组，回退到 window.examIndex');
+            examIndex = Array.isArray(window.examIndex) ? window.examIndex : [];
+        }
         let practiceRecords = await storage.get('practice_records', []);
 
         // 确保practiceRecords是数组
@@ -693,11 +697,12 @@ class ExamSystemApp {
      */
     updateCategoryStats(examIndex, practiceRecords) {
         const categories = ['P1', 'P2', 'P3'];
+        const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
 
         categories.forEach(category => {
-            const categoryExams = examIndex.filter(exam => exam.category === category);
+            const categoryExams = list.filter(exam => exam.category === category);
             const categoryRecords = practiceRecords.filter(record => {
-                const exam = examIndex.find(e => e.id === record.examId);
+                const exam = list.find(e => e.id === record.examId);
                 return exam && exam.category === category;
             });
 
@@ -1542,7 +1547,11 @@ class ExamSystemApp {
      * 开始练习会话
      */
     async startPracticeSession(examId) {
-        const examIndex = await storage.get('exam_index', []);
+        let examIndex = await storage.get('exam_index', []);
+        if (!Array.isArray(examIndex)) {
+            console.warn('[App] examIndex不是数组，回退到 window.examIndex');
+            examIndex = Array.isArray(window.examIndex) ? window.examIndex : [];
+        }
         const exam = examIndex.find(e => e.id === examId);
 
         if (!exam) {
@@ -1819,8 +1828,9 @@ class ExamSystemApp {
         try {
             console.log('[DataCollection] 开始保存真实练习数据:', examId, realData);
             
-            const examIndex = await storage.get('exam_index', []);
-            const exam = examIndex.find(e => e.id === examId);
+            let examIndex = await storage.get('exam_index', []);
+            const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
+            const exam = list.find(e => e.id === examId);
 
             if (!exam) {
                 console.error('[DataCollection] 无法找到题目信息:', examId);
