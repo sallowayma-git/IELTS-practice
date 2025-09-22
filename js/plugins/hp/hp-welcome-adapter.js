@@ -24,6 +24,25 @@
       '</div>'
     ].join('');
     root.__hpRendered = true;
+
+    // Extra safety: directly bind clicks here (besides hp-welcome-cta delegation)
+    try {
+      var readBtn = root.querySelector('[data-cta="start-reading"]');
+      var listenBtn = root.querySelector('[data-cta="start-listening"]');
+      function start(type){
+        try {
+          var exams = (window.hpCore && hpCore.getExamIndex) ? hpCore.getExamIndex() : (window.completeExamIndex||[]);
+          if (!Array.isArray(exams) || exams.length===0) { if (hpCore && hpCore.showMessage) hpCore.showMessage('题库为空','warning'); return; }
+          var pool = exams.filter(function(e){ return e && (e.type||'').toLowerCase()===type; });
+          if (!pool.length) { if (hpCore && hpCore.showMessage) hpCore.showMessage(type==='reading'?'阅读题库为空':'听力题库为空','warning'); return; }
+          var ex = pool[Math.floor(Math.random()*pool.length)];
+          if (hpCore && typeof hpCore.startExam==='function') return hpCore.startExam(ex.id);
+          if (typeof window.openExam==='function') return window.openExam(ex.id);
+        } catch (err) { try { console.warn('[HP Welcome Adapter] start failed', err); } catch(_){} }
+      }
+      if (readBtn) readBtn.addEventListener('click', function(ev){ ev.preventDefault(); start('reading'); });
+      if (listenBtn) listenBtn.addEventListener('click', function(ev){ ev.preventDefault(); start('listening'); });
+    } catch (_) {}
   }
 
   function injectStats(){
@@ -54,4 +73,3 @@
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
-

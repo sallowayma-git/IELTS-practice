@@ -371,7 +371,9 @@ function updatePracticeView() {
 
     if (currentExamType !== 'all') {
         recordsToShow = recordsToShow.filter(record => {
-            const exam = examIndex.find(e => e.id === record.examId || e.title === record.title);
+            // 增加数组化防御
+            const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
+            const exam = list.find(e => e.id === record.examId || e.title === record.title);
             return exam && exam.type === currentExamType;
         });
     }
