@@ -728,6 +728,8 @@ class ExamSystemApp {
         const urlParams = new URLSearchParams(window.location.search);
         const urlView = urlParams.get('view');
         const initialView = urlView || 'overview';
+
+        // 初始化完成后立即调用导航到指定视图
         this.navigateToView(initialView);
     }
 
@@ -977,7 +979,7 @@ class ExamSystemApp {
     injectDataCollectionScript(examWindow, examId) {
         console.log('[DataInjection] 开始注入数据采集脚本:', examId);
 
-        // 等待页面加载完成后注入脚本
+        // 新增修复3E：修复await语法错误 - 将内部injectScript改为async
         const injectScript = async () => {
             try {
                 // 检查窗口是否仍然存在
@@ -2822,8 +2824,9 @@ class ExamSystemApp {
 
 }
 
+// 新增修复3E：在js/app.js的DOMContentLoaded初始化中去除顶层await
 // 应用启动
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
     try {
         (function(){ try { window.app = new ExamSystemApp(); window.app.initialize(); } catch(e) { console.error('[App] 初始化失败:', e); } })();
     } catch (error) {
