@@ -36,9 +36,26 @@
       btns[2] && btns[2].addEventListener('click', (e)=>{ e.preventDefault(); exportData(); });
       btns[3] && btns[3].addEventListener('click', (e)=>{ e.preventDefault(); importData(); });
     }
+
+    // Text-based fallback binding for all buttons (no :contains, works on file://)
+    try {
+      Array.from(document.querySelectorAll('button')).forEach(function(b){
+        var t = (b.textContent||'').trim();
+        if (/清.*缓存/.test(t)) b.addEventListener('click', function(e){ e.preventDefault(); clearCache(); });
+        if (/加载.*题库|重新加载/.test(t)) b.addEventListener('click', function(e){ e.preventDefault(); loadLib(false); });
+        if (/配置|题库配置/.test(t)) b.addEventListener('click', function(e){ e.preventDefault(); showConfigs(); });
+        if (/强制.*刷新/.test(t)) b.addEventListener('click', function(e){ e.preventDefault(); forceRefresh(); });
+        if (/创建.*备份/.test(t)) b.addEventListener('click', function(e){ e.preventDefault(); createBackup(); });
+        if (/备份.*列表/.test(t)) b.addEventListener('click', function(e){ e.preventDefault(); backupList(); });
+        if (/导出/.test(t)) b.addEventListener('click', function(e){ e.preventDefault(); exportData(); });
+        if (/导入/.test(t)) b.addEventListener('click', function(e){ e.preventDefault(); importData(); });
+      });
+    } catch(_){ }
   }
 
-  hpCore.ready(()=> wire());
+  function init(){ try { wire(); } catch(e){ try{ console.warn('[HP-Settings-Bridge] wire failed', e); }catch(_){ } } }
+
+  if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', function(){ hpCore.ready(init); }); }
+  else { hpCore.ready(init); }
   try { console.log('[HP-Settings-Bridge] ready'); } catch(_){}
 })();
-

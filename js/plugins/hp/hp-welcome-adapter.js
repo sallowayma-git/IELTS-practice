@@ -34,7 +34,10 @@
           var exams = (window.hpCore && hpCore.getExamIndex) ? hpCore.getExamIndex() : (window.completeExamIndex||[]);
           if (!Array.isArray(exams) || exams.length===0) { if (hpCore && hpCore.showMessage) hpCore.showMessage('题库为空','warning'); return; }
           var pool = exams.filter(function(e){ return e && (e.type||'').toLowerCase()===type; });
-          if (!pool.length) { if (hpCore && hpCore.showMessage) hpCore.showMessage(type==='reading'?'阅读题库为空':'听力题库为空','warning'); return; }
+          if (!pool.length) {
+            // fallback: if no specific type available, pick from any
+            pool = exams.slice();
+          }
           var ex = pool[Math.floor(Math.random()*pool.length)];
           if (hpCore && typeof hpCore.startExam==='function') return hpCore.startExam(ex.id);
           if (typeof window.openExam==='function') return window.openExam(ex.id);

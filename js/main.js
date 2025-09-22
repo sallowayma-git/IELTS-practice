@@ -506,21 +506,22 @@ function renderExamItem(exam) {
 }
 
 function resolveExamBasePath(exam) {
-  let basePath = "";
-  if (exam && exam.path) {
+  let basePath = (exam && exam.path) ? String(exam.path) : "";
+  try {
     const pathMap = getPathMap();
-    if (exam.type && pathMap[exam.type] && pathMap[exam.type].root) {
-      basePath = pathMap[exam.type].root + String(exam.path);
-    } else {
-      basePath = String(exam.path);
+    const type = exam && exam.type;
+    const root = type && pathMap[type] && pathMap[type].root ? String(pathMap[type].root) : "";
+    if (root) {
+      // 避免重复前缀（如 ListeningPractice/ 已在 path 中）
+      const normalizedBase = basePath.replace(/\\/g, '/');
+      const normalizedRoot = root.replace(/\\/g, '/');
+      if (!normalizedBase.startsWith(normalizedRoot)) {
+        basePath = normalizedRoot + basePath;
+      }
     }
-  }
-
-  // 最后统一/与\，保证basePath以/结尾
-  if (!basePath.endsWith('/')) {
-    basePath += "/";
-  }
-  basePath = basePath.replace(/\\/g, "/").replace(/\/+/g, "/");
+  } catch (_) {}
+  if (!basePath.endsWith('/')) basePath += '/';
+  basePath = basePath.replace(/\\/g, '/').replace(/\/+\//g, '/');
   return basePath;
 }
 
@@ -535,10 +536,14 @@ function getPathMap() {
     // Fallback to embedded path map
     return {
       reading: {
-        root: '', // 置为空串，保持file://下资源定位正确
+        // 将阅读题目根路径指向实际数据所在目录
+        // 说明：数据脚本中的 exam.path 仅为子目录名（如 "1. P1 - A Brief History.../"），
+        // 需要在运行时拼接到真实根目录下
+        root: '睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/',
         exceptions: {}
       },
       listening: {
+        // 如本地不存在 ListeningPractice 目录，则 PDF/HTML 将无法打开（请确认资源已就位）
         root: 'ListeningPractice/',
         exceptions: {}
       }
