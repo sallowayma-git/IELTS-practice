@@ -320,6 +320,8 @@ let filteredExams = [];
 let app = null; // 主应用实例
 let pdfHandler = null; // PDF处理器实例
 let browseStateManager = null; // 浏览状态管理器实例
+window.__legacyBrowseType = window.__legacyBrowseType || 'all';
+window.__browseFilter = window.__browseFilter || { category: 'all', type: 'all' };
 
 // 练习记录数据（使用统一的键名）
 let practiceRecords = JSON.parse(localStorage.getItem('practice_records') || '[]');
@@ -429,7 +431,8 @@ function loadLibrary() {
     const cachedData = storage.get(activeConfigKey);
     if (cachedData) {
         console.log(`[System] 使用localStorage中key为'${activeConfigKey}'的题库数据`);
-        examIndex = cachedData;
+        examIndex = normalizeExamIndex(cachedData);
+        storage.set(activeConfigKey, examIndex);
 
         let configName = '默认题库';
         if (activeConfigKey !== 'exam_index') {
@@ -442,6 +445,8 @@ function loadLibrary() {
         }
         // 确保当前加载的配置存在于配置列表中
         saveLibraryConfiguration(configName, activeConfigKey, examIndex.length);
+
+        try { window.examIndex = examIndex; } catch (_) {}
 
         updateOverview();
         updateSystemInfo();
@@ -457,13 +462,26 @@ function loadLibrary() {
             throw new Error('默认题库数据未正确加载');
         }
 
-        examIndex = [...window.completeExamIndex];
+        const readingIndex = window.completeExamIndex.map(exam => ({
+            ...exam,
+            type: exam.type || 'reading'
+        }));
+
+        const listeningIndex = Array.isArray(window.listeningExamIndex)
+            ? window.listeningExamIndex.map(exam => ({
+                ...exam,
+                type: exam.type || 'listening'
+            }))
+            : [];
+
+        examIndex = [...readingIndex, ...listeningIndex];
 
         if (examIndex.length === 0) {
             throw new Error('默认题库数据为空');
         }
 
         // 将默认题库保存为 'exam_index' 配置，并设置为活动
+        examIndex = normalizeExamIndex(examIndex);
         storage.set('exam_index', examIndex);
         saveLibraryConfiguration('默认题库', 'exam_index', examIndex.length);
         setActiveLibraryConfiguration('exam_index');
@@ -516,6 +534,8 @@ function finishLibraryLoading(startTime) {
         window.performanceOptimizer.recordLoadTime(loadTime);
     }
 
+    try { window.examIndex = examIndex; } catch (_) {}
+
     const htmlCount = examIndex.filter(exam => exam.hasHtml).length;
     const pdfCount = examIndex.filter(exam => !exam.hasHtml).length;
 
@@ -535,7 +555,7 @@ function finishLibraryLoading(startTime) {
 function loadLibraryFallback() {
     try {
         // 创建基本的题库结构
-        examIndex = [
+        examIndex = normalizeExamIndex([
             {
                 id: 'fallback-notice',
                 title: '题库加载异常，请刷新页面重试',
@@ -544,9 +564,10 @@ function loadLibraryFallback() {
                 path: '',
                 filename: '',
                 hasHtml: false,
-                hasPdf: false
+                hasPdf: false,
+                type: 'reading'
             }
-        ];
+        ]);
 
         showMessage('已启用备用模式，功能可能受限', 'warning');
         updateOverview();
@@ -932,10 +953,30 @@ function performSearch(query) {
 }
 
 // 浏览分类
-function browseCategory(category) {
-    currentCategory = category;
-    document.getElementById('browse-title').textContent = `📚 ${category} 题库浏览`;
+function browseCategory(category, type) {
+    try {
+        window.__pendingBrowseFilter = { category, type };
+        window.__browseFilter = { category, type };
+    } catch (_) {}
+
+    // 优先使用 App 的统一处理
+    if (window.app && typeof window.app.browseCategory === 'function') {
+        window.app.browseCategory(category, type);
+        return;
+    }
+
+    // 回退：直接展示浏览视图并应用筛选
     showView('browse', false); // 不重置分类
+    if (typeof window.applyBrowseFilter === 'function') {
+        window.applyBrowseFilter(category, type);
+    } else {
+        currentCategory = category || 'all';
+        if (typeof type === 'string') {
+            window.__legacyBrowseType = type;
+        }
+        document.getElementById('browse-title').textContent = `📚 ${category} 题库浏览`;
+        loadExamList();
+    }
 }
 
 // 加载题目列表
@@ -949,13 +990,45 @@ function loadExamList() {
     }
 
     setTimeout(() => {
+        const pendingFilter = window.__pendingBrowseFilter || window.__browseFilter || {};
+        const desiredCategory = (pendingFilter.category || currentCategory || 'all').toString().trim();
+        const desiredType = (pendingFilter.type || window.__legacyBrowseType || 'all') || 'all';
+
+        const sourceIndex = Array.isArray(window.examIndex) ? window.examIndex : examIndex;
+        examIndex = sourceIndex;
+
         let examsToShow = examIndex;
 
-        if (currentCategory !== 'all') {
-            examsToShow = examIndex.filter(exam => exam.category === currentCategory);
+        if (desiredType && desiredType !== 'all') {
+            examsToShow = examsToShow.filter(exam => (exam.type || 'reading') === desiredType);
         }
 
-        // 隐藏loading状态
+        if (desiredCategory && desiredCategory !== 'all') {
+            const normalizedCategory = desiredCategory.toUpperCase();
+            examsToShow = examsToShow.filter(exam => exam.category === normalizedCategory);
+            currentCategory = normalizedCategory;
+        } else {
+            currentCategory = 'all';
+        }
+
+        window.__legacyBrowseType = desiredType;
+        window.__browseFilter = { category: currentCategory, type: desiredType };
+
+        if (window.__pendingBrowseFilter) {
+            delete window.__pendingBrowseFilter;
+        }
+
+        const browseTitle = document.getElementById('browse-title');
+        if (browseTitle) {
+            const categoryLabel = currentCategory !== 'all' ? `${currentCategory} ` : '';
+            let typeLabel = '';
+            if (desiredType === 'reading') typeLabel = '阅读';
+            else if (desiredType === 'listening') typeLabel = '听力';
+            browseTitle.textContent = categoryLabel
+                ? `📚 ${categoryLabel}${typeLabel || '题库'}浏览`
+                : '📚 题库浏览';
+        }
+
         if (loadingElement) {
             loadingElement.style.display = 'none';
         }
@@ -971,9 +1044,43 @@ function loadExamList() {
             return;
         }
 
-        filteredExams = examsToShow;
-        displayExams(filteredExams);
+        const sortedExams = sortExamsForDisplay(examsToShow);
+        filteredExams = sortedExams;
+        window.currentCategory = currentCategory;
+        window.currentExamType = desiredType;
+        displayExams(sortedExams);
     }, 500);
+}
+
+function sortExamsForDisplay(exams) {
+    const frequencyRank = { high: 0, medium: 1, low: 2 };
+    return [...exams].sort((a, b) => {
+        const rankA = frequencyRank[(a.frequency || '').toLowerCase()] ?? 3;
+        const rankB = frequencyRank[(b.frequency || '').toLowerCase()] ?? 3;
+        if (rankA !== rankB) return rankA - rankB;
+        const pathA = (a.path || a.title || '').toString();
+        const pathB = (b.path || b.title || '').toString();
+        return pathA.localeCompare(pathB, 'zh-Hans-u-nu-latn', { numeric: true, sensitivity: 'base' });
+    });
+}
+
+function normalizeExamIndex(list) {
+    const listeningIds = new Set(
+        Array.isArray(window.listeningExamIndex)
+            ? window.listeningExamIndex.map(exam => exam.id)
+            : []
+    );
+
+    return (Array.isArray(list) ? list : []).map(exam => {
+        const normalized = { ...exam };
+        if (!normalized.type) {
+            normalized.type = listeningIds.has(normalized.id) ? 'listening' : 'reading';
+        }
+        if (!normalized.searchText) {
+            normalized.searchText = `${normalized.title || ''} ${normalized.category || ''}`.toLowerCase();
+        }
+        return normalized;
+    });
 }
 
 // 优化的题目列表显示函数

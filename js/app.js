@@ -836,6 +836,7 @@ class ExamSystemApp {
         try {
             // 记录待应用筛选（可显式传入类型，如 'reading' 或 'listening'）
             window.__pendingBrowseFilter = { category, type };
+            window.__browseFilter = { category, type };
         } catch (_) {}
 
         // 无论是否存在旧的 ExamBrowser，都统一走新浏览视图

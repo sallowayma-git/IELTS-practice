@@ -538,6 +538,9 @@ function applyBrowseFilter(category = 'all', type = null) {
 
         currentExamType = type;
         currentCategory = normalizedCategory;
+        try {
+            window.__browseFilter = { category: normalizedCategory, type };
+        } catch (_) {}
 
         // 保持标题简洁
         const titleEl = document.getElementById('browse-title');
@@ -564,6 +567,20 @@ function initializeBrowseView() {
     currentExamType = 'all';
     document.getElementById('browse-title').textContent = '📚 题库浏览';
     loadExamList();
+}
+
+// 全局桥接：HTML 按钮 onclick="browseCategory('P1','reading')"
+if (typeof window.browseCategory !== 'function') {
+    window.browseCategory = function(category, type) {
+        try {
+            if (window.app && typeof window.app.browseCategory === 'function') {
+                window.app.browseCategory(category, type);
+                return;
+            }
+        } catch (_) {}
+        // 回退：直接应用筛选
+        try { applyBrowseFilter(category, type); } catch (_) {}
+    };
 }
 
 function filterRecordsByType(type) {
