@@ -17,6 +17,15 @@ let selectedRecords = new Set();
 // 降级握手映射：sessionId -> { examId, timer }
 const fallbackExamSessions = new Map();
 
+// 优先题目映射表：按类别指定优先显示的题目ID
+const preferredFirstExamByCategory = new Map([
+  ['P1_reading', 'A Brief History of Tea 茶叶简史'], // P1阅读类别的优先题目
+  ['P2_reading', 'Bird Migration 鸟类迁徙'], // P2阅读类别的优先题目
+  ['P3_reading', 'Elephant Communication 大象交流'], // P3阅读类别的优先题目
+  ['P3_listening', 'Pacific Navigation and Voyaging 太平洋航海'], // P3听力类别的优先题目
+  ['P4_listening', 'The Underground House'] // P4听力类别的优先题目
+]);
+
 
 // --- Initialization ---
 function initializeLegacyComponents() {
@@ -485,23 +494,57 @@ function updatePracticeView() {
 
 
 function browseCategory(category, type = 'reading') {
-    currentCategory = category;
-    currentExamType = type;
-    const typeText = type === 'listening' ? '听力' : '阅读';
-    document.getElementById('browse-title').textContent = `📚 ${category} ${typeText}题库浏览`;
-    // Navigate to browse view safely without relying on legacy showView
-    if (window.app && typeof window.app.navigateToView === 'function') {
-      window.app.navigateToView('browse');
-    } else if (typeof window.showView === 'function') {
-      showView('browse', false);
-    } else {
-      try {
-        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-        const target = document.getElementById('browse-view');
-        if (target) target.classList.add('active');
-      } catch(_) {}
+    // 优先调用 window.app.browseCategory(category, type)
+    if (window.app && typeof window.app.browseCategory === 'function') {
+        try {
+            window.app.browseCategory(category, type);
+            return;
+        } catch (error) {
+            console.warn('[browseCategory] window.app.browseCategory 调用失败，使用降级路径:', error);
+        }
     }
-    loadExamList(); // Ensure exam list is loaded when browsing category
+
+    // 降级路径：手动处理浏览筛选
+    try {
+        // 正确设置筛选器
+        currentCategory = category;
+        currentExamType = type;
+
+        // 设置待处理筛选器，确保组件未初始化时筛选不会丢失
+        try {
+            window.__pendingBrowseFilter = { category, type };
+            window.__browseFilter = { category, type };
+        } catch (_) {
+            // 如果全局变量设置失败，继续执行
+        }
+
+        // 正确更新标题使用中文字符串
+        const typeText = type === 'listening' ? '听力' : '阅读';
+        const titleEl = document.getElementById('browse-title');
+        if (titleEl) {
+            titleEl.textContent = `📚 ${category} ${typeText}题库浏览`;
+        }
+
+        // 导航到浏览视图
+        if (window.app && typeof window.app.navigateToView === 'function') {
+            window.app.navigateToView('browse');
+        } else if (typeof window.showView === 'function') {
+            showView('browse', false);
+        } else {
+            try {
+                document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+                const target = document.getElementById('browse-view');
+                if (target) target.classList.add('active');
+            } catch(_) {}
+        }
+
+        // 确保题目列表被加载
+        loadExamList();
+
+    } catch (error) {
+        console.error('[browseCategory] 处理浏览类别时出错:', error);
+        showMessage('浏览类别时出现错误', 'error');
+    }
 }
 
 function filterByType(type) {
@@ -588,9 +631,11 @@ function filterRecordsByType(type) {
     updatePracticeView();
 }
 
+
 function loadExamList() {
     const container = document.getElementById('exam-list-container');
-    let examsToShow = examIndex;
+    // 使用 Array.from() 创建副本，避免污染全局 examIndex
+    let examsToShow = Array.from(examIndex);
 
     if (currentExamType !== 'all') {
         examsToShow = examsToShow.filter(exam => exam.type === currentExamType);
@@ -598,7 +643,19 @@ function loadExamList() {
     if (currentCategory !== 'all') {
         examsToShow = examsToShow.filter(exam => exam.category === currentCategory);
     }
-    
+
+    // 如果有优先题目映射且当前类别不是'all'，则重新排序
+    if (currentCategory !== 'all' && preferredFirstExamByCategory.has(currentCategory)) {
+        const preferredTitle = preferredFirstExamByCategory.get(currentCategory);
+        const preferredIndex = examsToShow.findIndex(exam => exam.title === preferredTitle);
+
+        if (preferredIndex > 0) {
+            // 将优先题目移到列表开头
+            const preferredExam = examsToShow.splice(preferredIndex, 1)[0];
+            examsToShow.unshift(preferredExam);
+        }
+    }
+
     filteredExams = examsToShow;
     displayExams(filteredExams);
 }
@@ -850,7 +907,7 @@ function exportExamIndexToScriptFile(fullIndex, noteLabel = '') {
         const header = `// 题库配置导出 ${d.toLocaleString()}\n// 说明: 保存此文件到 assets/scripts/ 并在需要时手动在 index.html 引入以覆盖内置数据\n`;
         const content = `${header}window.completeExamIndex = ${JSON.stringify(reading, null, 2)};\n\nwindow.listeningExamIndex = ${JSON.stringify(listening, null, 2)};\n`;
 
-        const blob = new Blob([content], { type: 'application/javascript' });
+        const blob = new Blob([content], { type: 'application/javascript; charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -1352,7 +1409,7 @@ async function exportPracticeData() {
                     records: records
                 };
 
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json; charset=utf-8' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
@@ -1829,7 +1886,7 @@ async function exportPracticeData() {
     } catch(_) {}
     try {
         var records = (window.storage && storage.get) ? (await storage.get('practice_records', [])) : (window.practiceRecords || []);
-        var blob = new Blob([JSON.stringify(records, null, 2)], { type: 'application/json' });
+        var blob = new Blob([JSON.stringify(records, null, 2)], { type: 'application/json; charset=utf-8' });
         var url = URL.createObjectURL(blob);
         var a = document.createElement('a'); a.href = url; a.download = 'practice-records.json';
         document.body.appendChild(a); a.click(); document.body.removeChild(a);

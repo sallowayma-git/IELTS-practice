@@ -641,18 +641,25 @@ class DataManagementPanel {
      * 下载文件
      */
     downloadFile(content, filename, mimeType) {
-        const blob = new Blob([content], { type: mimeType });
+        // 对于文本类型的内容，添加UTF-8编码支持
+        const isTextType = mimeType.includes('text/') ||
+                          mimeType.includes('application/json') ||
+                          mimeType.includes('application/javascript') ||
+                          mimeType.includes('application/xml');
+
+        const blobOptions = isTextType ? { type: mimeType + '; charset=utf-8' } : { type: mimeType };
+        const blob = new Blob([content], blobOptions);
         const url = URL.createObjectURL(blob);
-        
+
         const a = document.createElement('a');
         a.href = url;
         a.download = filename;
         a.style.display = 'none';
-        
+
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        
+
         URL.revokeObjectURL(url);
     }
 
