@@ -546,10 +546,22 @@ class ScoreStorage {
                 }
             }
 
-            // 用时归一（秒）: treat non-number, NaN, or non-positive as missing
+            // 用时归一（秒）: consider multiple possible fields; prefer positive seconds
             if (!(typeof r.duration === 'number' && isFinite(r.duration) && r.duration > 0)) {
-                if (typeof rd.duration === 'number' && rd.duration > 0) {
-                    r.duration = rd.duration;
+                const sInfo = r.scoreInfo || rd.scoreInfo || {};
+                const candidates = [
+                    r.duration, rd.duration, r.durationSeconds, r.duration_seconds,
+                    r.elapsedSeconds, r.elapsed_seconds, r.timeSpent, r.time_spent,
+                    rd.durationSeconds, rd.elapsedSeconds, rd.timeSpent,
+                    sInfo.duration, sInfo.timeSpent
+                ];
+                let picked;
+                for (const v of candidates) {
+                    const n = Number(v);
+                    if (Number.isFinite(n) && n > 0) { picked = n; break; }
+                }
+                if (picked !== undefined) {
+                    r.duration = Math.floor(picked);
                 } else if (r.startTime && r.endTime) {
                     r.duration = Math.max(0, Math.floor((new Date(r.endTime) - new Date(r.startTime)) / 1000));
                 } else {
