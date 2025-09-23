@@ -1319,7 +1319,9 @@
                                 <i class="fas fa-list"></i>
                                 备份列表
                             </button>
-                            <button class="btn btn-primary" onclick="importData()">
+                            <!-- Use compatibility importer to support newer export schema -->
+                            <input type="file" id="compat-import-input" accept=".json" style="display:none" onchange="(function(e){try{var f=e.target.files&&e.target.files[0];if(!f)return; if(window.dataIntegrityManager&&typeof window.dataIntegrityManager.importData==='function'){ Promise.resolve(window.dataIntegrityManager.importData(f)).then(function(){ try{ (window.syncPracticeRecords||window.fixedSyncPracticeRecords||function(){})(); }catch(_){} try{ showMessage&&showMessage('数据导入成功','success'); }catch(_){} }).catch(function(err){ try{ showMessage&&showMessage('数据导入失败: '+(err&&err.message||err),'error'); }catch(_){} }); } else if (typeof window.importData==='function'){ window.importData(); } }catch(err){ try{ alert('导入失败: '+err); }catch(_){} }})(event)" />
+                            <button class="btn btn-primary" onclick="(function(){ var i=document.getElementById('compat-import-input'); if(i) i.click(); else if (typeof window.importData==='function') window.importData(); })()">
                                 <i class="fas fa-upload"></i>
                                 导入数据
                             </button>
@@ -1388,8 +1390,48 @@
     <script src="../../js/theme-switcher.js"></script>
 
     <!-- 加载主脚本 -->
+    <!-- Path helpers for nested design pages -->
+    <script src="../../js/plugins/hp/hp-path-prefix.js"></script>
+    <script src="../../js/plugins/hp/hp-path-map.js"></script>
     <script src="../../js/main.js"></script>
     <script src="../../js/boot-fallbacks.js"></script>
+    <script>
+      // Page-level normalization to handle mojibake characters in paths from data scripts
+      (function(){
+        try {
+          var installed = false;
+          function normalizePath(p){
+            try {
+              var s = String(p || '');
+              // Fix replacement char before extensions
+              s = s.replace(/\uFFFDhtml/gi, '.html').replace(/\uFFFDpdf/gi, '.pdf');
+              // Fix bracket pairs like 【高� -> 【高】, 【次� -> 【次】, etc.
+              s = s.replace(/【([^】]{0,6})\uFFFD/g, '【$1】');
+              return s;
+            } catch(_) { return p; }
+          }
+          function wrap(){
+            if (installed) return; installed = true;
+            var orig = window.buildResourcePath;
+            if (typeof orig !== 'function') { installed = false; return; }
+            if (orig.__pageNormalized) return;
+            function wrapped(exam, kind){
+              var out = orig.apply(this, arguments);
+              try { out = normalizePath(out); } catch(_){}
+              return out;
+            }
+            wrapped.__pageNormalized = true;
+            window.buildResourcePath = wrapped;
+            try { console.log('[Academic Page] buildResourcePath normalized wrapper installed'); } catch(_){ }
+          }
+          if (document.readyState === 'loading'){
+            document.addEventListener('DOMContentLoaded', wrap);
+          } else {
+            wrap();
+          }
+        } catch (err) { try { console.warn('[Academic Page] normalizePath install failed', err); } catch(_){ } }
+      })();
+    </script>
     <!-- 运行时修复补丁（异步存储/恢复兼容、本地file环境增强） -->
     <script src="../../js/patches/runtime-fixes.js"></script>
 
@@ -2860,7 +2902,7 @@ IELTS 学术练习管理系统
                         <span style="color: var(--color-gray-500); font-size: var(--font-size-xs);">温暖配色，适合放松阅读</span></p>
                       </div>
                       <div class="theme-actions">
-                        <button class="btn btn-primary" onclick="window.location.href='../../index.html'">
+                        <button class="btn btn-primary" onclick="window.location.href='../../.superdesign/design_iterations/my_melody_ielts_1.html'">
                           <i class="fas fa-exchange-alt" style="margin-right: var(--space-2);"></i>
                           切换主题
                         </button>
@@ -2876,6 +2918,21 @@ IELTS 学术练习管理系统
                       </div>
                       <div class="theme-actions">
                         <button class="btn btn-primary" onclick="window.location.href='../../.superdesign/design_iterations/my_melody_ielts_1.html'">
+                          <i class="fas fa-exchange-alt" style="margin-right: var(--space-2);"></i>
+                          切换主题
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="theme-card">
+                    <div class="theme-info">
+                      <div class="theme-details">
+                        <h4><i class="fas fa-home" style="margin-right: var(--space-2); color: #3b82f6;"></i>主页</h4>
+                        <p>主页面 · 综合功能<br>
+                        <span style="color: var(--color-gray-500); font-size: var(--font-size-xs);">返回主页面，包含所有功能</span></p>
+                      </div>
+                      <div class="theme-actions">
+                        <button class="btn btn-primary" onclick="window.location.href='../../index.html'">
                           <i class="fas fa-exchange-alt" style="margin-right: var(--space-2);"></i>
                           切换主题
                         </button>
