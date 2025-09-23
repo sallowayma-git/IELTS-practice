@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>IELTS Reading Practice - Improving Patient Safety</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        :root { 
+            --line: #e5e7eb; 
+            --bg: #f6f7fb; 
+            --panel: #fff; 
+            --accent: #3b82f6; 
+            --muted: #6b7280; 
+            --shadow: 0 6px 20px rgba(0,0,0,.12); 
+            --text-color: #333;
+            --highlight: #fff3a3;
+            --selbar-bg: #111;
+            --selbar-text: #fff;
+        }
+
+        body.dark-mode {
+            --line: #4a4a4a;
+            --bg: #1a1a1a;
+            --panel: #2a2a2a;
+            --muted: #bbb;
+            --text-color: #f0f0f0;
+            --highlight: #5b21b6;
+            --selbar-bg: #1f2937;
+            --selbar-text: #e5e7eb;
+        }
+        
+        * { 
+            box-sizing: border-box; 
+            margin: 0;
+            padding: 0;
+        }
+
+        html { font-size: 16px; scroll-behavior: smooth; }
+        html.font-regular { font-size: 16px; }
+        html.font-large { font-size: 18px; }
+        html.font-xlarge { font-size: 20px; }
+        
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+            background: var(--bg);
+            color: var(--text-color); 
+            overflow: hidden;
+            height: 100vh;
+            transition: background-color 0.3s ease;
+            padding-bottom: 64px;
+        }
+
+        .header {
+            background-color: var(--panel);
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--line);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            z-index: 100;
+        }
+
+        .header-content {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .header h1 {
+            font-size: 1.2rem;
+            font-weight: 500;
+            color: var(--text-color);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        #timer {
+            font-size: 1rem;
+            font-weight: 500;
+            background: var(--bg);
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--line);
+            min-width: 90px;
+            text-align: center;
+            color: var(--text-color);
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-btn {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+            color: var(--text-color);
+        }
+
+        .header-btn:hover {
+            background: var(--bg);
+            border-color: var(--accent);
+        }
+
+        #settings-panel {
+            position: absolute;
+            top: 60px;
+            right: 20px;
+            width: 200px;
+            background: var(--panel);
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--line);
+            z-index: 1000;
+            padding: 8px;
+            display: none;
+        }
+
+        .settings-group {
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--line);
+        }
+         .settings-group:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+
+        .settings-title {
+            font-size: 0.85rem;
+            color: var(--muted);
+            margin-bottom: 8px;
+            padding-left: 12px;
+        }
+
+        .settings-option {
+            display: block;
+            width: 100%;
+            text-align: left;
+            padding: 8px 12px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-size: 0.9rem;
+            border-radius: 6px;
+            color: var(--text-color);
+        }
+
+        .settings-option.active {
+            background: #e9effd;
+            color: var(--accent);
+            font-weight: 500;
+        }
+
+        .dark-mode .settings-option.active {
+            background: #1e3a8a;
+        }
+
+        #notes-panel {
+            position: fixed;
+            right: 12px;
+            bottom: 76px;
+            width: 320px;
+            height: 45vh;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            display: none;
+            flex-direction: column;
+            z-index: 900;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        #notes-panel header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--line);
+            background-color: var(--bg);
+        }
+
+        #notes-panel h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-color);
+            margin: 0;
+        }
+
+        #notes-panel textarea {
+            flex: 1;
+            border: 0;
+            padding: 16px;
+            resize: none;
+            font-size: 0.95rem;
+            background: transparent;
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+
+        #notes-panel textarea:focus {
+            outline: none;
+        }
+
+        #close-note {
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 1px solid var(--line);
+            background: transparent;
+            cursor: pointer;
+            color: var(--text-color);
+            transition: background-color 0.2s;
+        }
+
+        #close-note:hover {
+            background-color: rgba(0,0,0,0.1);
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.08);
+            z-index: 800;
+            display: none;
+            backdrop-filter: blur(2px);
+        }
+
+        .dark-mode .overlay {
+            background: rgba(0, 0, 0, 0.3);
+        }
+        
+        .shell {
+            display: flex;
+            height: calc(100vh - 58px - 64px);
+            width: 100%;
+            overflow: hidden;
+        }
+        
+        .pane {
+            background: var(--panel);
+            overflow: auto;
+            padding: 24px;
+        }
+        
+        #left {
+            min-width: 280px;
+            max-width: calc(100% - 280px);
+            width: 50%;
+        }
+        
+        #right {
+            min-width: 280px;
+            flex: 1;
+            background: var(--bg);
+            border-left: 1px solid var(--line);
+        }
+        
+        .dark-mode #right {
+            background: #1a1a1a;
+        }
+        
+        #divider {
+            flex: 0 0 8px;
+            background: var(--bg);
+            cursor: ew-resize;
+            user-select: none;
+            position: relative;
+            border-left: 1px solid var(--line);
+            border-right: 1px solid var(--line);
+        }
+        
+        #divider::before {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 4px;
+            height: 30px;
+            border-radius: 2px;
+            background: rgba(100, 100, 100, 0.2);
+        }
+        
+        #divider:hover {
+            background: #dbeafe;
+        }
+        
+        .dark-mode #divider {
+            border-color: #4a4a4a;
+        }
+        
+        .dark-mode #divider:hover {
+            background: #1e40af;
+        }
+
+        h2, h3, h4, h5 { margin: 0 0 16px; color: var(--text-color); }
+        #left p, #right p { margin: 0 0 16px; line-height: 1.7; }
+        #left strong, #right strong { font-weight: 600; }
+        .empty-space { height: 40px; }
+
+        .group { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+        .question-item { padding: 12px 0; border-bottom: 1px dashed var(--line); }
+        .question-item:last-child { border-bottom: none; }
+        
+        .radio-options { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+        .radio-options label { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.9rem; }
+        
+        /* Drag and Drop Styles */
+        .options-pool { background: #fafbfc; border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-top: 16px; }
+        .dark-mode .options-pool { background: #334155; }
+        .pool-items { display: flex; flex-wrap: wrap; gap: 8px; }
+        .drag-item { padding: 6px 12px; background-color: #eef2ff; border: 1px solid #c7d2fe; border-radius: 6px; cursor: grab; user-select: none; font-size: 14px; transition: all 0.2s; color: #333; }
+        .dark-mode .drag-item { background-color: #4f46e5; border-color: #6366f1; color: #fff; }
+        .drag-item.dragging { opacity: 0.5; }
+        .match-question-item { display: grid; grid-template-columns: 1fr 200px; align-items: center; gap: 8px; line-height: 1.5; padding: 10px 0; border-bottom: 1px dashed var(--line);}
+        .match-question-item:last-child { border-bottom: none; }
+        .match-dropzone { width: 100%; height: 38px; border: 2px dashed #9ca3af; border-radius: 6px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+        .match-dropzone.drag-over { border-color: var(--accent); background: #eff6ff; }
+        .dark-mode .match-dropzone.drag-over { background: #1e3a8a; }
+        .match-dropzone .drag-item { cursor: default; }
+
+        .summary-text p { line-height: 2.5; }
+        .drop-target-summary {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 140px;
+            height: 32px;
+            border: 2px dashed var(--line);
+            border-radius: 6px;
+            vertical-align: middle;
+            transition: background-color 0.2s, border-color 0.2s;
+            position: relative;
+            top: 8px;
+            padding: 0 4px;
+        }
+        .drop-target-summary.drag-over { background-color: #dbeafe; border-color: var(--accent); }
+        #word-options { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; margin-top: 16px; }
+        #word-options .drag-item.dragging { opacity: 0.5; }
+        .drop-target-summary .drag-item { background: transparent; border: none; padding: 0; cursor: default; color: var(--text-color); }
+
+        #results { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px; margin-top: 20px; display: none; line-height: 1.8; }
+        .results-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.9rem; }
+        .results-table th, .results-table td { border: 1px solid var(--line); padding: 8px; text-align: center; }
+        .results-table th { background: var(--bg); }
+        .result-correct { color: #10b981; font-weight: bold; }
+        .result-incorrect { color: #ef4444; font-weight: bold; }
+
+        .hl { background: var(--highlight); box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+        .dark-mode .hl { color: #f5f3ff; }
+
+        #selbar { position: absolute; display: none; z-index: 6000; background: var(--selbar-bg); color: var(--selbar-text); border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap: 6px; align-items: center; }
+        #selbar button { background: transparent; color: var(--selbar-text); border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+        #selbar button:hover { border-color: var(--selbar-text); }
+
+        .practice-nav { background: var(--panel); padding: 12px 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 -2px 4px rgba(0,0,0,.05); flex-wrap: wrap; position: fixed; left: 0; right: 0; bottom: 0; border-top: 1px solid var(--line); z-index: 4000; }
+        .practice-nav .title { font-weight: 600; color: var(--muted); }
+        .practice-nav .questions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .practice-nav .q-item { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); cursor: pointer; font-size: 14px; transition: all 0.2s; min-width: 36px; text-align: center; color: var(--text-color); }
+        .practice-nav .q-item:hover { background: var(--bg); border-color: var(--accent); }
+        .practice-nav .q-item.answered { background: #e0e7ff; border-color: var(--accent); color: var(--accent); font-weight: 500; }
+        .dark-mode .practice-nav .q-item.answered { background: #3949ab; border-color: var(--accent); color: #e8eaf6; }
+        .practice-nav .q-item.correct { background: #dcfce7; border-color: #4ade80; color: #15803d; }
+        .dark-mode .practice-nav .q-item.correct { background: #166534; border-color: #4ade80; color: #dcfce7; }
+        .practice-nav .q-item.incorrect { background: #fee2e2; border-color: #f87171; color: #b91c1c; }
+        .dark-mode .practice-nav .q-item.incorrect { background: #991b1b; border-color: #f87171; color: #fee2e2; }
+        .practice-nav .controls { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+        .practice-nav .controls button { padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); cursor: pointer; color: var(--text-color); }
+        .practice-nav .controls button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+        
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <h1>P3 - Improving Patient Safety</h1>
+            <div id="timer">00:00</div>
+        </div>
+        <div class="header-controls">
+            <button class="header-btn" id="size-btn">Size</button>
+            <button class="header-btn" id="color-btn">Color</button>
+            <button class="header-btn" id="note-btn">Note</button>
+        </div>
+    </header>
+
+    <div id="settings-panel">
+        <div class="settings-group">
+            <div class="settings-title">Font Size</div>
+            <button class="settings-option active" data-size="regular">Regular</button>
+            <button class="settings-option" data-size="large">Large</button>
+            <button class="settings-option" data-size="xlarge">Extra Large</button>
+        </div>
+        <div class="settings-group">
+            <div class="settings-title">Color Mode</div>
+            <button class="settings-option active" data-mode="light">Black on White</button>
+            <button class="settings-option" data-mode="dark">White on Black</button>
+        </div>
+    </div>
+
+    <div id="notes-panel">
+        <header>
+            <h3>Notes</h3>
+            <button id="close-note">Close</button>
+        </header>
+        <textarea placeholder="Write your notes here..."></textarea>
+    </div>
+
+    <div class="overlay"></div>
+
+    <div class="shell">
+        <section class="pane" id="left">
+            <h2>READING PASSAGE 3</h2>
+            <p>You should spend about 20 minutes on Questions 27–40, which are based on Reading Passage 3 below.</p>
+            
+            <h3>Improving Patient Safety</h3>
+            <h4>How improved drug packaging could provide some answers to patient safety issues</h4>
+            
+            <h4>Packaging</h4>
+            <p>One of the most prominent design issues in pharmacy is that of drug packages and the patient information leaflets (PILs) included in them. Many pharmacists are concerned that current designs are 'accidents waiting to happen'. The UK government shares this concern and, in 2003, the National Patient Safety Agency created a new role, appointing Colum Lowe, who has 14 years' experience as a designer in the private sector, as head of design and human factors.</p>
+            <p>Packaging design in the pharmaceutical industry is handled by either in-house teams or external design agencies. For packaging design of over-the-counter medicines, which do not have to be dispensed by a pharmacist but can be bought directly from a sales assistant, characteristics such as attractiveness and distinguishability are important and so these are usually commissioned from an external design team. The marketing team prepares the initial brief and the designers come up with six or seven designs. Two or three of these are then tested on a consumer group. In contrast, most designs for prescription-only products are created in-house. In some cases, this may simply involve the company's design team applying the house design and then handing it over to design engineers rather than testing the design on a consumer group. Clearly this process cannot adequately address the needs of the wide variety of patients using medication.</p>
+            
+            <h4>Design considerations</h4>
+            <p>In her book Information Design for Patient Safety, Thea Swayne highlighted a multitude of design problems. For example, drugs that look or sound alike can lead to confusion; small type sizes and even the glare on silver-foil packaging can lead to names or instructions being misread. One such example is a drug that was accidentally injected into a patient through the spine (intrathecally) rather than through the veins (intravenously). Investigations following this tragedy attributed some blame to the poor choice of typescript used on the drug container. Furthermore, according to Swayne, real situations in which medicines are used include a parent giving a cough medicine to a child in the middle of the night; packaging should be designed for moments such as these rather than for the ideal world of a hospital.</p>
+
+            <h4>Safety and compliance</h4>
+            <p>Child protection is another area that gives designers opportunities to improve safety. According to the Child Accident Prevention Trust, 70% of children admitted to hospital with suspected poisoning have swallowed medicines, and although child-resistant lids have helped, they are not yet fully effective. There is scope for improving what is currently available, according to Richard Mawle, a freelance product designer who feels it is not just children who are blocked by child-proof closures. ‘Many child-resistant packs are based on strength but older people may have the same level of strength as a child,' he explained, and suggested that better designs could rely on cognitive skills (e.g. removing the lid using a three-step process).</p>
+            <p>Mawle also worked on a project which involved applying his skills to packaging and PILs. Commenting on the information presented, he said: ‘There can be an awful lot of junk at the beginning of PILs. For example, why are company details towards the beginning of a leaflet when what might be more vital for the patient is that the medicine should not be taken with alcohol?'</p>
+
+            <h4>Design principles and guidelines</h4>
+            <p>Most designers work according to basic principles; for example, certain print styles are known to be more difficult to read than others. Look-alike boxes present the potential for errors and an obvious solution would be to use colours to highlight a larger dosage of a drug. However, according to Thea Swayne, designating a colour to a particular dosage is not recommended because this could lead to the user not reading the text on a box.</p>
+            <p>Design features can provide the basis for lengthy debates. One argument is that if all packaging was white with black lettering, people would have no choice but to read every box carefully. The problem is that trials of drug packaging are few – common signage studies concern road-traffic signs and visual-display units. Although some designers take results from such studies into account, proving that a particular feature is beneficial can be difficult. For example, current UK legislation requires packaging to include the name of the medicine in Braille, but, according to Karel van der Waarde, a design consultant to the pharmaceutical industry, ‘it is not known how much visually impaired patients will benefit nor how much the reading of visually able patients will be impaired'. Van der Waarde is sceptical about current legislation and says that many regulatory authorities do not have the resources to handle packaging information properly. ‘They do not look at the use of packaging in a practical context – they only see one box at a time and not several together as pharmacists would do,' he said.</p>
+
+            <h4>Innovation</h4>
+            <p>On a positive note, a recent innovation exhibition revealed several new designs. 'The popper' aims to help arthritis sufferers remove tablets from blister packs, and ‘Pluspoint' is an adrenaline auto-injector (a device that allows diabetics to inject themselves) aimed at overcoming the fact that many patients do not carry their medication due to its prohibitive size. The aim of good design is to try to make things more user-friendly as well as safer. The guidelines in Information Design for Patient Safety are not intended to be legally binding. Rather, the book's purpose is to create a basic design standard and to stimulate innovation. The challenge for the pharmaceutical industry is to adopt such a standard.</p>
+
+            <div class="empty-space"></div>
+        </section>
+        
+        <div id="divider"></div>
+        
+        <section class="pane" id="right">
+            <h3>Questions</h3>
+            
+            <div class="group" id="q27-32-anchor">
+                <h4>Questions 27–32</h4>
+                <p>Look at the following statements (Questions 27–32) and the list of people or groups below.</p>
+                <p>Match each statement with the correct person or group, <strong>A, B, C</strong> or <strong>D</strong>.</p>
+                <p><em>NB You may use any letter more than once.</em></p>
+                
+                <div class="match-question-item">
+                    <p><strong>27</strong> The elderly would benefit from drug containers that do not require force to open them.</p>
+                    <div class="match-dropzone" data-question="q27"></div>
+                </div>
+                <div class="match-question-item">
+                    <p><strong>28</strong> Adapting packaging for the blind may disadvantage people who can see.</p>
+                    <div class="match-dropzone" data-question="q28"></div>
+                </div>
+                <div class="match-question-item">
+                     <p><strong>29</strong> Specially designed containers have not been able to eliminate drugs being swallowed accidentally.</p>
+                    <div class="match-dropzone" data-question="q29"></div>
+                </div>
+                 <div class="match-question-item">
+                    <p><strong>30</strong> Designers have to consider how drugs are used in the home.</p>
+                    <div class="match-dropzone" data-question="q30"></div>
+                </div>
+                <div class="match-question-item">
+                    <p><strong>31</strong> Governing bodies need to compare different drug containers rather than studying individual ones.</p>
+                    <div class="match-dropzone" data-question="q31"></div>
+                </div>
+                <div class="match-question-item">
+                    <p><strong>32</strong> Information provided with medicine is not listed in the right order.</p>
+                    <div class="match-dropzone" data-question="q32"></div>
+                </div>
+
+                <div class="options-pool" id="people-options-pool">
+                    <strong>List of People or Groups</strong>
+                    <div class="pool-items">
+                        <div class="drag-item" draggable="true" data-option="A">A Thea Swayne</div>
+                        <div class="drag-item" draggable="true" data-option="B">B The Child Accident Prevention Trust</div>
+                        <div class="drag-item" draggable="true" data-option="C">C Richard Mawle</div>
+                        <div class="drag-item" draggable="true" data-option="D">D Karel van der Waarde</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="group" id="q33-37-anchor">
+                <h4>Questions 33–37</h4>
+                <p>Complete the summary using the list of words, A–G, below.</p>
+                <p><em>Drag and drop the correct word into the summary blanks.</em></p>
+                
+                <div class="summary-text">
+                    <h5>Packaging design in the pharmaceutical industry</h5>
+                    <h6>Over-the-counter drugs</h6>
+                    <p>
+                    First, a proposal is written by the <strong>33</strong> <span id="q33-target" class="drop-target-summary"></span>. Then several designs are produced by the <strong>34</strong> <span id="q34-target" class="drop-target-summary"></span>. Finally, selected designs are shown to <strong>35</strong> <span id="q35-target" class="drop-target-summary"></span>.
+                    </p>
+                    <h6>Prescription-only drugs</h6>
+                    <p>
+                    The <strong>36</strong> <span id="q36-target" class="drop-target-summary"></span> create the design. The design is then passed to <strong>37</strong> <span id="q37-target" class="drop-target-summary"></span>.
+                    </p>
+                </div>
+                 <div id="word-options" class="options-pool">
+                     <div class="pool-items">
+                        <div class="drag-item" draggable="true" data-word="consumers">A consumers</div>
+                        <div class="drag-item" draggable="true" data-word="design engineers">B design engineers</div>
+                        <div class="drag-item" draggable="true" data-word="external design team">C external design team</div>
+                        <div class="drag-item" draggable="true" data-word="in-house design team">D in-house design team</div>
+                        <div class="drag-item" draggable="true" data-word="marketing team">E marketing team</div>
+                        <div class="drag-item" draggable="true" data-word="pharmaceutical industry">F pharmaceutical industry</div>
+                        <div class="drag-item" draggable="true" data-word="pharmacists">G pharmacists</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="group" id="q38-40-anchor">
+                <h4>Questions 38–40</h4>
+                <p>Choose the correct letter, A, B, C or D.</p>
+                <div class="question-item">
+                    <p><strong>38</strong> In the accident mentioned in the passage, what was the 'design consideration' that caused a drug to be given incorrectly?</p>
+                    <div class="radio-options">
+                        <label><input name="q38" type="radio" value="A"> A a printing error</label>
+                        <label><input name="q38" type="radio" value="B"> B the style of print</label>
+                        <label><input name="q38" type="radio" value="C"> C an incorrect label</label>
+                        <label><input name="q38" type="radio" value="D"> D the shape of the bottle</label>
+                    </div>
+                </div>
+                <div class="question-item">
+                    <p><strong>39</strong> What do some people say about the use of only black and white as a design feature?</p>
+                    <div class="radio-options">
+                        <label><input name="q39" type="radio" value="A"> A Consumers would dislike this option.</label>
+                        <label><input name="q39" type="radio" value="B"> B Drug containers would all look too similar.</label>
+                        <label><input name="q39" type="radio" value="C"> C People would pay more attention to label information.</label>
+                        <label><input name="q39" type="radio" value="D"> D Partially sighted people would find these colours more helpful.</label>
+                    </div>
+                </div>
+                 <div class="question-item">
+                    <p><strong>40</strong> Why does the writer refer to ‘the popper’ and ‘Pluspoint'?</p>
+                    <div class="radio-options">
+                        <label><input name="q40" type="radio" value="A"> A to show that progress is being made in pharmaceutical packaging design</label>
+                        <label><input name="q40" type="radio" value="B"> B to give an example of pharmaceutical design problems that can cause accidents</label>
+                        <label><input name="q40" type="radio" value="C"> C to prove that a lot of work still needs to be done to improve pharmaceutical packaging design</label>
+                        <label><input name="q40" type="radio" value="D"> D to point out that patients need to be more informed about pharmaceutical products</label>
+                    </div>
+                </div>
+            </div>
+
+            <div id="results"></div>
+        </section>
+    </div>
+    
+    <div class="practice-nav">
+        <div class="title">Questions</div>
+        <div class="questions">
+            <div class="q-item" id="q27-nav" onclick="scrollToElement('q27-32-anchor')">27</div>
+            <div class="q-item" id="q28-nav" onclick="scrollToElement('q27-32-anchor')">28</div>
+            <div class="q-item" id="q29-nav" onclick="scrollToElement('q27-32-anchor')">29</div>
+            <div class="q-item" id="q30-nav" onclick="scrollToElement('q27-32-anchor')">30</div>
+            <div class="q-item" id="q31-nav" onclick="scrollToElement('q27-32-anchor')">31</div>
+            <div class="q-item" id="q32-nav" onclick="scrollToElement('q27-32-anchor')">32</div>
+            <div class="q-item" id="q33-nav" onclick="scrollToElement('q33-37-anchor')">33</div>
+            <div class="q-item" id="q34-nav" onclick="scrollToElement('q33-37-anchor')">34</div>
+            <div class="q-item" id="q35-nav" onclick="scrollToElement('q33-37-anchor')">35</div>
+            <div class="q-item" id="q36-nav" onclick="scrollToElement('q33-37-anchor')">36</div>
+            <div class="q-item" id="q37-nav" onclick="scrollToElement('q33-37-anchor')">37</div>
+            <div class="q-item" id="q38-nav" onclick="scrollToElement('q38-40-anchor')">38</div>
+            <div class="q-item" id="q39-nav" onclick="scrollToElement('q38-40-anchor')">39</div>
+            <div class="q-item" id="q40-nav" onclick="scrollToElement('q38-40-anchor')">40</div>
+        </div>
+        <div class="controls">
+            <button id="submit-btn" class="primary">Submit</button>
+            <button id="reset-btn">Reset</button>
+            <button id="pause-btn">Pause</button>
+        </div>
+    </div>
+
+    <div aria-label="Selection tools" id="selbar" role="toolbar">
+        <button id="btnHL">Highlight</button>
+        <button id="btnUH">Remove</button>
+        <button id="btnNote">Note</button>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // --- Global State ---
+            let settingsOpen = false, notesOpen = false;
+            let timerRunning = false;
+            let seconds = 0, timer;
+            let isResizing = false;
+            let selbar = document.getElementById('selbar');
+            let lastRange = null, currentHlNode = null, keepToolbar = false;
+            let draggedElement = null;
+            
+            const correctAnswers = {
+                q27: 'C', q28: 'D', q29: 'B', q30: 'A', q31: 'D', q32: 'C',
+                q33: 'marketing team', q34: 'external design team', q35: 'consumers',
+                q36: 'in-house design team', q37: 'design engineers',
+                q38: 'B', q39: 'C', q40: 'A'
+            };
+
+            // --- Timer Functions ---
+            function updateTimerDisplay() {
+                const minutes = String(Math.floor(seconds / 60)).padStart(2, '0');
+                const secs = String(seconds % 60).padStart(2, '0');
+                document.getElementById('timer').textContent = `${minutes}:${secs}`;
+            }
+
+            function startTimer() {
+                if (timerRunning) return;
+                timerRunning = true;
+                timer = setInterval(() => {
+                    seconds++;
+                    updateTimerDisplay();
+                }, 1000);
+                document.getElementById('pause-btn').textContent = 'Pause';
+            }
+
+            function pauseTimer() {
+                clearInterval(timer);
+                timerRunning = false;
+                document.getElementById('pause-btn').textContent = 'Continue';
+            }
+            
+            // --- UI & Panel Management ---
+            function closeAllPanels() {
+                notesOpen = false; settingsOpen = false;
+                document.getElementById('notes-panel').style.display = 'none';
+                document.getElementById('settings-panel').style.display = 'none';
+                document.querySelector('.overlay').style.display = 'none';
+            }
+
+            window.scrollToElement = function(id) {
+                const element = document.getElementById(id);
+                const pane = element.closest('.pane');
+                if (element && pane) {
+                    const top = element.offsetTop - 20;
+                    pane.scrollTo({ top, behavior: 'smooth' });
+                }
+            }
+
+            // --- Drag and Drop Logic ---
+            function setupDragAndDrop() {
+                const draggables = document.querySelectorAll('.drag-item');
+                let currentDragType = null;
+
+                draggables.forEach(draggable => {
+                    draggable.addEventListener('dragstart', (e) => {
+                        draggedElement = draggable;
+                        if (draggable.closest('#people-options-pool')) {
+                            currentDragType = 'people';
+                        } else if (draggable.closest('#word-options')) {
+                            currentDragType = 'word';
+                        }
+                        setTimeout(() => draggable.classList.add('dragging'), 0);
+                    });
+                    draggable.addEventListener('dragend', () => {
+                        if (draggedElement) draggedElement.classList.remove('dragging');
+                        draggedElement = null;
+                        currentDragType = null;
+                    });
+                });
+
+                const handleDragOver = (e) => e.preventDefault();
+                
+                function setupDropZone(zone, type, clone) {
+                    zone.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        if (currentDragType === type) zone.classList.add('drag-over');
+                    });
+                    zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+                    zone.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        if (!draggedElement || currentDragType !== type) return;
+                        zone.classList.remove('drag-over');
+
+                        if (clone) {
+                             if (zone.hasChildNodes()) {
+                                // Don't return to pool as it's a clone system
+                            }
+                            zone.innerHTML = '';
+                            const cloneNode = draggedElement.cloneNode(true);
+                            cloneNode.classList.remove('dragging');
+                            zone.appendChild(cloneNode);
+                        } else {
+                            if (zone.hasChildNodes()) {
+                                document.querySelector('#word-options .pool-items').appendChild(zone.firstChild);
+                            }
+                            zone.appendChild(draggedElement);
+                        }
+                        updateAnsweredState();
+                    });
+                }
+                
+                document.querySelectorAll('.match-dropzone').forEach(zone => setupDropZone(zone, 'people', true));
+                document.querySelectorAll('.drop-target-summary').forEach(zone => setupDropZone(zone, 'word', false));
+
+                // Handle returning words to pool
+                const wordPool = document.querySelector('#word-options');
+                wordPool.addEventListener('dragover', handleDragOver);
+                wordPool.addEventListener('drop', e => {
+                    if (currentDragType === 'word') {
+                        wordPool.querySelector('.pool-items').appendChild(draggedElement);
+                        updateAnsweredState();
+                    }
+                });
+            }
+
+            // --- Grading and State Update ---
+            function updateAnsweredState() {
+                for (let i = 27; i <= 40; i++) {
+                    const navItem = document.getElementById(`q${i}-nav`);
+                    if (navItem.classList.contains('correct') || navItem.classList.contains('incorrect')) continue;
+
+                    let answered = false;
+                    if (i >= 27 && i <= 32) { // Matching
+                        answered = document.querySelector(`.match-dropzone[data-question="q${i}"]`).hasChildNodes();
+                    } else if (i >= 33 && i <= 37) { // Summary completion
+                        answered = !!document.getElementById(`q${i}-target`).firstChild;
+                    } else { // Multiple choice
+                        answered = !!document.querySelector(`input[name="q${i}"]:checked`);
+                    }
+                    navItem.classList.toggle('answered', answered);
+                }
+            }
+            
+            function gradeAnswers() {
+                pauseTimer();
+                let correctCount = 0;
+                const totalQuestions = 14;
+                let resultsHTML = '<h4>Results</h4><table class="results-table"><thead><tr><th>Question</th><th>Your Answer</th><th>Correct Answer</th><th>Result</th></tr></thead><tbody>';
+
+                for (let i = 27; i <= 40; i++) {
+                    let userAnswer, isCorrect;
+                    let qId = `q${i}`;
+                    const correctAnswer = correctAnswers[qId];
+                    const navItem = document.getElementById(`${qId}-nav`);
+
+                    if (i >= 27 && i <= 32) { // Matching
+                        const dropzone = document.querySelector(`.match-dropzone[data-question="${qId}"]`);
+                        const droppedItem = dropzone.querySelector('.drag-item');
+                        userAnswer = droppedItem ? droppedItem.dataset.option : 'No Answer';
+                    } else if (i >= 33 && i <= 37) { // Summary completion
+                        const placeholder = document.getElementById(`${qId}-target`);
+                        userAnswer = (placeholder && placeholder.firstChild) ? placeholder.firstChild.dataset.word : 'No Answer';
+                    } else { // Multiple Choice
+                        const userAnswerEl = document.querySelector(`input[name="${qId}"]:checked`);
+                        userAnswer = userAnswerEl ? userAnswerEl.value : 'No Answer';
+                    }
+
+                    isCorrect = userAnswer.toLowerCase() === correctAnswer.toLowerCase();
+                    if (isCorrect) correctCount++;
+                    
+                    navItem.classList.remove('answered');
+                    navItem.classList.add(isCorrect ? 'correct' : 'incorrect');
+                    resultsHTML += `<tr><td>${i}</td><td>${userAnswer}</td><td>${correctAnswer}</td><td class="${isCorrect ? 'result-correct' : 'result-incorrect'}">${isCorrect ? '✓' : '✗'}</td></tr>`;
+                }
+                
+                const score = Math.round((correctCount / totalQuestions) * 100);
+                const summary = `<div style="font-weight:bold; margin-bottom:16px; font-size:1.1em;">Final Score: ${score}% (${correctCount}/${totalQuestions})</div>`;
+                resultsHTML += `</tbody></table>`;
+                
+                document.getElementById('results').innerHTML = summary + resultsHTML;
+                document.getElementById('results').style.display = 'block';
+                scrollToElement('results');
+            }
+
+            function resetQuiz() {
+                document.querySelectorAll('input[type="radio"]').forEach(el => el.checked = false);
+                document.querySelectorAll('.match-dropzone').forEach(dz => dz.innerHTML = '');
+                const wordOptionsContainer = document.querySelector('#word-options .pool-items');
+                document.querySelectorAll('.drop-target-summary .drag-item').forEach(word => {
+                    wordOptionsContainer.appendChild(word);
+                });
+
+                document.querySelectorAll('.q-item').forEach(item => item.className = 'q-item');
+                const resultsDiv = document.getElementById('results');
+                resultsDiv.style.display = 'none';
+                resultsDiv.innerHTML = '';
+                
+                pauseTimer();
+                seconds = 0;
+                updateTimerDisplay();
+                startTimer();
+                updateAnsweredState();
+            }
+
+            // --- Highlighter & Selection Toolbar ---
+            function positionSelbarForRect(rect) {
+                selbar.style.display = 'flex';
+                requestAnimationFrame(() => {
+                    const top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+                    const left = window.scrollX + rect.left + rect.width / 2 - selbar.offsetWidth / 2;
+                    selbar.style.top = `${(top > 0) ? top : (window.scrollY + rect.bottom + 8)}px`;
+                    selbar.style.left = `${Math.max(8, left)}px`;
+                });
+            }
+
+            function updateSelbar() {
+                const sel = window.getSelection();
+                if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+                    if (!keepToolbar && !currentHlNode) { selbar.style.display = 'none'; currentHlNode = null; }
+                    return;
+                }
+                const range = sel.getRangeAt(0);
+                let container = range.commonAncestorContainer;
+                if (container.nodeType === Node.TEXT_NODE) container = container.parentElement;
+                
+                const isInAllowedPane = document.getElementById('left').contains(container) || document.getElementById('right').contains(container);
+                const isHighlighted = container.classList?.contains('hl') || container.closest('.hl');
+                if (!isInAllowedPane && !isHighlighted) { selbar.style.display = 'none'; return; }
+                
+                lastRange = range.cloneRange();
+                currentHlNode = isHighlighted ? container.closest('.hl') : null;
+                positionSelbarForRect(range.getBoundingClientRect());
+            }
+
+            function doHighlight() {
+                if (currentHlNode || !lastRange || lastRange.collapsed) return;
+                const sel = window.getSelection();
+                try {
+                    const span = document.createElement('span');
+                    span.className = 'hl';
+                    lastRange.surroundContents(span);
+                } catch (e) { console.error("Highlighting failed:", e); }
+                sel?.removeAllRanges();
+                selbar.style.display = 'none';
+            }
+
+            function removeHighlight() {
+                const sel = window.getSelection();
+                let targetNode = currentHlNode;
+                if (!targetNode && lastRange) {
+                    const ancestor = lastRange.commonAncestorContainer;
+                    targetNode = ancestor.nodeType === Node.TEXT_NODE ? ancestor.parentElement.closest('.hl') : ancestor.closest('.hl');
+                }
+                if (targetNode) {
+                    const p = targetNode.parentNode;
+                    while (targetNode.firstChild) p.insertBefore(targetNode.firstChild, targetNode);
+                    if(p) p.removeChild(targetNode);
+                    p?.normalize();
+                }
+                currentHlNode = null; sel?.removeAllRanges(); selbar.style.display = 'none';
+            }
+            
+            // --- Event Listeners Setup ---
+            startTimer();
+            setupDragAndDrop();
+
+            // Header controls
+            document.getElementById('size-btn').addEventListener('click', (e) => { e.stopPropagation(); settingsOpen = !settingsOpen; document.getElementById('settings-panel').style.display = settingsOpen ? 'block' : 'none'; });
+            document.getElementById('color-btn').addEventListener('click', (e) => { e.stopPropagation(); settingsOpen = !settingsOpen; document.getElementById('settings-panel').style.display = settingsOpen ? 'block' : 'none'; });
+            document.getElementById('note-btn').addEventListener('click', () => { closeAllPanels(); notesOpen = true; document.getElementById('notes-panel').style.display = 'flex'; document.querySelector('.overlay').style.display = 'block'; });
+            document.querySelectorAll('.settings-option[data-size]').forEach(btn => btn.addEventListener('click', function() { document.documentElement.className = `font-${this.dataset.size}`; document.querySelectorAll('.settings-option[data-size]').forEach(b => b.classList.remove('active')); this.classList.add('active'); }));
+            document.querySelectorAll('.settings-option[data-mode]').forEach(btn => btn.addEventListener('click', function() { document.body.classList.toggle('dark-mode', this.dataset.mode === 'dark'); document.querySelectorAll('.settings-option[data-mode]').forEach(b => b.classList.remove('active')); this.classList.add('active'); }));
+            document.getElementById('close-note').addEventListener('click', closeAllPanels);
+            document.querySelector('.overlay').addEventListener('click', closeAllPanels);
+            document.addEventListener('click', (e) => {
+                const settingsPanel = document.getElementById('settings-panel');
+                const headerControls = document.querySelector('.header-controls');
+                if (!settingsPanel.contains(e.target) && !headerControls.contains(e.target)) { settingsPanel.style.display = 'none'; settingsOpen = false; }
+            });
+
+            // Bottom nav controls
+            document.getElementById('submit-btn').addEventListener('click', gradeAnswers);
+            document.getElementById('reset-btn').addEventListener('click', resetQuiz);
+            document.getElementById('pause-btn').addEventListener('click', function() {
+                if(timerRunning) pauseTimer();
+                else startTimer();
+            });
+
+            // Pane resizing
+            const divider = document.getElementById('divider');
+            const leftPane = document.getElementById('left');
+            divider.addEventListener('mousedown', (e) => { isResizing = true; document.body.style.cursor = 'ew-resize'; e.preventDefault(); });
+            document.addEventListener('mousemove', (e) => { if (!isResizing) return; const shellRect = document.querySelector('.shell').getBoundingClientRect(); let leftWidth = (e.clientX - shellRect.left) / shellRect.width * 100; leftPane.style.width = `${Math.max(20, Math.min(80, leftWidth))}%`; });
+            document.addEventListener('mouseup', () => { if (isResizing) { isResizing = false; document.body.style.cursor = ''; } });
+            
+            // Update answered state on input
+            document.getElementById('right').addEventListener('change', updateAnsweredState);
+            document.getElementById('right').addEventListener('drop', () => setTimeout(updateAnsweredState, 0));
+
+            // Selection toolbar events
+            document.addEventListener('mouseup', () => setTimeout(updateSelbar, 10));
+            document.addEventListener('selectionchange', () => setTimeout(updateSelbar, 10));
+            document.addEventListener('mousedown', (e) => { keepToolbar = !!e.target.closest('#selbar, .hl'); }, true);
+            document.addEventListener('click', (e) => {
+                const target = e.target;
+                if (target.classList.contains('hl')) {
+                    currentHlNode = target; lastRange = null; positionSelbarForRect(target.getBoundingClientRect());
+                    window.getSelection()?.removeAllRanges(); setTimeout(() => { keepToolbar = false; }, 0);
+                } else if (!selbar.contains(e.target)) { selbar.style.display = 'none'; currentHlNode = null; }
+            }, true);
+            document.getElementById('btnHL').addEventListener('click', doHighlight);
+            document.getElementById('btnUH').addEventListener('click', removeHighlight);
+            document.getElementById('btnNote').addEventListener('click', function() {
+                let text = (currentHlNode ? currentHlNode.textContent : (lastRange ? lastRange.cloneContents().textContent : '')).trim();
+                if (text) {
+                    const noteArea = document.querySelector('#notes-panel textarea');
+                    noteArea.value += (noteArea.value ? '\n\n' : '') + '> ' + text;
+                    closeAllPanels(); notesOpen = true; document.getElementById('notes-panel').style.display = 'flex';
+                    document.querySelector('.overlay').style.display = 'block'; noteArea.scrollTop = noteArea.scrollHeight;
+                }
+                selbar.style.display = 'none';
+            });
+        });
+    </script>
+</body>
+</html>

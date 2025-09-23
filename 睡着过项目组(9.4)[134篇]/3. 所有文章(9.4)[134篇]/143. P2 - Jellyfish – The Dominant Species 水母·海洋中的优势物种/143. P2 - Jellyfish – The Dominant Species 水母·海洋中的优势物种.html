@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>IELTS Reading Practice - Jellyfish – The Dominant Species</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        :root {
+            --line: #e5e7eb;
+            --bg: #f6f7fb;
+            --panel: #fff;
+            --accent: #3b82f6;
+            --muted: #6b7280;
+            --shadow: 0 6px 20px rgba(0,0,0,.12);
+            --text-color: #333;
+            --highlight: #fff3a3;
+            --selbar-bg: #111;
+            --selbar-text: #fff;
+        }
+
+        body.dark-mode {
+            --line: #4a4a4a;
+            --bg: #1a1a1a;
+            --panel: #2a2a2a;
+            --muted: #bbb;
+            --text-color: #f0f0f0;
+            --highlight: #5b21b6;
+            --selbar-bg: #1f2937;
+            --selbar-text: #e5e7eb;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html { font-size: 16px; scroll-behavior: smooth;}
+        html.font-regular { font-size: 16px; }
+        html.font-large { font-size: 18px; }
+        html.font-xlarge { font-size: 20px; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+            background: var(--bg);
+            color: var(--text-color);
+            height: 100vh;
+            overflow: hidden;
+            transition: background-color 0.3s ease;
+            padding-bottom: 64px;
+        }
+
+        .header {
+            background-color: var(--panel);
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--line);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            z-index: 100;
+            box-shadow: 0 1px 3px rgba(0,0,0,.05);
+        }
+
+        .header-content { display: flex; align-items: center; gap: 16px; }
+        .header h1 { font-size: 1.2rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-color); }
+        #timer { font-size: 1rem; font-weight: 500; background: var(--bg); padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line); min-width: 90px; text-align: center; color: var(--text-color); }
+        .header-controls { display: flex; align-items: center; gap: 10px; }
+        .header-btn { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 0.9rem; transition: all 0.2s ease; color: var(--text-color); }
+        .header-btn:hover { background: var(--bg); border-color: var(--accent); }
+
+        #settings-panel {
+            position: absolute; top: 60px; right: 20px; width: 200px; background: var(--panel); border-radius: 12px;
+            box-shadow: var(--shadow); border: 1px solid var(--line); z-index: 1000; padding: 8px; display: none;
+        }
+        .settings-group { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+        .settings-group:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+        .settings-title { font-size: 0.85rem; color: var(--muted); margin-bottom: 8px; padding-left: 12px; }
+        .settings-option { display: block; width: 100%; text-align: left; padding: 8px 12px; border: none; background: none; cursor: pointer; font-size: 0.9rem; border-radius: 6px; color: var(--text-color); }
+        .settings-option.active { background: #e9effd; color: var(--accent); font-weight: 500; }
+        .dark-mode .settings-option.active { background: #1e3a8a; }
+
+        #notes-panel {
+            position: fixed; right: 12px; bottom: 76px; width: 320px; height: 45vh; background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+            display: none; flex-direction: column; z-index: 900; box-shadow: var(--shadow); overflow: hidden;
+        }
+        #notes-panel header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--line); background-color: var(--bg); }
+        #notes-panel h3 { font-size: 1rem; font-weight: 600; color: var(--text-color); margin: 0; }
+        #notes-panel textarea { flex: 1; border: 0; padding: 16px; resize: none; font-size: 0.95rem; background: transparent; color: var(--text-color); line-height: 1.6; }
+        #notes-panel textarea:focus { outline: none; }
+        #close-note { padding: 4px 8px; border-radius: 4px; border: 1px solid var(--line); background: transparent; cursor: pointer; color: var(--text-color); transition: background-color 0.2s; }
+        #close-note:hover { background-color: rgba(0,0,0,0.05); }
+        .dark-mode #close-note:hover { background-color: rgba(255,255,255,0.1); }
+
+        .overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.08); z-index: 800; display: none; backdrop-filter: blur(2px); }
+        .dark-mode .overlay { background: rgba(0, 0, 0, 0.3); }
+
+        .shell { display: flex; height: calc(100vh - 58px - 64px); width: 100%; overflow: hidden; }
+        .pane { background: var(--panel); overflow: auto; padding: 24px; }
+        #left { min-width: 280px; max-width: calc(100% - 280px); width: 50%; }
+        #right { min-width: 280px; flex: 1; background: var(--bg); border-left: 1px solid var(--line); }
+        .dark-mode #right { background: #1a1a1a; }
+
+        #divider { flex: 0 0 8px; background: var(--bg); cursor: ew-resize; user-select: none; position: relative; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+        #divider::before { content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 4px; height: 30px; border-radius: 2px; background: rgba(100, 100, 100, 0.2); }
+        #divider:hover { background: #dbeafe; }
+        .dark-mode #divider { border-color: #4a4a4a; }
+        .dark-mode #divider:hover { background: #1e40af; }
+
+        h2, h3, h4 { margin: 0 0 16px; color: var(--text-color); }
+        #left p, #right p { margin: 0 0 16px; line-height: 1.7; }
+        #left strong, #right strong { font-weight: 600; }
+        .empty-space { height: 40px; }
+
+        .group { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+        .summary-completion p { line-height: 2.5; }
+        .summary-completion input { border: none; border-bottom: 1px solid #9ca3af; padding: 2px 8px; font-size: 1em; background: transparent; color: var(--text-color); min-width: 140px; text-align: center; }
+        .dark-mode .summary-completion input { border-bottom-color: #666; }
+        .summary-completion input:focus { outline: none; border-bottom: 2px solid var(--accent); }
+
+        #results { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px; margin-top: 20px; display: none; line-height: 1.8; }
+        .results-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.9rem; }
+        .results-table th, .results-table td { border: 1px solid var(--line); padding: 8px; text-align: center; }
+        .results-table th { background: var(--bg); }
+        .result-correct { color: #10b981; font-weight: bold; }
+        .result-incorrect { color: #ef4444; font-weight: bold; }
+
+        .hl { background: var(--highlight); box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+        .dark-mode .hl { color: #f5f3ff; }
+
+        #selbar { position: absolute; display: none; z-index: 6000; background: var(--selbar-bg); color: var(--selbar-text); border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap: 6px; align-items: center; }
+        #selbar button { background: transparent; color: var(--selbar-text); border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+        #selbar button:hover { border-color: var(--selbar-text); }
+
+        .practice-nav { background: var(--panel); padding: 12px 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 -2px 4px rgba(0,0,0,.05); flex-wrap: wrap; position: fixed; left: 0; right: 0; bottom: 0; border-top: 1px solid var(--line); z-index: 4000; }
+        .practice-nav .title { font-weight: 600; color: var(--muted); }
+        .practice-nav .questions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .practice-nav .q-item { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); cursor: pointer; font-size: 14px; transition: all 0.2s; min-width: 36px; text-align: center; color: var(--text-color); }
+        .practice-nav .q-item:hover { background: var(--bg); border-color: var(--accent); }
+        .practice-nav .q-item.answered { background: #e0e7ff; border-color: var(--accent); color: var(--accent); font-weight: 500; }
+        .dark-mode .practice-nav .q-item.answered { background: #3949ab; border-color: var(--accent); color: #e8eaf6; }
+        .practice-nav .q-item.correct { background: #dcfce7; border-color: #4ade80; color: #15803d; }
+        .dark-mode .practice-nav .q-item.correct { background: #166534; border-color: #4ade80; color: #dcfce7; }
+        .practice-nav .q-item.incorrect { background: #fee2e2; border-color: #f87171; color: #b91c1c; }
+        .dark-mode .practice-nav .q-item.incorrect { background: #991b1b; border-color: #f87171; color: #fee2e2; }
+        .practice-nav .controls { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+        .practice-nav .controls button { padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); cursor: pointer; color: var(--text-color); }
+        .practice-nav .controls button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+        
+        /* Paragraph Matching Table Styles */
+        .matching-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .matching-table th, .matching-table td { border: 1px solid var(--line); padding: 8px; text-align: left; vertical-align: middle; }
+        .matching-table th { background-color: var(--bg); font-weight: bold; text-align: center; }
+        .matching-table td:not(:first-child) { text-align: center; }
+        .matching-table input[type="radio"] { cursor: pointer; transform: scale(1.2); }
+
+        /* Multiple Choice (Checkbox) Styles */
+        .checkbox-group { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+        .checkbox-group label { display: flex; align-items: center; gap: 8px; cursor: pointer; line-height: 1.5; }
+        .checkbox-group input[type="checkbox"] { transform: scale(1.1); cursor: pointer; }
+
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <h1>P2 - Jellyfish – The Dominant Species</h1>
+            <div id="timer">00:00</div>
+        </div>
+        <div class="header-controls">
+            <button class="header-btn" id="size-btn">Size</button>
+            <button class="header-btn" id="color-btn">Color</button>
+            <button class="header-btn" id="note-btn">Note</button>
+        </div>
+    </header>
+
+    <div id="settings-panel">
+        <div class="settings-group">
+            <div class="settings-title">Font Size</div>
+            <button class="settings-option active" data-size="regular">Regular</button>
+            <button class="settings-option" data-size="large">Large</button>
+            <button class="settings-option" data-size="xlarge">Extra Large</button>
+        </div>
+        <div class="settings-group">
+            <div class="settings-title">Color Mode</div>
+            <button class="settings-option active" data-mode="light">Black on White</button>
+            <button class="settings-option" data-mode="dark">White on Black</button>
+        </div>
+    </div>
+
+    <div id="notes-panel">
+        <header>
+            <h3>Notes</h3>
+            <button id="close-note">Close</button>
+        </header>
+        <textarea placeholder="Write your notes here..."></textarea>
+    </div>
+
+    <div class="overlay"></div>
+
+    <div class="shell">
+        <section class="pane" id="left">
+            <h2>READING PASSAGE 2</h2>
+            <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>
+            
+            <h3>Jellyfish – The Dominant Species</h3>
+            
+            <p><strong>A</strong> Jellyfish have become the curse of beach holidays, permeating every ocean on the globe, thriving in the Arctic and the tropics. In an ever-changing world where other species struggle to endure, jellyfish populations are on the rise.</p>
+            <p>To the untrained eye, these creatures drift aimlessly on the oceans' currents and appear benign. In addition, they lack sharp claws, piercing teeth or even a brain. Despite this, they are armed with an amazing arsenal of weapons, especially the stinging power of their tentacles. As a result, jellyfish are among the most-feared, least-understood creatures in the seas.</p>
+            
+            <p><strong>B</strong> According to Dr Monty Graham, a jellyfish scientist at the University of South Alabama, US, 'Jellyfish are a pretty good group of animals to track coastal ecosystems. When you start to see jellyfish numbers grow, that usually indicates a stressed system.' While populations appear to be down this year, Dr Graham sees ‘a statistically solid increase' over the longer term.</p>
+            <p>This increase first gained attention in the 1980s when a huge number of jellyfish, Atlantic Ocean natives named Mnemiopsis leidyi, devastated the Black Sea, an ecosystem already weakened by overfishing of anchovies. Scientists believe that this species of jellyfish came in on the bottom of a ship and then rapidly multiplied, feeding on anchovy eggs and the plankton that young fish rely on.</p>
+
+            <p><strong>C</strong> Dense jellyfish aggregations can be a natural feature of healthy ocean ecosystems, but a clear picture is now emerging of more severe and frequent jellyfish outbreaks worldwide. Dr Anthony Richardson, from the University of Queensland, Australia, explains that once jellyfish gain a foothold, if conditions are right, they can establish a massive population at the expense of other ocean life. The problem is that parts of the ocean might switch from being dominated by fish to being dominated by jellyfish.</p>
+
+            <p><strong>D</strong> A study done by Richardson and his colleagues explores the causes behind jellyfish infestation, and the need for swift, decisive action to stem the jellyfish takeover. Jellyfish outbreaks are linked directly to human actions, including overfishing, the input of fertilizer and sewage into the ocean, and climate change.</p>
+            <p>Overfishing has removed fish from marine ecosystems at astounding rates. According to Richardson, this has made it possible for jellyfish to take their place. ‘This is because small fish appear to keep jellyfish in check by predation (on jellyfish when they are very small) and competition (when feeding). So, once we remove fish, jellyfish can proliferate.'</p>
+            <p>Eutrophication is another human-caused change in the ocean that has likely contributed to jellyfish explosions. Eutrophication is an increase in nitrogen and phosphorus in the ocean, largely caused by fertilizer and waste run-off. This leads to algae blooms, which lower oxygen in the marine ecosystem, creating so-called 'dead zones', which have been increasing dramatically around the world. According to Richardson, these low-oxygen waters give jellyfish the advantage. ‘Fish avoid low-oxygen waters but jellyfish, having lower oxygen demands, not only survive but can thrive in these conditions as there is less predation and competition from fish.'</p>
+
+            <p><strong>E</strong> Furthermore, Richardson and his colleagues speculate that climate change may expand the traditional geographical range of jellyfish. ‘As water warms, tropical species are moving towards the poles. Many venomous jellyfish species are tropical and could move into more densely populated subtropical and temperate regions.'</p>
+
+            <p><strong>F</strong> Once jellyfish appear en masse in an ecosystem, they can make it very difficult for fish to stage a comeback. By feeding on fish, the jellyfish successfully prevent fish from returning to their normal population numbers, says Richardson. ‘One can thus think of two alternate states with each being stable: one dominated by fish and the other by jellyfish. Unfortunately, where there is a jellyfish-dominated state then this does not support the nutritional needs of other fish, marine mammals, and seabirds.' In other words, an ecosystem that loses fish also loses the species that depend on fish for survival.</p>
+            <p>This state has been defined as a 'monoculture of jellyfish', an apt analogy since the situation shares similarities with other monocultures. When the rich biodiversity of tropical forests is replaced by plantations growing a single species of tree, an area of rich variety becomes a desert in terms of biodiversity, as do ocean ecosystems when jellyfish become the dominant species.</p>
+            <p>One result of large jellyfish populations is the economic effect it has had on the fishing industry. In the Gulf of Mexico, shrimp fishermen are struggling with a jellyfish boom that fills nets, causing them to break and resulting in millions of dollars in losses.</p>
+
+            <p><strong>G</strong> Experts say that a greater understanding of jellyfish, including their ideal water temperature and feeding habits, is necessary to determine with certainty what is causing the recent massive invasion and to come up with ways to combat it.</p>
+            <p>Due to the difficulty of turning ecosystems around once jellyfish have become dominant, Richardson and his colleagues propose focusing on ‘prevention rather than cure'. They recommend a halt to overfishing small fish that are vital to keeping jellyfish in check, reducing the amount of fertilizer and sewage running off into the oceans, and finally, if possible, confronting climate change.</p>
+            
+            <div class="empty-space"></div>
+        </section>
+        
+        <div id="divider"></div>
+        
+        <section class="pane" id="right">
+            <h3>Questions</h3>
+            
+            <div class="group" id="q14-17-anchor">
+                <h4>Questions 14–17</h4>
+                <p>Reading Passage 2 has seven sections, <strong>A–G</strong>.</p>
+                <p>Which paragraph contains the following information?</p>
+                <p><em>Write the correct letter, <strong>A–G</strong>, in boxes 14–17 on your answer sheet.</em></p>
+                <p><strong>NB</strong> You may use any letter more than once.</p>
+                <div style="overflow-x: auto;">
+                    <table class="matching-table">
+                        <thead>
+                            <tr>
+                                <th style="min-width: 250px;"></th>
+                                <th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th><th>G</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>14</strong> a prediction as to the direction in which the jellyfish population may spread</td>
+                                <td><input type="radio" name="q14" value="A"></td><td><input type="radio" name="q14" value="B"></td><td><input type="radio" name="q14" value="C"></td><td><input type="radio" name="q14" value="D"></td><td><input type="radio" name="q14" value="E"></td><td><input type="radio" name="q14" value="F"></td><td><input type="radio" name="q14" value="G"></td>
+                            </tr>
+                            <tr>
+                                <td><strong>15</strong> a description of some physical characteristics of jellyfish</td>
+                                <td><input type="radio" name="q15" value="A"></td><td><input type="radio" name="q15" value="B"></td><td><input type="radio" name="q15" value="C"></td><td><input type="radio" name="q15" value="D"></td><td><input type="radio" name="q15" value="E"></td><td><input type="radio" name="q15" value="F"></td><td><input type="radio" name="q15" value="G"></td>
+                            </tr>
+                            <tr>
+                                <td><strong>16</strong> an account of the consequences of jellyfish as lone survivors</td>
+                                <td><input type="radio" name="q16" value="A"></td><td><input type="radio" name="q16" value="B"></td><td><input type="radio" name="q16" value="C"></td><td><input type="radio" name="q16" value="D"></td><td><input type="radio" name="q16" value="E"></td><td><input type="radio" name="q16" value="F"></td><td><input type="radio" name="q16" value="G"></td>
+                            </tr>
+                            <tr>
+                                <td><strong>17</strong> suggestions on how to avoid further jellyfish invasions</td>
+                                <td><input type="radio" name="q17" value="A"></td><td><input type="radio" name="q17" value="B"></td><td><input type="radio" name="q17" value="C"></td><td><input type="radio" name="q17" value="D"></td><td><input type="radio" name="q17" value="E"></td><td><input type="radio" name="q17" value="F"></td><td><input type="radio" name="q17" value="G"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="group" id="q18-19-anchor">
+                <h4>Questions 18 and 19</h4>
+                <p>Choose <strong>TWO</strong> letters, <strong>A–E</strong>.</p>
+                <p>The list below gives some effects that jellyfish have had on the world. Which <strong>TWO</strong> of these effects are mentioned by the writer of the text?</p>
+                <div class="checkbox-group">
+                    <label><input type="checkbox" name="q18-19" value="A"> A They have damaged the tourism industry in some areas.</label>
+                    <label><input type="checkbox" name="q18-19" value="B"> B They have led to a reduction in the oceans' oxygen levels.</label>
+                    <label><input type="checkbox" name="q18-19" value="C"> C They have contributed to the decline in the Black Sea anchovy population.</label>
+                    <label><input type="checkbox" name="q18-19" value="D"> D They have caused the shrimp business in the Gulf of Mexico to shut down.</label>
+                    <label><input type="checkbox" name="q18-19" value="E"> E They have created financial hardship in the fishing industry.</label>
+                </div>
+            </div>
+
+             <div class="group" id="q20-21-anchor">
+                <h4>Questions 20 and 21</h4>
+                <p>Choose <strong>TWO</strong> letters, <strong>A–E</strong>.</p>
+                <p>Which <strong>TWO</strong> of the following are possible causes of an increase in jellyfish numbers?</p>
+                 <div class="checkbox-group">
+                    <label><input type="checkbox" name="q20-21" value="A"> A a shortage of small fish in the oceans</label>
+                    <label><input type="checkbox" name="q20-21" value="B"> B the dumping of chemicals into the oceans</label>
+                    <label><input type="checkbox" name="q20-21" value="C"> C a decline in biodiversity in the oceans</label>
+                    <label><input type="checkbox" name="q20-21" value="D"> D more competition among other fish in the oceans</label>
+                    <label><input type="checkbox" name="q20-21" value="E"> E a decrease in seabird populations</label>
+                </div>
+            </div>
+
+            <div class="group" id="q22-26-anchor">
+                 <h4>Questions 22–26</h4>
+                <p>Complete the sentences below.</p>
+                <p>Write <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>
+                <div class="summary-completion">
+                    <p><strong>22</strong> Some fish in the oceans may be unable to sustain their population as the jellyfish eat their <input type="text" id="q22_input">.</p>
+                    <p><strong>23</strong> The state of jellyfish becoming the main ocean species has been named <input type="text" id="q23_input">.</p>
+                    <p><strong>24</strong> Increasing numbers of jellyfish can damage <input type="text" id="q24_input"> used for commercial fishing.</p>
+                    <p><strong>25</strong> Understanding basic facts about jellyfish, such as the <input type="text" id="q25_input"> of the ocean which suits them best, may help control their numbers.</p>
+                    <p><strong>26</strong> Richardson believes it is better to direct attention to <input type="text" id="q26_input"> instead of just trying to solve existing problems.</p>
+                </div>
+            </div>
+            
+            <div id="results"></div>
+        </section>
+    </div>
+    
+    <div class="practice-nav">
+        <div class="title">Questions</div>
+        <div class="questions">
+            <div class="q-item" id="q14-nav" onclick="scrollToElement('q14-17-anchor')">14</div>
+            <div class="q-item" id="q15-nav" onclick="scrollToElement('q14-17-anchor')">15</div>
+            <div class="q-item" id="q16-nav" onclick="scrollToElement('q14-17-anchor')">16</div>
+            <div class="q-item" id="q17-nav" onclick="scrollToElement('q14-17-anchor')">17</div>
+            <div class="q-item" id="q18-nav" onclick="scrollToElement('q18-19-anchor')">18</div>
+            <div class="q-item" id="q19-nav" onclick="scrollToElement('q18-19-anchor')">19</div>
+            <div class="q-item" id="q20-nav" onclick="scrollToElement('q20-21-anchor')">20</div>
+            <div class="q-item" id="q21-nav" onclick="scrollToElement('q20-21-anchor')">21</div>
+            <div class="q-item" id="q22-nav" onclick="scrollToElement('q22-26-anchor')">22</div>
+            <div class="q-item" id="q23-nav" onclick="scrollToElement('q22-26-anchor')">23</div>
+            <div class="q-item" id="q24-nav" onclick="scrollToElement('q22-26-anchor')">24</div>
+            <div class="q-item" id="q25-nav" onclick="scrollToElement('q22-26-anchor')">25</div>
+            <div class="q-item" id="q26-nav" onclick="scrollToElement('q22-26-anchor')">26</div>
+        </div>
+        <div class="controls">
+            <button id="submit-btn" class="primary">Submit</button>
+            <button id="reset-btn">Reset</button>
+            <button id="pause-btn">Pause</button>
+        </div>
+    </div>
+
+    <div aria-label="Selection tools" id="selbar" role="toolbar">
+        <button id="btnHL">Highlight</button>
+        <button id="btnUH">Remove</button>
+        <button id="btnNote">Note</button>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // --- Global State ---
+            let settingsOpen = false, notesOpen = false;
+            let timerRunning = true, seconds = 0, timer;
+            let isResizing = false;
+            let selbar = document.getElementById('selbar');
+            let lastRange = null, currentHlNode = null, keepToolbar = false;
+            
+            const correctAnswers = {
+                q14: 'E',
+                q15: 'A',
+                q16: 'F',
+                q17: 'G',
+                'q18-19': ['C', 'E'],
+                'q20-21': ['A', 'B'],
+                q22: 'eggs',
+                q23: 'monoculture',
+                q24: 'nets',
+                q25: 'temperature',
+                q26: 'prevention'
+            };
+
+            // --- Core Functions ---
+            function startTimer() {
+                timer = setInterval(() => {
+                    if (timerRunning) {
+                        seconds++;
+                        const minutes = String(Math.floor(seconds / 60)).padStart(2, '0');
+                        const secs = String(seconds % 60).padStart(2, '0');
+                        document.getElementById('timer').textContent = `${minutes}:${secs}`;
+                    }
+                }, 1000);
+            }
+
+            function closeAllPanels() {
+                notesOpen = false; settingsOpen = false;
+                document.getElementById('notes-panel').style.display = 'none';
+                document.getElementById('settings-panel').style.display = 'none';
+                document.querySelector('.overlay').style.display = 'none';
+            }
+
+            window.scrollToElement = function(id) {
+                const element = document.getElementById(id);
+                const pane = element.closest('.pane');
+                if (element && pane) {
+                    const top = element.offsetTop - 20;
+                    pane.scrollTo({ top, behavior: 'smooth' });
+                }
+            }
+
+            // --- Grading and State Update ---
+            function updateAnsweredState() {
+                // Paragraph matching
+                for (let i = 14; i <= 17; i++) {
+                    const navItem = document.getElementById(`q${i}-nav`);
+                     if (navItem.classList.contains('correct') || navItem.classList.contains('incorrect')) continue;
+                    const answered = !!document.querySelector(`input[name="q${i}"]:checked`);
+                    navItem.classList.toggle('answered', answered);
+                }
+                // Checkbox groups
+                const q1819Answered = document.querySelectorAll('input[name="q18-19"]:checked').length > 0;
+                 if (!document.getElementById('q18-nav').classList.contains('correct') && !document.getElementById('q18-nav').classList.contains('incorrect')) {
+                    document.getElementById('q18-nav').classList.toggle('answered', q1819Answered);
+                    document.getElementById('q19-nav').classList.toggle('answered', q1819Answered);
+                 }
+
+                const q2021Answered = document.querySelectorAll('input[name="q20-21"]:checked').length > 0;
+                 if (!document.getElementById('q20-nav').classList.contains('correct') && !document.getElementById('q20-nav').classList.contains('incorrect')) {
+                    document.getElementById('q20-nav').classList.toggle('answered', q2021Answered);
+                    document.getElementById('q21-nav').classList.toggle('answered', q2021Answered);
+                }
+
+                // Summary completion
+                for (let i = 22; i <= 26; i++) {
+                    const navItem = document.getElementById(`q${i}-nav`);
+                     if (navItem.classList.contains('correct') || navItem.classList.contains('incorrect')) continue;
+                    const answered = document.getElementById(`q${i}_input`).value.trim() !== "";
+                    navItem.classList.toggle('answered', answered);
+                }
+            }
+            
+            function gradeAnswers() {
+                timerRunning = false;
+                document.getElementById('pause-btn').textContent = 'Continue';
+                let correctCount = 0;
+                const totalQuestions = 13;
+                let resultsHTML = '<h4>Results</h4><table class="results-table"><thead><tr><th>Question</th><th>Your Answer</th><th>Correct Answer</th><th>Result</th></tr></thead><tbody>';
+
+                // Grade Q14-17 (Matching Paragraph)
+                for (let i = 14; i <= 17; i++) {
+                    const userAnswerEl = document.querySelector(`input[name="q${i}"]:checked`);
+                    const userAnswer = userAnswerEl ? userAnswerEl.value : 'No Answer';
+                    const correctAnswer = correctAnswers[`q${i}`];
+                    const isCorrect = userAnswer === correctAnswer;
+                    if (isCorrect) correctCount++;
+                    document.getElementById(`q${i}-nav`).classList.add(isCorrect ? 'correct' : 'incorrect');
+                    resultsHTML += `<tr><td>${i}</td><td>${userAnswer}</td><td>${correctAnswer}</td><td class="${isCorrect ? 'result-correct' : 'result-incorrect'}">${isCorrect ? '✓' : '✗'}</td></tr>`;
+                }
+                
+                // Grade Q18-19 (Checkboxes)
+                const userAnswers1819 = Array.from(document.querySelectorAll('input[name="q18-19"]:checked')).map(el => el.value).sort();
+                const correctAnswers1819 = correctAnswers['q18-19'].sort();
+                const is1819Correct = JSON.stringify(userAnswers1819) === JSON.stringify(correctAnswers1819);
+                if (is1819Correct) correctCount += 2; // Assuming 2 marks for getting both correct
+                const resultClass1819 = is1819Correct ? 'correct' : 'incorrect';
+                document.getElementById('q18-nav').classList.add(resultClass1819);
+                document.getElementById('q19-nav').classList.add(resultClass1819);
+                resultsHTML += `<tr><td>18 & 19</td><td>${userAnswers1819.join(', ') || 'No Answer'}</td><td>${correctAnswers1819.join(', ')}</td><td class="${is1819Correct ? 'result-correct' : 'result-incorrect'}">${is1819Correct ? '✓' : '✗'}</td></tr>`;
+
+                // Grade Q20-21 (Checkboxes)
+                const userAnswers2021 = Array.from(document.querySelectorAll('input[name="q20-21"]:checked')).map(el => el.value).sort();
+                const correctAnswers2021 = correctAnswers['q20-21'].sort();
+                const is2021Correct = JSON.stringify(userAnswers2021) === JSON.stringify(correctAnswers2021);
+                if (is2021Correct) correctCount += 2;
+                const resultClass2021 = is2021Correct ? 'correct' : 'incorrect';
+                document.getElementById('q20-nav').classList.add(resultClass2021);
+                document.getElementById('q21-nav').classList.add(resultClass2021);
+                resultsHTML += `<tr><td>20 & 21</td><td>${userAnswers2021.join(', ') || 'No Answer'}</td><td>${correctAnswers2021.join(', ')}</td><td class="${is2021Correct ? 'result-correct' : 'result-incorrect'}">${is2021Correct ? '✓' : '✗'}</td></tr>`;
+
+                // Grade Q22-26 (Sentence Completion)
+                for (let i = 22; i <= 26; i++) {
+                    const input = document.getElementById(`q${i}_input`);
+                    const userAnswer = input.value.trim().toLowerCase() || 'No Answer';
+                    const correctAnswer = correctAnswers[`q${i}`];
+                    const isCorrect = userAnswer === correctAnswer;
+                    if (isCorrect) correctCount++;
+                    document.getElementById(`q${i}-nav`).classList.add(isCorrect ? 'correct' : 'incorrect');
+                    resultsHTML += `<tr><td>${i}</td><td>${input.value.trim() || 'No Answer'}</td><td>${correctAnswer}</td><td class="${isCorrect ? 'result-correct' : 'result-incorrect'}">${isCorrect ? '✓' : '✗'}</td></tr>`;
+                }
+
+                // Adjust score calculation if checkbox questions are marked individually
+                // For simplicity, this version gives all-or-nothing for the pair.
+                const totalMarksAvailable = 13; // 4 + 2 + 2 + 5
+                
+                const score = Math.round((correctCount / totalMarksAvailable) * 100);
+                const summary = `<div style="font-weight:bold; margin-top:16px; font-size:1.1em;">Final Score: ${score}% (${correctCount}/${totalMarksAvailable})</div>`;
+                resultsHTML += `</tbody></table>`;
+                
+                document.getElementById('results').innerHTML = summary + resultsHTML;
+                document.getElementById('results').style.display = 'block';
+                scrollToElement('results');
+            }
+
+            function resetQuiz() {
+                document.querySelectorAll('input[type="radio"]').forEach(el => el.checked = false);
+                document.querySelectorAll('input[type="checkbox"]').forEach(el => el.checked = false);
+                document.querySelectorAll('input[type="text"]').forEach(el => el.value = '');
+                document.querySelectorAll('.q-item').forEach(item => item.className = 'q-item');
+                const resultsDiv = document.getElementById('results');
+                resultsDiv.style.display = 'none';
+                resultsDiv.innerHTML = '';
+                
+                seconds = 0;
+                if (timer) clearInterval(timer);
+                startTimer();
+                timerRunning = true;
+                document.getElementById('pause-btn').textContent = 'Pause';
+                updateAnsweredState();
+            }
+
+            // --- Highlighter & Selection Toolbar ---
+            function positionSelbarForRect(rect) {
+                selbar.style.display = 'flex';
+                requestAnimationFrame(() => {
+                    const top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+                    const left = window.scrollX + rect.left + rect.width / 2 - selbar.offsetWidth / 2;
+                    selbar.style.top = `${(top > 0) ? top : (window.scrollY + rect.bottom + 8)}px`;
+                    selbar.style.left = `${Math.max(8, left)}px`;
+                });
+            }
+
+            function updateSelbar() {
+                const sel = window.getSelection();
+                if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+                    if (!keepToolbar && !currentHlNode) { selbar.style.display = 'none'; currentHlNode = null; }
+                    return;
+                }
+                const range = sel.getRangeAt(0);
+                let container = range.commonAncestorContainer;
+                if (container.nodeType === Node.TEXT_NODE) container = container.parentElement;
+                
+                const isInAllowedPane = document.getElementById('left').contains(container) || document.getElementById('right').contains(container);
+                const isHighlighted = container.classList?.contains('hl') || container.closest('.hl');
+                if (!isInAllowedPane && !isHighlighted) { selbar.style.display = 'none'; return; }
+                
+                lastRange = range.cloneRange();
+                currentHlNode = isHighlighted ? container.closest('.hl') : null;
+                positionSelbarForRect(range.getBoundingClientRect());
+            }
+
+            function doHighlight() {
+                if (currentHlNode || !lastRange || lastRange.collapsed) return;
+                const sel = window.getSelection();
+                try {
+                    const span = document.createElement('span');
+                    span.className = 'hl';
+                    lastRange.surroundContents(span);
+                } catch (e) { console.error("Highlighting failed:", e); }
+                sel?.removeAllRanges();
+                selbar.style.display = 'none';
+            }
+
+            function removeHighlight() {
+                const sel = window.getSelection();
+                let targetNode = currentHlNode;
+                if (!targetNode && lastRange) {
+                    const ancestor = lastRange.commonAncestorContainer;
+                    targetNode = ancestor.nodeType === Node.TEXT_NODE ? ancestor.parentElement.closest('.hl') : ancestor.closest('.hl');
+                }
+                if (targetNode) {
+                    const p = targetNode.parentNode;
+                    while (targetNode.firstChild) p.insertBefore(targetNode.firstChild, targetNode);
+                    if(p) p.removeChild(targetNode);
+                    p?.normalize();
+                }
+                currentHlNode = null; sel?.removeAllRanges(); selbar.style.display = 'none';
+            }
+
+            // --- Event Listeners Setup ---
+            startTimer();
+
+            // Header controls
+            document.getElementById('size-btn').addEventListener('click', (e) => { e.stopPropagation(); settingsOpen = !settingsOpen; document.getElementById('settings-panel').style.display = settingsOpen ? 'block' : 'none'; });
+            document.getElementById('color-btn').addEventListener('click', (e) => { e.stopPropagation(); settingsOpen = !settingsOpen; document.getElementById('settings-panel').style.display = settingsOpen ? 'block' : 'none'; });
+            document.getElementById('note-btn').addEventListener('click', () => { closeAllPanels(); notesOpen = true; document.getElementById('notes-panel').style.display = 'flex'; document.querySelector('.overlay').style.display = 'block'; });
+            document.querySelectorAll('.settings-option[data-size]').forEach(btn => btn.addEventListener('click', function() { document.documentElement.className = `font-${this.dataset.size}`; document.querySelectorAll('.settings-option[data-size]').forEach(b => b.classList.remove('active')); this.classList.add('active'); }));
+            document.querySelectorAll('.settings-option[data-mode]').forEach(btn => btn.addEventListener('click', function() { document.body.classList.toggle('dark-mode', this.dataset.mode === 'dark'); document.querySelectorAll('.settings-option[data-mode]').forEach(b => b.classList.remove('active')); this.classList.add('active'); }));
+            document.getElementById('close-note').addEventListener('click', closeAllPanels);
+            document.querySelector('.overlay').addEventListener('click', closeAllPanels);
+            document.addEventListener('click', (e) => {
+                const settingsPanel = document.getElementById('settings-panel');
+                const headerControls = document.querySelector('.header-controls');
+                if (!settingsPanel.contains(e.target) && !headerControls.contains(e.target)) { settingsPanel.style.display = 'none'; settingsOpen = false; }
+            });
+
+            // Bottom nav controls
+            document.getElementById('submit-btn').addEventListener('click', gradeAnswers);
+            document.getElementById('reset-btn').addEventListener('click', resetQuiz);
+            document.getElementById('pause-btn').addEventListener('click', function() { timerRunning = !timerRunning; this.textContent = timerRunning ? 'Pause' : 'Continue'; });
+
+            // Pane resizing
+            const divider = document.getElementById('divider');
+            const leftPane = document.getElementById('left');
+            divider.addEventListener('mousedown', (e) => { isResizing = true; document.body.style.cursor = 'ew-resize'; e.preventDefault(); });
+            document.addEventListener('mousemove', (e) => { if (!isResizing) return; const shellRect = document.querySelector('.shell').getBoundingClientRect(); let leftWidth = (e.clientX - shellRect.left) / shellRect.width * 100; leftPane.style.width = `${Math.max(20, Math.min(80, leftWidth))}%`; });
+            document.addEventListener('mouseup', () => { if (isResizing) { isResizing = false; document.body.style.cursor = ''; } });
+            
+            // Update answered state on input/change
+            document.getElementById('right').addEventListener('change', updateAnsweredState);
+            document.getElementById('right').addEventListener('input', updateAnsweredState);
+
+            // Selection toolbar events
+            document.addEventListener('mouseup', () => setTimeout(updateSelbar, 10));
+            document.addEventListener('selectionchange', () => setTimeout(updateSelbar, 10));
+            document.addEventListener('mousedown', (e) => { keepToolbar = !!e.target.closest('#selbar, .hl'); }, true);
+            document.addEventListener('click', (e) => {
+                const target = e.target;
+                if (target.classList.contains('hl')) {
+                    currentHlNode = target; lastRange = null; positionSelbarForRect(target.getBoundingClientRect());
+                    window.getSelection()?.removeAllRanges(); setTimeout(() => { keepToolbar = false; }, 0);
+                } else if (!selbar.contains(e.target)) { selbar.style.display = 'none'; currentHlNode = null; }
+            }, true);
+            document.getElementById('btnHL').addEventListener('click', doHighlight);
+            document.getElementById('btnUH').addEventListener('click', removeHighlight);
+            document.getElementById('btnNote').addEventListener('click', function() {
+                let text = (currentHlNode ? currentHlNode.textContent : (lastRange ? lastRange.cloneContents().textContent : '')).trim();
+                if (text) {
+                    const noteArea = document.querySelector('#notes-panel textarea');
+                    noteArea.value += (noteArea.value ? '\n\n' : '') + '> ' + text;
+                    closeAllPanels(); notesOpen = true; document.getElementById('notes-panel').style.display = 'flex';
+                    document.querySelector('.overlay').style.display = 'block'; noteArea.scrollTop = noteArea.scrollHeight;
+                }
+                selbar.style.display = 'none';
+            });
+        });
+    </script>
+</body>
+</html>
