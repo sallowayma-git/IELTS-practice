@@ -7,7 +7,7 @@
   'use strict';
   if (typeof hpCore === 'undefined') { console.error('[HP-History-Table] hpCore missing'); return; }
 
-  var currentFilter = { type: 'all', category: 'all' };
+  var currentFilter = { type: 'all', category: 'all', startDate: null, endDate: null };
 
   function fmtDuration(sec){ sec=+sec||0; var m=Math.floor(sec/60), s=sec%60; return (m+':'+String(s).padStart(2,'0')); }
   function badge(score){ score=+score||0; var color = score>=90?'#10b981': score>=80?'#3b82f6': score>=70?'#f59e0b':'#ef4444'; return '<span style="padding:4px 10px;border-radius:16px;background:'+color+';color:#fff;font-weight:700">'+score+'%</span>'; }
@@ -16,9 +16,23 @@
     var wrap = document.getElementById('practice-history-table');
     if (!wrap) return false;
     wrap.style.color = '#fff';
-    if (!records.length) { wrap.innerHTML = '<div style="text-align:center;padding:40px;opacity:.8;color:#fff"><div style="font-size:3rem;margin-bottom:10px">📝</div><div>暂无练习记录</div></div>'; return true; }
-    wrap.innerHTML = records.map(function(r){
-      var ex = (examIndex||[]).find(e=> e.id===r.examId) || {};
+    // 3-column virtual scroll layout
+    if (!records.length) {
+      wrap.innerHTML = '<div style="text-align:center;padding:40px;opacity:.8;color:#fff"><div style="font-size:3rem;margin-bottom:10px">📝</div><div>暂无练习记录</div></div>';
+      return true;
+    }
+
+    // Prepare columns and state
+    var cols = [[],[],[]];
+    for (var i=0;i<records.length;i++) cols[i%3].push(records[i]);
+    wrap.innerHTML = '';
+    wrap.style.display = 'grid';
+    wrap.style.gridTemplateColumns = 'repeat(3, 1fr)';
+    wrap.style.gap = '12px';
+
+    var state = { cols: cols, loaded: [0,0,0], pageSize: 30 };
+    function cardHTML(r){
+      var ex = (examIndex||[]).find(function(e){ return e.id===r.examId; }) || {};
       var title = ex.title || r.title || r.examName || '未知题目';
       var date = new Date(r.date || r.timestamp || Date.now());
       var score = r.score || r.percentage || 0;
@@ -32,7 +46,45 @@
         '  <div>'+badge(score)+'</div>',
         '</div>'
       ].join('');
-    }).join('');
+    }
+
+    function append(colEl, colIndex){
+      var list = state.cols[colIndex];
+      var start = state.loaded[colIndex];
+      if (start >= list.length) return;
+      var end = Math.min(list.length, start + state.pageSize);
+      var frag = document.createDocumentFragment();
+      for (var j=start;j<end;j++){
+        var div = document.createElement('div');
+        div.innerHTML = cardHTML(list[j]);
+        // unwrap to avoid nested div layers
+        while (div.firstChild) colEl.appendChild(div.firstChild);
+      }
+      state.loaded[colIndex] = end;
+    }
+
+    for (var c=0;c<3;c++){
+      var col = document.createElement('div');
+      col.className = 'hp-history-col';
+      col.style.maxHeight = '600px';
+      col.style.overflowY = 'auto';
+      col.style.display = 'flex';
+      col.style.flexDirection = 'column';
+      col.style.gap = '12px';
+      wrap.appendChild(col);
+      append(col, c);
+      (function(ci, el){
+        el.addEventListener('scroll', function(){
+          try {
+            if (el.scrollTop + el.clientHeight + 40 >= el.scrollHeight) {
+              append(el, ci);
+            }
+          } catch(_){ }
+        }, { passive:true });
+      })(c, col);
+    }
+    // keep state for potential future use
+    wrap.__hpColState = state;
     return true;
   }
 
@@ -86,25 +138,45 @@
     if (btn && sel) {
       btn.addEventListener('click', function(){
         var val = sel.value || 'all';
-        if (val==='all') currentFilter = { type:'all', category:'all' };
-        else {
+        var next = { type:'all', category:'all', startDate:null, endDate:null };
+        if (val!=='all') {
           var parts = val.split(':');
-          currentFilter = { type: parts[0], category: (parts[1]||'all').toUpperCase() };
+          next.type = parts[0];
+          next.category = (parts[1]||'all').toUpperCase();
         }
+        // read date range if provided
+        try {
+          var inputs = cont.querySelectorAll('input');
+          if (inputs && inputs.length>=1) {
+            var s = inputs[0].value && new Date(inputs[0].value);
+            if (s && !isNaN(s)) { s.setHours(0,0,0,0); next.startDate = s; }
+          }
+          if (inputs && inputs.length>=2) {
+            var e = inputs[1].value && new Date(inputs[1].value);
+            if (e && !isNaN(e)) { e.setHours(23,59,59,999); next.endDate = e; }
+          }
+        } catch(_){}
+        currentFilter = next;
         update();
       });
     }
   }
 
   function applyRecordFilter(records, examIndex){
-    if (!records || currentFilter.type==='all') return records;
+    if (!records) return records;
     return records.filter(function(r){
+      var pass = true;
+      // type/category filter
       var type = (r.type || '').toLowerCase();
-      var ex = (examIndex||[]).find(e=> e.id===r.examId);
+      var ex = (examIndex||[]).find(function(e){ return e.id===r.examId; });
       var cat = (r.category || r.part || (ex && (ex.category||ex.part)) || '').toUpperCase();
-      if (currentFilter.type && type !== currentFilter.type) return false;
-      if (currentFilter.category && currentFilter.category!=='all' && cat !== currentFilter.category) return false;
-      return true;
+      if (currentFilter.type && currentFilter.type!=='all' && type !== currentFilter.type) pass = false;
+      if (currentFilter.category && currentFilter.category!=='all' && cat !== currentFilter.category) pass = false;
+      // date window filter
+      var d = new Date(r.date || r.timestamp || Date.now());
+      if (currentFilter.startDate && d < currentFilter.startDate) pass = false;
+      if (currentFilter.endDate && d > currentFilter.endDate) pass = false;
+      return pass;
     });
   }
 

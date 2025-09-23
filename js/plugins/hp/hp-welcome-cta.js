@@ -31,21 +31,26 @@
   }
 
   function init(){
-    // Event delegation so bindings work regardless of render order
+    // Event delegation (bubble phase) to avoid double-handling with adapter
     document.addEventListener('click', function(e){
       var el = e.target;
       if (!el) return;
       // ascend if icon/span inside anchor/button
       if (el.matches && !el.matches('a,button')) { el = el.closest('a,button'); }
       if (!el) return;
+      // If adapter already handled this event, skip
+      if (e.defaultPrevented) return;
+      // Only act on buttons in the welcome cards area
+      var root = document.getElementById('practice-cards-container');
+      if (root && !root.contains(el)) return;
       var cta = el.getAttribute && el.getAttribute('data-cta');
-      if (cta === 'start-reading') { e.preventDefault(); onClickStart('reading'); }
-      if (cta === 'start-listening') { e.preventDefault(); onClickStart('listening'); }
+      if (cta === 'start-reading') { e.preventDefault(); onClickStart('reading'); return; }
+      if (cta === 'start-listening') { e.preventDefault(); onClickStart('listening'); return; }
       // Fallback by text content
       var t = (el.textContent || '').trim();
-      if (/^Start Reading Practice$/i.test(t)) { e.preventDefault(); onClickStart('reading'); }
-      if (/^Start Listening Practice$/i.test(t)) { e.preventDefault(); onClickStart('listening'); }
-    }, true);
+      if (/^Start Reading Practice$/i.test(t)) { e.preventDefault(); onClickStart('reading'); return; }
+      if (/^Start Listening Practice$/i.test(t)) { e.preventDefault(); onClickStart('listening'); return; }
+    }, false);
   }
 
   if (document.readyState === 'loading'){
