@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Data backup and recovery manager.
  * Provides export/import/cleanup functionality for the shared storage layer.
  */
@@ -210,6 +210,7 @@ class DataBackupManager {
         let mergeResult;
         try {
             mergeResult = await this.mergePracticeRecords(normalized.practiceRecords, mergeMode);
+
             if (normalized.userStats) {
                 await this.mergeUserStats(normalized.userStats, mergeMode);
             }
@@ -296,12 +297,42 @@ class DataBackupManager {
     }
 
     normalizeImportPayload(payload, { preserveIds = true } = {}) {
+        if (payload === undefined || payload === null) {
+            throw new Error('Import data is empty.');
+        }
+
         const practiceRecords = [];
         const sources = [];
         let userStats = null;
         const visited = new WeakSet();
 
-        const visit = (node, path = []) => {
+        const collectRecords = (records, originPath) => {
+            if (!Array.isArray(records) || !records.length) {
+                return;
+            }
+
+            const pathString = originPath ? originPath : '';
+            if (!this.isPracticeRecordPath(pathString)) {
+                return;
+            }
+
+            const normalizedRecords = records
+                .map((record, index) => this.normalizeRecord(record, {
+                    preserveIds,
+                    fallbackIdPrefix: pathString || 'record',
+                    index
+                }))
+                .filter(Boolean);
+
+            if (!normalizedRecords.length) {
+                return;
+            }
+
+            practiceRecords.push(...normalizedRecords);
+            sources.push({ path: pathString || '(root array)', count: normalizedRecords.length });
+        };
+
+        const visit = (node, pathSegments = []) => {
             if (!node || typeof node !== 'object') {
                 return;
             }
@@ -313,18 +344,11 @@ class DataBackupManager {
 
             if (Array.isArray(node)) {
                 if (this.isRecordArray(node)) {
-                    const normalized = node
-                        .map((record, index) => this.normalizeRecord(record, { preserveIds, fallbackIdPrefix: path.join('.') || 'record', index }))
-                        .filter(Boolean);
-
-                    if (normalized.length) {
-                        practiceRecords.push(...normalized);
-                        sources.push({ path: path.length ? path.join('.') : '(root array)', count: normalized.length });
-                    }
+                    collectRecords(node, pathSegments.join('.'));
                     return;
                 }
 
-                node.forEach((item, index) => visit(item, path.concat(index)));
+                node.forEach((item, index) => visit(item, pathSegments.concat(index)));
                 return;
             }
 
@@ -337,29 +361,18 @@ class DataBackupManager {
             }
 
             for (const [key, value] of Object.entries(node)) {
-                const nextPath = path.concat(String(key));
+                const nextPath = pathSegments.concat(String(key));
 
-                if (Array.isArray(value) && this.isRecordArray(value)) {
-                    const normalized = value
-                        .map((record, index) => this.normalizeRecord(record, { preserveIds, fallbackIdPrefix: nextPath.join('.'), index }))
-                        .filter(Boolean);
-                    if (normalized.length) {
-                        practiceRecords.push(...normalized);
-                        sources.push({ path: nextPath.join('.'), count: normalized.length });
+                if (Array.isArray(value)) {
+                    if (this.isRecordArray(value)) {
+                        collectRecords(value, nextPath.join('.'));
                         continue;
                     }
-                }
-
-                if (this.isPlainObject(value)) {
+                } else if (this.isPlainObject(value)) {
                     if (Array.isArray(value.data) && this.isRecordArray(value.data)) {
-                        const normalized = value.data
-                            .map((record, index) => this.normalizeRecord(record, { preserveIds, fallbackIdPrefix: nextPath.join('.') + '.data', index }))
-                            .filter(Boolean);
-                        if (normalized.length) {
-                            practiceRecords.push(...normalized);
-                            sources.push({ path: nextPath.join('.') + '.data', count: normalized.length });
-                            continue;
-                        }
+                        const nestedPath = nextPath.join('.') + '.data';
+                        collectRecords(value.data, nestedPath);
+                        continue;
                     }
 
                     if (!userStats && this.looksLikeUserStats(value)) {
@@ -380,6 +393,15 @@ class DataBackupManager {
             userStats,
             sources
         };
+    }
+
+    isPracticeRecordPath(pathString) {
+        if (!pathString) {
+            return false;
+        }
+
+        const normalized = pathString.toLowerCase();
+        return normalized.includes('practice_records') || normalized.includes('practicerecords');
     }
 
     validateNormalizedRecords(records) {
@@ -587,27 +609,23 @@ class DataBackupManager {
         }
 
         const keys = Object.keys(record).map(key => key.toLowerCase());
-        const signals = [
-            'id',
-            'practiceid',
-            'practice_id',
-            'recordid',
-            'record_id',
-            'examid',
-            'exam_id',
-            'examname',
-            'title',
-            'score',
-            'percentage',
-            'accuracy',
-            'starttime',
-            'createdat',
-            'timestamp',
-            'realdata',
-            'duration'
-        ];
+        const keySet = new Set(keys);
 
-        return signals.some(signal => keys.includes(signal));
+        const identitySignals = [
+            'id', 'practiceid', 'practice_id', 'recordid', 'record_id',
+            'examid', 'exam_id', 'examname', 'title'
+        ];
+        const timeSignals = ['starttime', 'start_time', 'createdat', 'timestamp', 'endtime'];
+        const statusSignals = ['status', 'realdata', 'duration'];
+
+        const hasIdentity = identitySignals.some(signal => keySet.has(signal));
+        if (!hasIdentity) {
+            return false;
+        }
+
+        const hasTime = timeSignals.some(signal => keySet.has(signal));
+        const hasStatus = statusSignals.some(signal => keySet.has(signal));
+        return hasStatus || hasTime;
     }
 
     looksLikeUserStats(candidate) {
