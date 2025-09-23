@@ -273,7 +273,7 @@ class DataManagementPanel {
      */
     async loadDataStats() {
         try {
-            const stats = this.backupManager.getDataStats();
+            const stats = await this.backupManager.getDataStats();
             
             if (stats) {
                 document.getElementById('recordCount').textContent = stats.practiceRecords.count;
@@ -314,7 +314,7 @@ class DataManagementPanel {
                 options.dateRange = { startDate, endDate };
             }
 
-            const exportResult = this.backupManager.exportPracticeRecords(options);
+            const exportResult = await this.backupManager.exportPracticeRecords(options);
             
             // 下载文件
             this.downloadFile(exportResult.data, exportResult.filename, exportResult.mimeType);

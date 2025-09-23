@@ -1,190 +1,164 @@
 ﻿/**
- * 数据备份和恢复管理器
- * 提供完整的数据导入导出、备份恢复和数据清理功能
+ * Data backup and recovery manager.
+ * Provides export/import/cleanup functionality for the shared storage layer.
  */
 class DataBackupManager {
     constructor() {
         this.storageKeys = {
             backupSettings: 'backup_settings',
             exportHistory: 'export_history',
-            importHistory: 'import_history'
+            importHistory: 'import_history',
+            manualBackups: 'manual_backups'
         };
-        
+
         this.supportedFormats = ['json', 'csv'];
         this.maxBackupHistory = 20;
         this.maxExportHistory = 50;
-        
+
         this.initialize();
     }
 
-    /**
-     * 初始化备份管理器
-     */
     async initialize() {
-        console.log('DataBackupManager initialized');
-        
-        // 初始化设置
-        await this.initializeSettings();
-        
-        // 设置定期清理
+        try {
+            await this.initializeSettings();
+        } catch (error) {
+            console.error('[DataBackupManager] failed to initialize settings', error);
+        }
+
         this.setupPeriodicCleanup();
     }
 
-    /**
-     * 初始化备份设置
-     */
     async initializeSettings() {
-        const defaultSettings = {
+        const defaults = {
             autoBackup: true,
-            backupInterval: 24, // 小时
+            backupInterval: 24,
             maxBackups: 10,
             compressionEnabled: false,
             encryptionEnabled: false,
             lastAutoBackup: null
         };
-        
-        const settings = await storage.get(this.storageKeys.backupSettings, defaultSettings);
-        await storage.set(this.storageKeys.backupSettings, settings);
-    }
 
-    /**
-     * 导出练习记录数据
-     */
-    async exportPracticeRecords(options = {}) {
         try {
-            const {
-                format = 'json',
-                includeStats = true,
-                includeBackups = false,
-                dateRange = null,
-                categories = null,
-                compression = false
-            } = options;
-
-            // 验证格式
-            if (!this.supportedFormats.includes(format.toLowerCase())) {
-                throw new Error(`Unsupported export format: ${format}`);
-            }
-
-            // 获取练习记录
-            let practiceRecords = [];
-            if (window.practiceRecorder) {
-                practiceRecords = window.practiceRecorder.getPracticeRecords();
-            } else {
-                practiceRecords = await storage.get('practice_records', []);
-            }
-
-            // 应用筛选条件
-            if (dateRange) {
-                practiceRecords = this.filterByDateRange(practiceRecords, dateRange);
-            }
-
-            if (categories && categories.length > 0) {
-                practiceRecords = practiceRecords.filter(record => 
-                    categories.includes(record.metadata?.category)
-                );
-            }
-
-            // 构建导出数据
-            const exportData = {
-                exportInfo: {
-                    timestamp: new Date().toISOString(),
-                    version: '1.0.0',
-                    format: format,
-                    recordCount: practiceRecords.length,
-                    options: options
-                },
-                practiceRecords: practiceRecords
-            };
-
-            // 包含用户统计
-            if (includeStats) {
-                if (window.practiceRecorder) {
-                    exportData.userStats = window.practiceRecorder.getUserStats();
-                } else {
-                    exportData.userStats = await storage.get('user_stats', {});
-                }
-            }
-
-            // 包含备份数据
-            if (includeBackups && window.practiceRecorder) {
-                exportData.backups = window.practiceRecorder.getBackups();
-            }
-
-            // 记录导出历史
-            await this.recordExportHistory(exportData.exportInfo);
-
-            // 根据格式返回数据
-            switch (format.toLowerCase()) {
-                case 'json':
-                    return this.exportAsJSON(exportData, compression);
-                case 'csv':
-                    return this.exportAsCSV(exportData);
-                default:
-                    throw new Error(`Format ${format} not implemented`);
-            }
-
+            const stored = await storage.get(this.storageKeys.backupSettings, defaults);
+            await storage.set(this.storageKeys.backupSettings, { ...defaults, ...stored });
         } catch (error) {
-            console.error('Export failed:', error);
-            throw new Error(`导出失败: ${error.message}`);
+            console.error('[DataBackupManager] unable to persist settings', error);
         }
     }
 
-    /**
-     * 导出为JSON格式
-     */
-    exportAsJSON(data, compression = false) {
-        const jsonString = JSON.stringify(data, null, compression ? 0 : 2);
-        
+    async exportPracticeRecords(options = {}) {
+        const {
+            format = 'json',
+            includeStats = true,
+            includeBackups = false,
+            dateRange = null,
+            categories = null,
+            compression = false
+        } = options;
+
+        const normalizedFormat = String(format).toLowerCase();
+        if (!this.supportedFormats.includes(normalizedFormat)) {
+            throw new Error(`Unsupported export format: ${format}`);
+        }
+
+        let practiceRecords = [];
+        if (window.practiceRecorder && typeof window.practiceRecorder.getPracticeRecords === 'function') {
+            practiceRecords = window.practiceRecorder.getPracticeRecords();
+        } else {
+            practiceRecords = await storage.get('practice_records', []);
+        }
+
+        if (dateRange) {
+            practiceRecords = this.filterByDateRange(practiceRecords, dateRange);
+        }
+
+        if (Array.isArray(categories) && categories.length) {
+            practiceRecords = practiceRecords.filter(record => categories.includes(record?.metadata?.category));
+        }
+
+        const exportPayload = {
+            exportInfo: {
+                timestamp: new Date().toISOString(),
+                version: '1.0.0',
+                format: normalizedFormat,
+                recordCount: practiceRecords.length,
+                options: { format, includeStats, includeBackups, dateRange, categories }
+            },
+            practiceRecords
+        };
+
+        if (includeStats) {
+            if (window.practiceRecorder && typeof window.practiceRecorder.getUserStats === 'function') {
+                exportPayload.userStats = window.practiceRecorder.getUserStats();
+            } else {
+                exportPayload.userStats = await storage.get('user_stats', {});
+            }
+        }
+
+        if (includeBackups && window.practiceRecorder && typeof window.practiceRecorder.getBackups === 'function') {
+            exportPayload.backups = window.practiceRecorder.getBackups();
+        }
+
+        await this.recordExportHistory(exportPayload.exportInfo);
+
+        switch (normalizedFormat) {
+            case 'json':
+                return this.exportAsJSON(exportPayload, compression);
+            case 'csv':
+                return this.exportAsCSV(exportPayload);
+            default:
+                throw new Error(`Format ${format} not implemented`);
+        }
+    }
+
+    exportAsJSON(data, compressionEnabled = false) {
+        const raw = JSON.stringify(data, null, 2);
+        const payload = compressionEnabled ? this.compressData(raw) : raw;
+
         return {
-            data: jsonString,
+            data: payload,
             filename: `practice_records_${this.getTimestamp()}.json`,
             mimeType: 'application/json',
-            size: jsonString.length
+            size: payload.length,
+            compressed: compressionEnabled
         };
     }
 
-    /**
-     * 导出为CSV格式
-     */
     exportAsCSV(data) {
-        const records = data.practiceRecords;
-        
-        if (records.length === 0) {
-            return {
-                data: '',
-                filename: `practice_records_${this.getTimestamp()}.csv`,
-                mimeType: 'text/csv',
-                size: 0
-            };
-        }
-
-        // CSV头部
+        const records = Array.isArray(data.practiceRecords) ? data.practiceRecords : [];
         const headers = [
-            '记录ID', '考试ID', '开始时间', '结束时间', '用时(分钟)', 
-            '状态', '得分', '总题数', '正确数', '准确率(%)', 
-            '分类', '频率', '题目标题', '创建时间'
+            'record_id',
+            'exam_id',
+            'title',
+            'status',
+            'score',
+            'accuracy',
+            'duration_seconds',
+            'start_time',
+            'end_time',
+            'category',
+            'frequency',
+            'created_at'
         ];
 
-        // 转换记录为CSV行
-        const rows = records.map(record => [
-            record.id || '',
-            record.examId || '',
-            record.startTime || '',
-            record.endTime || '',
-            record.duration ? Math.round(record.duration / 60) : 0,
-            record.status || '',
-            record.score || 0,
-            record.totalQuestions || 0,
-            record.correctAnswers || 0,
-            record.accuracy ? Math.round(record.accuracy * 100) : 0,
-            record.metadata?.category || '',
-            record.metadata?.frequency || '',
-            record.metadata?.examTitle || '',
-            record.createdAt || ''
-        ]);
+        const rows = records.map(record => {
+            const metadata = record?.metadata || {};
+            return [
+                record?.id ?? '',
+                record?.examId ?? '',
+                record?.title ?? '',
+                record?.status ?? '',
+                record?.score ?? '',
+                record?.accuracy ?? '',
+                record?.duration ?? '',
+                record?.startTime ?? '',
+                record?.endTime ?? '',
+                metadata.category ?? '',
+                metadata.frequency ?? '',
+                record?.createdAt ?? ''
+            ];
+        });
 
-        // 生成CSV内容
         const csvContent = [headers, ...rows]
             .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
             .join('\n');
@@ -196,113 +170,14 @@ class DataBackupManager {
             size: csvContent.length
         };
     }
-
     /**
-     * 从文件导入练习记录
+     * Legacy-friendly wrapper.
      */
-    async importPracticeRecords(filePath, options = {}) {
-        try {
-            const sourceLabel = typeof source === 'string' ? source : '[binary]';
-            console.log(`[DataBackupManager] 开始导入数据源: ${sourceLabel}`);
-
-            const payload = await this.parseImportSource(source, { allowFetch: true });
-            const result = await this.processImportPayload(payload, options);
-
-            if (window.showMessage && result.importedCount > 0) {
-                window.showMessage(`成功导入 ${result.importedCount} 条练习记录`);
-            }
-
-            return result;
-        } catch (error) {
-            console.error('[DataBackupManager] 导入练习记录失败:', error);
-
-            await this.recordImportHistory({
-                timestamp: new Date().toISOString(),
-                error: error.message,
-                success: false
-            });
-
-            if (window.showMessage) {
-                window.showMessage(`导入失败: ${error.message}`, 'error');
-            }
-
-            throw error;
-        }
+    async importPracticeRecords(source, options = {}) {
+        return this.importPracticeData(source, options);
     }
 
-
-    /**
-     * 导入练习数据
-     */
     async importPracticeData(source, options = {}) {
-        try {
-            const payload = await this.parseImportSource(source);
-            return await this.processImportPayload(payload, options);
-        } catch (error) {
-            console.error('Import failed:', error);
-
-            await this.recordImportHistory({
-                timestamp: new Date().toISOString(),
-                error: error.message,
-                success: false
-            });
-
-            throw new Error(`导入失败: ${error.message}`);
-        }
-    }
-
-    /**
-     * 解析导入数据源
-     */
-    async parseImportSource(source, { allowFetch = false } = {}) {
-        if (source === undefined || source === null) {
-            throw new Error('未提供导入数据');
-        }
-
-        if (typeof File !== 'undefined' && source instanceof File) {
-            return this.parseImportSource(await source.text());
-        }
-
-        if (typeof Blob !== 'undefined' && source instanceof Blob) {
-            return this.parseImportSource(await source.text());
-        }
-
-        if (typeof source === 'string') {
-            const trimmed = source.trim();
-            if (!trimmed) {
-                throw new Error('导入数据为空');
-            }
-
-            if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-                try {
-                    return JSON.parse(trimmed);
-                } catch (error) {
-                    throw new Error('导入数据不是有效的 JSON 格式');
-                }
-            }
-
-            if (allowFetch) {
-                const response = await fetch(source);
-                if (!response.ok) {
-                    throw new Error(`文件加载失败: ${source} (${response.status})`);
-                }
-                return await response.json();
-            }
-
-            throw new Error('导入字符串不是有效的 JSON 数据');
-        }
-
-        if (Array.isArray(source) || this.isPlainObject(source)) {
-            return source;
-        }
-
-        throw new Error('不支持的导入数据类型');
-    }
-
-    /**
-     * 处理导入有效负载
-     */
-    async processImportPayload(rawPayload, options = {}) {
         const {
             mergeMode = 'merge',
             validateData = true,
@@ -310,10 +185,17 @@ class DataBackupManager {
             preserveIds = true
         } = options;
 
-        const normalized = this.normalizeImportPayload(rawPayload, { preserveIds });
+        let payload;
+        try {
+            payload = await this.parseImportSource(source, { allowFetch: true });
+        } catch (error) {
+            throw new Error(`Failed to read import source: ${error.message}`);
+        }
+
+        const normalized = this.normalizeImportPayload(payload, { preserveIds });
 
         if (!normalized.practiceRecords.length) {
-            throw new Error('导入文件中未发现练习记录数据');
+            throw new Error('Import file does not contain any practice records.');
         }
 
         if (validateData) {
@@ -328,7 +210,6 @@ class DataBackupManager {
         let mergeResult;
         try {
             mergeResult = await this.mergePracticeRecords(normalized.practiceRecords, mergeMode);
-
             if (normalized.userStats) {
                 await this.mergeUserStats(normalized.userStats, mergeMode);
             }
@@ -337,9 +218,17 @@ class DataBackupManager {
                 try {
                     await this.restoreBackup(backupId);
                 } catch (restoreError) {
-                    console.error('Failed to restore backup after import error:', restoreError);
+                    console.error('[DataBackupManager] failed to restore backup after import error', restoreError);
                 }
             }
+
+            await this.recordImportHistory({
+                timestamp: new Date().toISOString(),
+                mergeMode,
+                backupId,
+                success: false,
+                error: error.message
+            });
             throw error;
         }
 
@@ -348,7 +237,7 @@ class DataBackupManager {
             recordCount: mergeResult.importedCount,
             mergeMode,
             backupId,
-            sources: normalized.sources || [],
+            sources: normalized.sources,
             success: true
         });
 
@@ -357,24 +246,155 @@ class DataBackupManager {
             ...mergeResult,
             backupId,
             statsImported: Boolean(normalized.userStats),
-            sources: normalized.sources || []
+            sources: normalized.sources
+        };
+    }
+
+    async parseImportSource(source, { allowFetch = false } = {}) {
+        if (source === undefined || source === null) {
+            throw new Error('Import source is empty.');
+        }
+
+        if (typeof File !== 'undefined' && source instanceof File) {
+            return this.parseImportSource(await source.text(), { allowFetch });
+        }
+
+        if (typeof Blob !== 'undefined' && source instanceof Blob) {
+            return this.parseImportSource(await source.text(), { allowFetch });
+        }
+
+        if (typeof source === 'string') {
+            const trimmed = source.trim();
+            if (!trimmed) {
+                throw new Error('Import source string is empty.');
+            }
+
+            if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+                try {
+                    return JSON.parse(trimmed);
+                } catch (error) {
+                    throw new Error('Import string is not valid JSON.');
+                }
+            }
+
+            if (!allowFetch) {
+                throw new Error('Import string is neither JSON nor a fetchable path.');
+            }
+
+            const response = await fetch(trimmed);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch import file: ${response.status}`);
+            }
+            return await response.json();
+        }
+
+        if (Array.isArray(source) || this.isPlainObject(source)) {
+            return source;
+        }
+
+        throw new Error('Unsupported import source type.');
+    }
+
+    normalizeImportPayload(payload, { preserveIds = true } = {}) {
+        const practiceRecords = [];
+        const sources = [];
+        let userStats = null;
+        const visited = new WeakSet();
+
+        const visit = (node, path = []) => {
+            if (!node || typeof node !== 'object') {
+                return;
+            }
+
+            if (visited.has(node)) {
+                return;
+            }
+            visited.add(node);
+
+            if (Array.isArray(node)) {
+                if (this.isRecordArray(node)) {
+                    const normalized = node
+                        .map((record, index) => this.normalizeRecord(record, { preserveIds, fallbackIdPrefix: path.join('.') || 'record', index }))
+                        .filter(Boolean);
+
+                    if (normalized.length) {
+                        practiceRecords.push(...normalized);
+                        sources.push({ path: path.length ? path.join('.') : '(root array)', count: normalized.length });
+                    }
+                    return;
+                }
+
+                node.forEach((item, index) => visit(item, path.concat(index)));
+                return;
+            }
+
+            if (!this.isPlainObject(node)) {
+                return;
+            }
+
+            if (!userStats && this.looksLikeUserStats(node)) {
+                userStats = this.extractUserStats(node);
+            }
+
+            for (const [key, value] of Object.entries(node)) {
+                const nextPath = path.concat(String(key));
+
+                if (Array.isArray(value) && this.isRecordArray(value)) {
+                    const normalized = value
+                        .map((record, index) => this.normalizeRecord(record, { preserveIds, fallbackIdPrefix: nextPath.join('.'), index }))
+                        .filter(Boolean);
+                    if (normalized.length) {
+                        practiceRecords.push(...normalized);
+                        sources.push({ path: nextPath.join('.'), count: normalized.length });
+                        continue;
+                    }
+                }
+
+                if (this.isPlainObject(value)) {
+                    if (Array.isArray(value.data) && this.isRecordArray(value.data)) {
+                        const normalized = value.data
+                            .map((record, index) => this.normalizeRecord(record, { preserveIds, fallbackIdPrefix: nextPath.join('.') + '.data', index }))
+                            .filter(Boolean);
+                        if (normalized.length) {
+                            practiceRecords.push(...normalized);
+                            sources.push({ path: nextPath.join('.') + '.data', count: normalized.length });
+                            continue;
+                        }
+                    }
+
+                    if (!userStats && this.looksLikeUserStats(value)) {
+                        userStats = this.extractUserStats(value);
+                    }
+                }
+
+                visit(value, nextPath);
+            }
+        };
+
+        visit(payload, []);
+
+        const deduplicated = this.deduplicateRecords(practiceRecords);
+
+        return {
+            practiceRecords: deduplicated,
+            userStats,
+            sources
         };
     }
 
     validateNormalizedRecords(records) {
         records.forEach((record, index) => {
             if (!record.id) {
-                throw new Error(`记录 ${index + 1} 缺少 id 字段`);
+                throw new Error(`Record ${index + 1} is missing an id.`);
             }
             if (!record.examId) {
-                throw new Error(`记录 ${index + 1} 缺少 examId 字段`);
+                throw new Error(`Record ${index + 1} is missing an examId.`);
             }
             if (!record.startTime) {
-                throw new Error(`记录 ${index + 1} 缺少 startTime 字段`);
+                throw new Error(`Record ${index + 1} is missing a startTime.`);
             }
-
             if (Number.isNaN(new Date(record.startTime).getTime())) {
-                throw new Error(`记录 ${index + 1} 的 startTime 无效`);
+                throw new Error(`Record ${index + 1} has an invalid startTime.`);
             }
         });
     }
@@ -382,25 +402,23 @@ class DataBackupManager {
     async mergePracticeRecords(newRecords, mergeMode = 'merge') {
         const existingRaw = await storage.get('practice_records', []);
         const existingRecords = Array.isArray(existingRaw) ? existingRaw.slice() : [];
-        const indexMap = new Map();
-
-        existingRecords.forEach((record, index) => {
-            if (!record || typeof record !== 'object') {
-                return;
-            }
-            const recordId = record.id || `legacy_${index}`;
-            indexMap.set(recordId, { record, index });
-        });
 
         if (mergeMode === 'replace') {
             await storage.set('practice_records', newRecords);
             return {
                 importedCount: newRecords.length,
-                updatedCount: existingRecords.length ? existingRecords.length : 0,
+                updatedCount: existingRecords.length,
                 skippedCount: 0,
                 finalCount: newRecords.length
             };
         }
+
+        const indexMap = new Map();
+        existingRecords.forEach((record, index) => {
+            if (record && record.id !== undefined && record.id !== null) {
+                indexMap.set(String(record.id), { record, index });
+            }
+        });
 
         let importedCount = 0;
         let updatedCount = 0;
@@ -409,21 +427,22 @@ class DataBackupManager {
         const mergedRecords = existingRecords.slice();
 
         for (const record of newRecords) {
-            if (!record || !record.id) {
+            if (!record || record.id === undefined || record.id === null) {
                 continue;
             }
 
-            const existing = indexMap.get(record.id);
+            const key = String(record.id);
+            const existing = indexMap.get(key);
 
             if (!existing) {
                 mergedRecords.push(record);
-                indexMap.set(record.id, { record, index: mergedRecords.length - 1 });
-                importedCount++;
+                indexMap.set(key, { record, index: mergedRecords.length - 1 });
+                importedCount += 1;
                 continue;
             }
 
             if (mergeMode === 'skip') {
-                skippedCount++;
+                skippedCount += 1;
                 continue;
             }
 
@@ -433,10 +452,10 @@ class DataBackupManager {
             if (incomingTimestamp >= existingTimestamp) {
                 const merged = this.mergeRecordDetails(existing.record, record);
                 mergedRecords[existing.index] = merged;
-                indexMap.set(record.id, { record: merged, index: existing.index });
-                updatedCount++;
+                indexMap.set(key, { record: merged, index: existing.index });
+                updatedCount += 1;
             } else {
-                skippedCount++;
+                skippedCount += 1;
             }
         }
 
@@ -451,7 +470,6 @@ class DataBackupManager {
             finalCount: mergedRecords.length
         };
     }
-
     async mergeUserStats(stats, mergeMode = 'merge') {
         if (!this.isPlainObject(stats)) {
             return;
@@ -470,17 +488,18 @@ class DataBackupManager {
                 continue;
             }
 
-            if (typeof value === 'number' && typeof existing[key] === 'number') {
-                merged[key] = Math.max(value, existing[key]);
+            const current = existing[key];
+            if (typeof value === 'number' && typeof current === 'number') {
+                merged[key] = Math.max(value, current);
                 continue;
             }
 
-            if (this.isPlainObject(value) && this.isPlainObject(existing[key])) {
-                merged[key] = { ...existing[key], ...value };
+            if (this.isPlainObject(value) && this.isPlainObject(current)) {
+                merged[key] = { ...current, ...value };
                 continue;
             }
 
-            if (existing[key] === undefined) {
+            if (current === undefined) {
                 merged[key] = value;
                 continue;
             }
@@ -491,120 +510,75 @@ class DataBackupManager {
         await storage.set('user_stats', merged);
     }
 
-    normalizeImportPayload(payload, { preserveIds = true } = {}) {
-        if (payload === undefined || payload === null) {
-            throw new Error('导入数据为空');
+    mergeRecordDetails(existing, incoming) {
+        const merged = { ...existing, ...incoming };
+
+        if (this.isPlainObject(existing?.metadata) || this.isPlainObject(incoming?.metadata)) {
+            merged.metadata = {
+                ...(this.isPlainObject(existing?.metadata) ? existing.metadata : {}),
+                ...(this.isPlainObject(incoming?.metadata) ? incoming.metadata : {})
+            };
         }
 
-        const practiceRecords = [];
-        const sources = [];
-        let userStats = null;
+        if (this.isPlainObject(existing?.realData) || this.isPlainObject(incoming?.realData)) {
+            merged.realData = {
+                ...(this.isPlainObject(existing?.realData) ? existing.realData : {}),
+                ...(this.isPlainObject(incoming?.realData) ? incoming.realData : {})
+            };
+        }
 
-        const visited = new WeakSet();
+        merged.startTime = this.normalizeDateValue(merged.startTime || incoming.startTime || existing.startTime) || merged.startTime;
+        merged.endTime = this.normalizeDateValue(merged.endTime || incoming.endTime || existing.endTime) || merged.endTime;
+        merged.createdAt = this.normalizeDateValue(merged.createdAt || incoming.createdAt || existing.createdAt) || merged.createdAt;
+        merged.updatedAt = this.normalizeDateValue(merged.updatedAt || incoming.updatedAt || existing.updatedAt) || merged.updatedAt;
 
-        const visit = (node, path = []) => {
-            if (!node || typeof node !== 'object') {
-                return;
+        if (!merged.duration && merged.startTime && merged.endTime) {
+            const start = new Date(merged.startTime).getTime();
+            const end = new Date(merged.endTime).getTime();
+            if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
+                merged.duration = Math.round((end - start) / 1000);
             }
+        }
 
-            if (visited.has(node)) {
-                return;
-            }
-
-            visited.add(node);
-
-            if (Array.isArray(node)) {
-                if (node.length && node.every(item => this.isPlainObject(item)) && this.looksLikePracticeRecordArray(node)) {
-                    const normalized = node
-                        .map((record, index) => this.normalizeRecord(record, {
-                            preserveIds,
-                            fallbackIdPrefix: path.join('.') || 'record',
-                            index
-                        }))
-                        .filter(Boolean);
-
-                    if (normalized.length) {
-                        practiceRecords.push(...normalized);
-                        sources.push({
-                            path: path.join('.') || '(root array)',
-                            count: normalized.length
-                        });
-                    }
-                    return;
-                }
-
-                node.forEach((item, index) => visit(item, path.concat(index)));
-                return;
-            }
-
-            if (!userStats && this.looksLikeUserStatsKey(path[path.length - 1])) {
-                userStats = this.extractUserStats(node) || userStats;
-            }
-
-            for (const [key, value] of Object.entries(node)) {
-                if (!value || typeof value !== 'object') {
-                    continue;
-                }
-
-                const nextPath = path.concat(key);
-
-                if (Array.isArray(value)) {
-                    if (value.length && value.every(item => this.isPlainObject(item)) && this.looksLikePracticeRecordArray(value)) {
-                        const normalized = value
-                            .map((record, index) => this.normalizeRecord(record, {
-                                preserveIds,
-                                fallbackIdPrefix: nextPath.join('.'),
-                                index
-                            }))
-                            .filter(Boolean);
-
-                        if (normalized.length) {
-                            practiceRecords.push(...normalized);
-                            sources.push({
-                                path: nextPath.join('.'),
-                                count: normalized.length
-                            });
-                            continue;
-                        }
-                    }
-                } else if (!userStats) {
-                    const candidateStats = this.extractUserStats(value);
-                    if (candidateStats) {
-                        userStats = candidateStats;
-                    }
-                }
-
-                visit(value, nextPath);
-            }
-
-            if (!userStats) {
-                const directStats = this.extractUserStats(node);
-                if (directStats) {
-                    userStats = directStats;
-                }
-            }
-        };
-
-        visit(payload, []);
-
-        const deduplicated = this.deduplicateRecords(practiceRecords);
-
-        return {
-            practiceRecords: deduplicated,
-            userStats,
-            sources
-        };
+        return merged;
     }
 
-    looksLikePracticeRecordArray(items) {
+    deduplicateRecords(records) {
+        const map = new Map();
+
+        records.forEach(record => {
+            if (!record || record.id === undefined || record.id === null) {
+                return;
+            }
+
+            const key = String(record.id);
+            const timestamp = this.getRecordTimestamp(record);
+            const existing = map.get(key);
+
+            if (!existing || timestamp >= existing.timestamp) {
+                map.set(key, { record, timestamp });
+            }
+        });
+
+        return Array.from(map.values())
+            .sort((a, b) => a.timestamp - b.timestamp)
+            .map(entry => entry.record);
+    }
+
+    isRecordArray(items) {
         if (!Array.isArray(items) || !items.length) {
             return false;
         }
 
-        const sample = items.slice(0, Math.min(items.length, 5));
-        const matches = sample.filter(item => this.looksLikePracticeRecord(item)).length;
+        const sampleSize = Math.min(items.length, 5);
+        let matches = 0;
+        for (let index = 0; index < sampleSize; index += 1) {
+            if (this.looksLikePracticeRecord(items[index])) {
+                matches += 1;
+            }
+        }
 
-        return matches >= Math.ceil(sample.length / 2);
+        return matches >= Math.ceil(sampleSize / 2);
     }
 
     looksLikePracticeRecord(record) {
@@ -612,40 +586,37 @@ class DataBackupManager {
             return false;
         }
 
-        const keys = Object.keys(record);
-        if (!keys.length) {
-            return false;
-        }
-
+        const keys = Object.keys(record).map(key => key.toLowerCase());
         const signals = [
-            'id', 'practiceId', 'practice_id', 'recordId', 'record_id',
-            'examId', 'exam_id', 'examID', 'examName', 'exam_name',
-            'title', 'score', 'percentage', 'accuracy', 'status',
-            'startTime', 'start_time', 'createdAt', 'timestamp',
-            'realData', 'duration', 'questionCount', 'totalQuestions'
+            'id',
+            'practiceid',
+            'practice_id',
+            'recordid',
+            'record_id',
+            'examid',
+            'exam_id',
+            'examname',
+            'title',
+            'score',
+            'percentage',
+            'accuracy',
+            'starttime',
+            'createdat',
+            'timestamp',
+            'realdata',
+            'duration'
         ];
 
-        const lowerKeys = keys.map(key => key.toLowerCase());
-
-        return signals.some(signal => lowerKeys.includes(signal.toLowerCase()));
+        return signals.some(signal => keys.includes(signal));
     }
 
-    looksLikeUserStatsKey(key) {
-        if (typeof key !== 'string') {
+    looksLikeUserStats(candidate) {
+        if (!this.isPlainObject(candidate)) {
             return false;
         }
 
-        const normalized = key.toLowerCase();
-        return [
-            'userstats',
-            'user_stats',
-            'stats',
-            'statistics',
-            'practicestats',
-            'practice_stats',
-            'practice_statistics',
-            'userstatistics'
-        ].includes(normalized);
+        const keys = Object.keys(candidate).map(key => key.toLowerCase());
+        return keys.some(key => key.includes('stats') || key.includes('practicecount') || key.includes('totalpractice') || key.includes('total_practice'));
     }
 
     extractUserStats(candidate) {
@@ -653,47 +624,12 @@ class DataBackupManager {
             return null;
         }
 
-        const keys = Object.keys(candidate);
-        if (!keys.length) {
-            return null;
-        }
-
-        const signalKeys = [
-            'totalpractices',
-            'total_practices',
-            'totaltimespent',
-            'total_time_spent',
-            'averagescore',
-            'average_score',
-            'bestscore',
-            'best_score',
-            'sessions',
-            'records',
-            'practicecount',
-            'practice_count'
-        ];
-
-        const hasSignal = keys.some(key => signalKeys.includes(key.toLowerCase()));
-        if (!hasSignal) {
-            return null;
-        }
-
         const normalized = {};
-
         for (const [key, value] of Object.entries(candidate)) {
             normalized[this.toCamelCaseKey(key)] = value;
         }
-
         return normalized;
     }
-
-    toCamelCaseKey(key) {
-        const str = String(key);
-        return str
-            .replace(/[-_\s]+([a-zA-Z0-9])/g, (_, group) => group.toUpperCase())
-            .replace(/^[A-Z]/, match => match.toLowerCase());
-    }
-
     normalizeRecord(record, options = {}) {
         const {
             preserveIds = true,
@@ -706,7 +642,6 @@ class DataBackupManager {
         }
 
         const safePrefix = fallbackIdPrefix || 'record';
-
         const sourceId = record.id ?? record.recordId ?? record.practiceId ?? record.sessionId ?? record.timestamp ?? record.uuid;
 
         let id = preserveIds && sourceId ? String(sourceId).trim() : '';
@@ -717,10 +652,9 @@ class DataBackupManager {
         const examId = record.examId ?? record.exam_id ?? record.examID ?? record.examName ?? record.title ?? record.name;
 
         const normalized = { ...record };
-
         normalized.id = id;
         normalized.examId = examId ? String(examId) : id;
-        normalized.title = record.title ?? record.examTitle ?? record.examName ?? record.name ?? '练习记录';
+        normalized.title = record.title ?? record.examTitle ?? record.examName ?? record.name ?? 'Practice record';
         normalized.status = record.status ?? record.recordStatus ?? 'completed';
 
         const startTimeRaw = record.startTime ?? record.start_time ?? record.startedAt ?? record.createdAt ?? record.timestamp ?? record.date;
@@ -737,17 +671,11 @@ class DataBackupManager {
         normalized.correctAnswers = this.parseInteger(record.correctAnswers ?? record.correctCount ?? record.realData?.correctAnswers ?? record.realData?.correct) ?? normalized.correctAnswers;
         normalized.accuracy = this.parseNumber(record.accuracy ?? record.realData?.accuracy ?? record.percentage) ?? normalized.accuracy;
 
-        if (this.isPlainObject(record.metadata)) {
-            normalized.metadata = { ...record.metadata };
-        } else {
-            normalized.metadata = {};
-        }
-
+        normalized.metadata = this.isPlainObject(record.metadata) ? { ...record.metadata } : {};
         const category = record.category ?? record.examCategory ?? record.section ?? record.mode;
         if (category && !normalized.metadata.category) {
             normalized.metadata.category = category;
         }
-
         if (record.frequency !== undefined && normalized.metadata.frequency === undefined) {
             normalized.metadata.frequency = record.frequency;
         }
@@ -769,12 +697,9 @@ class DataBackupManager {
         }
 
         if (normalized.accuracy !== undefined && normalized.accuracy !== null) {
-            if (normalized.accuracy <= 1 && normalized.accuracy >= 0) {
-                normalized.accuracy = Number((normalized.accuracy * 100).toFixed(2));
-            } else {
-                normalized.accuracy = Number(normalized.accuracy);
-            }
-            if (Number.isFinite(normalized.accuracy)) {
+            const value = Number(normalized.accuracy);
+            if (Number.isFinite(value)) {
+                normalized.accuracy = value <= 1 && value >= 0 ? Number((value * 100).toFixed(2)) : value;
                 normalized.accuracy = Math.min(Math.max(normalized.accuracy, 0), 100);
             } else {
                 delete normalized.accuracy;
@@ -782,17 +707,16 @@ class DataBackupManager {
         }
 
         if (normalized.score !== undefined && normalized.score !== null) {
-            normalized.score = Number(normalized.score);
-            if (!Number.isFinite(normalized.score)) {
+            const value = Number(normalized.score);
+            if (Number.isFinite(value)) {
+                normalized.score = value <= 1 && value >= 0 ? Number((value * 100).toFixed(2)) : value;
+            } else {
                 delete normalized.score;
-            } else if (normalized.score <= 1 && normalized.score >= 0) {
-                normalized.score = Number((normalized.score * 100).toFixed(2));
             }
         }
 
         return normalized;
     }
-
     normalizeDateValue(value) {
         if (!value) {
             return null;
@@ -815,14 +739,14 @@ class DataBackupManager {
             if (/^\d+$/.test(trimmed)) {
                 const numeric = Number(trimmed);
                 if (Number.isFinite(numeric)) {
-                    const ms = trimmed.length > 10 ? numeric : numeric * 1000;
-                    return new Date(ms).toISOString();
+                    const milliseconds = trimmed.length > 10 ? numeric : numeric * 1000;
+                    return new Date(milliseconds).toISOString();
                 }
             }
 
-            const date = new Date(trimmed);
-            if (!Number.isNaN(date.getTime())) {
-                return date.toISOString();
+            const parsed = new Date(trimmed);
+            if (!Number.isNaN(parsed.getTime())) {
+                return parsed.toISOString();
             }
         }
 
@@ -833,7 +757,6 @@ class DataBackupManager {
         if (value === undefined || value === null || value === '') {
             return undefined;
         }
-
         const num = Number(value);
         return Number.isFinite(num) ? num : undefined;
     }
@@ -842,7 +765,6 @@ class DataBackupManager {
         if (value === undefined || value === null || value === '') {
             return undefined;
         }
-
         const num = parseInt(value, 10);
         return Number.isFinite(num) ? num : undefined;
     }
@@ -874,102 +796,90 @@ class DataBackupManager {
         return 0;
     }
 
-    mergeRecordDetails(existing, incoming) {
-        const merged = { ...existing, ...incoming };
-
-        if (this.isPlainObject(existing.metadata) || this.isPlainObject(incoming.metadata)) {
-            merged.metadata = {
-                ...(this.isPlainObject(existing.metadata) ? existing.metadata : {}),
-                ...(this.isPlainObject(incoming.metadata) ? incoming.metadata : {})
-            };
-        }
-
-        if (this.isPlainObject(existing.realData) || this.isPlainObject(incoming.realData)) {
-            merged.realData = {
-                ...(this.isPlainObject(existing.realData) ? existing.realData : {}),
-                ...(this.isPlainObject(incoming.realData) ? incoming.realData : {})
-            };
-        }
-
-        merged.startTime = this.normalizeDateValue(merged.startTime || incoming.startTime || existing.startTime) || merged.startTime;
-        merged.endTime = this.normalizeDateValue(merged.endTime || incoming.endTime || existing.endTime) || merged.endTime;
-        merged.createdAt = this.normalizeDateValue(merged.createdAt || incoming.createdAt || existing.createdAt) || merged.createdAt;
-        merged.updatedAt = this.normalizeDateValue(merged.updatedAt || incoming.updatedAt || existing.updatedAt) || merged.updatedAt;
-
-        if (!merged.duration && merged.startTime && merged.endTime) {
-            const duration = (new Date(merged.endTime).getTime() - new Date(merged.startTime).getTime()) / 1000;
-            if (Number.isFinite(duration) && duration > 0) {
-                merged.duration = Math.round(duration);
-            }
-        }
-
-        return merged;
-    }
-
-    deduplicateRecords(records) {
-        const map = new Map();
-
-        for (const record of records) {
-            if (!record || !record.id) {
-                continue;
+    filterByDateRange(records, dateRange) {
+        const { startDate, endDate } = dateRange;
+        return (records || []).filter(record => {
+            const value = this.normalizeDateValue(record?.startTime ?? record?.createdAt ?? record?.timestamp);
+            if (!value) {
+                return false;
             }
 
-            const timestamp = this.getRecordTimestamp(record);
-            const existing = map.get(record.id);
-
-            if (!existing || timestamp >= existing.timestamp) {
-                map.set(record.id, { record, timestamp });
+            const recordDate = new Date(value);
+            if (startDate && recordDate < new Date(startDate)) {
+                return false;
             }
-        }
-
-        return Array.from(map.values())
-            .sort((a, b) => a.timestamp - b.timestamp)
-            .map(entry => entry.record);
+            if (endDate && recordDate > new Date(endDate)) {
+                return false;
+            }
+            return true;
+        });
     }
 
-    isPlainObject(value) {
-        return Object.prototype.toString.call(value) === '[object Object]';
-    }
-
-    /**
-     * 创建导入前备份
-     */
-    async createPreImportBackup() {
+    compressData(data) {
         try {
-            if (window.practiceRecorder) {
-                return window.practiceRecorder.createBackup('pre_import_backup');
-            } else {
-                // 降级处理：手动创建备份
-                const backupData = {
-                    id: `pre_import_${Date.now()}`,
-                    timestamp: new Date().toISOString(),
-                    data: {
-                        practice_records: await storage.get('practice_records', []),
-                        user_stats: await storage.get('user_stats', {}),
-                        exam_index: await storage.get('exam_index', [])
-                    }
-                };
-                
-                const backups = await storage.get('manual_backups', []);
-                backups.push(backupData);
-                
-                // 保持最近10个备份
-                if (backups.length > 10) {
-                    backups.splice(0, backups.length - 10);
-                }
-                
-                await storage.set('manual_backups', backups);
-                return backupData.id;
+            if (window.pako && typeof window.pako.gzip === 'function') {
+                return window.pako.gzip(data, { to: 'string' });
             }
         } catch (error) {
-            console.error('Failed to create pre-import backup:', error);
+            console.warn('[DataBackupManager] compression failed', error);
+        }
+        return data;
+    }
+    async createPreImportBackup() {
+        try {
+            if (window.practiceRecorder && typeof window.practiceRecorder.createBackup === 'function') {
+                return await window.practiceRecorder.createBackup('pre_import_backup');
+            }
+
+            const backup = {
+                id: `pre_import_${Date.now()}`,
+                timestamp: new Date().toISOString(),
+                data: {
+                    practice_records: await storage.get('practice_records', []),
+                    user_stats: await storage.get('user_stats', {}),
+                    exam_index: await storage.get('exam_index', [])
+                }
+            };
+
+            const backups = await storage.get(this.storageKeys.manualBackups, []);
+            backups.push(backup);
+            while (backups.length > this.maxBackupHistory) {
+                backups.shift();
+            }
+            await storage.set(this.storageKeys.manualBackups, backups);
+            return backup.id;
+        } catch (error) {
+            console.error('[DataBackupManager] failed to create backup', error);
             return null;
         }
     }
 
-    /**
-     * 数据清理和重置选项
-     */
+    async restoreBackup(backupId) {
+        if (!backupId) {
+            throw new Error('Invalid backup id.');
+        }
+
+        try {
+            if (window.practiceRecorder && typeof window.practiceRecorder.restoreBackup === 'function') {
+                return await window.practiceRecorder.restoreBackup(backupId);
+            }
+
+            const backups = await storage.get(this.storageKeys.manualBackups, []);
+            const backup = backups.find(item => item.id === backupId);
+            if (!backup) {
+                throw new Error(`Backup ${backupId} not found.`);
+            }
+
+            for (const [key, value] of Object.entries(backup.data || {})) {
+                await storage.set(key, value);
+            }
+            return true;
+        } catch (error) {
+            console.error('[DataBackupManager] backup restore failed', error);
+            throw error;
+        }
+    }
+
     async clearData(options = {}) {
         const {
             clearPracticeRecords = false,
@@ -979,315 +889,152 @@ class DataBackupManager {
             createBackup = true
         } = options;
 
-        try {
-            // 创建清理前备份
-            let backupId = null;
-            if (createBackup) {
-                backupId = await this.createPreImportBackup();
-            }
-
-            const clearedItems = [];
-
-            // 清理练习记录
-            if (clearPracticeRecords) {
-                storage.remove('practice_records');
-                clearedItems.push('练习记录');
-            }
-
-            // 清理用户统计
-            if (clearUserStats) {
-                storage.remove('user_stats');
-                clearedItems.push('用户统计');
-            }
-
-            // 清理备份数据
-            if (clearBackups) {
-                storage.remove('backup_data');
-                storage.remove('manual_backups');
-                clearedItems.push('备份数据');
-            }
-
-            // 清理设置
-            if (clearSettings) {
-                storage.remove('settings');
-                storage.remove(this.storageKeys.backupSettings);
-                clearedItems.push('系统设置');
-            }
-
-            // 重新初始化默认数据
-            if (clearPracticeRecords || clearUserStats) {
-                await storage.initializeDefaultData();
-            }
-
-            console.log('Data cleared:', clearedItems);
-
-            return {
-                success: true,
-                clearedItems,
-                backupId
-            };
-
-        } catch (error) {
-            console.error('Data clearing failed:', error);
-            throw new Error(`数据清理失败: ${error.message}`);
+        let backupId = null;
+        if (createBackup) {
+            backupId = await this.createPreImportBackup();
         }
+
+        const clearedItems = [];
+
+        if (clearPracticeRecords) {
+            await storage.set('practice_records', []);
+            clearedItems.push('practice_records');
+        }
+
+        if (clearUserStats) {
+            await storage.set('user_stats', {});
+            clearedItems.push('user_stats');
+        }
+
+        if (clearBackups) {
+            await storage.set(this.storageKeys.manualBackups, []);
+            if (typeof storage.remove === 'function') {
+                await storage.remove('backup_data');
+            }
+            clearedItems.push('backups');
+        }
+
+        if (clearSettings) {
+            await storage.remove('settings');
+            await storage.remove(this.storageKeys.backupSettings);
+            clearedItems.push('settings');
+        }
+
+        return {
+            success: true,
+            clearedItems,
+            backupId
+        };
     }
 
-    /**
-     * 按日期范围筛选记录
-     */
-    filterByDateRange(records, dateRange) {
-        const { startDate, endDate } = dateRange;
-        
-        return records.filter(record => {
-            const recordDate = new Date(record.startTime);
-            
-            if (startDate && recordDate < new Date(startDate)) {
-                return false;
-            }
-            
-            if (endDate && recordDate > new Date(endDate)) {
-                return false;
-            }
-            
-            return true;
-        });
-    }
-
-    /**
-     * 记录导出历史
-     */
-    async recordExportHistory(exportInfo) {
+    async recordExportHistory(info) {
         const history = await storage.get(this.storageKeys.exportHistory, []);
-        
-        history.push({
-            ...exportInfo,
-            id: `export_${Date.now()}`
-        });
-
-        // 保持最近的导出记录
-        if (history.length > this.maxExportHistory) {
-            history.splice(0, history.length - this.maxExportHistory);
+        history.push({ ...info, id: `export_${Date.now()}` });
+        while (history.length > this.maxExportHistory) {
+            history.shift();
         }
-
         await storage.set(this.storageKeys.exportHistory, history);
     }
 
-    /**
-     * 璁板綍瀵煎叆鍘嗗彶
-     */
-    async recordImportHistory(importInfo) {
+    async recordImportHistory(info) {
         const history = await storage.get(this.storageKeys.importHistory, []);
-        
-        history.push({
-            ...importInfo,
-            id: `import_${Date.now()}`
-        });
-
-        // 保持最近的导入记录
-        if (history.length > this.maxExportHistory) {
-            history.splice(0, history.length - this.maxExportHistory);
+        history.push({ ...info, id: `import_${Date.now()}` });
+        while (history.length > this.maxExportHistory) {
+            history.shift();
         }
-
         await storage.set(this.storageKeys.importHistory, history);
     }
 
-    /**
-     * 获取导出历史
-     */
     async getExportHistory() {
         const history = await storage.get(this.storageKeys.exportHistory, []);
         return history.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     }
 
-    /**
-     * 获取导入历史
-     */
     async getImportHistory() {
         const history = await storage.get(this.storageKeys.importHistory, []);
         return history.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     }
-
-    /**
-     * 恢复备份
-     */
-    async restoreBackup(backupId) {
-        try {
-            if (window.practiceRecorder) {
-                return window.practiceRecorder.restoreBackup(backupId);
-            } else {
-                // 降级处理：从手动备份恢复
-                const backups = await storage.get('manual_backups', []);
-                const backup = backups.find(b => b.id === backupId);
-                
-                if (!backup) {
-                    throw new Error(`备份不存在: ${backupId}`);
-                }
-                
-                // 恢复数据
-                for (const [key, value] of Object.entries(backup.data)) {
-                    await storage.set(key, value);
-                }
-                
-                return true;
-            }
-        } catch (error) {
-            console.error('Backup restore failed:', error);
-            throw new Error(`备份恢复失败: ${error.message}`);
-        }
-    }
-
-    /**
-     * 获取时间戳字符串
-     */
-    getTimestamp() {
-        return new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-    }
-
-    /**
-     * 设置定期清理
-     */
-    setupPeriodicCleanup() {
-        // 每天清理一次过期数据
-        setInterval(async () => {
-            await this.cleanupExpiredData();
-        }, 24 * 60 * 60 * 1000);
-    }
-
-    /**
-     * 清理过期数据
-     */
-    async cleanupExpiredData() {
-        try {
-            // 清理过期的导出历史
-            const exportHistory = await storage.get(this.storageKeys.exportHistory, []);
-            const validExports = exportHistory.filter(item => {
-                const age = Date.now() - new Date(item.timestamp).getTime();
-                return age < (30 * 24 * 60 * 60 * 1000); // 保留30天
-            });
-            
-            if (validExports.length !== exportHistory.length) {
-                await storage.set(this.storageKeys.exportHistory, validExports);
-            }
-
-            // 清理过期的导入历史
-            const importHistory = await storage.get(this.storageKeys.importHistory, []);
-            const validImports = importHistory.filter(item => {
-                const age = Date.now() - new Date(item.timestamp).getTime();
-                return age < (30 * 24 * 60 * 60 * 1000); // 保留30天
-            });
-            
-            if (validImports.length !== importHistory.length) {
-                await storage.set(this.storageKeys.importHistory, validImports);
-            }
-
-            console.log('Expired data cleaned up');
-            
-        } catch (error) {
-            console.error('Cleanup failed:', error);
-        }
-    
-        /**
-         * 规范化记录数据
-         * @param {Object} record - 原始记录
-         * @returns {Object} 规范化后的记录
-         */
-        normalizeRecord(record) {
-            if (!record) return record;
-            
-            const normalized = { ...record };
-            
-            // 标准化日期格式
-            if (normalized.startTime) {
-                normalized.startTime = new Date(normalized.startTime).toISOString();
-            }
-            if (normalized.endTime) {
-                normalized.endTime = new Date(normalized.endTime).toISOString();
-            }
-            if (normalized.createdAt) {
-                normalized.createdAt = new Date(normalized.createdAt).toISOString();
-            }
-            
-            // 确保必需字段存在
-            normalized.id = normalized.id || `record_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            normalized.examId = normalized.examId || 'unknown';
-            normalized.status = normalized.status || 'completed';
-            
-            // 标准化数值字段
-            normalized.score = parseFloat(normalized.score) || 0;
-            normalized.totalQuestions = parseInt(normalized.totalQuestions) || 0;
-            normalized.correctAnswers = parseInt(normalized.correctAnswers) || 0;
-            normalized.accuracy = parseFloat(normalized.accuracy) || 0;
-            
-            // 清理无效数据
-            if (normalized.metadata) {
-                normalized.metadata.category = normalized.metadata.category || 'general';
-                normalized.metadata.frequency = parseInt(normalized.metadata.frequency) || 1;
-            }
-            
-            return normalized;
-        }
-    }
-
-    /**
-    /**
-     * 合并记录，按 ID 去重，保留最新 timestamp 的记录
-     * @param {Array} oldRecords - 现有记录
-     * @param {Array} newRecords - 新记录
-     * @returns {Array} 合并后的记录
-     */
-    mergeRecords(oldRecords, newRecords) {
-        const mergedMap = new Map();
-        
-        // 处理所有记录，保留每个 ID 的最新版本
-        [...oldRecords, ...newRecords].forEach(record => {
-            const recordTime = new Date(record.createdAt || record.startTime || 0).getTime();
-            const current = mergedMap.get(record.id);
-            
-            if (!current || recordTime > current.time) {
-                mergedMap.set(record.id, { ...record, time: recordTime });
-            }
-        });
-        
-        // 移除临时 time 字段
-        return Array.from(mergedMap.values()).map(({ time, ...record }) => record);
-    }
-     * 获取数据统计信息
-     */
     async getDataStats() {
         try {
             const practiceRecords = await storage.get('practice_records', []);
             const userStats = await storage.get('user_stats', {});
             const exportHistory = await this.getExportHistory();
             const importHistory = await this.getImportHistory();
+            const storageInfo = typeof storage.getStorageInfo === 'function' ? await storage.getStorageInfo() : null;
+
+            const recordsArray = Array.isArray(practiceRecords) ? practiceRecords : [];
 
             return {
                 practiceRecords: {
-                    count: practiceRecords.length,
-                    oldestRecord: practiceRecords.length > 0 ? practiceRecords[0]?.startTime : null,
-                    newestRecord: practiceRecords.length > 0 ? practiceRecords[practiceRecords.length - 1]?.startTime : null
+                    count: recordsArray.length,
+                    oldestRecord: recordsArray.length ? recordsArray[0]?.startTime : null,
+                    newestRecord: recordsArray.length ? recordsArray[recordsArray.length - 1]?.startTime : null
                 },
                 userStats: {
-                    totalPractices: userStats.totalPractices || 0,
-                    totalTimeSpent: userStats.totalTimeSpent || 0,
-                    averageScore: userStats.averageScore || 0
+                    totalPractices: userStats?.totalPractices ?? 0,
+                    totalTimeSpent: userStats?.totalTimeSpent ?? 0,
+                    averageScore: userStats?.averageScore ?? 0
                 },
                 exportHistory: {
                     count: exportHistory.length,
-                    lastExport: exportHistory.length > 0 ? exportHistory[0].timestamp : null
+                    lastExport: exportHistory.length ? exportHistory[0].timestamp : null
                 },
                 importHistory: {
                     count: importHistory.length,
-                    lastImport: importHistory.length > 0 ? importHistory[0].timestamp : null
+                    lastImport: importHistory.length ? importHistory[0].timestamp : null
                 },
-                storage: await storage.getStorageInfo()
+                storage: storageInfo
             };
         } catch (error) {
-            console.error('Failed to get data stats:', error);
+            console.error('[DataBackupManager] failed to collect stats', error);
             return null;
         }
     }
+
+    setupPeriodicCleanup() {
+        if (this.cleanupTimer) {
+            clearInterval(this.cleanupTimer);
+        }
+
+        this.cleanupTimer = setInterval(() => {
+            this.cleanupExpiredData().catch(error => console.error('[DataBackupManager] cleanup failed', error));
+        }, 24 * 60 * 60 * 1000);
+    }
+
+    async cleanupExpiredData() {
+        try {
+            const limit = 30 * 24 * 60 * 60 * 1000;
+            const now = Date.now();
+
+            const exportHistory = await storage.get(this.storageKeys.exportHistory, []);
+            const freshExports = exportHistory.filter(item => now - new Date(item.timestamp).getTime() < limit);
+            if (freshExports.length !== exportHistory.length) {
+                await storage.set(this.storageKeys.exportHistory, freshExports);
+            }
+
+            const importHistory = await storage.get(this.storageKeys.importHistory, []);
+            const freshImports = importHistory.filter(item => now - new Date(item.timestamp).getTime() < limit);
+            if (freshImports.length !== importHistory.length) {
+                await storage.set(this.storageKeys.importHistory, freshImports);
+            }
+        } catch (error) {
+            console.error('[DataBackupManager] cleanup error', error);
+        }
+    }
+
+    getTimestamp() {
+        return new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    }
+
+    toCamelCaseKey(key) {
+        return String(key)
+            .replace(/[-_\s]+([a-zA-Z0-9])/g, (_, group) => group.toUpperCase())
+            .replace(/^[A-Z]/, match => match.toLowerCase());
+    }
+
+    isPlainObject(value) {
+        return Object.prototype.toString.call(value) === '[object Object]';
+    }
 }
 
-// 确保全局可用
 window.DataBackupManager = DataBackupManager;
