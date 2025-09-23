@@ -564,6 +564,15 @@ class ScoreStorage {
                     r.duration = Math.floor(picked);
                 } else if (r.startTime && r.endTime) {
                     r.duration = Math.max(0, Math.floor((new Date(r.endTime) - new Date(r.startTime)) / 1000));
+                } else if (Array.isArray(rd.interactions) && rd.interactions.length) {
+                    // Derive from interactions timestamp span
+                    try {
+                        const ts = rd.interactions.map(x => x && Number(x.timestamp)).filter(n => Number.isFinite(n));
+                        if (ts.length) {
+                            const span = Math.max(...ts) - Math.min(...ts);
+                            if (Number.isFinite(span) && span > 0) r.duration = Math.floor(span / 1000);
+                        }
+                    } catch(_) {}
                 } else {
                     r.duration = 0;
                 }

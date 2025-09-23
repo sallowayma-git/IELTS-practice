@@ -646,6 +646,14 @@ class DataBackupManager {
             const rd = merged.realData || {};
             if (typeof rd.duration === 'number' && rd.duration > 0) {
                 merged.duration = rd.duration;
+            } else if (Array.isArray(rd.interactions) && rd.interactions.length) {
+                try {
+                    const ts = rd.interactions.map(x => x && Number(x.timestamp)).filter(n => Number.isFinite(n));
+                    if (ts.length) {
+                        const span = Math.max(...ts) - Math.min(...ts);
+                        if (Number.isFinite(span) && span > 0) merged.duration = Math.floor(span / 1000);
+                    }
+                } catch(_) {}
             }
         }
 

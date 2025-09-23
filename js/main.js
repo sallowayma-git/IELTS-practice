@@ -169,6 +169,15 @@ async function syncPracticeRecords() {
                         duration = Math.round((e - s) / 1000);
                     }
                 }
+                if (!(Number.isFinite(duration) && duration > 0) && rd && Array.isArray(rd.interactions) && rd.interactions.length) {
+                    try {
+                        const ts = rd.interactions.map(x => x && Number(x.timestamp)).filter(n => Number.isFinite(n));
+                        if (ts.length) {
+                            const span = Math.max(...ts) - Math.min(...ts);
+                            if (Number.isFinite(span) && span > 0) duration = Math.floor(span / 1000);
+                        }
+                    } catch(_) {}
+                }
             }
             if (!Number.isFinite(duration)) duration = 0;
 
