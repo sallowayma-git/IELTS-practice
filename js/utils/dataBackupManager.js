@@ -635,11 +635,17 @@ class DataBackupManager {
         merged.createdAt = this.normalizeDateValue(merged.createdAt || incoming.createdAt || existing.createdAt) || merged.createdAt;
         merged.updatedAt = this.normalizeDateValue(merged.updatedAt || incoming.updatedAt || existing.updatedAt) || merged.updatedAt;
 
-        if (!merged.duration && merged.startTime && merged.endTime) {
+        if ((!merged.duration || merged.duration <= 0) && merged.startTime && merged.endTime) {
             const start = new Date(merged.startTime).getTime();
             const end = new Date(merged.endTime).getTime();
             if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
                 merged.duration = Math.round((end - start) / 1000);
+            }
+        }
+        if (!merged.duration || merged.duration <= 0) {
+            const rd = merged.realData || {};
+            if (typeof rd.duration === 'number' && rd.duration > 0) {
+                merged.duration = rd.duration;
             }
         }
 
@@ -804,7 +810,20 @@ class DataBackupManager {
         normalized.createdAt = this.normalizeDateValue(record.createdAt ?? startTimeRaw ?? endTimeRaw) ?? normalized.startTime;
         normalized.updatedAt = this.normalizeDateValue(record.updatedAt ?? endTimeRaw) || normalized.updatedAt;
 
-        normalized.duration = this.parseInteger(record.duration ?? record.realData?.duration ?? record.elapsedSeconds) ?? normalized.duration;
+        // Prefer a positive duration; avoid locking in 0 when a better value exists
+        (function(){
+            const candidates = [
+                (typeof record.duration === 'number') ? record.duration : undefined,
+                (record && record.realData && typeof record.realData.duration === 'number') ? record.realData.duration : undefined,
+                (typeof record.elapsedSeconds === 'number') ? record.elapsedSeconds : undefined
+            ];
+            let picked = undefined;
+            // pick first positive
+            for (const v of candidates) { if (Number.isFinite(v) && v > 0) { picked = v; break; } }
+            // else allow zero if nothing else
+            if (picked === undefined) { for (const v of candidates) { if (Number.isFinite(v)) { picked = v; break; } } }
+            if (picked !== undefined) normalized.duration = picked;
+        })();
         normalized.score = this.parseNumber(record.score ?? record.finalScore ?? record.realData?.score ?? record.percentage ?? record.realData?.percentage) ?? normalized.score;
         normalized.totalQuestions = this.parseInteger(record.totalQuestions ?? record.questionCount ?? record.questions ?? record.realData?.totalQuestions) ?? normalized.totalQuestions;
         normalized.correctAnswers = this.parseInteger(record.correctAnswers ?? record.correctCount ?? record.realData?.correctAnswers ?? record.realData?.correct) ?? normalized.correctAnswers;
@@ -827,7 +846,7 @@ class DataBackupManager {
 
         normalized.source = record.source ?? record.dataSource ?? normalized.source ?? 'imported';
 
-        if (!normalized.duration && normalized.startTime && normalized.endTime) {
+        if ((!normalized.duration || normalized.duration <= 0) && normalized.startTime && normalized.endTime) {
             const start = new Date(normalized.startTime).getTime();
             const end = new Date(normalized.endTime).getTime();
             if (Number.isFinite(start) && Number.isFinite(end) && end > start) {

@@ -946,3 +946,94 @@ window.DataIntegrityManager = DataIntegrityManager;
     try { console.warn('[DataIntegrityManager] export override install failed:', e); } catch(_) {}
   }
 })();
+
+// Strong override: export data in 09-21 schema using StorageManager snapshot (async-aware)
+(function() {
+  try {
+    const proto = DataIntegrityManager && DataIntegrityManager.prototype;
+    if (!proto) return;
+    proto.exportData = function(keys = null) {
+      const buildAndDownload = async () => {
+        const out = {
+          exportId: this.generateBackupId ? this.generateBackupId() : (Date.now()+"_"+Math.random().toString(36).slice(2,11)),
+          timestamp: new Date().toISOString(),
+          version: this.dataVersion || '1.0.0',
+          data: {}
+        };
+        const prefix = (window.storage && window.storage.prefix) ? window.storage.prefix : 'exam_system_';
+
+        // Prefer StorageManager snapshot (await Promise)
+        let snapshot = null;
+        try {
+          if (window.storage && typeof window.storage.exportData === 'function') {
+            snapshot = await window.storage.exportData();
+          }
+        } catch(_) {}
+
+        if (snapshot && snapshot.data && typeof snapshot.data === 'object') {
+          try {
+            Object.entries(snapshot.data).forEach(([cleanKey, wrapped]) => {
+              out.data[`${prefix}${cleanKey}`] = wrapped;
+            });
+          } catch(_) {}
+        } else {
+          // Fallback to prefixed localStorage keys only
+          try {
+            const keysToExport = keys || Object.keys(localStorage).filter(k => k.startsWith(prefix));
+            keysToExport.forEach(k => {
+              try {
+                const v = localStorage.getItem(k);
+                if (v == null) return;
+                const t = v.trim();
+                if ((t.startsWith('{') && t.endsWith('}')) || (t.startsWith('[') && t.endsWith(']'))) {
+                  out.data[k] = JSON.parse(v);
+                } else {
+                  out.data[k] = { data: v, timestamp: Date.now(), version: this.dataVersion || '1.0.0' };
+                }
+              } catch(__) {}
+            });
+          } catch(__) {}
+        }
+
+        // Flatten fields from wrapped keys to maintain 09-21 compatibility
+        try {
+          const wrappedRecs = out.data[`${prefix}practice_records`];
+          const wrappedStats = out.data[`${prefix}user_stats`];
+          out.data.practice_records = (wrappedRecs && Array.isArray(wrappedRecs.data)) ? wrappedRecs.data : [];
+          out.data.user_stats = (wrappedStats && wrappedStats.data && typeof wrappedStats.data === 'object') ? wrappedStats.data : {};
+        } catch(e) {
+          try { console.warn('[DataIntegrityManager] flatten fields failed:', e); } catch(_) {}
+          if (!Array.isArray(out.data.practice_records)) out.data.practice_records = [];
+          if (!out.data.user_stats || typeof out.data.user_stats !== 'object') out.data.user_stats = {};
+        }
+
+        try { if (typeof this.calculateChecksum === 'function') out.checksum = this.calculateChecksum(out.data); } catch(_){ }
+
+        const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        try {
+          const d = new Date();
+          const pad = (n) => String(n).padStart(2, '0');
+          const localDate = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+          a.download = `ielts_data_export_${localDate}.json`;
+        } catch(_) { a.download = `ielts_data_export_${new Date().toISOString().split('T')[0]}.json`; }
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        return out;
+      };
+
+      try {
+        return buildAndDownload(); // returns a Promise; callers may ignore
+      } catch (err) {
+        try { console.error('[DataIntegrityManager] export override (09-21 schema) failed:', err); } catch(_) {}
+        return { exportId: Date.now(), timestamp: new Date().toISOString(), version: this.dataVersion||'1.0.0', data: {} };
+      }
+    };
+  } catch (e) {
+    try { console.warn('[DataIntegrityManager] strong export override install failed:', e); } catch(_) {}
+  }
+})();
