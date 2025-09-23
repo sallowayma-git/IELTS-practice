@@ -630,6 +630,30 @@ class DataIntegrityManager {
 
             reader.onload = async (event) => {
                 try {
+                    // Prefer delegating to DataBackupManager for robust import (handles large files and shapes)
+                    try {
+                        const raw = event.target.result;
+                        const mgr = (window.__dataBackupManagerInstance || (window.__dataBackupManagerInstance = new (window.DataBackupManager || DataBackupManager)()));
+                        const result = await mgr.importPracticeData(raw, {
+                            mergeMode: 'merge',
+                            validateData: true,
+                            createBackup: true,
+                            preserveIds: true
+                        });
+                        if (typeof window.syncPracticeRecords === 'function') {
+                            try { window.syncPracticeRecords(); } catch (_) {}
+                        }
+                        console.log('[DataIntegrityManager] Delegated import done:', result);
+                        resolve({
+                            importedCount: result.importedCount || 0,
+                            updatedCount: result.updatedCount || 0,
+                            skippedCount: result.skippedCount || 0,
+                            finalCount: result.finalCount || 0
+                        });
+                        return; // stop here if delegation succeeded
+                    } catch (__delegateErr) {
+                        // fall back to legacy compatibility logic below
+                    }
                     const importFileContent = JSON.parse(event.target.result);
 
                     // 兼容层（新旧导出格式）：优先处理 exam_system_* 包装结构，避免双重前缀与嵌套
