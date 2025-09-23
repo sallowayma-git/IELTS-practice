@@ -19,7 +19,7 @@ class DataManagementPanel {
         this.createPanelStructure();
         this.bindEvents();
         this.loadDataStats();
-        this.loadHistory();
+        await this.loadHistory();
         
         console.log('DataManagementPanel initialized');
     }
@@ -502,7 +502,10 @@ class DataManagementPanel {
      * 加载操作历史
      */
     async loadHistory() {
-        await Promise.all([this.loadExportHistory(), this.loadImportHistory()]);
+        await Promise.all([
+            this.loadExportHistory(),
+            this.loadImportHistory()
+        ]);
     }
 
     /**
@@ -510,18 +513,20 @@ class DataManagementPanel {
      */
     async loadExportHistory() {
         const container = document.getElementById('exportHistory');
-        if (!container) return;
+        if (!container) {
+            return;
+        }
 
         try {
             const exportHistory = await this.backupManager.getExportHistory();
-            const items = Array.isArray(exportHistory) ? exportHistory : [];
+            const historyItems = Array.isArray(exportHistory) ? exportHistory : [];
 
-            if (!items.length) {
+            if (!historyItems.length) {
                 container.innerHTML = '<div class="no-history">暂无导出记录</div>';
                 return;
             }
 
-            container.innerHTML = items.map(item => `
+            container.innerHTML = historyItems.map((item) => `
                 <div class="history-item">
                     <div class="history-info">
                         <div class="history-title">
@@ -529,7 +534,7 @@ class DataManagementPanel {
                             ${item.format?.toUpperCase() || 'JSON'} 导出
                         </div>
                         <div class="history-details">
-                            <span>记录数: ${item.recordCount || 0}</span>
+                            <span>记录数: ${item.recordCount ?? 0}</span>
                             <span>时间: ${this.formatDateTime(item.timestamp)}</span>
                         </div>
                     </div>
@@ -546,18 +551,20 @@ class DataManagementPanel {
      */
     async loadImportHistory() {
         const container = document.getElementById('importHistory');
-        if (!container) return;
+        if (!container) {
+            return;
+        }
 
         try {
             const importHistory = await this.backupManager.getImportHistory();
-            const items = Array.isArray(importHistory) ? importHistory : [];
+            const historyItems = Array.isArray(importHistory) ? importHistory : [];
 
-            if (!items.length) {
+            if (!historyItems.length) {
                 container.innerHTML = '<div class="no-history">暂无导入记录</div>';
                 return;
             }
 
-            container.innerHTML = items.map(item => `
+            container.innerHTML = historyItems.map((item) => `
                 <div class="history-item">
                     <div class="history-info">
                         <div class="history-title">
@@ -565,7 +572,7 @@ class DataManagementPanel {
                             导入操作
                         </div>
                         <div class="history-details">
-                            <span>新增记录: ${item.recordCount || item.importedCount || 0}</span>
+                            <span>新增记录: ${item.recordCount ?? item.importedCount ?? 0}</span>
                             <span>合并模式: ${item.mergeMode || 'merge'}</span>
                             <span>时间: ${this.formatDateTime(item.timestamp)}</span>
                         </div>

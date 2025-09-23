@@ -3608,8 +3608,28 @@
                 // 检查是否有答案数据（支持多种格式）
                 const hasAnswers = record.realData && (
                     (record.realData.answers && record.realData.correctAnswers) ||
-                    (record.realData.answerComparison && Object.keys(record.realData.answerComparison).length > 0)
+                    (record.realData.answerComparison && Object.keys(record.realData.answerComparison).length > 0) ||
+                    (record.realData.userAnswers && Array.isArray(record.realData.userAnswers)) ||
+                    (record.realData.correctAnswers && Array.isArray(record.realData.correctAnswers)) ||
+                    (record.realData.questions && Array.isArray(record.realData.questions))
                 );
+
+                // 调试信息：检查答案数据
+                if (record.realData) {
+                    console.log('[Details] RealData structure:', {
+                        hasAnswers: !!record.realData.answers,
+                        hasCorrectAnswers: !!record.realData.correctAnswers,
+                        hasAnswerComparison: !!record.realData.answerComparison,
+                        hasUserAnswers: !!record.realData.userAnswers,
+                        hasQuestions: !!record.realData.questions,
+                        answerKeys: record.realData.answers ? Object.keys(record.realData.answers) : [],
+                        correctAnswerKeys: record.realData.correctAnswers ? Object.keys(record.realData.correctAnswers) : [],
+                        answerComparisonKeys: record.realData.answerComparison ? Object.keys(record.realData.answerComparison) : [],
+                        userAnswersLength: record.realData.userAnswers ? record.realData.userAnswers.length : 0,
+                        correctAnswersLength: record.realData.correctAnswers ? record.realData.correctAnswers.length : 0,
+                        questionsLength: record.realData.questions ? record.realData.questions.length : 0
+                    });
+                }
 
                 if (hasAnswers) {
                     let userAnswers = {};
@@ -3620,6 +3640,7 @@
                         // 直接使用answers和correctAnswers格式
                         userAnswers = record.realData.answers;
                         correctAnswers = record.realData.correctAnswers;
+                        console.log('[Details] Using direct answers format:', Object.keys(userAnswers).length, 'questions');
                     } else if (record.realData.answerComparison) {
                         // 从answerComparison对象中提取答案
                         Object.keys(record.realData.answerComparison).forEach(questionId => {
@@ -3627,8 +3648,49 @@
                             if (comparison && typeof comparison === 'object') {
                                 userAnswers[questionId] = comparison.userAnswer || comparison.user_answer || comparison.user || '—';
                                 correctAnswers[questionId] = comparison.correctAnswer || comparison.correct_answer || comparison.correct || '';
+                            } else if (typeof comparison === 'string') {
+                                // 如果answerComparison直接是字符串格式，尝试解析
+                                try {
+                                    const parsed = JSON.parse(comparison);
+                                    userAnswers[questionId] = parsed.userAnswer || parsed.user_answer || parsed.user || '—';
+                                    correctAnswers[questionId] = parsed.correctAnswer || parsed.correct_answer || parsed.correct || '';
+                                } catch (e) {
+                                    console.warn(`[Details] Failed to parse answerComparison for Q${questionId}:`, comparison);
+                                }
                             }
                         });
+                        console.log('[Details] Using answerComparison format:', Object.keys(userAnswers).length, 'questions');
+                    }
+
+                    // 处理数组格式的答案数据
+                    if (record.realData.userAnswers && Array.isArray(record.realData.userAnswers)) {
+                        record.realData.userAnswers.forEach((answer, index) => {
+                            const questionId = String(index + 1);
+                            userAnswers[questionId] = answer || '—';
+                        });
+                        console.log('[Details] Added userAnswers array format:', record.realData.userAnswers.length, 'questions');
+                    }
+
+                    if (record.realData.correctAnswers && Array.isArray(record.realData.correctAnswers)) {
+                        record.realData.correctAnswers.forEach((answer, index) => {
+                            const questionId = String(index + 1);
+                            correctAnswers[questionId] = answer || '';
+                        });
+                        console.log('[Details] Added correctAnswers array format:', record.realData.correctAnswers.length, 'questions');
+                    }
+
+                    // 处理questions数组格式
+                    if (record.realData.questions && Array.isArray(record.realData.questions)) {
+                        record.realData.questions.forEach((question, index) => {
+                            const questionId = question.id || String(index + 1);
+                            if (question.userAnswer !== undefined) {
+                                userAnswers[questionId] = question.userAnswer || '—';
+                            }
+                            if (question.correctAnswer !== undefined) {
+                                correctAnswers[questionId] = question.correctAnswer || '';
+                            }
+                        });
+                        console.log('[Details] Added questions array format:', record.realData.questions.length, 'questions');
                     }
 
                     // 获取所有题目ID（去重）
@@ -4281,8 +4343,48 @@
                         answers[questionId] = comparison.userAnswer || comparison.user_answer || comparison.user || '—';
                         correctAnswers[questionId] = comparison.correctAnswer || comparison.correct_answer || comparison.correct || '';
                         console.log(`[Debug] Processed Q${questionId}: user=${answers[questionId]}, correct=${correctAnswers[questionId]}`);
+                    } else if (typeof comparison === 'string') {
+                        // 如果answerComparison直接是字符串格式，尝试解析
+                        try {
+                            const parsed = JSON.parse(comparison);
+                            answers[questionId] = parsed.userAnswer || parsed.user_answer || parsed.user || '—';
+                            correctAnswers[questionId] = parsed.correctAnswer || parsed.correct_answer || parsed.correct || '';
+                        } catch (e) {
+                            console.warn(`[Debug] Failed to parse answerComparison for Q${questionId}:`, comparison);
+                        }
                     }
                 });
+            }
+
+            // 处理userAnswers和correctAnswers数组格式
+            if (d.userAnswers && Array.isArray(d.userAnswers)) {
+                d.userAnswers.forEach((answer, index) => {
+                    const questionId = String(index + 1);
+                    answers[questionId] = answer || '—';
+                });
+                console.log('[Debug] Added answers from userAnswers array:', d.userAnswers.length);
+            }
+
+            if (d.correctAnswers && Array.isArray(d.correctAnswers)) {
+                d.correctAnswers.forEach((answer, index) => {
+                    const questionId = String(index + 1);
+                    correctAnswers[questionId] = answer || '';
+                });
+                console.log('[Debug] Added correctAnswers from correctAnswers array:', d.correctAnswers.length);
+            }
+
+            // 处理questions数组格式
+            if (d.questions && Array.isArray(d.questions)) {
+                d.questions.forEach((question, index) => {
+                    const questionId = question.id || String(index + 1);
+                    if (question.userAnswer !== undefined) {
+                        answers[questionId] = question.userAnswer || '—';
+                    }
+                    if (question.correctAnswer !== undefined) {
+                        correctAnswers[questionId] = question.correctAnswer || '';
+                    }
+                });
+                console.log('[Debug] Added answers from questions array:', d.questions.length);
             }
 
             // 如果有答案数据，构建realData对象
