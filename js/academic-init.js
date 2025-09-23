@@ -850,134 +850,21 @@ function createBackup() {
 }
 
 async function importData() {
-   const input = document.createElement('input');
-   input.type = 'file';
-   input.accept = '.json';
-   input.onchange = async function(e) {
-       const file = e.target.files[0];
-       if (!file) return;
+    if (window.dataManagementPanel && typeof window.dataManagementPanel.show === 'function') {
+        window.dataManagementPanel.show();
+        const selectButton = document.querySelector('#dataManagementPanel [data-action="selectFile"]');
+        if (selectButton) {
+            selectButton.focus();
+            selectButton.click();
+        }
+        return;
+    }
 
-       const reader = new FileReader();
-       reader.onload = async function(e) {
-           try {
-               const data = JSON.parse(e.target.result);
-               console.log('Import data structure:', data);
-
-               let importedExamCount = 0;
-               let importedRecordCount = 0;
-
-               // Handle the exported data format from ielts_data_export_*.json
-               // First, check for top-level practice_records
-               if (data.practice_records && Array.isArray(data.practice_records)) {
-                   console.log('Found top-level practice_records:', data.practice_records.length);
-                   // Import practice records from exported format
-                   const importedRecords = data.practice_records.map(record => {
-                       const score = record.realData ? record.realData.percentage : (record.percentage || 0);
-                       const duration = record.realData ? record.realData.duration : (record.duration || 0);
-
-                       return {
-                           id: record.id || record.timestamp || Date.now(),
-                           examId: record.examId || '',
-                           title: record.title || record.examName || '未命名练习',
-                           type: record.type || getExamTypeFromCategory(record.category),
-                           category: record.category || getExamCategoryFromType(record.type),
-                           frequency: record.frequency || 'medium',
-                           score: score,
-                           duration: duration,
-                           date: record.date || (record.timestamp ? new Date(record.timestamp).toISOString() : new Date().toISOString()),
-                           timestamp: record.timestamp || record.id || Date.now(),
-                           realData: record.realData || null,
-                           dataSource: record.dataSource || 'imported'
-                       };
-                   });
-
-                   practiceRecords = importedRecords;
-                   await storage.set('practice_records', practiceRecords);
-                   importedRecordCount = importedRecords.length;
-               }
-               // Also check for nested practice_records in data.data
-               else if (data.data && data.data.practice_records && Array.isArray(data.data.practice_records)) {
-                   console.log('Found nested practice_records:', data.data.practice_records.length);
-                   const importedRecords = data.data.practice_records.map(record => {
-                       const score = record.realData ? record.realData.percentage : (record.percentage || 0);
-                       const duration = record.realData ? record.realData.duration : (record.duration || 0);
-
-                       return {
-                           id: record.id || record.timestamp || Date.now(),
-                           examId: record.examId || '',
-                           title: record.title || record.examName || '未命名练习',
-                           type: record.type || getExamTypeFromCategory(record.category),
-                           category: record.category || getExamCategoryFromType(record.type),
-                           frequency: record.frequency || 'medium',
-                           score: score,
-                           duration: duration,
-                           date: record.date || (record.timestamp ? new Date(record.timestamp).toISOString() : new Date().toISOString()),
-                           timestamp: record.timestamp || record.id || Date.now(),
-                           realData: record.realData || null,
-                           dataSource: record.dataSource || 'imported'
-                       };
-                   });
-
-                   practiceRecords = importedRecords;
-                   await storage.set('practice_records', practiceRecords);
-                   importedRecordCount = importedRecords.length;
-               }
-
-               // Handle exam index data from exported format
-               if (data.data && data.data['exam_system_exam_index'] && data.data['exam_system_exam_index'].data) {
-                   console.log('Found exam_system_exam_index:', data.data['exam_system_exam_index'].data.length);
-                   const importedExams = data.data['exam_system_exam_index'].data.map(exam => ({
-                       id: exam.id,
-                       title: exam.title,
-                       type: exam.type || getExamTypeFromCategory(exam.category),
-                       category: exam.category,
-                       frequency: exam.frequency,
-                       hasHtml: exam.hasHtml,
-                       hasPdf: exam.hasPdf,
-                       path: exam.path,
-                       filename: exam.filename,
-                       pdfFilename: exam.pdfFilename,
-                       questionCount: exam.questionCount || 14 // Default question count
-                   }));
-
-                   examIndex = importedExams;
-                   await storage.set('exam_index', examIndex);
-                   importedExamCount = importedExams.length;
-               }
-               // Fallback to direct format
-               else if (data.examIndex) {
-                   examIndex = data.examIndex;
-                   await storage.set('exam_index', examIndex);
-                   importedExamCount = examIndex.length;
-               }
-
-               // Fallback to direct practice records format
-               if (data.practiceRecords) {
-                   practiceRecords = data.practiceRecords;
-                   await storage.set('practice_records', practiceRecords);
-                   importedRecordCount = practiceRecords.length;
-               }
-
-               console.log('Import results:', {
-                   examCount: importedExamCount,
-                   recordCount: importedRecordCount,
-                   totalExams: examIndex.length,
-                   totalRecords: practiceRecords.length
-               });
-
-               updateOverview();
-               updateBrowseView();
-               updatePracticeView();
-
-               showMessage(`成功导入 ${importedExamCount} 道题目和 ${importedRecordCount} 条练习记录`, 'success');
-           } catch (error) {
-               console.error('Import error:', error);
-               showMessage('导入失败: ' + error.message, 'error');
-           }
-       };
-       reader.readAsText(file);
-   };
-   input.click();
+    if (window.showMessage) {
+        window.showMessage('数据管理面板未初始化', 'error');
+    } else {
+        alert('数据管理面板未初始化');
+    }
 }
 
 function exportAllData() {
