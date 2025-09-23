@@ -198,6 +198,46 @@ class DataBackupManager {
     }
 
     /**
+     * 从文件导入练习记录
+     */
+    async importPracticeRecords(filePath, options = {}) {
+        try {
+            console.log(`[DataBackupManager] 开始从 ${filePath} 导入练习记录`);
+            
+            const response = await fetch(filePath);
+            if (!response.ok) {
+                throw new Error(`文件加载失败: ${filePath} (${response.status})`);
+            }
+            
+            const importData = await response.json();
+            
+            if (!importData.practiceRecords || !Array.isArray(importData.practiceRecords)) {
+                throw new Error('导入文件格式无效: 缺少 practiceRecords 数组');
+            }
+            
+            const result = await this.importPracticeData(importData, options);
+            
+            console.log(`[DataBackupManager] 导入完成: ${result.importedCount || 0} 条新记录`);
+            
+            // 显示成功消息
+            if (window.showMessage && result.importedCount > 0) {
+                window.showMessage(`成功导入 ${result.importedCount} 条练习记录`);
+            }
+            
+            return result;
+            
+        } catch (error) {
+            console.error('[DataBackupManager] 导入练习记录失败:', error);
+            
+            if (window.showMessage) {
+                window.showMessage(`导入失败: ${error.message}`, 'error');
+            }
+            
+            throw error;
+        }
+    }
+    
+    /**
      * 导入练习数据
      */
     async importPracticeData(importData, options = {}) {
@@ -208,21 +248,21 @@ class DataBackupManager {
                 createBackup = true,
                 preserveIds = true
             } = options;
-
+            
             // 创建导入前备份
             let backupId = null;
             if (createBackup) {
                 backupId = await this.createPreImportBackup();
             }
-
+            
             // 解析导入数据
             const parsedData = this.parseImportData(importData);
-            
+             
             // 验证数据
             if (validateData) {
                 this.validateImportData(parsedData);
             }
-
+            
             // 执行导入
             const result = await this.executeImport(parsedData, {
                 mergeMode,
@@ -344,25 +384,15 @@ class DataBackupManager {
                     importedCount = data.practiceRecords.length;
                     
                 } else if (mergeMode === 'merge') {
-                    // 合并模式
-                    const existingIds = new Set(existingRecords.map(r => r.id));
-                    const newRecords = [];
-                    
-                    // 规范化新记录
+                    // 合并模式，按 id 去重，保留最新 timestamp
                     const normalizedRecords = data.practiceRecords.map(record => this.normalizeRecord(record));
-                    
-                    normalizedRecords.forEach(record => {
-                        if (!existingIds.has(record.id)) {
-                            newRecords.push(record);
-                            importedCount++;
-                        } else {
-                            skippedCount++;
-                        }
-                    });
-                    
-                    const mergedRecords = [...existingRecords, ...newRecords];
+                    const mergedRecords = this.mergeRecords(existingRecords, normalizedRecords);
+                    const duplicates = normalizedRecords.filter(n => existingRecords.some(o => o.id === n.id)).length;
+                    importedCount = normalizedRecords.length - duplicates;
+                    skippedCount = duplicates;
                     await storage.set('practice_records', mergedRecords);
-                    
+                    // 确保触发 storage-sync 事件
+                    window.dispatchEvent(new CustomEvent('storage-sync', {detail: {key: 'practice_records'}}));
                 } else if (mergeMode === 'skip') {
                     // 跳过模式 - 只导入不存在的记录
                     // 规范化新记录
@@ -711,6 +741,28 @@ class DataBackupManager {
     }
 
     /**
+    /**
+     * 合并记录，按 ID 去重，保留最新 timestamp 的记录
+     * @param {Array} oldRecords - 现有记录
+     * @param {Array} newRecords - 新记录
+     * @returns {Array} 合并后的记录
+     */
+    mergeRecords(oldRecords, newRecords) {
+        const mergedMap = new Map();
+        
+        // 处理所有记录，保留每个 ID 的最新版本
+        [...oldRecords, ...newRecords].forEach(record => {
+            const recordTime = new Date(record.createdAt || record.startTime || 0).getTime();
+            const current = mergedMap.get(record.id);
+            
+            if (!current || recordTime > current.time) {
+                mergedMap.set(record.id, { ...record, time: recordTime });
+            }
+        });
+        
+        // 移除临时 time 字段
+        return Array.from(mergedMap.values()).map(({ time, ...record }) => record);
+    }
      * 获取数据统计信息
      */
     async getDataStats() {

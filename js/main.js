@@ -26,12 +26,6 @@ const preferredFirstExamByCategory = {
 };
 
 
-document.addEventListener('click', function(e) {
-    console.log('[DEBUG] Click event on:', e.target.tagName, e.target.className, e.target.textContent.trim());
-    if (e.target.onclick) {
-        console.log('[DEBUG] Target has onclick:', e.target.onclick.toString());
-    }
-}, true);
 
 // --- Initialization ---
 function initializeLegacyComponents() {
@@ -333,7 +327,6 @@ function updateOverview() {
     let html = '<h3 style="grid-column: 1 / -1;">阅读</h3>';
     ['P1','P2','P3'].forEach(cat => {
         const onclickStr = "browseCategory('" + cat + "', 'reading')";
-        console.log('[DEBUG] Generated onclick for ' + cat + ' reading: ' + onclickStr);
         html += ''
         + '<div class="category-card">'
         +   '<div class="category-header">'
@@ -356,7 +349,6 @@ function updateOverview() {
             const count = listeningStats[cat] ? listeningStats[cat].total : 0;
             if (count > 0) {
                 const onclickStr = "browseCategory('" + cat + "', 'listening')";
-                console.log('[DEBUG] Generated onclick for ' + cat + ' listening: ' + onclickStr);
                 html += ''
                 + '<div class="category-card">'
                 +   '<div class="category-header">'
@@ -515,13 +507,11 @@ function updatePracticeView() {
 
 
 function browseCategory(category, type = 'reading') {
-    console.log('[DEBUG] browseCategory called with category:', category, 'type:', type);
 
     // 先设置筛选器，确保 App 路径也能获取到筛选参数
     try {
         currentCategory = category;
         currentExamType = type;
-        console.log('[browseCategory] Set globals: currentCategory=', currentCategory, 'currentExamType=', currentExamType);
 
         // 设置待处理筛选器，确保组件未初始化时筛选不会丢失
         try {
@@ -669,14 +659,11 @@ function loadExamList() {
     let examsToShow = Array.from(examIndex);
 
     // 先过滤
-    console.log('[Filter] Applying filters: category=', currentCategory, 'type=', currentExamType);
     if (currentExamType !== 'all') {
         examsToShow = examsToShow.filter(exam => exam.type === currentExamType);
-        console.log('[Filter] After type filter:', examsToShow.length, 'items');
     }
     if (currentCategory !== 'all') {
         examsToShow = examsToShow.filter(exam => exam.category === currentCategory);
-        console.log('[Filter] After category filter:', examsToShow.length, 'items');
     }
 
     // 然后置顶过滤后的数组
@@ -684,12 +671,9 @@ function loadExamList() {
         const key = `${currentCategory}_${currentExamType}`;
         const preferred = preferredFirstExamByCategory[key];
 
-        console.log('[PinTop] For key:', key, 'preferred:', preferred);
-
         if (preferred) {
             // 优先通过 preferred.id 在过滤后的 examsToShow 中查找
             let preferredIndex = examsToShow.findIndex(exam => exam.id === preferred.id);
-            console.log('[PinTop] Preferred index by ID in filtered examsToShow:', preferredIndex);
 
             // 如果失败，fallback 到 preferred.title + currentCategory + currentExamType 匹配
             if (preferredIndex === -1) {
@@ -698,18 +682,14 @@ function loadExamList() {
                     exam.category === currentCategory &&
                     exam.type === currentExamType
                 );
-                console.log('[PinTop] Preferred index by fallback title+category+type in filtered examsToShow:', preferredIndex);
             }
 
             if (preferredIndex > -1) {
                 const [item] = examsToShow.splice(preferredIndex, 1);
                 examsToShow.unshift(item);
-                console.log('[PinTop] Pinned to filtered examsToShow:', item.title);
             } else {
                 console.warn('[PinTop] No match found in filtered examsToShow for preferred:', preferred);
             }
-        } else {
-            console.log('[PinTop] No preferred for key:', key);
         }
     }
 
