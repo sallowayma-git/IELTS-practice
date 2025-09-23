@@ -1,140 +1,141 @@
-﻿<html>
-  <head>
+﻿<html>
+  <head>
     <meta charset="UTF-8" />
-    <link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin="" />
-    <link
-      rel="stylesheet"
-      as="style"
-      onload="this.rel='stylesheet'"
-      href="https://fonts.googleapis.com/css2?display=swap&amp;family=Newsreader%3Awght%40400%3B500%3B700%3B800&amp;family=Noto+Sans%3Awght%40400%3B500%3B700%3B900"
-    />
-
-    <title>Stitch Design</title>
-    <link rel="icon" type="image/x-icon" href="data:image/x-icon;base64," />
-        <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-  </head>
-  <body>
-    <div class="relative flex h-auto min-h-screen w-full flex-col bg-[#181112] dark group/design-root overflow-x-hidden" style='font-family: Newsreader, "Noto Sans", sans-serif;'>
-      <div class="layout-container flex h-full grow flex-col">
-        <header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-b-[#39282b] px-10 py-3">
-          <div class="flex items-center gap-4 text-white">
-            <div class="size-4">
-              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path
-                  d="M24 4C25.7818 14.2173 33.7827 22.2182 44 24C33.7827 25.7818 25.7818 33.7827 24 44C22.2182 33.7827 14.2173 25.7818 4 24C14.2173 22.2182 22.2182 14.2173 24 4Z"
-                  fill="currentColor"
-                ></path>
-              </svg>
-            </div>
-            <h2 class="text-white text-lg font-bold leading-tight tracking-[-0.015em]">Wizarding World IELTS Prep</h2>
-          </div>
-          <div class="flex flex-1 justify-end gap-8">
-            <div class="flex items-center gap-9">
-              <a class="text-white text-sm font-medium leading-normal" href="Welcome.html">Overview</a>
-              <a class="text-white text-sm font-medium leading-normal" href="Practice History.html">Practice History</a>
-              <a class="text-white text-sm font-medium leading-normal" href="practice.html">Question Bank</a>
-              <a class="text-white text-sm font-medium leading-normal" href="setting.html">Settings</a>
-            </div>
-            <button
-              class="flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 bg-[#39282b] text-white gap-2 text-sm font-bold leading-normal tracking-[0.015em] min-w-0 px-2.5"
-            >
-              <div class="text-white" data-icon="Bell" data-size="20px" data-weight="regular">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" fill="currentColor" viewBox="0 0 256 256">
-                  <path
-                    d="M221.8,175.94C216.25,166.38,208,139.33,208,104a80,80,0,1,0-160,0c0,35.34-8.26,62.38-13.81,71.94A16,16,0,0,0,48,200H88.81a40,40,0,0,0,78.38,0H208a16,16,0,0,0,13.8-24.06ZM128,216a24,24,0,0,1-22.62-16h45.24A24,24,0,0,1,128,216ZM48,184c7.7-13.24,16-43.92,16-80a64,64,0,1,1,128,0c0,36.05,8.28,66.73,16,80Z"
-                  ></path>
-                </svg>
-              </div>
-            </button>
-          </div>
-        </header>
-        <div class="px-40 flex flex-1 justify-center py-5">
-          <div class="layout-content-container flex flex-col max-w-[960px] flex-1">
-            <div class="flex flex-wrap justify-between gap-3 p-4"><p class="text-white tracking-light text-[32px] font-bold leading-tight min-w-72">设置</p></div>
-            <h3 class="text-white text-lg font-bold leading-tight tracking-[-0.015em] px-4 pb-2 pt-4">系统管理</h3>
-            <div class="flex justify-center">
-              <div class="flex flex-1 gap-3 max-w-[480px] flex-col items-stretch px-4 py-3">
-                <button
-                  class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#39282b] text-white text-sm font-bold leading-normal tracking-[0.015em] w-full"
-                >
-                  <span class="truncate">清除缓存</span>
-                </button>
-                <button
-                  class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#39282b] text-white text-sm font-bold leading-normal tracking-[0.015em] w-full"
-                >
-                  <span class="truncate">加载题库</span>
-                </button>
-                <button
-                  class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#39282b] text-white text-sm font-bold leading-normal tracking-[0.015em] w-full"
-                >
-                  <span class="truncate">题库配置切换</span>
-                </button>
-                <button
-                  class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#39282b] text-white text-sm font-bold leading-normal tracking-[0.015em] w-full"
-                >
-                  <span class="truncate">强制刷新题库</span>
-                </button>
-              </div>
-            </div>
-            <h3 class="text-white text-lg font-bold leading-tight tracking-[-0.015em] px-4 pb-2 pt-4">数据管理</h3>
-            <div class="flex justify-center">
-              <div class="flex flex-1 gap-3 max-w-[480px] flex-col items-stretch px-4 py-3">
-                <button
-                  class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#39282b] text-white text-sm font-bold leading-normal tracking-[0.015em] w-full"
-                >
-                  <span class="truncate">创建备份</span>
-                </button>
-                <button
-                  class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#39282b] text-white text-sm font-bold leading-normal tracking-[0.015em] w-full"
-                >
-                  <span class="truncate">备份列表</span>
-                </button>
-                <button
-                  class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#39282b] text-white text-sm font-bold leading-normal tracking-[0.015em] w-full"
-                >
-                  <span class="truncate">导出数据</span>
-                </button>
-                <button
-                  class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#39282b] text-white text-sm font-bold leading-normal tracking-[0.015em] w-full"
-                >
-                  <span class="truncate">导入数据</span>
-                </button>
-              </div>
-            </div>
-            <h3 class="text-white text-lg font-bold leading-tight tracking-[-0.015em] px-4 pb-2 pt-4">系统信息</h3>
-            <!-- 系统信息网格容器 - 由插件动态渲染 -->
-            <div id="system-info-container" class="p-4">
-              <div id="system-info-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                <!-- 插件将在这里渲染真实的系统信息卡片 -->
-              </div>
-
-              <!-- 加载状态 -->
-              <div id="system-info-loading" class="loading" style="display: none;">
-                <div class="spinner"></div>
-                <p>正在加载系统信息...</p>
-              </div>
-
-              <!-- 空状态 -->
-              <div id="system-info-empty" class="empty-state" style="display: none;">
-                <div class="empty-icon">📊</div>
-                <div class="empty-title">暂无系统信息</div>
-                <div class="empty-description">请检查数据连接或刷新页面</div>
-              </div>
-            </div>
-            <div class="flex px-4 py-3 justify-start">
-              <button
-                class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#39282b] text-white text-sm font-bold leading-normal tracking-[0.015em]"
-                onclick="window.HPTheme && window.HPTheme.open()"
-              >
-                <span class="truncate">主题切换</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  
-<!--  -->
+    <base href="./" />
+    <link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin="" />
+    <link
+      rel="stylesheet"
+      as="style"
+      onload="this.rel='stylesheet'"
+      href="https://fonts.googleapis.com/css2?display=swap&amp;family=Newsreader%3Awght%40400%3B500%3B700%3B800&amp;family=Noto+Sans%3Awght%40400%3B500%3B700%3B900"
+    />
+
+    <title>Stitch Design</title>
+    <link rel="icon" type="image/x-icon" href="data:image/x-icon;base64," />
+        <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  </head>
+  <body>
+    <div class="relative flex h-auto min-h-screen w-full flex-col bg-[#181112] dark group/design-root overflow-x-hidden" style='font-family: Newsreader, "Noto Sans", sans-serif;'>
+      <div class="layout-container flex h-full grow flex-col">
+        <header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-b-[#39282b] px-10 py-3">
+          <div class="flex items-center gap-4 text-white">
+            <div class="size-4">
+              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M24 4C25.7818 14.2173 33.7827 22.2182 44 24C33.7827 25.7818 25.7818 33.7827 24 44C22.2182 33.7827 14.2173 25.7818 4 24C14.2173 22.2182 22.2182 14.2173 24 4Z"
+                  fill="currentColor"
+                ></path>
+              </svg>
+            </div>
+            <h2 class="text-white text-lg font-bold leading-tight tracking-[-0.015em]">Wizarding World IELTS Prep</h2>
+          </div>
+          <div class="flex flex-1 justify-end gap-8">
+            <div class="flex items-center gap-9">
+              <a class="text-white text-sm font-medium leading-normal" href="Welcome.html">Overview</a>
+              <a class="text-white text-sm font-medium leading-normal" href="Practice History.html">Practice History</a>
+              <a class="text-white text-sm font-medium leading-normal" href="practice.html">Question Bank</a>
+              <a class="text-white text-sm font-medium leading-normal" href="setting.html">Settings</a>
+            </div>
+            <button
+              class="flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 bg-[#39282b] text-white gap-2 text-sm font-bold leading-normal tracking-[0.015em] min-w-0 px-2.5"
+            >
+              <div class="text-white" data-icon="Bell" data-size="20px" data-weight="regular">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" fill="currentColor" viewBox="0 0 256 256">
+                  <path
+                    d="M221.8,175.94C216.25,166.38,208,139.33,208,104a80,80,0,1,0-160,0c0,35.34-8.26,62.38-13.81,71.94A16,16,0,0,0,48,200H88.81a40,40,0,0,0,78.38,0H208a16,16,0,0,0,13.8-24.06ZM128,216a24,24,0,0,1-22.62-16h45.24A24,24,0,0,1,128,216ZM48,184c7.7-13.24,16-43.92,16-80a64,64,0,1,1,128,0c0,36.05,8.28,66.73,16,80Z"
+                  ></path>
+                </svg>
+              </div>
+            </button>
+          </div>
+        </header>
+        <div class="px-40 flex flex-1 justify-center py-5">
+          <div class="layout-content-container flex flex-col max-w-[960px] flex-1">
+            <div class="flex flex-wrap justify-between gap-3 p-4"><p class="text-white tracking-light text-[32px] font-bold leading-tight min-w-72">设置</p></div>
+            <h3 class="text-white text-lg font-bold leading-tight tracking-[-0.015em] px-4 pb-2 pt-4">系统管理</h3>
+            <div class="flex justify-center">
+              <div class="flex flex-1 gap-3 max-w-[480px] flex-col items-stretch px-4 py-3">
+                <button
+                  class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#39282b] text-white text-sm font-bold leading-normal tracking-[0.015em] w-full"
+                >
+                  <span class="truncate">清除缓存</span>
+                </button>
+                <button
+                  class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#39282b] text-white text-sm font-bold leading-normal tracking-[0.015em] w-full"
+                >
+                  <span class="truncate">加载题库</span>
+                </button>
+                <button
+                  class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#39282b] text-white text-sm font-bold leading-normal tracking-[0.015em] w-full"
+                >
+                  <span class="truncate">题库配置切换</span>
+                </button>
+                <button
+                  class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#39282b] text-white text-sm font-bold leading-normal tracking-[0.015em] w-full"
+                >
+                  <span class="truncate">强制刷新题库</span>
+                </button>
+              </div>
+            </div>
+            <h3 class="text-white text-lg font-bold leading-tight tracking-[-0.015em] px-4 pb-2 pt-4">数据管理</h3>
+            <div class="flex justify-center">
+              <div class="flex flex-1 gap-3 max-w-[480px] flex-col items-stretch px-4 py-3">
+                <button
+                  class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#39282b] text-white text-sm font-bold leading-normal tracking-[0.015em] w-full"
+                >
+                  <span class="truncate">创建备份</span>
+                </button>
+                <button
+                  class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#39282b] text-white text-sm font-bold leading-normal tracking-[0.015em] w-full"
+                >
+                  <span class="truncate">备份列表</span>
+                </button>
+                <button
+                  class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#39282b] text-white text-sm font-bold leading-normal tracking-[0.015em] w-full"
+                >
+                  <span class="truncate">导出数据</span>
+                </button>
+                <button
+                  class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#39282b] text-white text-sm font-bold leading-normal tracking-[0.015em] w-full"
+                >
+                  <span class="truncate">导入数据</span>
+                </button>
+              </div>
+            </div>
+            <h3 class="text-white text-lg font-bold leading-tight tracking-[-0.015em] px-4 pb-2 pt-4">系统信息</h3>
+            <!-- 系统信息网格容器 - 由插件动态渲染 -->
+            <div id="system-info-container" class="p-4">
+              <div id="system-info-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- 插件将在这里渲染真实的系统信息卡片 -->
+              </div>
+
+              <!-- 加载状态 -->
+              <div id="system-info-loading" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>正在加载系统信息...</p>
+              </div>
+
+              <!-- 空状态 -->
+              <div id="system-info-empty" class="empty-state" style="display: none;">
+                <div class="empty-icon">📊</div>
+                <div class="empty-title">暂无系统信息</div>
+                <div class="empty-description">请检查数据连接或刷新页面</div>
+              </div>
+            </div>
+            <div class="flex px-4 py-3 justify-start">
+              <button
+                class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#39282b] text-white text-sm font-bold leading-normal tracking-[0.015em]"
+                onclick="window.HPTheme && window.HPTheme.open()"
+              >
+                <span class="truncate">主题切换</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  
+<!--  -->
 <script src="../../../assets/scripts/complete-exam-data.js"></script>
 <script src="../../../assets/scripts/listening-exam-data.js"></script>
 <script src="../../../js/utils/helpers.js"></script>
@@ -159,17 +160,19 @@
 <script src="../../../js/main.js"></script>
 <script src="../../../js/boot-fallbacks.js"></script>
 <script src="../../../js/app.js"></script>
-<script src="../../../js/plugins/hp/hp-path-prefix.js"></script>
+<script src="../../../js/plugins/hp/hp-path-prefix.js"></script>`n<script src="../../../js/plugins/hp/hp-path-map.js"></script>
 <script src="../../../js/plugins/hp/hp-core-bridge.js"></script>
 <script src="../../../js/plugins/hp/hp-settings-ui.js"></script>
 <script src="../../../js/plugins/hp/hp-settings-theme-modal.js"></script>
 <script src="../../../js/plugins/hp/hp-settings-bridge.js"></script>
-<script src="../../../js/plugins/hp/hp-path-prefix.js"></script>
-
-<!-- HP ettings?-->
-<script src="../../../js/plugins/hp/hp-core-bridge.js"></script>
-<script src="../../../js/plugins/hp/hp-settings-ui.js"></script>
-<script src="../../../js/plugins/hp/hp-settings-theme-modal.js"></script>
-<script src="../../../js/plugins/hp/hp-settings-bridge.js"></script>
-</body></html>
+<script src="../../../js/plugins/hp/hp-path-prefix.js"></script>`n<script src="../../../js/plugins/hp/hp-path-map.js"></script>
+
+<!-- HP ettings?-->
+<script src="../../../js/plugins/hp/hp-core-bridge.js"></script>
+<script src="../../../js/plugins/hp/hp-settings-ui.js"></script>
+<script src="../../../js/plugins/hp/hp-settings-theme-modal.js"></script>
+<script src="../../../js/plugins/hp/hp-settings-bridge.js"></script>
+</body></html>
+
+
 

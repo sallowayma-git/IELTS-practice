@@ -190,7 +190,22 @@
         var ex = list.find(function(x){ return x && x.id===examId; });
         if (!ex) return this.showMessage('未找到题目', 'error');
         if (!ex.hasHtml) return this.viewExamPDF(examId);
-        var fullPath = (typeof window.buildResourcePath==='function') ? window.buildResourcePath(ex,'html') : ((ex.path||'') + '/' + (ex.filename||''));
+        var fullPath;
+        if (typeof window.buildResourcePath==='function') {
+          fullPath = window.buildResourcePath(ex,'html');
+        } else {
+          var __base = (window.HP_BASE_PREFIX || './');
+          if (__base && !/\/$/.test(__base)) __base += '/';
+          var __raw = String(ex.path||'');
+          if (__raw && !/\/$/.test(__raw)) __raw += '/';
+          __raw += String(ex.filename||'');
+          if (/^(?:[a-z]+:)?\/\//i.test(__raw) || /^[A-Za-z]:\\/.test(__raw)) {
+            fullPath = __raw;
+          } else {
+            __raw = __raw.replace(/^\.\//,'');
+            fullPath = __base + __raw;
+          }
+        }
         var w = window.open(fullPath, 'exam_'+examId, 'width=1200,height=800,scrollbars=yes,resizable=yes');
         if (!w) return this.showMessage('无法打开窗口，请检查弹窗设置', 'error');
         this.showMessage('正在打开: '+(ex.title||examId), 'info');
@@ -203,7 +218,22 @@
         var list = (Array.isArray(window.examIndex)? window.examIndex : (this.examIndex||[])) || [];
         var ex = list.find(function(x){ return x && x.id===examId; });
         if (!ex || !ex.pdfFilename) return this.showMessage('未找到PDF文件', 'error');
-        var pdfPath = (typeof window.buildResourcePath==='function') ? window.buildResourcePath(ex,'pdf') : ((ex.path||'') + '/' + (ex.pdfFilename||''));
+        var pdfPath;
+        if (typeof window.buildResourcePath==='function') {
+          pdfPath = window.buildResourcePath(ex,'pdf');
+        } else {
+          var __b = (window.HP_BASE_PREFIX || './');
+          if (__b && !/\/$/.test(__b)) __b += '/';
+          var __r = String(ex.path||'');
+          if (__r && !/\/$/.test(__r)) __r += '/';
+          __r += String(ex.pdfFilename||'');
+          if (/^(?:[a-z]+:)?\/\//i.test(__r) || /^[A-Za-z]:\\/.test(__r)) {
+            pdfPath = __r;
+          } else {
+            __r = __r.replace(/^\.\//,'');
+            pdfPath = __b + __r;
+          }
+        }
         var w = (typeof window.openPDFSafely==='function') ? window.openPDFSafely(pdfPath, ex.title||'PDF') : window.open(pdfPath, 'pdf_'+examId, 'width=1000,height=800,scrollbars=yes,resizable=yes');
         if (!w) return this.showMessage('无法打开PDF窗口', 'error');
         return w;

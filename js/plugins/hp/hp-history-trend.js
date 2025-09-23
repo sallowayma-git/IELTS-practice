@@ -1,4 +1,4 @@
-/**
+﻿/**
  * HP History Trend Plugin
  * Render 10-day accuracy trend chart grouped by type (Reading vs Listening)
  * without modifying core system files.
@@ -90,12 +90,12 @@
         '<svg width="' + width + '" height="' + height + '" style="background:rgba(255,255,255,0.05);border-radius:12px;">',
         '  <defs>',
         '    <linearGradient id="readingGradient" x1="0%" y1="0%" x2="0%" y2="100%">',
-        '      <stop offset="0%" style="stop-color:#4FC3F7;stop-opacity:0.8" />',
-        '      <stop offset="100%" style="stop-color:#4FC3F7;stop-opacity:0.2" />',
+        '      <stop offset="0%" style="stop-color:#9E2A2B;stop-opacity:0.85" />',
+        '      <stop offset="100%" style="stop-color:#9E2A2B;stop-opacity:0.25" />',
         '    </linearGradient>',
         '    <linearGradient id="listeningGradient" x1="0%" y1="0%" x2="0%" y2="100%">',
-        '      <stop offset="0%" style="stop-color:#81C784;stop-opacity:0.8" />',
-        '      <stop offset="100%" style="stop-color:#81C784;stop-opacity:0.2" />',
+        '      <stop offset="0%" style="stop-color:#D4AF37;stop-opacity:0.85" />',
+        '      <stop offset="100%" style="stop-color:#D4AF37;stop-opacity:0.25" />',
         '    </linearGradient>',
         '  </defs>',
         '  <g>',
@@ -112,16 +112,16 @@
       // Add reading line if we have data
       if (readingPoints) {
         svg.push(
-          '    <polyline points="' + readingPoints + '" fill="none" stroke="#4FC3F7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />',
-          '    <text x="' + (width - padding + 10) + '" y="' + (height - padding - 10) + '" fill="#4FC3F7" font-size="12" font-weight="bold">阅读</text>'
+          '    <polyline points="' + readingPoints + '" fill="none" stroke="#9E2A2B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />',
+          '    <text x="' + (width - padding + 10) + '" y="' + (height - padding - 10) + '" fill="#9E2A2B" font-size="12" font-weight="bold">阅读</text>'
         );
       }
 
       // Add listening line if we have data
       if (listeningPoints) {
         svg.push(
-          '    <polyline points="' + listeningPoints + '" fill="none" stroke="#81C784" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />',
-          '    <text x="' + (width - padding + 10) + '" y="' + (height - padding + 15) + '" fill="#81C784" font-size="12" font-weight="bold">听力</text>'
+          '    <polyline points="' + listeningPoints + '" fill="none" stroke="#D4AF37" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />',
+          '    <text x="' + (width - padding + 10) + '" y="' + (height - padding + 15) + '" fill="#D4AF37" font-size="12" font-weight="bold">听力</text>'
         );
       }
 
@@ -135,11 +135,11 @@
       legend.style.cssText = 'display:flex;gap:20px;justify-content:center;margin-top:20px;flex-wrap:wrap;';
       legend.innerHTML = [
         '<div style="display:flex;align-items:center;gap:8px;">',
-        '  <div style="width:16px;height:3px;background:#4FC3F7;border-radius:2px;"></div>',
+        '  <div style="width:16px;height:3px;background:#9E2A2B;border-radius:2px;"></div>',
         '  <span style="color:rgba(255,255,255,0.8);font-size:12px;">阅读准确率</span>',
         '</div>',
         '<div style="display:flex;align-items:center;gap:8px;">',
-        '  <div style="width:16px;height:3px;background:#81C784;border-radius:2px;"></div>',
+        '  <div style="width:16px;height:3px;background:#D4AF37;border-radius:2px;"></div>',
         '  <span style="color:rgba(255,255,255,0.8);font-size:12px;">听力准确率</span>',
         '</div>'
       ].join('');
@@ -181,3 +181,4 @@
 
   console.log('[HP-History-Trend] plugin loaded');
 })();
+

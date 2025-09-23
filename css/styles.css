@@ -2156,8 +2156,8 @@ body:not(.reduce-motion) .modal {
         flex-direction: column;
         gap: 5px;
     }
-}/
-* 系统维护面板样式 */
+}
+/* 系统维护面板样式 */
 .system-maintenance-panel {
     position: fixed;
     top: 50%;
@@ -3074,8 +3074,7 @@ body:not(.reduce-motion) .modal {
         white-space: nowrap;
     }
 }
-/
-* 练习记录标题点击样式 */
+/* 练习记录标题点击样式 */
 .record-title {
     cursor: pointer;
     transition: color 0.2s ease, text-decoration 0.2s ease;
