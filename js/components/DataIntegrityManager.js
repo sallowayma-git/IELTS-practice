@@ -638,16 +638,26 @@ class DataIntegrityManager {
                         const dataSection = importFileContent && importFileContent.data ? importFileContent.data : null;
                         if (!dataSection) throw new Error('NO_DATA_SECTION');
 
-                        // 提取练习记录
+                        // 提取练习记录（优先非空来源，避免空的 practice_records 覆盖真实数据）
                         let recordsToImport = [];
-                        if (Array.isArray(dataSection.practice_records)) {
-                            recordsToImport = dataSection.practice_records;
-                        } else if (dataSection[`${prefix}practice_records`] && Array.isArray(dataSection[`${prefix}practice_records`].data)) {
+                        // exam_system_practice_records 包装（优先）
+                        if (dataSection[`${prefix}practice_records`] && Array.isArray(dataSection[`${prefix}practice_records`].data) && dataSection[`${prefix}practice_records`].data.length) {
                             recordsToImport = dataSection[`${prefix}practice_records`].data;
-                        } else if (Array.isArray(importFileContent.records)) {
+                        }
+                        // 顶层 practice_records（仅在非空时覆盖）
+                        if (Array.isArray(dataSection.practice_records) && dataSection.practice_records.length) {
+                            recordsToImport = dataSection.practice_records;
+                        }
+                        // 其它旧命名
+                        if (!recordsToImport.length && Array.isArray(importFileContent.records)) {
                             recordsToImport = importFileContent.records;
-                        } else if (Array.isArray(importFileContent.practiceRecords)) {
+                        }
+                        if (!recordsToImport.length && Array.isArray(importFileContent.practiceRecords)) {
                             recordsToImport = importFileContent.practiceRecords;
+                        }
+                        // 根级 exam_system_practice_records.data（兜底）
+                        if (!recordsToImport.length && importFileContent[`${prefix}practice_records`] && Array.isArray(importFileContent[`${prefix}practice_records`].data)) {
+                            recordsToImport = importFileContent[`${prefix}practice_records`].data;
                         }
 
                         // 提取用户统计（可选）
@@ -660,13 +670,20 @@ class DataIntegrityManager {
                             userStatsToImport = importFileContent.userStats;
                         }
 
-                        // 写入关键数据
-                        if (window.storage) {
-                            storage.set('practice_records', Array.isArray(recordsToImport) ? recordsToImport : []);
-                            if (userStatsToImport) storage.set('user_stats', userStatsToImport);
-                        } else {
-                            localStorage.setItem('practice_records', JSON.stringify(Array.isArray(recordsToImport) ? recordsToImport : []));
-                            if (userStatsToImport) localStorage.setItem('user_stats', JSON.stringify(userStatsToImport));
+                        // 写入关键数据：仅当有记录时覆盖，避免用空数组清空
+                        if (Array.isArray(recordsToImport) && recordsToImport.length) {
+                            if (window.storage) {
+                                storage.set('practice_records', recordsToImport);
+                            } else {
+                                localStorage.setItem('practice_records', JSON.stringify(recordsToImport));
+                            }
+                        }
+                        if (userStatsToImport) {
+                            if (window.storage) {
+                                storage.set('user_stats', userStatsToImport);
+                            } else {
+                                localStorage.setItem('user_stats', JSON.stringify(userStatsToImport));
+                            }
                         }
 
                         // 其余数据键：去前缀并解包 data
