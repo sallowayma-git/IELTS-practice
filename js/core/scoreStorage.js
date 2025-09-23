@@ -41,15 +41,24 @@ class ScoreStorage {
      * 检查存储版本
      */
     async checkStorageVersion() {
-        const storedVersion = await storage.get(this.storageKeys.storageVersion);
-
+        const normalizeVersion = v => {
+          if (v === undefined || v === null) return '';
+          const s = String(v).trim();
+          return s.startsWith('"') && s.endsWith('"') ? s.slice(1, -1) : s;
+        };
+        const storedVersionRaw = await storage.get(this.storageKeys.storageVersion);
+        const storedVersion = normalizeVersion(storedVersionRaw);
+        const current = normalizeVersion(this.currentVersion);
         if (!storedVersion) {
-            // 首次使用，设置版本
-            await storage.set(this.storageKeys.storageVersion, this.currentVersion);
-            console.log('Storage version initialized:', this.currentVersion);
-        } else if (storedVersion !== this.currentVersion) {
-            // 版本不匹配，执行数据迁移
-            await this.migrateData(storedVersion, this.currentVersion);
+          await storage.set(this.storageKeys.storageVersion, current);
+          console.log('Storage version initialized:', current);
+          return;
+        }
+        if (storedVersion !== current) {
+          await this.migrateData(storedVersion, current);
+          await storage.set(this.storageKeys.storageVersion, current);
+        } else {
+          console.log('[ScoreStorage] 版本匹配，跳过迁移');
         }
     }
 
@@ -57,6 +66,10 @@ class ScoreStorage {
      * 数据迁移
      */
     async migrateData(fromVersion, toVersion) {
+        if (String(fromVersion) === String(toVersion)) {
+          console.log('[ScoreStorage] migrateData skipped: same version');
+          return;
+        }
         console.log(`Migrating data from ${fromVersion} to ${toVersion}`);
 
         try {
