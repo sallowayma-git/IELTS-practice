@@ -227,10 +227,14 @@ class DataManagementPanel {
             this.handleFileSelect(e);
         });
 
-        // 导入按钮
-        panel.querySelector('[data-action="import"]').addEventListener('click', () => {
-            this.handleImport();
+        // 导入按钮 - 使用事件委托
+        panel.addEventListener('click', (e) => {
+            console.log('Click on:', e.target.tagName, e.target.className, 'dataset.action:', e.target.dataset.action);
+            if (e.target.dataset.action === 'import') {
+                this.handleImport();
+            }
         });
+        console.log('[DataManagementPanel] Event listener added for import button');
 
         // 清理按钮
         panel.querySelector('[data-action="cleanup"]').addEventListener('click', () => {
@@ -372,8 +376,32 @@ class DataManagementPanel {
             if (this.selectedFileContent) {
                 fileContent = this.selectedFileContent;
             } else if (file) {
+                // 添加文件大小检查
+                if (file.size > 5 * 1024 * 1024) {
+                    this.showMessage('文件过大 (>5MB)，请分批导入或使用小文件测试。');
+                    return;
+                }
                 this.showProgress('读取文件...');
-                fileContent = await this.readFile(file);
+                // 直接使用FileReader添加详细日志
+                fileContent = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onerror = (e) => {
+                        console.error('[DataManagementPanel] File read error:', e);
+                        reject(new Error('文件读取失败'));
+                    };
+                    reader.onload = (e) => {
+                        console.log('[DataManagementPanel] File loaded, size:', file.size);
+                        try {
+                            const data = JSON.parse(e.target.result);
+                            console.log('[DataManagementPanel] JSON parsed, type:', Array.isArray(data) ? 'array' : typeof data, 'length:', data.length || data.practiceRecords?.length);
+                            resolve(data);
+                        } catch (err) {
+                            console.error('[DataManagementPanel] JSON parse error:', err);
+                            reject(err);
+                        }
+                    };
+                    reader.readAsText(file);
+                });
             } else {
                 this.showMessage('请先选择要导入的文件', 'warning');
                 return;
@@ -398,6 +426,7 @@ class DataManagementPanel {
 
             if (result.success) {
                 console.log('[DataManagementPanel] Import successful');
+                console.log("Import completed: importedCount=", result.importedCount, "total=", result.recordCount || result.finalCount || normalized.practiceRecords.length);
                 this.showMessage(
                     `导入成功！导入 ${result.importedCount || result.recordCount || 0} 条记录，跳过 ${result.skippedCount || 0} 条重复记录。`,
                     'success'

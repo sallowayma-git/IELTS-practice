@@ -178,6 +178,7 @@ class DataBackupManager {
     }
 
     async importPracticeData(source, options = {}) {
+        console.log('[DataBackupManager] importPracticeData called, source type:', typeof source, 'length:', Array.isArray(source) ? source.length : source.practiceRecords?.length);
         const {
             mergeMode = 'merge',
             validateData = true,
@@ -193,14 +194,26 @@ class DataBackupManager {
         }
 
         const normalized = this.normalizeImportPayload(payload, { preserveIds });
+        console.log('[DataBackupManager] Normalized records:', normalized.practiceRecords.length);
+
+        // 添加对根级数组的支持
+        if (Array.isArray(payload)) {
+            normalized.practiceRecords = payload;
+        } else {
+            normalized.practiceRecords = payload.practiceRecords || payload.records || [];
+        }
 
         if (!normalized.practiceRecords.length) {
             throw new Error('Import file does not contain any practice records.');
         }
 
+        const originalLength = normalized.practiceRecords.length;
         if (validateData) {
             this.validateNormalizedRecords(normalized.practiceRecords);
         }
+        const validatedLength = normalized.practiceRecords.length;
+        const skippedCount = originalLength - validatedLength;
+        console.log('[DataBackupManager] Validated records:', validatedLength, 'skipped:', skippedCount);
 
         let backupId = null;
         if (createBackup) {
@@ -210,6 +223,7 @@ class DataBackupManager {
         let mergeResult;
         try {
             mergeResult = await this.mergePracticeRecords(normalized.practiceRecords, mergeMode);
+            console.log('[DataBackupManager] Saving to storage');
 
             if (normalized.userStats) {
                 await this.mergeUserStats(normalized.userStats, mergeMode);
@@ -306,6 +320,26 @@ class DataBackupManager {
         let userStats = null;
         const visited = new WeakSet();
 
+        // Fast-path: extract from common shapes (avoids deep traversal misses)
+        try {
+            const direct = this.extractRecordsFromCommonShapes(payload);
+            if (direct.records && direct.records.length) {
+                const normalizedDirect = direct.records
+                    .map((record, index) => this.normalizeRecord(record, {
+                        preserveIds,
+                        fallbackIdPrefix: direct.source || 'record',
+                        index
+                    }))
+                    .filter(Boolean);
+                if (normalizedDirect.length) {
+                    practiceRecords.push(...normalizedDirect);
+                    sources.push({ path: direct.source || '(direct)', count: normalizedDirect.length });
+                }
+            }
+        } catch (_) {
+            // ignore and continue with generic traversal
+        }
+
         const collectRecords = (records, originPath) => {
             if (!Array.isArray(records) || !records.length) {
                 return;
@@ -401,24 +435,71 @@ class DataBackupManager {
         }
 
         const normalized = pathString.toLowerCase();
-        return normalized.includes('practice_records') || normalized.includes('practicerecords');
+        return (
+            normalized.includes('practice_records') ||
+            normalized.includes('practicerecords') ||
+            normalized.includes('exam_system_practice_records') ||
+            normalized.includes('mymelodypracticerecords') ||
+            normalized.includes('my_melody_practice_records')
+        );
     }
 
     validateNormalizedRecords(records) {
-        records.forEach((record, index) => {
+        const now = new Date().toISOString();
+        const missingFieldsLog = [];
+        let skippedCount = 0;
+
+        for (let index = 0; index < records.length; index++) {
+            const record = records[index];
+            const missingFields = [];
+            let isValid = true;
+
+            // 检查并修复缺失字段
             if (!record.id) {
-                throw new Error(`Record ${index + 1} is missing an id.`);
+                record.id = `imported_${now.split('T')[0]}_${Math.random().toString(36).substr(2, 9)}`;
             }
             if (!record.examId) {
-                throw new Error(`Record ${index + 1} is missing an examId.`);
+                record.examId = 'imported_ielts';
             }
             if (!record.startTime) {
-                throw new Error(`Record ${index + 1} is missing a startTime.`);
+                record.startTime = now;
+            } else if (Number.isNaN(new Date(record.startTime).getTime())) {
+                record.startTime = now;
             }
-            if (Number.isNaN(new Date(record.startTime).getTime())) {
-                throw new Error(`Record ${index + 1} has an invalid startTime.`);
+            if (!record.endTime) {
+                record.endTime = now;
+            } else if (Number.isNaN(new Date(record.endTime).getTime())) {
+                record.endTime = now;
             }
-        });
+            if (typeof record.duration !== 'number' || isNaN(record.duration)) {
+                record.duration = 0;
+            }
+            if (typeof record.score !== 'number' || isNaN(record.score)) {
+                record.score = 0;
+            }
+
+            // 如果基本字段仍无效，标记为跳过
+            if (!record.id || !record.examId || Number.isNaN(new Date(record.startTime).getTime())) {
+                isValid = false;
+                missingFields.push('id', 'examId', 'startTime');
+            }
+
+            if (!isValid) {
+                missingFieldsLog.push({ index, missingFields });
+                skippedCount++;
+                records.splice(index, 1);
+                index--; // 调整索引
+                console.log("Skipped record: missing fields - ", missingFields, "at index", index + 1);
+            }
+        }
+
+        if (skippedCount > 0) {
+            console.log(`[DataBackupManager] Skipped ${skippedCount} invalid records during validation.`);
+        }
+
+        if (records.length === 0 && skippedCount > 0) {
+            throw new Error('All records were invalid after validation.');
+        }
     }
 
     async mergePracticeRecords(newRecords, mergeMode = 'merge') {
@@ -626,6 +707,46 @@ class DataBackupManager {
         const hasTime = timeSignals.some(signal => keySet.has(signal));
         const hasStatus = statusSignals.some(signal => keySet.has(signal));
         return hasStatus || hasTime;
+    }
+
+    // Heuristic extractor for common export structures
+    extractRecordsFromCommonShapes(payload) {
+        // default empty result
+        const empty = { records: [], source: null };
+        try {
+            if (Array.isArray(payload)) {
+                return { records: payload, source: '(root array)' };
+            }
+            if (!this.isPlainObject(payload)) {
+                return empty;
+            }
+
+            // Top-level practice_records
+            if (Array.isArray(payload.practice_records)) {
+                return { records: payload.practice_records, source: 'practice_records' };
+            }
+
+            // Nested under data
+            const data = payload.data || {};
+            if (Array.isArray(data.practice_records)) {
+                return { records: data.practice_records, source: 'data.practice_records' };
+            }
+            if (this.isPlainObject(data.practice_records) && Array.isArray(data.practice_records.data)) {
+                return { records: data.practice_records.data, source: 'data.practice_records.data' };
+            }
+
+            // Our exported wrapper key
+            if (this.isPlainObject(data.exam_system_practice_records) && Array.isArray(data.exam_system_practice_records.data)) {
+                return { records: data.exam_system_practice_records.data, source: 'data.exam_system_practice_records.data' };
+            }
+            if (this.isPlainObject(payload.exam_system_practice_records) && Array.isArray(payload.exam_system_practice_records.data)) {
+                return { records: payload.exam_system_practice_records.data, source: 'exam_system_practice_records.data' };
+            }
+
+            return empty;
+        } catch (_) {
+            return empty;
+        }
     }
 
     looksLikeUserStats(candidate) {
