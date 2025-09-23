@@ -151,9 +151,18 @@ async function syncPracticeRecords() {
             const rd = (r && r.realData) || {};
             let duration = (typeof r.duration === 'number') ? r.duration : undefined;
             if (!(Number.isFinite(duration) && duration > 0)) {
-                if (typeof rd.duration === 'number' && rd.duration > 0) {
-                    duration = rd.duration;
-                } else if (r && r.startTime && r.endTime) {
+                const sInfo = r && (r.scoreInfo || rd.scoreInfo) || {};
+                const candidates = [
+                    r.duration, rd.duration, r.durationSeconds, r.duration_seconds,
+                    r.elapsedSeconds, r.elapsed_seconds, r.timeSpent, r.time_spent,
+                    rd.durationSeconds, rd.elapsedSeconds, rd.timeSpent,
+                    sInfo.duration, sInfo.timeSpent
+                ];
+                for (const v of candidates) {
+                    const n = Number(v);
+                    if (Number.isFinite(n) && n > 0) { duration = Math.floor(n); break; }
+                }
+                if (!(Number.isFinite(duration) && duration > 0) && r && r.startTime && r.endTime) {
                     const s = new Date(r.startTime).getTime();
                     const e = new Date(r.endTime).getTime();
                     if (Number.isFinite(s) && Number.isFinite(e) && e > s) {

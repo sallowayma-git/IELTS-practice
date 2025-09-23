@@ -812,16 +812,21 @@ class DataBackupManager {
 
         // Prefer a positive duration; avoid locking in 0 when a better value exists
         (function(){
+            const sInfo = record && (record.scoreInfo || (record.realData && record.realData.scoreInfo)) || {};
+            const rd = record && record.realData || {};
             const candidates = [
-                (typeof record.duration === 'number') ? record.duration : undefined,
-                (record && record.realData && typeof record.realData.duration === 'number') ? record.realData.duration : undefined,
-                (typeof record.elapsedSeconds === 'number') ? record.elapsedSeconds : undefined
+                record.duration, rd.duration,
+                record.durationSeconds, record.duration_seconds,
+                record.elapsedSeconds, record.elapsed_seconds,
+                record.timeSpent, record.time_spent,
+                rd.durationSeconds, rd.elapsedSeconds, rd.timeSpent,
+                sInfo.duration, sInfo.timeSpent
             ];
             let picked = undefined;
             // pick first positive
-            for (const v of candidates) { if (Number.isFinite(v) && v > 0) { picked = v; break; } }
+            for (const v of candidates) { const n = Number(v); if (Number.isFinite(n) && n > 0) { picked = n; break; } }
             // else allow zero if nothing else
-            if (picked === undefined) { for (const v of candidates) { if (Number.isFinite(v)) { picked = v; break; } } }
+            if (picked === undefined) { for (const v of candidates) { const n = Number(v); if (Number.isFinite(n)) { picked = n; break; } } }
             if (picked !== undefined) normalized.duration = picked;
         })();
         normalized.score = this.parseNumber(record.score ?? record.finalScore ?? record.realData?.score ?? record.percentage ?? record.realData?.percentage) ?? normalized.score;
