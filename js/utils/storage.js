@@ -894,62 +894,111 @@ class StorageManager {
             if (legacyKeys.length === 0) {
                 console.log('[Storage] 无遗留数据需要迁移');
                 await this.set('migration_completed', true);
-                return;
-            }
-
-            let migratedCount = 0;
-            for (const oldKey of legacyKeys) {
-                try {
-                    const legacyDataStr = localStorage.getItem(oldKey);
-                    if (!legacyDataStr) continue;
-
-                    let legacyData;
+            } else {
+                let migratedCount = 0;
+                for (const oldKey of legacyKeys) {
                     try {
-                        legacyData = JSON.parse(legacyDataStr);
-                    } catch (parseError) {
-                        console.warn(`[Storage] 解析遗留数据失败: ${oldKey}`, parseError);
-                        continue;
+                        const legacyDataStr = localStorage.getItem(oldKey);
+                        if (!legacyDataStr) continue;
+
+                        let legacyData;
+                        try {
+                            legacyData = JSON.parse(legacyDataStr);
+                        } catch (parseError) {
+                            console.warn(`[Storage] 解析遗留数据失败: ${oldKey}`, parseError);
+                            continue;
+                        }
+
+                        if (!Array.isArray(legacyData)) {
+                            console.warn(`[Storage] 遗留数据非数组，跳过: ${oldKey}`);
+                            continue;
+                        }
+
+                        if (legacyData.length === 0) {
+                            console.log('[Storage] 旧数据为空，跳过迁移');
+                            continue;
+                        }
+
+                        // 对应新键（去除 old_prefix_ 如果存在）
+                        let newKey = oldKey.replace(/^old_prefix_/, '');
+                        const current = await this.get(newKey, []);
+
+                        // 对于关键键额外检查
+                        const criticalKeys = ['practice_records'];
+                        if (criticalKeys.includes(newKey) && legacyData.length === 0 && current.length > 0) {
+                            console.log('[Storage] 发现空旧数据但新数据存在，跳过以避免覆盖');
+                            continue;
+                        }
+
+                        const merged = this.mergeRecords(current, legacyData);
+                        await this.set(newKey, merged);
+
+                        // 删除旧键
+                        localStorage.removeItem(oldKey);
+                        migratedCount++;
+                        console.log(`[Storage] 成功迁移并合并数据: ${oldKey} -> ${newKey} (${legacyData.length} 项)`);
+                    } catch (migrateError) {
+                        console.error(`[Storage] 迁移失败: ${oldKey}`, migrateError);
                     }
-
-                    if (!Array.isArray(legacyData)) {
-                        console.warn(`[Storage] 遗留数据非数组，跳过: ${oldKey}`);
-                        continue;
-                    }
-
-                    if (legacyData.length === 0) {
-                        console.log('[Storage] 旧数据为空，跳过迁移');
-                        continue;
-                    }
-
-                    // 对应新键（去除 old_prefix_ 如果存在）
-                    let newKey = oldKey.replace(/^old_prefix_/, '');
-                    const current = await this.get(newKey, []);
-
-                    // 对于关键键额外检查
-                    const criticalKeys = ['practice_records'];
-                    if (criticalKeys.includes(newKey) && legacyData.length === 0 && current.length > 0) {
-                        console.log('[Storage] 发现空旧数据但新数据存在，跳过以避免覆盖');
-                        continue;
-                    }
-
-                    const merged = this.mergeRecords(current, legacyData);
-                    await this.set(newKey, merged);
-
-                    // 删除旧键
-                    localStorage.removeItem(oldKey);
-                    migratedCount++;
-                    console.log(`[Storage] 成功迁移并合并数据: ${oldKey} -> ${newKey} (${legacyData.length} 项)`);
-                } catch (migrateError) {
-                    console.error(`[Storage] 迁移失败: ${oldKey}`, migrateError);
                 }
+
+                console.log(`[Storage] 数据迁移完成: ${migratedCount} 个键成功迁移`);
+                await this.set('migration_completed', true);
             }
 
-            console.log(`[Storage] 数据迁移完成: ${migratedCount} 个键成功迁移`);
-            await this.set('migration_completed', true);
+            // 迁移 MyMelody 遗留键（IndexedDB 中的旧键）
+            if (!await this.get('my_melody_migration_completed')) {
+                console.log('[Storage] 检查 MyMelody 遗留键迁移...');
+                const oldMyMelodyKey = this.getKey('practice_records'); // 'exam_system_practice_records'
+                try {
+                    const legacyMyMelodyData = await this.getFromIndexedDB(oldMyMelodyKey);
+                    if (legacyMyMelodyData) {
+                        let legacyData;
+                        try {
+                            const parsed = JSON.parse(legacyMyMelodyData);
+                            legacyData = parsed.data || parsed;
+                        } catch (parseError) {
+                            console.warn('[Storage] 解析 MyMelody 遗留数据失败', parseError);
+                            await this.set('my_melody_migration_completed', true);
+                            return;
+                        }
+
+                        if (!Array.isArray(legacyData)) {
+                            console.warn('[Storage] MyMelody 遗留数据非数组，跳过');
+                            await this.set('my_melody_migration_completed', true);
+                            return;
+                        }
+
+                        if (legacyData.length === 0) {
+                            console.log('[Storage] MyMelody 旧数据为空，跳过迁移');
+                            await this.set('my_melody_migration_completed', true);
+                            return;
+                        }
+
+                        const currentPracticeRecords = await this.get('practice_records', []);
+                        const merged = this.mergeRecords(currentPracticeRecords, legacyData);
+                        await this.set('practice_records', merged);
+
+                        // 删除旧键
+                        await this.removeFromIndexedDB(oldMyMelodyKey);
+                        console.log(`[Storage] 成功迁移 MyMelody 数据: ${legacyData.length} 项合并到 practice_records`);
+                    } else {
+                        console.log('[Storage] 无 MyMelody 遗留数据需要迁移');
+                    }
+                    await this.set('my_melody_migration_completed', true);
+                } catch (migrateError) {
+                    console.error('[Storage] MyMelody 迁移失败:', migrateError);
+                    await this.set('my_melody_migration_completed', true); // 避免无限重试
+                }
+            } else {
+                console.log('[Storage] MyMelody 迁移已完成，跳过');
+            }
+
         } catch (error) {
             console.error('[Storage] 迁移遗留数据失败:', error);
             // 即使失败也设置标志，避免无限重试
             await this.set('migration_completed', true);
+            await this.set('my_melody_migration_completed', true);
         }
     }
 

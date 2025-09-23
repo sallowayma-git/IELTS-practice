@@ -360,21 +360,6 @@
     
     <!-- 加载主应用（最后加载） -->
     <script src="js/app.js"></script>
-<![CDATA[
-<script src="js/testing/end-to-end-test.js"></script>
-<script src="js/tests/integration-test.js"></script>
-<script>
-window.addEventListener('load', () => {
-  setTimeout(() => {
-    console.log('Running tests...');
-    runEndToEndTest();
-    setTimeout(() => {
-      runPracticeEnhancementTests();
-    }, 5000);
-  }, 2000);
-});
-</script>
-]]>
 </body>
 
 </html>
