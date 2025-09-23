@@ -56,7 +56,6 @@ class ScoreStorage {
         }
         if (storedVersion !== current) {
           await this.migrateData(storedVersion, current);
-          await storage.set(this.storageKeys.storageVersion, current);
         } else {
           console.log('[ScoreStorage] 版本匹配，跳过迁移');
         }
@@ -243,6 +242,9 @@ class ScoreStorage {
      * 标准化答案格式
      */
     standardizeAnswers(answers) {
+        if (!Array.isArray(answers)) {
+            answers = [];
+        }
         return answers.map((answer, index) => ({
             questionId: answer.questionId || `q${index + 1}`,
             answer: answer.answer || '',
