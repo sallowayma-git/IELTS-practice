@@ -121,7 +121,21 @@ async function syncPracticeRecords() {
                 const total = (typeof r.totalQuestions === 'number') ? r.totalQuestions : (typeof sInfo.total === 'number' ? sInfo.total : (rd.answers ? Object.keys(rd.answers).length : 0));
                 const acc = (typeof r.accuracy === 'number') ? r.accuracy : (total > 0 ? (correct / total) : 0);
                 const pct = (typeof r.percentage === 'number') ? r.percentage : Math.round(acc * 100);
-                const dur = (typeof r.duration === 'number') ? r.duration : (typeof rd.duration === 'number' ? rd.duration : 0);
+                let dur = (typeof r.duration === 'number') ? r.duration : undefined;
+                if (!(Number.isFinite(dur) && dur > 0)) {
+                    if (typeof rd.duration === 'number' && rd.duration > 0) {
+                        dur = rd.duration;
+                    } else {
+                        // try compute from timestamps if available
+                        const s = r.startTime ? new Date(r.startTime).getTime() : NaN;
+                        const e = r.endTime ? new Date(r.endTime).getTime() : NaN;
+                        if (Number.isFinite(s) && Number.isFinite(e) && e > s) {
+                            dur = Math.round((e - s)/1000);
+                        } else {
+                            dur = 0;
+                        }
+                    }
+                }
                 return { ...r, accuracy: acc, percentage: pct, duration: dur, correctAnswers: (r.correctAnswers ?? correct), totalQuestions: (r.totalQuestions ?? total) };
             });
         }
@@ -130,6 +144,40 @@ async function syncPracticeRecords() {
         const raw = await storage.get('practice_records', []);
         records = Array.isArray(raw) ? raw : [];
     }
+
+    // Normalize duration and percentages to avoid 0-second artifacts
+    try {
+        records = (records || []).map(r => {
+            const rd = (r && r.realData) || {};
+            let duration = (typeof r.duration === 'number') ? r.duration : undefined;
+            if (!(Number.isFinite(duration) && duration > 0)) {
+                if (typeof rd.duration === 'number' && rd.duration > 0) {
+                    duration = rd.duration;
+                } else if (r && r.startTime && r.endTime) {
+                    const s = new Date(r.startTime).getTime();
+                    const e = new Date(r.endTime).getTime();
+                    if (Number.isFinite(s) && Number.isFinite(e) && e > s) {
+                        duration = Math.round((e - s) / 1000);
+                    }
+                }
+            }
+            if (!Number.isFinite(duration)) duration = 0;
+
+            // Coerce percentage/accuracy if only scoreInfo exists
+            const sInfo = r && (r.scoreInfo || rd.scoreInfo) || {};
+            const correct = (typeof r.correctAnswers === 'number') ? r.correctAnswers : (typeof sInfo.correct === 'number' ? sInfo.correct : (typeof r.score === 'number' ? r.score : undefined));
+            const total = (typeof r.totalQuestions === 'number') ? r.totalQuestions : (typeof sInfo.total === 'number' ? sInfo.total : (rd.answers ? Object.keys(rd.answers).length : undefined));
+            let accuracy = (typeof r.accuracy === 'number') ? r.accuracy : undefined;
+            let percentage = (typeof r.percentage === 'number') ? r.percentage : undefined;
+            if ((accuracy === undefined || percentage === undefined) && Number.isFinite(correct) && Number.isFinite(total) && total > 0) {
+                const acc = correct / total;
+                if (accuracy === undefined) accuracy = acc;
+                if (percentage === undefined) percentage = Math.round(acc * 100);
+            }
+
+            return { ...r, duration, accuracy: (accuracy ?? r.accuracy), percentage: (percentage ?? r.percentage) };
+        });
+    } catch (e) { console.warn('[System] normalize durations failed:', e); }
 
     // 新增修复3D：确保全局变量是UI的单一数据源
     window.practiceRecords = records;
@@ -1571,15 +1619,25 @@ async function clearPracticeData() {
     }
 }
 
-function clearCache() {
-    if (confirm('确定要清除所有缓存数据吗？')) {
-        localStorage.clear();
-        sessionStorage.clear();
+async function clearCache() {
+    if (confirm('确定要清除所有缓存数据并清空练习记录吗？')) {
+        try {
+            // 清空命名空间下的练习记录
+            if (window.storage && typeof storage.set === 'function') {
+                await storage.set('practice_records', []);
+            } else {
+                try { localStorage.removeItem('exam_system_practice_records'); } catch(_) {}
+            }
+        } catch (e) { console.warn('[clearCache] failed to clear practice_records:', e); }
+
+        try { localStorage.clear(); } catch(_) {}
+        try { sessionStorage.clear(); } catch(_) {}
+
         if (window.performanceOptimizer) {
-            // This assumes performanceOptimizer has a cleanup method
-            // window.performanceOptimizer.cleanup(); 
+            // optional cleanup hook
+            // window.performanceOptimizer.cleanup();
         }
-        showMessage('缓存已清除', 'success');
+        showMessage('缓存与练习记录已清除', 'success');
         setTimeout(() => { location.reload(); }, 1000);
     }
 }

@@ -1102,5 +1102,24 @@ window.addEventListener('beforeunload', async function(e) {
 // Initialize on page load
 window.addEventListener('load', function() {
    console.log('IELTS Academic Practice System initialized');
-   showMessage('系统就绪', 'success');
+  showMessage('系统就绪', 'success');
 });
+
+// Ensure global clearCache also clears practice records
+try {
+  window.clearCache = async function() {
+    if (confirm('确定要清除所有缓存数据并清空练习记录吗？此操作不可撤销')) {
+      try {
+        if (window.storage && typeof storage.set === 'function') {
+          await storage.set('practice_records', []);
+        } else {
+          try { localStorage.removeItem('exam_system_practice_records'); } catch(_) {}
+        }
+      } catch (e) { console.warn('[clearCache] failed to clear practice_records:', e); }
+      try { localStorage.clear(); } catch(_) {}
+      try { sessionStorage.clear(); } catch(_) {}
+      showMessage('缓存与练习记录已清除', 'success');
+      setTimeout(() => location.reload(), 1200);
+    }
+  };
+} catch(_) {}

@@ -1581,20 +1581,25 @@ function loadFullSystem() {
 }
 
 // 清除缓存
-function clearCache() {
-    if (confirm('确定要清除所有缓存数据吗？')) {
-        localStorage.clear();
-        sessionStorage.clear();
+async function clearCache() {
+    if (confirm('确定要清除所有缓存数据并清空练习记录吗？')) {
+        try {
+            if (window.storage && typeof storage.set === 'function') {
+                await storage.set('practice_records', []);
+            } else {
+                try { localStorage.removeItem('exam_system_practice_records'); } catch(_) {}
+            }
+        } catch (e) { console.warn('[clearCache] failed to clear practice_records:', e); }
 
-        // 清除性能优化器缓存
+        try { localStorage.clear(); } catch(_) {}
+        try { sessionStorage.clear(); } catch(_) {}
+
         if (window.performanceOptimizer) {
-            window.performanceOptimizer.cleanup();
+            try { window.performanceOptimizer.cleanup(); } catch(_) {}
         }
 
-        showMessage('缓存已清除', 'success');
-        setTimeout(() => {
-            location.reload();
-        }, 1000);
+        showMessage('缓存与练习记录已清除', 'success');
+        setTimeout(() => { location.reload(); }, 1000);
     }
 }
 

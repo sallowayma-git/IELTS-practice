@@ -546,9 +546,9 @@ class ScoreStorage {
                 }
             }
 
-            // 用时归一（秒）
-            if (typeof r.duration !== 'number' || isNaN(r.duration)) {
-                if (typeof rd.duration === 'number') {
+            // 用时归一（秒）: treat non-number, NaN, or non-positive as missing
+            if (!(typeof r.duration === 'number' && isFinite(r.duration) && r.duration > 0)) {
+                if (typeof rd.duration === 'number' && rd.duration > 0) {
                     r.duration = rd.duration;
                 } else if (r.startTime && r.endTime) {
                     r.duration = Math.max(0, Math.floor((new Date(r.endTime) - new Date(r.startTime)) / 1000));
