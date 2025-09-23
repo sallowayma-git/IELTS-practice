@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>IELTS Reading Practice - Born to Trade</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        :root {
+            --line: #e5e7eb;
+            --bg: #f6f7fb;
+            --panel: #fff;
+            --accent: #3b82f6;
+            --muted: #6b7280;
+            --shadow: 0 6px 20px rgba(0,0,0,.12);
+            --text-color: #333;
+            --highlight: #fff3a3;
+            --selbar-bg: #111;
+            --selbar-text: #fff;
+        }
+
+        body.dark-mode {
+            --line: #4a4a4a;
+            --bg: #1a1a1a;
+            --panel: #2a2a2a;
+            --muted: #bbb;
+            --text-color: #f0f0f0;
+            --highlight: #5b21b6;
+            --selbar-bg: #1f2937;
+            --selbar-text: #e5e7eb;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html { font-size: 16px; }
+        html.font-regular { font-size: 16px; }
+        html.font-large { font-size: 18px; }
+        html.font-xlarge { font-size: 20px; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+            background: var(--bg);
+            color: var(--text-color);
+            height: 100vh;
+            overflow: hidden;
+            transition: background-color 0.3s ease;
+            padding-bottom: 64px;
+        }
+
+        .header {
+            background-color: var(--panel);
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--line);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            z-index: 100;
+            box-shadow: 0 1px 3px rgba(0,0,0,.05);
+        }
+
+        .header-content { display: flex; align-items: center; gap: 16px; }
+        .header h1 { font-size: 1.2rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-color); }
+        #timer { font-size: 1rem; font-weight: 500; background: var(--bg); padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line); min-width: 90px; text-align: center; color: var(--text-color); }
+        .header-controls { display: flex; align-items: center; gap: 10px; }
+        .header-btn { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 0.9rem; transition: all 0.2s ease; color: var(--text-color); }
+        .header-btn:hover { background: var(--bg); border-color: var(--accent); }
+
+        #settings-panel {
+            position: absolute; top: 60px; right: 20px; width: 200px; background: var(--panel); border-radius: 12px;
+            box-shadow: var(--shadow); border: 1px solid var(--line); z-index: 1000; padding: 8px; display: none;
+        }
+        .settings-group { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+        .settings-group:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+        .settings-title { font-size: 0.85rem; color: var(--muted); margin-bottom: 8px; padding-left: 12px; }
+        .settings-option { display: block; width: 100%; text-align: left; padding: 8px 12px; border: none; background: none; cursor: pointer; font-size: 0.9rem; border-radius: 6px; color: var(--text-color); }
+        .settings-option.active { background: #e9effd; color: var(--accent); font-weight: 500; }
+        .dark-mode .settings-option.active { background: #1e3a8a; }
+
+        #notes-panel {
+            position: fixed; right: 12px; bottom: 76px; width: 320px; height: 45vh; background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+            display: none; flex-direction: column; z-index: 900; box-shadow: var(--shadow); overflow: hidden;
+        }
+        #notes-panel header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--line); background-color: var(--bg); }
+        #notes-panel h3 { font-size: 1rem; font-weight: 600; color: var(--text-color); margin: 0; }
+        #notes-panel textarea { flex: 1; border: 0; padding: 16px; resize: none; font-size: 0.95rem; background: transparent; color: var(--text-color); line-height: 1.6; }
+        #notes-panel textarea:focus { outline: none; }
+        #close-note { padding: 4px 8px; border-radius: 4px; border: 1px solid var(--line); background: transparent; cursor: pointer; color: var(--text-color); transition: background-color 0.2s; }
+        #close-note:hover { background-color: rgba(0,0,0,0.05); }
+        .dark-mode #close-note:hover { background-color: rgba(255,255,255,0.1); }
+
+        .overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.08); z-index: 800; display: none; backdrop-filter: blur(2px); }
+        .dark-mode .overlay { background: rgba(0, 0, 0, 0.3); }
+
+        .shell { display: flex; height: calc(100vh - 58px - 64px); width: 100%; overflow: hidden; }
+        .pane { background: var(--panel); overflow: auto; padding: 24px; }
+        #left { min-width: 280px; max-width: calc(100% - 280px); width: 50%; }
+        #right { min-width: 280px; flex: 1; background: var(--bg); border-left: 1px solid var(--line); }
+        .dark-mode #right { background: #1a1a1a; }
+
+        #divider { flex: 0 0 8px; background: var(--bg); cursor: ew-resize; user-select: none; position: relative; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+        #divider::before { content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 4px; height: 30px; border-radius: 2px; background: rgba(100, 100, 100, 0.2); }
+        #divider:hover { background: #dbeafe; }
+        .dark-mode #divider { border-color: #4a4a4a; }
+        .dark-mode #divider:hover { background: #1e40af; }
+
+        h2, h3, h4 { margin: 0 0 16px; color: var(--text-color); }
+        #left p, #right p { margin: 0 0 16px; line-height: 1.7; }
+        #left strong, #right strong { font-weight: 600; }
+        .empty-space { height: 40px; }
+
+        .group { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+        .question-item { padding: 12px 0; border-bottom: 1px dashed var(--line); }
+        .question-item:last-child { border-bottom: none; }
+
+        #results { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px; margin-top: 20px; display: none; line-height: 1.8; }
+        .results-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.9rem; }
+        .results-table th, .results-table td { border: 1px solid var(--line); padding: 8px; text-align: center; }
+        .results-table th { background: var(--bg); }
+        .result-correct { color: #10b981; font-weight: bold; }
+        .result-incorrect { color: #ef4444; font-weight: bold; }
+
+        .hl { background: var(--highlight); box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+        .dark-mode .hl { color: #f5f3ff; }
+
+        #selbar { position: absolute; display: none; z-index: 6000; background: var(--selbar-bg); color: var(--selbar-text); border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap: 6px; align-items: center; }
+        #selbar button { background: transparent; color: var(--selbar-text); border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+        #selbar button:hover { border-color: var(--selbar-text); }
+
+        .practice-nav { background: var(--panel); padding: 12px 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 -2px 4px rgba(0,0,0,.05); flex-wrap: wrap; position: fixed; left: 0; right: 0; bottom: 0; border-top: 1px solid var(--line); z-index: 4000; }
+        .practice-nav .title { font-weight: 600; color: var(--muted); }
+        .practice-nav .questions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .practice-nav .q-item { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); cursor: pointer; font-size: 14px; transition: all 0.2s; min-width: 36px; text-align: center; color: var(--text-color); }
+        .practice-nav .q-item:hover { background: var(--bg); border-color: var(--accent); }
+        .practice-nav .q-item.answered { background: #e0e7ff; border-color: var(--accent); color: var(--accent); font-weight: 500; }
+        .dark-mode .practice-nav .q-item.answered { background: #3949ab; border-color: var(--accent); color: #e8eaf6; }
+        .practice-nav .q-item.correct { background: #dcfce7; border-color: #4ade80; color: #15803d; }
+        .dark-mode .practice-nav .q-item.correct { background: #166534; border-color: #4ade80; color: #dcfce7; }
+        .practice-nav .q-item.incorrect { background: #fee2e2; border-color: #f87171; color: #b91c1c; }
+        .dark-mode .practice-nav .q-item.incorrect { background: #991b1b; border-color: #f87171; color: #fee2e2; }
+        .practice-nav .controls { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+        .practice-nav .controls button { padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); cursor: pointer; color: var(--text-color); }
+        .practice-nav .controls button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+        
+        /* Drag and Drop Styles */
+        .paragraph-wrapper { position: relative; margin-bottom: 1rem; }
+        .paragraph-dropzone { min-height: 40px; background: #f0f9ff; border: 2px dashed #93c5fd; border-radius: 8px; margin-bottom: 8px; padding: 6px 10px; display: flex; align-items: center; gap: 10px; transition: all 0.2s; }
+        .dark-mode .paragraph-dropzone { background: #1e3a8a; border-color: #3b82f6; }
+        .paragraph-dropzone.drag-over { background: #dbeafe; border-color: #3b82f6; }
+        .dark-mode .paragraph-dropzone.drag-over { background: #1e40af; }
+        .paragraph-label { font-weight: bold; color: #64748b; font-size: 0.9rem; min-width: 80px; }
+        .dark-mode .paragraph-label { color: #94a3b8; }
+        .dropped-items { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
+        .headings-pool { background: #fafbfc; border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin: 16px 0; }
+        .dark-mode .headings-pool { background: #334155; }
+        .pool-items { display: flex; flex-wrap: wrap; gap: 8px; }
+        .drag-item { padding: 6px 12px; background-color: #eef2ff; border: 1px solid #c7d2fe; border-radius: 6px; cursor: grab; user-select: none; font-size: 14px; transition: all 0.2s; color: #333; }
+        .dark-mode .drag-item { background-color: #4f46e5; border-color: #6366f1; color: #fff; }
+        .drag-item.dragging { opacity: 0.5; }
+        .dropped-items .drag-item { cursor: default; }
+
+        /* Summary and MC styles */
+        .summary-completion p { line-height: 2.5; }
+        .summary-completion input { border: none; border-bottom: 1px solid #9ca3af; padding: 2px 8px; font-size: 1em; background: transparent; color: var(--text-color); min-width: 120px; text-align: center; }
+        .dark-mode .summary-completion input { border-bottom-color: #666; }
+        .summary-completion input:focus { outline: none; border-bottom: 2px solid var(--accent); }
+        .mc-options { list-style: none; padding: 0; }
+        .mc-options li { margin-bottom: 8px; }
+        .mc-options label { display: flex; align-items: flex-start; cursor: pointer; }
+        .mc-options input[type="radio"] { margin-right: 8px; margin-top: 4px; }
+        .mc-options label strong { 
+            margin-right: 8px; 
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <h1>P2 - Born to Trade</h1>
+            <div id="timer">00:00</div>
+        </div>
+        <div class="header-controls">
+            <button class="header-btn" id="size-btn">Size</button>
+            <button class="header-btn" id="color-btn">Color</button>
+            <button class="header-btn" id="note-btn">Note</button>
+        </div>
+    </header>
+
+    <div id="settings-panel">
+        <div class="settings-group">
+            <div class="settings-title">Font Size</div>
+            <button class="settings-option active" data-size="regular">Regular</button>
+            <button class="settings-option" data-size="large">Large</button>
+            <button class="settings-option" data-size="xlarge">Extra Large</button>
+        </div>
+        <div class="settings-group">
+            <div class="settings-title">Color Mode</div>
+            <button class="settings-option active" data-mode="light">Black on White</button>
+            <button class="settings-option" data-mode="dark">White on Black</button>
+        </div>
+    </div>
+
+    <div id="notes-panel">
+        <header>
+            <h3>Notes</h3>
+            <button id="close-note">Close</button>
+        </header>
+        <textarea placeholder="Write your notes here..."></textarea>
+    </div>
+
+    <div class="overlay"></div>
+
+    <div class="shell">
+        <section class="pane" id="left">
+            <h2>READING PASSAGE 2</h2>
+            <p>You should spend about 20 minutes on Questions 14-26, which are based on Reading Passage 2 on the following pages.</p>
+
+            <h3>Born to Trade</h3>
+            <p><em>Long before our ancestors had any trappings of civilisation, they had a taste for material goods. Kate Douglas discovers where this ancient obsession has led us.</em></p>
+            
+            <div class="paragraph-wrapper">
+                <div class="paragraph-dropzone" data-section="A" id="q14-dropzone">
+                    <span class="paragraph-label">Section A (Q14):</span>
+                    <div class="dropped-items"></div>
+                </div>
+                <p><strong>A</strong> Humans are born to trade and we don't need shops or money to do it—the heart of commerce is an instinctive ability for what anthropologists call “reciprocity”. This is an ability to exchange goods of equal worth, and it evolved as the brains of our ancient ancestors and societies became more complex, allowing individuals to keep a running tally of their interactions with others. Evidence from modern hunter-gatherers leaves little doubt that the exchange of food and favours is innate, as is the ability to keep track of the credits and debits that accrue as a result. Combine this skill for mental book-keeping with even the most basic material culture, and trade inevitably follows.</p>
+            </div>
+            <div class="paragraph-wrapper">
+                <div class="paragraph-dropzone" data-section="B" id="q15-dropzone">
+                    <span class="paragraph-label">Section B (Q15):</span>
+                    <div class="dropped-items"></div>
+                </div>
+                <p><strong>B</strong> Once trade gets off the ground, the economic benefits quickly make it irresistible. But exchanging tools, food and other essentials of life in a barter economy is a far cry from the shopping mall. Modern consumerism extends beyond subsistence and utilitarianism to encompass everything from Gucci handbags and BMW convertibles to valuable paintings. Clearly, the worth of such goods is not inherent but resides in certain intangible qualities that we invest in them. When did humans start holding these goods in such high esteem?</p>
+            </div>
+            <div class="paragraph-wrapper">
+                <div class="paragraph-dropzone" data-section="C" id="q16-dropzone">
+                    <span class="paragraph-label">Section C (Q16):</span>
+                    <div class="dropped-items"></div>
+                </div>
+                <p><strong>C</strong> All the archaeological evidence for the flowering of consumer culture has up to now pointed to a date of around 40,000 years ago. That's when early modern humans started making increasingly intricate bone and stone tools, carving patterns into rocks and creating representational art such as carved figurines, jewellery and cave paintings. However, discoveries in Africa are pushing the origins of consumerism much further back into human prehistory.</p>
+                <p>A few years ago, reports began to emerge of discoveries made at the Blombos Cave, a site of ancient human habitation in South Africa. Christopher Henshilwood and colleagues from the University of Bergen in Norway dated thousands of pieces of ochre from the cave, and many of them proved to be more than 100,000 years old — before the time that early humans moved out of Africa. Ochre, a coloured clay that comes in various shades from red to black, does not occur naturally around Blombos and must have been imported from quarries at least 30 kilometres away, either directly by Blombos residents or through trade. Although ochre can be used to dry and preserve (cure) animal hides, the researchers are convinced the Blombos ochre had a symbolic purpose. For a start, it is predominantly red—any of the other colours available would have done for curing—and the surfaces of the clay had been scraped in a way that indicates they were used to yield pigment for dyes.</p>
+            </div>
+            <div class="paragraph-wrapper">
+                <div class="paragraph-dropzone" data-section="D" id="q17-dropzone">
+                    <span class="paragraph-label">Section D (Q17):</span>
+                    <div class="dropped-items"></div>
+                </div>
+                <p><strong>D</strong> An even more intriguing discovery from Blombos was of 41 beads dating from 76,000 years ago, found in clusters and made from the shells of a tiny mollusc. These cannot be natural deposits, argue the researchers, as each cluster contains shells of a similar size and colour with consistently placed holes. What's more, all the beads display a pattern of wear suggesting friction from rubbing against thread, clothes or other beads.</p>
+                <p>The previous oldest find of beads in Africa dates back to just 45,000 years ago. And it seems the Blombos people's taste for beautiful items was not an isolated phenomenon. Jessica Thompson of Arizona State University in Tempe has described finding shell fragments from a site in Tanzania that she believes may represent debris from bead manufacture. They are at least 45,000—and possibly 280,000—years old. Although there is no evidence of how the ancient beads were used, their modern counterparts are often traded. So it looks as though our taste for jewellery and art is much older than we thought.</p>
+            </div>
+             <div class="paragraph-wrapper">
+                <div class="paragraph-dropzone" data-section="E" id="q18-dropzone">
+                    <span class="paragraph-label">Section E (Q18):</span>
+                    <div class="dropped-items"></div>
+                </div>
+                <p><strong>E</strong> But why did we come to value these objects in the first place? In many animal species, individuals signal their genetic fitness by showing off with attention-grabbing adornment. Some researchers think that in humans, consumer products play a similar role. Archaeologist Aimee Plourde, from the University of California, also argues that even in egalitarian societies, some people are more successful than others. Among our ancestors, superior skills in areas such as hunting, crafts, environmental knowledge and contact with neighbouring groups would have brought respect—in other words, prestige.</p>
+                <p>And because prestige brings social benefits, people would want to show off their talents. The best way to do this would be through demonstrating possession of material items that are hard to fake. ‘A good hunter, for instance, could advertise his skills by wearing the tooth of an animal that is elusive or dangerous,' says Plourde. The benefits of prestige would also lead to competition to acquire it. As a result, the value and variety of prestige goods would spiral and there would be a parallel increase in the ranking of social systems.</p>
+                <p>If Plourde is correct, prestige goods form a direct link between our innate drive for trade and the development of structured, hierarchical societies. They are arguably the first step on the road to modern civilisation, paving the way for agriculture and urbanisation. We may not be impressed by beads any more, but their modern equivalents have the same fascination. Nobody believes the guy who spends €670,000 on a Bugatti Veyron car does so because he needs to travel at 250 mph. We all know in today's consumer society he's buying an exclusive status symbol.</p>
+            </div>
+
+            <div class="empty-space"></div>
+        </section>
+        
+        <div id="divider"></div>
+        
+        <section class="pane" id="right">
+            <h3>Questions</h3>
+            
+            <div class="group" id="q14-18-anchor">
+                <h4>Questions 14–18</h4>
+                <p>Reading Passage 2 has five sections, <strong>A–E</strong>.</p>
+                <p>Choose the correct heading for each section from the list of headings below.</p>
+                <p><em>Write the correct number, i–vii, in boxes 14–18 on your answer sheet. (Drag a heading from this list and drop it onto the correct section's answer box on the left.)</em></p>
+                <div class="headings-pool" id="headings-pool-container">
+                    <strong>List of Headings</strong>
+                    <div class="pool-items">
+                        <div class="drag-item" draggable="true" data-heading="i">i The desire to make expensive jewellery</div>
+                        <div class="drag-item" draggable="true" data-heading="ii">ii The clues that indicate ancient items were decorative</div>
+                        <div class="drag-item" draggable="true" data-heading="iii">iii Querying the changes in the value of traded items</div>
+                        <div class="drag-item" draggable="true" data-heading="iv">iv A natural human talent</div>
+                        <div class="drag-item" draggable="true" data-heading="v">v How status can be gained from ownership of goods</div>
+                        <div class="drag-item" draggable="true" data-heading="vi">vi Recent finds alter theories about when consumerism started</div>
+                        <div class="drag-item" draggable="true" data-heading="vii">vii Changes in research methods</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="group" id="q19-21-anchor">
+                <h4>Questions 19–21</h4>
+                <p>Choose the correct letter, A, B, C or D.</p>
+                <p><em>Write the correct letter in boxes 19–21 on your answer sheet.</em></p>
+
+                <div class="question-item">
+                     <div class="mc-question">
+                        <p><strong>19</strong> In section A, ‘reciprocity' refers to our ancestors' ability to</p>
+                        <ul class="mc-options">
+                            <li><label><input type="radio" name="q19" value="A"><strong>A</strong>keep written records of different goods traded</label></li>
+                            <li><label><input type="radio" name="q19" value="B"><strong>B</strong>monitor the balance between goods given and received</label></li>
+                            <li><label><input type="radio" name="q19" value="C"><strong>C</strong>produce more materials for trading purposes</label></li>
+                            <li><label><input type="radio" name="q19" value="D"><strong>D</strong>make money from trading goods and services</label></li>
+                        </ul>
+                    </div>
+                </div>
+                 <div class="question-item">
+                     <div class="mc-question">
+                        <p><strong>20</strong> What is said about the ochre found at Blombos Cave?</p>
+                        <ul class="mc-options">
+                            <li><label><input type="radio" name="q20" value="A"><strong>A</strong>It is of a type only found in this particular area.</label></li>
+                            <li><label><input type="radio" name="q20" value="B"><strong>B</strong>It has all been dyed to give the same shade of red.</label></li>
+                            <li><label><input type="radio" name="q20" value="C"><strong>C</strong>It has been perfectly preserved despite its age.</label></li>
+                            <li><label><input type="radio" name="q20" value="D"><strong>D</strong>It appears it was selected for its colour.</label></li>
+                        </ul>
+                    </div>
+                </div>
+                 <div class="question-item">
+                     <div class="mc-question">
+                        <p><strong>21</strong> What made the researchers realise the purpose of the beads found at Blombos Cave?</p>
+                        <ul class="mc-options">
+                            <li><label><input type="radio" name="q21" value="A"><strong>A</strong>They are of many different shapes and sizes.</label></li>
+                            <li><label><input type="radio" name="q21" value="B"><strong>B</strong>They were found in large numbers, clustered together.</label></li>
+                            <li><label><input type="radio" name="q21" value="C"><strong>C</strong>They have patterns in many different colours.</label></li>
+                            <li><label><input type="radio" name="q21" value="D"><strong>D</strong>They have holes and markings suggesting they were joined together.</label></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="group" id="q22-26-anchor">
+                <h4>Questions 22–26</h4>
+                <p>Complete the summary below.</p>
+                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>
+                <div class="summary-completion">
+                    <h4>Why certain objects are valued?</h4>
+                    <p>
+                    Some researchers argue that we may use ownership of desirable goods to demonstrate our strength and fitness as other <strong>22</strong> <input type="text" id="q22_input"> use their attractive physical features. Showing off one's superiority is not a new phenomenon and even in ancient times successful people would have gained <strong>23</strong> <input type="text" id="q23_input"> from this. A desire for status could have led to an increase in the worth of prestige goods and to <strong>24</strong> <input type="text" id="q24_input"> among people wishing to achieve this status.
+                    </p>
+                    <p>
+                    It is thought that our natural desire to trade provided a basis for organised farming and <strong>25</strong> <input type="text" id="q25_input"> development and finally resulted in the complex societies which can be seen today. Whilst we do not value things such as beads nowadays, other items hold the same appeal for us and bring the same status as owning beads did for our <strong>26</strong> <input type="text" id="q26_input">.
+                    </p>
+                </div>
+            </div>
+            
+            <div id="results"></div>
+        </section>
+    </div>
+    
+    <div class="practice-nav">
+        <div class="title">Questions</div>
+        <div class="questions">
+            <div class="q-item" id="q14-nav" onclick="scrollToElement('q14-18-anchor')">14</div>
+            <div class="q-item" id="q15-nav" onclick="scrollToElement('q14-18-anchor')">15</div>
+            <div class="q-item" id="q16-nav" onclick="scrollToElement('q14-18-anchor')">16</div>
+            <div class="q-item" id="q17-nav" onclick="scrollToElement('q14-18-anchor')">17</div>
+            <div class="q-item" id="q18-nav" onclick="scrollToElement('q14-18-anchor')">18</div>
+            <div class="q-item" id="q19-nav" onclick="scrollToElement('q19-21-anchor')">19</div>
+            <div class="q-item" id="q20-nav" onclick="scrollToElement('q19-21-anchor')">20</div>
+            <div class="q-item" id="q21-nav" onclick="scrollToElement('q19-21-anchor')">21</div>
+            <div class="q-item" id="q22-nav" onclick="scrollToElement('q22-26-anchor')">22</div>
+            <div class="q-item" id="q23-nav" onclick="scrollToElement('q22-26-anchor')">23</div>
+            <div class="q-item" id="q24-nav" onclick="scrollToElement('q22-26-anchor')">24</div>
+            <div class="q-item" id="q25-nav" onclick="scrollToElement('q22-26-anchor')">25</div>
+            <div class="q-item" id="q26-nav" onclick="scrollToElement('q22-26-anchor')">26</div>
+        </div>
+        <div class="controls">
+            <button id="submit-btn" class="primary">Submit</button>
+            <button id="reset-btn">Reset</button>
+            <button id="pause-btn">Pause</button>
+        </div>
+    </div>
+
+    <div aria-label="Selection tools" id="selbar" role="toolbar">
+        <button id="btnHL">Highlight</button>
+        <button id="btnUH">Remove</button>
+        <button id="btnNote">Note</button>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // --- Global State ---
+            let settingsOpen = false, notesOpen = false;
+            let timerRunning = true, seconds = 0, timer;
+            let isResizing = false;
+            let selbar = document.getElementById('selbar');
+            let lastRange = null, currentHlNode = null, keepToolbar = false;
+            let draggedElement = null;
+            const questionNumbers = Array.from({length: 13}, (_, i) => i + 14);
+            
+            const correctAnswers = {
+                q14: 'iv', q15: 'iii', q16: 'vi', q17: 'ii', q18: 'v',
+                q19: 'B', q20: 'D', q21: 'D',
+                q22: 'species', q23: 'respect', q24: 'competition', q25: 'urbanisation', q26: 'ancestors'
+            };
+
+            // --- Core Functions ---
+            function startTimer() {
+                timer = setInterval(() => {
+                    if (timerRunning) {
+                        seconds++;
+                        const minutes = String(Math.floor(seconds / 60)).padStart(2, '0');
+                        const secs = String(seconds % 60).padStart(2, '0');
+                        document.getElementById('timer').textContent = `${minutes}:${secs}`;
+                    }
+                }, 1000);
+            }
+
+            function closeAllPanels() {
+                notesOpen = false; settingsOpen = false;
+                document.getElementById('notes-panel').style.display = 'none';
+                document.getElementById('settings-panel').style.display = 'none';
+                document.querySelector('.overlay').style.display = 'none';
+            }
+
+            window.scrollToElement = function(id) {
+                const element = document.getElementById(id);
+                const pane = element.closest('.pane');
+                if (element && pane) {
+                    const top = element.offsetTop - 20;
+                    pane.scrollTo({ top, behavior: 'smooth' });
+                }
+            }
+            
+            // --- Drag and Drop Logic ---
+            function setupDragAndDrop() {
+                const draggables = document.querySelectorAll('.drag-item');
+                const dropTargets = document.querySelectorAll('.paragraph-dropzone');
+                const pool = document.getElementById('headings-pool-container');
+
+                draggables.forEach(draggable => {
+                    draggable.addEventListener('dragstart', (e) => {
+                        draggedElement = draggable;
+                        setTimeout(() => draggable.classList.add('dragging'), 0);
+                    });
+                    draggable.addEventListener('dragend', () => {
+                        if (draggedElement) draggedElement.classList.remove('dragging');
+                        draggedElement = null;
+                    });
+                });
+
+                const handleDragOver = e => {
+                    e.preventDefault();
+                    const target = e.target.closest('.paragraph-dropzone, .headings-pool');
+                    if (target) target.classList.add('drag-over');
+                };
+
+                const handleDragLeave = e => {
+                    const target = e.target.closest('.paragraph-dropzone, .headings-pool');
+                    if (target) target.classList.remove('drag-over');
+                };
+
+                const handleDrop = e => {
+                    e.preventDefault();
+                    const target = e.target.closest('.paragraph-dropzone, .headings-pool');
+                    if (!target || !draggedElement) return;
+                    
+                    target.classList.remove('drag-over');
+
+                    if (target.classList.contains('paragraph-dropzone')) {
+                        const droppedItemsContainer = target.querySelector('.dropped-items');
+                        if (droppedItemsContainer.children.length > 0) {
+                            pool.querySelector('.pool-items').appendChild(droppedItemsContainer.firstElementChild);
+                        }
+                        droppedItemsContainer.appendChild(draggedElement);
+                    } else if (target.classList.contains('headings-pool')) {
+                         target.querySelector('.pool-items').appendChild(draggedElement);
+                    }
+
+                    updateAnsweredState();
+                };
+
+                [...dropTargets, pool].forEach(container => {
+                    container.addEventListener('dragover', handleDragOver);
+                    container.addEventListener('dragleave', handleDragLeave);
+                    container.addEventListener('drop', handleDrop);
+                });
+            }
+
+            // --- Grading and State Update ---
+            function updateAnsweredState() {
+                questionNumbers.forEach(i => {
+                    const navItem = document.getElementById(`q${i}-nav`);
+                    if (!navItem || navItem.classList.contains('correct') || navItem.classList.contains('incorrect')) return;
+
+                    let answered = false;
+                    if (i >= 14 && i <= 18) {
+                        answered = document.querySelector(`#q${i}-dropzone .dropped-items`).hasChildNodes();
+                    } else if (i >= 19 && i <= 21) {
+                         answered = !!document.querySelector(`input[name="q${i}"]:checked`);
+                    } else if (i >= 22 && i <= 26) {
+                        answered = document.getElementById(`q${i}_input`).value.trim() !== "";
+                    }
+                    navItem.classList.toggle('answered', answered);
+                });
+            }
+            
+            function gradeAnswers() {
+                timerRunning = false;
+                document.getElementById('pause-btn').textContent = 'Continue';
+                let correctCount = 0;
+                const totalQuestions = questionNumbers.length;
+                let resultsHTML = '<h4>Results</h4><table class="results-table"><thead><tr><th>Question</th><th>Your Answer</th><th>Correct Answer</th><th>Result</th></tr></thead><tbody>';
+
+                // Grade Q14-18 (Heading Matching)
+                for (let i = 14; i <= 18; i++) {
+                    const dropzone = document.querySelector(`#q${i}-dropzone .dropped-items`);
+                    const droppedItem = dropzone.querySelector('.drag-item');
+                    const userAnswer = droppedItem ? droppedItem.dataset.heading : 'No Answer';
+                    const correctAnswer = correctAnswers[`q${i}`];
+                    const isCorrect = userAnswer === correctAnswer;
+                    if (isCorrect) correctCount++;
+                    document.getElementById(`q${i}-nav`).classList.add(isCorrect ? 'correct' : 'incorrect');
+                    resultsHTML += `<tr><td>${i}</td><td>${userAnswer}</td><td>${correctAnswer}</td><td class="${isCorrect ? 'result-correct' : 'result-incorrect'}">${isCorrect ? '✓' : '✗'}</td></tr>`;
+                }
+                
+                // Grade Q19-21 (Multiple Choice)
+                 for (let i = 19; i <= 21; i++) {
+                    const userAnswerEl = document.querySelector(`input[name="q${i}"]:checked`);
+                    const userAnswer = userAnswerEl ? userAnswerEl.value : 'No Answer';
+                    const correctAnswer = correctAnswers[`q${i}`];
+                    const isCorrect = userAnswer === correctAnswer;
+                    if (isCorrect) correctCount++;
+                    document.getElementById(`q${i}-nav`).classList.add(isCorrect ? 'correct' : 'incorrect');
+                    resultsHTML += `<tr><td>${i}</td><td>${userAnswer}</td><td>${correctAnswer}</td><td class="${isCorrect ? 'result-correct' : 'result-incorrect'}">${isCorrect ? '✓' : '✗'}</td></tr>`;
+                }
+
+                // Grade Q22-26 (Summary Completion)
+                for (let i = 22; i <= 26; i++) {
+                    const input = document.getElementById(`q${i}_input`);
+                    const userAnswer = input.value.trim().toLowerCase() || 'No Answer';
+                    const correctAnswer = correctAnswers[`q${i}`];
+                    const isCorrect = userAnswer === correctAnswer;
+                    if (isCorrect) correctCount++;
+                    document.getElementById(`q${i}-nav`).classList.add(isCorrect ? 'correct' : 'incorrect');
+                    resultsHTML += `<tr><td>${i}</td><td>${input.value.trim() || 'No Answer'}</td><td>${correctAnswer}</td><td class="${isCorrect ? 'result-correct' : 'result-incorrect'}">${isCorrect ? '✓' : '✗'}</td></tr>`;
+                }
+
+                const score = Math.round((correctCount / totalQuestions) * 100);
+                const summary = `<div style="font-weight:bold; margin-top:16px; font-size:1.1em;">Final Score: ${score}% (${correctCount}/${totalQuestions})</div>`;
+                resultsHTML += `</tbody></table>`;
+                
+                document.getElementById('results').innerHTML = summary + resultsHTML;
+                document.getElementById('results').style.display = 'block';
+                scrollToElement('results');
+            }
+
+            function resetQuiz() {
+                // Reset drag and drop
+                const headingPool = document.getElementById('headings-pool-container').querySelector('.pool-items');
+                document.querySelectorAll('.paragraph-dropzone .dropped-items .drag-item').forEach(item => headingPool.appendChild(item));
+                
+                // Reset inputs and radios
+                document.querySelectorAll('input[type="text"]').forEach(el => el.value = '');
+                document.querySelectorAll('input[type="radio"]').forEach(el => el.checked = false);
+                
+                // Reset UI
+                document.querySelectorAll('.q-item').forEach(item => item.className = 'q-item');
+                const resultsDiv = document.getElementById('results');
+                resultsDiv.style.display = 'none';
+                resultsDiv.innerHTML = '';
+                
+                // Reset timer
+                seconds = 0;
+                if (timer) clearInterval(timer);
+                startTimer();
+                document.getElementById('timer').textContent = '00:00';
+                timerRunning = true;
+                document.getElementById('pause-btn').textContent = 'Pause';
+                updateAnsweredState();
+            }
+
+            // --- Highlighter & Selection Toolbar ---
+            function positionSelbarForRect(rect) {
+                selbar.style.display = 'flex';
+                requestAnimationFrame(() => {
+                    const top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+                    const left = window.scrollX + rect.left + rect.width / 2 - selbar.offsetWidth / 2;
+                    selbar.style.top = `${(top > 0) ? top : (window.scrollY + rect.bottom + 8)}px`;
+                    selbar.style.left = `${Math.max(8, left)}px`;
+                });
+            }
+
+            function updateSelbar() {
+                const sel = window.getSelection();
+                if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+                    if (!keepToolbar && !currentHlNode) { selbar.style.display = 'none'; currentHlNode = null; }
+                    return;
+                }
+                const range = sel.getRangeAt(0);
+                let container = range.commonAncestorContainer;
+                if (container.nodeType === Node.TEXT_NODE) container = container.parentElement;
+                
+                const isInLeftPane = document.getElementById('left').contains(container);
+                const isInRightPane = document.getElementById('right').contains(container);
+                const isHighlighted = container.classList?.contains('hl') || container.closest('.hl');
+                
+                if ((!isInLeftPane && !isInRightPane) && !isHighlighted) {
+                    selbar.style.display = 'none'; 
+                    return; 
+                }
+                
+                lastRange = range.cloneRange();
+                currentHlNode = isHighlighted ? container.closest('.hl') : null;
+                positionSelbarForRect(range.getBoundingClientRect());
+            }
+
+            function doHighlight() {
+                if (currentHlNode || !lastRange || lastRange.collapsed) return;
+                const sel = window.getSelection();
+                try {
+                    const span = document.createElement('span');
+                    span.className = 'hl';
+                    lastRange.surroundContents(span);
+                } catch (e) { console.error("Highlighting failed:", e); return; }
+                sel?.removeAllRanges();
+                selbar.style.display = 'none';
+            }
+
+            function removeHighlight() {
+                const sel = window.getSelection();
+                let targetNode = currentHlNode;
+                if (!targetNode && lastRange) {
+                    const ancestor = lastRange.commonAncestorContainer;
+                    targetNode = ancestor.nodeType === Node.TEXT_NODE ? ancestor.parentElement.closest('.hl') : ancestor.closest('.hl');
+                }
+                if (targetNode) {
+                    const p = targetNode.parentNode;
+                    while (targetNode.firstChild) p.insertBefore(targetNode.firstChild, targetNode);
+                    if(p) p.removeChild(targetNode);
+                    p?.normalize();
+                }
+                currentHlNode = null; sel?.removeAllRanges(); selbar.style.display = 'none';
+            }
+
+            // --- Event Listeners Setup ---
+            startTimer();
+            setupDragAndDrop();
+
+            // Header controls
+            document.getElementById('size-btn').addEventListener('click', (e) => { e.stopPropagation(); settingsOpen = !settingsOpen; document.getElementById('settings-panel').style.display = settingsOpen ? 'block' : 'none'; });
+            document.getElementById('color-btn').addEventListener('click', (e) => { e.stopPropagation(); settingsOpen = !settingsOpen; document.getElementById('settings-panel').style.display = settingsOpen ? 'block' : 'none'; });
+            document.getElementById('note-btn').addEventListener('click', () => { closeAllPanels(); notesOpen = true; document.getElementById('notes-panel').style.display = 'flex'; document.querySelector('.overlay').style.display = 'block'; });
+            document.querySelectorAll('.settings-option[data-size]').forEach(btn => btn.addEventListener('click', function() { document.documentElement.className = `font-${this.dataset.size}`; document.querySelectorAll('.settings-option[data-size]').forEach(b => b.classList.remove('active')); this.classList.add('active'); }));
+            document.querySelectorAll('.settings-option[data-mode]').forEach(btn => btn.addEventListener('click', function() { document.body.classList.toggle('dark-mode', this.dataset.mode === 'dark'); document.querySelectorAll('.settings-option[data-mode]').forEach(b => b.classList.remove('active')); this.classList.add('active'); }));
+            document.getElementById('close-note').addEventListener('click', closeAllPanels);
+            document.querySelector('.overlay').addEventListener('click', closeAllPanels);
+            document.addEventListener('click', (e) => {
+                const settingsPanel = document.getElementById('settings-panel');
+                const headerControls = document.querySelector('.header-controls');
+                if (!settingsPanel.contains(e.target) && !headerControls.contains(e.target)) { settingsPanel.style.display = 'none'; settingsOpen = false; }
+            });
+
+            // Bottom nav controls
+            document.getElementById('submit-btn').addEventListener('click', gradeAnswers);
+            document.getElementById('reset-btn').addEventListener('click', resetQuiz);
+            document.getElementById('pause-btn').addEventListener('click', function() { timerRunning = !timerRunning; this.textContent = timerRunning ? 'Pause' : 'Continue'; });
+
+            // Pane resizing
+            const divider = document.getElementById('divider');
+            const leftPane = document.getElementById('left');
+            divider.addEventListener('mousedown', (e) => { isResizing = true; document.body.style.cursor = 'ew-resize'; e.preventDefault(); });
+            document.addEventListener('mousemove', (e) => { if (!isResizing) return; const shellRect = document.querySelector('.shell').getBoundingClientRect(); let leftWidth = (e.clientX - shellRect.left) / shellRect.width * 100; leftPane.style.width = `${Math.max(20, Math.min(80, leftWidth))}%`; });
+            document.addEventListener('mouseup', () => { if (isResizing) { isResizing = false; document.body.style.cursor = ''; } });
+            
+            // Update answered state on input/change
+            document.getElementById('right').addEventListener('change', updateAnsweredState);
+            document.getElementById('right').addEventListener('input', updateAnsweredState);
+            document.getElementById('right').addEventListener('drop', () => setTimeout(updateAnsweredState, 0));
+
+            // Selection toolbar events
+            document.addEventListener('mouseup', () => setTimeout(updateSelbar, 10));
+            document.addEventListener('selectionchange', () => setTimeout(updateSelbar, 10));
+            document.addEventListener('mousedown', (e) => { keepToolbar = !!e.target.closest('#selbar, .hl'); }, true);
+            document.addEventListener('click', (e) => {
+                const target = e.target;
+                if (target.classList.contains('hl')) {
+                    currentHlNode = target; lastRange = null; positionSelbarForRect(target.getBoundingClientRect());
+                    window.getSelection()?.removeAllRanges(); setTimeout(() => { keepToolbar = false; }, 0);
+                } else if (!selbar.contains(e.target)) { selbar.style.display = 'none'; currentHlNode = null; }
+            }, true);
+            document.getElementById('btnHL').addEventListener('click', doHighlight);
+            document.getElementById('btnUH').addEventListener('click', removeHighlight);
+            document.getElementById('btnNote').addEventListener('click', function() {
+                let text = (currentHlNode ? currentHlNode.textContent : (lastRange ? lastRange.cloneContents().textContent : '')).trim();
+                if (text) {
+                    const noteArea = document.querySelector('#notes-panel textarea');
+                    noteArea.value += (noteArea.value ? '\n\n' : '') + '> ' + text;
+                    closeAllPanels(); notesOpen = true; document.getElementById('notes-panel').style.display = 'flex';
+                    document.querySelector('.overlay').style.display = 'block'; noteArea.scrollTop = noteArea.scrollHeight;
+                }
+                selbar.style.display = 'none';
+            });
+        });
+    </script>
+</body>
+</html>

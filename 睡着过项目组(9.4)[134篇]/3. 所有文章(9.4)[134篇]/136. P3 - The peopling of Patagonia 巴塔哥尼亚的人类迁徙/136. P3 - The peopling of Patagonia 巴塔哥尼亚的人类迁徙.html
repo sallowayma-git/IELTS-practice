@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>IELTS Reading Practice - The Peopling of Patagonia</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        :root {
+            --line: #e5e7eb;
+            --bg: #f6f7fb;
+            --panel: #fff;
+            --accent: #3b82f6;
+            --muted: #6b7280;
+            --shadow: 0 6px 20px rgba(0,0,0,.12);
+            --text-color: #333;
+            --highlight: #fff3a3;
+            --selbar-bg: #111;
+            --selbar-text: #fff;
+        }
+
+        body.dark-mode {
+            --line: #4a4a4a;
+            --bg: #1a1a1a;
+            --panel: #2a2a2a;
+            --muted: #bbb;
+            --text-color: #f0f0f0;
+            --highlight: #5b21b6;
+            --selbar-bg: #1f2937;
+            --selbar-text: #e5e7eb;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html { font-size: 16px; scroll-behavior: smooth; }
+        html.font-regular { font-size: 16px; }
+        html.font-large { font-size: 18px; }
+        html.font-xlarge { font-size: 20px; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+            background: var(--bg);
+            color: var(--text-color);
+            height: 100vh;
+            overflow: hidden;
+            transition: background-color 0.3s ease;
+            padding-bottom: 64px;
+        }
+
+        .header {
+            background-color: var(--panel);
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--line);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            z-index: 100;
+            box-shadow: 0 1px 3px rgba(0,0,0,.05);
+        }
+
+        .header-content { display: flex; align-items: center; gap: 16px; }
+        .header h1 { font-size: 1.2rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-color); }
+        #timer { font-size: 1rem; font-weight: 500; background: var(--bg); padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line); min-width: 90px; text-align: center; color: var(--text-color); }
+        .header-controls { display: flex; align-items: center; gap: 10px; }
+        .header-btn { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 0.9rem; transition: all 0.2s ease; color: var(--text-color); }
+        .header-btn:hover { background: var(--bg); border-color: var(--accent); }
+
+        #settings-panel {
+            position: absolute; top: 60px; right: 20px; width: 200px; background: var(--panel); border-radius: 12px;
+            box-shadow: var(--shadow); border: 1px solid var(--line); z-index: 1000; padding: 8px; display: none;
+        }
+        .settings-group { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+        .settings-group:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+        .settings-title { font-size: 0.85rem; color: var(--muted); margin-bottom: 8px; padding-left: 12px; }
+        .settings-option { display: block; width: 100%; text-align: left; padding: 8px 12px; border: none; background: none; cursor: pointer; font-size: 0.9rem; border-radius: 6px; color: var(--text-color); }
+        .settings-option.active { background: #e9effd; color: var(--accent); font-weight: 500; }
+        .dark-mode .settings-option.active { background: #1e3a8a; }
+
+        #notes-panel {
+            position: fixed; right: 12px; bottom: 76px; width: 320px; height: 45vh; background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+            display: none; flex-direction: column; z-index: 900; box-shadow: var(--shadow); overflow: hidden;
+        }
+        #notes-panel header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--line); background-color: var(--bg); }
+        #notes-panel h3 { font-size: 1rem; font-weight: 600; color: var(--text-color); margin: 0; }
+        #notes-panel textarea { flex: 1; border: 0; padding: 16px; resize: none; font-size: 0.95rem; background: transparent; color: var(--text-color); line-height: 1.6; }
+        #notes-panel textarea:focus { outline: none; }
+        #close-note { padding: 4px 8px; border-radius: 4px; border: 1px solid var(--line); background: transparent; cursor: pointer; color: var(--text-color); transition: background-color 0.2s; }
+        #close-note:hover { background-color: rgba(0,0,0,0.05); }
+        .dark-mode #close-note:hover { background-color: rgba(255,255,255,0.1); }
+
+        .overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.08); z-index: 800; display: none; backdrop-filter: blur(2px); }
+        .dark-mode .overlay { background: rgba(0, 0, 0, 0.3); }
+
+        .shell { display: flex; height: calc(100vh - 58px - 64px); width: 100%; overflow: hidden; }
+        .pane { background: var(--panel); overflow: auto; padding: 24px; }
+        #left { min-width: 280px; max-width: calc(100% - 280px); width: 50%; }
+        #right { min-width: 280px; flex: 1; background: var(--bg); border-left: 1px solid var(--line); }
+        .dark-mode #right { background: #1a1a1a; }
+
+        #divider { flex: 0 0 8px; background: var(--bg); cursor: ew-resize; user-select: none; position: relative; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+        #divider::before { content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 4px; height: 30px; border-radius: 2px; background: rgba(100, 100, 100, 0.2); }
+        #divider:hover { background: #dbeafe; }
+        .dark-mode #divider { border-color: #4a4a4a; }
+        .dark-mode #divider:hover { background: #1e40af; }
+
+        h2, h3, h4 { margin: 0 0 16px; color: var(--text-color); }
+        #left p, #right p { margin: 0 0 16px; line-height: 1.7; }
+        #left strong, #right strong { font-weight: 600; }
+        .empty-space { height: 40px; }
+
+        .group { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+        .question-item { padding: 12px 0; border-bottom: 1px dashed var(--line); }
+        .question-item:last-child { border-bottom: none; }
+        .question-item p { margin: 0; }
+
+        #results { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px; margin-top: 20px; display: none; line-height: 1.8; }
+        .results-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.9rem; }
+        .results-table th, .results-table td { border: 1px solid var(--line); padding: 8px; text-align: center; }
+        .results-table th { background: var(--bg); }
+        .result-correct { color: #10b981; font-weight: bold; }
+        .result-incorrect { color: #ef4444; font-weight: bold; }
+
+        .hl { background: var(--highlight); box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+        .dark-mode .hl { color: #f5f3ff; }
+
+        #selbar { position: absolute; display: none; z-index: 6000; background: var(--selbar-bg); color: var(--selbar-text); border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap: 6px; align-items: center; }
+        #selbar button { background: transparent; color: var(--selbar-text); border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+        #selbar button:hover { border-color: var(--selbar-text); }
+
+        .practice-nav { background: var(--panel); padding: 12px 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 -2px 4px rgba(0,0,0,.05); flex-wrap: wrap; position: fixed; left: 0; right: 0; bottom: 0; border-top: 1px solid var(--line); z-index: 4000; }
+        .practice-nav .title { font-weight: 600; color: var(--muted); }
+        .practice-nav .questions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .practice-nav .q-item { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); cursor: pointer; font-size: 14px; transition: all 0.2s; min-width: 36px; text-align: center; color: var(--text-color); }
+        .practice-nav .q-item:hover { background: var(--bg); border-color: var(--accent); }
+        .practice-nav .q-item.answered { background: #e0e7ff; border-color: var(--accent); color: var(--accent); font-weight: 500; }
+        .dark-mode .practice-nav .q-item.answered { background: #3949ab; border-color: var(--accent); color: #e8eaf6; }
+        .practice-nav .q-item.correct { background: #dcfce7; border-color: #4ade80; color: #15803d; font-weight: bold;}
+        .dark-mode .practice-nav .q-item.correct { background: #166534; border-color: #4ade80; color: #dcfce7; }
+        .practice-nav .q-item.incorrect { background: #fee2e2; border-color: #f87171; color: #b91c1c; font-weight: bold; }
+        .dark-mode .practice-nav .q-item.incorrect { background: #991b1b; border-color: #f87171; color: #fee2e2; }
+        .practice-nav .controls { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+        .practice-nav .controls button { padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); cursor: pointer; color: var(--text-color); }
+        .practice-nav .controls button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+        
+        /* Options & Choices Styles */
+        .options-list { list-style: none; padding: 0; margin: 0; }
+        .options-list li { margin-bottom: 8px; }
+        .options-list label { display: flex; align-items: center; cursor: pointer; gap: 8px; }
+        .options-list label strong { font-weight: 600; }
+
+        /* Summary Completion Styles */
+        .summary-text p { line-height: 2.5; }
+        .drop-target-summary {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 160px;
+            height: 34px;
+            border: 2px dashed var(--line);
+            border-radius: 6px;
+            vertical-align: middle;
+            transition: all 0.2s;
+            position: relative;
+            top: 8px;
+            padding: 0 6px;
+        }
+        .drop-target-summary.drag-over { background-color: #dbeafe; border-color: var(--accent); }
+        .dark-mode .drop-target-summary.drag-over { background: #1e40af; }
+
+        .options-pool { background: #fafbfc; border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-top: 16px; }
+        .dark-mode .options-pool { background: #334155; }
+        .pool-items { display: flex; flex-wrap: wrap; gap: 8px; }
+        .drag-item { padding: 6px 12px; background-color: #eef2ff; border: 1px solid #c7d2fe; border-radius: 6px; cursor: grab; user-select: none; font-size: 14px; transition: all 0.2s; color: #333; }
+        .dark-mode .drag-item { background-color: #4f46e5; border-color: #6366f1; color: #fff; }
+        .drag-item.dragging { opacity: 0.5; }
+        .drop-target-summary .drag-item { background: transparent; border: none; padding: 0; cursor: default; }
+
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <h1>The Peopling of Patagonia</h1>
+            <div id="timer">00:00</div>
+        </div>
+        <div class="header-controls">
+            <button class="header-btn" id="size-btn">Size</button>
+            <button class="header-btn" id="color-btn">Color</button>
+            <button class="header-btn" id="note-btn">Note</button>
+        </div>
+    </header>
+
+    <div id="settings-panel">
+        <div class="settings-group">
+            <div class="settings-title">Font Size</div>
+            <button class="settings-option active" data-size="regular">Regular</button>
+            <button class="settings-option" data-size="large">Large</button>
+            <button class="settings-option" data-size="xlarge">Extra Large</button>
+        </div>
+        <div class="settings-group">
+            <div class="settings-title">Color Mode</div>
+            <button class="settings-option active" data-mode="light">Black on White</button>
+            <button class="settings-option" data-mode="dark">White on Black</button>
+        </div>
+    </div>
+
+    <div id="notes-panel">
+        <header>
+            <h3>Notes</h3>
+            <button id="close-note">Close</button>
+        </header>
+        <textarea placeholder="Write your notes here..."></textarea>
+    </div>
+
+    <div class="overlay"></div>
+
+    <div class="shell">
+        <section class="pane" id="left">
+            <h2>READING PASSAGE 3</h2>
+            <p>You should spend about 20 minutes on Questions 27-40, which are based on Reading Passage 3 below.</p>
+
+            <h3>The Peopling of Patagonia</h3>
+            <h4>Anthropologists continue to investigate human migration to Patagonia at the southern tip of South America</h4>
+            
+            <p>The human settlement of the southern extremity of the Americas has always fascinated prehistorians. Viewed from a global perspective, this was the last major continental land mass to be reached by human beings. The earliest occupation of Patagonia carries obvious implications for understanding when the North and South American continents were peopled, because it gives a baseline that all calculations regarding the rate of dispersion of humans throughout both continents must take into account.</p>
+            <p>For many years the human settlement of North and South America has been conceived of as beginning in the far north and travelling progressively southwards to Patagonia. However, fundamental disagreements developed concerning the length of time involved. Some scholars accepted a human presence in the Americas as early as 20,000 years ago, while others proposed that it could date no earlier than 8,000 years ago, and the debate is still with us today.</p>
+            <p>The idea of a relatively ‘late' settlement of the Americas (around 8,000 years ago) implies that a rapid process of migration took place. Herein lies a second debate, which revolves around the question of how migration is to be understood. The ‘late' model demands a hypothetical migration conceived of as a single, continually advancing wave of settlement. This has always been difficult to take seriously, and many scholars now support the idea of an 'early' model that sees the migration as a less ordered migration, and this is surely the most realistic scenario as migrants slowly adapted to the diverse natural habitats they would have met while travelling through the continent.</p>
+            <p>Those who argue for an earlier settlement, however, must contend with the lack of unequivocal evidence for archaeological sites older than around 14,000 years. Nevertheless, evidence for human occupation of the centre of South America is now securely dated to around 12,500 years ago at the Monte Verde site, which casts doubt on the 'late' model. The lack of archaeological evidence further south for this time period may be explained by the obstacle to humans on foot posed by the huge glacial streams that were present at that time.</p>
+            <p>We can speculate then that the retreat of the Patagonian glaciers around 14,000 years ago allowed the initial human intrusion into a pristine environment, which was similar to that of early post-glacial Europe. Human settlement of the vast horizontal expanse of treeless high country must have been tenuous at best, and the evidence for this occupation remains relatively scant, most of it coming from rock shelters in Argentina and Chile. There is, however, reliable evidence from these sites to confirm the presence of humans by around 11,000 years ago in different habitats, and some hints of an even older occupation. However, some other sites where evidence for even earlier human occupation was initially posited have recently come under fresh scrutiny. This is because anthropologists have come to recognise that bones or other evidence may be deposited in caves by natural agency—in other words, by other forces such as floods or predators—and not necessarily by humans.</p>
+            <p>We shall turn now to a more detailed discussion of the archaeological evidence found in various parts of Patagonia. At the site located beside Chinchihuapi Creek, excavations have produced convincing evidence of human occupation, including hut foundations and wooden artefacts. They were buried in layers of peat, which has the property of preserving wood remarkably well, and as a result, radiocarbon dating tests have shown these artefacts to date from around 12,500 years ago. One of the most famous Patagonian sites is a cave known as Los Toldos. However, the evidence from this site has recently been called into question, because dispersed flecks of carbon used in the test process were taken unsystematically from many different places at the site. As a result, the association of this material with the artefacts is not at all clear. About 150 kilometres to the south is the site called El Ceibo, where a similar collection of artefacts to that found at Los Toldos has been discovered from the lowest levels of the dig, but as yet no radiocarbon dates are available, and this sort of analysis of the existing evidence is required before the site's value can be confirmed.</p>
+            <p>The Arroyo Eeo site is located very close to the high plateau. The artefacts from the earliest occupations were found at the same depth and have the same origins as those from Los Toldos, and have been securely dated to around 9,000 years ago. Another site that is mentioned in the debate is at Las Buitreras, where a number of stone flakes associated with bone remains of various animals have been discovered. However, anthropologists now believe that presumed cut marks on the bones are somewhat dubious, and despite detailed testing there is no way of securely relating any of these remains to human occupation. Finally, some 50 kilometres to the south is the site at Cueva Fell, which was the first Patagonian site to be systematically studied by modern archaeological methods. However, it is now recognised that the utility of this site must be restricted to its direct vicinity, given changes to the nearby area caused by flooding, and findings cannot be freely extrapolated further afield.</p>
+            <p>In conclusion, based on the evidence from a number of reliable sites, it seems probable that human populations reached Patagonia around 11,000 years ago.</p>
+
+            <div class="empty-space"></div>
+        </section>
+        
+        <div id="divider"></div>
+        
+        <section class="pane" id="right">
+            <h3>Questions</h3>
+            
+            <div class="group" id="q27-31-anchor">
+                <h4>Questions 27–31</h4>
+                <p>Choose the correct letter, A, B, C or D.</p>
+                <div class="question-item">
+                    <p><strong>27</strong> In the first paragraph, what is the writer's main point about migration to Patagonia?</p>
+                    <ul class="options-list">
+                        <li><label><input type="radio" name="q27" value="A"> <strong>A</strong> It started earlier than previously thought.</label></li>
+                        <li><label><input type="radio" name="q27" value="B"> <strong>B</strong> Historians have overlooked its importance.</label></li>
+                        <li><label><input type="radio" name="q27" value="C"> <strong>C</strong> It impacts on research into the wider region.</label></li>
+                        <li><label><input type="radio" name="q27" value="D"> <strong>D</strong> Researchers have calculated its effects on the environment.</label></li>
+                    </ul>
+                </div>
+                <div class="question-item">
+                    <p><strong>28</strong> In the second paragraph, what is the writer's purpose?</p>
+                    <ul class="options-list">
+                        <li><label><input type="radio" name="q28" value="A"> <strong>A</strong> to challenge previous research</label></li>
+                        <li><label><input type="radio" name="q28" value="B"> <strong>B</strong> to propose new areas to investigate</label></li>
+                        <li><label><input type="radio" name="q28" value="C"> <strong>C</strong> to summarise a scholarly debate</label></li>
+                        <li><label><input type="radio" name="q28" value="D"> <strong>D</strong> to suggest reasons for human migration</label></li>
+                    </ul>
+                </div>
+                 <div class="question-item">
+                    <p><strong>29</strong> The writer refers to the 'late' model in order to</p>
+                    <ul class="options-list">
+                        <li><label><input type="radio" name="q29" value="A"> <strong>A</strong> compare it with another theory of migration.</label></li>
+                        <li><label><input type="radio" name="q29" value="B"> <strong>B</strong> evaluate the success of American migration.</label></li>
+                        <li><label><input type="radio" name="q29" value="C"> <strong>C</strong> criticise the speed of research into migration.</label></li>
+                        <li><label><input type="radio" name="q29" value="D"> <strong>D</strong> compare migration in different parts of the world.</label></li>
+                    </ul>
+                </div>
+                <div class="question-item">
+                    <p><strong>30</strong> What is the writer's main point about the ‘early' model?</p>
+                    <ul class="options-list">
+                        <li><label><input type="radio" name="q30" value="A"> <strong>A</strong> Scholars support the idea of fast migrations.</label></li>
+                        <li><label><input type="radio" name="q30" value="B"> <strong>B</strong> It is too random to be a convincing theory.</label></li>
+                        <li><label><input type="radio" name="q30" value="C"> <strong>C</strong> South America was more habitable at an earlier time.</label></li>
+                        <li><label><input type="radio" name="q30" value="D"> <strong>D</strong> It is more consistent with the physical conditions of the land.</label></li>
+                    </ul>
+                </div>
+                 <div class="question-item">
+                    <p><strong>31</strong> What does the writer suggest about the Monte Verde site?</p>
+                    <ul class="options-list">
+                        <li><label><input type="radio" name="q31" value="A"> <strong>A</strong> It is much younger than researchers once estimated.</label></li>
+                        <li><label><input type="radio" name="q31" value="B"> <strong>B</strong> It provides supporting evidence for relatively early settlement.</label></li>
+                        <li><label><input type="radio" name="q31" value="C"> <strong>C</strong> Archaeologists believe the site is of questionable value.</label></li>
+                        <li><label><input type="radio" name="q31" value="D"> <strong>D</strong> Streams exposed the site, making new research possible.</label></li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="group" id="q32-35-anchor">
+                <h4>Questions 32–35</h4>
+                <p>Do the following statements agree with the claims of the writer in Reading Passage 3? Write YES, NO, or NOT GIVEN.</p>
+                <div class="question-item">
+                    <p><strong>32</strong> The conditions encountered by the first migrants to Patagonia were unique.</p>
+                     <ul class="options-list">
+                        <li><label><input type="radio" name="q32" value="YES"> YES</label></li>
+                        <li><label><input type="radio" name="q32" value="NO"> NO</label></li>
+                        <li><label><input type="radio" name="q32" value="NOT GIVEN"> NOT GIVEN</label></li>
+                    </ul>
+                </div>
+                <div class="question-item">
+                    <p><strong>33</strong> In the high country the first migrants hunted wild animals for food.</p>
+                    <ul class="options-list">
+                        <li><label><input type="radio" name="q33" value="YES"> YES</label></li>
+                        <li><label><input type="radio" name="q33" value="NO"> NO</label></li>
+                        <li><label><input type="radio" name="q33" value="NOT GIVEN"> NOT GIVEN</label></li>
+                    </ul>
+                </div>
+                <div class="question-item">
+                    <p><strong>34</strong> Archaeologists have failed to draw conclusions from the evidence found at rock shelters in Argentina and Chile.</p>
+                    <ul class="options-list">
+                        <li><label><input type="radio" name="q34" value="YES"> YES</label></li>
+                        <li><label><input type="radio" name="q34" value="NO"> NO</label></li>
+                        <li><label><input type="radio" name="q34" value="NOT GIVEN"> NOT GIVEN</label></li>
+                    </ul>
+                </div>
+                 <div class="question-item">
+                    <p><strong>35</strong> Archaeological evidence can be moved from place to place in a variety of ways.</p>
+                    <ul class="options-list">
+                        <li><label><input type="radio" name="q35" value="YES"> YES</label></li>
+                        <li><label><input type="radio" name="q35" value="NO"> NO</label></li>
+                        <li><label><input type="radio" name="q35" value="NOT GIVEN"> NOT GIVEN</label></li>
+                    </ul>
+                </div>
+            </div>
+
+             <div class="group" id="q36-40-anchor">
+                <h4>Questions 36–40</h4>
+                <p>Complete the summary using the list of words and phrases, A–J, below.</p>
+                <p><em>Drag a phrase from the list and drop it into the correct blank.</em></p>
+                <div class="summary-text">
+                    <h5>The archaeological evidence from Patagonia</h5>
+                    <p>
+                    Building remains and other evidence have been found in <strong>36</strong> <span id="q36-target" class="drop-target-summary"></span> at the Chinchihuapi Creek site, and because of this it has been possible to date them to around 12,500 years ago. However, the <strong>37</strong> <span id="q37-target" class="drop-target-summary"></span> of the samples taken from Los Toldos means that this site is of doubtful value. El Ceibo is a more promising dig, where the examination of artefacts would be beneficial in order to confirm the usefulness of discoveries there. The remains found at the Arroyo Eeo site show <strong>38</strong> <span id="q38-target" class="drop-target-summary"></span> and date from around 9,000 years ago. Unfortunately, no <strong>39</strong> <span id="q39-target" class="drop-target-summary"></span> can be made between the samples taken from Las Buitreras and human presence. The findings of the work carried out at Cueva Fell cannot provide useful information beyond the <strong>40</strong> <span id="q40-target" class="drop-target-summary"></span>. In conclusion, though the evidence is mixed, it is believed that the human population of Patagonia began about 11,000 years ago.
+                    </p>
+                </div>
+                 <div class="options-pool">
+                    <div class="pool-items" id="summary-options-pool">
+                        <div class="drag-item" id="word-A" draggable="true" data-option="A">A fixed date</div>
+                        <div class="drag-item" id="word-B" draggable="true" data-option="B">B random collection</div>
+                        <div class="drag-item" id="word-C" draggable="true" data-option="C">C similar properties</div>
+                        <div class="drag-item" id="word-D" draggable="true" data-option="D">D good condition</div>
+                        <div class="drag-item" id="word-E" draggable="true" data-option="E">E scientific evaluation</div>
+                        <div class="drag-item" id="word-F" draggable="true" data-option="F">F huge quantities</div>
+                        <div class="drag-item" id="word-G" draggable="true" data-option="G">G new samples</div>
+                        <div class="drag-item" id="word-H" draggable="true" data-option="H">H reliable connection</div>
+                        <div class="drag-item" id="word-I" draggable="true" data-option="I">I skilled preservation</div>
+                        <div class="drag-item" id="word-J" draggable="true" data-option="J">J immediate surroundings</div>
+                    </div>
+                 </div>
+            </div>
+            
+            <div id="results"></div>
+        </section>
+    </div>
+    
+    <div class="practice-nav">
+        <div class="title">Questions</div>
+        <div class="questions">
+            <div class="q-item" id="q27-nav" onclick="scrollToElement('q27-31-anchor')">27</div>
+            <div class="q-item" id="q28-nav" onclick="scrollToElement('q27-31-anchor')">28</div>
+            <div class="q-item" id="q29-nav" onclick="scrollToElement('q27-31-anchor')">29</div>
+            <div class="q-item" id="q30-nav" onclick="scrollToElement('q27-31-anchor')">30</div>
+            <div class="q-item" id="q31-nav" onclick="scrollToElement('q27-31-anchor')">31</div>
+            <div class="q-item" id="q32-nav" onclick="scrollToElement('q32-35-anchor')">32</div>
+            <div class="q-item" id="q33-nav" onclick="scrollToElement('q32-35-anchor')">33</div>
+            <div class="q-item" id="q34-nav" onclick="scrollToElement('q32-35-anchor')">34</div>
+            <div class="q-item" id="q35-nav" onclick="scrollToElement('q32-35-anchor')">35</div>
+            <div class="q-item" id="q36-nav" onclick="scrollToElement('q36-40-anchor')">36</div>
+            <div class="q-item" id="q37-nav" onclick="scrollToElement('q36-40-anchor')">37</div>
+            <div class="q-item" id="q38-nav" onclick="scrollToElement('q36-40-anchor')">38</div>
+            <div class="q-item" id="q39-nav" onclick="scrollToElement('q36-40-anchor')">39</div>
+            <div class="q-item" id="q40-nav" onclick="scrollToElement('q36-40-anchor')">40</div>
+        </div>
+        <div class="controls">
+            <button id="submit-btn" class="primary">Submit</button>
+            <button id="reset-btn">Reset</button>
+            <button id="pause-btn">Pause</button>
+        </div>
+    </div>
+
+    <div aria-label="Selection tools" id="selbar" role="toolbar">
+        <button id="btnHL">Highlight</button>
+        <button id="btnUH">Remove</button>
+        <button id="btnNote">Note</button>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // --- Global State ---
+            let settingsOpen = false, notesOpen = false;
+            let timerRunning = true, seconds = 0, timer;
+            let isResizing = false;
+            let selbar = document.getElementById('selbar');
+            let lastRange = null, currentHlNode = null, keepToolbar = false;
+            let draggedElement = null;
+            const questionNumbers = Array.from({length: 14}, (_, i) => i + 27);
+            
+            const correctAnswers = {
+                q27: 'C', q28: 'C', q29: 'A', q30: 'D', q31: 'B',
+                q32: 'NO', q33: 'NOT GIVEN', q34: 'NO', q35: 'YES',
+                q36: 'D', q37: 'B', q38: 'C', q39: 'H', q40: 'J'
+            };
+
+            // --- Core Functions ---
+            function startTimer() {
+                timer = setInterval(() => {
+                    if (timerRunning) {
+                        seconds++;
+                        const minutes = String(Math.floor(seconds / 60)).padStart(2, '0');
+                        const secs = String(seconds % 60).padStart(2, '0');
+                        document.getElementById('timer').textContent = `${minutes}:${secs}`;
+                    }
+                }, 1000);
+            }
+
+            function closeAllPanels() {
+                notesOpen = false; settingsOpen = false;
+                document.getElementById('notes-panel').style.display = 'none';
+                document.getElementById('settings-panel').style.display = 'none';
+                document.querySelector('.overlay').style.display = 'none';
+            }
+
+            window.scrollToElement = function(id) {
+                const element = document.getElementById(id);
+                const pane = element.closest('.pane');
+                if (element && pane) {
+                    const top = element.offsetTop - 20;
+                    pane.scrollTo({ top, behavior: 'smooth' });
+                }
+            }
+            
+            // --- Drag and Drop Logic ---
+            function setupDragAndDrop() {
+                const draggables = document.querySelectorAll('.drag-item');
+                const dropTargets = document.querySelectorAll('.drop-target-summary');
+                const pool = document.getElementById('summary-options-pool');
+
+                draggables.forEach(draggable => {
+                    draggable.addEventListener('dragstart', (e) => {
+                        draggedElement = draggable;
+                        setTimeout(() => draggable.classList.add('dragging'), 0);
+                    });
+                    draggable.addEventListener('dragend', () => {
+                        if (draggedElement) draggedElement.classList.remove('dragging');
+                        draggedElement = null;
+                    });
+                });
+
+                const handleDragOver = e => {
+                    e.preventDefault();
+                    const target = e.target.closest('.drop-target-summary, #summary-options-pool');
+                    if (target) target.classList.add('drag-over');
+                };
+
+                const handleDragLeave = e => {
+                    const target = e.target.closest('.drop-target-summary, #summary-options-pool');
+                    if (target) target.classList.remove('drag-over');
+                };
+
+                const handleDrop = e => {
+                    e.preventDefault();
+                    const target = e.target.closest('.drop-target-summary, #summary-options-pool');
+                    if (!target || !draggedElement) return;
+                    
+                    target.classList.remove('drag-over');
+                    
+                    // If dropping on a summary blank
+                    if (target.classList.contains('drop-target-summary')) {
+                        // If there's already an item, return it to the pool
+                        if (target.children.length > 0) {
+                            pool.appendChild(target.firstElementChild);
+                        }
+                        target.appendChild(draggedElement);
+                    } 
+                    // If dropping back into the pool
+                    else if (target.id === 'summary-options-pool') {
+                         target.appendChild(draggedElement);
+                    }
+
+                    updateAnsweredState();
+                };
+
+                [...dropTargets, pool].forEach(container => {
+                    container.addEventListener('dragover', handleDragOver);
+                    container.addEventListener('dragleave', handleDragLeave);
+                    container.addEventListener('drop', handleDrop);
+                });
+            }
+
+            // --- Grading and State Update ---
+            function updateAnsweredState() {
+                questionNumbers.forEach(i => {
+                    const navItem = document.getElementById(`q${i}-nav`);
+                    if (!navItem || navItem.classList.contains('correct') || navItem.classList.contains('incorrect')) return;
+
+                    let answered = false;
+                    if (i >= 27 && i <= 35) {
+                        answered = !!document.querySelector(`input[name="q${i}"]:checked`);
+                    } else if (i >= 36 && i <= 40) {
+                        answered = document.querySelector(`#q${i}-target`).hasChildNodes();
+                    }
+                    navItem.classList.toggle('answered', answered);
+                });
+            }
+            
+            function gradeAnswers() {
+                timerRunning = false;
+                document.getElementById('pause-btn').textContent = 'Continue';
+                let correctCount = 0;
+                const totalQuestions = questionNumbers.length;
+                let resultsHTML = '<h4>Results</h4><table class="results-table"><thead><tr><th>Question</th><th>Your Answer</th><th>Correct Answer</th><th>Result</th></tr></thead><tbody>';
+
+                questionNumbers.forEach(i => {
+                    let userAnswer, correctAnswer, isCorrect;
+                    const qid = `q${i}`;
+                    
+                    if (i >= 27 && i <= 35) { // MCQs and Y/N/NG
+                        const userAnswerEl = document.querySelector(`input[name="${qid}"]:checked`);
+                        userAnswer = userAnswerEl ? userAnswerEl.value : 'No Answer';
+                    } else if (i >= 36 && i <= 40) { // Summary Completion
+                        const dropTarget = document.getElementById(`${qid}-target`);
+                        const droppedItem = dropTarget.querySelector('.drag-item');
+                        userAnswer = droppedItem ? droppedItem.dataset.option : 'No Answer';
+                    }
+
+                    correctAnswer = correctAnswers[qid];
+                    isCorrect = userAnswer === correctAnswer;
+                    if (isCorrect) correctCount++;
+                    
+                    document.getElementById(`${qid}-nav`).classList.remove('answered');
+                    document.getElementById(`${qid}-nav`).classList.add(isCorrect ? 'correct' : 'incorrect');
+
+                    let userAnswerDisplay = userAnswer;
+                    if(i >= 36 && i <= 40 && userAnswer !== 'No Answer'){
+                        userAnswerDisplay = document.getElementById(`word-${userAnswer}`).textContent;
+                    }
+                    let correctAnswerDisplay = correctAnswer;
+                    if(i >= 36 && i <= 40 && correctAnswer){
+                        correctAnswerDisplay = document.getElementById(`word-${correctAnswer}`).textContent;
+                    }
+
+                    resultsHTML += `<tr><td>${i}</td><td>${userAnswerDisplay}</td><td>${correctAnswerDisplay}</td><td class="${isCorrect ? 'result-correct' : 'result-incorrect'}">${isCorrect ? '✓' : '✗'}</td></tr>`;
+                });
+
+                const score = Math.round((correctCount / totalQuestions) * 100);
+                const summary = `<div style="font-weight:bold; margin-top:16px; font-size:1.1em;">Final Score: ${score}% (${correctCount}/${totalQuestions})</div>`;
+                resultsHTML += `</tbody></table>`;
+                
+                document.getElementById('results').innerHTML = summary + resultsHTML;
+                document.getElementById('results').style.display = 'block';
+                scrollToElement('results');
+            }
+
+            function resetQuiz() {
+                // Reset drag and drop
+                const pool = document.getElementById('summary-options-pool');
+                document.querySelectorAll('.drop-target-summary .drag-item').forEach(item => pool.appendChild(item));
+
+                // Reset radio buttons
+                document.querySelectorAll('input[type="radio"]').forEach(el => el.checked = false);
+                
+                // Reset UI
+                document.querySelectorAll('.q-item').forEach(item => item.className = 'q-item');
+                const resultsDiv = document.getElementById('results');
+                resultsDiv.style.display = 'none';
+                resultsDiv.innerHTML = '';
+                
+                // Reset timer
+                seconds = 0;
+                if (timer) clearInterval(timer);
+                startTimer();
+                document.getElementById('timer').textContent = '00:00';
+                timerRunning = true;
+                document.getElementById('pause-btn').textContent = 'Pause';
+                updateAnsweredState();
+            }
+
+            // --- Highlighter & Selection Toolbar ---
+            function positionSelbarForRect(rect) {
+                selbar.style.display = 'flex';
+                requestAnimationFrame(() => {
+                    const top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+                    const left = window.scrollX + rect.left + rect.width / 2 - selbar.offsetWidth / 2;
+                    selbar.style.top = `${(top > 0) ? top : (window.scrollY + rect.bottom + 8)}px`;
+                    selbar.style.left = `${Math.max(8, left)}px`;
+                });
+            }
+
+            function updateSelbar() {
+                const sel = window.getSelection();
+                if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+                    if (!keepToolbar && !currentHlNode) { selbar.style.display = 'none'; currentHlNode = null; }
+                    return;
+                }
+                const range = sel.getRangeAt(0);
+                let container = range.commonAncestorContainer;
+                if (container.nodeType === Node.TEXT_NODE) container = container.parentElement;
+                
+                // Check if selection is within either pane
+                const isInAllowedPane = document.getElementById('left').contains(container) || document.getElementById('right').contains(container);
+                const isHighlighted = container.classList?.contains('hl') || container.closest('.hl');
+                
+                if (!isInAllowedPane && !isHighlighted) { 
+                    selbar.style.display = 'none'; 
+                    return; 
+                }
+                
+                lastRange = range.cloneRange();
+                currentHlNode = isHighlighted ? container.closest('.hl') : null;
+                positionSelbarForRect(range.getBoundingClientRect());
+            }
+
+            function doHighlight() {
+                if (currentHlNode || !lastRange || lastRange.collapsed) return;
+                const sel = window.getSelection();
+                try {
+                    const span = document.createElement('span');
+                    span.className = 'hl';
+                    lastRange.surroundContents(span);
+                } catch (e) { console.error("Highlighting failed:", e); return; }
+                sel?.removeAllRanges();
+                selbar.style.display = 'none';
+            }
+
+            function removeHighlight() {
+                const sel = window.getSelection();
+                let targetNode = currentHlNode;
+                if (!targetNode && lastRange) {
+                    const ancestor = lastRange.commonAncestorContainer;
+                    targetNode = ancestor.nodeType === Node.TEXT_NODE ? ancestor.parentElement.closest('.hl') : ancestor.closest('.hl');
+                }
+                if (targetNode) {
+                    const p = targetNode.parentNode;
+                    while (targetNode.firstChild) p.insertBefore(targetNode.firstChild, targetNode);
+                    if(p) p.removeChild(targetNode);
+                    p?.normalize();
+                }
+                currentHlNode = null; sel?.removeAllRanges(); selbar.style.display = 'none';
+            }
+
+            // --- Event Listeners Setup ---
+            startTimer();
+            setupDragAndDrop();
+
+            // Header controls
+            document.getElementById('size-btn').addEventListener('click', (e) => { e.stopPropagation(); settingsOpen = !settingsOpen; document.getElementById('settings-panel').style.display = settingsOpen ? 'block' : 'none'; });
+            document.getElementById('color-btn').addEventListener('click', (e) => { e.stopPropagation(); settingsOpen = !settingsOpen; document.getElementById('settings-panel').style.display = settingsOpen ? 'block' : 'none'; });
+            document.getElementById('note-btn').addEventListener('click', () => { closeAllPanels(); notesOpen = true; document.getElementById('notes-panel').style.display = 'flex'; document.querySelector('.overlay').style.display = 'block'; });
+            document.querySelectorAll('.settings-option[data-size]').forEach(btn => btn.addEventListener('click', function() { document.documentElement.className = `font-${this.dataset.size}`; document.querySelectorAll('.settings-option[data-size]').forEach(b => b.classList.remove('active')); this.classList.add('active'); }));
+            document.querySelectorAll('.settings-option[data-mode]').forEach(btn => btn.addEventListener('click', function() { document.body.classList.toggle('dark-mode', this.dataset.mode === 'dark'); document.querySelectorAll('.settings-option[data-mode]').forEach(b => b.classList.remove('active')); this.classList.add('active'); }));
+            document.getElementById('close-note').addEventListener('click', closeAllPanels);
+            document.querySelector('.overlay').addEventListener('click', closeAllPanels);
+            document.addEventListener('click', (e) => {
+                const settingsPanel = document.getElementById('settings-panel');
+                const headerControls = document.querySelector('.header-controls');
+                if (!settingsPanel.contains(e.target) && !headerControls.contains(e.target)) { settingsPanel.style.display = 'none'; settingsOpen = false; }
+            });
+
+            // Bottom nav controls
+            document.getElementById('submit-btn').addEventListener('click', gradeAnswers);
+            document.getElementById('reset-btn').addEventListener('click', resetQuiz);
+            document.getElementById('pause-btn').addEventListener('click', function() { timerRunning = !timerRunning; this.textContent = timerRunning ? 'Pause' : 'Continue'; });
+
+            // Pane resizing
+            const divider = document.getElementById('divider');
+            const leftPane = document.getElementById('left');
+            divider.addEventListener('mousedown', (e) => { isResizing = true; document.body.style.cursor = 'ew-resize'; e.preventDefault(); });
+            document.addEventListener('mousemove', (e) => { if (!isResizing) return; const shellRect = document.querySelector('.shell').getBoundingClientRect(); let leftWidth = (e.clientX - shellRect.left) / shellRect.width * 100; leftPane.style.width = `${Math.max(20, Math.min(80, leftWidth))}%`; });
+            document.addEventListener('mouseup', () => { if (isResizing) { isResizing = false; document.body.style.cursor = ''; } });
+            
+            // Update answered state on input/change
+            document.getElementById('right').addEventListener('change', updateAnsweredState);
+
+            // Selection toolbar events
+            document.addEventListener('mouseup', () => setTimeout(updateSelbar, 10));
+            document.addEventListener('selectionchange', () => setTimeout(updateSelbar, 10));
+            document.addEventListener('mousedown', (e) => { keepToolbar = !!e.target.closest('#selbar, .hl'); }, true);
+            document.addEventListener('click', (e) => {
+                const target = e.target;
+                if (target.classList.contains('hl')) {
+                    currentHlNode = target; lastRange = null; positionSelbarForRect(target.getBoundingClientRect());
+                    window.getSelection()?.removeAllRanges(); setTimeout(() => { keepToolbar = false; }, 0);
+                } else if (!selbar.contains(e.target)) { selbar.style.display = 'none'; currentHlNode = null; }
+            }, true);
+            document.getElementById('btnHL').addEventListener('click', doHighlight);
+            document.getElementById('btnUH').addEventListener('click', removeHighlight);
+            document.getElementById('btnNote').addEventListener('click', function() {
+                let text = (currentHlNode ? currentHlNode.textContent : (lastRange ? lastRange.cloneContents().textContent : '')).trim();
+                if (text) {
+                    const noteArea = document.querySelector('#notes-panel textarea');
+                    noteArea.value += (noteArea.value ? '\n\n' : '') + '> ' + text;
+                    closeAllPanels(); notesOpen = true; document.getElementById('notes-panel').style.display = 'flex';
+                    document.querySelector('.overlay').style.display = 'block'; noteArea.scrollTop = noteArea.scrollHeight;
+                }
+                selbar.style.display = 'none';
+            });
+        });
+    </script>
+</body>
+</html>
