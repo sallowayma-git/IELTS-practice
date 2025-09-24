@@ -2818,8 +2818,11 @@
 
                 window.addEventListener('storage-sync', (event) => {
                     console.log('[Theme] 收到存储同步事件，正在更新练习记录...', event.detail);
-                    this.loadData();
-                    this.updateUI();
+                    // Ensure event.detail is properly formatted
+                    if (event.detail && typeof event.detail === 'object') {
+                        this.loadData();
+                        this.updateUI();
+                    }
                 });
 
                 // 定期保存数据
@@ -3229,20 +3232,21 @@
             if (confirm('确定要删除这条练习记录吗？')) {
                 app.practiceRecords = app.practiceRecords.filter(record => record.id !== recordId);
                 app.saveData();
-                storage.set('practice_records', app.practiceRecords);
+                if (window.storage) {
+    window.storage.set('practice_records', app.practiceRecords);
+}
                 if (window.storage) {
                   try {
-                    const list = await storage.get('practice_records', []);
+                    const list = await window.storage.get('practice_records', []);
                     const newList = list.filter(x => String(x.id) !== String(recordId));
-                    await storage.set('practice_records', newList);
-    // 同步兼容键
-    const nested = await storage.get('exam_system_practice_records', null);
-    if (nested && Array.isArray(nested.data)) {
-      nested.data = newList; // 或过滤后的数组
-      await storage.set('exam_system_practice_records', nested);
-    }
-    await window.syncSharedPracticeRecords();
+                    await window.storage.set('practice_records', newList);
+                    // 同步兼容键
+                    const nested = await window.storage.get('exam_system_practice_records', null);
+                    if (nested && Array.isArray(nested.data)) {
+                      nested.data = newList; // 或过滤后的数组
+                      await window.storage.set('exam_system_practice_records', nested);
                     }
+                    await window.syncSharedPracticeRecords();
                   } catch (e) {
                     console.error('[Melody] 删除同步失败', e);
                   }
@@ -3258,15 +3262,14 @@
                 app.saveData();
                 if (window.storage) {
                   try {
-                    await storage.set('practice_records', []);
-    // 同步兼容键
-    const nested = await storage.get('exam_system_practice_records', null);
-    if (nested && Array.isArray(nested.data)) {
-      nested.data = []; // 清空
-      await storage.set('exam_system_practice_records', nested);
-    }
-    await window.syncSharedPracticeRecords();
+                    await window.storage.set('practice_records', []);
+                    // 同步兼容键
+                    const nested = await window.storage.get('exam_system_practice_records', null);
+                    if (nested && Array.isArray(nested.data)) {
+                      nested.data = []; // 清空
+                      await window.storage.set('exam_system_practice_records', nested);
                     }
+                    await window.syncSharedPracticeRecords();
                   } catch (e) {
                     console.error('[Melody] 清空同步失败', e);
                   }
@@ -3315,7 +3318,9 @@
                 app.practiceRecords = data.practiceRecords || [];
                 app.settings = { ...app.settings, ...data.settings };
                 app.saveData();
-                storage.set('practice_records', app.practiceRecords);
+                if (window.storage) {
+    window.storage.set('practice_records', app.practiceRecords);
+}
                 app.updateUI();
                 app.showNotification('数据恢复成功');
             } else {
@@ -3335,7 +3340,9 @@
                     reminders: false
                 };
                 app.saveData();
-                storage.set('practice_records', []);
+                if (window.storage) {
+    window.storage.set('practice_records', []);
+}
                 localStorage.removeItem('myMelodyPracticeRecords');
                 localStorage.removeItem('exam_system_practice_records');
                 app.updateUI();
@@ -3416,7 +3423,9 @@
                             if (data.settings) app.settings = { ...app.settings, ...data.settings };
 
                             app.saveData();
-                            storage.set('practice_records', app.practiceRecords);
+                            if (window.storage) {
+    window.storage.set('practice_records', app.practiceRecords);
+}
                             app.updateUI();
                             if (importedCount > 0) {
                                 app.showNotification(`数据导入成功，导入 ${importedCount} 条练习记录`);
@@ -3500,7 +3509,9 @@
 
                             if (importedCount > 0) {
                                 app.saveData();
-                                storage.set('practice_records', app.practiceRecords);
+                                if (window.storage) {
+    window.storage.set('practice_records', app.practiceRecords);
+}
                                 app.updateUI();
                                 app.showNotification(`成功导入 ${importedCount} 条练习记录`);
                             } else {
@@ -3564,17 +3575,16 @@
                 app.saveData();
                 if (window.storage) {
                   try {
-                    const list = await storage.get('practice_records', []);
+                    const list = await window.storage.get('practice_records', []);
                     const newList = list.filter(x => !selectedIds.includes(String(x.id)));
-                    await storage.set('practice_records', newList);
-    // 同步兼容键
-    const nested = await storage.get('exam_system_practice_records', null);
-    if (nested && Array.isArray(nested.data)) {
-      nested.data = newList; // 过滤后的数组
-      await storage.set('exam_system_practice_records', nested);
-    }
-    await window.syncSharedPracticeRecords();
+                    await window.storage.set('practice_records', newList);
+                    // 同步兼容键
+                    const nested = await window.storage.get('exam_system_practice_records', null);
+                    if (nested && Array.isArray(nested.data)) {
+                      nested.data = newList; // 过滤后的数组
+                      await window.storage.set('exam_system_practice_records', nested);
                     }
+                    await window.syncSharedPracticeRecords();
                   } catch (e) {
                     console.error('[Melody] 批量删除同步失败', e);
                   }
@@ -3641,7 +3651,7 @@
                 }
 
                 if (!record && window.storage) {
-                    const practiceRecords = storage.get('practice_records', []);
+                    const practiceRecords = window.storage ? window.storage.get('practice_records', []) : [];
                     record = practiceRecords.find(r =>
                         r.id === recordId ||
                         r.examId === recordId ||
@@ -4389,7 +4399,10 @@
 
         // 获取活动题库配置键
         function getActiveLibraryConfigurationKey() {
-            return storage.get('active_exam_index_key', 'exam_index');
+            if (window.storage) {
+                return window.storage.get('active_exam_index_key', 'exam_index');
+            }
+            return 'exam_index';
         }
 
         
@@ -4800,7 +4813,7 @@
             console.log('[Record] Starting upsert for:', rec);
 
             // 获取当前的记录列表
-            let list = storage.get('practice_records', []);
+            let list = window.storage ? window.storage.get('practice_records', []) : [];
             const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
 
             // 1. 按sessionId去重
@@ -4830,7 +4843,9 @@
             }
 
             // 同步到storage
-            storage.set('practice_records', list);
+            if (window.storage) {
+    window.storage.set('practice_records', list);
+}
 
             // 更新app.practiceRecords，确保不重复
             if (app && app.practiceRecords) {
@@ -4931,7 +4946,7 @@
 
         // 同步真实练习记录
         function syncRealPracticeRecords() {
-            const storageRecords = storage.get('practice_records', []);
+            const storageRecords = window.storage ? window.storage.get('practice_records', []) : [];
 
             // 智能合并storage记录和app.practiceRecords
             if (app && app.practiceRecords) {
@@ -5101,13 +5116,20 @@
     <script>
     // Overrides per MyMelody_IELTS_Fix_Guide
     (function(){
-            window.buildResourcePath = buildResourcePath;
+            // Ensure buildResourcePath is available globally
+            if (typeof buildResourcePath === 'function') {
+                window.buildResourcePath = buildResourcePath;
+            } else {
+                console.warn('[Melody] buildResourcePath function not found');
+            }
 
       window.openExamPDF = function(examId) {
         const exam = (window.app && window.app.examData || []).find(e => String(e.id) === String(examId));
         if (!exam) return;
-        const pdfPath = buildResourcePath(exam, 'pdf');
-        window.open(pdfPath, '_blank');
+        const pdfPath = window.buildResourcePath ? window.buildResourcePath(exam, 'pdf') : '#';
+        if (pdfPath !== '#') {
+            window.open(pdfPath, '_blank');
+        }
       };
 
       window.updateCategoryStats = function() {
@@ -5195,7 +5217,8 @@
         document.getElementById('examListModal').style.display = 'flex';
       };
 
-      MyMelodyIELTSApp.prototype.renderExams = function(exams) {
+      if (typeof MyMelodyIELTSApp !== 'undefined') {
+    MyMelodyIELTSApp.prototype.renderExams = function(exams) {
         const container = document.getElementById('examGrid');
         if (!container) return;
         if (exams.length === 0) {
@@ -5263,6 +5286,7 @@
               </div>
             </div>\n      `;
         }).join('');
+      }
       };
 
       window.formatDuration = function(value) {
@@ -5326,7 +5350,7 @@
       window.loadRealExamLibrary = function(forceFresh){
         const startTime = performance.now();
         const activeConfigKey = getActiveLibraryConfigurationKey();
-        const cachedData = storage.get(activeConfigKey);
+        const cachedData = window.storage ? window.storage.get(activeConfigKey) : null;
 
 
         if (!forceFresh && Array.isArray(cachedData) && cachedData.length > 0) {
@@ -5368,7 +5392,9 @@
               console.warn('[Library] window.app 不存在，无法设置数据');
             }
 
-            storage.set(activeConfigKey, merged);
+            if (window.storage) {
+    window.storage.set(activeConfigKey, merged);
+}
 
             finishRealLibraryLoading(startTime);
             return;
@@ -5536,12 +5562,12 @@
     }
     try {
       // 1. Read primary: practice_records (array)
-      let list = await storage.get('practice_records', []);
+      let list = await window.storage.get('practice_records', []);
       if (!Array.isArray(list)) list = [];
 
       // 2. Fallback to nested: exam_system_practice_records.data (array)
       if (list.length === 0) {
-        const nested = await storage.get('exam_system_practice_records', null);
+        const nested = await window.storage.get('exam_system_practice_records', null);
         if (nested && Array.isArray(nested.data)) {
           list = nested.data;
         }
@@ -5577,15 +5603,34 @@
         localStorage.setItem('myMelodyPracticeRecords', JSON.stringify(mapped));
       } catch (e) {
         console.warn('[Sync] Local mirror failed:', e);
+        // If localStorage is full, try to clear some space
+        if (e.name === 'QuotaExceededError') {
+          try {
+            // Try to remove old cached data to free up space
+            const keysToRemove = [];
+            for (let i = 0; i < localStorage.length; i++) {
+              const key = localStorage.key(i);
+              if (key && key.startsWith('cached_') || key.startsWith('temp_')) {
+                keysToRemove.push(key);
+              }
+            }
+            keysToRemove.forEach(key => localStorage.removeItem(key));
+
+            // Try again after clearing cache
+            localStorage.setItem('myMelodyPracticeRecords', JSON.stringify(mapped));
+          } catch (e2) {
+            console.warn('[Sync] Still failed after cache cleanup:', e2);
+          }
+        }
       }
 
       // 6. Back-sync to nested if primary changed (ensure consistency)
       if (list.length !== mapped.length) {
         const nestedKey = 'exam_system_practice_records';
-        const currentNested = await storage.get(nestedKey, null);
+        const currentNested = await window.storage.get(nestedKey, null);
         if (currentNested && typeof currentNested === 'object') {
           currentNested.data = mapped; // Update nested.data
-          await storage.set(nestedKey, currentNested);
+          await window.storage.set(nestedKey, currentNested);
         }
       }
 
