@@ -3205,21 +3205,46 @@
             app.switchPage('practice');
         }
 
-        function deleteRecord(recordId) {
+        async function deleteRecord(recordId) {
             if (confirm('确定要删除这条练习记录吗？')) {
                 app.practiceRecords = app.practiceRecords.filter(record => record.id !== recordId);
                 app.saveData();
                 storage.set('practice_records', app.practiceRecords);
+                if (window.storage) {
+                  try {
+                    const list = await storage.get('practice_records', []);
+                    const newList = list.filter(x => String(x.id) !== String(recordId));
+                    await storage.set('practice_records', newList);
+                    if (window.applyImportedRecordsToPage) {
+                      await window.applyImportedRecordsToPage();
+                    } else if (window.app && typeof window.app.updateUI === 'function') {
+                      window.app.updateUI();
+                    }
+                  } catch (e) {
+                    console.error('[Melody] 删除同步失败', e);
+                  }
+                }
                 app.updatePractice();
                 app.showNotification('记录已删除');
             }
         }
 
-        function clearAllRecords() {
+        async function clearAllRecords() {
             if (confirm('确定要清空所有练习记录吗？此操作不可恢复！')) {
                 app.practiceRecords = [];
                 app.saveData();
-                storage.set('practice_records', []);
+                if (window.storage) {
+                  try {
+                    await storage.set('practice_records', []);
+                    if (window.applyImportedRecordsToPage) {
+                      await window.applyImportedRecordsToPage();
+                    } else if (window.app && typeof window.app.updateUI === 'function') {
+                      window.app.updateUI();
+                    }
+                  } catch (e) {
+                    console.error('[Melody] 清空同步失败', e);
+                  }
+                }
                 localStorage.removeItem('myMelodyPracticeRecords');
                 localStorage.removeItem('exam_system_practice_records');
                 app.updatePractice();
@@ -3499,7 +3524,7 @@
             app.updateBulkActionsState();
         }
 
-        function batchDeleteSelected() {
+        async function batchDeleteSelected() {
             const selectedIds = Array.from(document.querySelectorAll('.record-checkbox:checked'))
                 .map(cb => cb.closest('.record-item').dataset.recordId);
 
@@ -3511,6 +3536,20 @@
             if (confirm(`确定要删除选中的 ${selectedIds.length} 条记录吗？此操作不可恢复！`)) {
                 app.practiceRecords = app.practiceRecords.filter(record => !selectedIds.includes(record.id));
                 app.saveData();
+                if (window.storage) {
+                  try {
+                    const list = await storage.get('practice_records', []);
+                    const newList = list.filter(x => !selectedIds.includes(String(x.id)));
+                    await storage.set('practice_records', newList);
+                    if (window.applyImportedRecordsToPage) {
+                      await window.applyImportedRecordsToPage();
+                    } else if (window.app && typeof window.app.updateUI === 'function') {
+                      window.app.updateUI();
+                    }
+                  } catch (e) {
+                    console.error('[Melody] 批量删除同步失败', e);
+                  }
+                }
                 app.updatePractice();
                 app.showNotification(`成功删除 ${selectedIds.length} 条记录`);
             }
@@ -5334,43 +5373,101 @@
     if (window.storage && storage.setNamespace) storage.setNamespace('exam_system');
   } catch(_) {}
   function mapToMelodyModel(r) {
-    // Score: prefer percentage, then score, then accuracy*100
-    var pct = (r.percentage != null ? Number(r.percentage) : null);
-    var sc = (r.score != null ? Number(r.score) : null);
-    var acc = (r.accuracy != null ? Number(r.accuracy) : null);
-    var score = 0;
-    if (Number.isFinite(pct)) score = Math.round(pct);
-    else if (Number.isFinite(sc)) score = Math.round(sc);
-    else if (Number.isFinite(acc)) score = Math.round(acc * 100);
-    // Duration: prefer r.duration, else realData.duration, else compute from times
-    var dur = Number(r.duration);
+    function inferType(rec) {
+      const id = String(rec.examId || '').toLowerCase().trim();
+      // 优先用 examId 纠偏：p* → reading；listening-* → listening
+      if (id.startsWith('listening-')) return 'listening';
+      if (id && id[0] === 'p') return 'reading';
+      // 再看显式 type（只在不冲突时采用）
+      const t = String(rec.type || '').toLowerCase().trim();
+      if ((t === 'reading' || t === 'listening') && !id.startsWith('p')) return t;
+      // 题库交叉核对
+      try {
+        const ed = (window.app && Array.isArray(window.app.examData)) ? window.app.examData : [];
+        const m = ed.find(e => String(e.id) === String(rec.examId)) || ed.find(e => e.title && rec.title && String(e.title).trim() === String(rec.title).trim());
+        if (m && (m.type === 'reading' || m.type === 'listening')) return m.type;
+      } catch (_) {}
+      // 最后用 category 规则
+      const cat = String(rec.category || '').toUpperCase().trim();
+      if (cat === 'P4') return 'listening';
+      if (cat === 'P1' || cat === 'P2') return 'reading';
+      if (cat === 'P3') return id.includes('listening') ? 'listening' : 'reading';
+      return 'reading';
+    }
+    const rd = r.realData || {};
+    const si = r.scoreInfo || rd.scoreInfo || {};
+    const ac = r.answerComparison || rd.answerComparison || {};
+    // 1) 候选直接取百分比/分数/准确率
+    const basicCandidates = [
+      r.percentage,
+      r.score,
+      rd.percentage,
+      rd.score,
+      si.percentage,
+      Number.isFinite(Number(r.accuracy)) ? Number(r.accuracy) * 100 : null,
+      Number.isFinite(Number(rd.accuracy)) ? Number(rd.accuracy) * 100 : null
+    ].filter(v => v !== null && v !== undefined && Number.isFinite(Number(v)));
+    // 2) 候选用 correct/total 推导（多来源）
+    const ratioCandidates = [];
+    const pushRatio = (correct, total) => {
+      const c = Number(correct), t = Number(total);
+      if (Number.isFinite(c) && Number.isFinite(t) && t > 0) ratioCandidates.push((c / t) * 100);
+    };
+    pushRatio(r.correct, r.totalQuestions ?? r.total);
+    pushRatio(rd.correct, rd.totalQuestions ?? rd.total);
+    pushRatio(r.correctCount, r.questionCount ?? r.totalQuestions);
+    pushRatio(rd.correctCount, rd.questionCount ?? rd.totalQuestions);
+    pushRatio(si.correct, si.total ?? si.totalQuestions);
+    if (ac.summary && (ac.summary.correct != null) && (ac.summary.total != null)) {
+      pushRatio(ac.summary.correct, ac.summary.total);
+    }
+    // 3) 若仍然没有，则用 answers 对比 correctAnswers 逐题推导
+    if (!basicCandidates.length && !ratioCandidates.length && rd.answers && rd.correctAnswers) {
+      try {
+        let c = 0, t = 0;
+        const ans = rd.answers, keySet = new Set(Object.keys(rd.correctAnswers));
+        keySet.forEach(k => {
+          t++;
+          if (String(ans[k]).trim() === String(rd.correctAnswers[k]).trim()) c++;
+        });
+        if (t > 0) ratioCandidates.push((c / t) * 100);
+      } catch (_) {}
+    }
+    // 4) 选出分数
+    let score = 0;
+    const all = basicCandidates.concat(ratioCandidates)
+      .map(Number).filter(v => Number.isFinite(v));
+    const nonNeg = all.filter(v => v >= 0);
+    const picked = nonNeg.length ? Math.max(...nonNeg) : 0;
+    score = Math.round(Math.max(0, Math.min(100, picked)));
+    // 时长（秒）：duration > realData.duration > end-start
+    let dur = Number(r.duration);
     if (!Number.isFinite(dur) || dur <= 0) {
-      var rd = (r.realData || {});
-      var rdDur = Number(rd.duration);
+      const rdDur = Number(rd.duration);
       if (Number.isFinite(rdDur) && rdDur > 0) dur = Math.round(rdDur);
     }
     if ((!Number.isFinite(dur) || dur <= 0) && r.startTime && r.endTime) {
       try {
-        var s = new Date(r.startTime).getTime(), e = new Date(r.endTime).getTime();
+        const s = new Date(r.startTime).getTime();
+        const e = new Date(r.endTime).getTime();
         if (Number.isFinite(s) && Number.isFinite(e) && e > s) dur = Math.round((e - s) / 1000);
-      } catch(_) {}
+      } catch (_) {}
     }
     if (!Number.isFinite(dur) || dur < 0) dur = 0;
-    // Type from existing field or fall back by category prefix
-    var type = r.type || (String(r.category || '').toUpperCase().startsWith('P') ? 'reading' : 'listening');
+    const type = inferType(r);
     return {
       id: r.id || r.examId || ('rec_' + Date.now() + Math.random()),
       examId: r.examId || r.id,
       title: r.title || '未命题目',
-      type: type,
+      type,
       category: r.category || 'unknown',
       date: r.startTime || r.createdAt || r.date || new Date().toISOString(),
-      duration: dur, // seconds
-      score: score, // percentage 0–100
+      duration: dur,
+      score: score,
       realData: r.realData
     };
   }
-  async function applyImportedRecordsToPage() {
+  window.applyImportedRecordsToPage = async function() {
     try {
       if (!window.storage || typeof storage.get !== 'function') return;
       const recs = await storage.get('practice_records', []);
