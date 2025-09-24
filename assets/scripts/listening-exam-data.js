@@ -769,7 +769,7 @@ window.listeningExamIndex = [
         filename: '4. PART4 Field Trial – Heat Pump.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Field Trial – Heat Pump Technology.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -781,7 +781,7 @@ window.listeningExamIndex = [
         filename: '5. PART 4 Food Safety Standards.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'PART 4 Food Safety Standards.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -793,7 +793,7 @@ window.listeningExamIndex = [
         filename: '6.  Part 4 The development and production of the pencil.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'PART 4  The development and production of the pencil.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -805,7 +805,7 @@ window.listeningExamIndex = [
         filename: '7.  Part 4 The Salamander.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'The Salamander.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -817,7 +817,7 @@ window.listeningExamIndex = [
         filename: '8. Part 4 - history of music in Britain.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Part 4 - history of music in Britain.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -829,7 +829,7 @@ window.listeningExamIndex = [
         filename: '9. PART4 Effect of digital world on young people.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Effect of digital world on young people.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -841,7 +841,7 @@ window.listeningExamIndex = [
         filename: '10. PART 4 Solar water purifier ( SW40).html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'PART 4 Solar water purifier ( SW40).pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -853,7 +853,7 @@ window.listeningExamIndex = [
         filename: '11. PART4 The preservation of organisms and fossils.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'The preservation of organisms and fossils.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -865,7 +865,7 @@ window.listeningExamIndex = [
         filename: '12. PART4  After Action Review Process.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'After Action Review Process.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -877,7 +877,7 @@ window.listeningExamIndex = [
         filename: '13. PART4  Leatherback Turtles.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Leatherback Turtles.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -889,7 +889,7 @@ window.listeningExamIndex = [
         filename: '14. PART4  Honeybee.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Honeybee.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -901,7 +901,7 @@ window.listeningExamIndex = [
         filename: '15. PART4 Autonomous Underwater Vehicle (A.U.V.).html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Autonomous Underwater Vehicle (A.U.V.).pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -913,7 +913,7 @@ window.listeningExamIndex = [
         filename: '16. PART4 Gamification.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Gamification.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -925,7 +925,7 @@ window.listeningExamIndex = [
         filename: '17. PART4 American Salt Marshes.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'PART4 American Salt Marshes.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -937,7 +937,7 @@ window.listeningExamIndex = [
         filename: '18. PART4 Adwaita turtles.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Adwaita turtles.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -949,7 +949,7 @@ window.listeningExamIndex = [
         filename: '19. PART 4 Bislama – The Pidgin English Language of Vanuatu.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Bislama – The Pidgin English Language of Vanuatu.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -961,7 +961,7 @@ window.listeningExamIndex = [
         filename: '20. PART4 African Clawed Frog( (Xenopus Laevis).html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'African Clawed Frog( (Xenopus Laevis).pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -973,7 +973,7 @@ window.listeningExamIndex = [
         filename: '21. PART4  Aboriginal Textile Design.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Aboriginal Textile Design.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -985,7 +985,7 @@ window.listeningExamIndex = [
         filename: '22. PART4 Transhumance.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Transhumance.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -997,7 +997,7 @@ window.listeningExamIndex = [
         filename: '23. PART4 Elephant research in Amboseli.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Elephant research in Amboseli.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1009,7 +1009,7 @@ window.listeningExamIndex = [
         filename: '24. PART4 The Evolution and Cultivation of Vegetables.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'The Evolution and Cultivation of Vegetables.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1021,7 +1021,7 @@ window.listeningExamIndex = [
         filename: '25. PART4 Study on dolphins\' behavior.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Study on dolphins\'s behavior.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1033,7 +1033,7 @@ window.listeningExamIndex = [
         filename: '26. PART4 Ancient cave art symbols.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Ancient cave art symbols.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1045,7 +1045,7 @@ window.listeningExamIndex = [
         filename: '27. PART 4 Treadle Pump.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Treadle Pump.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1057,7 +1057,7 @@ window.listeningExamIndex = [
         filename: '28. PART4 Reintroducing the Beaver Population to Britain.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Reintroducing the Beaver Population to Britain.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1069,7 +1069,7 @@ window.listeningExamIndex = [
         filename: '29. PART4 Plant Behaviour.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Plant Behaviour.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1081,7 +1081,7 @@ window.listeningExamIndex = [
         filename: '30. PART4  Recycling Tyres in Australia.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Recycling Tyres in Australia.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1093,7 +1093,7 @@ window.listeningExamIndex = [
         filename: '31. PART4 Plastics exhibition.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Plastics exhibition.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1105,7 +1105,7 @@ window.listeningExamIndex = [
         filename: '32. PART4 Gastropods (snails and slugs).html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Gastropods (snails and slugs).pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1117,7 +1117,7 @@ window.listeningExamIndex = [
         filename: '33. PART4  Vertical farming a new approach to growing crops.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Vertical farming a new approach to growing crops.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1129,7 +1129,7 @@ window.listeningExamIndex = [
         filename: 'The Vikings.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'The Vikings.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1141,7 +1141,7 @@ window.listeningExamIndex = [
         filename: 'Tourism in Antarctica.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Tourism in Antarctica.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1153,7 +1153,7 @@ window.listeningExamIndex = [
         filename: 'Part 4 Underwater Archaeological Sites.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Part 4 Underwater Archaeological Sites.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1165,7 +1165,7 @@ window.listeningExamIndex = [
         filename: 'How To Unleash Your Creativity.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'How To Unleash Your Creativity.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1177,7 +1177,7 @@ window.listeningExamIndex = [
         filename: 'PART4  Supplementary feeding of wild animals.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'PART4  Supplementary feeding of wild animals.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1189,7 +1189,7 @@ window.listeningExamIndex = [
         filename: 'PART 4 Survival Strategies of Male Lizards.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'PART 4 Survival Strategies of Male Lizards.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1201,7 +1201,7 @@ window.listeningExamIndex = [
         filename: 'PART4  Benefits of using drama activities in the c.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'PART4  Benefits of using drama activities in the classroom.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1213,7 +1213,7 @@ window.listeningExamIndex = [
         filename: '41. PART4 Max Dupain.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: '41. PART4 Max Dupain.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1225,7 +1225,7 @@ window.listeningExamIndex = [
         filename: '42. PART 4 Photic sneezing.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'PART 4 Photic sneezing.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1237,7 +1237,7 @@ window.listeningExamIndex = [
         filename: '43. PART4 Development of tunnel linking Franch and England.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Development of tunnel linking Franch and England.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1249,7 +1249,7 @@ window.listeningExamIndex = [
         filename: '44. PART4 Kakapo, the endangered bird.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Kakapo, the endangered bird.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1261,7 +1261,7 @@ window.listeningExamIndex = [
         filename: '45. PART 4 Volcanic Activity on Mount Pinatub.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Volcanic Activity on Mount Pinatubo.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1273,7 +1273,7 @@ window.listeningExamIndex = [
         filename: '46. PART 4 Natural rubber production.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Natural rubber production.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1285,7 +1285,7 @@ window.listeningExamIndex = [
         filename: '47. PART4 History and development of railways.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'History and development of railways.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1297,7 +1297,7 @@ window.listeningExamIndex = [
         filename: '48. PART4 Extinction of Australian species.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Part 4 Extinction of Australian species.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1309,7 +1309,7 @@ window.listeningExamIndex = [
         filename: '49. PART4 The Knowledge of Antarctica Continent.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'The Knowledge of Antarctica Continent.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1321,7 +1321,7 @@ window.listeningExamIndex = [
         filename: '50. PART4 Stone Age Man in Japan.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Stone Age Man in Japan.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1333,7 +1333,7 @@ window.listeningExamIndex = [
         filename: '51. PART4 Early gold mining in the Otago region, New Zealand.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Early gold mining in the Otago region, New Zealand.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1345,7 +1345,7 @@ window.listeningExamIndex = [
         filename: '52. PART4 Canadian maple syrup.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Canadian maple syrup.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1357,7 +1357,7 @@ window.listeningExamIndex = [
         filename: '53. PART 4 Cape Breton Mining in Canada.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Cape Breton Mining in Canada.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1369,7 +1369,7 @@ window.listeningExamIndex = [
         filename: '54. PART4 Australian Crocodiles.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Australian Crocodiles.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1381,7 +1381,7 @@ window.listeningExamIndex = [
         filename: '55. PART4 Providing IT support for University Teachers.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Providing IT support for University Teachers.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1393,7 +1393,7 @@ window.listeningExamIndex = [
         filename: '56. PART4 Insect Extinction in the 21st Century.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Insect Extinction in the 21st Century.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1405,7 +1405,7 @@ window.listeningExamIndex = [
         filename: '57. PART4  Architecture in New Zealand in 1960s.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Architecture in New Zealand in 1960s.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1417,7 +1417,7 @@ window.listeningExamIndex = [
         filename: '58. PART4 The berbers.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'The Berbers.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1429,7 +1429,7 @@ window.listeningExamIndex = [
         filename: '59.  PART4 Geography 331 field trip.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Geography 331 field trip.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1441,7 +1441,7 @@ window.listeningExamIndex = [
         filename: '60.  PART4 Dolphin research in the northern territory.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'PART 4 Dolphin Research in the Northern Territory.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1453,7 +1453,7 @@ window.listeningExamIndex = [
         filename: '61. PART4 The Underground House.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'PART4 The Underground House.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1465,7 +1465,7 @@ window.listeningExamIndex = [
         filename: '62. PART4  Oxytocin and trust.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'PART4  Oxytocin and trust.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1477,7 +1477,7 @@ window.listeningExamIndex = [
         filename: '63. PART4  Jathropha a new biofuel.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'PART4 Jatropha --a new biofuel.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1489,7 +1489,7 @@ window.listeningExamIndex = [
         filename: '64. PART4 Organic Farming.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'PART 4 Organic Farming.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1501,7 +1501,7 @@ window.listeningExamIndex = [
         filename: '65. PART 4 The Mangrove Regeneration Project.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'PART4 The Mangrove Regeneration Project.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1513,7 +1513,7 @@ window.listeningExamIndex = [
         filename: '66. PART4 Different Types of Supermarket Layout.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'PART4 Different Types of Supermarket Layout.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1525,7 +1525,7 @@ window.listeningExamIndex = [
         filename: '67. PART4 Working as a Patent Attorney.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: '67. PART4 Working as a Patent Attorney.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1537,7 +1537,7 @@ window.listeningExamIndex = [
         filename: 'PART 4 Nanotechnology and Its Applications.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'PART 4 Nanotechnology and Its Applications.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1549,7 +1549,7 @@ window.listeningExamIndex = [
         filename: 'PART4  Cube houses.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'PART4  Cube houses.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1561,7 +1561,7 @@ window.listeningExamIndex = [
         filename: '70. PART4 Early Developments in Portraits.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'Early Developments in Portraits.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1573,7 +1573,7 @@ window.listeningExamIndex = [
         filename: '71. PART4 Calotype photography in Britain and France.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'PART4 Calotype photography in Britain and France.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1585,7 +1585,7 @@ window.listeningExamIndex = [
         filename: '72. PART4 New engineering designs Scottish case study.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'PART4 New engineering designs Scottish case study.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1597,7 +1597,7 @@ window.listeningExamIndex = [
         filename: '73. PART4 Bird surveying techniques.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'PART4 Bird surveying techniques.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1609,7 +1609,7 @@ window.listeningExamIndex = [
         filename: '74. PART4 Development and use of plastics.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'PART4 Development and use of plastics.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1621,7 +1621,7 @@ window.listeningExamIndex = [
         filename: '75. PART4  The importance of science fiction.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'PART4 The importance of science fiction.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1633,7 +1633,7 @@ window.listeningExamIndex = [
         filename: '76. PART4 Soundspace.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'PART4 Soundspaces.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1645,7 +1645,7 @@ window.listeningExamIndex = [
         filename: '77. PART4 The Tiger Shark.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'The Tiger Shark.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1657,7 +1657,7 @@ window.listeningExamIndex = [
         filename: '78. PART 4 Education about research in the humor of young children.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'PART 4 Education about research in the humor of young children.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1669,7 +1669,7 @@ window.listeningExamIndex = [
         filename: '79. PART4 Health on the night shift.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'PART4  Health on the night shift.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1681,7 +1681,7 @@ window.listeningExamIndex = [
         filename: '80. PART4 Cities Today.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'PART4 Cities today.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1693,7 +1693,7 @@ window.listeningExamIndex = [
         filename: '81. PART4 Manmade objects in space.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'PART4 Manmade objects in space.pdf',
         mp3Filename: 'audio.mp3'
     },
     {
@@ -1705,7 +1705,7 @@ window.listeningExamIndex = [
         filename: '82.PART4 The influence of the carter family on american music.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '',
+        pdfFilename: 'PART4 The influence of the carter family on american music.pdf',
         mp3Filename: 'audio.mp3'
     }
 ];
