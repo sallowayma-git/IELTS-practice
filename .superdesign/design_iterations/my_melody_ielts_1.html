@@ -3158,7 +3158,27 @@
                 }
                 initializePageEffects();
             }, 100);
-        });
+    document.addEventListener('DOMContentLoaded', function() {
+      if (window.syncSharedPracticeRecords) window.syncSharedPracticeRecords();
+      // 页面恢复可见时同步
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && window.syncSharedPracticeRecords) window.syncSharedPracticeRecords();
+      });
+      // 定时轻量轮询 5s
+      window._melodySyncTimer && clearInterval(window._melodySyncTimer);
+      window._melodySyncTimer = setInterval(() => {
+        if (window.syncSharedPracticeRecords) window.syncSharedPracticeRecords();
+      }, 5000);
+    });
+  })();
+
+  // 绑定导入文件事件（如果未绑定）
+  if (document.getElementById('melody-import-file')) {
+    document.getElementById('melody-import-file').addEventListener('change', async (ev) => {
+      await handleImportFile(ev.target.files && ev.target.files[0]);
+      ev.target.value = '';
+    });
+  }
 
         // 全局函数定义
         function startExam(examId) {
@@ -3215,10 +3235,13 @@
                     const list = await storage.get('practice_records', []);
                     const newList = list.filter(x => String(x.id) !== String(recordId));
                     await storage.set('practice_records', newList);
-                    if (window.applyImportedRecordsToPage) {
-                      await window.applyImportedRecordsToPage();
-                    } else if (window.app && typeof window.app.updateUI === 'function') {
-                      window.app.updateUI();
+    // 同步兼容键
+    const nested = await storage.get('exam_system_practice_records', null);
+    if (nested && Array.isArray(nested.data)) {
+      nested.data = newList; // 或过滤后的数组
+      await storage.set('exam_system_practice_records', nested);
+    }
+    await window.syncSharedPracticeRecords();
                     }
                   } catch (e) {
                     console.error('[Melody] 删除同步失败', e);
@@ -3236,10 +3259,13 @@
                 if (window.storage) {
                   try {
                     await storage.set('practice_records', []);
-                    if (window.applyImportedRecordsToPage) {
-                      await window.applyImportedRecordsToPage();
-                    } else if (window.app && typeof window.app.updateUI === 'function') {
-                      window.app.updateUI();
+    // 同步兼容键
+    const nested = await storage.get('exam_system_practice_records', null);
+    if (nested && Array.isArray(nested.data)) {
+      nested.data = []; // 清空
+      await storage.set('exam_system_practice_records', nested);
+    }
+    await window.syncSharedPracticeRecords();
                     }
                   } catch (e) {
                     console.error('[Melody] 清空同步失败', e);
@@ -3541,10 +3567,13 @@
                     const list = await storage.get('practice_records', []);
                     const newList = list.filter(x => !selectedIds.includes(String(x.id)));
                     await storage.set('practice_records', newList);
-                    if (window.applyImportedRecordsToPage) {
-                      await window.applyImportedRecordsToPage();
-                    } else if (window.app && typeof window.app.updateUI === 'function') {
-                      window.app.updateUI();
+    // 同步兼容键
+    const nested = await storage.get('exam_system_practice_records', null);
+    if (nested && Array.isArray(nested.data)) {
+      nested.data = newList; // 过滤后的数组
+      await storage.set('exam_system_practice_records', nested);
+    }
+    await window.syncSharedPracticeRecords();
                     }
                   } catch (e) {
                     console.error('[Melody] 批量删除同步失败', e);
@@ -5368,214 +5397,323 @@
     </script>
 <script>
 (function(){
-  // Ensure namespace
-  try {
-    if (window.storage && storage.setNamespace) storage.setNamespace('exam_system');
-  } catch(_) {}
-  function mapToMelodyModel(r) {
+  // Ensure namespace (no-op if storage not ready)
+  if (typeof window.storage === 'object' && window.storage.setNamespace) {
+    try {
+      window.storage.setNamespace('exam_system');
+    } catch (e) {
+      console.warn('[Melody] Namespace set failed:', e);
+    }
+  }
+
+  // Clean mapToMelodyModel: max non-negative score, multi-source derivation incl. answers comparison, examId-first type inference
+  window.mapToMelodyModel = function(r) {
+    if (!r || typeof r !== 'object') return null;
+
     function inferType(rec) {
-      const id = String(rec.examId || '').toLowerCase().trim();
-      // 优先用 examId 纠偏：p* → reading；listening-* → listening
+      const id = String(rec.examId || rec.id || '').toLowerCase().trim();
+      // Strict examId priority: listening-* → listening; p* → reading (no override)
       if (id.startsWith('listening-')) return 'listening';
-      if (id && id[0] === 'p') return 'reading';
-      // 再看显式 type（只在不冲突时采用）
-      const t = String(rec.type || '').toLowerCase().trim();
-      if ((t === 'reading' || t === 'listening') && !id.startsWith('p')) return t;
-      // 题库交叉核对
+      if (id.startsWith('p') && id.length > 1) return 'reading';
+      // Fallback to explicit type only if no examId prefix conflict
+      const explicitType = String(rec.type || '').toLowerCase().trim();
+      if (explicitType === 'reading' || explicitType === 'listening') return explicitType;
+      // Cross-check with examData if available
       try {
-        const ed = (window.app && Array.isArray(window.app.examData)) ? window.app.examData : [];
-        const m = ed.find(e => String(e.id) === String(rec.examId)) || ed.find(e => e.title && rec.title && String(e.title).trim() === String(rec.title).trim());
-        if (m && (m.type === 'reading' || m.type === 'listening')) return m.type;
-      } catch (_) {}
-      // 最后用 category 规则
+        const examData = (window.app && Array.isArray(window.app.examData)) ? window.app.examData : [];
+        const match = examData.find(e => String(e.id) === String(rec.examId)) ||
+                      examData.find(e => e.title && rec.title && String(e.title).trim().toLowerCase() === String(rec.title).trim().toLowerCase());
+        if (match && (match.type === 'reading' || match.type === 'listening')) return match.type;
+      } catch (e) {
+        console.warn('[InferType] ExamData check failed:', e);
+      }
+      // Final fallback: category rules, P4= listening, P1/P2=reading, P3=reading unless id hints listening
       const cat = String(rec.category || '').toUpperCase().trim();
       if (cat === 'P4') return 'listening';
       if (cat === 'P1' || cat === 'P2') return 'reading';
       if (cat === 'P3') return id.includes('listening') ? 'listening' : 'reading';
-      return 'reading';
+      return 'reading'; // Default
     }
+
     const rd = r.realData || {};
     const si = r.scoreInfo || rd.scoreInfo || {};
     const ac = r.answerComparison || rd.answerComparison || {};
-    // 1) 候选直接取百分比/分数/准确率
+
+    // 1. Basic candidates: direct percentage/score/accuracy (prioritize non-zero positives)
     const basicCandidates = [
-      r.percentage,
-      r.score,
-      rd.percentage,
-      rd.score,
-      si.percentage,
-      Number.isFinite(Number(r.accuracy)) ? Number(r.accuracy) * 100 : null,
-      Number.isFinite(Number(rd.accuracy)) ? Number(rd.accuracy) * 100 : null
-    ].filter(v => v !== null && v !== undefined && Number.isFinite(Number(v)));
-    // 2) 候选用 correct/total 推导（多来源）
+      Number(r.percentage), Number(r.score), Number(rd.percentage), Number(rd.score),
+      Number(si.percentage), Number(si.score),
+      Number.isFinite(Number(r.accuracy)) ? Number(r.accuracy) * 100 : NaN,
+      Number.isFinite(Number(rd.accuracy)) ? Number(rd.accuracy) * 100 : NaN,
+      Number.isFinite(Number(si.accuracy)) ? Number(si.accuracy) * 100 : NaN
+    ].filter(v => !isNaN(v) && Number.isFinite(v) && v >= 0 && v <= 100);
+
+    // 2. Ratio candidates: correct/total from multi-sources (ensure positive ratios)
     const ratioCandidates = [];
     const pushRatio = (correct, total) => {
-      const c = Number(correct), t = Number(total);
-      if (Number.isFinite(c) && Number.isFinite(t) && t > 0) ratioCandidates.push((c / t) * 100);
+      const c = Number(correct) || 0;
+      const t = Number(total) || 0;
+      if (t > 0 && c >= 0) {
+        const ratio = Math.min(100, Math.max(0, (c / t) * 100));
+        if (ratio > 0) ratioCandidates.push(ratio); // Only push positive to avoid suppressing valid scores
+      }
     };
-    pushRatio(r.correct, r.totalQuestions ?? r.total);
-    pushRatio(rd.correct, rd.totalQuestions ?? rd.total);
-    pushRatio(r.correctCount, r.questionCount ?? r.totalQuestions);
-    pushRatio(rd.correctCount, rd.questionCount ?? rd.totalQuestions);
-    pushRatio(si.correct, si.total ?? si.totalQuestions);
-    if (ac.summary && (ac.summary.correct != null) && (ac.summary.total != null)) {
+    pushRatio(r.correct, r.total || r.totalQuestions);
+    pushRatio(rd.correct, rd.total || rd.totalQuestions);
+    pushRatio(r.correctCount, r.questionCount || r.totalQuestions);
+    pushRatio(rd.correctCount, rd.questionCount || rd.totalQuestions);
+    pushRatio(si.correct, si.total || si.totalQuestions);
+    if (ac.summary && Number.isFinite(ac.summary.correct) && Number.isFinite(ac.summary.total)) {
       pushRatio(ac.summary.correct, ac.summary.total);
     }
-    // 3) 若仍然没有，则用 answers 对比 correctAnswers 逐题推导
-    if (!basicCandidates.length && !ratioCandidates.length && rd.answers && rd.correctAnswers) {
+
+    // 3. If no candidates, derive from answers vs correctAnswers comparison (per-question match)
+    if (basicCandidates.length === 0 && ratioCandidates.length === 0 && rd.answers && rd.correctAnswers) {
       try {
-        let c = 0, t = 0;
-        const ans = rd.answers, keySet = new Set(Object.keys(rd.correctAnswers));
-        keySet.forEach(k => {
-          t++;
-          if (String(ans[k]).trim() === String(rd.correctAnswers[k]).trim()) c++;
+        let correct = 0, total = 0;
+        const ansKeys = Object.keys(rd.answers);
+        const corrKeys = Object.keys(rd.correctAnswers);
+        const allKeys = [...new Set([...ansKeys, ...corrKeys])]; // Union of keys
+        allKeys.forEach(k => {
+          total++;
+          const userAns = String(rd.answers[k] || '').trim();
+          const corrAns = String(rd.correctAnswers[k] || '').trim();
+          if (userAns && userAns === corrAns && userAns !== '—') correct++;
         });
-        if (t > 0) ratioCandidates.push((c / t) * 100);
-      } catch (_) {}
+        if (total > 0) {
+          const derived = Math.min(100, Math.max(0, (correct / total) * 100));
+          if (derived > 0) ratioCandidates.push(derived); // Only positive
+        }
+      } catch (e) {
+        console.warn('[DeriveScore] Answers comparison failed:', e);
+      }
     }
-    // 4) 选出分数
+
+    // 4. Select score: max from all positive candidates (avoid 0 suppression)
     let score = 0;
-    const all = basicCandidates.concat(ratioCandidates)
-      .map(Number).filter(v => Number.isFinite(v));
-    const nonNeg = all.filter(v => v >= 0);
-    const picked = nonNeg.length ? Math.max(...nonNeg) : 0;
-    score = Math.round(Math.max(0, Math.min(100, picked)));
-    // 时长（秒）：duration > realData.duration > end-start
-    let dur = Number(r.duration);
-    if (!Number.isFinite(dur) || dur <= 0) {
-      const rdDur = Number(rd.duration);
-      if (Number.isFinite(rdDur) && rdDur > 0) dur = Math.round(rdDur);
+    const allCandidates = [...basicCandidates, ...ratioCandidates].filter(v => v > 0); // Filter >0 to prioritize valid over 0
+    if (allCandidates.length > 0) {
+      score = Math.round(Math.max(...allCandidates));
+    } else if (basicCandidates.length > 0) {
+      // Fallback to max non-negative if no positive
+      score = Math.round(Math.max(...basicCandidates.filter(v => v >= 0), 0));
     }
-    if ((!Number.isFinite(dur) || dur <= 0) && r.startTime && r.endTime) {
+    score = Math.max(0, Math.min(100, score)); // Clamp 0-100
+
+    // Duration (seconds): prioritize r.duration > rd.duration > end-start (ensure positive)
+    let dur = Number(r.duration) || 0;
+    if (dur <= 0) dur = Number(rd.duration) || 0;
+    if (dur <= 0 && r.startTime && r.endTime) {
       try {
-        const s = new Date(r.startTime).getTime();
-        const e = new Date(r.endTime).getTime();
-        if (Number.isFinite(s) && Number.isFinite(e) && e > s) dur = Math.round((e - s) / 1000);
-      } catch (_) {}
+        const start = new Date(r.startTime).getTime();
+        const end = new Date(r.endTime).getTime();
+        if (!isNaN(start) && !isNaN(end) && end > start) dur = Math.round((end - start) / 1000);
+      } catch (e) {}
     }
-    if (!Number.isFinite(dur) || dur < 0) dur = 0;
-    const type = inferType(r);
+    dur = Math.max(0, dur);
+
+    const mappedType = inferType(r);
+
     return {
-      id: r.id || r.examId || ('rec_' + Date.now() + Math.random()),
-      examId: r.examId || r.id,
-      title: r.title || '未命题目',
-      type,
-      category: r.category || 'unknown',
+      id: String(r.id || r.examId || ('rec_' + Date.now() + Math.random())),
+      examId: String(r.examId || r.id),
+      title: String(r.title || '未命名练习'),
+      type: mappedType,
+      category: String(r.category || 'unknown'),
       date: r.startTime || r.createdAt || r.date || new Date().toISOString(),
       duration: dur,
       score: score,
-      realData: r.realData
+      percentage: score, // Alias for compatibility
+      realData: r.realData // Preserve full details
     };
-  }
-  window.applyImportedRecordsToPage = async function() {
-    try {
-      if (!window.storage || typeof storage.get !== 'function') return;
-      const recs = await storage.get('practice_records', []);
-      const arr = Array.isArray(recs) ? recs : [];
-      const mapped = arr.map(mapToMelodyModel);
-      if (window.app) {
-        window.app.practiceRecords = mapped;
-        if (typeof window.app.updateUI === 'function') window.app.updateUI();
-      }
-      try {
-        localStorage.setItem('myMelodyPracticeRecords', JSON.stringify(mapped));
-      } catch(_) {}
-    } catch (e) {
-      console.error('[Melody] 同步导入记录失败', e);
-    }
-  }
-  async function handleImportFile(file) {
-    if (!file) return;
-    if (!window.DataBackupManager || !window.storage) {
-      alert('导入组件未就绪');
-      return;
-    }
-    // Only JSON is supported for import
-    if (!/\.json$/i.test(file.name)) {
-      alert('请导入 JSON 文件（CSV 导入暂不支持）');
-      return;
-    }
-    const raw = await file.text();
-    let obj;
-    try {
-      obj = JSON.parse(raw);
-    } catch (e) {
-      const msg = 'JSON 文件无效：' + (e && e.message ? e.message : e);
-      if (window.app?.showNotification) window.app.showNotification(msg);
-      else alert(msg);
-      return;
-    }
+  };
 
-    // Extract records from known shapes
-    let records = [];
-    if (Array.isArray(obj.practiceRecords)) {
-      records = obj.practiceRecords;
-    } else if (Array.isArray(obj.practice_records)) {
-      records = obj.practice_records;
-    } else if (obj && obj.data) {
-      // exam_system_practice_records.data[]
-      if (obj.data.exam_system_practice_records?.data && Array.isArray(obj.data.exam_system_practice_records.data)) {
-        records = obj.data.exam_system_practice_records.data;
-      }
-      // data.practice_records[]
-      else if (Array.isArray(obj.data.practice_records)) {
-        records = obj.data.practice_records;
-      }
-      // Generic: any key like practice_records with .data array
-      else {
-        for (const [k, v] of Object.entries(obj.data)) {
-          if (String(k).toLowerCase().includes('practice_records') && v && Array.isArray(v.data)) {
-            records = v.data;
-            break;
-          }
+  // Clean syncSharedPracticeRecords: read/map/update UI/mirror local, ensure full sync incl. deletions
+  window.syncSharedPracticeRecords = async function() {
+    if (typeof window.storage !== 'object') {
+      console.warn('[Sync] Storage unavailable');
+      return;
+    }
+    try {
+      // 1. Read primary: practice_records (array)
+      let list = await storage.get('practice_records', []);
+      if (!Array.isArray(list)) list = [];
+
+      // 2. Fallback to nested: exam_system_practice_records.data (array)
+      if (list.length === 0) {
+        const nested = await storage.get('exam_system_practice_records', null);
+        if (nested && Array.isArray(nested.data)) {
+          list = nested.data;
         }
       }
-    }
 
-    // Optional: fail early with a clear message
-    if (!Array.isArray(records) || records.length === 0) {
-      const msg = '导入失败：未在文件中发现练习记录数组（practiceRecords 或 data.exam_system_practice_records.data 或 data.practice_records）。';
-      if (window.app?.showNotification) window.app.showNotification(msg);
-      else alert(msg);
+      // 3. Map all to Melody model (handles derivation/fix)
+      const mapped = Array.isArray(list) ? list.map(window.mapToMelodyModel).filter(Boolean) : [];
+
+      // 4. Update app/UI if available
+      if (window.app && Array.isArray(window.app.practiceRecords)) {
+        // Merge: replace by id/examId, add new, remove missing (full sync for deletions)
+        const appIds = new Set(window.app.practiceRecords.map(r => String(r.id || r.examId)));
+        const mappedIds = new Set(mapped.map(r => String(r.id || r.examId)));
+        // Remove from app if missing in mapped (deletions)
+        window.app.practiceRecords = window.app.practiceRecords.filter(r => mappedIds.has(String(r.id || r.examId)));
+        // Add/update from mapped
+        mapped.forEach(newRec => {
+          const appIdx = window.app.practiceRecords.findIndex(r => String(r.id || r.examId) === String(newRec.id || newRec.examId));
+          if (appIdx >= 0) {
+            window.app.practiceRecords[appIdx] = newRec; // Update
+          } else {
+            window.app.practiceRecords.push(newRec); // Add
+          }
+        });
+        // Sort by date desc
+        window.app.practiceRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
+        if (typeof window.app.updateUI === 'function') window.app.updateUI();
+        if (typeof window.app.updatePractice === 'function') window.app.updatePractice();
+      }
+
+      // 5. Mirror to localStorage (myMelodyPracticeRecords) for legacy compat
+      try {
+        localStorage.setItem('myMelodyPracticeRecords', JSON.stringify(mapped));
+      } catch (e) {
+        console.warn('[Sync] Local mirror failed:', e);
+      }
+
+      // 6. Back-sync to nested if primary changed (ensure consistency)
+      if (list.length !== mapped.length) {
+        const nestedKey = 'exam_system_practice_records';
+        const currentNested = await storage.get(nestedKey, null);
+        if (currentNested && typeof currentNested === 'object') {
+          currentNested.data = mapped; // Update nested.data
+          await storage.set(nestedKey, currentNested);
+        }
+      }
+
+      console.log('[Sync] Synced', mapped.length, 'records (full incl. deletions)');
+    } catch (e) {
+      console.error('[Sync] Error:', e);
+    }
+  };
+
+  // Clean bindImport: JSON pre-extract + importPracticeData + sync
+  async function handleImportFile(file) {
+    if (!file || !window.DataBackupManager || typeof window.storage !== 'object') {
+      const msg = '导入组件未就绪，请稍后重试';
+      (window.app?.showNotification || alert)(msg);
+      return;
+    }
+    if (!/\.json$/i.test(file.name)) {
+      (window.app?.showNotification || alert)('仅支持 JSON 文件导入');
+      return;
+    }
+    let raw, obj;
+    try {
+      raw = await file.text();
+      obj = JSON.parse(raw);
+    } catch (e) {
+      const msg = 'JSON 解析失败: ' + (e?.message || String(e));
+      (window.app?.showNotification || alert)(msg);
       return;
     }
 
-    // Provide user_stats if present
-    const userStats = obj?.data?.exam_system_user_stats?.data || obj?.user_stats || null;
+    // Pre-extract records from common shapes (no mutation)
+    let records = [];
+    let userStats = null;
+    if (Array.isArray(obj.practiceRecords)) {
+      records = [...obj.practiceRecords];
+    } else if (Array.isArray(obj.practice_records)) {
+      records = [...obj.practice_records];
+    } else if (obj?.data) {
+      // Nested: exam_system_practice_records.data
+      if (obj.data.exam_system_practice_records?.data && Array.isArray(obj.data.exam_system_practice_records.data)) {
+        records = [...obj.data.exam_system_practice_records.data];
+      }
+      // Nested: practice_records.data or similar
+      else if (obj.data.practice_records?.data && Array.isArray(obj.data.practice_records.data)) {
+        records = [...obj.data.practice_records.data];
+      }
+      // user_stats
+      userStats = obj.data.exam_system_user_stats?.data || obj.user_stats || null;
+    }
+    if (!Array.isArray(records) || records.length === 0) {
+      (window.app?.showNotification || alert)('文件中未找到练习记录数组');
+      return;
+    }
 
+    // Import via DataBackupManager (merge, preserve IDs, backup)
     const mgr = new DataBackupManager();
     const result = await mgr.importPracticeData(
       { practiceRecords: records, user_stats: userStats },
       { mergeMode: 'merge', preserveIds: true, createBackup: true }
     );
-    await applyImportedRecordsToPage();
-    const imported = (result && (result.importedCount || result.finalCount || 0)) || 0;
-    if (window.app && typeof window.app.showNotification === 'function') {
-      window.app.showNotification('数据导入完成，记录数：' + imported);
-    }
+
+    // Post-import sync
+    await window.syncSharedPracticeRecords();
+
+    const count = (result?.importedCount || result?.finalCount || records.length) || 0;
+    (window.app?.showNotification || alert)('导入完成: ' + count + ' 条记录');
   }
+
   function bindImport() {
     const el = document.getElementById('melody-import-file');
     if (!el) return;
-    el.addEventListener('change', async (ev) => {
+    // Clear existing listeners to avoid duplicates
+    el.replaceWith(el.cloneNode(true));
+    const newEl = document.getElementById('melody-import-file');
+    newEl.addEventListener('change', async (ev) => {
       try {
-        await handleImportFile(ev.target.files && ev.target.files[0]);
+        await handleImportFile(ev.target.files?.[0]);
       } catch (e) {
-        const msg = (e && e.message) ? e.message : String(e);
-        console.error('[Melody] 导入失败', e);
-        if (window.app && typeof window.app.showNotification === 'function') {
-          window.app.showNotification('导入失败：' + msg);
-        } else {
-          alert('导入失败：' + msg);
-        }
+        const msg = (e?.message || String(e));
+        console.error('[Import] Failed:', e);
+        (window.app?.showNotification || alert)('导入失败: ' + msg);
       } finally {
-        ev.target.value = '';
+        newEl.value = ''; // Reset
       }
     });
   }
-  // Bind immediately if present; also bind after DOM ready
-  bindImport();
-  document.addEventListener('DOMContentLoaded', bindImport);
+
+  // Boot: bind on DOMContentLoaded/visibilitychange/5s timer (idempotent, no duplicates)
+  function boot() {
+    // Bind import once
+    bindImport();
+
+    // DOMContentLoaded sync (if not fired yet)
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initSync, { once: true });
+    } else {
+      initSync();
+    }
+
+    // Visibility change sync
+    document.addEventListener('visibilitychange', visSync, { once: false });
+
+    // 5s timer (clear existing to avoid multiples)
+    if (window._melodySyncTimer) clearInterval(window._melodySyncTimer);
+    window._melodySyncTimer = setInterval(syncSharedPracticeRecords, 5000);
+  }
+
+  function initSync() {
+    if (typeof window.syncSharedPracticeRecords === 'function') {
+      window.syncSharedPracticeRecords();
+    }
+  }
+
+  function visSync() {
+    if (!document.hidden && typeof window.syncSharedPracticeRecords === 'function') {
+      window.syncSharedPracticeRecords();
+    }
+  }
+
+  // Auto-boot on load (safe, checks existence)
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot, { once: true });
+  } else {
+    boot();
+  }
+
+  // Expose for manual call if needed
+  window.bootMelodySync = boot;
 })();
 </script>
 
