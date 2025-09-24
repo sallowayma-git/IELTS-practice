@@ -2217,15 +2217,15 @@
                 <h3>🎨 主题设置</h3>
                 <div class="setting-item">
                     <span>动画效果</span>
-                    <div class="toggle active" id="animationToggle"></div>
+                    <div class="toggle active" id="animationToggle" onclick="toggleSettingDirect('animations', this)"></div>
                 </div>
                 <div class="setting-item">
                     <span>粒子效果</span>
-                    <div class="toggle active" id="particlesToggle"></div>
+                    <div class="toggle active" id="particlesToggle" onclick="toggleSettingDirect('particles', this)"></div>
                 </div>
                   <div class="setting-item">
                     <span>深色模式</span>
-                    <div class="toggle" id="darkModeToggle"></div>
+                    <div class="toggle" id="darkModeToggle" onclick="toggleSettingDirect('darkMode', this)"></div>
                 </div>
                 <div class="setting-item">
                     <span>主题切换</span>
@@ -2237,15 +2237,15 @@
                 <h3>📊 学习设置</h3>
                 <div class="setting-item">
                     <span>自动保存进度</span>
-                    <div class="toggle active" id="autoSaveToggle"></div>
+                    <div class="toggle active" id="autoSaveToggle" onclick="toggleSettingDirect('autoSave', this)"></div>
                 </div>
                 <div class="setting-item">
                     <span>练习提醒</span>
-                    <div class="toggle" id="reminderToggle"></div>
+                    <div class="toggle" id="reminderToggle" onclick="toggleSettingDirect('reminders', this)"></div>
                 </div>
                 <div class="setting-item">
                     <span>成绩统计</span>
-                    <div class="toggle active" id="statisticsToggle"></div>
+                    <div class="toggle active" id="statisticsToggle" onclick="toggleSettingDirect('statistics', this)"></div>
                 </div>
                             </div>
 
@@ -3161,19 +3161,28 @@
                 }
                 initializePageEffects();
             }, 100);
-    document.addEventListener('DOMContentLoaded', function() {
-      if (window.syncSharedPracticeRecords) window.syncSharedPracticeRecords();
-      // 页面恢复可见时同步
-      document.addEventListener('visibilitychange', () => {
-        if (!document.hidden && window.syncSharedPracticeRecords) window.syncSharedPracticeRecords();
-      });
-      // 定时轻量轮询 5s
-      window._melodySyncTimer && clearInterval(window._melodySyncTimer);
-      window._melodySyncTimer = setInterval(() => {
-        if (window.syncSharedPracticeRecords) window.syncSharedPracticeRecords();
-      }, 5000);
-    });
-  })();
+
+            // 设置DOM加载完成事件
+            if (typeof document !== 'undefined' && document.addEventListener) {
+                document.addEventListener('DOMContentLoaded', function() {
+                    if (window.syncSharedPracticeRecords) window.syncSharedPracticeRecords();
+                    // 页面恢复可见时同步
+                    document.addEventListener('visibilitychange', () => {
+                        if (!document.hidden && window.syncSharedPracticeRecords) window.syncSharedPracticeRecords();
+                    });
+                    // 定时轻量轮询 5s
+                    window._melodySyncTimer && clearInterval(window._melodySyncTimer);
+                    window._melodySyncTimer = setInterval(() => {
+                        if (window.syncSharedPracticeRecords) window.syncSharedPracticeRecords();
+                    }, 5000);
+                });
+            } else if (typeof window !== 'undefined' && window.addEventListener) {
+                // 备选方案：使用window的load事件
+                window.addEventListener('load', function() {
+                    if (window.syncSharedPracticeRecords) window.syncSharedPracticeRecords();
+                });
+            }
+        })();
 
   // 绑定导入文件事件（如果未绑定）
   if (document.getElementById('melody-import-file')) {
@@ -4420,6 +4429,9 @@
   
         // 主题切换弹窗
         function showThemeSwitcher() {
+            console.log('[Theme] showThemeSwitcher called');
+            // 确保函数在全局可用
+            window.showThemeSwitcher = showThemeSwitcher;
             const html = `
             <div id="theme-switcher" class="modal-overlay show">
               <div class="modal-container" style="max-width:560px;">
@@ -5087,30 +5099,208 @@
         }
 
         // 页面加载时初始化真实数据
-        document.addEventListener('DOMContentLoaded', () => {
-            // 确保app对象创建完成后再设置事件监听器
-            setTimeout(() => {
-                initializeRealData();
-                // 重新设置设置页面的事件监听器
-                setupSettingsEventListeners();
+        // 设置页面加载完成事件
+        if (typeof document !== 'undefined' && document.addEventListener) {
+            document.addEventListener('DOMContentLoaded', () => {
+                // 确保app对象创建完成后再设置事件监听器
+                setTimeout(() => {
+                    initializeRealData();
+                    // 重新设置设置页面的事件监听器
+                    ensureSettingsWork();
 
-                // 添加调试函数到全局，方便用户调试
-                window.debugPracticeRecords = debugPracticeRecords;
-                console.log('[Debug] Debug function available: debugPracticeRecords()');
-
-                // 移除自动修复功能，只使用真实数据
-            }, 100);
-        });
+                    // 添加调试函数到全局，方便用户调试
+                    window.debugPracticeRecords = debugPracticeRecords;
+                    console.log('[Debug] Debug function available: debugPracticeRecords()');
+                }, 100);
+            });
+        } else if (typeof window !== 'undefined' && window.addEventListener) {
+            // 备选方案：使用window的load事件
+            window.addEventListener('load', () => {
+                setTimeout(() => {
+                    initializeRealData();
+                    ensureSettingsWork();
+                    window.debugPracticeRecords = debugPracticeRecords;
+                }, 100);
+            });
+        }
 
         // 设置页面事件监听器设置函数
         function setupSettingsEventListeners() {
-            document.getElementById('animationToggle')?.addEventListener('click', (e) => app.toggleSetting(e.target, 'animations'));
-            document.getElementById('particlesToggle')?.addEventListener('click', (e) => app.toggleSetting(e.target, 'particles'));
-              document.getElementById('autoSaveToggle')?.addEventListener('click', (e) => app.toggleSetting(e.target, 'autoSave'));
-            document.getElementById('reminderToggle')?.addEventListener('click', (e) => app.toggleSetting(e.target, 'reminders'));
-            document.getElementById('darkModeToggle')?.addEventListener('click', (e) => app.toggleSetting(e.target, 'darkMode'));
-            document.getElementById('statisticsToggle')?.addEventListener('click', (e) => app.toggleSetting(e.target, 'statistics'));
+            console.log('[Settings] Setting up event listeners...');
+
+            // 添加点击事件到设置项而不是toggle元素
+            const animationSetting = document.getElementById('animationToggle')?.closest('.setting-item');
+            const particlesSetting = document.getElementById('particlesToggle')?.closest('.setting-item');
+            const autoSaveSetting = document.getElementById('autoSaveToggle')?.closest('.setting-item');
+            const reminderSetting = document.getElementById('reminderToggle')?.closest('.setting-item');
+            const darkModeSetting = document.getElementById('darkModeToggle')?.closest('.setting-item');
+            const statisticsSetting = document.getElementById('statisticsToggle')?.closest('.setting-item');
+
+            console.log('[Settings] Found settings elements:', {
+                animation: !!animationSetting,
+                particles: !!particlesSetting,
+                autoSave: !!autoSaveSetting,
+                reminder: !!reminderSetting,
+                darkMode: !!darkModeSetting,
+                statistics: !!statisticsSetting
+            });
+
+            const handleSettingClick = (element, toggleId, settingName) => {
+                if (!element) return;
+
+                element.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log(`[Settings] Clicked ${settingName} setting`);
+
+                    if (window.app && window.app.toggleSetting) {
+                        const toggleElement = document.getElementById(toggleId);
+                        if (toggleElement) {
+                            window.app.toggleSetting(toggleElement, settingName);
+                            console.log(`[Settings] Toggled ${settingName} successfully`);
+                        } else {
+                            console.warn(`[Settings] Toggle element ${toggleId} not found`);
+                        }
+                    } else {
+                        console.warn(`[Settings] app.toggleSetting not available`);
                     }
+                });
+            };
+
+            handleSettingClick(animationSetting, 'animationToggle', 'animations');
+            handleSettingClick(particlesSetting, 'particlesToggle', 'particles');
+            handleSettingClick(autoSaveSetting, 'autoSaveToggle', 'autoSave');
+            handleSettingClick(reminderSetting, 'reminderToggle', 'reminders');
+            handleSettingClick(darkModeSetting, 'darkModeToggle', 'darkMode');
+            handleSettingClick(statisticsSetting, 'statisticsToggle', 'statistics');
+
+            console.log('[Settings] Event listeners setup complete');
+        }
+
+        // 添加一个备用方法：直接在HTML元素上设置onclick属性
+        function setupSettingsFallback() {
+            console.log('[Settings] Setting up fallback click handlers...');
+
+            const settings = [
+                { id: 'animationToggle', setting: 'animations' },
+                { id: 'particlesToggle', setting: 'particles' },
+                { id: 'autoSaveToggle', setting: 'autoSave' },
+                { id: 'reminderToggle', setting: 'reminders' },
+                { id: 'darkModeToggle', setting: 'darkMode' },
+                { id: 'statisticsToggle', setting: 'statistics' }
+            ];
+
+            settings.forEach(({ id, setting }) => {
+                const element = document.getElementById(id);
+                if (element) {
+                    // 直接设置onclick属性
+                    element.onclick = function() {
+                        console.log(`[Settings] Fallback: Clicked ${setting}`);
+                        if (window.app && window.app.toggleSetting) {
+                            window.app.toggleSetting(this, setting);
+                        }
+                    };
+                    console.log(`[Settings] Fallback: Set onclick for ${id}`);
+                }
+            });
+        }
+
+        // 在设置页面显示时调用备用方法
+        function ensureSettingsWork() {
+            setupSettingsEventListeners();
+            setTimeout(setupSettingsFallback, 500); // 延迟调用备用方法
+        }
+
+        // 直接的设置切换函数，作为onclick处理程序
+        function toggleSettingDirect(setting, element) {
+            console.log(`[Direct Toggle] ${setting} clicked`, element);
+
+            // 切换激活状态
+            element.classList.toggle('active');
+            const isActive = element.classList.contains('active');
+
+            console.log(`[Direct Toggle] ${setting} is now ${isActive ? 'active' : 'inactive'}`);
+
+            // 尝试更新app.settings
+            if (window.app && window.app.settings) {
+                window.app.settings[setting] = isActive;
+                console.log(`[Direct Toggle] Updated app.settings.${setting} to ${isActive}`);
+
+                // 保存数据
+                if (window.app.saveData) {
+                    window.app.saveData();
+                    console.log(`[Direct Toggle] Saved data`);
+                }
+            } else {
+                console.warn(`[Direct Toggle] app.settings not available, using localStorage`);
+                // 备用：使用localStorage
+                try {
+                    let settings = JSON.parse(localStorage.getItem('myMelodySettings') || '{}');
+                    settings[setting] = isActive;
+                    localStorage.setItem('myMelodySettings', JSON.stringify(settings));
+                    console.log(`[Direct Toggle] Saved to localStorage`);
+                } catch (e) {
+                    console.error(`[Direct Toggle] Failed to save to localStorage:`, e);
+                }
+            }
+
+            // 应用特定设置的效果
+            applySettingEffect(setting, isActive);
+        }
+
+        // 应用设置效果
+        function applySettingEffect(setting, isActive) {
+            console.log(`[Direct Toggle] Applying effect for ${setting}: ${isActive}`);
+
+            switch (setting) {
+                case 'particles':
+                    const particles = document.getElementById('particles');
+                    if (particles) {
+                        particles.style.display = isActive ? 'block' : 'none';
+                        console.log(`[Direct Toggle] Particles display set to ${isActive ? 'block' : 'none'}`);
+                    }
+                    break;
+
+                case 'animations':
+                    if (document.body) {
+                        document.body.style.animationPlayState = isActive ? 'running' : 'paused';
+                        console.log(`[Direct Toggle] Body animation play state set to ${isActive ? 'running' : 'paused'}`);
+                    }
+                    break;
+
+                case 'darkMode':
+                    if (document.body) {
+                        document.body.classList.toggle('dark-mode', isActive);
+                        console.log(`[Direct Toggle] Dark mode class ${isActive ? 'added' : 'removed'}`);
+
+                        // 调用applyDarkMode如果存在
+                        if (window.app && window.app.applyDarkMode) {
+                            window.app.applyDarkMode();
+                        }
+                    }
+                    break;
+
+                case 'reminders':
+                    console.log(`[Direct Toggle] Reminders set to ${isActive}`);
+                    break;
+
+                case 'statistics':
+                    console.log(`[Direct Toggle] Statistics set to ${isActive}`);
+                    break;
+
+                case 'autoSave':
+                    console.log(`[Direct Toggle] AutoSave set to ${isActive}`);
+                    break;
+
+                default:
+                    console.log(`[Direct Toggle] Unknown setting: ${setting}`);
+            }
+        }
+
+        // 确保关键函数在全局可用
+        window.toggleSettingDirect = toggleSettingDirect;
+        window.applySettingEffect = applySettingEffect;
+        window.ensureSettingsWork = ensureSettingsWork;
     </script>
 
     <script>
