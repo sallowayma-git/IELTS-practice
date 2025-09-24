@@ -1535,40 +1535,8 @@ function attemptComponentRecovery() {
     console.log('[System] 组件恢复尝试完成');
 }
 
-// 查看PDF文件
-function viewPDF(examId) {
-    const exam = examIndex.find(e => e.id === examId);
-    if (!exam) {
-        showMessage('题目不存在', 'error');
-        return;
-    }
-
-    let relativePdfPath;
-
-    // 构造PDF文件路径
-    const potentialPath = exam.path + exam.filename;
-
-    if (potentialPath.toLowerCase().endsWith('.pdf')) {
-        relativePdfPath = potentialPath;
-    } else if (exam.pdfFilename) {
-        if (typeof window.buildResourcePath === 'function') {
-            const built = window.buildResourcePath(exam, 'pdf');
-            showMessage(`正在打开PDF: ${exam.title}`, 'info');
-            openPDFSafely(built, exam.title);
-            return;
-        }
-        relativePdfPath = exam.path + exam.pdfFilename;
-    } else {
-        // Fallback if pdfFilename is missing
-        relativePdfPath = exam.path + exam.filename.replace(/\.html?$/i, '.pdf');
-    }
-
-    const encodedPdfPath = './' + encodeURI(relativePdfPath).replace(/%252F/g, '/');
-
-    console.log('[viewPDF] Attempting to open encoded pdfPath:', encodedPdfPath);
-    showMessage(`正在打开PDF: ${exam.title}`, 'info');
-    openPDFSafely(encodedPdfPath, exam.title);
-}
+// 查看PDF文件 - 函数已移至 main.js 以获得更好的维护性和一致性
+// PDF viewing function moved to main.js for better maintenance and consistency
 
 // 加载完整系统
 function loadFullSystem() {

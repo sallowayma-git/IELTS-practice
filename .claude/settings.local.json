@@ -6,7 +6,8 @@
       "Bash(node:*)",
       "Bash(dir:*)",
       "Bash(mkdir:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(python3:*)"
     ],
     "deny": [],
     "ask": []
