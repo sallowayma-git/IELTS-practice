@@ -7,11 +7,18 @@
 /tools/
 /ListeningPractice/
 /睡着过项目组(9.4)[134篇]/
+睡着过项目组(9.4)[134篇]/
+睡着过项目组(9.4)[134篇]/**
 /.claude/
+.claude/
+.claude/**
 /templates/hp/
-
 
 # 忽略可能的系统文件
 .DS_Store
 Thumbs.db
 .claude/settings.local.json
+
+# 使用通配符忽略特殊命名的目录
+*[9.4]*
+*睡着过项目组*
