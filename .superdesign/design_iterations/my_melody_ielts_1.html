@@ -12,6 +12,11 @@
     <script src="../../assets/scripts/listening-exam-data.js"></script>
     <script src="../../js/components/PerformanceOptimizer.js"></script>
     <script src="../../js/boot-fallbacks.js"></script>
+    <script src="../../js/utils/storage.js"></script>
+    <script src="../../js/utils/dataBackupManager.js"></script>
+    <script>
+    if (window.storage && storage.setNamespace) storage.setNamespace('exam_system');
+    </script>
     <!-- 仅影响后续动态生成链接的相对解析，不影响上文已加载资源 -->
     <base href="../../">
     <style>
@@ -2186,7 +2191,8 @@
                         <span class="melody-btn-icon">📤</span>
                         <span class="melody-btn-text">导出记录</span>
                     </button>
-                    <button class="melody-btn melody-btn-success" onclick="importRecords()">
+                    <input id="melody-import-file" type="file" accept=".json" style="display:none">
+                    <button class="melody-btn melody-btn-success" onclick="document.getElementById('melody-import-file').click()">
                         <span class="melody-btn-icon">📥</span>
                         <span class="melody-btn-text">导入记录</span>
                     </button>
@@ -5321,5 +5327,160 @@
       // 移除可能导致循环调用的重新加载逻辑
     });
     </script>
+<script>
+(function(){
+  // Ensure namespace
+  try {
+    if (window.storage && storage.setNamespace) storage.setNamespace('exam_system');
+  } catch(_) {}
+  function mapToMelodyModel(r) {
+    // Score: prefer percentage, then score, then accuracy*100
+    var pct = (r.percentage != null ? Number(r.percentage) : null);
+    var sc = (r.score != null ? Number(r.score) : null);
+    var acc = (r.accuracy != null ? Number(r.accuracy) : null);
+    var score = 0;
+    if (Number.isFinite(pct)) score = Math.round(pct);
+    else if (Number.isFinite(sc)) score = Math.round(sc);
+    else if (Number.isFinite(acc)) score = Math.round(acc * 100);
+    // Duration: prefer r.duration, else realData.duration, else compute from times
+    var dur = Number(r.duration);
+    if (!Number.isFinite(dur) || dur <= 0) {
+      var rd = (r.realData || {});
+      var rdDur = Number(rd.duration);
+      if (Number.isFinite(rdDur) && rdDur > 0) dur = Math.round(rdDur);
+    }
+    if ((!Number.isFinite(dur) || dur <= 0) && r.startTime && r.endTime) {
+      try {
+        var s = new Date(r.startTime).getTime(), e = new Date(r.endTime).getTime();
+        if (Number.isFinite(s) && Number.isFinite(e) && e > s) dur = Math.round((e - s) / 1000);
+      } catch(_) {}
+    }
+    if (!Number.isFinite(dur) || dur < 0) dur = 0;
+    // Type from existing field or fall back by category prefix
+    var type = r.type || (String(r.category || '').toUpperCase().startsWith('P') ? 'reading' : 'listening');
+    return {
+      id: r.id || r.examId || ('rec_' + Date.now() + Math.random()),
+      examId: r.examId || r.id,
+      title: r.title || '未命题目',
+      type: type,
+      category: r.category || 'unknown',
+      date: r.startTime || r.createdAt || r.date || new Date().toISOString(),
+      duration: dur, // seconds
+      score: score, // percentage 0–100
+      realData: r.realData
+    };
+  }
+  async function applyImportedRecordsToPage() {
+    try {
+      if (!window.storage || typeof storage.get !== 'function') return;
+      const recs = await storage.get('practice_records', []);
+      const arr = Array.isArray(recs) ? recs : [];
+      const mapped = arr.map(mapToMelodyModel);
+      if (window.app) {
+        window.app.practiceRecords = mapped;
+        if (typeof window.app.updateUI === 'function') window.app.updateUI();
+      }
+      try {
+        localStorage.setItem('myMelodyPracticeRecords', JSON.stringify(mapped));
+      } catch(_) {}
+    } catch (e) {
+      console.error('[Melody] 同步导入记录失败', e);
+    }
+  }
+  async function handleImportFile(file) {
+    if (!file) return;
+    if (!window.DataBackupManager || !window.storage) {
+      alert('导入组件未就绪');
+      return;
+    }
+    // Only JSON is supported for import
+    if (!/\.json$/i.test(file.name)) {
+      alert('请导入 JSON 文件（CSV 导入暂不支持）');
+      return;
+    }
+    const raw = await file.text();
+    let obj;
+    try {
+      obj = JSON.parse(raw);
+    } catch (e) {
+      const msg = 'JSON 文件无效：' + (e && e.message ? e.message : e);
+      if (window.app?.showNotification) window.app.showNotification(msg);
+      else alert(msg);
+      return;
+    }
+
+    // Extract records from known shapes
+    let records = [];
+    if (Array.isArray(obj.practiceRecords)) {
+      records = obj.practiceRecords;
+    } else if (Array.isArray(obj.practice_records)) {
+      records = obj.practice_records;
+    } else if (obj && obj.data) {
+      // exam_system_practice_records.data[]
+      if (obj.data.exam_system_practice_records?.data && Array.isArray(obj.data.exam_system_practice_records.data)) {
+        records = obj.data.exam_system_practice_records.data;
+      }
+      // data.practice_records[]
+      else if (Array.isArray(obj.data.practice_records)) {
+        records = obj.data.practice_records;
+      }
+      // Generic: any key like practice_records with .data array
+      else {
+        for (const [k, v] of Object.entries(obj.data)) {
+          if (String(k).toLowerCase().includes('practice_records') && v && Array.isArray(v.data)) {
+            records = v.data;
+            break;
+          }
+        }
+      }
+    }
+
+    // Optional: fail early with a clear message
+    if (!Array.isArray(records) || records.length === 0) {
+      const msg = '导入失败：未在文件中发现练习记录数组（practiceRecords 或 data.exam_system_practice_records.data 或 data.practice_records）。';
+      if (window.app?.showNotification) window.app.showNotification(msg);
+      else alert(msg);
+      return;
+    }
+
+    // Provide user_stats if present
+    const userStats = obj?.data?.exam_system_user_stats?.data || obj?.user_stats || null;
+
+    const mgr = new DataBackupManager();
+    const result = await mgr.importPracticeData(
+      { practiceRecords: records, user_stats: userStats },
+      { mergeMode: 'merge', preserveIds: true, createBackup: true }
+    );
+    await applyImportedRecordsToPage();
+    const imported = (result && (result.importedCount || result.finalCount || 0)) || 0;
+    if (window.app && typeof window.app.showNotification === 'function') {
+      window.app.showNotification('数据导入完成，记录数：' + imported);
+    }
+  }
+  function bindImport() {
+    const el = document.getElementById('melody-import-file');
+    if (!el) return;
+    el.addEventListener('change', async (ev) => {
+      try {
+        await handleImportFile(ev.target.files && ev.target.files[0]);
+      } catch (e) {
+        const msg = (e && e.message) ? e.message : String(e);
+        console.error('[Melody] 导入失败', e);
+        if (window.app && typeof window.app.showNotification === 'function') {
+          window.app.showNotification('导入失败：' + msg);
+        } else {
+          alert('导入失败：' + msg);
+        }
+      } finally {
+        ev.target.value = '';
+      }
+    });
+  }
+  // Bind immediately if present; also bind after DOM ready
+  bindImport();
+  document.addEventListener('DOMContentLoaded', bindImport);
+})();
+</script>
+
 </body>
 </html>
