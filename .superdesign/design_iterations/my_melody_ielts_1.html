@@ -5470,8 +5470,18 @@
         }
 
         // 刷新题库列表
-        function refreshExamList() {
-            loadRealExamLibrary();
+        async function refreshExamList() {
+            try {
+                const config = await getActiveLibraryConfig();
+                await window.librarySyncManager.syncLibraryConfig(config);
+                if (window.app && window.app.updateBrowse) {
+                    window.app.updateBrowse();
+                }
+                app.showNotification('题库已刷新');
+            } catch (error) {
+                console.error('[Refresh] 刷新失败:', error);
+                app.showNotification('刷新题库失败，请重试');
+            }
         }
 
         // 初始化真实数据
