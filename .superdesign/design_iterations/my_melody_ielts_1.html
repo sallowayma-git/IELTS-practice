@@ -3128,7 +3128,7 @@
 
                 this.syncInterval = setInterval(() => {
                     this.checkLibraryConfigStatus();
-                }, 5000); // 每5秒检查一次
+                }, 10000); // 每10秒检查一次
 
                 console.log('[Sync] 启动定期配置检查');
             }
@@ -3641,19 +3641,23 @@
             }, 500);
 
             // 设置DOM加载完成事件
-            if (typeof document !== 'undefined' && document.addEventListener) {
-                document.addEventListener('DOMContentLoaded', function() {
-                    if (window.syncSharedPracticeRecords) window.syncSharedPracticeRecords();
-                    // 页面恢复可见时同步
-                    document.addEventListener('visibilitychange', () => {
-                        if (!document.hidden && window.syncSharedPracticeRecords) window.syncSharedPracticeRecords();
-                    });
-                    // 定时轻量轮询 5s
-                    window._melodySyncTimer && clearInterval(window._melodySyncTimer);
-                    window._melodySyncTimer = setInterval(() => {
+            if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+                if (typeof document.addEventListener === 'function') {
+                    document.addEventListener('DOMContentLoaded', function() {
                         if (window.syncSharedPracticeRecords) window.syncSharedPracticeRecords();
-                    }, 5000);
-                });
+                        // 页面恢复可见时同步
+                        if (typeof document.addEventListener === 'function') {
+                            document.addEventListener('visibilitychange', () => {
+                                if (!document.hidden && window.syncSharedPracticeRecords) window.syncSharedPracticeRecords();
+                            });
+                        }
+                        // 定时轻量轮询 5s
+                        window._melodySyncTimer && clearInterval(window._melodySyncTimer);
+                        window._melodySyncTimer = setInterval(() => {
+                            if (window.syncSharedPracticeRecords) window.syncSharedPracticeRecords();
+                        }, 5000);
+                    });
+                }
             } else if (typeof window !== 'undefined' && window.addEventListener) {
                 // 备选方案：使用window的load事件
                 window.addEventListener('load', function() {
@@ -6138,6 +6142,23 @@
 
       // 增强的题库加载函数，支持同步机制
       window.loadRealExamLibraryWithSync = async function(forceFresh = false) {
+        // 添加加载标志防止重复加载
+        if (window.libraryLoading && !forceFresh) {
+          console.log('[Library] 题库正在加载中，跳过重复调用');
+          return Promise.resolve(window.app ? window.app.examData : []);
+        }
+
+        if (!forceFresh) {
+          // 检查配置变化：如果配置未变且最近加载过（<30s），跳过
+          const lastLoadTime = window.lastLibraryLoadTime || 0;
+          const now = Date.now();
+          if (now - lastLoadTime < 30000) {
+            console.log('[Library] 最近已加载，跳过');
+            return Promise.resolve(window.app ? window.app.examData : []);
+          }
+        }
+
+        window.libraryLoading = true;
         const startTime = performance.now();
         console.log('[Library] 开始加载题库数据，强制刷新:', forceFresh);
 
@@ -6192,6 +6213,8 @@
               window.app.updateUI();
             }
 
+            window.lastLibraryLoadTime = Date.now();
+
             console.log('[Library] 题库加载完成');
             if (window.app && window.app.showNotification) {
               window.app.showNotification(`题库加载完成！共 ${data.length} 个题目`, 'success');
@@ -6225,6 +6248,8 @@
           }
 
           throw error;
+        } finally {
+          window.libraryLoading = false;
         }
       };
 
