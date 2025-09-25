@@ -2311,6 +2311,96 @@
     </div>
 
     <script>
+        // 测试函数 (全局)
+        window.showSyncStatus = function() {
+            if (window.librarySyncManager) {
+                console.log('[Status] 同步管理器状态:', {
+                    isInitialized: window.librarySyncManager.isInitialized,
+                    currentConfig: window.librarySyncManager.currentConfig,
+                    lastSyncTime: new Date(window.librarySyncManager.lastSyncTime).toLocaleString(),
+                    retryCount: window.librarySyncManager.retryCount
+                });
+            } else {
+                console.log('[Status] 同步管理器未初始化');
+            }
+
+            if (window.app && window.app.examData) {
+                console.log('[Status] 题库数据状态:', {
+                    totalExams: window.app.examData.length,
+                    reading: window.app.examData.filter(e => e.type === 'reading').length,
+                    listening: window.app.examData.filter(e => e.type === 'listening').length,
+                    configId: window.librarySyncManager ? window.librarySyncManager.currentConfig.id : 'none'
+                });
+            } else {
+                console.log('[Status] 题库数据未加载或app对象不存在');
+            }
+        };
+
+        window.manualSyncLibrary = async function() {
+            console.log('[Manual] 手动触发题库同步...');
+
+            if (window.librarySyncManager) {
+                const config = await window.librarySyncManager.getActiveLibraryConfig();
+                console.log('[Manual] 当前配置:', config);
+
+                await window.librarySyncManager.syncLibraryConfig(config);
+                console.log('[Manual] 手动同步完成');
+            } else {
+                console.log('[Manual] 同步管理器不可用，请等待初始化');
+            }
+        };
+
+        window.testLibrarySync = function() {
+            console.log('[Test] 开始测试题库同步功能...');
+
+            // 测试1: 检查同步管理器是否已初始化
+            if (window.librarySyncManager) {
+                console.log('[Test] ✅ 同步管理器已初始化');
+                console.log('[Test] 管理器状态:', {
+                    isInitialized: window.librarySyncManager.isInitialized,
+                    currentConfig: window.librarySyncManager.currentConfig,
+                    hasSyncInterval: !!window.librarySyncManager.syncInterval
+                });
+            } else {
+                console.log('[Test] ❌ 同步管理器未初始化');
+                return false;
+            }
+
+            // 测试2: 检查题库数据是否已加载
+            if (window.app && window.app.examData && window.app.examData.length > 0) {
+                console.log('[Test] ✅ 题库数据已加载');
+                console.log('[Test] 题目数量:', window.app.examData.length);
+
+                // 统计分类
+                const reading = window.app.examData.filter(e => e.type === 'reading').length;
+                const listening = window.app.examData.filter(e => e.type === 'listening').length;
+                console.log('[Test] 阅读题目:', reading, '个');
+                console.log('[Test] 听力题目:', listening, '个');
+            } else {
+                console.log('[Test] ❌ 题库数据未加载');
+                return false;
+            }
+
+            // 测试3: 检查函数可用性
+            if (typeof window.loadRealExamLibrary === 'function') {
+                console.log('[Test] ✅ loadRealExamLibrary 函数可用');
+            }
+
+            // 测试4: 检查存储配置
+            if (window.storage) {
+                console.log('[Test] ✅ 存储系统可用');
+                console.log('[Test] 存储命名空间:', window.storage.getNamespace ? window.storage.getNamespace() : '未设置');
+            } else {
+                console.log('[Test] ❌ 存储系统不可用');
+            }
+
+            // 测试5: 模拟配置变化（轻量）
+            console.log('[Test] 模拟配置变化检查（不执行完整同步）');
+            console.log('[Test] 测试完成');
+
+            return true;
+        };
+
         // 全局状态管理
         class MyMelodyIELTSApp {
             constructor() {
@@ -3149,31 +3239,42 @@
 
             // 同步题库配置
             async syncLibraryConfig(newConfig) {
+                // 防止频繁调用：在同步中添加锁
+                if (this.isSyncing) {
+                    console.log('[Sync] 同步正在进行中，跳过重复调用');
+                    return;
+                }
+                this.isSyncing = true;
                 this.showSyncStatus('正在同步题库配置...');
 
                 try {
+                    console.log('[Sync] 开始同步配置:', newConfig.id);
+                    
                     // 清除相关缓存
                     await this.clearLibraryCache();
-
+                    
                     // 重新加载题库
                     await this.reloadExamLibrary(newConfig);
-
+                    
                     // 更新当前配置
                     this.currentConfig = newConfig;
                     this.lastSyncTime = Date.now();
                     this.retryCount = 0;
-
+                    
                     // 更新UI显示
                     this.updateExamGrid();
-
+                    
                     // 显示成功提示
-                    this.showSyncSuccess('题库配置已同步');
-
-                    console.log('[Sync] 题库配置同步完成');
+                    this.showSyncSuccess(`题库已切换至: ${newConfig.id} (${this.examData.length}个题目)`);
+                    
+                    console.log('[Sync] 题库配置同步完成:', newConfig.id);
+                    console.log('[Sync] 切换后题库数量:', this.examData.length);
 
                 } catch (error) {
                     console.error('[Sync] 题库配置同步失败:', error);
                     this.handleSyncError(error, newConfig);
+                } finally {
+                    this.isSyncing = false;
                 }
             }
 
@@ -3508,11 +3609,12 @@
             setTimeout(async () => {
                 try {
                     console.log('[Init] 开始初始化题库同步管理器...');
-                    if (window.librarySyncManager) {
+                    if (typeof LibrarySyncManager !== 'undefined') {
+                        window.librarySyncManager = new LibrarySyncManager();
                         await window.librarySyncManager.init();
                         console.log('[Init] 题库同步管理器初始化成功');
                     } else {
-                        console.warn('[Init] 题库同步管理器未定义');
+                        console.warn('[Init] LibrarySyncManager 类未定义');
                     }
                 } catch (error) {
                     console.error('[Init] 题库同步管理器初始化失败:', error);
@@ -4503,12 +4605,15 @@
         }
 
         function loadLibrary() {
-            app.showNotification('正在重新加载题库...');
-            setTimeout(() => {
-                app.initSampleData();
-                app.updateBrowse();
-                app.showNotification('题库重新加载完成');
-            }, 1000);
+            if (window.librarySyncManager) {
+                app.showNotification('正在重新加载题库...');
+                window.manualSyncLibrary();
+            } else if (typeof window.loadRealExamLibrary === 'function') {
+                app.showNotification('正在重新加载题库...');
+                window.loadRealExamLibrary(true);
+            } else {
+                app.showNotification('题库加载函数未定义，请刷新页面');
+            }
         }
 
         function checkLibraryUpdates() {
