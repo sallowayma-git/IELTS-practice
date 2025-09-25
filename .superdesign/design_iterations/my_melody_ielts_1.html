@@ -2252,8 +2252,8 @@
             <div class="settings-section">
                 <h3>📚 题库管理</h3>
                 <div class="data-actions">
+                    <button class="btn btn-info" onclick="showLibraryConfigListV2()">⚙️ 题库配置切换</button>
                     <button class="btn" onclick="loadLibrary()">🔄 重新加载题库</button>
-                    <button class="btn btn-secondary" onclick="checkLibraryUpdates()">📋 检查更新</button>
                     <button class="btn btn-secondary" onclick="libraryInfo()">ℹ️ 题库信息</button>
                 </div>
             </div>
@@ -2311,95 +2311,7 @@
     </div>
 
     <script>
-        // 测试函数 (全局)
-        window.showSyncStatus = function() {
-            if (window.librarySyncManager) {
-                console.log('[Status] 同步管理器状态:', {
-                    isInitialized: window.librarySyncManager.isInitialized,
-                    currentConfig: window.librarySyncManager.currentConfig,
-                    lastSyncTime: new Date(window.librarySyncManager.lastSyncTime).toLocaleString(),
-                    retryCount: window.librarySyncManager.retryCount
-                });
-            } else {
-                console.log('[Status] 同步管理器未初始化');
-            }
 
-            if (window.app && window.app.examData) {
-                console.log('[Status] 题库数据状态:', {
-                    totalExams: window.app.examData.length,
-                    reading: window.app.examData.filter(e => e.type === 'reading').length,
-                    listening: window.app.examData.filter(e => e.type === 'listening').length,
-                    configId: window.librarySyncManager ? window.librarySyncManager.currentConfig.id : 'none'
-                });
-            } else {
-                console.log('[Status] 题库数据未加载或app对象不存在');
-            }
-        };
-
-        window.manualSyncLibrary = async function() {
-            console.log('[Manual] 手动触发题库同步...');
-
-            if (window.librarySyncManager) {
-                const config = await window.librarySyncManager.getActiveLibraryConfig();
-                console.log('[Manual] 当前配置:', config);
-
-                await window.librarySyncManager.syncLibraryConfig(config);
-                console.log('[Manual] 手动同步完成');
-            } else {
-                console.log('[Manual] 同步管理器不可用，请等待初始化');
-            }
-        };
-
-        window.testLibrarySync = function() {
-            console.log('[Test] 开始测试题库同步功能...');
-
-            // 测试1: 检查同步管理器是否已初始化
-            if (window.librarySyncManager) {
-                console.log('[Test] ✅ 同步管理器已初始化');
-                console.log('[Test] 管理器状态:', {
-                    isInitialized: window.librarySyncManager.isInitialized,
-                    currentConfig: window.librarySyncManager.currentConfig,
-                    hasSyncInterval: !!window.librarySyncManager.syncInterval
-                });
-            } else {
-                console.log('[Test] ❌ 同步管理器未初始化');
-                return false;
-            }
-
-            // 测试2: 检查题库数据是否已加载
-            if (window.app && window.app.examData && window.app.examData.length > 0) {
-                console.log('[Test] ✅ 题库数据已加载');
-                console.log('[Test] 题目数量:', window.app.examData.length);
-
-                // 统计分类
-                const reading = window.app.examData.filter(e => e.type === 'reading').length;
-                const listening = window.app.examData.filter(e => e.type === 'listening').length;
-                console.log('[Test] 阅读题目:', reading, '个');
-                console.log('[Test] 听力题目:', listening, '个');
-            } else {
-                console.log('[Test] ❌ 题库数据未加载');
-                return false;
-            }
-
-            // 测试3: 检查函数可用性
-            if (typeof window.loadRealExamLibrary === 'function') {
-                console.log('[Test] ✅ loadRealExamLibrary 函数可用');
-            }
-
-            // 测试4: 检查存储配置
-            if (window.storage) {
-                console.log('[Test] ✅ 存储系统可用');
-                console.log('[Test] 存储命名空间:', window.storage.getNamespace ? window.storage.getNamespace() : '未设置');
-            } else {
-                console.log('[Test] ❌ 存储系统不可用');
-            }
-
-            // 测试5: 模拟配置变化（轻量）
-            console.log('[Test] 模拟配置变化检查（不执行完整同步）');
-            console.log('[Test] 测试完成');
-
-            return true;
-        };
 
         // 全局状态管理
         class MyMelodyIELTSApp {
@@ -6250,9 +6162,6 @@
           }
         });
 
-        // 调试代码已清理
-
-        // 调试代码已清理
       };
 
       // 增强的题库加载函数，支持同步机制
