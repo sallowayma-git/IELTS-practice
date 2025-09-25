@@ -3249,7 +3249,7 @@
                 }
                 this.isSyncing = true;
                 this.showSyncStatus('正在同步题库配置...');
-
+            
                 try {
                     console.log('[Sync] 开始同步配置:', newConfig.id);
                     
@@ -3257,7 +3257,16 @@
                     await this.clearLibraryCache();
                     
                     // 重新加载题库
-                    await this.reloadExamLibrary(newConfig);
+                    const data = await this.reloadExamLibrary(newConfig);
+                    
+                    // 添加null/undefined检查
+                    if (data && Array.isArray(data) && data.length > 0) {
+                        this.examData = data;
+                        console.log('[Sync] Library data loaded successfully:', data.length, 'items');
+                    } else {
+                        console.warn('[Sync] Library data is invalid or empty, falling back to empty array');
+                        this.examData = [];
+                    }
                     
                     // 更新当前配置
                     this.currentConfig = newConfig;
@@ -3272,7 +3281,7 @@
                     
                     console.log('[Sync] 题库配置同步完成:', newConfig.id);
                     console.log('[Sync] 切换后题库数量:', this.examData.length);
-
+            
                 } catch (error) {
                     console.error('[Sync] 题库配置同步失败:', error);
                     this.handleSyncError(error, newConfig);
@@ -3283,24 +3292,55 @@
 
             // 清除题库缓存
             async clearLibraryCache() {
-                if (window.storage) {
+                let keys = [];
+                if (window.storage && typeof window.storage.keys === 'function') {
                     try {
-                        // 清除所有题库相关的缓存
-                        const keys = await window.storage.keys();
-                        const libraryKeys = keys.filter(key =>
-                            key.includes('exam_library') ||
-                            key.includes('completeExamIndex') ||
-                            key.includes('listeningExamIndex')
-                        );
-
-                        for (const key of libraryKeys) {
-                            await window.storage.remove(key);
-                        }
-
-                        console.log('[Sync] 已清除题库缓存:', libraryKeys);
+                        keys = await window.storage.keys();
+                        console.log('[Sync] Retrieved keys from window.storage:', keys.length);
                     } catch (error) {
-                        console.warn('[Sync] 清除缓存失败:', error);
+                        console.warn('[Sync] Error getting keys from window.storage:', error);
+                        keys = [];
                     }
+                } else {
+                    console.warn('[Sync] window.storage.keys not available, falling back to localStorage');
+                    try {
+                        keys = Object.keys(localStorage);
+                        console.log('[Sync] Retrieved keys from localStorage:', keys.length);
+                    } catch (error) {
+                        console.warn('[Sync] Error getting keys from localStorage:', error);
+                        keys = [];
+                    }
+                }
+            
+                if (Array.isArray(keys)) {
+                    const libraryKeys = keys.filter(key =>
+                        key.includes('exam_library') ||
+                        key.includes('completeExamIndex') ||
+                        key.includes('listeningExamIndex')
+                    );
+            
+                    if (window.storage && typeof window.storage.remove === 'function') {
+                        for (const key of libraryKeys) {
+                            try {
+                                await window.storage.remove(key);
+                            } catch (error) {
+                                console.warn('[Sync] Error removing key:', key, error);
+                            }
+                        }
+                    } else {
+                        // Fallback to localStorage.removeItem
+                        for (const key of libraryKeys) {
+                            try {
+                                localStorage.removeItem(key);
+                            } catch (error) {
+                                console.warn('[Sync] Error removing localStorage key:', key, error);
+                            }
+                        }
+                    }
+            
+                    console.log('[Sync] 已清除题库缓存:', libraryKeys.length, 'keys');
+                } else {
+                    console.warn('[Sync] Keys is not an array, skipping cache clear');
                 }
             }
 
@@ -3365,22 +3405,38 @@
             // 处理同步错误
             async handleSyncError(error, config) {
                 this.retryCount++;
-
+            
+                console.log(`[Sync] 处理同步错误，重试次数: ${this.retryCount}/${this.maxRetries}`);
+            
                 if (this.retryCount <= this.maxRetries) {
                     console.log(`[Sync] 第 ${this.retryCount} 次重试同步...`);
-
-                    setTimeout(async () => {
+            
+                    // 添加错误捕获避免无限循环
+                    const retryTimeout = setTimeout(async () => {
                         try {
+                            clearTimeout(retryTimeout); // 确保只执行一次
                             await this.syncLibraryConfig(config);
+                            this.retryCount = 0; // 成功后重置
                         } catch (retryError) {
                             console.error(`[Sync] 第 ${this.retryCount} 次重试失败:`, retryError);
                             if (this.retryCount >= this.maxRetries) {
                                 this.showSyncError('同步失败，已重试多次');
+                                // 停止任何潜在的重复定时器
+                                if (this.syncInterval) {
+                                    clearInterval(this.syncInterval);
+                                    this.syncInterval = null;
+                                }
                             }
                         }
                     }, 2000 * this.retryCount); // 递增延迟
                 } else {
+                    console.warn('[Sync] 达到最大重试次数，停止重试');
                     this.showSyncError('同步失败，请手动刷新页面');
+                    // 停止定期检查以避免重复尝试
+                    if (this.syncInterval) {
+                        clearInterval(this.syncInterval);
+                        this.syncInterval = null;
+                    }
                 }
             }
 
@@ -5332,13 +5388,19 @@
 
         function upsertPracticeRecord(rec) {
             console.log('[Record] Starting upsert for:', rec);
-
+        
             // 获取当前的记录列表
             let list = window.storage ? window.storage.get('practice_records', []) : [];
+            console.log('[Record] list type:', typeof list, 'isArray:', Array.isArray(list));
+            if (!Array.isArray(list)) list = [];
             const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-
+        
             // 1. 按sessionId去重
             const bySessionId = (r) => String(r.id) === String(rec.id);
+            if (!Array.isArray(list)) {
+                console.warn('[Record] List is not an array before findIndex, skipping upsert');
+                return;
+            }
             const sessionIdx = list.findIndex(bySessionId);
 
             if (sessionIdx >= 0) {
@@ -5347,6 +5409,10 @@
                 console.log('[Record] Updated existing record by sessionId:', rec.id);
             } else {
                 // 2. 按examId和时间窗口去重（5分钟内）
+                if (!Array.isArray(list)) {
+                    console.warn('[Record] List is not an array before duplicate findIndex, skipping upsert');
+                    return;
+                }
                 const duplicateIdx = list.findIndex(r =>
                     String(r.examId) === String(rec.examId) &&
                     new Date(r.date) > fiveMinutesAgo
@@ -5467,12 +5533,36 @@
 
         // 同步真实练习记录
         function syncRealPracticeRecords() {
-            const storageRecords = window.storage ? window.storage.get('practice_records', []) : [];
-
+            let storageRecords = [];
+            if (window.storage) {
+                try {
+                    storageRecords = window.storage.get('practice_records', []);
+                    console.log('[Sync] Raw storageRecords:', storageRecords);
+                } catch (error) {
+                    console.warn('[Sync] Error reading storage_records:', error);
+                    storageRecords = [];
+                }
+            } else {
+                console.warn('[Sync] window.storage not available, using localStorage fallback');
+                try {
+                    const localData = localStorage.getItem('myMelodyPracticeRecords');
+                    storageRecords = localData ? JSON.parse(localData) : [];
+                } catch (error) {
+                    console.warn('[Sync] Error reading localStorage:', error);
+                    storageRecords = [];
+                }
+            }
+        
+            // Ensure iterable: fallback to empty array if not array
+            if (!Array.isArray(storageRecords)) {
+                console.warn('[Sync] storageRecords is not iterable, falling back to empty array');
+                storageRecords = [];
+            }
+        
             // 智能合并storage记录和app.practiceRecords
             if (app && app.practiceRecords) {
                 const mergedRecords = [...storageRecords];
-
+        
                 // 保留app.practiceRecords中独有的记录（可能是导入的）
                 app.practiceRecords.forEach(existingRecord => {
                     const existsInStorage = storageRecords.find(r => r.id === existingRecord.id);
@@ -5480,16 +5570,16 @@
                         mergedRecords.push(existingRecord);
                     }
                 });
-
+        
                 // 按日期排序，最新的在前面
                 mergedRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
-
+        
                 app.practiceRecords = mergedRecords;
                 console.log('[Sync] Merged records count:', mergedRecords.length);
             } else {
                 app.practiceRecords = storageRecords;
             }
-
+        
             updateCategoryStats();
             updateOverview();
             app.updatePractice();
@@ -6614,14 +6704,15 @@
 
   // Clean syncSharedPracticeRecords: read/map/update UI/mirror local, ensure full sync incl. deletions
   window.syncSharedPracticeRecords = async function() {
-    if (typeof window.storage !== 'object') {
-      console.warn('[Sync] Storage unavailable');
-      return;
-    }
-    try {
-      // 1. Read primary: practice_records (array)
-      let list = await window.storage.get('practice_records', []);
-      if (!Array.isArray(list)) list = [];
+      if (typeof window.storage !== 'object') {
+        console.warn('[Sync] Storage unavailable');
+        return;
+      }
+      try {
+        // 1. Read primary: practice_records (array)
+        let list = await window.storage.get('practice_records', []);
+        console.log('[Record] syncSharedPracticeRecords list type:', typeof list, 'isArray:', Array.isArray(list));
+        if (!Array.isArray(list)) list = [];
 
       // 2. Fallback to nested: exam_system_practice_records.data (array)
       if (list.length === 0) {
@@ -6630,6 +6721,7 @@
           list = nested.data;
         }
       }
+      if (!Array.isArray(list)) list = [];
 
       // 3. Map all to Melody model (handles derivation/fix)
       const mapped = Array.isArray(list) ? list.map(window.mapToMelodyModel).filter(Boolean) : [];
