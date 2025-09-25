@@ -2974,6 +2974,350 @@
         // 全局函数
         let app;
 
+        // 题库配置同步管理器
+        class LibrarySyncManager {
+            constructor() {
+                this.isInitialized = false;
+                this.currentConfig = null;
+                this.syncInterval = null;
+                this.lastSyncTime = 0;
+                this.retryCount = 0;
+                this.maxRetries = 3;
+            }
+
+            async init() {
+                if (this.isInitialized) return;
+
+                console.log('[Sync] 初始化题库同步管理器...');
+
+                try {
+                    // 初始化配置监听
+                    this.setupConfigListener();
+
+                    // 启动定期检查
+                    this.startPeriodicCheck();
+
+                    // 加载初始配置
+                    await this.loadInitialConfig();
+
+                    this.isInitialized = true;
+                    console.log('[Sync] 题库同步管理器初始化完成');
+                } catch (error) {
+                    console.error('[Sync] 初始化失败:', error);
+                    this.showSyncError('同步管理器初始化失败');
+                }
+            }
+
+            // 设置配置变化监听器
+            setupConfigListener() {
+                console.log('[Sync] 设置配置监听器...');
+
+                // 监听 storage 事件
+                window.addEventListener('storage', (event) => {
+                    this.handleLibraryConfigChange(event);
+                });
+
+                // 监听自定义消息事件
+                window.addEventListener('message', (event) => {
+                    this.handleCrossPageMessage(event);
+                });
+
+                // 监听页面可见性变化
+                document.addEventListener('visibilitychange', () => {
+                    if (!document.hidden) {
+                        this.checkLibraryConfigStatus();
+                    }
+                });
+            }
+
+            // 启动定期检查
+            startPeriodicCheck() {
+                if (this.syncInterval) {
+                    clearInterval(this.syncInterval);
+                }
+
+                this.syncInterval = setInterval(() => {
+                    this.checkLibraryConfigStatus();
+                }, 5000); // 每5秒检查一次
+
+                console.log('[Sync] 启动定期配置检查');
+            }
+
+            // 停止定期检查
+            stopPeriodicCheck() {
+                if (this.syncInterval) {
+                    clearInterval(this.syncInterval);
+                    this.syncInterval = null;
+                    console.log('[Sync] 停止定期配置检查');
+                }
+            }
+
+            // 加载初始配置
+            async loadInitialConfig() {
+                try {
+                    const config = await this.getActiveLibraryConfig();
+                    this.currentConfig = config;
+                    console.log('[Sync] 初始配置加载完成:', config);
+                } catch (error) {
+                    console.error('[Sync] 初始配置加载失败:', error);
+                    throw error;
+                }
+            }
+
+            // 获取当前题库配置
+            async getActiveLibraryConfig() {
+                if (window.storage) {
+                    try {
+                        const configKey = await window.storage.get('active_exam_index_key', 'exam_index');
+                        const config = {
+                            id: configKey,
+                            timestamp: Date.now(),
+                            source: 'storage'
+                        };
+                        return config;
+                    } catch (error) {
+                        console.warn('[Sync] 从 storage 获取配置失败:', error);
+                    }
+                }
+
+                // 备用：从 localStorage 获取
+                try {
+                    const configKey = localStorage.getItem('active_exam_index_key') || 'exam_index';
+                    return {
+                        id: configKey,
+                        timestamp: Date.now(),
+                        source: 'localStorage'
+                    };
+                } catch (error) {
+                    console.warn('[Sync] 从 localStorage 获取配置失败:', error);
+                    return {
+                        id: 'exam_index',
+                        timestamp: Date.now(),
+                        source: 'default'
+                    };
+                }
+            }
+
+            // 处理题库配置变化
+            async handleLibraryConfigChange(event) {
+                if (event.key === 'active_exam_index_key' || event.key === 'exam_system_config') {
+                    console.log('[Sync] 检测到题库配置变化:', event.key, event.newValue);
+
+                    try {
+                        const newConfig = await this.getActiveLibraryConfig();
+
+                        // 检查是否真的发生了变化
+                        if (this.currentConfig && this.currentConfig.id === newConfig.id) {
+                            console.log('[Sync] 配置未实际变化，跳过同步');
+                            return;
+                        }
+
+                        console.log('[Sync] 执行题库配置同步...');
+                        await this.syncLibraryConfig(newConfig);
+
+                    } catch (error) {
+                        console.error('[Sync] 配置同步失败:', error);
+                        this.showSyncError('配置同步失败');
+                    }
+                }
+            }
+
+            // 处理跨页面消息
+            handleCrossPageMessage(event) {
+                // 安全检查
+                try {
+                    if (location.protocol !== 'file:' &&
+                        event.origin &&
+                        event.origin !== 'null' &&
+                        event.origin !== window.location.origin) {
+                        return;
+                    }
+                } catch (_) {
+                    // file:// 协议下允许所有消息
+                }
+
+                const { type, data } = event.data || {};
+
+                if (type === 'LIBRARY_CONFIG_CHANGED') {
+                    console.log('[Sync] 收到跨页面配置变化通知:', data);
+                    this.handleLibraryConfigChange({
+                        key: 'active_exam_index_key',
+                        newValue: data.configId
+                    });
+                }
+            }
+
+            // 同步题库配置
+            async syncLibraryConfig(newConfig) {
+                this.showSyncStatus('正在同步题库配置...');
+
+                try {
+                    // 清除相关缓存
+                    await this.clearLibraryCache();
+
+                    // 重新加载题库
+                    await this.reloadExamLibrary(newConfig);
+
+                    // 更新当前配置
+                    this.currentConfig = newConfig;
+                    this.lastSyncTime = Date.now();
+                    this.retryCount = 0;
+
+                    // 更新UI显示
+                    this.updateExamGrid();
+
+                    // 显示成功提示
+                    this.showSyncSuccess('题库配置已同步');
+
+                    console.log('[Sync] 题库配置同步完成');
+
+                } catch (error) {
+                    console.error('[Sync] 题库配置同步失败:', error);
+                    this.handleSyncError(error, newConfig);
+                }
+            }
+
+            // 清除题库缓存
+            async clearLibraryCache() {
+                if (window.storage) {
+                    try {
+                        // 清除所有题库相关的缓存
+                        const keys = await window.storage.keys();
+                        const libraryKeys = keys.filter(key =>
+                            key.includes('exam_library') ||
+                            key.includes('completeExamIndex') ||
+                            key.includes('listeningExamIndex')
+                        );
+
+                        for (const key of libraryKeys) {
+                            await window.storage.remove(key);
+                        }
+
+                        console.log('[Sync] 已清除题库缓存:', libraryKeys);
+                    } catch (error) {
+                        console.warn('[Sync] 清除缓存失败:', error);
+                    }
+                }
+            }
+
+            // 重新加载题库
+            async reloadExamLibrary(config) {
+                console.log('[Sync] 重新加载题库，配置:', config);
+
+                // 调用增强的题库加载函数
+                const data = await window.loadRealExamLibraryWithSync(true);
+
+                if (data && data.length > 0) {
+                    // 更新应用数据
+                    if (window.app && window.app.examData) {
+                        window.app.examData = data;
+                    }
+
+                    // 更新分类统计
+                    if (window.updateCategoryStats) {
+                        window.updateCategoryStats();
+                    }
+
+                    console.log('[Sync] 题库重新加载完成，题目数量:', data.length);
+                    return data;
+                } else {
+                    throw new Error('题库数据为空');
+                }
+            }
+
+            // 更新题库网格显示
+            updateExamGrid() {
+                if (window.app && window.app.updateBrowse) {
+                    window.app.updateBrowse();
+                } else if (window.filterExams) {
+                    window.filterExams();
+                }
+            }
+
+            // 检查配置状态
+            async checkLibraryConfigStatus() {
+                try {
+                    const config = await this.getActiveLibraryConfig();
+                    const now = Date.now();
+
+                    // 如果距离上次同步超过30秒，检查是否有更新
+                    if (now - this.lastSyncTime > 30000) {
+                        console.log('[Sync] 检查配置状态更新...');
+
+                        if (this.currentConfig && this.currentConfig.id !== config.id) {
+                            console.log('[Sync] 检测到配置更新，执行同步');
+                            await this.syncLibraryConfig(config);
+                        }
+                    }
+                } catch (error) {
+                    console.warn('[Sync] 配置状态检查失败:', error);
+                }
+            }
+
+            // 处理同步错误
+            async handleSyncError(error, config) {
+                this.retryCount++;
+
+                if (this.retryCount <= this.maxRetries) {
+                    console.log(`[Sync] 第 ${this.retryCount} 次重试同步...`);
+
+                    setTimeout(async () => {
+                        try {
+                            await this.syncLibraryConfig(config);
+                        } catch (retryError) {
+                            console.error(`[Sync] 第 ${this.retryCount} 次重试失败:`, retryError);
+                            if (this.retryCount >= this.maxRetries) {
+                                this.showSyncError('同步失败，已重试多次');
+                            }
+                        }
+                    }, 2000 * this.retryCount); // 递增延迟
+                } else {
+                    this.showSyncError('同步失败，请手动刷新页面');
+                }
+            }
+
+            // 显示同步状态
+            showSyncStatus(message) {
+                this.showNotification(message, 'info', 2000);
+            }
+
+            // 显示同步成功
+            showSyncSuccess(message) {
+                this.showNotification(message, 'success', 3000);
+            }
+
+            // 显示同步错误
+            showSyncError(message) {
+                this.showNotification(message, 'error', 5000);
+            }
+
+            // 显示通知
+            showNotification(message, type = 'info', duration = 3000) {
+                if (window.app && window.app.showNotification) {
+                    window.app.showNotification(message, duration);
+                } else {
+                    // 备用通知方法
+                    const notification = document.getElementById('notification');
+                    if (notification) {
+                        notification.textContent = message;
+                        notification.className = `notification show ${type}`;
+                        setTimeout(() => {
+                            notification.className = 'notification';
+                        }, duration);
+                    } else {
+                        console.log(`[Notification] ${type.toUpperCase()}: ${message}`);
+                    }
+                }
+            }
+
+            // 销毁管理器
+            destroy() {
+                this.stopPeriodicCheck();
+                this.isInitialized = false;
+                console.log('[Sync] 题库同步管理器已销毁');
+            }
+        }
+
         // 生成云状分布的emoji
         function createEmojiCloud() {
             const emojiCloud = document.getElementById('emojiCloud');
@@ -3138,29 +3482,61 @@
 
         // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', () => {
+            console.log('[Init] 页面加载开始初始化...');
 
             // 首先验证数据加载状态
             const dataLoaded = verifyDataLoading();
             if (!dataLoaded) {
+              console.log('[Init] 全局数据索引未就绪，等待加载...');
               setTimeout(() => {
                 if (verifyDataLoading()) {
+                  console.log('[Init] 全局数据索引加载完成');
                 } else {
+                  console.log('[Init] 全局数据索引加载失败');
                 }
               }, 500);
             } else {
+              console.log('[Init] 全局数据索引已就绪');
             }
 
+            // 初始化主应用
             app = new MyMelodyIELTSApp();
             window.app = app; // 确保全局可访问
+            console.log('[Init] 主应用初始化完成');
 
-
-            // 延迟加载题库数据，确保应用初始化完成
-            setTimeout(() => {
-                if (typeof window.loadRealExamLibrary === 'function') {
-                    window.loadRealExamLibrary(true);
+            // 初始化题库同步管理器
+            setTimeout(async () => {
+                try {
+                    console.log('[Init] 开始初始化题库同步管理器...');
+                    if (window.librarySyncManager) {
+                        await window.librarySyncManager.init();
+                        console.log('[Init] 题库同步管理器初始化成功');
+                    } else {
+                        console.warn('[Init] 题库同步管理器未定义');
+                    }
+                } catch (error) {
+                    console.error('[Init] 题库同步管理器初始化失败:', error);
                 }
-                initializePageEffects();
-            }, 100);
+            }, 200);
+
+            // 延迟加载题库数据，确保应用和同步管理器都初始化完成
+            setTimeout(async () => {
+                try {
+                    console.log('[Init] 开始加载题库数据...');
+                    if (typeof window.loadRealExamLibrary === 'function') {
+                        await window.loadRealExamLibrary(true);
+                        console.log('[Init] 题库数据加载完成');
+                    } else {
+                        console.warn('[Init] 题库加载函数未定义');
+                    }
+
+                    // 初始化页面效果
+                    initializePageEffects();
+                    console.log('[Init] 页面效果初始化完成');
+                } catch (error) {
+                    console.error('[Init] 题库数据加载失败:', error);
+                }
+            }, 500);
 
             // 设置DOM加载完成事件
             if (typeof document !== 'undefined' && document.addEventListener) {
@@ -3182,6 +3558,8 @@
                     if (window.syncSharedPracticeRecords) window.syncSharedPracticeRecords();
                 });
             }
+
+            console.log('[Init] 页面初始化完成');
         })();
 
   // 绑定导入文件事件（如果未绑定）
@@ -5301,6 +5679,112 @@
         window.toggleSettingDirect = toggleSettingDirect;
         window.applySettingEffect = applySettingEffect;
         window.ensureSettingsWork = ensureSettingsWork;
+
+        // 测试题库同步功能
+        window.testLibrarySync = function() {
+            console.log('[Test] 开始测试题库同步功能...');
+
+            // 测试1: 检查同步管理器是否已初始化
+            if (window.librarySyncManager) {
+                console.log('[Test] ✅ 同步管理器已初始化');
+                console.log('[Test] 管理器状态:', {
+                    isInitialized: window.librarySyncManager.isInitialized,
+                    currentConfig: window.librarySyncManager.currentConfig,
+                    hasSyncInterval: !!window.librarySyncManager.syncInterval
+                });
+            } else {
+                console.log('[Test] ❌ 同步管理器未初始化');
+                return false;
+            }
+
+            // 测试2: 检查题库数据是否已加载
+            if (window.app && window.app.examData && window.app.examData.length > 0) {
+                console.log('[Test] ✅ 题库数据已加载');
+                console.log('[Test] 题目数量:', window.app.examData.length);
+
+                // 统计分类
+                const reading = window.app.examData.filter(e => e.type === 'reading').length;
+                const listening = window.app.examData.filter(e => e.type === 'listening').length;
+                console.log('[Test] 阅读题目:', reading, '个');
+                console.log('[Test] 听力题目:', listening, '个');
+            } else {
+                console.log('[Test] ❌ 题库数据未加载');
+                return false;
+            }
+
+            // 测试3: 检查分类统计是否正确
+            if (window.updateCategoryStats) {
+                console.log('[Test] ✅ 分类统计函数可用');
+                window.updateCategoryStats();
+                console.log('[Test] 分类统计已更新');
+            } else {
+                console.log('[Test] ❌ 分类统计函数不可用');
+            }
+
+            // 测试4: 检查存储配置
+            if (window.storage) {
+                console.log('[Test] ✅ 存储系统可用');
+                console.log('[Test] 存储命名空间:', window.storage.getNamespace ? window.storage.getNamespace() : '未设置');
+            } else {
+                console.log('[Test] ❌ 存储系统不可用');
+            }
+
+            // 测试5: 模拟配置变化
+            console.log('[Test] 模拟题库配置变化...');
+            if (window.librarySyncManager.handleLibraryConfigChange) {
+                window.librarySyncManager.handleLibraryConfigChange({
+                    key: 'active_exam_index_key',
+                    newValue: 'exam_index'
+                });
+                console.log('[Test] ✅ 配置变化处理函数可用');
+            }
+
+            console.log('[Test] 题库同步功能测试完成');
+            return true;
+        };
+
+        // 手动触发题库同步
+        window.manualSyncLibrary = async function() {
+            console.log('[Manual] 手动触发题库同步...');
+
+            try {
+                if (window.librarySyncManager) {
+                    const config = await window.librarySyncManager.getActiveLibraryConfig();
+                    console.log('[Manual] 当前配置:', config);
+
+                    await window.librarySyncManager.syncLibraryConfig(config);
+                    console.log('[Manual] 手动同步完成');
+                } else {
+                    console.log('[Manual] 同步管理器不可用');
+                }
+            } catch (error) {
+                console.error('[Manual] 手动同步失败:', error);
+            }
+        };
+
+        // 显示同步状态
+        window.showSyncStatus = function() {
+            if (window.librarySyncManager) {
+                console.log('[Status] 同步管理器状态:', {
+                    isInitialized: window.librarySyncManager.isInitialized,
+                    currentConfig: window.librarySyncManager.currentConfig,
+                    lastSyncTime: new Date(window.librarySyncManager.lastSyncTime).toLocaleString(),
+                    retryCount: window.librarySyncManager.retryCount
+                });
+            } else {
+                console.log('[Status] 同步管理器未初始化');
+            }
+
+            if (window.app && window.app.examData) {
+                console.log('[Status] 题库数据状态:', {
+                    totalExams: window.app.examData.length,
+                    reading: window.app.examData.filter(e => e.type === 'reading').length,
+                    listening: window.app.examData.filter(e => e.type === 'listening').length
+                });
+            } else {
+                console.log('[Status] 题库数据未加载');
+            }
+        };
     </script>
 
     <script>
@@ -5537,73 +6021,292 @@
         // 调试代码已清理
       };
 
-      window.loadRealExamLibrary = function(forceFresh){
+      // 增强的题库加载函数，支持同步机制
+      window.loadRealExamLibraryWithSync = async function(forceFresh = false) {
         const startTime = performance.now();
-        const activeConfigKey = getActiveLibraryConfigurationKey();
-        const cachedData = window.storage ? window.storage.get(activeConfigKey) : null;
+        console.log('[Library] 开始加载题库数据，强制刷新:', forceFresh);
 
-
-        if (!forceFresh && Array.isArray(cachedData) && cachedData.length > 0) {
-          app.examData = cachedData;
-          finishRealLibraryLoading(startTime);
-          return;
-        }
-
-        if (app && typeof app.showNotification === 'function') {
-          app.showNotification('正在加载题库索引...');
-        }
-
-        const tryBuildFromGlobals = (attempt = 1) => {
-
-          // 检查全局索引状态
-
-          let readingExams = [];
-          let listeningExams = [];
-
-          if (Array.isArray(window.completeExamIndex)) {
-            readingExams = window.completeExamIndex.map(exam => ({ ...exam, type: 'reading' }));
-          } else {
-            console.warn('[Library] 阅读数据索引未加载或不是数组');
+        try {
+          // 检查网络状态
+          if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            console.log('[Library] 网络离线，使用缓存数据');
+            if (window.app && window.app.showNotification) {
+              window.app.showNotification('网络离线，使用缓存数据', 'warning');
+            }
+            return await loadFromCache();
           }
 
-          if (Array.isArray(window.listeningExamIndex)) {
-            listeningExams = window.listeningExamIndex.map(exam => ({ ...exam, type: 'listening' }));
-          } else {
-            console.warn('[Library] 听力数据索引未加载或不是数组');
+          // 获取当前配置
+          const config = await getActiveLibraryConfig();
+          console.log('[Library] 当前配置:', config);
+
+          // 检查是否需要更新
+          if (!forceFresh && !await needsUpdate(config)) {
+            console.log('[Library] 数据未过期，使用缓存');
+            return await loadFromCache();
           }
 
-          const merged = [...readingExams, ...listeningExams];
+          // 显示加载状态
+          if (window.app && window.app.showNotification) {
+            window.app.showNotification('正在加载题库数据...', 'info');
+          }
 
-          if (merged.length > 0) {
-            // 设置数据到app对象
+          // 从全局索引加载数据
+          const data = await loadFromGlobalIndex();
+          console.log('[Library] 从全局索引加载数据完成，数量:', data.length);
+
+          if (data && data.length > 0) {
+            // 更新应用数据
             if (window.app) {
-              window.app.examData = merged;
-            } else {
-              console.warn('[Library] window.app 不存在，无法设置数据');
+              window.app.examData = data;
             }
 
-            if (window.storage) {
-    window.storage.set(activeConfigKey, merged);
-}
+            // 更新缓存
+            await updateCache(data, config);
 
-            finishRealLibraryLoading(startTime);
-            return;
-          }
+            // 广播更新
+            broadcastLibraryUpdate(data);
 
-          if (attempt < 5) {
-            setTimeout(() => tryBuildFromGlobals(attempt + 1), 150);
+            // 更新分类统计
+            if (window.updateCategoryStats) {
+              window.updateCategoryStats();
+            }
+
+            // 更新UI
+            if (window.app && window.app.updateUI) {
+              window.app.updateUI();
+            }
+
+            console.log('[Library] 题库加载完成');
+            if (window.app && window.app.showNotification) {
+              window.app.showNotification(`题库加载完成！共 ${data.length} 个题目`, 'success');
+            }
+
+            return data;
           } else {
-            // 不落盘空数组，避免把"空索引"固化为缓存
-            app.examData = [];
-            finishRealLibraryLoading(startTime);
-            if (app && typeof app.showNotification === 'function') {
-              app.showNotification('题库脚本尚未加载，稍后重试或刷新');
+            throw new Error('题库数据为空');
+          }
+
+        } catch (error) {
+          console.error('[Library] 加载失败:', error);
+
+          // 尝试使用缓存数据
+          try {
+            const cachedData = await loadFromCache();
+            if (cachedData && cachedData.length > 0) {
+              console.log('[Library] 使用缓存数据作为后备');
+              if (window.app && window.app.showNotification) {
+                window.app.showNotification('加载失败，使用缓存数据', 'warning');
+              }
+              return cachedData;
+            }
+          } catch (cacheError) {
+            console.error('[Library] 缓存数据也无法加载:', cacheError);
+          }
+
+          // 如果完全失败，显示错误
+          if (window.app && window.app.showNotification) {
+            window.app.showNotification('题库加载失败，请检查网络连接', 'error');
+          }
+
+          throw error;
+        }
+      };
+
+      // 辅助函数：获取当前配置
+      async function getActiveLibraryConfig() {
+        if (window.storage) {
+          try {
+            const configKey = await window.storage.get('active_exam_index_key', 'exam_index');
+            return {
+              id: configKey,
+              timestamp: Date.now(),
+              source: 'storage'
+            };
+          } catch (error) {
+            console.warn('[Library] 从 storage 获取配置失败:', error);
+          }
+        }
+
+        // 备用：从 localStorage 获取
+        try {
+          const configKey = localStorage.getItem('active_exam_index_key') || 'exam_index';
+          return {
+            id: configKey,
+            timestamp: Date.now(),
+            source: 'localStorage'
+          };
+        } catch (error) {
+          console.warn('[Library] 从 localStorage 获取配置失败:', error);
+          return {
+            id: 'exam_index',
+            timestamp: Date.now(),
+            source: 'default'
+          };
+        }
+      }
+
+      // 辅助函数：检查是否需要更新
+      async function needsUpdate(config) {
+        try {
+          const lastUpdate = localStorage.getItem('last_library_update');
+          if (!lastUpdate) return true;
+
+          const updateTime = parseInt(lastUpdate);
+          const now = Date.now();
+          const fiveMinutes = 5 * 60 * 1000; // 5分钟
+
+          // 如果距离上次更新超过5分钟，认为需要更新
+          if (now - updateTime > fiveMinutes) {
+            console.log('[Library] 缓存已过期，需要更新');
+            return true;
+          }
+
+          // 检查配置是否变化
+          const lastConfig = localStorage.getItem('last_library_config');
+          if (lastConfig !== config.id) {
+            console.log('[Library] 配置已变化，需要更新');
+            return true;
+          }
+
+          return false;
+        } catch (error) {
+          console.warn('[Library] 检查更新状态失败:', error);
+          return true; // 出错时默认需要更新
+        }
+      }
+
+      // 辅助函数：从缓存加载数据
+      async function loadFromCache() {
+        if (window.storage) {
+          try {
+            const config = await getActiveLibraryConfig();
+            const cacheKey = `exam_library_${config.id}`;
+            const cached = await window.storage.get(cacheKey);
+
+            if (Array.isArray(cached) && cached.length > 0) {
+              console.log('[Library] 从缓存加载数据:', cached.length, '个题目');
+              if (window.app) {
+                window.app.examData = cached;
+              }
+              return cached;
+            }
+          } catch (error) {
+            console.warn('[Library] 从 storage 缓存加载失败:', error);
+          }
+        }
+
+        // 备用：从 localStorage 加载
+        try {
+          const cached = localStorage.getItem('myMelodyExamData');
+          if (cached) {
+            const data = JSON.parse(cached);
+            if (Array.isArray(data) && data.length > 0) {
+              console.log('[Library] 从 localStorage 缓存加载数据:', data.length, '个题目');
+              if (window.app) {
+                window.app.examData = data;
+              }
+              return data;
             }
           }
-        };
+        } catch (error) {
+          console.warn('[Library] 从 localStorage 缓存加载失败:', error);
+        }
 
-        tryBuildFromGlobals(1);
-      };
+        // 如果都没有缓存，返回空数组
+        console.log('[Library] 无可用缓存数据');
+        return [];
+      }
+
+      // 辅助函数：从全局索引加载数据
+      async function loadFromGlobalIndex() {
+        console.log('[Library] 从全局索引加载数据...');
+
+        let readingExams = [];
+        let listeningExams = [];
+
+        // 检查全局索引状态
+        if (Array.isArray(window.completeExamIndex)) {
+          readingExams = window.completeExamIndex.map(exam => ({
+            ...exam,
+            type: 'reading',
+            category: exam.category || exam.part || 'P1'
+          }));
+          console.log('[Library] 加载阅读题目:', readingExams.length, '个');
+        } else {
+          console.warn('[Library] 阅读数据索引未加载或不是数组');
+        }
+
+        if (Array.isArray(window.listeningExamIndex)) {
+          listeningExams = window.listeningExamIndex.map(exam => ({
+            ...exam,
+            type: 'listening',
+            category: exam.category || exam.part || 'P1'
+          }));
+          console.log('[Library] 加载听力题目:', listeningExams.length, '个');
+        } else {
+          console.warn('[Library] 听力数据索引未加载或不是数组');
+        }
+
+        const merged = [...readingExams, ...listeningExams];
+        console.log('[Library] 合并后总题目数:', merged.length);
+
+        // 数据验证和清理
+        const validData = merged.filter(exam => {
+          return exam &&
+                 exam.id &&
+                 exam.title &&
+                 (exam.type === 'reading' || exam.type === 'listening');
+        });
+
+        console.log('[Library] 有效题目数:', validData.length);
+        return validData;
+      }
+
+      // 辅助函数：更新缓存
+      async function updateCache(data, config) {
+        try {
+          const cacheKey = `exam_library_${config.id}`;
+
+          // 更新 storage 缓存
+          if (window.storage) {
+            await window.storage.set(cacheKey, data);
+            console.log('[Library] 更新 storage 缓存成功');
+          }
+
+          // 更新 localStorage 缓存
+          localStorage.setItem('myMelodyExamData', JSON.stringify(data));
+          localStorage.setItem('last_library_update', Date.now().toString());
+          localStorage.setItem('last_library_config', config.id);
+
+          console.log('[Library] 更新 localStorage 缓存成功');
+        } catch (error) {
+          console.error('[Library] 更新缓存失败:', error);
+        }
+      }
+
+      // 辅助函数：广播更新
+      function broadcastLibraryUpdate(data) {
+        console.log('[Library] 广播题库更新通知');
+
+        // 向主系统发送更新通知
+        try {
+          if (window.parent && window.parent !== window) {
+            window.parent.postMessage({
+              type: 'LIBRARY_UPDATED',
+              data: {
+                count: data.length,
+                timestamp: Date.now()
+              }
+            }, '*');
+          }
+        } catch (error) {
+          console.warn('[Library] 广播更新失败:', error);
+        }
+      }
+
+      // 兼容性：保留原函数名
+      window.loadRealExamLibrary = window.loadRealExamLibraryWithSync;
     })();
 
     // 简化的页面加载完成检查
