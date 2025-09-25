@@ -6728,22 +6728,16 @@
 
       // 4. Update app/UI if available
       if (window.app && Array.isArray(window.app.practiceRecords)) {
-        // Merge: replace by id/examId, add new, remove missing (full sync for deletions)
-        const appIds = new Set(window.app.practiceRecords.map(r => String(r.id || r.examId)));
-        const mappedIds = new Set(mapped.map(r => String(r.id || r.examId)));
-        // Remove from app if missing in mapped (deletions)
-        window.app.practiceRecords = window.app.practiceRecords.filter(r => mappedIds.has(String(r.id || r.examId)));
-        // Add/update from mapped
-        mapped.forEach(newRec => {
-          const appIdx = window.app.practiceRecords.findIndex(r => String(r.id || r.examId) === String(newRec.id || newRec.examId));
-          if (appIdx >= 0) {
-            window.app.practiceRecords[appIdx] = newRec; // Update
-          } else {
-            window.app.practiceRecords.push(newRec); // Add
+        console.log('[Sync] Before merge: storageRecords.length =', mapped.length, ', app.practiceRecords.length =', app.practiceRecords.length);
+        const merged = [...mapped];
+        app.practiceRecords.forEach(old => {
+          if (!merged.find(r => r.id === old.id || r.examId === old.examId)) {
+            merged.push(old);
           }
         });
-        // Sort by date desc
-        window.app.practiceRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
+        merged.sort((a, b) => new Date(b.date) - new Date(a.date));
+        app.practiceRecords = merged;
+        console.log('[Sync] After: merged.length =', merged.length);
         if (typeof window.app.updateUI === 'function') window.app.updateUI();
         if (typeof window.app.updatePractice === 'function') window.app.updatePractice();
       }
