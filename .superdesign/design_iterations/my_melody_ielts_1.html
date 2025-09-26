@@ -2252,7 +2252,7 @@
             <div class="settings-section">
                 <h3>📚 题库管理</h3>
                 <div class="data-actions">
-                    <button class="btn btn-info" onclick="switchLibraryConfig()">⚙️ 题库配置切换</button>
+                    <button class="btn btn-info" onclick="showLibraryConfigModal()">⚙️ 题库配置切换</button>
                     <button class="btn" onclick="loadLibrary()">🔄 重新加载题库</button>
                     <button class="btn btn-secondary" onclick="libraryInfo()">ℹ️ 题库信息</button>
                 </div>
@@ -2310,6 +2310,24 @@
                     </div>
     </div>
 
+    <!-- 题库配置切换模态框 -->
+    <div id="library-config-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 class="modal-title">📚 题库配置切换</h3>
+                <button class="modal-close" onclick="closeLibraryConfigModal()">✖</button>
+            </div>
+            <div class="modal-body">
+                <div class="exam-list" id="config-list">
+                    <!-- 配置列表将通过JS动态生成 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeLibraryConfigModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+
     <script>
 
 
@@ -2318,19 +2336,55 @@
             return Array.isArray(val) ? val : [];
         }
 
-        // 题库配置切换函数
-        function switchLibraryConfig() {
-            console.log('[Switch] 开始配置切换');
-            if (window.parent && typeof window.parent.showLibraryConfigListV2 === 'function') {
-                window.parent.showLibraryConfigListV2();
-            } else {
-                alert('题库配置切换功能暂不可用，请联系管理员');
+        // 题库配置切换模态框函数
+        function showLibraryConfigModal() {
+            const modal = document.getElementById('library-config-modal');
+            const listContainer = document.getElementById('config-list');
+            
+            // 计算总题目数
+            const readingCount = Array.isArray(window.completeExamIndex) ? window.completeExamIndex.length : 0;
+            const listeningCount = Array.isArray(window.listeningExamIndex) ? window.listeningExamIndex.length : 0;
+            const totalCount = readingCount + listeningCount;
+            
+            // 当前 active_key
+            const activeKey = window.storage ? window.storage.get('active_exam_index_key', 'exam_index') : 'exam_index';
+            
+            listContainer.innerHTML = `
+                <div class="exam-item">
+                    <div class="exam-title">默认题库 (exam_index)</div>
+                    <div class="exam-meta">
+                        <span>阅读: ${readingCount} 篇</span>
+                        <span>听力: ${listeningCount} 篇</span>
+                        <span>总计: ${totalCount} 篇</span>
+                        ${activeKey === 'exam_index' ? '<span class="best-score">当前激活</span>' : ''}
+                    </div>
+                    <div class="exam-actions">
+                        <button class="btn" onclick="switchToDefaultConfig()">切换到默认</button>
+                        <button class="btn btn-secondary" onclick="loadRealExamLibrary(true)">重新加载</button>
+                    </div>
+                </div>
+            `;
+            
+            modal.style.display = 'flex';
+        }
+        
+        function closeLibraryConfigModal() {
+            document.getElementById('library-config-modal').style.display = 'none';
+        }
+        
+        // 切换到默认配置
+        async function switchToDefaultConfig() {
+            if (window.storage) {
+                await window.storage.set('active_exam_index_key', 'exam_index');
             }
-            // 切换后重新加载题库
-            setTimeout(() => {
-                loadRealExamLibrary();
-                console.log('[Switch] 配置切换完成，重新加载题库');
-            }, 500);
+            loadRealExamLibrary(true);
+            closeLibraryConfigModal();
+            showNotification('已切换到默认题库配置');
+        }
+        
+        // 原 switchLibraryConfig 函数（保留作为备用）
+        function switchLibraryConfig() {
+            showLibraryConfigModal();
         }
 
         // 全局状态管理
