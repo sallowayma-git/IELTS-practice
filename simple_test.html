@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>简单测试</title>
+</head>
+<body>
+    <h1>简单脚本加载测试</h1>
+    <div id="log"></div>
+    
+    <script>
+        function log(message) {
+            const div = document.createElement('div');
+            div.textContent = new Date().toLocaleTimeString() + ': ' + message;
+            document.getElementById('log').appendChild(div);
+            console.log(message);
+        }
+        
+        log('开始加载脚本...');
+    </script>
+    
+    <!-- 逐个加载脚本并测试 -->
+    <script src="js/utils/storage.js"></script>
+    <script>
+        log('storage.js 加载完成: ' + (typeof window.storage));
+    </script>
+    
+    <script src="js/utils/validation.js"></script>
+    <script>
+        log('validation.js 加载完成: ' + (typeof window.validateExam));
+    </script>
+    
+    <script src="js/utils/events.js"></script>
+    <script>
+        log('events.js 加载完成: ' + (typeof window.EventEmitter));
+    </script>
+    
+    <script src="js/utils/errorDisplay.js"></script>
+    <script>
+        log('errorDisplay.js 加载完成: ' + (typeof window.ErrorDisplay));
+    </script>
+    
+    <script src="js/stores/ExamStore.js"></script>
+    <script>
+        log('ExamStore.js 加载完成: ' + (typeof window.ExamStore));
+    </script>
+    
+    <script src="js/stores/RecordStore.js"></script>
+    <script>
+        log('RecordStore.js 加载完成: ' + (typeof window.RecordStore));
+    </script>
+    
+    <script src="js/stores/AppStore.js"></script>
+    <script>
+        log('AppStore.js 加载完成: ' + (typeof window.AppStore));
+    </script>
+    
+    <script src="js/ui/ExamBrowser.js"></script>
+    <script>
+        log('ExamBrowser.js 加载完成: ' + (typeof window.ExamBrowser));
+    </script>
+    
+    <script src="js/ui/RecordViewer.js"></script>
+    <script>
+        log('RecordViewer.js 加载完成: ' + (typeof window.RecordViewer));
+    </script>
+    
+    <script src="js/ui/SettingsPanel.js"></script>
+    <script>
+        log('SettingsPanel.js 加载完成: ' + (typeof window.SettingsPanel));
+    </script>
+    
+    <script src="js/main.js"></script>
+    <script>
+        log('main.js 加载完成: ' + (typeof window.App) + ', app实例: ' + (typeof window.app));
+        
+        // 等待一下再测试初始化
+        setTimeout(() => {
+            log('测试App初始化...');
+            if (window.app && window.app.isInitialized) {
+                log('App初始化状态: ' + window.app.isInitialized());
+            } else {
+                log('App或isInitialized方法不可用');
+            }
+        }, 2000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>调试类加载</title>
+</head>
+<body>
+    <h1>调试新架构类加载</h1>
+    <div id="results"></div>
+    
+    <!-- 按正确顺序加载脚本 -->
+    <script src="js/utils/storage.js"></script>
+    <script src="js/utils/validation.js"></script>
+    <script src="js/utils/events.js"></script>
+    <script src="js/utils/errorDisplay.js"></script>
+    
+    <script src="js/stores/ExamStore.js"></script>
+    <script src="js/stores/RecordStore.js"></script>
+    <script src="js/stores/AppStore.js"></script>
+    
+    <script src="js/ui/ExamBrowser.js"></script>
+    <script src="js/ui/RecordViewer.js"></script>
+    <script src="js/ui/SettingsPanel.js"></script>
+    
+    <script src="js/main.js"></script>
+    
+    <script>
+        function checkClass(className) {
+            const exists = window[className] !== undefined;
+            const type = typeof window[className];
+            return { exists, type };
+        }
+        
+        function displayResults() {
+            const classes = [
+                'validateExam', 'validateRecord', 'EventEmitter', 'ErrorDisplay',
+                'ExamStore', 'RecordStore', 'AppStore',
+                'ExamBrowser', 'RecordViewer', 'SettingsPanel',
+                'App', 'app'
+            ];
+            
+            let html = '<h2>类加载状态:</h2><ul>';
+            
+            classes.forEach(className => {
+                const result = checkClass(className);
+                const status = result.exists ? '✅' : '❌';
+                html += `<li>${status} ${className}: ${result.exists ? result.type : '不存在'}</li>`;
+            });
+            
+            html += '</ul>';
+            
+            // 检查存储系统
+            html += '<h2>存储系统:</h2><ul>';
+            const storageExists = window.storage !== undefined;
+            html += `<li>${storageExists ? '✅' : '❌'} storage: ${storageExists ? typeof window.storage : '不存在'}</li>`;
+            html += '</ul>';
+            
+            document.getElementById('results').innerHTML = html;
+        }
+        
+        // 等待所有脚本加载完成
+        window.addEventListener('load', () => {
+            setTimeout(displayResults, 1000);
+        });
+        
+        // 立即检查一次
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(displayResults, 500);
+        });
+    </script>
+</body>
+</html>

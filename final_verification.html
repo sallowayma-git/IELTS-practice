@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>最终验证 - 清理后系统测试</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 20px; 
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-result { 
+            margin: 10px 0; 
+            padding: 10px; 
+            border-radius: 5px; 
+            border-left: 4px solid #ccc;
+        }
+        .pass { 
+            background: #d4edda; 
+            color: #155724; 
+            border-left-color: #28a745;
+        }
+        .fail { 
+            background: #f8d7da; 
+            color: #721c24; 
+            border-left-color: #dc3545;
+        }
+        .info { 
+            background: #d1ecf1; 
+            color: #0c5460; 
+            border-left-color: #17a2b8;
+        }
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+            border-left-color: #ffc107;
+        }
+        button { 
+            margin: 5px; 
+            padding: 10px 15px; 
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background: #007bff;
+            color: white;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .summary {
+            margin: 20px 0;
+            padding: 15px;
+            background: #e9ecef;
+            border-radius: 5px;
+        }
+        .score {
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .score.excellent { color: #28a745; }
+        .score.good { color: #17a2b8; }
+        .score.poor { color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 最终验证 - 清理后系统测试</h1>
+        <p>此页面验证代码清理后系统的完整功能</p>
+        
+        <div id="test-results"></div>
+        
+        <div class="summary" id="summary" style="display: none;">
+            <h3>📊 测试总结</h3>
+            <div class="score" id="score"></div>
+            <div id="summary-details"></div>
+        </div>
+        
+        <h2>🔧 手动测试</h2>
+        <button onclick="testLoadLibrary()">测试 loadLibrary</button>
+        <button onclick="testShowLibraryConfig()">测试题库配置</button>
+        <button onclick="testNewArchitecture()">测试新架构</button>
+        <button onclick="testStorage()">测试存储系统</button>
+        <button onclick="testInitialization()">测试初始化</button>
+        <button onclick="runAllTests()">🚀 运行完整测试</button>
+        
+        <!-- 加载所有必要的脚本 -->
+        <script src="js/utils/storage.js"></script>
+        <script src="js/utils/validation.js"></script>
+        <script src="js/utils/events.js"></script>
+        <script src="js/utils/errorDisplay.js"></script>
+        
+        <script src="js/stores/ExamStore.js"></script>
+        <script src="js/stores/RecordStore.js"></script>
+        <script src="js/stores/AppStore.js"></script>
+        
+        <script src="js/ui/ExamBrowser.js"></script>
+        <script src="js/ui/RecordViewer.js"></script>
+        <script src="js/ui/SettingsPanel.js"></script>
+        
+        <script src="js/script.js"></script>
+        <script src="js/main.js"></script>
+        
+        <script>
+            let testResults = [];
+            let passCount = 0;
+            let failCount = 0;
+            
+            function log(message, type = 'info') {
+                const div = document.createElement('div');
+                div.className = `test-result ${type}`;
+                div.innerHTML = message;
+                document.getElementById('test-results').appendChild(div);
+                
+                testResults.push({ message, type });
+                if (type === 'pass') passCount++;
+                if (type === 'fail') failCount++;
+            }
+            
+            function testLoadLibrary() {
+                try {
+                    if (typeof window.loadLibrary === 'function') {
+                        log('✅ <strong>loadLibrary</strong> 函数可用', 'pass');
+                        log('ℹ️ 函数类型: ' + typeof window.loadLibrary, 'info');
+                    } else {
+                        log('❌ <strong>loadLibrary</strong> 函数不可用', 'fail');
+                    }
+                } catch (error) {
+                    log('❌ loadLibrary 测试失败: ' + error.message, 'fail');
+                }
+            }
+            
+            function testShowLibraryConfig() {
+                try {
+                    if (typeof window.showLibraryConfigListV2 === 'function') {
+                        log('✅ <strong>showLibraryConfigListV2</strong> 函数可用', 'pass');
+                    } else {
+                        log('❌ <strong>showLibraryConfigListV2</strong> 函数不可用', 'fail');
+                    }
+                } catch (error) {
+                    log('❌ showLibraryConfigListV2 测试失败: ' + error.message, 'fail');
+                }
+            }
+            
+            function testNewArchitecture() {
+                try {
+                    const classes = [
+                        { name: 'ExamStore', desc: '题库存储' },
+                        { name: 'RecordStore', desc: '记录存储' },
+                        { name: 'AppStore', desc: '应用存储' },
+                        { name: 'ExamBrowser', desc: '题库浏览器' },
+                        { name: 'RecordViewer', desc: '记录查看器' },
+                        { name: 'SettingsPanel', desc: '设置面板' }
+                    ];
+                    
+                    let allAvailable = true;
+                    
+                    classes.forEach(cls => {
+                        if (window[cls.name]) {
+                            log(`✅ <strong>${cls.name}</strong> (${cls.desc}) 类可用`, 'pass');
+                        } else {
+                            log(`❌ <strong>${cls.name}</strong> (${cls.desc}) 类不可用`, 'fail');
+                            allAvailable = false;
+                        }
+                    });
+                    
+                    if (allAvailable) {
+                        log('🎉 <strong>所有新架构类都可用</strong>', 'pass');
+                    } else {
+                        log('⚠️ 部分新架构类缺失', 'warning');
+                    }
+                    
+                    // 测试App实例
+                    if (window.app && typeof window.app === 'object') {
+                        log('✅ <strong>App实例</strong> 可用', 'pass');
+                        
+                        if (typeof window.app.isInitialized === 'function') {
+                            const initialized = window.app.isInitialized();
+                            if (initialized) {
+                                log('✅ <strong>App已初始化</strong>', 'pass');
+                            } else {
+                                log('⚠️ App未完全初始化', 'warning');
+                            }
+                        } else {
+                            log('⚠️ App.isInitialized 方法不可用', 'warning');
+                        }
+                    } else {
+                        log('❌ <strong>App实例</strong> 不可用', 'fail');
+                    }
+                    
+                } catch (error) {
+                    log('❌ 新架构测试失败: ' + error.message, 'fail');
+                }
+            }
+            
+            function testStorage() {
+                try {
+                    if (window.storage && typeof window.storage.get === 'function') {
+                        log('✅ <strong>存储系统</strong> 可用', 'pass');
+                        
+                        // 测试基本存储操作
+                        const testKey = 'final_test_' + Date.now();
+                        const testValue = 'test_value_' + Math.random();
+                        
+                        window.storage.set(testKey, testValue).then(() => {
+                            return window.storage.get(testKey);
+                        }).then(retrieved => {
+                            if (retrieved === testValue) {
+                                log('✅ <strong>存储读写操作</strong> 正常', 'pass');
+                            } else {
+                                log('❌ 存储读写操作异常', 'fail');
+                            }
+                            // 清理
+                            window.storage.remove(testKey);
+                        }).catch(error => {
+                            log('❌ 存储操作失败: ' + error.message, 'fail');
+                        });
+                        
+                    } else {
+                        log('❌ <strong>存储系统</strong> 不可用', 'fail');
+                    }
+                } catch (error) {
+                    log('❌ 存储系统测试失败: ' + error.message, 'fail');
+                }
+            }
+            
+            function testInitialization() {
+                try {
+                    // 测试工具函数
+                    const utils = [
+                        { name: 'validateExam', desc: '题目验证' },
+                        { name: 'validateRecord', desc: '记录验证' },
+                        { name: 'EventEmitter', desc: '事件发射器' },
+                        { name: 'ErrorDisplay', desc: '错误显示' }
+                    ];
+                    
+                    utils.forEach(util => {
+                        if (window[util.name]) {
+                            log(`✅ <strong>${util.name}</strong> (${util.desc}) 可用`, 'pass');
+                        } else {
+                            log(`❌ <strong>${util.name}</strong> (${util.desc}) 不可用`, 'fail');
+                        }
+                    });
+                    
+                    // 测试全局变量
+                    if (window.App && typeof window.App === 'function') {
+                        log('✅ <strong>App类</strong> 可用', 'pass');
+                    } else {
+                        log('❌ <strong>App类</strong> 不可用', 'fail');
+                    }
+                    
+                } catch (error) {
+                    log('❌ 初始化测试失败: ' + error.message, 'fail');
+                }
+            }
+            
+            function generateSummary() {
+                const total = passCount + failCount;
+                const percentage = total > 0 ? Math.round((passCount / total) * 100) : 0;
+                
+                const summaryDiv = document.getElementById('summary');
+                const scoreDiv = document.getElementById('score');
+                const detailsDiv = document.getElementById('summary-details');
+                
+                let scoreClass = 'poor';
+                let scoreText = '需要修复';
+                
+                if (percentage >= 90) {
+                    scoreClass = 'excellent';
+                    scoreText = '优秀';
+                } else if (percentage >= 70) {
+                    scoreClass = 'good';
+                    scoreText = '良好';
+                }
+                
+                scoreDiv.className = `score ${scoreClass}`;
+                scoreDiv.innerHTML = `${percentage}% (${passCount}/${total}) - ${scoreText}`;
+                
+                detailsDiv.innerHTML = `
+                    <p><strong>通过:</strong> ${passCount} 项</p>
+                    <p><strong>失败:</strong> ${failCount} 项</p>
+                    <p><strong>总计:</strong> ${total} 项测试</p>
+                `;
+                
+                summaryDiv.style.display = 'block';
+                
+                // 滚动到总结
+                summaryDiv.scrollIntoView({ behavior: 'smooth' });
+            }
+            
+            function runAllTests() {
+                // 清空之前的结果
+                document.getElementById('test-results').innerHTML = '';
+                testResults = [];
+                passCount = 0;
+                failCount = 0;
+                
+                log('🚀 <strong>开始运行完整测试套件...</strong>', 'info');
+                
+                setTimeout(() => testLoadLibrary(), 100);
+                setTimeout(() => testShowLibraryConfig(), 200);
+                setTimeout(() => testNewArchitecture(), 300);
+                setTimeout(() => testStorage(), 400);
+                setTimeout(() => testInitialization(), 500);
+                
+                setTimeout(() => {
+                    log('✅ <strong>所有测试完成</strong>', 'info');
+                    generateSummary();
+                }, 1500);
+            }
+            
+            // 页面加载完成后自动运行测试
+            document.addEventListener('DOMContentLoaded', () => {
+                setTimeout(() => {
+                    log('📋 页面加载完成，准备运行测试...', 'info');
+                    setTimeout(runAllTests, 1000);
+                }, 500);
+            });
+        </script>
+    </div>
+</body>
+</html>
