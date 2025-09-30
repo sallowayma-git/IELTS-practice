@@ -1,5 +1,4 @@
 # 忽略特定的文件夹
-/.kiro/
 /.qoder/
 /.vscode/
 /documents/
@@ -12,11 +11,8 @@
 # 忽略可能的系统文件
 .DS_Store
 Thumbs.db
-<<<<<<< HEAD
 .claude/settings.local.json
 
 # 使用通配符忽略特殊命名的目录
-*[9.4]*
+*9.4*
 *睡着过项目组*
-=======
->>>>>>> d9860d77adc0e13154019db447d30b4ce375c1e3
