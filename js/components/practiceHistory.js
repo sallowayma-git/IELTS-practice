@@ -6,6 +6,7 @@ class PracticeHistory {
     constructor() {
         this.currentRecords = [];
         this.filteredRecords = [];
+        this.selectedSet = new Set();
         this.currentPage = 1;
         this.recordsPerPage = 20;
         this.sortBy = 'startTime';
@@ -43,6 +44,14 @@ class PracticeHistory {
         
         // 监听视图激活事件
         document.addEventListener('click', (e) => {
+            // 批量选择复选框
+            const checkbox = e.target.closest('input[type="checkbox"][data-record-id]');
+            if (checkbox) {
+                const recordId = checkbox.dataset.recordId;
+                this.toggleSelection(recordId);
+                return;
+            }
+            
             // 题目标题点击 - 显示详情
             const recordTitle = e.target.closest('.record-title');
             if (recordTitle) {
@@ -118,6 +127,10 @@ class PracticeHistory {
                         <button class="btn btn-outline" onclick="window.app.components.practiceHistory.showImportDialog()">
                             <span class="btn-icon">📤</span>
                             导入
+                        </button>
+                        <button class="btn btn-danger" id="bulk-delete-btn" onclick="window.app.components.practiceHistory.bulkDeleteSelected()" style="display: none;">
+                            <span class="btn-icon">🗑️</span>
+                            批量删除
                         </button>
                     </div>
                 </div>
@@ -281,7 +294,10 @@ class PracticeHistory {
         // 搜索输入事件
         const searchInput = document.getElementById('history-search');
         if (searchInput) {
-            searchInput.addEventListener('input', Utils.debounce((e) => {
+            const debounceFunc = (window.Utils && typeof window.Utils.debounce === 'function') 
+                ? Utils.debounce 
+                : this.debounce;
+            searchInput.addEventListener('input', debounceFunc((e) => {
                 this.searchQuery = e.target.value.trim().toLowerCase();
                 this.applyFilters();
             }, 300));
@@ -329,11 +345,20 @@ class PracticeHistory {
                 throw new Error('PracticeRecorder not available');
             }
             
-            // 获取所有记录
-            this.currentRecords = practiceRecorder.getPracticeRecords();
+            // 检查getPracticeRecords方法是否存在
+            if (typeof practiceRecorder.getPracticeRecords !== 'function') {
+                console.error('getPracticeRecords method not found on practiceRecorder');
+                // 使用降级方法直接从storage获取
+                this.currentRecords = storage.get('practice_records', []);
+            } else {
+                // 获取所有记录
+                this.currentRecords = practiceRecorder.getPracticeRecords();
+            }
             
             // 应用筛选和排序
             this.applyFilters();
+            this.selectedSet.clear();
+            this.updateBulkActions();
             
             console.log(`Loaded ${this.currentRecords.length} practice records`);
             
@@ -399,6 +424,8 @@ class PracticeHistory {
         filtered = this.applySorting(filtered);
         
         this.filteredRecords = filtered;
+        this.selectedSet.clear();
+        this.updateBulkActions();
         
         // 更新统计信息
         this.updateHistoryStats();
@@ -498,16 +525,88 @@ class PracticeHistory {
      * 更新历史统计信息
      */
     updateHistoryStats() {
-        const totalPractices = this.filteredRecords.length;
-        const avgAccuracy = totalPractices > 0 
-            ? Math.round(this.filteredRecords.reduce((sum, r) => sum + r.accuracy, 0) / totalPractices * 100)
-            : 0;
-        const totalTime = this.filteredRecords.reduce((sum, r) => sum + r.duration, 0);
-        
-        document.getElementById('total-practices').textContent = totalPractices;
-        document.getElementById('avg-accuracy').textContent = avgAccuracy + '%';
-        document.getElementById('total-time').textContent = Utils.formatDuration(totalTime);
-        document.getElementById('filtered-count').textContent = totalPractices;
+        try {
+            const totalPractices = this.filteredRecords.length;
+            const avgAccuracy = totalPractices > 0 
+                ? Math.round(this.filteredRecords.reduce((sum, r) => sum + r.accuracy, 0) / totalPractices * 100)
+                : 0;
+            const totalTime = this.filteredRecords.reduce((sum, r) => sum + r.duration, 0);
+            
+            document.getElementById('total-practices').textContent = totalPractices;
+            document.getElementById('avg-accuracy').textContent = avgAccuracy + '%';
+            
+            // 防御性检查 Utils 对象是否存在
+            console.log('[PracticeHistory] Utils对象检查:', {
+                windowUtils: !!window.Utils,
+                formatDurationExists: window.Utils && typeof window.Utils.formatDuration === 'function',
+                totalTime: totalTime
+            });
+            
+            const formattedTime = (window.Utils && typeof window.Utils.formatDuration === 'function') 
+                ? Utils.formatDuration(totalTime)
+                : this.formatDurationFallback(totalTime);
+            document.getElementById('total-time').textContent = formattedTime;
+            document.getElementById('filtered-count').textContent = totalPractices;
+        } catch (error) {
+            console.error('[PracticeHistory] updateHistoryStats错误:', error);
+            // 使用备用方案
+            document.getElementById('total-time').textContent = '计算中...';
+        }
+    }
+
+    /**
+     * 备用时间格式化函数
+     */
+    formatDurationFallback(seconds) {
+        if (seconds < 60) {
+            return `${seconds}秒`;
+        } else if (seconds < 3600) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return remainingSeconds > 0 ? `${minutes}分${remainingSeconds}秒` : `${minutes}分钟`;
+        } else {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            return minutes > 0 ? `${hours}小时${minutes}分钟` : `${hours}小时`;
+        }
+    }
+
+    /**
+     * 备用日期格式化函数
+     */
+    formatDateFallback(date, format = 'YYYY-MM-DD') {
+        const d = new Date(date);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const hours = String(d.getHours()).padStart(2, '0');
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        const seconds = String(d.getSeconds()).padStart(2, '0');
+
+        return format
+            .replace('YYYY', year)
+            .replace('MM', month)
+            .replace('DD', day)
+            .replace('HH', hours)
+            .replace('mm', minutes)
+            .replace('ss', seconds);
+    }
+
+    /**
+     * 备用防抖函数
+     */
+    debounce(func, wait, immediate = false) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                timeout = null;
+                if (!immediate) func.apply(this, args);
+            };
+            const callNow = immediate && !timeout;
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+            if (callNow) func.apply(this, args);
+        };
     }
 
     /**
@@ -541,15 +640,24 @@ class PracticeHistory {
      */
     createRecordItem(record) {
         const accuracy = Math.round(record.accuracy * 100);
-        const duration = Utils.formatDuration(record.duration);
-        const startTime = Utils.formatDate(record.startTime, 'YYYY-MM-DD HH:mm');
+        const duration = (window.Utils && typeof window.Utils.formatDuration === 'function')
+            ? Utils.formatDuration(record.duration)
+            : this.formatDurationFallback(record.duration);
+        const startTime = (window.Utils && typeof window.Utils.formatDate === 'function')
+            ? Utils.formatDate(record.startTime, 'YYYY-MM-DD HH:mm')
+            : this.formatDateFallback(record.startTime, 'YYYY-MM-DD HH:mm');
         
         const accuracyClass = accuracy >= 80 ? 'excellent' : accuracy >= 60 ? 'good' : 'needs-improvement';
         const statusClass = record.status === 'completed' ? 'completed' : 'interrupted';
+        const recordIdStr = String(record.id);
+        const isSelected = this.selectedSet.has(recordIdStr) ? 'checked' : '';
         
         return `
-            <div class="history-record-item" data-record-id="${record.id}">
+            <div class="history-record-item" data-record-id="${recordIdStr}">
                 <div class="record-main">
+                    <div class="record-checkbox">
+                        <input type="checkbox" data-record-id="${recordIdStr}" ${isSelected}>
+                    </div>
                     <div class="record-status">
                         <div class="status-indicator ${statusClass}"></div>
                     </div>
@@ -576,13 +684,13 @@ class PracticeHistory {
                         </div>
                     </div>
                     <div class="record-actions">
-                        <button class="btn btn-sm btn-primary" data-history-action="retry" data-record-id="${record.id}">
+                        <button class="btn btn-sm btn-primary" data-history-action="retry" data-record-id="${recordIdStr}">
                             重新练习
                         </button>
-                        <button class="btn btn-sm btn-secondary" data-history-action="details" data-record-id="${record.id}">
+                        <button class="btn btn-sm btn-secondary" data-history-action="details" data-record-id="${recordIdStr}">
                             查看详情
                         </button>
-                        <button class="btn btn-sm btn-outline" data-history-action="delete" data-record-id="${record.id}">
+                        <button class="btn btn-sm btn-outline" data-history-action="delete" data-record-id="${recordIdStr}">
                             删除
                         </button>
                     </div>
@@ -684,8 +792,9 @@ class PracticeHistory {
     /**
      * 处理记录操作
      */
-    handleRecordAction(action, recordId) {
-        const record = this.filteredRecords.find(r => r.id === recordId);
+    async handleRecordAction(action, recordId) {
+        const recordIdStr = String(recordId);
+        const record = this.filteredRecords.find(r => String(r.id) === recordIdStr);
         if (!record) return;
         
         switch (action) {
@@ -693,10 +802,13 @@ class PracticeHistory {
                 this.retryExam(record);
                 break;
             case 'details':
-                this.showRecordDetails(recordId);
+                this.showRecordDetails(recordIdStr);
                 break;
             case 'delete':
-                this.deleteRecord(recordId);
+                await this.deleteRecord(recordIdStr);
+                break;
+            case 'bulkDelete':
+                await this.bulkDeleteSelected();
                 break;
         }
     }
@@ -713,16 +825,83 @@ class PracticeHistory {
     }
 
     /**
+     * 切换选择
+     */
+    toggleSelection(recordId) {
+        const id = String(recordId);
+        if (this.selectedSet.has(id)) {
+            this.selectedSet.delete(id);
+        } else {
+            this.selectedSet.add(id);
+        }
+        this.updateBulkActions();
+    }
+    
+    /**
+     * 更新批量操作UI
+     */
+    updateBulkActions() {
+        const btn = document.getElementById('bulk-delete-btn');
+        if (btn) {
+            btn.style.display = this.selectedSet.size > 0 ? 'inline-block' : 'none';
+            btn.textContent = `批量删除 (${this.selectedSet.size})`;
+        }
+    }
+    
+    /**
+     * 批量删除选中记录
+     */
+    async bulkDeleteSelected() {
+        const selectedIds = new Set(Array.from(this.selectedSet, id => String(id)));
+        if (selectedIds.size === 0) {
+            window.showMessage('请先选择要删除的记录', 'warning');
+            return;
+        }
+        if (!confirm(`确定要删除选中 ${selectedIds.size} 条记录吗？此操作不可撤销。`)) return;
+        
+        try {
+            const records = await storage.get('practice_records', []);
+            const kept = records.filter(r => !selectedIds.has(String(r?.id)));
+            const deletedCount = records.length - kept.length;
+            await storage.set('practice_records', kept);
+            
+            this.currentRecords = this.currentRecords.filter(r => !selectedIds.has(String(r.id)));
+            this.filteredRecords = this.filteredRecords.filter(r => !selectedIds.has(String(r.id)));
+            this.selectedSet.clear();
+            
+            if (typeof this.refreshHistory === 'function') {
+                this.refreshHistory();
+            } else {
+                this.renderHistoryList();
+            }
+            if (typeof window.syncPracticeRecords === 'function') {
+                window.syncPracticeRecords();
+            }
+            window.showMessage(`已删除 ${deletedCount} 条记录`, 'success');
+        } catch (error) {
+            console.error('批量删除失败:', error);
+            window.showMessage('批量删除失败', 'error');
+        }
+    }
+    
+    /**
      * 显示记录详情
      */
     showRecordDetails(recordId) {
-        const record = this.filteredRecords.find(r => r.id === recordId);
+        const recordIdStr = String(recordId);
+        const record = this.filteredRecords.find(r => String(r.id) === recordIdStr);
         if (!record) return;
         
         const accuracy = Math.round(record.accuracy * 100);
-        const duration = Utils.formatDuration(record.duration);
-        const startTime = Utils.formatDate(record.startTime, 'YYYY-MM-DD HH:mm:ss');
-        const endTime = Utils.formatDate(record.endTime, 'YYYY-MM-DD HH:mm:ss');
+        const duration = (window.Utils && typeof window.Utils.formatDuration === 'function') 
+            ? Utils.formatDuration(record.duration)
+            : this.formatDurationFallback(record.duration);
+        const startTime = (window.Utils && typeof window.Utils.formatDate === 'function') 
+            ? Utils.formatDate(record.startTime, 'YYYY-MM-DD HH:mm:ss')
+            : this.formatDateFallback(record.startTime, 'YYYY-MM-DD HH:mm:ss');
+        const endTime = (window.Utils && typeof window.Utils.formatDate === 'function') 
+            ? Utils.formatDate(record.endTime, 'YYYY-MM-DD HH:mm:ss')
+            : this.formatDateFallback(record.endTime, 'YYYY-MM-DD HH:mm:ss');
         
         // 生成答案详情表格
         const answersTableHtml = this.generateAnswersTable(record);

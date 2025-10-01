@@ -317,6 +317,10 @@ class SettingsPanel {
                             <p class="settings-description">导入导出、备份恢复练习数据</p>
                         </div>
                         <div class="settings-item">
+                            <button class="btn" id="library-loader">加载题库</button>
+                            <p class="settings-description">阅读/听力题库全量重载与增量更新</p>
+                        </div>
+                        <div class="settings-item">
                             <button class="btn btn-secondary" id="system-maintenance">系统维护</button>
                             <p class="settings-description">系统诊断、性能监控和维护工具</p>
                         </div>
@@ -510,6 +514,19 @@ class SettingsPanel {
                 }
             });
         }
+
+        // 加载题库
+        const libraryLoaderBtn = modal.querySelector('#library-loader');
+        if (libraryLoaderBtn) {
+            libraryLoaderBtn.addEventListener('click', () => {
+                this.hide();
+                if (window.showLibraryLoaderModal) {
+                    window.showLibraryLoaderModal();
+                } else if (window.showMessage) {
+                    window.showMessage('加载题库功能尚未初始化', 'warning');
+                }
+            });
+        }
         
         // 系统维护
         const systemMaintenanceBtn = modal.querySelector('#system-maintenance');
@@ -670,7 +687,7 @@ class SettingsPanel {
         };
         
         const dataStr = JSON.stringify(allSettings, null, 2);
-        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const dataBlob = new Blob([dataStr], { type: 'application/json; charset=utf-8' });
         
         const link = document.createElement('a');
         link.href = URL.createObjectURL(dataBlob);

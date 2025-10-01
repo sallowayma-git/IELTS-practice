@@ -35,6 +35,12 @@ class ExamSystemApp {
             // 设置事件监听器
             this.setupEventListeners();
 
+            // 调用 main.js 的遗留组件初始化
+            if (typeof window.initializeLegacyComponents === 'function') {
+                this.updateLoadingMessage('正在初始化遗留组件...');
+                window.initializeLegacyComponents();
+            }
+
             this.updateLoadingMessage('正在加载初始数据...');
             // 加载初始数据
             await this.loadInitialData();
@@ -58,7 +64,7 @@ class ExamSystemApp {
             this.showLoading(false);
 
             console.log('[App] IELTS考试系统初始化成功');
-            this.showUserMessage('系统初始化完成 Sallowaymmm呈现', 'success');
+            this.showUserMessage('系统初始化完成', 'success');
 
         } catch (error) {
             this.showLoading(false);
@@ -298,11 +304,16 @@ class ExamSystemApp {
      * 检查必要的依赖
      */
     checkDependencies() {
-        const requiredGlobals = ['storage', 'Utils'];
+        // 仅检查硬性依赖，保持向后兼容；Utils 可选
+        const requiredGlobals = ['storage'];
         const missing = requiredGlobals.filter(name => !window[name]);
 
         if (missing.length > 0) {
             throw new Error(`Missing required dependencies: ${missing.join(', ')}`);
+        }
+        // 软依赖提示但不阻断
+        if (!window.Utils) {
+            console.warn('[App] Optional dependency missing: Utils (continuing)');
         }
     }
 
@@ -313,7 +324,7 @@ class ExamSystemApp {
         // 定义组件加载优先级 - 只加载实际存在的组件
         const coreComponents = ['PracticeRecorder']; // 只有PracticeRecorder是必需的
         const optionalComponents = [
-            'ExamBrowser', 'PracticeHistory', 'ExamScanner'
+            // ExamBrowser已移除，使用内置的题目列表功能
         ]; // 只加载真正需要且存在的组件
 
         try {
@@ -373,9 +384,9 @@ class ExamSystemApp {
         console.log('[App] 初始化可选组件...');
 
         const componentInitializers = [
-            { name: 'ExamBrowser', init: () => new ExamBrowser() },
-            { name: 'PracticeHistory', init: () => new PracticeHistory() },
-            { name: 'ExamScanner', init: () => new ExamScanner() },
+            // ExamBrowser组件已移除，使用内置的题目列表功能
+            // PracticeHistory组件已移除，使用简单的练习记录界面
+
             { name: 'RecommendationDisplay', init: () => new RecommendationDisplay() },
             {
                 name: 'GoalSettings', init: () => {
@@ -434,7 +445,8 @@ class ExamSystemApp {
 
         // 只初始化已经加载的组件
         const availableComponents = [
-            'ExamBrowser', 'PracticeHistory', 'ExamScanner'
+            // ExamBrowser已移除，使用内置的题目列表功能
+            // PracticeHistory and ExamScanner were removed
         ].filter(name => window[name]);
 
         if (availableComponents.length > 0) {
@@ -446,11 +458,7 @@ class ExamSystemApp {
             console.warn('[App] 没有发现可用的可选组件');
         }
 
-        // 如果ExamBrowser仍然不可用，创建一个简化版本
-        if (!this.components.examBrowser && !window.ExamBrowser) {
-            // 静默创建ExamBrowser简化版本
-            this.components.examBrowser = this.createFallbackExamBrowser();
-        }
+        // ExamBrowser组件已移除，使用内置的题目列表功能
     }
 
     /**
@@ -585,12 +593,8 @@ class ExamSystemApp {
      */
     async loadInitialData() {
         try {
-            // 扫描题库（如果扫描器可用）
-            if (this.components.examScanner && typeof this.components.examScanner.scanExamLibrary === 'function') {
-                await this.components.examScanner.scanExamLibrary();
-            } else {
-                console.log('[App] ExamScanner不可用，跳过题库扫描');
-            }
+            // ExamScanner已移除，题库索引由其他方式管理
+            console.log('[App] 跳过ExamScanner扫描，使用现有题库索引');
 
             // 加载用户统计
             await this.loadUserStats();
@@ -608,7 +612,7 @@ class ExamSystemApp {
      * 加载用户统计数据
      */
     async loadUserStats() {
-        const stats = storage.get('user_stats', {
+        const stats = await storage.get('user_stats', {
             totalPractices: 0,
             totalTimeSpent: 0,
             averageScore: 0,
@@ -626,9 +630,19 @@ class ExamSystemApp {
     /**
      * 更新总览页面统计信息
      */
-    updateOverviewStats() {
-        const examIndex = storage.get('exam_index', []);
-        const practiceRecords = storage.get('practice_records', []);
+    async updateOverviewStats() {
+        let examIndex = await storage.get('exam_index', []);
+        if (!Array.isArray(examIndex)) {
+            console.warn('[App] examIndex不是数组，回退到 window.examIndex');
+            examIndex = Array.isArray(window.examIndex) ? window.examIndex : [];
+        }
+        let practiceRecords = await storage.get('practice_records', []);
+
+        // 确保practiceRecords是数组
+        if (!Array.isArray(practiceRecords)) {
+            console.warn('[App] practiceRecords不是数组，使用空数组替代');
+            practiceRecords = [];
+        }
 
         // 更新总体统计
         const totalExams = examIndex.length;
@@ -683,11 +697,12 @@ class ExamSystemApp {
      */
     updateCategoryStats(examIndex, practiceRecords) {
         const categories = ['P1', 'P2', 'P3'];
+        const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
 
         categories.forEach(category => {
-            const categoryExams = examIndex.filter(exam => exam.category === category);
+            const categoryExams = list.filter(exam => exam.category === category);
             const categoryRecords = practiceRecords.filter(record => {
-                const exam = examIndex.find(e => e.id === record.examId);
+                const exam = list.find(e => e.id === record.examId);
                 return exam && exam.category === category;
             });
 
@@ -718,6 +733,8 @@ class ExamSystemApp {
         const urlParams = new URLSearchParams(window.location.search);
         const urlView = urlParams.get('view');
         const initialView = urlView || 'overview';
+
+        // 初始化完成后立即调用导航到指定视图
         this.navigateToView(initialView);
     }
 
@@ -766,6 +783,15 @@ class ExamSystemApp {
             case 'overview':
                 this.refreshOverviewData();
                 break;
+            case 'browse':
+                // 如果存在待应用的筛选，则优先应用而不重置
+                if (window.__pendingBrowseFilter && typeof window.applyBrowseFilter === 'function') {
+                    const { category, type } = window.__pendingBrowseFilter;
+                    try { window.applyBrowseFilter(category, type); } finally { delete window.__pendingBrowseFilter; }
+                } else if (typeof window.initializeBrowseView === 'function') {
+                    window.initializeBrowseView();
+                }
+                break;
             case 'specialized-practice':
                 if (this.components.specializedPractice) {
                     this.components.specializedPractice.updateSpecializedProgress();
@@ -777,9 +803,8 @@ class ExamSystemApp {
                 }
                 break;
             case 'practice':
-                if (this.components.practiceHistory) {
-                    this.components.practiceHistory.refreshHistory();
-                }
+                // 使用简单的练习记录更新，不依赖复杂组件
+                this.updateSimplePracticeView();
                 break;
             case 'analysis':
                 this.loadAnalysisData();
@@ -807,25 +832,31 @@ class ExamSystemApp {
     /**
      * 浏览分类题目
      */
-    browseCategory(category) {
-        if (this.components.examBrowser) {
-            this.components.examBrowser.showCategory(category);
-            this.navigateToView('browse');
+    browseCategory(category, type = null) {
+        try {
+            // 记录待应用筛选（可显式传入类型，如 'reading' 或 'listening'）
+            window.__pendingBrowseFilter = { category, type };
+            window.__browseFilter = { category, type };
+        } catch (_) {}
 
-            // 更新浏览页面标题
-            const browseTitle = document.getElementById('browse-title');
-            if (browseTitle) {
-                browseTitle.textContent = `${category} 题库浏览`;
+        // 无论是否存在旧的 ExamBrowser，都统一走新浏览视图
+        this.navigateToView('browse');
+
+        // 立即尝试应用（如果浏览视图已在当前激活）
+        try {
+            if (typeof window.applyBrowseFilter === 'function' && document.getElementById('browse-view')?.classList.contains('active')) {
+                window.applyBrowseFilter(category, type);
+                delete window.__pendingBrowseFilter;
             }
-        }
+        } catch (_) {}
     }
 
     /**
      * 开始分类练习
      */
-    startCategoryPractice(category) {
+    async startCategoryPractice(category) {
         // 获取该分类的题目
-        const examIndex = storage.get('exam_index', []);
+        const examIndex = await storage.get('exam_index', []);
         const categoryExams = examIndex.filter(exam => exam.category === category);
 
         if (categoryExams.length === 0) {
@@ -839,11 +870,24 @@ class ExamSystemApp {
     }
 
     /**
-     * 打开指定题目进行练习
-     */
-    openExam(examId) {
-        const examIndex = storage.get('exam_index', []);
-        const exam = examIndex.find(e => e.id === examId);
+      * 打开指定题目进行练习
+      */
+    async openExam(examId) {
+        // 使用活动题库配置键，保证全量/增量切换后仍能打开
+        let examIndex = [];
+        try {
+            const activeKey = await storage.get('active_exam_index_key', 'exam_index');
+            examIndex = await storage.get(activeKey, []) || [];
+            if ((!examIndex || examIndex.length === 0) && activeKey !== 'exam_index') {
+                examIndex = await storage.get('exam_index', []);
+            }
+        } catch (_) {
+            examIndex = await storage.get('exam_index', []);
+        }
+
+        // 增加数组化防御
+        let list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
+        const exam = list.find(e => e.id === examId);
 
         if (!exam) {
             window.showMessage('题目不存在', 'error');
@@ -851,19 +895,24 @@ class ExamSystemApp {
         }
 
         try {
-            // 记录练习开始
-            this.startPracticeSession(examId);
+            // 若无HTML，直接打开PDF
+            if (exam.hasHtml === false) {
+                const pdfUrl = (typeof window.buildResourcePath === 'function')
+                    ? window.buildResourcePath(exam, 'pdf')
+                    : ((exam.path || '').replace(/\\/g,'/').replace(/\/+\//g,'/') + (exam.pdfFilename || '') );
+                const pdfWin = window.open(pdfUrl, `pdf_${exam.id}`, 'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes');
+                if (!pdfWin) throw new Error('无法打开PDF窗口，请检查弹窗设置');
+                window.showMessage(`正在打开PDF: ${exam.title}`, 'info');
+                return;
+            }
 
-            // 构造题目URL
+            // 先构造URL并立即打开窗口（保持用户手势，避免被浏览器拦截）
             const examUrl = this.buildExamUrl(exam);
-
-            // 在新窗口中打开题目
             const examWindow = this.openExamWindow(examUrl, exam);
 
-            // 新增：注入数据采集脚本
+            // 再进行会话记录与脚本注入
+            await this.startPracticeSession(examId);
             this.injectDataCollectionScript(examWindow, examId);
-
-            // 设置窗口管理
             this.setupExamWindowManagement(examWindow, examId);
 
             window.showMessage(`正在打开题目: ${exam.title}`, 'info');
@@ -878,19 +927,17 @@ class ExamSystemApp {
      * 构造题目URL
      */
     buildExamUrl(exam) {
-        // 基于exam对象构造完整的文件路径
-        let examPath = exam.path;
+        // 使用全局的路径构建器以确保阅读/听力路径正确
+        if (typeof window.buildResourcePath === 'function') {
+            return window.buildResourcePath(exam, 'html');
+        }
 
-        // 确保路径格式正确
+        // 回退：基于exam对象构造完整的文件路径（可能不含根前缀）
+        let examPath = exam.path || '';
         if (!examPath.endsWith('/')) {
             examPath += '/';
         }
-
-        // 添加文件名
-        const fullPath = examPath + exam.filename;
-
-        // 返回相对于当前页面的路径
-        return fullPath;
+        return examPath + exam.filename;
     }
 
 
@@ -903,14 +950,23 @@ class ExamSystemApp {
         const windowFeatures = this.calculateWindowFeatures();
 
         // 打开新窗口
-        const examWindow = window.open(
-            examUrl,
-            `exam_${exam.id}`,
-            windowFeatures
-        );
+        let examWindow = null;
+        try {
+            examWindow = window.open(
+                examUrl,
+                `exam_${exam.id}`,
+                windowFeatures
+            );
+        } catch (_) {}
 
+        // 弹窗被拦截时，降级为当前窗口打开，确保用户可进入练习页
         if (!examWindow) {
-            throw new Error('无法打开新窗口，请检查浏览器弹窗设置');
+            try {
+                window.location.href = examUrl;
+                return window; // 以当前窗口作为返回引用
+            } catch (e) {
+                throw new Error('无法打开题目页面，请检查弹窗/文件路径设置');
+            }
         }
 
         return examWindow;
@@ -946,13 +1002,13 @@ class ExamSystemApp {
     }
 
     /**
-     * 注入数据采集脚本到练习页面
-     */
+      * 注入数据采集脚本到练习页面
+      */
     injectDataCollectionScript(examWindow, examId) {
         console.log('[DataInjection] 开始注入数据采集脚本:', examId);
 
-        // 等待页面加载完成后注入脚本
-        const injectScript = () => {
+        // 新增修复3E：修复await语法错误 - 将内部injectScript改为async
+        const injectScript = async () => {
             try {
                 // 检查窗口是否仍然存在
                 if (examWindow.closed) {
@@ -984,45 +1040,37 @@ class ExamSystemApp {
                 console.log('[DataInjection] 开始加载脚本文件...');
 
                 // 加载练习页面增强脚本
-                fetch('./js/practice-page-enhancer.js')
-                    .then(r => r.text())
-                    .then(enhancerScript => {
-                        console.log('[DataInjection] 增强脚本加载完成，开始注入...');
+                const enhancerScript = await fetch('./js/practice-page-enhancer.js').then(r => r.text());
+                console.log('[DataInjection] 增强脚本加载完成，开始注入...');
 
-                        // 注入练习页面增强脚本
-                        const enhancerScriptEl = doc.createElement('script');
-                        enhancerScriptEl.type = 'text/javascript';
-                        enhancerScriptEl.textContent = enhancerScript;
-                        doc.head.appendChild(enhancerScriptEl);
+                // 注入练习页面增强脚本
+                const enhancerScriptEl = doc.createElement('script');
+                enhancerScriptEl.type = 'text/javascript';
+                enhancerScriptEl.textContent = enhancerScript;
+                doc.head.appendChild(enhancerScriptEl);
 
-                        console.log('[DataInjection] 练习页面增强脚本已注入');
+                console.log('[DataInjection] 练习页面增强脚本已注入');
 
-                        // 等待脚本初始化完成后发送会话信息
-                        setTimeout(() => {
-                            this.initializePracticeSession(examWindow, examId);
-                        }, 1500); // 增加等待时间确保脚本完全初始化
-                    })
-                    .catch(error => {
-                        console.error('[DataInjection] 脚本加载失败:', error);
-                        // 降级到内联脚本注入
-                        this.injectInlineScript(examWindow, examId);
-                    });
+                // 等待脚本初始化完成后发送会话信息
+                setTimeout(() => {
+                    this.initializePracticeSession(examWindow, examId);
+                }, 1500); // 增加等待时间确保脚本完全初始化
 
             } catch (error) {
                 console.error('[DataInjection] 脚本注入失败:', error);
-                // 记录错误但不中断练习流程
-                this.handleInjectionError(examId, error);
+                // 降级到内联脚本注入
+                this.injectInlineScript(examWindow, examId);
             }
         };
 
         // 更可靠的页面加载检测
-        const checkAndInject = () => {
+        const checkAndInject = async () => {
             try {
                 if (examWindow.closed) return;
 
                 const doc = examWindow.document;
                 if (doc && (doc.readyState === 'complete' || doc.readyState === 'interactive')) {
-                    injectScript();
+                    await injectScript();
                 } else {
                     // 继续等待
                     setTimeout(checkAndInject, 200);
@@ -1162,7 +1210,7 @@ class ExamSystemApp {
     /**
      * 处理注入错误
      */
-    handleInjectionError(examId, error) {
+    async handleInjectionError(examId, error) {
         console.error('[DataInjection] 注入错误:', error);
 
         // 记录错误信息
@@ -1174,12 +1222,12 @@ class ExamSystemApp {
         };
 
         // 保存错误日志到本地存储
-        const errorLogs = storage.get('injection_errors', []);
+        const errorLogs = await storage.get('injection_errors', []);
         errorLogs.push(errorInfo);
         if (errorLogs.length > 50) {
             errorLogs.splice(0, errorLogs.length - 50); // 保留最近50条错误
         }
-        storage.set('injection_errors', errorLogs);
+        await storage.set('injection_errors', errorLogs);
 
         // 不显示错误给用户，静默处理
         console.warn('[DataInjection] 将使用模拟数据模式');
@@ -1211,6 +1259,13 @@ class ExamSystemApp {
         // 设置窗口通信
         this.setupExamWindowCommunication(examWindow, examId);
 
+        // 启动与练习页的会话握手（file:// 下更可靠）
+        try {
+            this.startExamHandshake(examWindow, examId);
+        } catch (e) {
+            console.warn('[App] 启动握手失败:', e);
+        }
+
         // 更新UI状态
         this.updateExamStatus(examId, 'in-progress');
     }
@@ -1220,16 +1275,21 @@ class ExamSystemApp {
      */
     setupExamWindowCommunication(examWindow, examId) {
         // 监听来自题目窗口的消息
-        const messageHandler = (event) => {
+        const messageHandler = async (event) => {
             // 验证消息数据格式
             if (!event.data || typeof event.data !== 'object') return;
 
-            // 只处理来自练习页面的消息
-            if (event.data.source !== 'practice_page') return;
+            // 兼容处理：允许缺失来源标记的消息（旧页面可能未填充 source）
 
             // 验证窗口来源（如果可能的话）- 放宽验证条件
             if (event.source && examWindow && event.source !== examWindow) {
                 console.log('[App] 消息来源窗口不匹配，但仍处理消息');
+            }
+
+            // 放宽消息源过滤，兼容 inline_collector 与 practice_page
+            const src = (event.data && event.data.source) || '';
+            if (src && src !== 'practice_page' && src !== 'inline_collector') {
+                return; // 非预期来源的消息忽略
             }
 
             const { type, data } = event.data || {};
@@ -1253,7 +1313,7 @@ class ExamSystemApp {
                     this.handleProgressUpdate(examId, data);
                     break;
                 case 'PRACTICE_COMPLETE':
-                    this.handlePracticeComplete(examId, data);
+                    await this.handlePracticeComplete(examId, data);
                     break;
                 case 'ERROR_OCCURRED':
                     this.handleDataCollectionError(examId, data);
@@ -1271,17 +1331,64 @@ class ExamSystemApp {
         }
         this.messageHandlers.set(examId, messageHandler);
 
-        // 向题目窗口发送初始化消息
+        // 向题目窗口发送初始化消息（兼容 0.2 增强器监听的 INIT_SESSION）
         examWindow.addEventListener('load', () => {
-            examWindow.postMessage({
-                type: 'init_exam_session',
-                data: {
-                    examId: examId,
-                    parentOrigin: window.location.origin,
-                    sessionId: this.generateSessionId()
-                }
-            }, '*');
+            const initPayload = {
+                examId: examId,
+                parentOrigin: window.location.origin,
+                sessionId: this.generateSessionId()
+            };
+            try {
+                // 首选 0.2 的大写事件名，保证 practicePageEnhancer 能收到并设置 sessionId
+                console.log('[System] 发送初始化消息到练习页面:', { type: 'INIT_SESSION', data: {} });
+                examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
+                // 同时发一份旧事件名，兼容历史实现
+                examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
+            } catch (e) {
+                console.warn('[App] 发送初始化消息失败:', e);
+            }
         });
+    }
+
+    /**
+     * 与练习页建立握手（重复发送 INIT_SESSION，直到收到 SESSION_READY）
+     */
+    startExamHandshake(examWindow, examId) {
+        if (!this._handshakeTimers) this._handshakeTimers = new Map();
+
+        // 避免重复握手
+        if (this._handshakeTimers.has(examId)) return;
+
+        const initPayload = {
+            examId,
+            parentOrigin: window.location.origin,
+            sessionId: this.generateSessionId()
+        };
+
+        let attempts = 0;
+        const maxAttempts = 30; // ~9s
+        const tick = () => {
+            if (examWindow && !examWindow.closed) {
+                try {
+                    // 直接发送两种事件名，确保增强器任何实现都能收到
+                    if (attempts === 0) {
+                        console.log('[System] 发送初始化消息到练习页面:', { type: 'INIT_SESSION', data: {} });
+                    }
+                    examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
+                    examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
+                } catch (_) { /* 忽略 */ }
+            }
+            attempts++;
+            if (attempts >= maxAttempts) {
+                clearInterval(timer);
+                this._handshakeTimers.delete(examId);
+                console.warn('[App] 握手超时，练习页可能未加载增强器');
+            }
+        };
+        const timer = setInterval(tick, 300);
+        this._handshakeTimers.set(examId, timer);
+        // 立即发送一次
+        tick();
     }
 
     /**
@@ -1289,11 +1396,11 @@ class ExamSystemApp {
      */
     createFallbackRecorder() {
         return {
-            handleRealPracticeData: (examId, realData) => {
+            handleRealPracticeData: async (examId, realData) => {
                 console.log('[FallbackRecorder] 处理真实练习数据:', examId, realData);
                 try {
                     // 获取题目信息
-                    const examIndex = storage.get('exam_index', []);
+                    const examIndex = await storage.get('exam_index', []);
                     const exam = examIndex.find(e => e.id === examId);
 
                     if (!exam) {
@@ -1305,14 +1412,14 @@ class ExamSystemApp {
                     const practiceRecord = this.createSimplePracticeRecord(exam, realData);
 
                     // 直接保存到localStorage
-                    const records = storage.get('practice_records', []);
+                    const records = await storage.get('practice_records', []);
                     records.unshift(practiceRecord);
 
                     if (records.length > 1000) {
                         records.splice(1000);
                     }
 
-                    storage.set('practice_records', records);
+                    await storage.set('practice_records', records);
                     console.log('[FallbackRecorder] 记录已保存:', practiceRecord.id);
 
                     return practiceRecord;
@@ -1331,53 +1438,36 @@ class ExamSystemApp {
                     sessionId: this.generateSessionId(),
                     status: 'started'
                 };
+            },
+
+            getPracticeRecords: async (filters = {}) => {
+                console.log('[FallbackRecorder] 获取练习记录');
+                try {
+                    const records = await storage.get('practice_records', []);
+                    
+                    if (Object.keys(filters).length === 0) {
+                        return records;
+                    }
+                    
+                    return records.filter(record => {
+                        if (filters.examId && record.examId !== filters.examId) return false;
+                        if (filters.category && record.category !== filters.category) return false;
+                        if (filters.startDate && new Date(record.startTime) < new Date(filters.startDate)) return false;
+                        if (filters.endDate && new Date(record.startTime) > new Date(filters.endDate)) return false;
+                        if (filters.minAccuracy && record.accuracy < filters.minAccuracy) return false;
+                        if (filters.maxAccuracy && record.accuracy > filters.maxAccuracy) return false;
+                        
+                        return true;
+                    });
+                } catch (error) {
+                    console.error('[FallbackRecorder] 获取记录失败:', error);
+                    return [];
+                }
             }
         };
     }
 
-    /**
-     * 创建降级版ExamBrowser
-     */
-    createFallbackExamBrowser() {
-        return {
-            // 基本的题库浏览功能
-            displayExams: (exams) => {
-                console.log('[FallbackExamBrowser] 显示考试列表:', exams.length);
-                const examList = document.getElementById('examList');
-                if (examList && exams) {
-                    examList.innerHTML = exams.map(exam => `
-                        <div class="exam-item fallback-mode" style="border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 8px;">
-                            <h3 style="margin: 0 0 10px 0; color: #333;">${exam.title}</h3>
-                            <p style="margin: 5px 0; color: #666;">分类: ${exam.category} | 频率: ${exam.frequency}</p>
-                            <button onclick="window.open('${exam.path}', '_blank')" class="btn btn-primary" style="margin-top: 10px;">
-                                开始练习
-                            </button>
-                        </div>
-                    `).join('');
-                }
-            },
-
-            // 搜索功能
-            search: (query) => {
-                console.log('[FallbackExamBrowser] 搜索:', query);
-                const examIndex = storage.get('exam_index', []);
-                return examIndex.filter(exam =>
-                    exam.title.toLowerCase().includes(query.toLowerCase()) ||
-                    exam.category.toLowerCase().includes(query.toLowerCase())
-                );
-            },
-
-            // 分类过滤
-            filterByCategory: (category) => {
-                console.log('[FallbackExamBrowser] 分类过滤:', category);
-                const examIndex = storage.get('exam_index', []);
-                return category === 'all' ? examIndex : examIndex.filter(exam => exam.category === category);
-            },
-
-            // 标记为降级模式
-            isFallback: true
-        };
-    }
+    // ExamBrowser组件已移除，使用内置的题目列表功能
 
     /**
      * 格式化时长
@@ -1474,8 +1564,12 @@ class ExamSystemApp {
     /**
      * 开始练习会话
      */
-    startPracticeSession(examId) {
-        const examIndex = storage.get('exam_index', []);
+    async startPracticeSession(examId) {
+        let examIndex = await storage.get('exam_index', []);
+        if (!Array.isArray(examIndex)) {
+            console.warn('[App] examIndex不是数组，回退到 window.examIndex');
+            examIndex = Array.isArray(window.examIndex) ? window.examIndex : [];
+        }
         const exam = examIndex.find(e => e.id === examId);
 
         if (!exam) {
@@ -1483,9 +1577,20 @@ class ExamSystemApp {
             return;
         }
 
-        // 使用练习记录器开始会话
-        if (this.components.practiceRecorder) {
-            try {
+        try {
+            // 优先使用新的练习页面管理器
+            if (window.practicePageManager) {
+                console.log('[App] 使用练习页面管理器启动会话');
+                const sessionId = await window.practicePageManager.startPracticeSession(examId, exam);
+                console.log('[App] 练习会话已启动:', sessionId);
+                
+                // 更新题目状态
+                this.updateExamStatus(examId, 'in-progress');
+                return sessionId;
+            }
+            
+            // 使用练习记录器开始会话
+            if (this.components.practiceRecorder) {
                 let sessionData;
                 if (typeof this.components.practiceRecorder.startPracticeSession === 'function') {
                     sessionData = this.components.practiceRecorder.startPracticeSession(examId, exam);
@@ -1496,26 +1601,55 @@ class ExamSystemApp {
                     sessionData = null;
                 }
                 console.log('[App] 练习会话已通过记录器启动:', sessionData);
-            } catch (error) {
-                console.error('[App] 练习记录器启动失败:', error);
+            } else {
+                // 降级处理
+                console.log('[App] 使用降级会话管理');
+                const sessionData = {
+                    examId: examId,
+                    startTime: new Date().toISOString(),
+                    status: 'started',
+                    sessionId: this.generateSessionId()
+                };
+
+                const activeSessions = await storage.get('active_sessions', []);
+                activeSessions.push(sessionData);
+                await storage.set('active_sessions', activeSessions);
             }
-        } else {
-            // 降级处理
-            console.log('[App] 使用降级会话管理');
-            const sessionData = {
-                examId: examId,
-                startTime: new Date().toISOString(),
-                status: 'started',
-                sessionId: this.generateSessionId()
-            };
 
-            const activeSessions = storage.get('active_sessions', []);
-            activeSessions.push(sessionData);
-            storage.set('active_sessions', activeSessions);
+            // 更新题目状态
+            this.updateExamStatus(examId, 'in-progress');
+            
+        } catch (error) {
+            console.error('[App] 启动练习会话失败:', error);
+            
+            // 最终降级方案
+            this.startPracticeSessionFallback(examId, exam);
         }
+    }
 
+    /**
+     * 降级启动练习会话
+     */
+    async startPracticeSessionFallback(examId, exam) {
+        console.log('[App] 使用最终降级方案启动练习');
+        
+        const sessionData = {
+            examId: examId,
+            startTime: new Date().toISOString(),
+            status: 'started',
+            sessionId: this.generateSessionId()
+        };
+
+        const activeSessions = await storage.get('active_sessions', []);
+        activeSessions.push(sessionData);
+        await storage.set('active_sessions', activeSessions);
+        
         // 更新题目状态
         this.updateExamStatus(examId, 'in-progress');
+        
+        // 尝试打开练习页面
+        const practiceUrl = `templates/ielts-exam-template.html?examId=${examId}`;
+        window.open(practiceUrl, `practice_${sessionData.sessionId}`, 'width=1200,height=800');
     }
 
     /**
@@ -1571,6 +1705,14 @@ class ExamSystemApp {
             this.examWindows.set(examId, windowInfo);
         }
 
+        // 停止握手重试
+        try {
+            if (this._handshakeTimers && this._handshakeTimers.has(examId)) {
+                clearInterval(this._handshakeTimers.get(examId));
+                this._handshakeTimers.delete(examId);
+            }
+        } catch (_) {}
+
         // 可以在这里发送额外的配置信息给数据采集器
         // 例如题目信息、特殊设置等
     }
@@ -1596,21 +1738,25 @@ class ExamSystemApp {
     /**
      * 处理练习完成（真实数据）
      */
-    handlePracticeComplete(examId, data) {
+    async handlePracticeComplete(examId, data) {
         console.log('[DataCollection] 练习完成（真实数据）:', examId, data);
         console.log('[DataCollection] PracticeRecorder状态:', !!this.components.practiceRecorder);
 
         try {
-            // 使用真实数据更新练习记录
-            if (this.components && this.components.practiceRecorder) {
-                console.log('[DataCollection] 使用PracticeRecorder处理真实数据');
-                const result = this.components.practiceRecorder.handleRealPracticeData(examId, data);
-                console.log('[DataCollection] PracticeRecorder处理结果:', result);
-            } else {
-                // 降级处理：直接保存真实数据
-                console.log('[DataCollection] PracticeRecorder不可用，使用降级保存');
-                console.log('[DataCollection] Components状态:', this.components);
-                this.saveRealPracticeData(examId, data);
+            // 直接保存真实数据（采用旧版本的简单方式）
+            console.log('[DataCollection] 直接保存真实数据');
+            await this.saveRealPracticeData(examId, data);
+
+            // 刷新内存中的练习记录，确保无需手动刷新即可看到
+            try {
+                if (typeof window.syncPracticeRecords === 'function') {
+                    window.syncPracticeRecords();
+                } else if (window.storage) {
+                    const latest = await window.storage.get('practice_records', []);
+                    window.practiceRecords = latest;
+                }
+            } catch (syncErr) {
+                console.warn('[DataCollection] 刷新练习记录失败（UI可能需要手动刷新）:', syncErr);
             }
 
             // 更新UI状态
@@ -1637,7 +1783,7 @@ class ExamSystemApp {
     /**
      * 处理数据采集错误
      */
-    handleDataCollectionError(examId, data) {
+    async handleDataCollectionError(examId, data) {
         console.error('[DataCollection] 数据采集错误:', examId, data);
 
         // 记录错误但不中断用户体验
@@ -1648,12 +1794,12 @@ class ExamSystemApp {
             type: 'data_collection_error'
         };
 
-        const errorLogs = storage.get('collection_errors', []);
+        const errorLogs = await storage.get('collection_errors', []);
         errorLogs.push(errorInfo);
         if (errorLogs.length > 50) {
             errorLogs.splice(0, errorLogs.length - 50);
         }
-        storage.set('collection_errors', errorLogs);
+        await storage.set('collection_errors', errorLogs);
 
         // 标记该会话使用模拟数据
         if (this.examWindows && this.examWindows.has(examId)) {
@@ -1694,19 +1840,22 @@ class ExamSystemApp {
     }
 
     /**
-     * 保存真实练习数据
+     * 保存真实练习数据（采用旧版本的简单直接方式）
      */
-    saveRealPracticeData(examId, realData) {
+    async saveRealPracticeData(examId, realData) {
         try {
-            const examIndex = storage.get('exam_index', []);
-            const exam = examIndex.find(e => e.id === examId);
+            console.log('[DataCollection] 开始保存真实练习数据:', examId, realData);
+            
+            let examIndex = await storage.get('exam_index', []);
+            const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
+            const exam = list.find(e => e.id === examId);
 
             if (!exam) {
-                console.error('无法找到题目信息:', examId);
+                console.error('[DataCollection] 无法找到题目信息:', examId);
                 return;
             }
 
-            // 构造增强的练习记录
+            // 构造练习记录（与旧版本完全相同的格式）
             const practiceRecord = {
                 id: Date.now(),
                 examId: examId,
@@ -1716,17 +1865,18 @@ class ExamSystemApp {
 
                 // 真实数据
                 realData: {
-                    score: realData.scoreInfo?.correct || 0,
-                    totalQuestions: realData.scoreInfo?.total || 0,
-                    accuracy: realData.scoreInfo?.accuracy || 0,
-                    percentage: realData.scoreInfo?.percentage || 0,
-                    duration: realData.duration,
-                    answers: realData.answers,
-                    answerHistory: realData.answerHistory,
-                    interactions: realData.interactions,
-                    isRealData: true,
-                    source: realData.scoreInfo?.source || 'unknown'
-                },
+                   score: realData.scoreInfo?.correct || 0,
+                   totalQuestions: realData.scoreInfo?.total || 0,
+                   accuracy: realData.scoreInfo?.accuracy || 0,
+                   percentage: realData.scoreInfo?.percentage || 0,
+                   duration: realData.duration,
+                   answers: realData.answers,
+                   correctAnswers: realData.correctAnswers || {},
+                   answerHistory: realData.answerHistory,
+                   interactions: realData.interactions,
+                   isRealData: true,
+                   source: realData.scoreInfo?.source || 'unknown'
+               },
 
                 // 数据来源标识
                 dataSource: 'real',
@@ -1736,8 +1886,66 @@ class ExamSystemApp {
                 timestamp: Date.now()
             };
 
-            // 保存到练习记录
-            const practiceRecords = storage.get('practice_records', []);
+            // 兼容旧视图字段（便于总览系统统计与详情展示）
+            try {
+                const sInfo = realData && realData.scoreInfo ? realData.scoreInfo : {};
+                const correct = typeof sInfo?.correct === 'number' ? sInfo.correct : 0;
+                const total = typeof sInfo?.total === 'number' ? sInfo.total : (practiceRecord.realData?.totalQuestions || Object.keys(realData.answers || {}).length || 0);
+                const acc = typeof sInfo?.accuracy === 'number' ? sInfo.accuracy : (total > 0 ? correct / total : 0);
+                const pct = typeof sInfo?.percentage === 'number' ? sInfo.percentage : Math.round(acc * 100);
+
+                practiceRecord.score = correct;
+                practiceRecord.correctAnswers = correct; // 兼容练习记录视图所需字段
+                practiceRecord.totalQuestions = total;
+                practiceRecord.accuracy = acc;
+                practiceRecord.percentage = pct;
+                practiceRecord.answers = realData.answers || {};
+                practiceRecord.startTime = new Date((realData.startTime ?? (Date.now() - (realData.duration || 0) * 1000))).toISOString();
+                practiceRecord.endTime = new Date((realData.endTime ?? Date.now())).toISOString();
+
+                // 填充详情，便于在练习记录详情中显示正确答案
+                const comp = realData && realData.answerComparison ? realData.answerComparison : {};
+                const details = {};
+                Object.entries(comp).forEach(([qid, obj]) => {
+                    details[qid] = {
+                        userAnswer: obj && obj.userAnswer != null ? obj.userAnswer : '',
+                        correctAnswer: obj && obj.correctAnswer != null ? obj.correctAnswer : '',
+                        isCorrect: !!(obj && obj.isCorrect)
+                    };
+                });
+                // 将详情放入 realData.scoreInfo，便于历史详情与Markdown导出读取
+                if (!practiceRecord.realData) practiceRecord.realData = {};
+                practiceRecord.realData.scoreInfo = {
+                    correct: correct,
+                    total: total,
+                    accuracy: acc,
+                    percentage: pct,
+                    details: details
+                };
+                
+                // 同时保留顶层一致性（仅用于展示，不作为详情读取来源）
+                practiceRecord.scoreInfo = {
+                    correct: correct,
+                    total: total,
+                    accuracy: acc,
+                    percentage: pct,
+                    details: details
+                };
+                
+                // 将比较结构提升到顶层，便于兼容读取
+                practiceRecord.answerComparison = comp;
+            } catch (compatErr) {
+                console.warn('[DataCollection] 兼容字段填充失败:', compatErr);
+            }
+
+            // 直接保存到localStorage（与旧版本完全相同的方式）
+            let practiceRecords = await storage.get('practice_records', []);
+            if (!Array.isArray(practiceRecords)) {
+                // 迁移修复：历史上可能被错误压缩为对象，这里强制纠正为数组
+                practiceRecords = [];
+            }
+            console.log('[DataCollection] 当前记录数量:', practiceRecords.length);
+
             practiceRecords.unshift(practiceRecord);
 
             // 限制记录数量
@@ -1745,9 +1953,21 @@ class ExamSystemApp {
                 practiceRecords.splice(100);
             }
 
-            storage.set('practice_records', practiceRecords);
+            const saveResult = await storage.set('practice_records', practiceRecords);
+            console.log('[DataCollection] 保存结果:', saveResult);
 
-            console.log('[DataCollection] 真实练习数据已保存:', practiceRecord);
+            // 立即验证保存是否成功
+            const verifyRecords = await storage.get('practice_records', []);
+            const savedRecord = Array.isArray(verifyRecords)
+                ? verifyRecords.find(r => r.id === practiceRecord.id)
+                : undefined;
+            
+            if (savedRecord) {
+                console.log('[DataCollection] ✓ 真实练习数据保存成功:', practiceRecord.id);
+                console.log('[DataCollection] ✓ 验证成功，当前总记录数:', verifyRecords.length);
+            } else {
+                console.error('[DataCollection] ✗ 保存验证失败，记录未找到');
+            }
 
         } catch (error) {
             console.error('[DataCollection] 保存真实数据失败:', error);
@@ -1757,9 +1977,10 @@ class ExamSystemApp {
     /**
      * 显示真实完成通知
      */
-    showRealCompletionNotification(examId, realData) {
-        const examIndex = storage.get('exam_index', []);
-        const exam = examIndex.find(e => e.id === examId);
+    async showRealCompletionNotification(examId, realData) {
+        const examIndex = await storage.get('exam_index', []);
+        const list = Array.isArray(examIndex) ? examIndex : [];
+        const exam = list.find(e => e.id === examId);
 
         if (!exam) return;
 
@@ -1859,8 +2080,8 @@ class ExamSystemApp {
     /**
      * 显示题目完成通知
      */
-    showExamCompletionNotification(examId, resultData) {
-        const examIndex = storage.get('exam_index', []);
+    async showExamCompletionNotification(examId, resultData) {
+        const examIndex = await storage.get('exam_index', []);
         const exam = examIndex.find(e => e.id === examId);
 
         if (!exam) return;
@@ -1877,8 +2098,8 @@ class ExamSystemApp {
     /**
      * 显示详细结果
      */
-    showDetailedResults(examId, resultData) {
-        const examIndex = storage.get('exam_index', []);
+    async showDetailedResults(examId, resultData) {
+        const examIndex = await storage.get('exam_index', []);
         const exam = examIndex.find(e => e.id === examId);
 
         if (!exam) return;
@@ -1963,7 +2184,7 @@ class ExamSystemApp {
     /**
      * 清理题目会话
      */
-    cleanupExamSession(examId) {
+    async cleanupExamSession(examId) {
         // 清理窗口引用
         if (this.examWindows && this.examWindows.has(examId)) {
             this.examWindows.delete(examId);
@@ -1977,9 +2198,9 @@ class ExamSystemApp {
         }
 
         // 清理活动会话
-        const activeSessions = storage.get('active_sessions', []);
+        const activeSessions = await storage.get('active_sessions', []);
         const updatedSessions = activeSessions.filter(session => session.examId !== examId);
-        storage.set('active_sessions', updatedSessions);
+        await storage.set('active_sessions', updatedSessions);
     }
 
     /**
@@ -2036,8 +2257,8 @@ class ExamSystemApp {
     /**
      * 显示练习完成通知
      */
-    showPracticeCompletionNotification(examId, practiceRecord) {
-        const examIndex = storage.get('exam_index', []);
+    async showPracticeCompletionNotification(examId, practiceRecord) {
+        const examIndex = await storage.get('exam_index', []);
         const exam = examIndex.find(e => e.id === examId);
 
         if (!exam) return;
@@ -2058,8 +2279,8 @@ class ExamSystemApp {
     /**
      * 显示详细练习结果
      */
-    showDetailedPracticeResults(examId, practiceRecord) {
-        const examIndex = storage.get('exam_index', []);
+    async showDetailedPracticeResults(examId, practiceRecord) {
+        const examIndex = await storage.get('exam_index', []);
         const exam = examIndex.find(e => e.id === examId);
 
         if (!exam) return;
@@ -2162,33 +2383,13 @@ class ExamSystemApp {
     /**
      * 显示活动会话指示器
      */
+    // 显示活动会话指示器（已禁用，无需统计活动会话）
     showActiveSessionsIndicator() {
-        const activeSessions = storage.get('active_sessions', []);
-
-        if (activeSessions.length === 0) {
-            this.hideActiveSessionsIndicator();
-            return;
-        }
-
-        let indicator = document.querySelector('.active-sessions-indicator');
-
-        if (!indicator) {
-            indicator = document.createElement('div');
-            indicator.className = 'active-sessions-indicator';
-            document.body.appendChild(indicator);
-
-            // 点击显示会话详情
-            indicator.addEventListener('click', () => {
-                this.showActiveSessionsDetails();
-            });
-        }
-
-        indicator.innerHTML = `
-            <span class="indicator-text">活动练习</span>
-            <span class="session-count">${activeSessions.length}</span>
-        `;
-
-        indicator.style.display = 'block';
+        // 根据需求移除该功能，确保不显示“活动练习”浮动指示器
+        const indicatorEl = document.querySelector('.active-sessions-indicator');
+        if (indicatorEl) indicatorEl.remove();
+        // 功能禁用，直接返回
+        return;
     }
 
     /**
@@ -2204,9 +2405,9 @@ class ExamSystemApp {
     /**
      * 显示活动会话详情
      */
-    showActiveSessionsDetails() {
-        const activeSessions = storage.get('active_sessions', []);
-        const examIndex = storage.get('exam_index', []);
+    async showActiveSessionsDetails() {
+        const activeSessions = await storage.get('active_sessions', []);
+        const examIndex = await storage.get('exam_index', []);
 
         if (activeSessions.length === 0) {
             window.showMessage('当前没有活动的练习会话', 'info');
@@ -2296,8 +2497,8 @@ class ExamSystemApp {
     /**
      * 关闭所有题目会话
      */
-    closeAllExamSessions() {
-        const activeSessions = storage.get('active_sessions', []);
+    async closeAllExamSessions() {
+        const activeSessions = await storage.get('active_sessions', []);
 
         activeSessions.forEach(session => {
             this.closeExamSession(session.examId);
@@ -2316,6 +2517,12 @@ class ExamSystemApp {
      * 开始会话监控
      */
     startSessionMonitoring() {
+        // 禁用活动会话监控，以避免误判窗口关闭状态
+        if (this.sessionMonitorInterval) {
+            clearInterval(this.sessionMonitorInterval);
+            this.sessionMonitorInterval = null;
+        }
+        return;
         // 每30秒检查一次活动会话
         this.sessionMonitorInterval = setInterval(() => {
             this.updateActiveSessionsIndicator();
@@ -2327,6 +2534,10 @@ class ExamSystemApp {
      * 更新活动会话指示器
      */
     updateActiveSessionsIndicator() {
+        // 已禁用活动会话显示
+        const indicator = document.querySelector('.active-sessions-indicator');
+        if (indicator) indicator.remove();
+        return;
         this.showActiveSessionsIndicator();
     }
 
@@ -2354,6 +2565,58 @@ class ExamSystemApp {
      */
     refreshOverviewData() {
         this.updateOverviewStats();
+    }
+
+    /**
+     * 更新简单的练习记录视图
+     */
+    updateSimplePracticeView() {
+        // This function is disabled because its logic has been moved to
+        // updatePracticeView() in main.js to support virtual scrolling.
+        // Leaving this empty prevents it from overwriting the virtual scroller DOM.
+        console.log('[App] updateSimplePracticeView is disabled, functionality moved to main.js.');
+        return;
+    }
+
+    /**
+     * 更新简单的练习记录列表
+     */
+    updateSimplePracticeList(records) {
+        const historyContainer = document.getElementById('practice-history-list');
+        if (!historyContainer) return;
+        
+        if (records.length === 0) {
+            historyContainer.innerHTML = `
+                <div style="text-align: center; padding: 40px; opacity: 0.7;">
+                    <div style="font-size: 3em; margin-bottom: 15px;">📋</div>
+                    <p>暂无练习记录</p>
+                    <p style="font-size: 0.9em; margin-top: 10px;">开始练习后，记录将自动保存在这里</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // 显示所有记录
+        const recentRecords = records;
+        
+        historyContainer.innerHTML = recentRecords.map(record => {
+            const accuracy = Math.round((record.accuracy || 0) * 100);
+            const duration = Math.round((record.duration || 0) / 60); // 转换为分钟
+            const date = new Date(record.startTime).toLocaleDateString();
+            
+            return `
+                <div class="history-item" style="display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+                    <div>
+                        <h4 style="margin: 0; color: white;">${record.title || record.examId}</h4>
+                        <p style="margin: 5px 0 0 0; opacity: 0.8; font-size: 0.9em;">${date}</p>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="color: ${accuracy >= 80 ? '#4ade80' : accuracy >= 60 ? '#fbbf24' : '#f87171'}; font-weight: bold;">${accuracy}%</div>
+                        <div style="opacity: 0.8; font-size: 0.9em;">${duration}分钟</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
     }
 
     /**
@@ -2598,16 +2861,32 @@ class ExamSystemApp {
 
         this.isInitialized = false;
     }
+
 }
 
+// 新增修复3E：在js/app.js的DOMContentLoaded初始化中去除顶层await
 // 应用启动
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
     try {
-        window.app = new ExamSystemApp();
-        await window.app.initialize();
+        (function(){ try { window.app = new ExamSystemApp(); window.app.initialize(); } catch(e) { console.error('[App] 初始化失败:', e); } })();
     } catch (error) {
         console.error('Failed to start application:', error);
-        window.handleError(error, 'Application Startup');
+        if (window.handleError) {
+            window.handleError(error, 'Application Startup');
+        } else {
+            // Fallback: non-blocking user message if error handler is unavailable
+            try {
+                const container = document.getElementById('message-container');
+                if (container) {
+                    const msg = document.createElement('div');
+                    msg.className = 'message error';
+                    msg.textContent = '系统启动失败，请检查控制台日志。';
+                    container.appendChild(msg);
+                }
+            } catch (_) {
+                // no-op
+            }
+        }
     }
 });
 
@@ -2617,3 +2896,29 @@ window.addEventListener('beforeunload', () => {
         window.app.destroy();
     }
 });
+
+// 调试辅助：导出握手状态
+window.getHandshakeState = function() {
+    try {
+        const state = { timers: [], windows: [] };
+        if (window.app) {
+            if (window.app._handshakeTimers) {
+                state.timers = Array.from(window.app._handshakeTimers.keys());
+            }
+            if (window.app.examWindows) {
+                window.app.examWindows.forEach((info, id) => {
+                    state.windows.push({
+                        examId: id,
+                        ready: !!info.dataCollectorReady,
+                        pageType: info.pageType || null,
+                        lastUpdate: info.lastUpdate || null,
+                        status: info.status || null
+                    });
+                });
+            }
+        }
+        return state;
+    } catch (e) {
+        return { error: e.message };
+    }
+};

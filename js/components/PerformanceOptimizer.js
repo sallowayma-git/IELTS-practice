@@ -366,61 +366,70 @@ class PerformanceOptimizer {
                 // 只保留最近100次的性能数据
                 if (this.performanceMetrics.renderTime.length > 100) {
                     this.performanceMetrics.renderTime.shift();
-                }\n            \
-            });\n        \
-        };\n    }\n    \
-    \n    /**\n     \
-    * 设置性能监控\n     \
-    */\n    \
-    setupPerformanceMonitoring() {\n        \
-    // 监控页面性能\n        \
-    if (typeof PerformanceObserver !== 'undefined') {\n            \
-    const observer = new PerformanceObserver((list) => {\n                \
-    for (const entry of list.getEntries()) {\n                    \
-    if (entry.entryType === 'measure') {\n                        \
-    console.log(`[Performance] ${entry.name}: ${entry.duration.toFixed(2)}ms`);\n                    \
-    }\n                \
-    }\n            \
-    });\n            \n            \
-    observer.observe({ entryTypes: ['measure'] });\n            \
-    this.observers.set('performance', observer);\n        \
-    }\n    \
-    }\n    \
-    \n    /**\n     \
-    * 获取性能统计\n     \
-    */\n    \
-    getPerformanceStats() {\n        \
-    const renderTimes = this.performanceMetrics.renderTime;\n        \
-    const avgRenderTime = renderTimes.length > 0 \n            \
-    ? renderTimes.reduce((a, b) => a + b, 0) / renderTimes.length \n            \
-    : 0;\n            \n        \
-    const cacheHitRate = this.performanceMetrics.cacheHits + this.performanceMetrics.cacheMisses > 0\n            \
-    ? (this.performanceMetrics.cacheHits / (this.performanceMetrics.cacheHits + this.performanceMetrics.cacheMisses)) * 100\n            \
-    : 0;\n            \n        \
-    return {\n            \
-    averageRenderTime: avgRenderTime.toFixed(2),\n            \
-    cacheHitRate: cacheHitRate.toFixed(2),\n            \
-    cacheSize: this.cache.size,\n            \
-    totalCacheHits: this.performanceMetrics.cacheHits,\n            \
-    totalCacheMisses: this.performanceMetrics.cacheMisses\n        \
-    };\n    \
-    }\n    \
-    \n    /**\n     \
-    * 销毁性能优化器\n     \
-    */\n    \
-    destroy() {\n        \
-    console.log('[PerformanceOptimizer] 销毁性能优化器');\n        \n        \
-    // 清理缓存\n        \
-    this.cache.clear();\n        \
-    this.cacheTTL.clear();\n        \n        \
-    // 断开观察者\n        \
-    this.observers.forEach(observer => {\n            \
-    observer.disconnect();\n        \
-    });\n        \
-    this.observers.clear();\n    \
-    }\n\
-    }\n\
-    \n\
-    // 导出到全局\n\
-    window.VirtualScroller = VirtualScroller;\n\
-    window.PerformanceOptimizer = PerformanceOptimizer;
+                }
+            });
+        };
+    }
+    
+    /**
+     * 设置性能监控
+     */
+    setupPerformanceMonitoring() {
+        // 监控页面性能
+        if (typeof PerformanceObserver !== 'undefined') {
+            const observer = new PerformanceObserver((list) => {
+                for (const entry of list.getEntries()) {
+                    if (entry.entryType === 'measure') {
+                        console.log(`[Performance] ${entry.name}: ${entry.duration.toFixed(2)}ms`);
+                    }
+                }
+            });
+            
+            observer.observe({ entryTypes: ['measure'] });
+            this.observers.set('performance', observer);
+        }
+    }
+    
+    /**
+     * 获取性能统计
+     */
+    getPerformanceStats() {
+        const renderTimes = this.performanceMetrics.renderTime;
+        const avgRenderTime = renderTimes.length > 0 
+            ? renderTimes.reduce((a, b) => a + b, 0) / renderTimes.length 
+            : 0;
+            
+        const cacheHitRate = this.performanceMetrics.cacheHits + this.performanceMetrics.cacheMisses > 0
+            ? (this.performanceMetrics.cacheHits / (this.performanceMetrics.cacheHits + this.performanceMetrics.cacheMisses)) * 100
+            : 0;
+            
+        return {
+            averageRenderTime: avgRenderTime.toFixed(2),
+            cacheHitRate: cacheHitRate.toFixed(2),
+            cacheSize: this.cache.size,
+            totalCacheHits: this.performanceMetrics.cacheHits,
+            totalCacheMisses: this.performanceMetrics.cacheMisses
+        };
+    }
+    
+    /**
+     * 销毁性能优化器
+     */
+    destroy() {
+        console.log('[PerformanceOptimizer] 销毁性能优化器');
+        
+        // 清理缓存
+        this.cache.clear();
+        this.cacheTTL.clear();
+        
+        // 断开观察者
+        this.observers.forEach(observer => {
+            observer.disconnect();
+        });
+        this.observers.clear();
+    }
+}
+
+// 导出到全局
+window.VirtualScroller = VirtualScroller;
+window.PerformanceOptimizer = PerformanceOptimizer;

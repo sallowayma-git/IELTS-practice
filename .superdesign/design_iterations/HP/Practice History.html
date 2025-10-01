@@ -1,0 +1,225 @@
+﻿<html>
+  <head>
+    <meta charset="UTF-8" />
+    <base href="./" />
+    <link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin="" />
+    <link
+      rel="stylesheet"
+      as="style"
+      onload="this.rel='stylesheet'"
+      href="https://fonts.googleapis.com/css2?display=swap&amp;family=Newsreader%3Awght%40400%3B500%3B700%3B800&amp;family=Noto+Sans%3Awght%40400%3B500%3B700%3B900"
+    />
+
+    <title>Stitch Design</title>
+    <link rel="icon" type="image/x-icon" href="data:image/x-icon;base64," />
+        <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  </head>
+  <body>
+    <div
+      class="relative flex h-auto min-h-screen w-full flex-col bg-[#181112] dark group/design-root overflow-x-hidden"
+      style="--select-button-svg: url('data:image/svg+xml,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2724px%27 height=%2724px%27 fill=%27rgb(185,157,161)%27 viewBox=%270 0 256 256%27%3e%3cpath d=%27M181.66,170.34a8,8,0,0,1,0,11.32l-48,48a8,8,0,0,1-11.32,0l-48-48a8,8,0,0,1,11.32-11.32L128,212.69l42.34-42.35A8,8,0,0,1,181.66,170.34Zm-96-84.68L128,43.31l42.34,42.35a8,8,0,0,0,11.32-11.32l-48-48a8,8,0,0,0-11.32,0l-48,48A8,8,0,0,0,85.66,85.66Z%27%3e%3c/path%3e%3c/svg%3e'); font-family: Newsreader, &quot;Noto Sans&quot;, sans-serif;"
+    >
+      <div class="layout-container flex h-full grow flex-col">
+        <header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-b-[#39282b] px-10 py-3">
+          <div class="flex items-center gap-4 text-white">
+            <div class="size-4">
+              <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M13.8261 30.5736C16.7203 29.8826 20.2244 29.4783 24 29.4783C27.7756 29.4783 31.2797 29.8826 34.1739 30.5736C36.9144 31.2278 39.9967 32.7669 41.3563 33.8352L24.8486 7.36089C24.4571 6.73303 23.5429 6.73303 23.1514 7.36089L6.64374 33.8352C8.00331 32.7669 11.0856 31.2278 13.8261 30.5736Z"
+                  fill="currentColor"
+                ></path>
+                <path
+                  fill-rule="evenodd"
+                  clip-rule="evenodd"
+                  d="M39.998 35.764C39.9944 35.7463 39.9875 35.7155 39.9748 35.6706C39.9436 35.5601 39.8949 35.4259 39.8346 35.2825C39.8168 35.2403 39.7989 35.1993 39.7813 35.1602C38.5103 34.2887 35.9788 33.0607 33.7095 32.5189C30.9875 31.8691 27.6413 31.4783 24 31.4783C20.3587 31.4783 17.0125 31.8691 14.2905 32.5189C12.0012 33.0654 9.44505 34.3104 8.18538 35.1832C8.17384 35.2075 8.16216 35.233 8.15052 35.2592C8.09919 35.3751 8.05721 35.4886 8.02977 35.589C8.00356 35.6848 8.00039 35.7333 8.00004 35.7388C8.00004 35.739 8 35.7393 8.00004 35.7388C8.00004 35.7641 8.0104 36.0767 8.68485 36.6314C9.34546 37.1746 10.4222 37.7531 11.9291 38.2772C14.9242 39.319 19.1919 40 24 40C28.8081 40 33.0758 39.319 36.0709 38.2772C37.5778 37.7531 38.6545 37.1746 39.3151 36.6314C39.9006 36.1499 39.9857 35.8511 39.998 35.764ZM4.95178 32.7688L21.4543 6.30267C22.6288 4.4191 25.3712 4.41909 26.5457 6.30267L43.0534 32.777C43.0709 32.8052 43.0878 32.8338 43.104 32.8629L41.3563 33.8352C43.104 32.8629 43.1038 32.8626 43.104 32.8629L43.1051 32.865L43.1065 32.8675L43.1101 32.8739L43.1199 32.8918C43.1276 32.906 43.1377 32.9246 43.1497 32.9473C43.1738 32.9925 43.2062 33.0545 43.244 33.1299C43.319 33.2792 43.4196 33.489 43.5217 33.7317C43.6901 34.1321 44 34.9311 44 35.7391C44 37.4427 43.003 38.7775 41.8558 39.7209C40.6947 40.6757 39.1354 41.4464 37.385 42.0552C33.8654 43.2794 29.133 44 24 44C18.867 44 14.1346 43.2794 10.615 42.0552C8.86463 41.4464 7.30529 40.6757 6.14419 39.7209C4.99695 38.7775 3.99999 37.4427 3.99999 35.7391C3.99999 34.8725 4.29264 34.0922 4.49321 33.6393C4.60375 33.3898 4.71348 33.1804 4.79687 33.0311C4.83898 32.9556 4.87547 32.8935 4.9035 32.8471C4.91754 32.8238 4.92954 32.8043 4.93916 32.7889L4.94662 32.777L4.95178 32.7688ZM35.9868 29.004L24 9.77997L12.0131 29.004C12.4661 28.8609 12.9179 28.7342 13.3617 28.6282C16.4281 27.8961 20.0901 27.4783 24 27.4783C27.9099 27.4783 31.5719 27.8961 34.6383 28.6282C35.082 28.7342 35.5339 28.8609 35.9868 29.004Z"
+                  fill="currentColor"
+                ></path>
+              </svg>
+            </div>
+            <h2 class="text-white text-lg font-bold leading-tight tracking-[-0.015em]">Wizarding World IELTS Prep</h2>
+          </div>
+          <div class="flex flex-1 justify-end gap-8">
+            <div class="flex items-center gap-9">
+              <a class="text-white text-sm font-medium leading-normal" href="Welcome.html">Overview</a>
+              <a class="text-white text-sm font-medium leading-normal" href="Practice History.html">Practice History</a>
+              <a class="text-white text-sm font-medium leading-normal" href="practice.html">Question Bank</a>
+              <a class="text-white text-sm font-medium leading-normal" href="setting.html">Settings</a>
+            </div>
+            <button
+              class="flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 bg-[#39282b] text-white gap-2 text-sm font-bold leading-normal tracking-[0.015em] min-w-0 px-2.5"
+            >
+              <div class="text-white" data-icon="Bell" data-size="20px" data-weight="regular">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" fill="currentColor" viewBox="0 0 256 256">
+                  <path
+                    d="M221.8,175.94C216.25,166.38,208,139.33,208,104a80,80,0,1,0-160,0c0,35.34-8.26,62.38-13.81,71.94A16,16,0,0,0,48,200H88.81a40,40,0,0,0,78.38,0H208a16,16,0,0,0,13.8-24.06ZM128,216a24,24,0,0,1-22.62-16h45.24A24,24,0,0,1,128,216ZM48,184c7.7-13.24,16-43.92,16-80a64,64,0,1,1,128,0c0,36.05,8.28,66.73,16,80Z"
+                  ></path>
+                </svg>
+              </div>
+            </button>
+          </div>
+        </header>
+        <div class="px-40 flex flex-1 justify-center py-5">
+          <div class="layout-content-container flex flex-col max-w-[960px] flex-1">
+            <div class="flex flex-wrap justify-between gap-3 p-4">
+              <p class="text-white tracking-light text-[32px] font-bold leading-tight min-w-72">Practice History & Achievements</p>
+              <div class="flex items-center gap-4">
+                <span class="text-sm font-medium text-white/80">Level: 5</span>
+                <div class="w-32 h-2 bg-gray-700 rounded-full overflow-hidden">
+                  <div class="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full" style="width: 75%;"></div>
+                </div>
+                <span class="text-xs font-bold text-pink-400">75%</span>
+              </div>
+            </div>
+
+            <h3 class="text-white text-lg font-bold leading-tight tracking-[-0.015em] px-4 pb-2 pt-4">Filter History</h3>
+            <div class="flex max-w-[480px] flex-wrap items-end gap-4 px-4 py-3">
+              <label class="flex flex-col min-w-40 flex-1">
+                <select
+                  class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-white focus:outline-0 focus:ring-0 border border-[#543b3f] bg-[#271c1d] focus:border-[#543b3f] h-14 bg-[image:--select-button-svg] placeholder:text-[#b99da1] p-[15px] text-base font-normal leading-normal"
+                >
+                  <option value="one">Subject</option>
+                  <option value="two">two</option>
+                  <option value="three">three</option>
+                </select>
+              </label>
+            </div>
+            <div class="flex max-w-[480px] flex-wrap items-end gap-4 px-4 py-3">
+              <label class="flex flex-col min-w-40 flex-1">
+                <input
+                  placeholder="Start Date"
+                  class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-white focus:outline-0 focus:ring-0 border border-[#543b3f] bg-[#271c1d] focus:border-[#543b3f] h-14 placeholder:text-[#b99da1] p-[15px] text-base font-normal leading-normal"
+                  value=""
+                />
+              </label>
+              <label class="flex flex-col min-w-40 flex-1">
+                <input
+                  placeholder="End Date"
+                  class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-white focus:outline-0 focus:ring-0 border border-[#543b3f] bg-[#271c1d] focus:border-[#543b3f] h-14 placeholder:text-[#b99da1] p-[15px] text-base font-normal leading-normal"
+                  value=""
+                />
+              </label>
+            </div>
+            <div class="flex px-4 py-3 justify-end">
+              <button
+                class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#ec1337] text-white text-sm font-bold leading-normal tracking-[0.015em]"
+              >
+                <span class="truncate">Apply Filters</span>
+              </button>
+            </div>
+
+            <!-- 成就区域 - 由插件动态渲染 -->
+            <div id="achievements-container" class="flex flex-wrap gap-4 px-4 py-6">
+              <h3 class="text-white text-lg font-bold leading-tight tracking-[-0.015em] px-0 pb-2 pt-4">Achievements</h3>
+              <div id="achievements-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 w-full">
+                <!-- 插件将在这里渲染成就卡片 -->
+              </div>
+
+              <!-- 加载状态 -->
+              <div id="achievements-loading" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>正在加载成就数据...</p>
+              </div>
+
+              <!-- 空状态 -->
+              <div id="achievements-empty" class="empty-state" style="display: none;">
+                <div class="empty-icon">🏆</div>
+                <div class="empty-title">暂无成就</div>
+                <div class="empty-description">继续练习以解锁更多成就</div>
+              </div>
+            </div>
+
+            <!-- 练习历史表格区域 - 由插件动态渲染 -->
+            <div id="practice-history-container" class="px-4 py-3 @container">
+              <h3 class="text-white text-lg font-bold leading-tight tracking-[-0.015em] px-0 pb-2 pt-4">Practice History</h3>
+              <div id="practice-history-table" class="flex overflow-hidden rounded-lg border border-[#543b3f] bg-[#181112]">
+                <!-- 插件将在这里渲染练习历史表格 -->
+              </div>
+
+              <!-- 加载状态 -->
+              <div id="practice-history-loading" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>正在加载练习历史...</p>
+              </div>
+
+              <!-- 空状态 -->
+              <div id="practice-history-empty" class="empty-state" style="display: none;">
+                <div class="empty-icon">📝</div>
+                <div class="empty-title">暂无练习历史</div>
+                <div class="empty-description">开始练习后将显示历史记录</div>
+              </div>
+            </div>
+            <!-- 练习趋势区域 - 由插件动态渲染 -->
+            <div id="practice-trend-container" class="flex flex-wrap gap-4 px-4 py-6">
+              <h3 class="text-white text-lg font-bold leading-tight tracking-[-0.015em] px-0 pb-2 pt-4">Practice Trend</h3>
+              <div id="practice-trend-grid" class="flex flex-wrap gap-4 w-full">
+                <!-- 插件将在这里渲染练习趋势图表 -->
+              </div>
+
+              <!-- 加载状态 -->
+              <div id="practice-trend-loading" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>正在加载趋势数据...</p>
+              </div>
+
+              <!-- 空状态 -->
+              <div id="practice-trend-empty" class="empty-state" style="display: none;">
+                <div class="empty-icon">📈</div>
+                <div class="empty-title">暂无趋势数据</div>
+                <div class="empty-description">需要更多练习记录来生成趋势图表</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  
+<!--  -->
+<script src="../../../assets/scripts/complete-exam-data.js"></script>
+<script src="../../../assets/scripts/listening-exam-data.js"></script>
+<script src="../../../js/utils/helpers.js"></script>
+<script src="../../../js/utils/storage.js"></script>
+<script src="../../../js/utils/asyncExportHandler.js"></script>
+<script src="../../../js/core/scoreStorage.js"></script>
+<script src="../../../js/core/practiceRecorder.js"></script>
+<script src="../../../js/components/PDFHandler.js"></script>
+<script src="../../../js/components/IndexValidator.js"></script>
+<script src="../../../js/components/CommunicationTester.js"></script>
+<script src="../../../js/components/ErrorFixer.js"></script>
+<script src="../../../js/components/CommunicationRecovery.js"></script>
+<script src="../../../js/components/PerformanceOptimizer.js"></script>
+<script src="../../../js/components/DataIntegrityManager.js"></script>
+<script src="../../../js/components/BrowseStateManager.js"></script>
+<script src="../../../js/utils/dataConsistencyManager.js"></script>
+<script src="../../../js/utils/markdownExporter.js"></script>
+<script src="../../../js/components/practiceRecordModal.js"></script>
+<script src="../../../js/components/practiceHistoryEnhancer.js"></script>
+<script src="../../../js/utils/componentChecker.js"></script>
+<script src="../../../js/theme-switcher.js"></script>
+<script src="../../../js/main.js"></script>
+<script src="../../../js/boot-fallbacks.js"></script>
+<script src="../../../js/app.js"></script>
+<script src="../../../js/plugins/hp/hp-path-prefix.js"></script>
+<script src="../../../js/plugins/hp/hp-path-map.js"></script>
+<script src="../../../js/plugins/hp/hp-core-bridge.js"></script>
+<script src="../../../js/plugins/hp/hp-history-adapter.js"></script>
+<script src="../../../js/plugins/hp/hp-history-trend.js"></script>
+<script src="../../../js/plugins/hp/hp-history-achievements.js"></script>
+<script src="../../../js/plugins/hp/hp-history-table.js"></script>
+<script src="../../../js/plugins/hp/hp-path-prefix.js"></script>
+<script src="../../../js/plugins/hp/hp-path-map.js"></script>
+
+<!-- HP 插件脚本（History）-->
+<script src="../../../js/plugins/hp/hp-core-bridge.js"></script>
+<script src="../../../js/plugins/hp/hp-history-adapter.js"></script>
+<script src="../../../js/plugins/hp/hp-history-trend.js"></script>
+<script src="../../../js/plugins/hp/hp-history-achievements.js"></script>
+<script src="../../../js/plugins/hp/hp-history-table.js"></script>
+</body></html>
+
+
+
+
+
+
+
+
