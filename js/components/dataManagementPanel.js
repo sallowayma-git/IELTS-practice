@@ -7,6 +7,7 @@ class DataManagementPanel {
         this.container = container;
         this.backupManager = new DataBackupManager();
         this.isVisible = false;
+        this.selectedFileContent = null;
         
         this.initialize();
     }
@@ -14,10 +15,11 @@ class DataManagementPanel {
     /**
      * 初始化组件
      */
-    initialize() {
+    async initialize() {
         this.createPanelStructure();
         this.bindEvents();
         this.loadDataStats();
+        await this.loadHistory();
         
         console.log('DataManagementPanel initialized');
     }
@@ -225,10 +227,14 @@ class DataManagementPanel {
             this.handleFileSelect(e);
         });
 
-        // 导入按钮
-        panel.querySelector('[data-action="import"]').addEventListener('click', () => {
-            this.handleImport();
+        // 导入按钮 - 使用事件委托
+        panel.addEventListener('click', (e) => {
+            console.log('Click on:', e.target.tagName, e.target.className, 'dataset.action:', e.target.dataset.action);
+            if (e.target.dataset.action === 'import') {
+                this.handleImport();
+            }
         });
+        console.log('[DataManagementPanel] Event listener added for import button');
 
         // 清理按钮
         panel.querySelector('[data-action="cleanup"]').addEventListener('click', () => {
@@ -253,11 +259,11 @@ class DataManagementPanel {
     /**
      * 显示面板
      */
-    show() {
+    async show() {
         this.container.style.display = 'block';
         this.isVisible = true;
-        this.loadDataStats();
-        this.loadHistory();
+        await this.loadDataStats();
+        await this.loadHistory();
     }
 
     /**
@@ -273,7 +279,7 @@ class DataManagementPanel {
      */
     async loadDataStats() {
         try {
-            const stats = this.backupManager.getDataStats();
+            const stats = await this.backupManager.getDataStats();
             
             if (stats) {
                 document.getElementById('recordCount').textContent = stats.practiceRecords.count;
@@ -314,7 +320,7 @@ class DataManagementPanel {
                 options.dateRange = { startDate, endDate };
             }
 
-            const exportResult = this.backupManager.exportPracticeRecords(options);
+            const exportResult = await this.backupManager.exportPracticeRecords(options);
             
             // 下载文件
             this.downloadFile(exportResult.data, exportResult.filename, exportResult.mimeType);
@@ -333,6 +339,7 @@ class DataManagementPanel {
      * 处理文件选择
      */
     handleFileSelect(event) {
+        console.log('[DataManagementPanel] handleFileSelect called');
         const file = event.target.files[0];
         const fileNameSpan = document.getElementById('selectedFileName');
         const importBtn = document.querySelector('[data-action="import"]');
@@ -340,9 +347,19 @@ class DataManagementPanel {
         if (file) {
             fileNameSpan.textContent = file.name;
             importBtn.disabled = false;
+            
+            // 异步读取文件内容
+            this.readFile(file).then(content => {
+                this.selectedFileContent = content;
+                console.log('[DataManagementPanel] File content loaded');
+            }).catch(error => {
+                console.error('[DataManagementPanel] Failed to read file:', error);
+                this.showMessage('文件读取失败', 'error');
+            });
         } else {
             fileNameSpan.textContent = '未选择文件';
             importBtn.disabled = true;
+            this.selectedFileContent = null;
         }
     }
 
@@ -350,18 +367,45 @@ class DataManagementPanel {
      * 处理数据导入
      */
     async handleImport() {
+        console.log('[DataManagementPanel] handleImport called');
         try {
+            let fileContent;
             const fileInput = document.getElementById('importFile');
             const file = fileInput.files[0];
             
-            if (!file) {
+            if (this.selectedFileContent) {
+                fileContent = this.selectedFileContent;
+            } else if (file) {
+                // 添加文件大小检查
+                if (file.size > 5 * 1024 * 1024) {
+                    this.showMessage('文件过大 (>5MB)，请分批导入或使用小文件测试。');
+                    return;
+                }
+                this.showProgress('读取文件...');
+                // 直接使用FileReader添加详细日志
+                fileContent = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onerror = (e) => {
+                        console.error('[DataManagementPanel] File read error:', e);
+                        reject(new Error('文件读取失败'));
+                    };
+                    reader.onload = (e) => {
+                        console.log('[DataManagementPanel] File loaded, size:', file.size);
+                        try {
+                            const data = JSON.parse(e.target.result);
+                            console.log('[DataManagementPanel] JSON parsed, type:', Array.isArray(data) ? 'array' : typeof data, 'length:', data.length || data.practiceRecords?.length);
+                            resolve(data);
+                        } catch (err) {
+                            console.error('[DataManagementPanel] JSON parse error:', err);
+                            reject(err);
+                        }
+                    };
+                    reader.readAsText(file);
+                });
+            } else {
                 this.showMessage('请先选择要导入的文件', 'warning');
                 return;
             }
-
-            this.showProgress('读取文件...');
-
-            const fileContent = await this.readFile(file);
             
             this.updateProgress('验证数据格式...');
 
@@ -381,8 +425,10 @@ class DataManagementPanel {
             this.hideProgress();
 
             if (result.success) {
+                console.log('[DataManagementPanel] Import successful');
+                console.log("Import completed: importedCount=", result.importedCount, "total=", result.recordCount || result.finalCount || normalized.practiceRecords.length);
                 this.showMessage(
-                    `导入成功！导入 ${result.importedCount} 条记录，跳过 ${result.skippedCount} 条重复记录。`,
+                    `导入成功！导入 ${result.importedCount || result.recordCount || 0} 条记录，跳过 ${result.skippedCount || 0} 条重复记录。`,
                     'success'
                 );
                 this.loadDataStats();
@@ -392,10 +438,12 @@ class DataManagementPanel {
                 fileInput.value = '';
                 document.getElementById('selectedFileName').textContent = '未选择文件';
                 document.querySelector('[data-action="import"]').disabled = true;
+                this.selectedFileContent = null;
             }
 
         } catch (error) {
             this.hideProgress();
+            console.error('[DataManagementPanel] Import failed:', error);
             this.showMessage(`导入失败: ${error.message}`, 'error');
         }
     }
@@ -482,68 +530,88 @@ class DataManagementPanel {
     /**
      * 加载操作历史
      */
-    loadHistory() {
-        this.loadExportHistory();
-        this.loadImportHistory();
+    async loadHistory() {
+        await Promise.all([
+            this.loadExportHistory(),
+            this.loadImportHistory()
+        ]);
     }
 
     /**
      * 加载导出历史
      */
-    loadExportHistory() {
-        const exportHistory = this.backupManager.getExportHistory();
+    async loadExportHistory() {
         const container = document.getElementById('exportHistory');
-
-        if (exportHistory.length === 0) {
-            container.innerHTML = '<div class="no-history">暂无导出记录</div>';
+        if (!container) {
             return;
         }
 
-        container.innerHTML = exportHistory.map(item => `
-            <div class="history-item">
-                <div class="history-info">
-                    <div class="history-title">
-                        <i class="fas fa-download"></i>
-                        ${item.format?.toUpperCase() || 'JSON'} 导出
-                    </div>
-                    <div class="history-details">
-                        <span>记录数: ${item.recordCount || 0}</span>
-                        <span>时间: ${this.formatDateTime(item.timestamp)}</span>
+        try {
+            const exportHistory = await this.backupManager.getExportHistory();
+            const historyItems = Array.isArray(exportHistory) ? exportHistory : [];
+
+            if (!historyItems.length) {
+                container.innerHTML = '<div class="no-history">暂无导出记录</div>';
+                return;
+            }
+
+            container.innerHTML = historyItems.map((item) => `
+                <div class="history-item">
+                    <div class="history-info">
+                        <div class="history-title">
+                            <i class="fas fa-download"></i>
+                            ${item.format?.toUpperCase() || 'JSON'} 导出
+                        </div>
+                        <div class="history-details">
+                            <span>记录数: ${item.recordCount ?? 0}</span>
+                            <span>时间: ${this.formatDateTime(item.timestamp)}</span>
+                        </div>
                     </div>
                 </div>
-            </div>
-        `).join('');
+            `).join('');
+        } catch (error) {
+            console.error('[DataManagementPanel] Failed to load export history:', error);
+            container.innerHTML = '<div class="no-history">导出历史加载失败</div>';
+        }
     }
 
     /**
      * 加载导入历史
      */
-    loadImportHistory() {
-        const importHistory = this.backupManager.getImportHistory();
+    async loadImportHistory() {
         const container = document.getElementById('importHistory');
-
-        if (importHistory.length === 0) {
-            container.innerHTML = '<div class="no-history">暂无导入记录</div>';
+        if (!container) {
             return;
         }
 
-        container.innerHTML = importHistory.map(item => `
-            <div class="history-item ${item.success ? 'success' : 'error'}">
-                <div class="history-info">
-                    <div class="history-title">
-                        <i class="fas fa-${item.success ? 'upload' : 'exclamation-triangle'}"></i>
-                        ${item.success ? '导入成功' : '导入失败'}
-                    </div>
-                    <div class="history-details">
-                        ${item.success ? 
-                            `<span>记录数: ${item.recordCount || 0}</span>` :
-                            `<span>错误: ${item.error}</span>`
-                        }
-                        <span>时间: ${this.formatDateTime(item.timestamp)}</span>
+        try {
+            const importHistory = await this.backupManager.getImportHistory();
+            const historyItems = Array.isArray(importHistory) ? importHistory : [];
+
+            if (!historyItems.length) {
+                container.innerHTML = '<div class="no-history">暂无导入记录</div>';
+                return;
+            }
+
+            container.innerHTML = historyItems.map((item) => `
+                <div class="history-item">
+                    <div class="history-info">
+                        <div class="history-title">
+                            <i class="fas fa-upload"></i>
+                            导入操作
+                        </div>
+                        <div class="history-details">
+                            <span>新增记录: ${item.recordCount ?? item.importedCount ?? 0}</span>
+                            <span>合并模式: ${item.mergeMode || 'merge'}</span>
+                            <span>时间: ${this.formatDateTime(item.timestamp)}</span>
+                        </div>
                     </div>
                 </div>
-            </div>
-        `).join('');
+            `).join('');
+        } catch (error) {
+            console.error('[DataManagementPanel] Failed to load import history:', error);
+            container.innerHTML = '<div class="no-history">导入历史加载失败</div>';
+        }
     }
 
     /**
@@ -641,18 +709,25 @@ class DataManagementPanel {
      * 下载文件
      */
     downloadFile(content, filename, mimeType) {
-        const blob = new Blob([content], { type: mimeType });
+        // 对于文本类型的内容，添加UTF-8编码支持
+        const isTextType = mimeType.includes('text/') ||
+                          mimeType.includes('application/json') ||
+                          mimeType.includes('application/javascript') ||
+                          mimeType.includes('application/xml');
+
+        const blobOptions = isTextType ? { type: mimeType + '; charset=utf-8' } : { type: mimeType };
+        const blob = new Blob([content], blobOptions);
         const url = URL.createObjectURL(blob);
-        
+
         const a = document.createElement('a');
         a.href = url;
         a.download = filename;
         a.style.display = 'none';
-        
+
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        
+
         URL.revokeObjectURL(url);
     }
 

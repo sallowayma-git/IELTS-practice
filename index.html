@@ -4,412 +4,363 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IELTS阅读练习系统</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Microsoft YaHei', Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            color: white;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 40px 20px;
-        }
-
-        .header {
-            text-align: center;
-            margin-bottom: 50px;
-        }
-
-        .logo {
-            font-size: 5em;
-            margin-bottom: 20px;
-            animation: bounce 2s infinite;
-        }
-
-        @keyframes bounce {
-
-            0%,
-            20%,
-            50%,
-            80%,
-            100% {
-                transform: translateY(0);
-            }
-
-            40% {
-                transform: translateY(-10px);
-            }
-
-            60% {
-                transform: translateY(-5px);
-            }
-        }
-
-        h1 {
-            font-size: 3em;
-            margin-bottom: 15px;
-            background: linear-gradient(45deg, #4ade80, #06d6a0);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .subtitle {
-            font-size: 1.3em;
-            opacity: 0.9;
-            margin-bottom: 40px;
-        }
-
-        .system-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-            gap: 30px;
-            margin-bottom: 50px;
-        }
-
-        .system-card {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 40px;
-            border-radius: 20px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            transition: all 0.3s ease;
-            text-align: center;
-        }
-
-        .system-card:hover {
-            transform: translateY(-10px);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
-            background: rgba(255, 255, 255, 0.15);
-        }
-
-        .system-icon {
-            font-size: 4em;
-            margin-bottom: 20px;
-        }
-
-        .system-title {
-            font-size: 1.8em;
-            margin-bottom: 15px;
-            color: #4ade80;
-        }
-
-        .system-desc {
-            margin-bottom: 25px;
-            line-height: 1.6;
-            opacity: 0.9;
-        }
-
-        .btn {
-            background: linear-gradient(45deg, #4CAF50, #45a049);
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            border-radius: 10px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            text-decoration: none;
-            display: inline-block;
-            margin: 5px;
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
-        }
-
-        .btn-primary {
-            background: linear-gradient(45deg, #4CAF50, #45a049);
-        }
-
-        .btn-secondary {
-            background: linear-gradient(45deg, #2196F3, #1976D2);
-        }
-
-        .btn-warning {
-            background: linear-gradient(45deg, #ff9800, #f57c00);
-        }
-
-        .features-section {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 40px;
-            border-radius: 20px;
-            backdrop-filter: blur(10px);
-            margin-bottom: 40px;
-        }
-
-        .features-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 30px;
-            margin-top: 30px;
-        }
-
-        .feature-item {
-            text-align: center;
-            padding: 20px;
-        }
-
-        .feature-icon {
-            font-size: 2.5em;
-            margin-bottom: 15px;
-        }
-
-        .feature-title {
-            font-size: 1.2em;
-            margin-bottom: 10px;
-            color: #4ade80;
-        }
-
-        .feature-desc {
-            opacity: 0.8;
-            line-height: 1.5;
-        }
-
-        .stats-section {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 40px;
-        }
-
-        .stat-card {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 30px;
-            border-radius: 15px;
-            text-align: center;
-            backdrop-filter: blur(10px);
-        }
-
-        .stat-number {
-            font-size: 2.5em;
-            font-weight: bold;
-            color: #4ade80;
-            margin-bottom: 10px;
-        }
-
-        .stat-label {
-            opacity: 0.8;
-        }
-
-        .footer {
-            text-align: center;
-            padding: 30px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 15px;
-            margin-top: 40px;
-        }
-
-        .footer-links {
-            margin-top: 20px;
-        }
-
-        .footer-links a {
-            color: #4ade80;
-            text-decoration: none;
-            margin: 0 15px;
-            transition: opacity 0.3s ease;
-        }
-
-        .footer-links a:hover {
-            opacity: 0.7;
-        }
-
-        @media (max-width: 768px) {
-            .container {
-                padding: 20px 15px;
-            }
-
-            h1 {
-                font-size: 2.2em;
-            }
-
-            .system-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .features-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .stats-section {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-    </style>
+    <title>考试总览系统</title>
+    <link rel="icon" type="image/svg+xml" href="assets/images/favicon.svg">
+    <link rel="stylesheet" href="css/main.css">
 </head>
 
 <body>
+    <input type="file" id="folder-picker" webkitdirectory style="display: none;">
+    <div class="message-container" id="message-container"></div>
+
     <div class="container">
         <div class="header">
-            <div class="logo">📚</div>
-            <h1>IELTS阅读练习系统</h1>
-            <p class="subtitle">专业的雅思阅读练习管理平台</p>
+            <h1>📚 考试总览系统</h1>
+            <p>IELTS练习管理平台 - <a href="#" onclick="showDeveloperTeam(); return false;" style="color: rgba(102, 126, 234, 0.8); text-decoration: none; font-weight: 600; transition: color 0.3s ease;">睡着过呈现</a></p>
         </div>
 
-        <div class="stats-section">
-            <div class="stat-card">
-                <div class="stat-number">65</div>
-                <div class="stat-label">练习题目</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">3</div>
-                <div class="stat-label">难度等级</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">49</div>
-                <div class="stat-label">HTML题目</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">16</div>
-                <div class="stat-label">PDF题目</div>
+        <nav class="main-nav">
+            <button class="nav-btn active" data-view="overview" onclick="window.showView && window.showView('overview')">📊 总览</button>
+            <button class="nav-btn" data-view="browse" onclick="window.showView && window.showView('browse')">📚 题库浏览</button>
+            <button class="nav-btn" data-view="practice" onclick="window.showView && window.showView('practice')">📝 练习记录</button>
+            <button class="nav-btn" data-view="settings" onclick="window.showView && window.showView('settings')">⚙️ 设置</button>
+        </nav>
+
+        <!-- 总览页面 -->
+        <div id="overview-view" class="view active">
+            <h2>📊 学习总览</h2>
+
+            <div class="category-grid" id="category-overview">
+                <!-- 分类卡片将通过JavaScript动态生成 -->
             </div>
         </div>
 
-        <div class="system-grid">
-            <div class="system-card">
-                <div class="system-icon">🚀</div>
-                <h2 class="system-title">工作版系统</h2>
-                <p class="system-desc">
-                    完整功能的练习系统，包含题库浏览、随机练习、文件检查等核心功能。
-                    界面简洁，性能稳定，推荐日常使用。
-                </p>
-                <a href="improved-working-system.html" class="btn btn-primary">立即使用</a>
+        <!-- 题库浏览页面 -->
+        <div id="browse-view" class="view">
+
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h2 id="browse-title">📚 题库浏览</h2>
+                <div id="type-filter-buttons">
+                    <button class="btn btn-sm" onclick="filterByType('all')">全部</button>
+                    <button class="btn btn-sm" onclick="filterByType('reading')">阅读</button>
+                    <button class="btn btn-sm" onclick="filterByType('listening')">听力</button>
+                </div>
             </div>
 
-            <div class="system-card">
-                <div class="system-icon">🔧</div>
-                <h2 class="system-title">完整版系统</h2>
-                <p class="system-desc">
-                    功能更全面的系统版本，包含高级统计、学习分析、进度追踪等功能。
-                    正在持续开发中，敬请期待。
-                </p>
-                <a href="#" class="btn btn-warning" onclick="showComingSoon()">开发中</a>
+            <div class="search-box">
+                <input type="text" class="search-input" placeholder="搜索题目..." onkeyup="searchExams(this.value)">
             </div>
-        </div>
 
-        <div class="features-section">
-            <h2 style="text-align: center; margin-bottom: 20px; color: #4ade80;">🌟 系统特色</h2>
-
-            <div class="features-grid">
-                <div class="feature-item">
-                    <div class="feature-icon">📖</div>
-                    <h3 class="feature-title">完整题库</h3>
-                    <p class="feature-desc">包含P1、P2、P3三个难度等级，共65个精选练习题目</p>
-                </div>
-
-                <div class="feature-item">
-                    <div class="feature-icon">🎯</div>
-                    <h3 class="feature-title">分类练习</h3>
-                    <p class="feature-desc">按难度分类，支持随机练习和定向练习</p>
-                </div>
-
-                <div class="feature-item">
-                    <div class="feature-icon">🔍</div>
-                    <h3 class="feature-title">智能搜索</h3>
-                    <p class="feature-desc">快速搜索题目，支持标题和分类筛选</p>
-                </div>
-
-                <div class="feature-item">
-                    <div class="feature-icon">📱</div>
-                    <h3 class="feature-title">响应式设计</h3>
-                    <p class="feature-desc">完美适配桌面和移动设备</p>
-                </div>
-
-                <div class="feature-item">
-                    <div class="feature-icon">⚡</div>
-                    <h3 class="feature-title">快速加载</h3>
-                    <p class="feature-desc">优化的加载速度，流畅的使用体验</p>
-                </div>
-
-                <div class="feature-item">
-                    <div class="feature-icon">🛠️</div>
-                    <h3 class="feature-title">文件检查</h3>
-                    <p class="feature-desc">自动检查题目文件可用性</p>
-                </div>
+            <div id="exam-list-container"></div>
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>正在加载题目列表...</p>
             </div>
         </div>
 
-        <div class="footer">
-            <h3 style="color: #4ade80; margin-bottom: 15px;">开始您的雅思阅读练习之旅</h3>
-            <p style="opacity: 0.8; margin-bottom: 20px;">
-                选择适合您的系统版本，开始高效的雅思阅读练习
-            </p>
+        <!-- 练习记录页面 -->
+    <div id="practice-view" class="view">
+        <h2>📝 练习记录</h2>
 
-            <div>
-                <a href="improved-working-system.html" class="btn btn-primary">🚀 开始练习</a>
-                <a href="#" class="btn btn-secondary" onclick="showHelp()">📖 使用帮助</a>
+        <div class="practice-stats">
+            <div class="stat-card">
+                <div class="stat-number" id="total-practiced">0</div>
+                <div class="stat-label">已练习题目</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="avg-score">0%</div>
+                <div class="stat-label">平均正确率</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="study-time">0</div>
+                <div class="stat-label">学习时长(分钟)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="streak-days">0</div>
+                <div class="stat-label">连续学习天数</div>
+            </div>
+        </div>
+
+        <div class="practice-history">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3>📈 练习历史</h3>
+                <div id="record-type-filter-buttons">
+                    <button class="btn btn-sm" onclick="filterRecordsByType('all')">全部</button>
+                    <button class="btn btn-sm" onclick="filterRecordsByType('reading')">阅读</button>
+                    <button class="btn btn-sm" onclick="filterRecordsByType('listening')">听力</button>
+                </div>
+                <div>
+                    <button class="btn btn-secondary" onclick="(window.markdownExporter||(window.markdownExporter=new MarkdownExporter())).exportToMarkdown()" style="margin-right: 10px;">📄 导出Markdown</button>
+                    <button class="btn btn-info" onclick="toggleBulkDelete()" id="bulk-delete-btn"
+                        style="margin-right: 10px;">📝 批量删除</button>
+                    <button class="btn btn-warning" onclick="clearPracticeData()">🗑️ 清除记录</button>
+                </div>
             </div>
 
-            <div class="footer-links">
-                <a href="#" onclick="showAbout()">关于系统</a>
-                <a href="#" onclick="showContact()">联系我们</a>
-                <a href="#" onclick="showFeedback()">意见反馈</a>
+            <div id="practice-history-list">
+                <div style="text-align: center; padding: 40px; opacity: 0.7;">
+                    <div style="font-size: 3em; margin-bottom: 15px;">📋</div>
+                    <p>暂无练习记录</p>
+                    <p style="font-size: 0.9em; margin-top: 10px;">开始练习后，记录将自动保存在这里</p>
+                </div>
             </div>
-
-            <p style="margin-top: 20px; opacity: 0.6; font-size: 0.9em;">
-                © 2024 IELTS阅读练习系统 - 专注于提升您的阅读能力
-            </p>
         </div>
     </div>
 
+    <!-- 设置页面 -->
+    <div id="settings-view" class="view">
+        <h2>⚙️ 系统设置</h2>
+        <div style="background: rgba(255, 255, 255, 0.1); padding: 20px; border-radius: 10px;">
+            <div style="margin-bottom: 30px;">
+                <h3>🔧 系统管理</h3>
+                <p style="margin: 15px 0; opacity: 0.9;">系统工具和设置选项</p>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
+                    <button class="btn btn-warning" onclick="clearCache()">🗑️ 清除缓存</button>
+                    <button class="btn" onclick="showLibraryLoaderModal()">📂 加载题库</button>
+                    <button class="btn btn-info" onclick="showLibraryConfigListV2()">⚙️ 题库配置切换</button>
+                    <button class="btn btn-warning" onclick="loadLibrary(true); showMessage('题库已强制刷新', 'success')">🔄 强制刷新题库</button>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 30px;">
+                <h3>💾 数据管理</h3>
+                <p style="margin: 15px 0; opacity: 0.9;">数据备份、导入导出和完整性检查</p>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button class="btn" onclick="createManualBackup()">💾 创建备份</button>
+                    <button class="btn btn-secondary" onclick="showBackupList()">📋 备份列表</button>
+                    <button class="btn btn-info" onclick="exportAllData()">📤 导出数据</button>
+                    <button class="btn btn-warning" onclick="importData()">📥 导入数据</button>
+                </div>
+            </div>
+
+            <div>
+                <h3>📊 系统信息</h3>
+                <div style="margin-top: 15px; line-height: 1.8; font-weight: bold;">
+                    <div style="color: #10b981;">题库状态: 已加载完整索引</div>
+                    <div>题目总数: <span id="total-exams">147</span></div>
+                    <div>HTML题目: <span id="html-exams">147</span></div>
+                    <div>PDF题目: <span id="pdf-exams">147</span></div>
+                    <div>最后更新: <span id="last-update">2025/9/16 14:47:09</span></div>
+                </div>
+
+                <!-- 主题切换按钮 -->
+                <div style="margin-top: 25px;">
+                    <button class="btn btn-secondary" onclick="showThemeSwitcherModal()">
+                        🎨 主题切换
+                    </button>
+                </div>
+
+                <!-- 开发团队链接 -->
+                <div
+                    style="margin-top: 30px; text-align: center; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.2);">
+                    <a href="#" onclick="showDeveloperTeam()"
+                        style="color: rgba(255, 255, 255, 0.7); text-decoration: none; font-size: 0.9em; transition: color 0.3s ease;">
+                        睡着过开发团队
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <!-- 开发团队弹窗 -->
+    <div id="developer-modal" class="developer-modal">
+        <div class="developer-modal-content">
+            <h2>🎉 睡着过开发团队</h2>
+            <p style="text-align: center; margin-bottom: 25px; opacity: 0.9; font-size: 0.95em;">
+                感谢以下开发者的贡献 (排名不分先后)
+            </p>
+
+            <div class="developer-grid">
+                <div class="developer-card">
+                    <div class="developer-name">🕊️</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">Sallowaymmm(🧐)</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">julie</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">呆呆军师</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">POI</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">Na.8.0</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">猪柳蛋</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">馒头不吃鱼</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">i</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">Aurelia 7.0</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">twoLin</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">yyyyy</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">鑫鑫</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">Gamiya_</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">zᙆ</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">zO_cssjjj👧</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">爱吃青花鱼罐头的罗罗酱</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">llalaland</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">哈希海</div>
+                </div>
+            </div>
+
+            <button class="modal-close-btn" onclick="hideDeveloperTeam()">
+                关闭
+            </button>
+        </div>
+    </div>
+
+    <!-- 主题切换弹窗 -->
+    <div id="theme-switcher-modal" class="theme-modal">
+        <div class="theme-modal-content">
+            <div class="theme-modal-header">
+                <h3>🎨 主题切换</h3>
+                <button class="theme-modal-close" onclick="hideThemeSwitcherModal()">×</button>
+            </div>
+            <div class="theme-modal-body">
+                <div class="theme-options">
+                    <div class="theme-option">
+                        <div class="theme-info">
+                            <div class="theme-name">📚 Academic</div>
+                            <div class="theme-desc">专业 高效 可靠</div>
+                        </div>
+                        <button class="btn btn-sm" onclick="window.location.href='.superdesign/design_iterations/ielts_academic_functional_2.html'">切换</button>
+                    </div>
+                    <div class="theme-option">
+                        <div class="theme-info">
+                            <div class="theme-name">🍂 Bloom</div>
+                            <div class="theme-desc">秋日 暖阳</div>
+                        </div>
+                        <button id="bloom-theme-btn" class="btn btn-sm" onclick="toggleBloomDarkMode()">切换</button>
+                    </div>
+                    <div class="theme-option">
+                        <div class="theme-info">
+                            <div class="theme-name" style="color: #0554F2;">🔵 Blue</div>
+                            <div class="theme-desc" style="color: #0788D9;">冷静 清爽 专注</div>
+                        </div>
+                        <button id="blue-theme-btn" class="btn btn-sm" style="background: #0554F2; border-color: #1154D9;" onclick="applyTheme('blue')">切换</button>
+                    </div>
+                    <div class="theme-option">
+                        <div class="theme-info">
+                            <div class="theme-name" style="color: #ec4899;">🎀 Melody</div>
+                            <div class="theme-desc" style="color: #ec4899;">美乐蒂</div>
+                        </div>
+                        <button class="btn btn-sm" style="background: #ec4899; border-color: #ec4899;" onclick="window.location.href='.superdesign/design_iterations/my_melody_ielts_1.html'">切换</button>
+                    </div>
+                    <div class="theme-option">
+                        <div class="theme-info">
+                            <div class="theme-name" style="color: #6a2bbf;">🧙 HarryPotter</div>
+                            <div class="theme-desc" style="color: #6a2bbf;">哈利波特</div>
+                        </div>
+                        <button class="btn btn-sm" style="background: #6a2bbf; border-color: #6a2bbf;" aria-label="哈利波特主题（冒险）" onclick="(function(){try{document.documentElement.setAttribute('data-theme','harry');localStorage.setItem('theme','harry');}catch(e){} window.location.href='.superdesign/design_iterations/HarryPoter.html';})()">切换</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 加载完整题库数据 -->
+    <script src="assets/scripts/complete-exam-data.js"></script>
+    <script src="assets/scripts/listening-exam-data.js"></script>
+
+    <!-- 加载工具函数 -->
+    
+    <script src="js/utils/storage.js"></script>
+    <script src="js/utils/dataBackupManager.js"></script>
+    <script src="js/components/dataManagementPanel.js"></script>
+
+    <!-- 设置共享命名空间 -->
     <script>
-        function showComingSoon() {
-            alert('🚧 完整版系统正在开发中！\n\n即将推出的功能：\n• 详细的练习统计\n• 学习进度分析\n• 错题回顾功能\n• 个性化推荐\n• 成绩报告导出\n\n请先使用工作版系统进行练习。');
-        }
+      // 确保存储初始化完成后设置命名空间
+      if (window.storage && typeof window.storage.setNamespace === 'function') {
+        window.storage.setNamespace('exam_system');
+        console.log('主页面已设置共享命名空间: exam_system');
 
-        function showHelp() {
-            alert('📖 使用帮助\n\n1. 点击"开始练习"进入工作版系统\n2. 在总览页面选择难度等级\n3. 可以随机练习或浏览所有题目\n4. 点击题目可以开始练习\n5. 使用搜索功能快速找到特定题目\n\n如有问题，请联系技术支持。');
-        }
-
-        function showAbout() {
-            alert('ℹ️ 关于系统\n\n本系统是专为雅思阅读练习设计的管理平台，包含：\n\n• 完整的题库管理\n• 分类练习功能\n• 文件检查工具\n• 响应式界面设计\n\n系统持续更新中，致力于为用户提供最佳的练习体验。');
-        }
-
-        function showContact() {
-            alert('📞 联系我们\n\n如果您在使用过程中遇到任何问题，或有改进建议，请通过以下方式联系我们：\n\n• 技术支持邮箱：sallowayma@gmail.com\n• 开发者：13137401610\n• WeChat：2578869106\n\n我会及时回复您的问题。');
-        }
-
-        function showFeedback() {
-            const feedback = prompt('💬 意见反馈\n\n请输入您的宝贵意见或建议：');
-            if (feedback && feedback.trim()) {
-                alert('✅ 感谢您的反馈！\n\n您的意见对我们非常重要，我们会认真考虑并持续改进系统。\n\n反馈内容已记录，我们会尽快处理。');
-            }
-        }
-
-        // 页面加载动画
-        document.addEventListener('DOMContentLoaded', () => {
-            const cards = document.querySelectorAll('.system-card, .stat-card, .feature-item');
-            cards.forEach((card, index) => {
-                card.style.opacity = '0';
-                card.style.transform = 'translateY(20px)';
-                setTimeout(() => {
-                    card.style.transition = 'all 0.6s ease';
-                    card.style.opacity = '1';
-                    card.style.transform = 'translateY(0)';
-                }, index * 100);
+        // 验证命名空间设置是否生效
+        setTimeout(() => {
+          const testKey = 'namespace_test';
+          const testValue = 'test_value_' + Date.now();
+          window.storage.set(testKey, testValue).then(() => {
+            window.storage.get(testKey).then((retrievedValue) => {
+              if (retrievedValue === testValue) {
+                console.log('✅ 命名空间设置验证成功: 存储和读取正常');
+              } else {
+                console.warn('❌ 命名空间设置验证失败: 读取值不匹配');
+              }
+              // 清理测试数据
+              window.storage.remove(testKey);
+            }).catch((error) => {
+              console.error('❌ 命名空间设置验证失败: 读取错误', error);
             });
-        });
-
-        // 键盘快捷键
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-                window.location.href = 'improved-working-system.html';
-            }
-        });
+          }).catch((error) => {
+            console.error('❌ 命名空间设置验证失败: 存储错误', error);
+          });
+        }, 1000);
+      } else {
+        console.warn('存储管理器未加载或setNamespace方法不可用');
+      }
     </script>
+
+    <!-- 加载核心组件 -->
+    <script src="js/core/scoreStorage.js"></script>
+    <script src="js/core/practiceRecorder.js"></script>
+    <script src="js/components/PDFHandler.js"></script>
+
+    <script src="js/components/IndexValidator.js"></script>
+    <script src="js/components/CommunicationTester.js"></script>
+    <script src="js/components/ErrorFixer.js"></script>
+    <script src="js/components/CommunicationRecovery.js"></script>
+    <script src="js/components/PerformanceOptimizer.js"></script>
+    <script src="js/components/DataIntegrityManager.js"></script>
+    <script src="js/components/BrowseStateManager.js"></script>
+
+    <!-- 新增的 Markdown 导出和记录详情功能 -->
+    <!--  -->
+    <script src="js/utils/dataConsistencyManager.js"></script>
+    <script src="js/utils/markdownExporter.js"></script>
+    <script src="js/components/practiceRecordModal.js"></script>
+    <script src="js/components/practiceHistoryEnhancer.js"></script>
+    <script src="js/utils/componentChecker.js"></script>
+    <script src="js/theme-switcher.js"></script>
+
+    
+    
+    <!-- 加载主脚本 -->
+    <script src="js/main.js"></script>
+    <script src="js/boot-fallbacks.js"></script>
+    <!-- 运行时修复补丁（异步存储/恢复兼容、本地file环境增强） -->
+    <script src="js/patches/runtime-fixes.js"></script>
+    
+    
+    <!-- 加载主应用（最后加载） -->
+    <script src="js/app.js"></script>
 </body>
 
 </html>

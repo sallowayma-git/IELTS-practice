@@ -1,0 +1,198 @@
+﻿<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<base href="./" />
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>IELTS Prep - Potter Style</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&amp;family=Lora:ital,wght@0,400;0,700;1,400&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#7F0909",
+                        "background-light": "#F3E9E0",
+                        "background-dark": "#1A1A1A",
+                        "text-light": "#3C3636",
+                        "text-dark": "#EAEAEA",
+                        "card-light": "#FFFFFF",
+                        "card-dark": "#2D2D2D",
+                        "border-light": "#D1C4B7",
+                        "border-dark": "#4A4A4A",
+                    },
+                    fontFamily: {
+                        display: ["Cinzel", "serif"],
+                        body: ["Lora", "serif"],
+                    },
+                    borderRadius: {
+                        DEFAULT: "8px",
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' },
+                        },
+                        mistReveal: {
+                             '0%': { 'clip-path': 'inset(45% 45% 45% 45%)', opacity: '0'},
+                             '100%': { 'clip-path': 'inset(0% 0% 0% 0%)', opacity: '1'},
+                        }
+                    },
+                    animation: {
+                        fadeIn: 'fadeIn 1.5s ease-out',
+                        mistReveal: 'mistReveal 1.5s ease-out forwards',
+                    }
+                },
+            },
+        };
+    </script>
+<style>
+        body {
+            font-family: 'Lora', serif;
+        }
+        .font-display {
+            font-family: 'Cinzel', serif;
+        }
+        .mist-container {
+            position: relative;
+            overflow: hidden;
+        }
+        .mist-content {
+           animation: mistReveal 1.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-text-light dark:text-text-dark">
+<div id="root">
+<header class="bg-card-light dark:bg-card-dark shadow-md sticky top-0 z-50">
+<div class="container mx-auto px-6 py-3 flex justify-between items-center">
+<div class="flex items-center">
+<span class="font-display text-2xl font-bold text-primary">Wizarding World IELTS Prep</span>
+<span class="material-icons text-primary ml-2">auto_stories</span>
+</div>
+<nav class="hidden md:flex items-center space-x-8">
+<a class="font-display text-sm tracking-wider uppercase text-text-light dark:text-text-dark hover:text-primary dark:hover:text-primary transition-colors" href="Welcome.html">Overview</a>
+<a class="font-display text-sm tracking-wider uppercase text-text-light dark:text-text-dark hover:text-primary dark:hover:text-primary transition-colors" href="Practice History.html">Practice History</a>
+<a class="font-display text-sm tracking-wider uppercase text-text-light dark:text-text-dark hover:text-primary dark:hover:text-primary transition-colors" href="practice.html">Question Bank</a>
+<a class="font-display text-sm tracking-wider uppercase text-text-light dark:text-text-dark hover:text-primary dark:hover:text-primary transition-colors" href="setting.html">Settings</a>
+</nav>
+<div class="flex items-center">
+<button class="p-2 rounded-full text-text-light dark:text-text-dark hover:bg-gray-200 dark:hover:bg-gray-700" id="theme-toggle">
+<span class="material-icons">brightness_6</span>
+</button>
+<button class="md:hidden ml-4">
+<span class="material-icons text-text-light dark:text-text-dark">menu</span>
+</button>
+</div>
+</div>
+</header>
+<main class="container mx-auto px-6 py-12 mist-container">
+<div class="mist-content">
+<section class="text-center">
+<h1 class="font-display text-4xl md:text-6xl font-bold text-primary mb-4">Welcome, Aspiring Scholar!</h1>
+<p class="text-lg md:text-xl text-text-light dark:text-text-dark max-w-3xl mx-auto">
+                        Embark on your magical journey to IELTS success. Sharpen your skills in the arts of Reading and Listening, and may your results be as dazzling as a Patronus charm.
+                    </p>
+</section>
+<!-- 练习类型卡片区域 - 由插件动态渲染 -->
+<div id="practice-cards-container" class="mt-16 grid grid-cols-1 md:grid-cols-2 gap-8">
+<!-- 插件将在这里渲染练习类型卡片 -->
+</div>
+<!-- 进度统计区域 - 由插件动态渲染 -->
+<div id="progress-stats-container" class="mt-16 bg-card-light dark:bg-card-dark rounded-lg shadow-lg p-8 border border-border-light dark:border-border-dark">
+<h2 class="font-display text-2xl font-bold text-center mb-6">Your Progress at a Glance</h2>
+<div id="progress-stats-grid" class="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
+<!-- 插件将在这里渲染进度统计 -->
+</div>
+</div>
+</div>
+</main>
+<footer class="bg-card-light dark:bg-card-dark mt-16 border-t border-border-light dark:border-border-dark">
+<div class="container mx-auto px-6 py-6 text-center text-text-light dark:text-text-dark text-sm">
+<p>© 2025 IELTS Prep - Potter Style. All rights reserved.</p>
+<p class="mt-2">Designed for the most dedicated witches and wizards.</p>
+</div>
+</footer>
+</div>
+<script>
+        const themeToggle = document.getElementById('theme-toggle');
+        // On page load or when changing themes, best to add inline in `head` to avoid FOUC
+        if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark')
+        }
+        themeToggle.addEventListener('click', function() {
+            // if set via local storage previously
+            if (localStorage.getItem('color-theme')) {
+                if (localStorage.getItem('color-theme') === 'light') {
+                    document.documentElement.classList.add('dark');
+                    localStorage.setItem('color-theme', 'dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                    localStorage.setItem('color-theme', 'light');
+                }
+                // if NOT set via local storage previously
+            } else {
+                if (document.documentElement.classList.contains('dark')) {
+                    document.documentElement.classList.remove('dark');
+                    localStorage.setItem('color-theme', 'light');
+                } else {
+                    document.documentElement.classList.add('dark');
+                    localStorage.setItem('color-theme', 'dark');
+                }
+            }
+        });
+    </script>
+
+<!-- updated -->
+
+<!-- updated -->
+
+<!-- updated -->
+
+<!-- updated -->
+
+<!-- updated -->
+<script src="../../../assets/scripts/complete-exam-data.js"></script>
+<script src="../../../assets/scripts/listening-exam-data.js"></script>
+<script src="../../../js/utils/helpers.js"></script>
+<script src="../../../js/utils/storage.js"></script>
+<script src="../../../js/utils/asyncExportHandler.js"></script>
+<script src="../../../js/core/scoreStorage.js"></script>
+<script src="../../../js/core/practiceRecorder.js"></script>
+<script src="../../../js/components/PDFHandler.js"></script>
+<script src="../../../js/components/IndexValidator.js"></script>
+<script src="../../../js/components/CommunicationTester.js"></script>
+<script src="../../../js/components/ErrorFixer.js"></script>
+<script src="../../../js/components/CommunicationRecovery.js"></script>
+<script src="../../../js/components/PerformanceOptimizer.js"></script>
+<script src="../../../js/components/DataIntegrityManager.js"></script>
+<script src="../../../js/components/BrowseStateManager.js"></script>
+<script src="../../../js/utils/dataConsistencyManager.js"></script>
+<script src="../../../js/utils/markdownExporter.js"></script>
+<script src="../../../js/components/practiceRecordModal.js"></script>
+<script src="../../../js/components/practiceHistoryEnhancer.js"></script>
+<script src="../../../js/utils/componentChecker.js"></script>
+<script src="../../../js/theme-switcher.js"></script>
+<script src="../../../js/main.js"></script>
+<script src="../../../js/boot-fallbacks.js"></script>
+<script src="../../../js/app.js"></script>
+
+<!-- updated -->
+<script src="../../../js/plugins/hp/hp-path-prefix.js"></script>
+<script src="../../../js/plugins/hp/hp-path-map.js"></script>
+
+<!-- updated -->
+<script src="../../../js/plugins/hp/hp-core-bridge.js"></script>
+<script src="../../../js/plugins/hp/hp-welcome-cta.js"></script>
+<script src="../../../js/plugins/hp/hp-welcome-adapter.js"></script>
+<script src="../../../js/plugins/hp/hp-welcome-ui.js"></script>
+
+</body></html>
+
+
+
+

@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HarryPoter - The Marauder's Map</title>
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body { background: #0c0a09; }
+
+    /* Full-viewport responsive wrapper */
+    .map-viewport {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Fixed design resolution, scaled as a whole to avoid tearing */
+    .stage {
+      position: relative;
+      width: 1440px;
+      height: 900px;
+      transform-origin: center center;
+      transform: scale(var(--scale, 1));
+      background-image: url('../../assets/images/The-Marauders-Map-main/map-bg.png');
+      background-size: 100% 100%;
+      background-position: center;
+      background-repeat: no-repeat;
+      backface-visibility: hidden;
+      will-change: transform;
+    }
+
+    /* Map overlay */
+    .map {
+      position: absolute;
+      inset: 0;
+      background-image: url('../../assets/images/The-Marauders-Map-main/map.png');
+      background-size: 100% 100%;
+      background-position: center;
+      background-repeat: no-repeat;
+      mix-blend-mode: multiply;
+      filter: grayscale(1);
+    }
+
+    /* Reveal cloud */
+    .map .mask {
+      position: absolute;
+      inset: 0;
+      background-image: url('../../assets/images/The-Marauders-Map-main/cloud.png');
+      background-size: 100% 100%;
+      background-position: center;
+      background-repeat: no-repeat;
+      mix-blend-mode: lighten;
+      animation: 3s linear 0s magic forwards;
+    }
+
+    /* Path and footprints layer (design space 1440x900) */
+    .track {
+      position: absolute;
+      top: 0; left: 0;
+      width: 1440px;
+      height: 900px;
+      mix-blend-mode: multiply;
+      opacity: 0.7;
+      pointer-events: none;
+    }
+
+    svg.path {
+      position: absolute;
+      top: 0; left: 0;
+      width: 1440px; height: 900px;
+      display: block;
+      pointer-events: none;
+    }
+
+    .footprint { position: absolute; }
+
+    .footprint .foot {
+      position: absolute;
+      width: 10px;
+      height: 22px;
+      background-image: url('../../assets/images/The-Marauders-Map-main/footprints.png');
+      background-size: 40px;
+      background-repeat: no-repeat;
+      background-position-x: 10px;
+      animation: 1s linear 0s footsteps forwards;
+    }
+
+    .footprint .foot::after {
+      display: block;
+      content: '';
+      width: 100%;
+      height: 100%;
+      background-image: url('../../assets/images/The-Marauders-Map-main/footprints-cloud.png');
+      background-repeat: no-repeat;
+      background-size: 20px 22px;
+      mix-blend-mode: lighten;
+      animation: 8s linear 1s footHide forwards;
+      opacity: 0;
+    }
+
+    .footprint.last .foot::after { animation-play-state: paused; }
+
+    @keyframes footHide {
+      0% { opacity: 0; }
+      25% { opacity: 1; filter: brightness(1); }
+      100% { opacity: 1; filter: brightness(10); }
+    }
+
+    .footprint .foot.right::after { background-position-x: -10px; }
+
+    @keyframes footsteps {
+      0% { background-position-x: 0px; }
+      25% { background-position-x: 0px; }
+      25.1% { background-position-x: -10px; }
+      50% { background-position-x: -10px; }
+      50.1% { background-position-x: -20px; }
+      75% { background-position-x: -20px; }
+      75.1% { background-position-x: -30px; }
+      100% { background-position-x: -30px; }
+    }
+
+    .footprint .foot.left { left: -5px; top: 7px; }
+    .footprint .foot.right {
+      left: 5px; top: -7px;
+      background-position-y: -22px;
+      animation-delay: 1s;
+    }
+
+    @keyframes magic { from { filter: brightness(10); } to { filter: brightness(0); } }
+
+    .name-banner {
+      position: absolute;
+      width: 160px;
+      height: 40px;
+      background-image: url('../../assets/images/The-Marauders-Map-main/banner.svg');
+      background-repeat: no-repeat;
+      background-size: 160px 40px;
+      text-align: center;
+      line-height: 30px;
+      font-family: 'Apple Chancery', 'Times New Roman', serif;
+      z-index: 1;
+      display: none;
+      animation: 1s linear 0s nameShow forwards;
+      pointer-events: none;
+    }
+
+    @keyframes nameShow { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes nameShow { from { opacity: 0; } to { opacity: 1; } }
+
+    /* Side scrolls (decorative, parchment with blotchy tones refined) */
+    .side-scroll {
+      position: absolute;
+      top: 0; bottom: 0;
+      width: 0px; /* JS sets actual width */
+      pointer-events: none;
+      z-index: 0;
+      left: 0;
+      /* lighter parchment base */
+      background-color: #ceb083;
+      /* scatter darker tones toward edges, reduce dense dark cores */
+      background-image:
+        radial-gradient(60% 55% at -12% 15%, rgba(176,139,88,0.18) 0%, rgba(176,139,88,0.0) 60%), /* #b08b58 */
+        radial-gradient(58% 50% at 112% 28%, rgba(162,120,79,0.18) 0%, rgba(162,120,79,0.0) 60%),  /* #a2784f */
+        radial-gradient(56% 50% at 50% -14%, rgba(192,158,103,0.16) 0%, rgba(192,158,103,0.0) 58%), /* #c09e67 */
+        radial-gradient(56% 50% at 50% 114%, rgba(191,163,123,0.16) 0%, rgba(191,163,123,0.0) 58%), /* #bfa37b */
+        radial-gradient(52% 48% at 0% 65%, rgba(201,174,131,0.14) 0%, rgba(201,174,131,0.0) 58%),  /* #c9ae83 */
+        radial-gradient(52% 48% at 100% 40%, rgba(200,167,117,0.14) 0%, rgba(200,167,117,0.0) 58%),/* #c8a775 */
+        radial-gradient(50% 46% at 80% 85%, rgba(212,190,157,0.16) 0%, rgba(212,190,157,0.0) 60%), /* #d4be9d */
+        /* subtle vignette to add depth, minimal center dark */
+        linear-gradient(to right, rgba(80,67,47,0.25), rgba(100,84,59,0.14) 25%, rgba(120,100,70,0.06) 65%, rgba(160,134,94,0.04));
+      background-blend-mode: multiply, multiply, multiply, multiply, multiply, multiply, multiply, normal;
+      box-shadow: inset 0 0 50px rgba(0,0,0,0.25), inset 0 0 120px rgba(0,0,0,0.15);
+      overflow: hidden;
+      /* Apply irregular torn edge to whole scroll */
+      -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1000 1000'><defs><filter id='f'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' seed='7'/><feDisplacementMap in='SourceGraphic' scale='60'/></filter></defs><rect width='1000' height='1000' fill='white' filter='url(%23f)'/></svg>");
+      mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1000 1000'><defs><filter id='f'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' seed='7'/><feDisplacementMap in='SourceGraphic' scale='60'/></filter></defs><rect width='1000' height='1000' fill='white' filter='url(%23f)'/></svg>");
+      -webkit-mask-size: cover; mask-size: cover;
+      -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+      -webkit-mask-position: center; mask-position: center;
+    }
+    .side-scroll.right { left: auto; right: 0; }
+
+    /* Irregular torn edge mask */
+    .side-scroll .torn-mask {
+      position: absolute; inset: 0;
+      -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1000 1000'><defs><filter id='f'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' seed='7'/><feDisplacementMap in='SourceGraphic' scale='60'/></filter></defs><rect width='1000' height='1000' fill='white' filter='url(%23f)'/></svg>");
+      mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1000 1000'><defs><filter id='f'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' seed='7'/><feDisplacementMap in='SourceGraphic' scale='60'/></filter></defs><rect width='1000' height='1000' fill='white' filter='url(%23f)'/></svg>");
+      -webkit-mask-size: cover; mask-size: cover;
+      -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+      -webkit-mask-position: center; mask-position: center;
+      background: inherit;
+    }
+
+    /* Rolled inner edge shading */
+    .side-scroll::before {
+      content: "";
+      position: absolute; top: 0; bottom: 0; width: 48px;
+      pointer-events: none;
+    }
+    .side-scroll.left::before {
+      right: 0;
+      background: linear-gradient(to left, rgba(80,67,47,0.40), rgba(100,84,59,0.30) 40%, rgba(120,100,70,0.12) 70%, rgba(0,0,0,0.0) 100%);
+    }
+    .side-scroll.right::before {
+      left: 0;
+      background: linear-gradient(to right, rgba(80,67,47,0.40), rgba(100,84,59,0.30) 40%, rgba(120,100,70,0.12) 70%, rgba(0,0,0,0.0) 100%);
+    }
+    /* Pixelated rough parchment noise + torn edge */
+    .side-scroll::after {
+      content: "";
+      position: absolute; inset: 0;
+      background-image:
+        url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/><feComponentTransfer><feFuncA type='table' tableValues='0 0.07'/></feComponentTransfer></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"),
+        repeating-linear-gradient( 14deg, rgba(0,0,0,0.02), rgba(0,0,0,0.02) 3px, rgba(255,255,255,0.012) 3px, rgba(255,255,255,0.012) 7px ),
+        repeating-linear-gradient( -12deg, rgba(0,0,0,0.018), rgba(0,0,0,0.018) 3px, rgba(255,255,255,0.01) 3px, rgba(255,255,255,0.01) 7px );
+      background-size: 140px 140px, auto, auto;
+      image-rendering: pixelated;
+      mix-blend-mode: multiply, multiply, multiply;
+      opacity: 0.6;
+      pointer-events: none;
+    }
+
+    /* Image map hit layer and effects */
+    .map-hit {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      pointer-events: auto;
+      z-index: 3;
+    }
+    /* Layering for clarity */
+    .map { z-index: 1; }
+    svg.path { z-index: 3; }
+    .track { z-index: 3; }
+    .effects-layer {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 4;
+    }
+
+    /* Fireflies effect (The Burrow) */
+    .firefly {
+      position: absolute;
+      width: 5px;
+      height: 5px;
+      background-color: #FFD700;
+      border-radius: 50%;
+      box-shadow: 0 0 8px 2px #FFD700;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+    }
+    .firefly-container.active .firefly { opacity: 0.8; animation: float 6s infinite ease-in-out; }
+    @keyframes float { 50% { transform: translateY(-20px) translateX(10px); } }
+
+    /* Golden Snitch effect (Quidditch Pitch) */
+    #snitch {
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      background-color: gold;
+      border-radius: 50%;
+      box-shadow: 0 0 10px 3px gold;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    .snitch-container.active #snitch { opacity: 1; animation: fly-path 1.5s linear infinite; }
+    @keyframes fly-path {
+      0% { top: 23%; left: 69%; }
+      25% { top: 26%; left: 75%; }
+      50% { top: 22%; left: 76%; }
+      75% { top: 25%; left: 68%; }
+      100% { top: 23%; left: 69%; }
+    }
+
+    /* Gear effect (Azkaban) */
+    #settings-gear {
+      position: absolute;
+      top: 606px; /* scaled from 505px (1200x750) -> 1440x900 */
+      left: 378px; /* scaled from 315px */
+      font-size: 24px;
+      color: white;
+      text-shadow: 0 0 5px black;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    .gear-container.active #settings-gear { opacity: 1; animation: spin 4s linear infinite; }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="map-viewport" id="viewport">
+    <div class="side-scroll left" id="sideLeft"><div class="torn-mask"></div></div>
+    <div class="side-scroll right" id="sideRight"><div class="torn-mask"></div></div>
+    <div class="stage" id="stage">
+      <div class="map">
+        <div id="mapMask" class="mask"></div>
+      </div>
+
+      <!-- Clickable image map (design space 1440x900) -->
+      <img class="map-hit" src="../../assets/images/The-Marauders-Map-main/map.png" width="1440" height="900" usemap="#hp-map" alt="Harry Potter Map" />
+      <map name="hp-map">
+        <!-- Hogwarts (Overview) - scaled from 1200x750 by 1.2 -->
+        <area shape="poly" coords="552,198, 648,228, 828,300, 780,372, 660,348, 564,342" href="#overview" alt="Hogwarts" title="前往总览">
+        <!-- The Burrow (Records) - nudged right-down -->
+        <area shape="poly" coords="246,270, 348,294, 342,354, 288,342, 252,360" href="#records" alt="The Burrow" title="查看练习记录">
+        <!-- Quidditch Pitch (Question Bank) - nudged left -->
+        <area shape="poly" coords="1048,192, 1108,210, 1120,240, 1096,270, 1036,276, 982,258, 970,228, 994,204" href="#questions" alt="Quidditch Pitch" title="进入题库">
+        <!-- Azkaban (Settings) rect x1,y1,x2,y2 - nudged left -->
+        <area shape="rect" coords="306,558, 384,732" href="#settings" alt="Azkaban" title="打开设置">
+      </map>
+
+      <!-- Effects Layer (not interactive) -->
+      <div class="effects-layer" id="effects-layer">
+        <div id="burrow-effects" class="firefly-container">
+          <span class="firefly" style="left: 21%; top: 30%; animation-delay: -1.2s;"></span>
+          <span class="firefly" style="left: 19%; top: 32%; animation-delay: -2.5s; animation-duration: 7s;"></span>
+          <span class="firefly" style="left: 23%; top: 29%; animation-delay: -0.8s; animation-duration: 6.2s;"></span>
+        </div>
+        <div id="quidditch-effects" class="snitch-container">
+          <div id="snitch"></div>
+        </div>
+        <div id="azkaban-effects" class="gear-container">
+          <div id="settings-gear">⚙️</div>
+        </div>
+      </div>
+
+      <!-- Keep original SVG path and track for footsteps, above the effects for visibility -->
+      <svg class="path" id="svgPath" width="1440" height="900" viewBox="0 0 1440 900" version="1.1"
+        xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+        <title>path</title>
+        <g id="页面-1" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd" stroke-opacity="0">
+          <g id="编组" stroke="#FFFFFF">
+            <rect id="矩形" x="0.5" y="0.5" width="1439" height="899"></rect>
+            <polyline id="path"
+              points="130.896846 440.973055 77.5736485 440.973055 37.1505202 369.443329 37.1505202 356.479448 51.9044918 351.186423 224.12596 351.186423 231.548286 330.534893 224.12596 255.156304 231.548286 207.572814 384.619482 213.802866 484.122309 199.455275 653.112882 162.545157 670.983559 247.421636 670.983559 364.482797 638.20106 369.443329 631.544477 406.417259 608.545342 415.874847 608.545342 467.454973 622.076813 475.219868 670.983559 467.454973 670.983559 429.285411"></polyline>
+          </g>
+        </g>
+      </svg>
+      <div id="track" class="track">
+        <div id="name" class="name-banner">Shui</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      // Hover bridge: route area hover to effect containers
+      function bindHover(areaSelector, effectsEl) {
+        const area = document.querySelector(areaSelector);
+        if (!area || !effectsEl) return;
+        area.addEventListener('mouseover', () => effectsEl.classList.add('active'));
+        area.addEventListener('mouseout', () => effectsEl.classList.remove('active'));
+      }
+
+      const DESIGN_W = 1440;
+      const DESIGN_H = 900;
+      const $viewport = document.getElementById('viewport');
+      const $stage = document.getElementById('stage');
+      const $sideLeft = document.getElementById('sideLeft');
+      const $sideRight = document.getElementById('sideRight');
+
+      function applyScale() {
+        const vw = $viewport.clientWidth;
+        const vh = $viewport.clientHeight;
+        const scale = Math.min(vw / DESIGN_W, vh / DESIGN_H);
+        $stage.style.setProperty('--scale', scale);
+        // Side scrolls width: fill leftover space when aspect ratio wider than 16:10 (1440x900)
+        const scaledW = DESIGN_W * scale;
+        const leftover = Math.max(0, vw - scaledW);
+        const sideWidth = leftover / 2;
+        [$sideLeft, $sideRight].forEach(el => {
+          if (!el) return;
+          el.style.width = sideWidth + 'px';
+        });
+      }
+
+      window.addEventListener('resize', applyScale);
+      window.addEventListener('orientationchange', applyScale);
+      applyScale();
+
+      function createFootprint() {
+        const footprint = document.createElement('div');
+        footprint.className = 'footprint';
+        const footLeft = document.createElement('div');
+        const footRight = document.createElement('div');
+        footLeft.classList = 'foot left';
+        footRight.classList = 'foot right';
+        footprint.appendChild(footLeft);
+        footprint.appendChild(footRight);
+        return footprint;
+      }
+
+      const $path = document.querySelector('#path');
+      const pathLen = $path.getTotalLength();
+      const $track = document.querySelector('#track');
+      const $name = document.querySelector('#name');
+
+      let tempLen = 0;
+      let interval;
+      function drawFootprint() {
+        const point = $path.getPointAtLength(tempLen);
+        $name.style.left = `${point.x + 25}px`;
+        $name.style.top = `${point.y + 25}px`;
+
+        if (tempLen % 40 === 0) {
+          const footprint = createFootprint();
+          footprint.style.left = `${point.x}px`;
+          footprint.style.top = `${point.y}px`;
+
+          const prePoint = $path.getPointAtLength(Math.max(0, tempLen - 20));
+          const nextPoint = $path.getPointAtLength(Math.min(pathLen, tempLen + 20));
+          const angle = getAngle(prePoint, nextPoint);
+          footprint.style.rotate = `${angle + Math.PI / 2}rad`;
+
+          $track.appendChild(footprint);
+          if (tempLen > pathLen) {
+            clearInterval(interval);
+            footprint.classList.add('last');
+          } else {
+            setTimeout(() => { footprint.remove(); }, 15000);
+          }
+        }
+        tempLen += 1;
+      }
+
+      function getAngle(p0, p1) {
+        const deltaX = p1.x - p0.x;
+        const deltaY = p1.y - p0.y;
+        return Math.atan2(deltaY, deltaX);
+      }
+
+      const $mapMask = document.querySelector('#mapMask');
+      $mapMask.addEventListener('animationend', () => {
+        drawFootprint();
+        $name.style.display = 'block';
+        interval = setInterval(drawFootprint, 50);
+      });
+
+      // Bind hover to effects per spec
+      bindHover('area[alt="The Burrow"]', document.getElementById('burrow-effects'));
+      bindHover('area[alt="Quidditch Pitch"]', document.getElementById('quidditch-effects'));
+      bindHover('area[alt="Azkaban"]', document.getElementById('azkaban-effects'));
+
+      // Handle navigation for each clickable area
+      document.querySelectorAll('map[name="hp-map"] area').forEach(a => {
+        a.addEventListener('click', (e) => {
+          e.preventDefault();
+
+          // Get the href attribute to determine destination
+          const href = a.getAttribute('href');
+
+          // Navigate based on the destination
+          switch(href) {
+            case '#overview':
+              window.location.href = 'HP/Welcome.html';
+              break;
+            case '#records':
+              window.location.href = 'HP/Practice History.html';
+              break;
+            case '#questions':
+              window.location.href = 'HP/practice.html';
+              break;
+            case '#settings':
+              window.location.href = 'HP/setting.html';
+              break;
+            default:
+              console.log('Unknown destination:', href);
+          }
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
