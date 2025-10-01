@@ -8,6 +8,7 @@ class BaseComponent {
         this.container = null;
         this.subscriptions = [];
         this.eventListeners = [];
+        this._renderPending = false; // Task 84: 渲染防抖标记
     }
 
     // Attach to DOM container, setup listeners and subscriptions
@@ -20,6 +21,9 @@ class BaseComponent {
 
     // Detach from DOM, cleanup listeners and subscriptions
     detach() {
+        // Task 84: 取消待处理的渲染
+        this._renderPending = false;
+
         this.cleanupEventListeners();
         this.unsubscribeFromStores();
         this.container = null;
@@ -28,6 +32,21 @@ class BaseComponent {
     // Render content (idempotent: should clear then rebuild)
     render() {
         if (!this.container) return;
+        // Task 84: 渲染重入防护和防抖
+        if (this._renderPending) {
+            if (window.__DEBUG__) console.debug('[BaseComponent] Render already pending, skipping');
+            return;
+        }
+
+        this._renderPending = true;
+        queueMicrotask(() => {
+            this._renderPending = false;
+            this._doRender();
+        });
+    }
+
+    // 实际渲染方法，由子类重写
+    _doRender() {
         // Subclasses implement specific rendering
         // Ensure: this.container.innerHTML = ''; then build HTML
     }

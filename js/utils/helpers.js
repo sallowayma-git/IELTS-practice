@@ -702,10 +702,10 @@ if (!window.EventEmitter) {
 }
 
 // Global event bus for cross-component communication
-// Guard against redefinition
+// Guard against redefinition - defer to events.js as canonical source
 if (!window.globalEventBus) {
     window.globalEventBus = new window.EventEmitter();
-    console.log('[Events] EventEmitter initialized from helpers.js');
+    // No log here - let events.js handle canonical initialization log
 }
 
 // Utility functions for window context detection (Task 35)

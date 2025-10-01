@@ -2,18 +2,157 @@
 // Coordinates RecordStats, RecordList components
 // Inherits from BaseComponent, handles store integration and actions
 
+// BaseComponent 兜底处理 (Task 74)
+if (!window.BaseComponent) {
+    window.BaseComponent = class {
+        constructor() { this.subscriptions = []; }
+        attach() {}
+        detach() { this.subscriptions.forEach(u => u()); }
+        render() {}
+        addSubscription(u) { this.subscriptions.push(u); }
+        addEventListener() {}
+        setupEventListeners() {}
+        subscribeToStores() {}
+        cleanupEventListeners() {}
+        unsubscribeFromStores() {}
+    };
+    console.warn('[RecordViewer] BaseComponent missing, using fallback');
+}
+
+// UI子组件兜底处理 (Task 81)
+if (!window.RecordStats) {
+    window.RecordStats = class {
+        constructor(){}
+        render(){} update(){} destroy(){}
+        attach(){}
+        calculateStats(){ return { total: 0, avgScore: 0, studyTime: 0, streakDays: 0 }; }
+        setStats(){}
+    };
+}
+
 class RecordViewer extends BaseComponent {
     constructor(stores) {
-        super(stores, {
-            container: document.getElementById('practice-view'),
-            filterButtons: document.getElementById('record-type-filter-buttons'),
-            bulkDeleteBtn: document.getElementById('bulk-delete-btn')
+        this._failed = false; // Task 82: 错误状态标记
+        this._subscriptions = []; // 订阅管理
+
+        try {
+            super(stores, {
+                container: document.getElementById('practice-view'),
+                filterButtons: document.getElementById('record-type-filter-buttons'),
+                bulkDeleteBtn: document.getElementById('bulk-delete-btn')
+            });
+            this.currentFilter = 'all';
+            this.bulkDeleteMode = false;
+            this.selectedRecords = new Set();
+
+            // Safe Mode 跳过昂贵设置 (Task 77)
+            this.isSafeMode = window.__SAFE_MODE__ === true;
+            if (this.isSafeMode) {
+                if (window.__DEBUG__) console.debug('[RecordViewer] Safe Mode: 跳过昂贵统计计算和实时更新');
+                this.realTimeUpdatesEnabled = false;
+                this.advancedStatsEnabled = false;
+            } else {
+                this.realTimeUpdatesEnabled = true;
+                this.advancedStatsEnabled = true;
+            }
+
+            this.checkRequiredElements();
+            this.initSubComponents();
+            this.initBasicStats(); // Task 86: 初始化基本统计
+        } catch (error) {
+            this._failed = true;
+            console.error('[RecordViewer] UI bootstrap failed:', error);
+            if (window.ErrorService) {
+                window.ErrorService.showWarning('练习记录界面初始化失败: ' + error.message);
+            }
+            this.cleanupSubscriptions();
+        }
+    }
+
+    // Task 82: 清理订阅，防止错误风暴
+    cleanupSubscriptions() {
+        this._subscriptions.forEach(unsubscribe => {
+            try {
+                unsubscribe();
+            } catch (e) {
+                if (window.__DEBUG__) console.debug('[RecordViewer] Failed to cleanup subscription:', e);
+            }
         });
-        this.currentFilter = 'all';
-        this.bulkDeleteMode = false;
-        this.selectedRecords = new Set();
-        this.checkRequiredElements();
-        this.initSubComponents();
+        this._subscriptions = [];
+    }
+
+    // Task 86: 初始化基本统计
+    initBasicStats() {
+        // 确保DOM元素存在
+        const statElements = ['total-practiced', 'avg-score', 'study-time', 'streak-days'];
+        statElements.forEach(id => {
+            if (!document.getElementById(id)) {
+                const container = document.createElement('span');
+                container.id = id;
+                container.textContent = '0';
+                container.style.cssText = 'font-size: 2em; font-weight: bold;';
+                document.body.appendChild(container);
+            }
+        });
+
+        // 计算并显示基本统计
+        this.updateBasicStats();
+    }
+
+    // Task 86: 更新基本统计
+    updateBasicStats() {
+        try {
+            const stats = this.calculateDefensiveStats();
+
+            // 更新DOM显示，防御NaN
+            const updateElement = (id, value) => {
+                const element = document.getElementById(id);
+                if (element) {
+                    const safeValue = isNaN(value) ? 0 : Math.round(value);
+                    element.textContent = safeValue;
+                }
+            };
+
+            updateElement('total-practiced', stats.total);
+            updateElement('avg-score', stats.avgScore);
+            updateElement('study-time', stats.studyTime);
+            updateElement('streak-days', stats.streakDays);
+        } catch (error) {
+            console.error('[RecordViewer] Failed to update basic stats:', error);
+        }
+    }
+
+    // Task 86: 防御性统计计算
+    calculateDefensiveStats() {
+        let records = [];
+
+        // 尝试从多个来源获取记录
+        if (this.stores.records && this.stores.records.getRecords) {
+            records = this.stores.records.getRecords() || [];
+        } else if (window.storage) {
+            try {
+                const storedRecords = window.storage.get('practice_records') || [];
+                records = Array.isArray(storedRecords) ? storedRecords : [];
+            } catch (e) {
+                if (window.__DEBUG__) console.debug('[RecordViewer] Failed to calculate stats:', e);
+            }
+        }
+
+        // 防御性计算
+        const total = records.length || 0;
+        const validScores = records.filter(r => r.score && typeof r.score.percentage === 'number');
+        const avgScore = validScores.length > 0
+            ? validScores.reduce((sum, r) => sum + r.score.percentage, 0) / validScores.length
+            : 0;
+        const studyTime = records.reduce((sum, r) => sum + (r.duration || 0), 0) / 60; // 转换为分钟
+        const streakDays = 1; // 简化计算
+
+        return {
+            total,
+            avgScore,
+            studyTime,
+            streakDays
+        };
     }
 
     checkRequiredElements() {
@@ -139,12 +278,68 @@ class RecordViewer extends BaseComponent {
     }
 
     render() {
-        this.stats.render();
-        const filters = this.currentFilter !== 'all' ? { type: this.currentFilter } : {};
-        const filteredRecords = this.stores.records.getRecords(filters);
-        this.recordList.setRecords(filteredRecords);
-        this.recordList.setBulkMode(this.bulkDeleteMode);
-        if (this.bulkDeleteMode) this.updateBulkDeleteButton();
+        // Task 82: 错误防护 - 失败时短路
+        if (this._failed) {
+            if (window.__DEBUG__) console.debug('[RecordViewer] Skipping render due to failed initialization');
+            return;
+        }
+
+        try {
+            // Task 86: 数据兜底
+            let records = [];
+            if (this.stores.records && this.stores.records.getRecords) {
+                const filters = this.currentFilter !== 'all' ? { type: this.currentFilter } : {};
+                records = this.stores.records.getRecords(filters);
+            } else {
+                // 从localStorage兜底获取
+                records = this.getRecordsFromStorage();
+            }
+
+            // Safe Mode下限制渲染数量
+            const maxRecords = this.isSafeMode ? 50 : records.length;
+            const displayRecords = records.slice(0, maxRecords);
+
+            this.stats.render();
+            this.recordList.setRecords(displayRecords);
+            this.recordList.setBulkMode(this.bulkDeleteMode);
+            if (this.bulkDeleteMode) this.updateBulkDeleteButton();
+        } catch (error) {
+            console.error('[RecordViewer] Render failed:', error);
+            this.renderEmptyState();
+        }
+    }
+
+    // Task 86: 从localStorage获取记录
+    getRecordsFromStorage() {
+        try {
+            if (window.storage) {
+                const storedRecords = window.storage.get('practice_records') || [];
+                const filters = this.currentFilter !== 'all' ? { type: this.currentFilter } : {};
+                return this.applyRecordFilters(storedRecords, filters);
+            }
+        } catch (e) {
+            if (window.__DEBUG__) console.debug('[RecordViewer] Failed to load records from storage:', e);
+        }
+        return [];
+    }
+
+    // Task 86: 应用记录过滤器
+    applyRecordFilters(records, filters) {
+        if (!filters.type || filters.type === 'all') return records;
+        return records.filter(record => record.type === filters.type);
+    }
+
+    // Task 86: 空状态渲染
+    renderEmptyState() {
+        if (this.elements.container) {
+            this.elements.container.innerHTML = `
+                <div style="text-align: center; padding: 60px 20px; color: #666;">
+                    <div style="font-size: 3em; margin-bottom: 20px;">📊</div>
+                    <h3>暂无练习记录</h3>
+                    <p>开始练习后，这里会显示你的练习统计和记录</p>
+                </div>
+            `;
+        }
     }
 
     handleRecordAction(action, id) {

@@ -15,6 +15,14 @@ class StorageManager {
     async initializeStorage() {
         console.log('[Storage] 开始初始化存储系统');
         try {
+            // Safe Mode 检查 (Task 66)
+            if (window.__SAFE_MODE__) {
+                console.log('[Storage] SAFE_MODE 检测到，使用 local-only 模式');
+                this.useIndexedDB = false;
+                this.useAutoBackup = false;
+                return this.initializeLocalStorageOnly();
+            }
+
             // 检查localStorage可用性
             const testKey = this.prefix + 'test';
             localStorage.setItem(testKey, 'test');
@@ -50,6 +58,31 @@ class StorageManager {
         } catch (error) {
             console.warn('[Storage] localStorage 不可用，fallback 到 IndexedDB:', error);
             await this.initializeIndexedDBStorage();
+        }
+    }
+
+    /**
+     * Safe Mode: 仅初始化localStorage (Task 66)
+     */
+    async initializeLocalStorageOnly() {
+        console.log('[Storage] Safe Mode: 初始化localStorage-only模式');
+        try {
+            // 检查localStorage可用性
+            const testKey = this.prefix + 'safe_mode_test';
+            localStorage.setItem(testKey, 'ok');
+            localStorage.removeItem(testKey);
+            console.log('[Storage] Safe Mode: localStorage可用');
+
+            // 设置标记
+            this.isLocalStorageOnly = true;
+            this.useIndexedDB = false;
+            this.useAutoBackup = false;
+
+            console.log('[Storage] Safe Mode: 存储初始化完成 (localStorage-only)');
+
+        } catch (error) {
+            console.error('[Storage] Safe Mode: localStorage不可用:', error);
+            throw error;
         }
     }
 

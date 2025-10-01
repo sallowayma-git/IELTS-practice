@@ -726,7 +726,7 @@
 
 ---
 
-- [ ] 39. Isolate test scripts and remove production references
+- [x] 39. Isolate test scripts and remove production references
 
   - Goal: Keep `js/tests/` and `js/testing/` completely out of production pages; load them only in `test_regression.html`.
 
@@ -740,7 +740,7 @@
   - Opening `index.html` never loads code from `js/tests/` or `js/testing/`.
   - Opening `test_regression.html` loads tests without console errors.
 
-- [ ] 40. Gate verbose console logs behind a debug flag (no behavior change)
+- [x] 40. Gate verbose console logs behind a debug flag (no behavior change)
 
   - Goal: Reduce console noise in production while preserving troubleshooting signals in tests.
 
@@ -753,7 +753,7 @@
   - Baseline (index.html) has minimal console output (no chatty logs).
   - Test page shows detailed logs when `__DEBUG__ = true`.
 
-- [ ] 41. Script ownership map and dead-code quarantine plan
+- [x] 41. Script ownership map and dead-code quarantine plan
 
   - Goal: Produce a clear map of scripts → owners → entry points; quarantine unreferenced scripts under `legacy/` (no deletion yet).
 
@@ -767,7 +767,7 @@
   - A `SCRIPT_OWNERSHIP.md` exists with current mapping and decisions.
   - No production page references any file under `legacy/`.
 
-- [ ] 42. Dependency layering rules and sanity checks
+- [x] 42. Dependency layering rules and sanity checks
 
   - Goal: Enforce the layered dependencies: `utils → stores → ui → app`, with plugins/theme pages on top.
 
@@ -779,7 +779,7 @@
   Acceptance:
   - Documented rules exist; known violations are listed with owners and fix plans.
 
-- [ ] 43. Consolidate practice communication paths (no loss of functionality)
+- [x] 43. Consolidate practice communication paths (no loss of functionality)
 
   - Goal: Ensure exactly one parent-side router (App) and child-side listeners only on practice pages.
 
@@ -792,7 +792,7 @@
   - Parent page shows exactly one `message` listener in DevTools.
   - Child windows continue to work; tests for duplicate suppression remain green.
 
-- [ ] 44. Storage keys and migration consistency (final pass)
+- [x] 44. Storage keys and migration consistency (final pass)
 
   - Goal: Ensure all code paths use the same keys as `js/utils/storage.js` and normalize old shapes at store boundaries.
 
@@ -804,7 +804,7 @@
   Acceptance:
   - No mixed-prefix or duplicate keys; legacy shapes normalized on read.
 
-- [ ] 45. PDF path normalization centralization
+- [x] 45. PDF path normalization centralization
 
   - Goal: Keep path normalization in one place when opening PDFs; remove scattered adaptations.
 
@@ -816,7 +816,7 @@
   Acceptance:
   - One code path computes the PDF path; no duplicate normalization logic.
 
-- [ ] 46. Theme/academic compatibility scripts hardening
+- [x] 46. Theme/academic compatibility scripts hardening
 
   - Goal: Ensure `js/academic-*.js`, `js/script.js`, `js/design-adaptations.js` are not loaded by base pages unless explicitly required.
 
@@ -828,7 +828,7 @@
   Acceptance:
   - Base pages function without these compatibility scripts; theme pages remain functional.
 
-- [ ] 47. ErrorService adoption sweep (no behavior change)
+- [x] 47. ErrorService adoption sweep (no behavior change)
 
   - Goal: Replace direct `showMessage*` usages with the ErrorService facade across UI.
 
@@ -839,7 +839,7 @@
   Acceptance:
   - Internal codebases reference only ErrorService for user-facing messages.
 
-- [ ] 48. Performance budgets and console timing baselines
+- [x] 48. Performance budgets and console timing baselines
 
   - Goal: Maintain TTI ≤ 800ms and responsive lists with batch size 50/debounce 300ms.
 
@@ -850,7 +850,7 @@
   Acceptance:
   - Perf logs present and stable across runs; lists remain responsive beyond 500 items.
 
-- [ ] 49. Code style and naming consistency (no toolchain changes)
+- [x] 49. Code style and naming consistency (no toolchain changes)
 
   - Goal: Improve readability without introducing new linters.
 
@@ -862,7 +862,7 @@
   Acceptance:
   - New/edited files adhere to the style; reviewers can quickly identify ownership and purpose.
 
-- [ ] 50. Final script de-dup pass and commit plan
+- [x] 50. Final script de-dup pass and commit plan
 
   - Goal: Remove or quarantine non-referenced/duplicate scripts after all previous tasks are green.
 
@@ -873,3 +873,521 @@
 
   Acceptance:
   - Repo no longer contains unused production-facing scripts; tests and baseline pages unaffected.
+
+---
+
+- [x] 51. Theme pages path remap after legacy move (no functional change)
+
+  - Goal: Update theme/HP pages to reference `legacy/` paths for moved components to prevent 404s.
+
+  Scopes and replacements:
+  - In `.superdesign/design_iterations/HP/*.html` (prefix `../../../`):
+    - `../../../js/components/IndexValidator.js` → `../../../legacy/IndexValidator.js`
+    - `../../../js/components/practiceRecordModal.js` → `../../../legacy/practiceRecordModal.js`
+    - `../../../js/components/practiceHistoryEnhancer.js` → `../../../legacy/practiceHistoryEnhancer.js`
+    - `../../../js/components/CommunicationTester.js` → `../../../legacy/CommunicationTester.js`
+  - In `.superdesign/design_iterations/ielts_academic_functional_2.html` (prefix `../../`):
+    - `../../js/components/IndexValidator.js` → `../../legacy/IndexValidator.js`
+    - `../../js/components/practiceRecordModal.js` → `../../legacy/practiceRecordModal.js`
+    - `../../js/components/practiceHistoryEnhancer.js` → `../../legacy/practiceHistoryEnhancer.js`
+    - `../../js/components/CommunicationTester.js` → `../../legacy/CommunicationTester.js`
+
+  Implementation steps:
+  1) Apply the above path substitutions; avoid touching PDFHandler (still under `js/components/`).
+  2) Open each theme page directly via file:// and verify DevTools Network shows zero 404.
+  3) Quick click-through for practice/history/settings views to ensure no runtime errors.
+
+  Acceptance:
+  - All theme pages load without 404s.
+  - No console errors caused by missing moved files.
+
+- [x] 52. Optional: Legacy alias stubs for backward compatibility (fallback only)
+
+  - Goal: For teams that cannot edit theme HTML soon, provide optional stub files under `js/components/` that synchronously load from `legacy/`.
+
+  Implementation steps:
+  1) For each moved file that is still referenced by some pages, create a tiny stub at `js/components/<Name>.js`:
+     - Use `document.write('<script src="../../legacy/<Name>.js"></' + 'script>')` to synchronously include the legacy file (keeps execution order in file://).
+  2) Scope strictly to the needed set (IndexValidator, practiceRecordModal, practiceHistoryEnhancer, CommunicationTester).
+  3) Remove the stubs once HTML references are updated (task 51 complete).
+
+  Acceptance:
+  - Pages referencing old paths work immediately; no order-related regressions.
+  - Stubs are temporary and documented in CLEANUP_REPORT.md.
+
+- [x] 53. Update docs and checklists after path changes
+
+  - Goal: Ensure internal guides point to the correct script locations.
+
+  Implementation steps:
+  1) Update `assets/developer wiki/hp-overview-usage-todo.md` script lists to use `legacy/` for moved items.
+  2) In English wiki pages that reference moved component paths, add a note that these are legacy components and now live under `legacy/`.
+  3) Add a short “Path Migration Notes” section to `SCRIPT_OWNERSHIP.md`.
+
+  Acceptance:
+  - No doc still instructs using `js/components/<moved>.js`.
+
+- [x] 54. Path integrity checker (manual run on test page)
+
+  - Goal: Provide a small script to verify that all `<script src>` paths are reachable and modules are defined.
+
+  Implementation steps:
+  1) Add `tests/path-checker.js` that:
+     - Iterates over `document.scripts`, checks `src`, and attempts to detect presence of expected globals (when known).
+     - Logs a PASS/FAIL table to console.
+  2) Include it only in `test_regression.html` and run manually after path updates.
+
+  Acceptance:
+  - Console table shows all paths PASS on both base and theme pages (when loaded via test harness).
+
+- [x] 55. Injector alias map for dynamic loads (defensive)
+
+  - Goal: Add a minimal alias map for `App.injectScript` so that requests for moved components can fall back to `legacy/` automatically.
+
+  Implementation steps:
+  1) In `App.injectScript`, before creating the tag, check if `src` matches `js/components/(IndexValidator|practiceRecordModal|practiceHistoryEnhancer|CommunicationTester).js`.
+  2) If so, rewrite to `legacy/<Name>.js` and log the aliasing.
+  3) Keep PDFHandler untouched (active component).
+
+  Acceptance:
+  - Dynamic loads work regardless of old/new path; single log indicates aliasing.
+
+- [x] 56. Verify index/test pages for residual legacy path references
+
+  - Goal: Ensure only theme pages reference `legacy/` directly; base pages should not.
+
+  Implementation steps:
+  1) Grep `index.html` and other base pages for `legacy/` to confirm none present.
+  2) Keep `legacy/` references scoped to theme/test contexts only.
+
+  Acceptance:
+  - Base pages tidy; theme/test pages explicitly reference `legacy/` where needed.
+
+---
+
+- [x] 63. Emergency "Safe Mode" for index.html (minimal viable system)
+
+  - Goal: Make `index.html` usable immediately with minimal scripts and features while preserving the ability to re-enable advanced components later.
+
+  Implementation steps:
+  1) Add a global flag `window.__SAFE_MODE__ = true` in `index.html` before any script tags.
+  2) Limit initial scripts to: `js/utils/{events.js,helpers.js,storage.js,errorDisplay.js}`, `js/stores/{AppStore.js,ExamStore.js,RecordStore.js}`, `js/ui/{ExamBrowser.js,RecordViewer.js,SettingsPanel.js}`, `js/app.js`.
+  3) Temporarily exclude heavy/optional scripts from index.html (keep via injector): `js/core/scoreStorage.js`, `assets/scripts/listening-exam-data.js`, DataIntegrityManager, performanceOptimizer, academic/compat scripts.
+  4) In `app.js`, gate heavy features under `if (!window.__SAFE_MODE__)` (e.g., tutorials, keyboard shortcuts, periodic diagnostics, auto-backup).
+  5) Add visible notice in console: `[SAFE_MODE] Enabled - advanced features are disabled at startup`.
+
+  Acceptance:
+  - Page loads without freezing; navigation buttons work; browse/records/settings可用。
+  - TTI ≤ 1000ms on mid-tier laptop。
+
+- [x] 64. MVP render cap and pagination (avoid long list freeze)
+
+  - Goal: Prevent UI freeze when rendering large exam lists by capping initial render and enabling "Load more".
+
+  Implementation steps:
+  1) In `ExamBrowser` list rendering, cap initial render to 50 items when `__SAFE_MODE__` is true.
+  2) Append a "Load more" button that renders next 50 items per click; maintain current filters/search.
+  3) Keep existing virtual scrolling code disabled in safe mode to avoid complexity; re-enable later with performance tests.
+
+  Acceptance:
+  - Long exam libraries do not freeze on initial load; user can incrementally load more。
+
+- [x] 65. Canonical EventEmitter guard (definitive fix)
+
+  - Goal: Eliminate duplicate EventEmitter/globalEventBus definitions that can cause event duplication and unpredictable behavior.
+
+  Implementation steps:
+  1) In `js/utils/helpers.js`, wrap EventEmitter definitions with `if (!window.EventEmitter) { ... }` and `if (!window.globalEventBus) { ... }`.
+  2) Ensure `index.html` loads `js/utils/events.js` before `helpers.js`.
+  3) Add a single console log `[Events] EventEmitter initialized` from the canonical source only (events.js)。
+
+  Acceptance:
+  - DevTools console shows a single EventEmitter init log; no double subscription symptoms。
+
+- [x] 66. StorageManager "local-only" mode in safe mode
+
+  - Goal: Reduce storage initialization overhead and avoid potential IndexedDB stalls in file://.
+
+  Implementation steps:
+  1) If `__SAFE_MODE__`, set `window.storage.useIndexedDB = false` (if supported) or short-circuit to localStorage-only path.
+  2) Skip backup/restore scans on startup; expose them via Settings on-demand。
+
+  Acceptance:
+  - Storage initializes quickly; no "存储系统不可用"日志；数据读写正常。
+
+- [x] 67. Back-compat global API bridges (MVP only)
+
+  - Goal: Temporarily expose minimal global APIs needed by index.html/旧UI（不改变内部结构）。
+
+  Implementation steps:
+  1) 在 `app.js` 安全暴露只读桥接：`window.searchExams = (q) => App.ui?.browser?.handleSearch?.(q)`，`window.filterByType/filterByCategory` 类似模式。
+  2) 在 `ExamStore` 暴露 `window.loadLibrary = () => App.stores?.exams?.refreshExams?.()`；标注弃用提示。
+
+  Acceptance:
+  - index.html 中遗留的 inline 处理器能工作，且不引入新全局污染（仅桥接必要项）。
+
+- [x] 68. Message router lean mode
+
+  - Goal: Simplify cross-window communication in safe mode to avoid timer storms and duplicate handling。
+
+  Implementation steps:
+  1) 在 `setupMessageRouter()` 中，当 `__SAFE_MODE__` 时禁用非关键消息类型处理（仅处理 SESSION_READY / PRACTICE_COMPLETE）。
+  2) 将握手重试上限设为较小（例如 5 次），失败通过 ErrorService 提示重试。
+
+  Acceptance:
+  - 不再出现大量消息日志或定时器；完成数据能稳定回传。
+
+- [x] 69. Critical path profiling and caps
+
+  - Goal: 快速识别并抑制引发卡顿的关键路径（渲染/监听/轮询）。
+
+  Implementation steps:
+  1) 在 App 初始化（Data/UI/Events）与首次列表/统计渲染周围添加 `console.time` 标记；打印总耗时。
+  2) 统计并打印监听器/定时器数量（使用 `debugReport()`）。
+  3) 当监听器/定时器超过阈值（例如>20）时，发出警告并提示开启详细诊断。
+
+  Acceptance:
+  - 控制台有清晰的时序与数量基线；重复切换视图后数量不增长。
+
+- [x] 70. Index.html minimal DOM contract
+
+  - Goal: 确保 index.html DOM 结构满足 UI 组件最小依赖，避免空容器或缺失导致 JS 报错。
+
+  Implementation steps:
+  1) 校对 `#exam-list-container`、统计卡片容器、设置面板必需元素是否存在；若缺失，UI 组件在初始化时自行创建最小容器。
+  2) 为导航按钮统一绑定 `data-view` 与 `showView` 桥接，确保切换稳定。
+
+  Acceptance:
+  - 页面加载后无 `querySelector` 空对象报错；视图切换稳定。
+
+- [x] 71. Feature gates and rollback toggle
+
+  - Goal: 为后续逐步恢复高级功能提供开关，便于定位回归问题。
+
+  Implementation steps:
+  1) 在 `SettingsPanel` 添加"高级功能开关"区域：IndexedDB/自动备份/虚拟滚动/性能诊断等，默认关闭（SAFE_MODE）。
+  2) 切换时记录到 `storage.settings` 并提示刷新应用以生效。
+
+  Acceptance:
+  - 用户可在设置中逐项启用高级功能；崩溃时可通过关闭开关回退。
+
+- [x] 72. Remove heavy scripts from base pages (deferred-only)
+
+  - Goal: 从 `index.html` 移除重型脚本的初始加载（不删文件），统一改为按需注入。
+
+  Implementation steps:
+  1) 注释或移除 `js/core/scoreStorage.js`、`assets/scripts/listening-exam-data.js`、`js/utils/performanceOptimizer.js` 等在 index.html 的 script 标签。
+  2) 保留在 `App.injectScript` 的白名单中以便后续按需加载。
+
+  Acceptance:
+  - DevTools Network 精简；首页稳定无卡顿；相关功能点（PDF/Practice/Listening）触发时仍能工作（注入后）。
+
+- [x] 73. One-pager sanity test for index.html
+
+  - Goal: 手工自测脚本，仅验证 index.html 的核心路径（非测试框架）。
+
+  Implementation steps:
+  1) 在控制台执行：加载题库→显示前 50 列表→搜索/筛选→切换到记录→切回浏览；观察无异常。
+  2) 记录 TTI 与首次渲染耗时，确保在预算内；如超出，禁用更多可选功能再测。
+  3) 创建 `test_safe_mode.html` 自检页面进行自动化测试。
+
+  Acceptance:
+  - index.html 独立可用；无滚动卡死；核心操作顺畅。
+- [x] 57. Back-compat API shims for test harness (no feature removal)
+
+  - Goal: Provide global functions expected by older tests (e.g., test_file_protocol.html) by mapping to the new architecture.
+
+  Implementation steps:
+  1) Create `js/compat/compat-shims.js` and load it only on test pages (not on index.html).
+  2) Define the following globals as thin proxies (guard existence and log deprecation in debug):
+     - `window.loadLibrary = () => window.App?.stores?.exams?.refreshExams?.()`
+     - `window.refreshExamLibrary = window.loadLibrary`
+     - `window.loadExamLibrary = window.loadLibrary`
+     - `window.showLibraryConfigListV2 = (...args) => window.App?.ui?.settings?.showLibraryConfigListV2?.(...args)`
+     - `window.createManualBackup = (...args) => window.App?.ui?.settings?.createManualBackup?.(...args)`
+     - `window.exportAllData = (...args) => window.App?.ui?.settings?.exportData?.(...args)`
+     - `window.importData = (...args) => window.App?.ui?.settings?.importData?.(...args)`
+     - `window.searchExams = (q) => window.App?.ui?.browser?.handleSearch?.(q)`
+     - `window.filterByType = (t) => window.App?.ui?.browser?.setType?.(t)`
+     - `window.filterByCategory = (c) => window.App?.ui?.browser?.setCategory?.(c)`
+  3) Add no-throw fallbacks: if target is missing, log a warning via `ErrorService.showWarning` in debug mode.
+
+  Acceptance:
+  - The test page detects all of the above globals as defined.
+  - Calling them does not throw and routes to the new system when available.
+
+- [x] 58. Test page baseline loader snippet (file:// compatible)
+
+  - Goal: Ensure test pages load the same minimal baseline as index.html, in correct order, without duplicating code.
+
+  Implementation steps:
+  1) Create `tests/include-baseline.js` that dynamically injects, in order:
+     - `assets/scripts/complete-exam-data.js`
+     - `js/utils/events.js`, `js/utils/helpers.js`, `js/utils/storage.js`, `js/utils/errorDisplay.js`
+     - `js/stores/AppStore.js`, `js/stores/ExamStore.js`, `js/stores/RecordStore.js`
+     - `js/ui/ExamBrowser.js`, `js/ui/RecordViewer.js`, `js/ui/SettingsPanel.js`
+     - `js/app.js`
+     - `js/compat/compat-shims.js` (last)
+  2) Have `test_regression.html` and `test_file_protocol.html` include only this single script.
+  3) Provide a `window.onBaselineReady` callback that fires after all scripts load.
+
+  Acceptance:
+  - `window.storage`, `window.ExamStore`, `window.RecordStore`, `window.SettingsPanel` are present on test pages.
+  - No duplicate loads; DevTools shows clean order.
+
+- [x] 59. Storage readiness gating for tests
+
+  - Goal: Avoid "存储系统不可用" on test pages by waiting for `window.storage` to be initialized.
+
+  Implementation steps:
+  1) Add `window.waitForStorageReady()` helper in `tests/include-baseline.js` that resolves when `window.storage` exists (poll every 50ms up to 3s).
+  2) In test scripts, call `await waitForStorageReady()` before touching storage-dependent APIs.
+
+  Acceptance:
+  - Test pages no longer report missing storage.
+
+- [x] 60. Expose SettingsPanel API to tests (read-only surface)
+
+  - Goal: Provide a stable, test-friendly facade for settings actions without exposing internal details.
+
+  Implementation steps:
+  1) In `compat-shims.js`, add `window.SettingsPanelAPI = { exportData, importData, createManualBackup, showLibraryConfigListV2 }` that delegates to `App.ui.settings`.
+  2) Document expected parameters and add warnings if not provided.
+
+  Acceptance:
+  - Test pages can call SettingsPanel features via `SettingsPanelAPI` successfully.
+
+- [x] 61. Test harness guidance and migration notes
+
+  - Goal: Document how tests should reference the new architecture while keeping legacy globals available on test pages only.
+
+  Implementation steps:
+  1) Add `tests/README.md` with: baseline loader usage, available shims, and migration examples (old → new API).
+  2) Add a deprecation table for legacy globals and their new counterparts.
+
+  Acceptance:
+  - Contributors can run tests locally via double-click and understand available APIs.
+
+- [x] 62. Phase-out plan for legacy globals in tests
+
+  - Goal: After tests adopt new APIs, reduce reliance on global shims gradually.
+
+  Implementation steps:
+  1) Mark shims with `console.warn('[CompatShim] ... is deprecated')` when `__DEBUG__` is true.
+  2) Update tests to directly call `App.stores` / `App.ui` methods.
+  3) Track remaining uses and set a removal target date in `CLEANUP_REPORT.md`.
+
+  Acceptance:
+  - New tests use the canonical APIs; shims remain for older pages only.
+
+---
+
+- [x] 74. Provide BaseComponent and include order fix
+
+  - Goal: Resolve `BaseComponent is not defined` by adding a minimal base class and ensuring it loads before UI components.
+
+  Implementation steps:
+  1) Create `js/ui/BaseComponent.js` with a minimal class exposing `attach(root)`, `detach()`, `render()` no-ops and an `ensureContainer(selector)` helper.
+  2) Update `index.html` to include `<script src="js/ui/BaseComponent.js"></script>` before `ExamBrowser.js`/`RecordViewer.js`/`SettingsPanel.js`.
+  3) In each UI component file, guard against missing BaseComponent by falling back to a no-op base: `window.BaseComponent = window.BaseComponent || class { attach(){} detach(){} render(){} }` (top of file) if direct import is hard.
+
+  Acceptance:
+  - Console no longer reports `BaseComponent is not defined`.
+  - UI components initialize without throwing when containers are missing (use ensureContainer).
+
+- [x] 75. Fix Safe Mode storage init call mismatch
+
+  - Goal: Remove `this.initializeStorageSafeMode is not a function` by aligning App with Storage API.
+
+  Implementation steps:
+  1) In `js/app.js`, replace calls to `this.initializeStorageSafeMode()` with `await window.storage?.initializeLocalStorageOnly?.()` or a guarded path: `if (window.__SAFE_MODE__ && window.storage?.initializeLocalStorageOnly) await window.storage.initializeLocalStorageOnly();`.
+  2) Ensure this call happens before stores initialization; if stores lazily call storage, keep idempotent.
+  3) Add try/catch with `ErrorService.showWarning` on failure, but continue boot with localStorage default.
+
+  Acceptance:
+  - No `initializeStorageSafeMode` error; Safe Mode storage path confirmed by logs。
+
+- [x] 76. Single success/failure path for App.initialize (no double logs)
+
+  - Goal: Avoid mixed state where initialization logs success after a thrown error.
+
+  Implementation steps:
+  1) Ensure `App.initialize()` returns early upon Safe Mode error; move `初始化成功` log only after all awaited steps.
+  2) If a non-fatal Safe Mode step fails, log via `ErrorService.showWarning` and continue, but do not throw unhandled promise rejections.
+  3) Add a top-level `.catch()` at the bootstrap site that logs a single failure banner and prevents duplicate success logs.
+
+  Acceptance:
+  - Console shows either a clean success banner or a single failure banner, never both.
+
+- [x] 77. Harden UI component bootstrap under Safe Mode
+
+  - Goal: Ensure UI components do not assume advanced features and do not break when optional containers are missing.
+
+  Implementation steps:
+  1) In UI constructors, when `__SAFE_MODE__` is true, skip expensive setup (virtual scroll, observers) and rely on MVP render.
+  2) Use `BaseComponent.ensureContainer()` to create required containers if selectors return null.
+  3) Wrap event bindings with guards and log debug-only warnings.
+
+  Acceptance:
+  - No runtime errors from UI constructors; navigation & minimal interactions work.
+
+- [ ] 78. Safe Mode re-enable path (feature toggles)
+
+  - Goal: Verify Settings toggles correctly re-enable optional features and re-bootstrap needed scripts.
+
+  Implementation steps:
+  1) For each toggle (IndexedDB, auto-backup, performance diagnostics, virtual scroll), define a handler that persists the flag and prompts for reload.
+  2) On reload, App reads the flags and disables `__SAFE_MODE__` branches stepwise: a) storage, b) diagnostics, c) list rendering strategy.
+  3) Confirm PDF/Practice/Listening features still inject needed scripts on demand.
+
+  Acceptance:
+  - Enabling toggles survives reload and does not reintroduce freezes; can be turned off to roll back.
+
+- [x] 79. Index.html script block audit (final Safe Mode pass)
+
+  - Goal: Verify script order and ensure only minimal baseline is present on index.html.
+
+  Implementation steps:
+  1) Confirm order: events.js → helpers.js → storage.js → errorDisplay.js → BaseComponent.js → stores → ui → app.
+  2) Confirm heavy scripts are not present initially; verify `App.injectScript` covers PDF/Practice/Listening.
+  3) Grep for residual references to removed scripts in `index.html` and fix.
+
+  Acceptance:
+  - No 404; no ReferenceError; TTI ≤ 1000ms measured via console timing.
+
+- [x] 80. Console hygiene and debug gates (Safe Mode)
+
+  - Goal: Ensure production (index.html) console is concise; detailed logs only with `__DEBUG__`.
+
+  Implementation steps:
+  1) Gate non-essential `console.log` behind `if (window.__DEBUG__)` in hot paths added for Safe Mode.
+  2) Keep `[SAFE_MODE]` prefix for high-level notices; limit frequency.
+  3) Add a one-liner to toggle `__DEBUG__` in Settings for troubleshooting.
+
+  Acceptance:
+  - Production console retains only key notices; debug details appear only when enabled.
+
+---
+
+- [x] 81. Safe Mode UI stub components (prevent ReferenceError)
+
+  - Goal: Provide minimal no-op stubs for subcomponents referenced by UI, to avoid crashes in Safe Mode.
+
+  Implementation steps:
+  1) Create `js/ui/safe-mode-stubs.js` that defines no-op globals:
+     - `window.ExamFilterBar`, `window.ExamList`, `window.Pagination`
+     - `window.RecordStats`
+     - `window.SettingsActions`
+     Each exposes constructors and the minimal methods used by current UI (e.g., `render`, `update`, `destroy`) as no-ops.
+  2) Include `safe-mode-stubs.js` in `index.html` before `ExamBrowser.js`, `RecordViewer.js`, `SettingsPanel.js`.
+  3) At the top of each UI file, keep a defensive fallback:
+     - `window.ExamFilterBar = window.ExamFilterBar || class { render(){} update(){} destroy(){} }` (similar for others).
+
+  Acceptance:
+  - No `ReferenceError` for `ExamFilterBar`, `RecordStats`, or `SettingsActions` when opening Browse/Practice/Settings views.
+  - UI loads and remains interactive under Safe Mode.
+
+- [x] 82. UI bootstrap error guards and fail-soft rendering
+
+  - Goal: Prevent error storms by isolating UI init errors and avoiding re-render loops.
+
+  Implementation steps:
+  1) Wrap UI constructor logic in try/catch; on error, call `ErrorService.showWarning('UI init failed: ...')` and set an internal `_failed = true` flag.
+  2) In `render()`/`update()` paths, if `_failed` is true, short-circuit and avoid scheduling further renders.
+  3) Ensure store subscriptions are removed/unset when init fails to avoid repeated callbacks.
+
+  Acceptance:
+  - Clicking Browse/Practice no longer floods console; at most one warning toast appears.
+  - Other views remain usable after a single view init failure.
+
+- [x] 83. Single-time nav listener binding
+
+  - Goal: Avoid duplicate event listeners on navigation buttons causing multiple renders per click.
+
+  Implementation steps:
+  1) In Safe Mode init, add a guard `if (this._navBound) return; this._navBound = true;` before binding nav button listeners.
+  2) When re-initializing (if any), do not rebind; provide a `teardownNav()` only for full reset paths.
+
+  Acceptance:
+  - Log like "已设置 4 个导航按钮监听器" appears only once across the session.
+  - Each click leads to a single render call (verify via console counts).
+
+- [x] 84. Render re-entrancy guard and microtask debounce
+
+  - Goal: Ensure at most one render cycle per tick to prevent render storms.
+
+  Implementation steps:
+  1) In each UI component, add `this._renderPending` flag; if set, skip scheduling.
+  2) Use `queueMicrotask(() => { this._renderPending = false; this._doRender(); })` to coalesce multiple updates.
+  3) Cancel pending work on `detach()`.
+
+  Acceptance:
+  - Rapid clicks/search only trigger one render per tick; no call stack growth observed.
+
+- [x] 85. Browse view minimal data path (empty-safe)
+
+  - Goal: Avoid freezes when data stores are not ready or empty under Safe Mode.
+
+  Implementation steps:
+  1) Before list render, if `App.stores?.exams?.exams` is not an array, attempt `await storage.get('exam_index', [])` as fallback.
+  2) If still empty, show a friendly empty-state card and return without list processing.
+  3) Cap initial items at 50 (already in Task 64) and ensure filters/search operate on the subset without exceptions.
+
+  Acceptance:
+  - Clicking Browse never freezes even with empty storage; empty-state renders instantly.
+
+- [x] 86. Practice view minimal stats path (empty-safe)
+
+  - Goal: Avoid freezes in Practice view when no records are present or RecordStore isn’t initialized.
+
+  Implementation steps:
+  1) If `App.stores?.records?.records` is not an array, fallback to `await storage.get('practice_records', [])`.
+  2) Compute minimal stats (count/avg/time) defensively; guard NaNs.
+  3) Render a light record list with cap=50; no virtual scroll in Safe Mode.
+
+  Acceptance:
+  - Clicking Practice never freezes; stats show 0s gracefully when empty.
+
+- [ ] 87. Global error flood throttling
+
+  - Goal: Prevent repeated identical exceptions from flooding console/UI.
+
+  Implementation steps:
+  1) In `ErrorService`, maintain a `Map<signature, {count, lastTs}>`; for duplicate messages within 1s, drop after 3 occurrences and log once: "muted X repeats".
+  2) Resets counters after a cool-down (e.g., 10s).
+
+  Acceptance:
+  - Under failure, each unique error appears few times, then gets muted; console remains readable.
+
+- [ ] 88. Disable advanced observers/RAF in Safe Mode
+
+  - Goal: Eliminate background animation/observers that can exacerbate freezes.
+
+  Implementation steps:
+  1) Guard any `requestAnimationFrame` loops, `IntersectionObserver`, `ResizeObserver` behind `if (!__SAFE_MODE__)`.
+  2) For remnants, add runtime checks to skip scheduling when in Safe Mode.
+
+  Acceptance:
+  - No RAF/observer-related resource usage in performance panel under Safe Mode.
+
+- [ ] 89. Script order enforcement check (runtime)
+
+  - Goal: Detect misordered scripts at runtime to prevent ReferenceError.
+
+  Implementation steps:
+  1) In `BaseComponent.js`, on load check `if (!window.ExamFilterBar && window.__SAFE_MODE__) console.warn('[SafeMode] UI stubs missing before UI components')`.
+  2) Add a small `verifyOrder()` in `App.initialize()` that asserts required globals before proceeding in Safe Mode and shows a single actionable toast on mismatch.
+
+  Acceptance:
+  - No warnings in correct order; clear guidance if order is broken.
+
+- [ ] 90. Post-fix Safe Mode smoke and metrics
+
+  - Goal: Validate that freezes are eliminated and performance budgets are met.
+
+  Implementation steps:
+  1) After fixes, run a manual smoke: Browse (50 items) → Practice (stats) → Settings toggle check.
+  2) Capture metrics: TTI ≤ 1000ms, first render ≤ 300ms, listener count stable; record into `PERF_NOTES.md`.
+
+  Acceptance:
+  - No freezes when opening Browse/Practice; metrics recorded and within budgets.

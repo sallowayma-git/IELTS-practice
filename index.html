@@ -285,6 +285,13 @@
             </div>
         </div>
     </div>
+<!-- Safe Mode: 紧急拯救模式 - 最小脚本集 -->
+<script>
+window.__SAFE_MODE__ = true;
+window.__DEBUG__ = false; // 生产环境默认关闭调试日志
+console.log('[SAFE_MODE] Enabled - advanced features are disabled at startup');
+</script>
+
 <!-- 加载基础题库数据 -->
 <script src="assets/scripts/complete-exam-data.js"></script>
 <!-- listening-exam-data.js 将按需加载 -->
@@ -295,7 +302,7 @@
 <script src="js/utils/events.js"></script>
 <script src="js/utils/helpers.js"></script>
 <script src="js/utils/storage.js"></script>
-<script src="js/utils/performanceOptimizer.js"></script>
+<!-- performanceOptimizer.js 在SAFE_MODE下跳过，按需加载 -->
 <script src="js/utils/errorDisplay.js"></script>
 
 <!-- Stores -->
@@ -303,13 +310,19 @@
 <script src="js/stores/ExamStore.js"></script>
 <script src="js/stores/RecordStore.js"></script>
 
+<!-- UI Base Component -->
+<script src="js/ui/BaseComponent.js"></script>
+
+<!-- Safe Mode UI Stubs (Task 81) -->
+<script src="js/ui/safe-mode-stubs.js"></script>
+
 <!-- UI Components -->
 <script src="js/ui/ExamBrowser.js"></script>
 <script src="js/ui/RecordViewer.js"></script>
 <script src="js/ui/SettingsPanel.js"></script>
 
-<!-- Core Components (最小依赖) -->
-<script src="js/core/scoreStorage.js"></script>
+<!-- Core Components (按需加载) -->
+<!-- scoreStorage.js 在SAFE_MODE下跳过，需要时由App.injectScript加载 -->
 <!-- DataIntegrityManager 将按需加载 -->
 
 <!-- App 初始化 (替换 main.js) -->
