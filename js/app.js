@@ -8,8 +8,255 @@ class ExamSystemApp {
         this.components = {};
         this.isInitialized = false;
 
+        // 统一状态管理 - 替代全局变量
+        this.state = {
+            // 考试相关状态
+            exam: {
+                index: [],
+                currentCategory: 'all',
+                currentExamType: 'all',
+                filteredExams: [],
+                configurations: {},
+                activeConfigKey: 'exam_index'
+            },
+
+            // 练习相关状态
+            practice: {
+                records: [],
+                selectedRecords: new Set(),
+                bulkDeleteMode: false,
+                dataCollector: null
+            },
+
+            // UI状态
+            ui: {
+                browseFilter: { category: 'all', type: 'all' },
+                pendingBrowseFilter: null,
+                legacyBrowseType: 'all',
+                currentVirtualScroller: null,
+                loading: false,
+                loadingMessage: ''
+            },
+
+            // 组件实例
+            components: {
+                dataIntegrityManager: null,
+                pdfHandler: null,
+                browseStateManager: null,
+                practiceListScroller: null
+            },
+
+            // 系统状态
+            system: {
+                processedSessions: new Set(),
+                fallbackExamSessions: new Map(),
+                failedScripts: new Set()
+            }
+        };
+
         // 绑定方法上下文
         this.handleResize = this.handleResize.bind(this);
+    }
+
+    // 状态管理方法
+    getState(path) {
+        return path.split('.').reduce((obj, key) => obj && obj[key], this.state);
+    }
+
+    setState(path, value) {
+        const keys = path.split('.');
+        const lastKey = keys.pop();
+        const target = keys.reduce((obj, key) => obj && obj[key], this.state);
+        if (target && target.hasOwnProperty(lastKey)) {
+            target[lastKey] = value;
+        }
+    }
+
+    updateState(path, updates) {
+        const current = this.getState(path);
+        this.setState(path, { ...current, ...updates });
+    }
+
+    // 持久化状态到存储
+    async persistState(path, storageKey = null) {
+        const value = this.getState(path);
+        const key = storageKey || path.replace('.', '_');
+
+        try {
+            await storage.set(key, value);
+        } catch (error) {
+            console.error(`[App] 持久化状态失败 ${path}:`, error);
+        }
+    }
+
+    // 批量持久化状态
+    async persistMultipleState(mapping) {
+        const promises = Object.entries(mapping).map(([path, storageKey]) =>
+            this.persistState(path, storageKey)
+        );
+
+        try {
+            await Promise.all(promises);
+        } catch (error) {
+            console.error('[App] 批量持久化状态失败:', error);
+        }
+    }
+
+    // 组件检查功能
+    async checkComponents() {
+        console.log('=== 组件加载检查 ===');
+
+        const components = {
+            'SystemDiagnostics': window.SystemDiagnostics,
+            'MarkdownExporter': window.MarkdownExporter,
+            'practiceRecordModal': window.practiceRecordModal,
+            'practiceHistoryEnhancer': window.practiceHistoryEnhancer
+        };
+
+        let allLoaded = true;
+
+        Object.keys(components).forEach(name => {
+            const component = components[name];
+            const status = component ? '✅ 已加载' : '❌ 未加载';
+            console.log(`${name}: ${status}`);
+
+            if (!component) {
+                allLoaded = false;
+            }
+        });
+
+        // 检查全局函数
+        const functions = {
+            'exportPracticeData': window.exportPracticeData,
+            'showRecordDetails': window.showRecordDetails,
+            'showMessage': window.showMessage
+        };
+
+        console.log('\n=== 全局函数检查 ===');
+        Object.keys(functions).forEach(name => {
+            const func = functions[name];
+            const status = (typeof func === 'function') ? '✅ 可用' : '❌ 不可用';
+            console.log(`${name}: ${status}`);
+        });
+
+        // 检查数据
+        console.log('\n=== 数据检查 ===');
+        const practiceRecordsCount = this.getState('practice.records')?.length || 0;
+        console.log(`practiceRecords: ${practiceRecordsCount} 条记录`);
+
+        if (window.storage) {
+            try {
+                const arr = await window.storage.get('practice_records', []);
+                const count = Array.isArray(arr) ? arr.length : 0;
+                console.log(`storage.practice_records: ${count} 条记录`);
+            } catch (_) {
+                console.log('storage.practice_records: 0 条记录');
+            }
+        }
+
+        console.log('\n=== 检查完成 ===');
+
+        if (allLoaded) {
+            console.log('✅ 所有组件已正确加载');
+
+            // 尝试初始化增强器
+            if (window.practiceHistoryEnhancer && !window.practiceHistoryEnhancer.initialized) {
+                console.log('🔄 手动初始化增强器...');
+                window.practiceHistoryEnhancer.initialize();
+            }
+        } else {
+            console.log('⚠️ 部分组件未加载，功能可能受限');
+        }
+
+        return { allLoaded, components, functions };
+    }
+
+    // 初始化全局变量访问兼容层
+    initializeGlobalCompatibility() {
+        // 考试相关
+        Object.defineProperty(window, 'examIndex', {
+            get: () => this.state.exam.index,
+            set: (value) => this.setState('exam.index', value),
+            configurable: true
+        });
+
+        Object.defineProperty(window, 'currentCategory', {
+            get: () => this.state.exam.currentCategory,
+            set: (value) => this.setState('exam.currentCategory', value),
+            configurable: true
+        });
+
+        Object.defineProperty(window, 'currentExamType', {
+            get: () => this.state.exam.currentExamType,
+            set: (value) => this.setState('exam.currentExamType', value),
+            configurable: true
+        });
+
+        Object.defineProperty(window, 'filteredExams', {
+            get: () => this.state.exam.filteredExams,
+            set: (value) => this.setState('exam.filteredExams', value),
+            configurable: true
+        });
+
+        // 练习相关
+        Object.defineProperty(window, 'practiceRecords', {
+            get: () => this.state.practice.records,
+            set: (value) => this.setState('practice.records', value),
+            configurable: true
+        });
+
+        Object.defineProperty(window, 'bulkDeleteMode', {
+            get: () => this.state.practice.bulkDeleteMode,
+            set: (value) => this.setState('practice.bulkDeleteMode', value),
+            configurable: true
+        });
+
+        Object.defineProperty(window, 'selectedRecords', {
+            get: () => this.state.practice.selectedRecords,
+            set: (value) => this.setState('practice.selectedRecords', value),
+            configurable: true
+        });
+
+        // UI状态
+        Object.defineProperty(window, '__browseFilter', {
+            get: () => this.state.ui.browseFilter,
+            set: (value) => this.setState('ui.browseFilter', value),
+            configurable: true
+        });
+
+        Object.defineProperty(window, '__pendingBrowseFilter', {
+            get: () => this.state.ui.pendingBrowseFilter,
+            set: (value) => this.setState('ui.pendingBrowseFilter', value),
+            configurable: true
+        });
+
+        Object.defineProperty(window, '__legacyBrowseType', {
+            get: () => this.state.ui.legacyBrowseType,
+            set: (value) => this.setState('ui.legacyBrowseType', value),
+            configurable: true
+        });
+
+        // 组件实例
+        Object.defineProperty(window, 'dataIntegrityManager', {
+            get: () => this.state.components.dataIntegrityManager,
+            set: (value) => this.setState('components.dataIntegrityManager', value),
+            configurable: true
+        });
+
+        Object.defineProperty(window, 'pdfHandler', {
+            get: () => this.state.components.pdfHandler,
+            set: (value) => this.setState('components.pdfHandler', value),
+            configurable: true
+        });
+
+        Object.defineProperty(window, 'app', {
+            get: () => this,
+            set: (value) => { /* 保持app引用为当前实例 */ },
+            configurable: true
+        });
+
+        // 全局组件检查函数
+        window.checkComponents = () => this.checkComponents();
     }
 
     /**
@@ -22,6 +269,10 @@ class ExamSystemApp {
 
             // 检查必要的依赖
             this.checkDependencies();
+
+            this.updateLoadingMessage('正在初始化状态管理...');
+            // 初始化统一状态管理和全局变量兼容层
+            this.initializeGlobalCompatibility();
 
             this.updateLoadingMessage('正在初始化响应式功能...');
             // 初始化响应式管理器
@@ -52,8 +303,7 @@ class ExamSystemApp {
             // 返回导航已移除
 
             // 显示活动会话指示器
-            this.showActiveSessionsIndicator();
-
+            
             // 定期更新活动会话
             this.startSessionMonitoring();
 
@@ -564,6 +814,22 @@ class ExamSystemApp {
      */
     async loadInitialData() {
         try {
+            // 加载考试索引到状态管理
+            const examIndex = await storage.get('exam_index', []);
+            if (Array.isArray(examIndex)) {
+                this.setState('exam.index', examIndex);
+            }
+
+            // 加载练习记录到状态管理
+            const practiceRecords = await storage.get('practice_records', []);
+            if (Array.isArray(practiceRecords)) {
+                this.setState('practice.records', practiceRecords);
+            }
+
+            // 加载浏览过滤器状态
+            const browseFilter = await storage.get('browse_filter', { category: 'all', type: 'all' });
+            this.setState('ui.browseFilter', browseFilter);
+
             // ExamScanner已移除，题库索引由其他方式管理
 
             // 加载用户统计
@@ -601,17 +867,14 @@ class ExamSystemApp {
      * 更新总览页面统计信息
      */
     async updateOverviewStats() {
-        let examIndex = await storage.get('exam_index', []);
-        if (!Array.isArray(examIndex)) {
-            console.warn('[App] examIndex不是数组，回退到 window.examIndex');
-            examIndex = Array.isArray(window.examIndex) ? window.examIndex : [];
-        }
-        let practiceRecords = await storage.get('practice_records', []);
+        // 使用状态管理中的数据
+        const examIndex = this.getState('exam.index') || [];
+        const practiceRecords = this.getState('practice.records') || [];
 
-        // 确保practiceRecords是数组
-        if (!Array.isArray(practiceRecords)) {
-            console.warn('[App] practiceRecords不是数组，使用空数组替代');
-            practiceRecords = [];
+        // 确保数据是数组
+        if (!Array.isArray(examIndex) || !Array.isArray(practiceRecords)) {
+            console.warn('[App] 状态管理中的数据格式异常');
+            return;
         }
 
         // 更新总体统计
@@ -773,14 +1036,8 @@ class ExamSystemApp {
                 }
                 break;
             case 'practice':
-                // 使用简单的练习记录更新，不依赖复杂组件
-                this.updateSimplePracticeView();
-                break;
-            case 'analysis':
-                this.loadAnalysisData();
-                break;
-            case 'goals':
-                this.loadGoalsData();
+                // 练习视图已由其他组件处理
+                console.log('[App] 练习视图已激活');
                 break;
         }
     }
@@ -2083,36 +2340,13 @@ class ExamSystemApp {
         `;
 
         // 显示结果模态框
-        this.showModal(resultContent);
+        // 模态框功能已移除(resultContent);
     }
 
     /**
      * 显示模态框
      */
-    showModal(content) {
-        const modalOverlay = document.createElement('div');
-        modalOverlay.className = 'modal-overlay show';
-        modalOverlay.innerHTML = `<div class="modal">${content}</div>`;
-
-        document.body.appendChild(modalOverlay);
-
-        // 点击背景关闭
-        modalOverlay.addEventListener('click', (e) => {
-            if (e.target === modalOverlay) {
-                modalOverlay.remove();
-            }
-        });
-
-        // ESC键关闭
-        const escHandler = (e) => {
-            if (e.key === 'Escape') {
-                modalOverlay.remove();
-                document.removeEventListener('keydown', escHandler);
-            }
-        };
-        document.addEventListener('keydown', escHandler);
-    }
-
+    
     /**
      * 清理题目会话
      */
@@ -2274,7 +2508,7 @@ class ExamSystemApp {
             </div>
         `;
 
-        this.showModal(resultContent);
+        // 模态框功能已移除(resultContent);
     }
 
     /**
@@ -2312,25 +2546,7 @@ class ExamSystemApp {
     /**
      * 显示活动会话指示器
      */
-    // 显示活动会话指示器（已禁用，无需统计活动会话）
-    showActiveSessionsIndicator() {
-        // 根据需求移除该功能，确保不显示“活动练习”浮动指示器
-        const indicatorEl = document.querySelector('.active-sessions-indicator');
-        if (indicatorEl) indicatorEl.remove();
-        // 功能禁用，直接返回
-        return;
-    }
-
-    /**
-     * 隐藏活动会话指示器
-     */
-    hideActiveSessionsIndicator() {
-        const indicator = document.querySelector('.active-sessions-indicator');
-        if (indicator) {
-            indicator.style.display = 'none';
-        }
-    }
-
+    
     /**
      * 显示活动会话详情
      */
@@ -2386,7 +2602,7 @@ class ExamSystemApp {
             </div>
         `;
 
-        this.showModal(sessionsContent);
+        // 模态框功能已移除(sessionsContent);
     }
 
     /**
@@ -2419,8 +2635,7 @@ class ExamSystemApp {
         }
 
         this.cleanupExamSession(examId);
-        this.showActiveSessionsIndicator();
-        window.showMessage('会话已结束', 'info');
+                window.showMessage('会话已结束', 'info');
     }
 
     /**
@@ -2454,22 +2669,11 @@ class ExamSystemApp {
         return;
         // 每30秒检查一次活动会话
         this.sessionMonitorInterval = setInterval(() => {
-            this.updateActiveSessionsIndicator();
-            this.cleanupClosedWindows();
+                        this.cleanupClosedWindows();
         }, 30000);
     }
 
-    /**
-     * 更新活动会话指示器
-     */
-    updateActiveSessionsIndicator() {
-        // 已禁用活动会话显示
-        const indicator = document.querySelector('.active-sessions-indicator');
-        if (indicator) indicator.remove();
-        return;
-        this.showActiveSessionsIndicator();
-    }
-
+    
     /**
      * 清理已关闭的窗口
      */
@@ -2499,78 +2703,9 @@ class ExamSystemApp {
     /**
      * 更新简单的练习记录视图
      */
-    updateSimplePracticeView() {
-        // This function is disabled because its logic has been moved to
-        // updatePracticeView() in main.js to support virtual scrolling.
-        // Leaving this empty prevents it from overwriting the virtual scroller DOM.
-        return;
-    }
-
-    /**
-     * 更新简单的练习记录列表
-     */
-    updateSimplePracticeList(records) {
-        const historyContainer = document.getElementById('practice-history-list');
-        if (!historyContainer) return;
-        
-        if (records.length === 0) {
-            historyContainer.innerHTML = `
-                <div style="text-align: center; padding: 40px; opacity: 0.7;">
-                    <div style="font-size: 3em; margin-bottom: 15px;">📋</div>
-                    <p>暂无练习记录</p>
-                    <p style="font-size: 0.9em; margin-top: 10px;">开始练习后，记录将自动保存在这里</p>
-                </div>
-            `;
-            return;
-        }
-        
-        // 显示所有记录
-        const recentRecords = records;
-        
-        historyContainer.innerHTML = recentRecords.map(record => {
-            const accuracy = Math.round((record.accuracy || 0) * 100);
-            const duration = Math.round((record.duration || 0) / 60); // 转换为分钟
-            const date = new Date(record.startTime).toLocaleDateString();
-            
-            return `
-                <div class="history-item" style="display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
-                    <div>
-                        <h4 style="margin: 0; color: white;">${record.title || record.examId}</h4>
-                        <p style="margin: 5px 0 0 0; opacity: 0.8; font-size: 0.9em;">${date}</p>
-                    </div>
-                    <div style="text-align: right;">
-                        <div style="color: ${accuracy >= 80 ? '#4ade80' : accuracy >= 60 ? '#fbbf24' : '#f87171'}; font-weight: bold;">${accuracy}%</div>
-                        <div style="opacity: 0.8; font-size: 0.9em;">${duration}分钟</div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-    }
-
-    /**
-     * 加载练习记录
-     */
-    loadPracticeRecords() {
-        // 练习记录页面逻辑
-    }
-
-    /**
-     * 加载分析数据
-     */
-    loadAnalysisData() {
-        // 分析页面逻辑
-    }
-
-    /**
-     * 加载目标数据
-     */
-    loadGoalsData() {
-        // 刷新目标设置组件
-        if (this.components.goalSettings) {
-            this.components.goalSettings.refresh();
-        }
-    }
-
+    
+    
+    
     /**
      * 处理窗口大小变化
      */
@@ -2650,7 +2785,7 @@ class ExamSystemApp {
                             <button onclick="window.location.reload()" class="btn btn-primary">
                                 🔄 刷新页面
                             </button>
-                            <button onclick="window.app.showSystemInfo()" class="btn btn-outline">
+                            <button onclick="alert('系统信息功能已移除')" class="btn btn-outline">
                                 📊 系统信息
                             </button>
                         </div>
@@ -2722,41 +2857,20 @@ class ExamSystemApp {
         }
     }
 
-    /**
-     * 显示系统信息
-     */
-    showSystemInfo() {
-        const systemInfo = {
-            userAgent: navigator.userAgent,
-            platform: navigator.platform,
-            language: navigator.language,
-            cookieEnabled: navigator.cookieEnabled,
-            onLine: navigator.onLine,
-            screenResolution: `${screen.width}x${screen.height}`,
-            windowSize: `${window.innerWidth}x${window.innerHeight}`,
-            timestamp: new Date().toISOString(),
-            errors: this.globalErrors || []
-        };
-
-        const infoWindow = window.open('', '_blank', 'width=600,height=400');
-        infoWindow.document.write(`
-            <html>
-                <head><title>系统信息</title></head>
-                <body style="font-family: monospace; padding: 20px;">
-                    <h2>IELTS系统诊断信息</h2>
-                    <pre>${JSON.stringify(systemInfo, null, 2)}</pre>
-                    <button onclick="navigator.clipboard.writeText(document.querySelector('pre').textContent)">
-                        复制到剪贴板
-                    </button>
-                </body>
-            </html>
-        `);
-    }
-
+    
     /**
      * 销毁应用
      */
     destroy() {
+        // 持久化当前状态
+        this.persistMultipleState({
+            'exam.index': 'exam_index',
+            'practice.records': 'practice_records',
+            'ui.browseFilter': 'browse_filter',
+            'exam.currentCategory': 'current_category',
+            'exam.currentExamType': 'current_exam_type'
+        });
+
         // 清理事件监听器
         window.removeEventListener('resize', this.handleResize);
 
@@ -2773,6 +2887,17 @@ class ExamSystemApp {
                 }
                 this.cleanupExamSession(examId);
             });
+        }
+
+        // 清理状态中的集合和Map
+        if (this.state.practice.selectedRecords) {
+            this.state.practice.selectedRecords.clear();
+        }
+        if (this.state.system.processedSessions) {
+            this.state.system.processedSessions.clear();
+        }
+        if (this.state.system.fallbackExamSessions) {
+            this.state.system.fallbackExamSessions.clear();
         }
 
         // 销毁组件
@@ -2820,28 +2945,3 @@ window.addEventListener('beforeunload', () => {
     }
 });
 
-// 调试辅助：导出握手状态
-window.getHandshakeState = function() {
-    try {
-        const state = { timers: [], windows: [] };
-        if (window.app) {
-            if (window.app._handshakeTimers) {
-                state.timers = Array.from(window.app._handshakeTimers.keys());
-            }
-            if (window.app.examWindows) {
-                window.app.examWindows.forEach((info, id) => {
-                    state.windows.push({
-                        examId: id,
-                        ready: !!info.dataCollectorReady,
-                        pageType: info.pageType || null,
-                        lastUpdate: info.lastUpdate || null,
-                        status: info.status || null
-                    });
-                });
-            }
-        }
-        return state;
-    } catch (e) {
-        return { error: e.message };
-    }
-};

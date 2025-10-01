@@ -11,15 +11,20 @@ class PracticeHistoryEnhancer {
      * 初始化增强功能
      */
     initialize() {
-        if (this.initialized) return;
-        
+        if (this.initialized) {
+            console.log('[PracticeHistoryEnhancer] 已初始化，跳过重复初始化');
+            return;
+        }
+
+        // 立即标记为初始化中，防止重复调用
+        this.initialized = true;
+
         try {
             console.log('[PracticeHistoryEnhancer] 开始初始化');
-            
+
             // 等待练习历史组件加载
             this.waitForPracticeHistory().then(() => {
                 this.enhancePracticeHistory();
-                this.initialized = true;
                 console.log('[PracticeHistoryEnhancer] 练习历史增强功能已初始化');
             }).catch(error => {
                 console.error('[PracticeHistoryEnhancer] 初始化失败:', error);
@@ -365,17 +370,13 @@ class PracticeHistoryEnhancer {
 // 创建全局实例
 window.practiceHistoryEnhancer = new PracticeHistoryEnhancer();
 
-// 自动初始化
-document.addEventListener('DOMContentLoaded', () => {
-    window.practiceHistoryEnhancer.initialize();
-});
-
-// 如果页面已经加载完成，立即初始化
+// 统一初始化逻辑
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         window.practiceHistoryEnhancer.initialize();
     });
 } else {
+    // 页面已加载完成，延迟初始化
     setTimeout(() => {
         window.practiceHistoryEnhancer.initialize();
     }, 100);
