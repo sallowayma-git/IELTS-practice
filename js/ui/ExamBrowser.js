@@ -47,15 +47,27 @@ if (!window.Pagination) {
 
 class ExamBrowser extends BaseComponent {
     constructor(stores) {
+        // Task 101: stores容错处理
+        const safeStores = stores || window.App?.stores || {
+            exams: { subscribe: () => {}, exams: [] },
+            app: { subscribe: () => () => {}, addError: () => {} },
+            records: { subscribe: () => {}, stats: {} }
+        };
+
+        // Task 91: 必须先调用super()
+        super(safeStores, {
+            container: document.getElementById('browse-view'),
+            categoryOverview: document.getElementById('category-overview'),
+            loading: document.querySelector('.loading')
+        });
+
         this._failed = false; // Task 82: 错误状态标记
         this._subscriptions = []; // 订阅管理
 
+        // Task 97: 设置视图名称
+        this.setViewName('browse');
+
         try {
-            super(stores, {
-                container: document.getElementById('browse-view'),
-                categoryOverview: document.getElementById('category-overview'),
-                loading: document.querySelector('.loading')
-            });
             this.currentCategory = 'all';
             this.currentType = 'all';
             this.searchQuery = '';
@@ -257,7 +269,7 @@ class ExamBrowser extends BaseComponent {
     }
 
     // Task 84: 实际渲染方法，由基类render调用
-    _doRender() {
+    _doActualRender() {
         // Task 82: 错误防护 - 失败时短路
         if (this._failed) {
             if (window.__DEBUG__) console.debug('[ExamBrowser] Skipping render due to failed initialization');
@@ -280,12 +292,22 @@ class ExamBrowser extends BaseComponent {
             const maxItems = this.isSafeMode ? 50 : allExams.length;
             const displayExams = allExams.slice(0, maxItems);
             const total = allExams.length;
-            const startIndex = (this.currentPage - 1) * this.pagination.pageSize;
-            const paginatedExams = displayExams.slice(startIndex, startIndex + this.pagination.pageSize);
+
+            // Task 95: 分页空值安全
+            const pageSize = this.pagination && this.pagination.pageSize ? parseInt(this.pagination.pageSize) || 20 : 20;
+            const startIndex = Math.max(0, (parseInt(this.currentPage) || 1) - 1) * pageSize;
+            const endIndex = Math.min(displayExams.length, startIndex + pageSize);
+            const paginatedExams = displayExams.slice(startIndex, endIndex);
 
             this.examList.setExams(paginatedExams);
-            this.pagination.setTotal(total);
-            this.pagination.setPage(this.currentPage);
+
+            // 安全调用pagination方法
+            if (this.pagination && typeof this.pagination.setTotal === 'function') {
+                this.pagination.setTotal(total);
+            }
+            if (this.pagination && typeof this.pagination.setPage === 'function') {
+                this.pagination.setPage(this.currentPage);
+            }
         } finally {
             setTimeout(() => { this._isRendering = false; }, 0);
         }
@@ -496,10 +518,7 @@ class ExamBrowser extends BaseComponent {
     static instance = null;
 }
 
-// Export and set global instance
-const examBrowserInstance = new ExamBrowser(window.stores || { exams: {}, app: {}, records: {} });
+// Export only - App owns lifecycle
 window.ExamBrowser = ExamBrowser;
-window.ExamBrowserInstance = examBrowserInstance;
-examBrowserInstance.attach(document.getElementById('browse-view') || document.body);
 
-console.log('[ExamBrowser] Controller initialized');
+console.log('[ExamBrowser] Class defined (instance will be created by App)');

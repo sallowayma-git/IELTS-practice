@@ -1182,6 +1182,200 @@
 
 ---
 
+- [ ] 91. UI constructors: call super() first (hard fix)
+
+  - Goal: Eliminate `Must call super constructor before accessing 'this'` class errors that can cascade into render storms.
+
+  Implementation steps:
+  1) In `js/ui/ExamBrowser.js`, `js/ui/RecordViewer.js`, `js/ui/SettingsPanel.js`, move `super(stores, elements)` to be the first statement inside `constructor`.
+  2) Only after `super(...)` should `this._failed`, `this._subscriptions`, and other fields be set.
+  3) Wrap the entire initialization (including `super`) in a try/catch if needed; but never access `this` before `super`.
+
+  Acceptance:
+  - No class-constructor order errors in console; UI constructors complete or fail-soft gracefully.
+
+- [ ] 92. Safe Mode: stub signature alignment and coverage
+
+  - Goal: Ensure stubs match the method names used by UI; add missing stubs.
+
+  Implementation steps:
+  1) In `js/ui/safe-mode-stubs.js`, ensure:
+     - `Pagination` exposes `pageSize`, `setTotal(total)`, `setPage(page)` used by `ExamBrowser`.
+     - Add `window.RecordList` stub with `attach()`, `setRecords()`, `setBulkMode()`, `destroy()` methods.
+  2) Keep constructor signatures flexible (accept unused args), e.g., `constructor(...args){}` to tolerate different call sites.
+  3) Retain no-op behavior under Safe Mode.
+
+  Acceptance:
+  - No `is not a function` errors for `pagination.setTotal/setPage` or `recordList.setRecords/setBulkMode`.
+
+- [ ] 93. UI fallback globals completeness
+
+  - Goal: Provide defensive fallbacks in UI files to avoid missing-class crashes.
+
+  Implementation steps:
+  1) At the top of `RecordViewer.js`, add fallback for `window.RecordList` (similar to `RecordStats`).
+  2) At the top of `SettingsPanel.js`, ensure fallback for `SettingsActions` exists (if not already).
+
+  Acceptance:
+  - No `ReferenceError` in UI files even if stubs failed to load.
+
+- [ ] 94. Attach-once guards for UI components
+
+  - Goal: Prevent multiple `attach()` calls from re-binding listeners leading to multiple renders per click.
+
+  Implementation steps:
+  1) In `BaseComponent`, track `_attached` boolean; in `attach()`, if already attached, return early.
+  2) In `detach()`, reset `_attached = false`.
+
+  Acceptance:
+  - Clicking nav repeatedly does not produce multiple identical listeners; render frequency remains stable.
+
+- [ ] 95. Minimal null-safe pagination in Safe Mode
+
+  - Goal: Prevent NaN slicing when `pageSize` is undefined.
+
+  Implementation steps:
+  1) In `ExamBrowser._doRender()`, compute `const pageSize = this.pagination?.pageSize || 20`.
+  2) Use `pageSize` for slicing and for `Pagination` updates.
+
+  Acceptance:
+  - No NaN or undefined slicing errors; list renders deterministically.
+
+- [ ] 96. ErrorService: duplicate error suppression (tuning)
+
+  - Goal: Further suppress repeated identical errors to keep console usable during unresolved failures.
+
+  Implementation steps:
+  1) Implement a `suppressDuplicates(signature, windowMs=1000, maxRepeats=3)` utility inside `ErrorService`.
+  2) Use it in `showUser()` and `.log()` before printing to console/UI.
+
+  Acceptance:
+  - Repeated identical errors in a second are capped; a single summary appears instead.
+
+- [ ] 97. View-activation render gating
+
+  - Goal: Avoid `render()` triggers before the view DOM has its containers, especially under Safe Mode.
+
+  Implementation steps:
+  1) Emit a `viewActivated` event only after the view container is present in DOM.
+  2) In `ExamBrowser.attach()` and `RecordViewer.attach()`, check for required containers; if missing, create via `ensureContainer()` or short-circuit with empty-state.
+
+  Acceptance:
+  - No init-time render errors due to missing containers.
+
+- [ ] 98. Fallback to empty-state on unknown failure (user-friendly)
+
+  - Goal: When rendering fails unexpectedly, show a friendly empty-state instead of crashing.
+
+  Implementation steps:
+  1) Wrap main `render()` bodies in try/catch; on catch, call `renderEmptyState()` and set `_failed`.
+  2) Clear or detach store subscriptions to avoid repeated failing callbacks.
+
+  Acceptance:
+  - A friendly state appears instead of crash or infinite error logs; other views remain usable.
+
+---
+
+- [ ] 99. Remove UI auto‑instantiation; App owns lifecycle
+
+  - Goal: Eliminate duplicate UI instances and bad stores passed by global self‑init code in UI files.
+
+  Implementation steps:
+  1) In `js/ui/ExamBrowser.js`, `js/ui/RecordViewer.js`, `js/ui/SettingsPanel.js`, comment/remove bottom blocks that:
+     - create global instances with `new ... (window.stores || { ... })`
+     - assign `window.*Instance = ...`
+     - call `.attach(...)` immediately
+  2) Keep only the class exports: `window.ExamBrowser = ExamBrowser;` etc.
+  3) App is the single owner: it constructs with real stores and calls `attach()` explicitly.
+
+  Acceptance:
+  - No UI code runs before App creates proper stores; no duplicate instances; no early `.subscribe` errors.
+
+- [ ] 100. Pass real stores to UI and attach explicitly
+
+  - Goal: Ensure UI receives valid store instances and attaches after DOM is ready.
+
+  Implementation steps:
+  1) In `App.initializeMinimalUI()`, construct UI with stores: `new window.ExamBrowser(this.stores)` etc.
+  2) Call `attach()` with the correct containers:
+     - `browser.attach(document.getElementById('browse-view'))`
+     - `recordViewer.attach(document.getElementById('practice-view'))`
+     - `settings.attach(document.getElementById('settings-view'))`
+  3) Only after `attach()` subscribe to events or expose bridges.
+
+  Acceptance:
+  - No `subscribe is not a function` for `this.stores.exams/records`; UI renders successfully in Safe Mode.
+
+- [ ] 101. UI stores fallback (defensive only)
+
+  - Goal: Provide a safe fallback inside UI constructors when stores are omitted.
+
+  Implementation steps:
+  1) At top of each UI constructor: `this.stores = stores || window.App?.stores || { exams: null, records: null, app: null };`
+  2) All store usages must be guarded: check method existence before calling; otherwise short‑circuit to empty‑state.
+
+  Acceptance:
+  - UI does not crash if constructed without stores (Safe Mode still OK), but App passes stores in normal flow.
+
+- [ ] 102. Error normalization for object errors
+
+  - Goal: Fix repeated "Unknown error type: object" by normalizing non‑Error payloads.
+
+  Implementation steps:
+  1) In `ErrorService`/error handler, add a `normalizeError(e)` that returns `{ message, stack }` for plain objects and strings.
+  2) Use `JSON.stringify(e)` fallback for objects without `message`, cap size to 512 chars.
+  3) Replace raw `console.error(e)` with normalized output and apply duplicate suppression (Task 96).
+
+  Acceptance:
+  - No more "Unknown error type: object" spam; errors show actionable messages.
+
+- [ ] 103. Safe Mode: prevent mixed storage modes during init
+
+  - Goal: Avoid switching to IndexedDB mid‑session under Safe Mode causing side effects.
+
+  Implementation steps:
+  1) If `__SAFE_MODE__`, ensure storage stays local‑only; skip post‑init IndexedDB enablement.
+  2) Hide/disable storage migration logs in Safe Mode; expose via Settings toggle only.
+
+  Acceptance:
+  - Safe Mode session does not re‑enter IndexedDB; logs remain consistent with local‑only path.
+
+- [ ] 104. One UI instance policy validation
+
+  - Goal: Verify at runtime that only one instance per UI component exists to prevent double renders.
+
+  Implementation steps:
+  1) Add `window.__uiInstances = {}`; upon UI constructor, increment counters; on `detach()`, decrement.
+  2) In Safe Mode, if count > 1, log a warning and skip further instantiation.
+
+  Acceptance:
+  - Runtime shows at most one `ExamBrowser/RecordViewer/SettingsPanel` instance.
+
+- [ ] 105. Minimal browse/practice render via App until UI stabilized
+
+  - Goal: As a fallback, use App’s Safe Mode renderers while UI components stabilize.
+
+  Implementation steps:
+  1) Gate UI component .render() calls behind a flag `window.__USE_UI_COMPONENTS__` (default true).
+  2) If false, skip UI attach/render and rely on `renderBrowseViewSafeMode()` / `renderPracticeViewSafeMode()`.
+  3) Provide a Settings toggle to switch back to component rendering after fixes.
+
+  Acceptance:
+  - Even if UI component attach fails, App’s fallback keeps the page usable.
+
+- [ ] 106. Final Safe Mode smoke (after 99–105)
+
+  - Goal: Confirm the elimination of crashes and error floods when clicking Browse/Practice/Settings.
+
+  Implementation steps:
+  1) Reload index.html; verify logs show no early UI instantiation and no subscribe errors.
+  2) Click Browse/Practice/Settings sequentially; observe no freezes; record metrics to `PERF_NOTES.md`.
+
+  Acceptance:
+  - No `subscribe is not a function`; no error floods; navigation remains responsive.
+
+---
+
 - [x] 74. Provide BaseComponent and include order fix
 
   - Goal: Resolve `BaseComponent is not defined` by adding a minimal base class and ensuring it loads before UI components.

@@ -30,17 +30,54 @@ if (!window.RecordStats) {
     };
 }
 
+// RecordList 兜底处理 (Task 93)
+if (!window.RecordList) {
+    window.RecordList = class {
+        constructor(container, options = {}){
+            this.container = container;
+            this.options = options;
+            this.records = [];
+            this.bulkMode = false;
+        }
+        render(){} update(){} destroy(){}
+        attach(container){
+            if (container) this.container = container;
+        }
+        setRecords(records = []){
+            this.records = records || [];
+        }
+        setBulkMode(enabled = false){
+            this.bulkMode = enabled;
+        }
+        clear(){
+            this.records = [];
+        }
+    };
+}
+
 class RecordViewer extends BaseComponent {
     constructor(stores) {
+        // Task 101: stores容错处理
+        const safeStores = stores || window.App?.stores || {
+            records: { subscribe: () => (), getRecords: () => [], stats: {} },
+            exams: { subscribe: () => () => {}, getExamById: () => null },
+            app: { subscribe: () => () => {}, addError: () => {} }
+        };
+
+        // Task 91: 必须先调用super()
+        super(safeStores, {
+            container: document.getElementById('practice-view'),
+            filterButtons: document.getElementById('record-type-filter-buttons'),
+            bulkDeleteBtn: document.getElementById('bulk-delete-btn')
+        });
+
         this._failed = false; // Task 82: 错误状态标记
         this._subscriptions = []; // 订阅管理
 
+        // Task 97: 设置视图名称
+        this.setViewName('practice');
+
         try {
-            super(stores, {
-                container: document.getElementById('practice-view'),
-                filterButtons: document.getElementById('record-type-filter-buttons'),
-                bulkDeleteBtn: document.getElementById('bulk-delete-btn')
-            });
             this.currentFilter = 'all';
             this.bulkDeleteMode = false;
             this.selectedRecords = new Set();
@@ -277,36 +314,32 @@ class RecordViewer extends BaseComponent {
         }
     }
 
-    render() {
+    // Task 98: 使用基类的错误处理模式
+    _doActualRender() {
         // Task 82: 错误防护 - 失败时短路
         if (this._failed) {
             if (window.__DEBUG__) console.debug('[RecordViewer] Skipping render due to failed initialization');
             return;
         }
 
-        try {
-            // Task 86: 数据兜底
-            let records = [];
-            if (this.stores.records && this.stores.records.getRecords) {
-                const filters = this.currentFilter !== 'all' ? { type: this.currentFilter } : {};
-                records = this.stores.records.getRecords(filters);
-            } else {
-                // 从localStorage兜底获取
-                records = this.getRecordsFromStorage();
-            }
-
-            // Safe Mode下限制渲染数量
-            const maxRecords = this.isSafeMode ? 50 : records.length;
-            const displayRecords = records.slice(0, maxRecords);
-
-            this.stats.render();
-            this.recordList.setRecords(displayRecords);
-            this.recordList.setBulkMode(this.bulkDeleteMode);
-            if (this.bulkDeleteMode) this.updateBulkDeleteButton();
-        } catch (error) {
-            console.error('[RecordViewer] Render failed:', error);
-            this.renderEmptyState();
+        // Task 86: 数据兜底
+        let records = [];
+        if (this.stores.records && this.stores.records.getRecords) {
+            const filters = this.currentFilter !== 'all' ? { type: this.currentFilter } : {};
+            records = this.stores.records.getRecords(filters);
+        } else {
+            // 从localStorage兜底获取
+            records = this.getRecordsFromStorage();
         }
+
+        // Safe Mode下限制渲染数量
+        const maxRecords = this.isSafeMode ? 50 : records.length;
+        const displayRecords = records.slice(0, maxRecords);
+
+        this.stats.render();
+        this.recordList.setRecords(displayRecords);
+        this.recordList.setBulkMode(this.bulkDeleteMode);
+        if (this.bulkDeleteMode) this.updateBulkDeleteButton();
     }
 
     // Task 86: 从localStorage获取记录
@@ -580,10 +613,7 @@ class RecordViewer extends BaseComponent {
     static instance = null;
 }
 
-// Export and set global instance
-const recordViewerInstance = new RecordViewer(window.stores || { records: {}, exams: {}, app: {} });
+// Export only - App owns lifecycle
 window.RecordViewer = RecordViewer;
-window.RecordViewerInstance = recordViewerInstance;
-recordViewerInstance.attach(document.getElementById('practice-view') || document.body);
 
-console.log('[RecordViewer] Controller initialized');
+console.log('[RecordViewer] Class defined (instance will be created by App)');

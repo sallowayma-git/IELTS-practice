@@ -4027,6 +4027,9 @@ App.prototype.setupEventListenersSafeMode = function() {
 App.prototype.initializeMinimalUI = async function() {
     console.log('[SAFE_MODE] 初始化最小UI组件');
 
+    // 任务105: UI组件开关
+    window.USE_UI_COMPONENTS = !window.__SAFE_MODE__; // Safe Mode下默认关闭UI组件
+
     // 确保必要的DOM容器存在 (Task 70)
     this.ensureMinimalDOM();
 
@@ -4037,12 +4040,79 @@ App.prototype.initializeMinimalUI = async function() {
         records: window.RecordStore ? new window.RecordStore() : null
     };
 
-    // 初始化UI组件
-    this.ui = {
-        browser: window.ExamBrowser ? new window.ExamBrowser() : null,
-        recordViewer: window.RecordViewer ? new window.RecordViewer() : null,
-        settings: window.SettingsPanel ? new window.SettingsPanel() : null
-    };
+    // 任务105: 根据开关决定是否使用UI组件
+    if (window.USE_UI_COMPONENTS) {
+        console.log('[App] 使用高级UI组件');
+
+        // 任务100: 传递真实stores并显式attach + 任务104: 单实例策略
+        // 任务104: 检查是否已有实例存在
+        if (window.ExamBrowserInstance || window.RecordViewerInstance || window.SettingsPanelInstance) {
+            console.warn('[App] 检测到现有UI实例，可能存在重复实例化问题');
+        }
+
+        this.ui = {
+            browser: window.ExamBrowser ? new window.ExamBrowser(this.stores) : null,
+            recordViewer: window.RecordViewer ? new window.RecordViewer(this.stores) : null,
+            settings: window.SettingsPanel ? new window.SettingsPanel(this.stores) : null
+        };
+
+        // 任务104: 记录实例计数并设置全局单例
+        if (this.ui.browser) {
+            if (window.ExamBrowserInstance) {
+                console.warn('[App] ExamBrowser实例已存在，跳过重复创建');
+                this.ui.browser = window.ExamBrowserInstance;
+            } else {
+                window.ExamBrowserInstance = this.ui.browser;
+                console.log('[App] ExamBrowser单例已设置');
+            }
+        }
+
+        if (this.ui.recordViewer) {
+            if (window.RecordViewerInstance) {
+                console.warn('[App] RecordViewer实例已存在，跳过重复创建');
+                this.ui.recordViewer = window.RecordViewerInstance;
+            } else {
+                window.RecordViewerInstance = this.ui.recordViewer;
+                console.log('[App] RecordViewer单例已设置');
+            }
+        }
+
+        if (this.ui.settings) {
+            if (window.SettingsPanelInstance) {
+                console.warn('[App] SettingsPanel实例已存在，跳过重复创建');
+                this.ui.settings = window.SettingsPanelInstance;
+            } else {
+                window.SettingsPanelInstance = this.ui.settings;
+                console.log('[App] SettingsPanel单例已设置');
+            }
+        }
+
+        // 显式attach UI组件到正确容器
+        if (this.ui.browser) {
+            const browseContainer = document.getElementById('browse-view') || document.body;
+            this.ui.browser.attach(browseContainer);
+            console.log('[App] ExamBrowser attached with real stores');
+        }
+
+        if (this.ui.recordViewer) {
+            const practiceContainer = document.getElementById('practice-view') || document.body;
+            this.ui.recordViewer.attach(practiceContainer);
+            console.log('[App] RecordViewer attached with real stores');
+        }
+
+        if (this.ui.settings) {
+            const settingsContainer = document.getElementById('settings-view') || document.body;
+            this.ui.settings.attach(settingsContainer);
+            console.log('[App] SettingsPanel attached with real stores');
+        }
+    } else {
+        console.log('[App] 使用Safe Mode渲染器（UI组件已禁用）');
+        this.ui = {
+            browser: null,
+            recordViewer: null,
+            settings: null
+        };
+    }
 
     // 渲染初始视图
     this.renderCurrentViewSafeMode();

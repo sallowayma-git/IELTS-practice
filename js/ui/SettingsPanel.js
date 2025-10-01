@@ -34,17 +34,29 @@ if (!window.SettingsActions) {
 
 class SettingsPanel extends BaseComponent {
     constructor(stores) {
+        // Task 101: stores容错处理
+        const safeStores = stores || window.App?.stores || {
+            exams: { subscribe: () => () => {}, exams: [] },
+            app: { subscribe: () => () => {}, addError: () => {} },
+            records: { subscribe: () => () => {}, stats: {} }
+        };
+
+        // Task 91: 必须先调用super()
+        super(safeStores, {
+            container: document.getElementById('settings-view'),
+            totalExams: document.getElementById('total-exams'),
+            htmlExams: document.getElementById('html-exams'),
+            pdfExams: document.getElementById('pdf-exams'),
+            lastUpdate: document.getElementById('last-update')
+        });
+
         this._failed = false; // Task 82: 错误状态标记
         this._subscriptions = []; // 订阅管理
 
+        // Task 97: 设置视图名称
+        this.setViewName('settings');
+
         try {
-            super(stores, {
-                container: document.getElementById('settings-view'),
-                totalExams: document.getElementById('total-exams'),
-                htmlExams: document.getElementById('html-exams'),
-                pdfExams: document.getElementById('pdf-exams'),
-                lastUpdate: document.getElementById('last-update')
-            });
             this.actions = null;
 
             // Safe Mode 跳过昂贵设置 (Task 77)
@@ -246,6 +258,16 @@ class SettingsPanel extends BaseComponent {
     }
 
     toggleIndexedDB(enabled) {
+        // Task 103: Safe Mode下禁止中途切回IndexedDB
+        if (window.__SAFE_MODE__ && enabled) {
+            this.showMessage('Safe Mode下禁止启用IndexedDB以保持系统稳定', 'warning');
+            // 确保IndexedDB保持禁用状态
+            if (window.storage) {
+                window.storage.useIndexedDB = false;
+            }
+            return;
+        }
+
         console.log(`[Settings] IndexedDB ${enabled ? '启用' : '禁用'}`);
         if (window.storage) {
             window.storage.useIndexedDB = enabled;
@@ -399,10 +421,7 @@ class SettingsPanel extends BaseComponent {
     static instance = null;
 }
 
-// Export and set global instance
-const settingsPanelInstance = new SettingsPanel(window.stores || { exams: {}, app: {} });
+// Export only - App owns lifecycle
 window.SettingsPanel = SettingsPanel;
-window.SettingsPanelInstance = settingsPanelInstance;
-settingsPanelInstance.attach(document.getElementById('settings-view') || document.body);
 
-console.log('[SettingsPanel] Panel initialized');
+console.log('[SettingsPanel] Class defined (instance will be created by App)');

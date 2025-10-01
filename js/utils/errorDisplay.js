@@ -6,7 +6,11 @@ window.ErrorDisplay = class ErrorDisplay {
         this.container = null;
         this.errors = new Map();
         this.maxErrors = 5;
-        
+
+        // Task 96: 错误去重
+        this.recentErrors = new Map(); // message -> timestamp
+        this.duplicateWindow = 5000; // 5秒内不显示重复错误
+
         this.createContainer();
         this.setupStyles();
         
@@ -381,8 +385,28 @@ window.ErrorDisplay = class ErrorDisplay {
     
     // Public API for manual error display
     show(message, type = 'error', actions = []) {
+        // Task 96: 错误去重检查
+        const now = Date.now();
+        const messageKey = `${type}:${message}`;
+
+        if (this.recentErrors.has(messageKey)) {
+            const lastTime = this.recentErrors.get(messageKey);
+            if (now - lastTime < this.duplicateWindow) {
+                if (window.__DEBUG__) {
+                    console.debug(`[ErrorDisplay] Suppressed duplicate error: ${message}`);
+                }
+                return null; // 不显示重复错误
+            }
+        }
+
+        // 记录此错误消息
+        this.recentErrors.set(messageKey, now);
+
+        // 清理过期的错误记录
+        this.cleanupRecentErrors(now);
+
         const errorInfo = {
-            id: 'manual_' + Date.now(),
+            id: 'manual_' + now,
             message: message,
             userMessage: message,
             recoverable: type !== 'error',
@@ -390,7 +414,7 @@ window.ErrorDisplay = class ErrorDisplay {
             timestamp: new Date().toISOString(),
             context: 'Manual display'
         };
-        
+
         this.showError(errorInfo);
         return errorInfo.id;
     }
@@ -398,9 +422,19 @@ window.ErrorDisplay = class ErrorDisplay {
     hide(errorId) {
         this.hideError(errorId);
     }
-    
+
     clear() {
         this.clearAllErrors();
+    }
+
+    // Task 96: 清理过期的错误记录
+    cleanupRecentErrors(now = Date.now()) {
+        const cutoff = now - this.duplicateWindow;
+        for (const [key, timestamp] of this.recentErrors.entries()) {
+            if (timestamp < cutoff) {
+                this.recentErrors.delete(key);
+            }
+        }
     }
 };
 
@@ -431,20 +465,33 @@ window.clearErrorMessages = () => {
 // 统一错误服务门面 (Task 31)
 window.ErrorService = {
     /**
-     * 显示用户错误消息
+     * 显示用户错误消息 (Task 102: 错误标准化)
      */
     showUser(message, type = 'error', actions = []) {
         try {
+            // 标准化错误消息
+            let normalizedMessage = message;
+            if (typeof message === 'object' && message !== null) {
+                // 使用helpers.js的normalizeError函数
+                if (window.ErrorHelpers && typeof window.ErrorHelpers.normalizeError === 'function') {
+                    const normalizedError = window.ErrorHelpers.normalizeError(message);
+                    normalizedMessage = normalizedError.message;
+                } else {
+                    // 回退方案：尝试提取消息
+                    normalizedMessage = message.message || message.error || message.msg || JSON.stringify(message);
+                }
+            }
+
             // 使用 ErrorDisplay 显示错误
             if (window.errorDisplay) {
-                return window.errorDisplay.show(message, type, actions);
+                return window.errorDisplay.show(normalizedMessage, type, actions);
             }
 
             // 回退方案
-            this.fallbackShow(message, type);
+            this.fallbackShow(normalizedMessage, type);
         } catch (error) {
             console.error('[ErrorService] Failed to show error:', error);
-            this.fallbackShow(message, type);
+            this.fallbackShow(String(message), type);
         }
     },
 
