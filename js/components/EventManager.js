@@ -7,6 +7,7 @@ class EventManager {
         this.listeners = new Map();
         this.initialized = false;
         this.debounceTimers = new Map();
+        this.globalListeners = new Map(); // 用于管理全局监听器
     }
     
     /**
@@ -14,11 +15,8 @@ class EventManager {
      */
     initialize() {
         if (this.initialized) {
-            console.warn('[EventManager] 已经初始化，跳过重复初始化');
             return;
         }
-        
-        console.log('[EventManager] 初始化事件管理器');
         
         // 清理旧的事件监听器
         this.cleanup();
@@ -38,8 +36,7 @@ class EventManager {
      * 清理所有事件监听器
      */
     cleanup() {
-        console.log('[EventManager] 清理事件监听器');
-        
+
         // 移除所有已注册的事件监听器
         this.listeners.forEach((listenerData, key) => {
             const { element, event, handler } = listenerData;
@@ -47,9 +44,32 @@ class EventManager {
                 element.removeEventListener(event, handler);
             }
         });
-        
+
         this.listeners.clear();
-        
+
+        // 清理全局监听器
+        this.globalListeners.forEach((handler, key) => {
+            // 从key中解析元素类型和事件
+            const parts = key.split('-');
+            if (parts.length >= 3) {
+                const elementType = parts[1];
+                const event = parts[2];
+
+                let element;
+                if (elementType === 'Window') {
+                    element = window;
+                } else if (elementType === 'Document') {
+                    element = document;
+                }
+
+                if (element && handler) {
+                    element.removeEventListener(event, handler);
+                }
+            }
+        });
+
+        this.globalListeners.clear();
+
         // 清理防抖定时器
         this.debounceTimers.forEach(timer => clearTimeout(timer));
         this.debounceTimers.clear();
@@ -116,26 +136,59 @@ class EventManager {
      */
     registerGlobalListeners() {
         // 窗口大小变化
-        this.addEventListener(window, 'resize', this.throttle(() => {
+        this.addGlobalListener(window, 'resize', this.throttle(() => {
             this.handleWindowResize();
         }, 250));
-        
+
         // 页面可见性变化
-        this.addEventListener(document, 'visibilitychange', () => {
+        this.addGlobalListener(document, 'visibilitychange', () => {
             if (!document.hidden) {
                 this.handlePageVisible();
             }
         });
-        
+
         // 错误处理
-        this.addEventListener(window, 'error', (event) => {
+        this.addGlobalListener(window, 'error', (event) => {
             this.handleGlobalError(event);
         });
-        
+
         // 未处理的Promise错误
-        this.addEventListener(window, 'unhandledrejection', (event) => {
+        this.addGlobalListener(window, 'unhandledrejection', (event) => {
             this.handleUnhandledRejection(event);
         });
+    }
+
+    /**
+     * 添加全局监听器（防止重复绑定）
+     */
+    addGlobalListener(element, event, handler, options = {}) {
+        const key = `global-${element.constructor.name}-${event}`;
+
+        // 如果已经存在，先移除
+        if (this.globalListeners.has(key)) {
+            const oldHandler = this.globalListeners.get(key);
+            element.removeEventListener(event, oldHandler);
+        }
+
+        // 添加新监听器
+        element.addEventListener(event, handler, options);
+        this.globalListeners.set(key, handler);
+    }
+
+    /**
+     * 移除全局监听器
+     */
+    removeGlobalListener(element, event) {
+        const key = `global-${element.constructor.name}-${event}`;
+        const handler = this.globalListeners.get(key);
+
+        if (handler) {
+            element.removeEventListener(event, handler);
+            this.globalListeners.delete(key);
+            return true;
+        }
+
+        return false;
     }
     
     /**
