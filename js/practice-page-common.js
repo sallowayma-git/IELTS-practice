@@ -163,7 +163,7 @@ document.addEventListener('DOMContentLoaded', function () {
      * 整合了原有的practicePageManager功能，解决数据收集和正确答案提取问题
      */
     if (!window.practicePageEnhancer) {
-        console.log('[PracticeEnhancer] 初始化增强器');
+        debugLog('[PracticeEnhancer] 初始化增强器');
 
         // 内嵌CorrectAnswerExtractor功能，确保在练习页面中可用
         if (!window.CorrectAnswerExtractor) {

@@ -298,9 +298,9 @@ class MainNavigation {
      * 浏览分类
      */
     browseCategory(category, frequency = null) {
-        if (window.app && window.app.components.examBrowser) {
-            window.app.components.examBrowser.showCategory(category, frequency);
-            window.app.navigateToView('browse');
+        if (window.App && window.App.components.examBrowser) {
+            window.App.components.examBrowser.showCategory(category, frequency);
+            window.App.navigateToView('browse');
             
             // 更新浏览页面标题
             const browseTitle = document.getElementById('browse-title');
@@ -323,17 +323,17 @@ class MainNavigation {
         const categoryExams = examIndex.filter(exam => exam.category === category);
         
         if (categoryExams.length === 0) {
-            window.showMessage(`${category} 分类暂无可用题目`, 'warning');
+            window.App.showUserMessage(`${category} 分类暂无可用题目`, 'warning');
             return;
         }
 
         // 随机选择一个题目
         const randomExam = categoryExams[Math.floor(Math.random() * categoryExams.length)];
         
-        if (window.app && typeof window.app.openExam === 'function') {
-            window.app.openExam(randomExam.id);
+        if (window.App && typeof window.App.openExam === 'function') {
+            window.App.openExam(randomExam.id);
         } else {
-            window.showMessage(`开始练习: ${randomExam.title}`, 'info');
+            window.App.showUserMessage(`开始练习: ${randomExam.title}`, 'info');
         }
     }
 
@@ -377,7 +377,7 @@ class MainNavigation {
         `;
 
         // 这里可以显示模态框或导航到统计页面
-        window.showMessage(modalContent, 'info');
+        window.App.showUserMessage(modalContent, 'info');
     }
 
     /**

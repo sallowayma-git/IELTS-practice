@@ -64,10 +64,15 @@ class PracticeRecorder {
      * 设置消息监听器
      */
     setupMessageListeners() {
-        // 监听来自考试窗口的消息
-        window.addEventListener('message', (event) => {
-            this.handleExamMessage(event);
-        });
+        // 只在练习窗口中添加消息监听器 (Task 35)
+        if (typeof window.isPracticeWindow === 'function' && window.isPracticeWindow()) {
+            window.addEventListener('message', (event) => {
+                this.handleExamMessage(event);
+            });
+            console.log('[PracticeRecorder] Message listener attached for practice window');
+        } else {
+            console.log('[PracticeRecorder] Skipping message listener - not in practice window');
+        }
         
         // 监听页面可见性变化
         document.addEventListener('visibilitychange', () => {

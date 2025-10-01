@@ -1,12 +1,29 @@
 /**
- * 主应用程序
- * 负责应用的初始化和整体协调
+ * App - 主应用程序入口
+ *
+ * 公共表面：
+ * - App.stores: 应用存储管理 {AppStore, ExamStore, RecordStore}
+ * - App.ui: UI 组件管理 {ExamBrowser, RecordViewer, SettingsPanel 等}
+ * - App.events: 事件总线，用于所有内部通信 (基于 EventEmitter)
+ * - App.initialize(): 初始化应用
+ *
+ * 所有全局通信通过 App.events 路由。兼容 file:// 协议。
+ * 白名单全局：App, storage, EventEmitter (utils)。
  */
-class ExamSystemApp {
+class App {
     constructor() {
         this.currentView = 'overview';
         this.components = {};
+        this.stores = {};
+        this.ui = {};
         this.isInitialized = false;
+        this._messageListenerAttached = false;
+        this._isRendering = false;
+        this._loadedScripts = new Set(); // 跟踪已加载的脚本
+        this._listeners = new Map(); // 监听器注册表
+        this._intervals = new Set(); // 定时器注册表
+        this._timeouts = new Set(); // 延时器注册表
+        this.events = new EventEmitter(); // 单一事件中心，包装 globalEventBus
 
         // 绑定方法上下文
         this.handleResize = this.handleResize.bind(this);
@@ -36,10 +53,7 @@ class ExamSystemApp {
             this.setupEventListeners();
 
             // 调用 main.js 的遗留组件初始化
-            if (typeof window.initializeLegacyComponents === 'function') {
-                this.updateLoadingMessage('正在初始化遗留组件...');
-                window.initializeLegacyComponents();
-            }
+            // 移除遗留初始化，统一到 App
 
             this.updateLoadingMessage('正在加载初始数据...');
             // 加载初始数据
@@ -98,8 +112,9 @@ class ExamSystemApp {
         this.showUserMessage(userMessage, 'error');
 
         // 记录详细错误信息（用于调试）
-        if (window.handleError) {
-            window.handleError(error, 'App Initialization');
+        // 使用 App 错误处理，如果可用
+        if (this.handleGlobalError) {
+            this.handleGlobalError(error, 'App Initialization');
         }
 
         // 显示降级UI或恢复选项
@@ -180,11 +195,19 @@ class ExamSystemApp {
      * 显示用户消息
      */
     showUserMessage(message, type = 'info') {
-        // 使用现有的showMessage函数或创建新的通知
-        if (window.showMessage) {
+        // 使用统一错误服务
+        if (window.ErrorService) {
+            window.ErrorService.showUser(message, type);
+        } else if (window.showMessage) {
+            // 回退到现有方法
             window.showMessage(message, type);
         } else {
-            console.log(`[App] ${type.toUpperCase()}: ${message}`);
+            // 最终回退
+            if (type === 'error') {
+                console.error(`[App] ${type.toUpperCase()}: ${message}`);
+            } else {
+                alert(message);
+            }
         }
     }
 
@@ -193,26 +216,27 @@ class ExamSystemApp {
      */
     initializeResponsiveFeatures() {
         // 初始化响应式管理器
+        // 通过 App.ui 管理 UI 组件
         if (window.ResponsiveManager) {
-            this.responsiveManager = new ResponsiveManager();
+            this.ui.responsiveManager = new ResponsiveManager();
             console.log('Responsive manager initialized');
         }
 
         // 初始化触摸处理器
         if (window.TouchHandler) {
-            this.touchHandler = new TouchHandler();
+            this.ui.touchHandler = new TouchHandler();
             console.log('Touch handler initialized');
         }
 
         // 初始化主题管理器
         if (window.ThemeManager) {
-            this.themeManager = new ThemeManager();
+            this.ui.themeManager = new ThemeManager();
             console.log('Theme manager initialized');
         }
 
         // 初始化键盘快捷键
         if (window.KeyboardShortcuts) {
-            this.keyboardShortcuts = new KeyboardShortcuts();
+            this.ui.keyboardShortcuts = new KeyboardShortcuts();
             console.log('Keyboard shortcuts initialized');
         }
 
@@ -220,13 +244,13 @@ class ExamSystemApp {
 
         // 初始化教程系统
         if (window.TutorialSystem) {
-            this.tutorialSystem = new TutorialSystem();
+            this.ui.tutorialSystem = new TutorialSystem();
             console.log('Tutorial system initialized');
         }
 
         // 初始化设置面板
         if (window.SettingsPanel) {
-            this.settingsPanel = new SettingsPanel();
+            this.ui.settingsPanel = new SettingsPanel();
             console.log('Settings panel initialized');
         }
 
@@ -361,20 +385,100 @@ class ExamSystemApp {
         console.log('[App] 核心组件初始化 - ExamBrowser将在可选组件阶段处理');
 
         // 初始化PracticeRecorder（必需，但有降级方案）
+        // 通过 App.stores 和 App.components 管理
         if (window.PracticeRecorder) {
             try {
-                this.components.practiceRecorder = new PracticeRecorder();
+                this.stores.practiceRecorder = new PracticeRecorder();
                 this.setupPracticeRecorderEvents();
                 console.log('[App] PracticeRecorder初始化成功');
             } catch (error) {
                 console.error('[App] PracticeRecorder初始化失败:', error);
-                this.components.practiceRecorder = this.createFallbackRecorder();
+                this.stores.practiceRecorder = this.createFallbackRecorder();
                 console.log('[App] 使用降级版PracticeRecorder');
             }
         } else {
             console.warn('[App] PracticeRecorder类不可用，创建降级记录器');
-            this.components.practiceRecorder = this.createFallbackRecorder();
+            this.stores.practiceRecorder = this.createFallbackRecorder();
         }
+
+        // 初始化 RecordStore
+        if (window.RecordStore) {
+            try {
+                this.stores.recordStore = new window.RecordStore();
+                await this.stores.recordStore.initialize();
+                console.log('[App] RecordStore 初始化成功');
+            } catch (error) {
+                console.error('[App] RecordStore 初始化失败:', error);
+                this.stores.recordStore = null;
+            }
+        } else {
+            console.warn('[App] RecordStore 类不可用');
+            this.stores.recordStore = null;
+        }
+
+        // Store 命名适配器 - 提供一致的访问方式 (Task 34)
+        this.setupStoreAdapters();
+    }
+
+    /**
+     * 设置 Store 命名适配器
+     */
+    setupStoreAdapters() {
+        // 检查并初始化其他 Stores
+        if (window.AppStore && !this.stores.app) {
+            this.stores.app = new window.AppStore();
+            console.log('[App] AppStore 初始化成功');
+        }
+
+        if (window.ExamStore && !this.stores.examStore) {
+            this.stores.examStore = new window.ExamStore();
+            console.log('[App] ExamStore 初始化成功');
+        }
+
+        // 创建命名适配器 - 支持新命名规范和向后兼容
+        if (this.stores.examStore) {
+            this.stores.exams = this.stores.examStore;
+
+            // 开发模式下添加弃用日志
+            if (location.hostname === 'localhost' || location.protocol === 'file:') {
+                const originalExamStore = this.stores.examStore;
+                this.stores.examStore = new Proxy(originalExamStore, {
+                    get(target, prop) {
+                        if (prop === 'deprecatedAccess') return true;
+                        console.warn('[App] DEPRECATED: Using examStore - consider switching to stores.exams');
+                        return target[prop];
+                    }
+                });
+            }
+        }
+
+        if (this.stores.recordStore) {
+            this.stores.records = this.stores.recordStore;
+
+            // 开发模式下添加弃用日志
+            if (location.hostname === 'localhost' || location.protocol === 'file:') {
+                const originalRecordStore = this.stores.recordStore;
+                this.stores.recordStore = new Proxy(originalRecordStore, {
+                    get(target, prop) {
+                        if (prop === 'deprecatedAccess') return true;
+                        console.warn('[App] DEPRECATED: Using recordStore - consider switching to stores.records');
+                        return target[prop];
+                    }
+                });
+            }
+        }
+
+        if (this.stores.app) {
+            // AppStore 本身就是标准命名
+        }
+
+        console.log('[App] Store adapters configured:', {
+            exams: !!this.stores.exams,
+            records: !!this.stores.records,
+            app: !!this.stores.app,
+            examStore: !!this.stores.examStore,
+            recordStore: !!this.stores.recordStore
+        });
     }
 
     /**
@@ -391,7 +495,7 @@ class ExamSystemApp {
             {
                 name: 'GoalSettings', init: () => {
                     const instance = new GoalSettings();
-                    window.goalSettings = instance;
+                    // 移除 window.goalSettings，使用 App.ui
                     return instance;
                 }
             },
@@ -405,7 +509,7 @@ class ExamSystemApp {
                     container.style.display = 'none';
                     document.body.appendChild(container);
                     const instance = new DataManagementPanel(container);
-                    window.dataManagementPanel = instance;
+                    // 移除 window.dataManagementPanel，使用 App.ui
                     return instance;
                 }
             },
@@ -416,7 +520,7 @@ class ExamSystemApp {
                     container.style.display = 'none';
                     document.body.appendChild(container);
                     const instance = new SystemMaintenancePanel(container);
-                    window.systemMaintenancePanel = instance;
+                    // 移除 window.systemManagementPanel，使用 App.ui
                     return instance;
                 }
             }
@@ -427,6 +531,7 @@ class ExamSystemApp {
                 try {
                     const componentKey = name.charAt(0).toLowerCase() + name.slice(1);
                     this.components[componentKey] = init();
+                    this.ui[componentKey] = init(); // 暴露到公共 UI
                     console.log(`[App] ${name}初始化成功`);
                 } catch (error) {
                     console.error(`[App] ${name}初始化失败:`, error);
@@ -586,6 +691,9 @@ class ExamSystemApp {
                 }
             }
         });
+
+        // 设置单一消息路由器（防止重复监听）
+        this.setupMessageRouter();
     }
 
     /**
@@ -631,32 +739,40 @@ class ExamSystemApp {
      * 更新总览页面统计信息
      */
     async updateOverviewStats() {
-        let examIndex = await storage.get('exam_index', []);
-        if (!Array.isArray(examIndex)) {
-            console.warn('[App] examIndex不是数组，回退到 window.examIndex');
-            examIndex = Array.isArray(window.examIndex) ? window.examIndex : [];
+        if (this._isRendering) return;
+        this._isRendering = true;
+
+        try {
+            let examIndex = await storage.get('exam_index', []);
+            if (!Array.isArray(examIndex)) {
+                console.warn('[App] examIndex不是数组，回退到 window.examIndex');
+                // 使用 App.stores 如果可用，否则 fallback
+                examIndex = Array.isArray(this.stores.examStore?.examIndex) ? this.stores.examStore.examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
+            }
+            let practiceRecords = await storage.get('practice_records', []);
+
+            // 确保practiceRecords是数组
+            if (!Array.isArray(practiceRecords)) {
+                console.warn('[App] practiceRecords不是数组，使用空数组替代');
+                practiceRecords = this.stores.records?.records || this.stores.recordStore?.records || [];
+            }
+
+            // 更新总体统计
+            const totalExams = examIndex.length;
+            const completedExams = new Set(practiceRecords.map(r => r.examId)).size;
+            const averageAccuracy = this.calculateAverageAccuracy(practiceRecords);
+            const studyDays = this.calculateStudyDays(practiceRecords);
+
+            this.updateStatElement('total-exams', totalExams);
+            this.updateStatElement('completed-exams', completedExams);
+            this.updateStatElement('average-accuracy', `${averageAccuracy}%`);
+            this.updateStatElement('study-days', studyDays);
+
+            // 更新分类统计
+            this.updateCategoryStats(examIndex, practiceRecords);
+        } finally {
+            setTimeout(() => { this._isRendering = false; }, 0);
         }
-        let practiceRecords = await storage.get('practice_records', []);
-
-        // 确保practiceRecords是数组
-        if (!Array.isArray(practiceRecords)) {
-            console.warn('[App] practiceRecords不是数组，使用空数组替代');
-            practiceRecords = [];
-        }
-
-        // 更新总体统计
-        const totalExams = examIndex.length;
-        const completedExams = new Set(practiceRecords.map(r => r.examId)).size;
-        const averageAccuracy = this.calculateAverageAccuracy(practiceRecords);
-        const studyDays = this.calculateStudyDays(practiceRecords);
-
-        this.updateStatElement('total-exams', totalExams);
-        this.updateStatElement('completed-exams', completedExams);
-        this.updateStatElement('average-accuracy', `${averageAccuracy}%`);
-        this.updateStatElement('study-days', studyDays);
-
-        // 更新分类统计
-        this.updateCategoryStats(examIndex, practiceRecords);
     }
 
     /**
@@ -697,7 +813,7 @@ class ExamSystemApp {
      */
     updateCategoryStats(examIndex, practiceRecords) {
         const categories = ['P1', 'P2', 'P3'];
-        const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
+        const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(this.stores.examStore?.examIndex) ? this.stores.examStore.examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []));
 
         categories.forEach(category => {
             const categoryExams = list.filter(exam => exam.category === category);
@@ -729,6 +845,7 @@ class ExamSystemApp {
      * 设置初始视图
      */
     setupInitialView() {
+        if (typeof markFirstRenderStart === 'function') markFirstRenderStart();
         // 简化的URL参数获取，避免依赖Utils
         const urlParams = new URLSearchParams(window.location.search);
         const urlView = urlParams.get('view');
@@ -736,6 +853,7 @@ class ExamSystemApp {
 
         // 初始化完成后立即调用导航到指定视图
         this.navigateToView(initialView);
+        if (typeof markFirstRenderEnd === 'function') markFirstRenderEnd();
     }
 
     /**
@@ -744,34 +862,41 @@ class ExamSystemApp {
     navigateToView(viewName) {
         if (this.currentView === viewName) return;
 
-        // 隐藏所有视图
-        document.querySelectorAll('.view').forEach(view => {
-            view.classList.remove('active');
-        });
+        if (this._isRendering) return;
+        this._isRendering = true;
 
-        // 显示目标视图
-        const targetView = document.getElementById(`${viewName}-view`);
-        if (targetView) {
-            targetView.classList.add('active');
-            this.currentView = viewName;
-
-            // 更新导航状态
-            document.querySelectorAll('.nav-btn').forEach(btn => {
-                btn.classList.remove('active');
+        try {
+            // 隐藏所有视图
+            document.querySelectorAll('.view').forEach(view => {
+                view.classList.remove('active');
             });
 
-            const activeNavBtn = document.querySelector(`[data-view="${viewName}"]`);
-            if (activeNavBtn) {
-                activeNavBtn.classList.add('active');
+            // 显示目标视图
+            const targetView = document.getElementById(`${viewName}-view`);
+            if (targetView) {
+                targetView.classList.add('active');
+                this.currentView = viewName;
+
+                // 更新导航状态
+                document.querySelectorAll('.nav-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+
+                const activeNavBtn = document.querySelector(`[data-view="${viewName}"]`);
+                if (activeNavBtn) {
+                    activeNavBtn.classList.add('active');
+                }
+
+                // 更新URL
+                const url = new URL(window.location);
+                url.searchParams.set('view', viewName);
+                window.history.replaceState({}, '', url);
+
+                // 触发视图激活事件
+                this.onViewActivated(viewName);
             }
-
-            // 更新URL
-            const url = new URL(window.location);
-            url.searchParams.set('view', viewName);
-            window.history.replaceState({}, '', url);
-
-            // 触发视图激活事件
-            this.onViewActivated(viewName);
+        } finally {
+            setTimeout(() => { this._isRendering = false; }, 0);
         }
     }
 
@@ -779,39 +904,50 @@ class ExamSystemApp {
      * 视图激活回调
      */
     onViewActivated(viewName) {
-        switch (viewName) {
-            case 'overview':
-                this.refreshOverviewData();
-                break;
-            case 'browse':
-                // 如果存在待应用的筛选，则优先应用而不重置
-                if (window.__pendingBrowseFilter && typeof window.applyBrowseFilter === 'function') {
-                    const { category, type } = window.__pendingBrowseFilter;
-                    try { window.applyBrowseFilter(category, type); } finally { delete window.__pendingBrowseFilter; }
-                } else if (typeof window.initializeBrowseView === 'function') {
-                    window.initializeBrowseView();
-                }
-                break;
-            case 'specialized-practice':
-                if (this.components.specializedPractice) {
-                    this.components.specializedPractice.updateSpecializedProgress();
-                }
-                break;
-            case 'question-type-practice':
-                if (this.components.questionTypePractice) {
-                    this.components.questionTypePractice.updateQuestionTypesDisplay();
-                }
-                break;
-            case 'practice':
-                // 使用简单的练习记录更新，不依赖复杂组件
-                this.updateSimplePracticeView();
-                break;
-            case 'analysis':
-                this.loadAnalysisData();
-                break;
-            case 'goals':
-                this.loadGoalsData();
-                break;
+        if (this._isRendering) return;
+        this._isRendering = true;
+
+        try {
+            // 触发事件，让 UI 组件 subscribe 并 render
+            this.events.emit('viewActivated', { viewName });
+
+            // 保留原有逻辑作为 fallback，但优先事件
+            switch (viewName) {
+                case 'overview':
+                    this.refreshOverviewData();
+                    break;
+                case 'browse':
+                    // 如果存在待应用的筛选，则优先应用而不重置
+                    if (window.__pendingBrowseFilter && typeof window.applyBrowseFilter === 'function') {
+                        const { category, type } = window.__pendingBrowseFilter;
+                        try { window.applyBrowseFilter(category, type); } finally { delete window.__pendingBrowseFilter; }
+                    } else if (typeof window.initializeBrowseView === 'function') {
+                        window.initializeBrowseView();
+                    }
+                    break;
+                case 'specialized-practice':
+                    if (this.components.specializedPractice) {
+                        this.components.specializedPractice.updateSpecializedProgress();
+                    }
+                    break;
+                case 'question-type-practice':
+                    if (this.components.questionTypePractice) {
+                        this.components.questionTypePractice.updateQuestionTypesDisplay();
+                    }
+                    break;
+                case 'practice':
+                    // 使用简单的练习记录更新，不依赖复杂组件
+                    this.updateSimplePracticeView();
+                    break;
+                case 'analysis':
+                    this.loadAnalysisData();
+                    break;
+                case 'goals':
+                    this.loadGoalsData();
+                    break;
+            }
+        } finally {
+            setTimeout(() => { this._isRendering = false; }, 0);
         }
     }
 
@@ -860,7 +996,7 @@ class ExamSystemApp {
         const categoryExams = examIndex.filter(exam => exam.category === category);
 
         if (categoryExams.length === 0) {
-            window.showMessage(`${category} 分类暂无可用题目`, 'warning');
+            this.showUserMessage(`${category} 分类暂无可用题目`, 'warning');
             return;
         }
 
@@ -873,6 +1009,39 @@ class ExamSystemApp {
       * 打开指定题目进行练习
       */
     async openExam(examId) {
+        // 动态加载按需脚本（Recorder for 练习记录, PDFHandler for PDF打开），兼容 file://
+        if (typeof window.loadedScripts === 'undefined') {
+            window.loadedScripts = new Set();
+        }
+
+        // 加载 PracticeRecorder 如果未加载
+        if (!window.PracticeRecorder && !window.loadedScripts.has('practiceRecorder')) {
+            await new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'js/core/practiceRecorder.js';
+                script.onload = () => {
+                    window.loadedScripts.add('practiceRecorder');
+                    resolve();
+                };
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+
+        // 加载 PDFHandler 如果未加载
+        if (!window.PDFHandler && !window.loadedScripts.has('PDFHandler')) {
+            await new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'js/components/PDFHandler.js';
+                script.onload = () => {
+                    window.loadedScripts.add('PDFHandler');
+                    resolve();
+                };
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+
         // 使用活动题库配置键，保证全量/增量切换后仍能打开
         let examIndex = [];
         try {
@@ -890,19 +1059,19 @@ class ExamSystemApp {
         const exam = list.find(e => e.id === examId);
 
         if (!exam) {
-            window.showMessage('题目不存在', 'error');
+            this.showUserMessage('题目不存在', 'error');
             return;
         }
 
         try {
             // 若无HTML，直接打开PDF
             if (exam.hasHtml === false) {
-                const pdfUrl = (typeof window.buildResourcePath === 'function')
-                    ? window.buildResourcePath(exam, 'pdf')
+                const pdfUrl = (typeof this.buildResourcePath === 'function')
+                    ? this.buildResourcePath(exam, 'pdf')
                     : ((exam.path || '').replace(/\\/g,'/').replace(/\/+\//g,'/') + (exam.pdfFilename || '') );
                 const pdfWin = window.open(pdfUrl, `pdf_${exam.id}`, 'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes');
                 if (!pdfWin) throw new Error('无法打开PDF窗口，请检查弹窗设置');
-                window.showMessage(`正在打开PDF: ${exam.title}`, 'info');
+                this.showUserMessage(`正在打开PDF: ${exam.title}`, 'info');
                 return;
             }
 
@@ -915,7 +1084,7 @@ class ExamSystemApp {
             this.injectDataCollectionScript(examWindow, examId);
             this.setupExamWindowManagement(examWindow, examId);
 
-            window.showMessage(`正在打开题目: ${exam.title}`, 'info');
+            this.showUserMessage(`正在打开题目: ${exam.title}`, 'info');
 
         } catch (error) {
             console.error('Failed to open exam:', error);
@@ -928,8 +1097,8 @@ class ExamSystemApp {
      */
     buildExamUrl(exam) {
         // 使用全局的路径构建器以确保阅读/听力路径正确
-        if (typeof window.buildResourcePath === 'function') {
-            return window.buildResourcePath(exam, 'html');
+        if (typeof this.buildResourcePath === 'function') {
+            return this.buildResourcePath(exam, 'html');
         }
 
         // 回退：基于exam对象构造完整的文件路径（可能不含根前缀）
@@ -1040,7 +1209,11 @@ class ExamSystemApp {
                 console.log('[DataInjection] 开始加载脚本文件...');
 
                 // 加载练习页面增强脚本
-                const enhancerScript = await fetch('./js/practice-page-enhancer.js').then(r => r.text());
+                // file:// 兼容：使用相对路径
+                const enhancerScript = await fetch('./js/practice-page-enhancer.js').then(r => r.text()).catch(() => {
+                    console.warn('[DataInjection] 无法加载增强脚本，使用内联');
+                    return ''; // fallback to inline
+                });
                 console.log('[DataInjection] 增强脚本加载完成，开始注入...');
 
                 // 注入练习页面增强脚本
@@ -1274,27 +1447,36 @@ class ExamSystemApp {
      * 设置题目窗口通信
      */
     setupExamWindowCommunication(examWindow, examId) {
+        // 类型守卫函数
+        const isValidMessage = (msg) => msg && typeof msg === 'object' && msg.type && typeof msg.data === 'object';
+        const isSessionReadyMsg = (msg) => msg.type === 'SESSION_READY' && msg.data && typeof msg.data.pageType === 'string' && typeof msg.data.timestamp === 'number';
+        const isProgressUpdateMsg = (msg) => msg.type === 'PROGRESS_UPDATE' && msg.data && typeof msg.data.answeredQuestions === 'number' && typeof msg.data.totalQuestions === 'number' && typeof msg.data.elapsedTime === 'number';
+        const isPracticeCompleteMsg = (msg) => msg.type === 'PRACTICE_COMPLETE' && msg.data && typeof msg.data.sessionId === 'string' && msg.data.answers && typeof msg.data.duration === 'number';
+    
         // 监听来自题目窗口的消息
         const messageHandler = async (event) => {
             // 验证消息数据格式
-            if (!event.data || typeof event.data !== 'object') return;
-
+            if (!isValidMessage(event.data)) {
+                console.warn('[App] 无效消息格式:', event.data);
+                return;
+            }
+    
             // 兼容处理：允许缺失来源标记的消息（旧页面可能未填充 source）
-
+    
             // 验证窗口来源（如果可能的话）- 放宽验证条件
             if (event.source && examWindow && event.source !== examWindow) {
                 console.log('[App] 消息来源窗口不匹配，但仍处理消息');
             }
-
+    
             // 放宽消息源过滤，兼容 inline_collector 与 practice_page
             const src = (event.data && event.data.source) || '';
             if (src && src !== 'practice_page' && src !== 'inline_collector') {
                 return; // 非预期来源的消息忽略
             }
-
-            const { type, data } = event.data || {};
+    
+            const { type, data } = event.data;
             console.log('[App] 收到练习页面消息:', type, data);
-
+    
             switch (type) {
                 case 'exam_completed':
                     this.handleExamCompleted(examId, data);
@@ -1307,12 +1489,24 @@ class ExamSystemApp {
                     break;
                 // 新增：处理数据采集器的消息
                 case 'SESSION_READY':
+                    if (!isSessionReadyMsg(event.data)) {
+                        console.warn('[App] SESSION_READY 消息验证失败');
+                        return;
+                    }
                     this.handleSessionReady(examId, data);
                     break;
                 case 'PROGRESS_UPDATE':
+                    if (!isProgressUpdateMsg(event.data)) {
+                        console.warn('[App] PROGRESS_UPDATE 消息验证失败');
+                        return;
+                    }
                     this.handleProgressUpdate(examId, data);
                     break;
                 case 'PRACTICE_COMPLETE':
+                    if (!isPracticeCompleteMsg(event.data)) {
+                        console.warn('[App] PRACTICE_COMPLETE 消息验证失败');
+                        return;
+                    }
                     await this.handlePracticeComplete(examId, data);
                     break;
                 case 'ERROR_OCCURRED':
@@ -1322,14 +1516,6 @@ class ExamSystemApp {
                     console.log('[App] 未处理的消息类型:', type);
             }
         };
-
-        window.addEventListener('message', messageHandler);
-
-        // 存储消息处理器以便清理
-        if (!this.messageHandlers) {
-            this.messageHandlers = new Map();
-        }
-        this.messageHandlers.set(examId, messageHandler);
 
         // 向题目窗口发送初始化消息（兼容 0.2 增强器监听的 INIT_SESSION）
         examWindow.addEventListener('load', () => {
@@ -1351,8 +1537,140 @@ class ExamSystemApp {
     }
 
     /**
+     * 集中消息处理器 - 单一入口，避免重复绑定
+     */
+    async handleMessage(event) {
+        // 类型守卫函数
+        const isValidMessage = (msg) => msg && typeof msg === 'object' && msg.type && typeof msg.data === 'object';
+        const isSessionReadyMsg = (msg) => msg.type === 'SESSION_READY' && msg.data && typeof msg.data.pageType === 'string' && typeof msg.data.timestamp === 'number';
+        const isProgressUpdateMsg = (msg) => msg.type === 'PROGRESS_UPDATE' && msg.data && typeof msg.data.answeredQuestions === 'number' && typeof msg.data.totalQuestions === 'number' && typeof msg.data.elapsedTime === 'number';
+        const isPracticeCompleteMsg = (msg) => msg.type === 'PRACTICE_COMPLETE' && msg.data && typeof msg.data.sessionId === 'string' && msg.data.answers && typeof msg.data.duration === 'number';
+
+        // 验证消息数据格式
+        if (!isValidMessage(event.data)) {
+            console.warn('[App] 无效消息格式:', event.data);
+            return;
+        }
+
+        // 查找消息来源对应的 examId
+        let targetExamId = null;
+        let targetWindowData = null;
+        if (this.examWindows) {
+            for (const [examId, windowData] of this.examWindows.entries()) {
+                if (event.source === windowData.window) {
+                    targetExamId = examId;
+                    targetWindowData = windowData;
+                    break;
+                }
+            }
+        }
+
+        if (!targetExamId || !targetWindowData) {
+            console.warn('[App] 未知消息来源');
+            return;
+        }
+
+        const examWindow = targetWindowData.window;
+
+        // 兼容处理：允许缺失来源标记的消息（旧页面可能未填充 source）
+
+        // 验证窗口来源（如果可能的话）- 放宽验证条件
+        if (event.source && examWindow && event.source !== examWindow) {
+            console.log('[App] 消息来源窗口不匹配，但仍处理消息');
+        }
+
+        // 放宽消息源过滤，兼容 inline_collector 与 practice_page
+        const src = (event.data && event.data.source) || '';
+        if (src && src !== 'practice_page' && src !== 'inline_collector') {
+            return; // 非预期来源的消息忽略
+        }
+
+        const { type, data } = event.data;
+        console.log('[App] 收到练习页面消息:', type, data);
+
+        switch (type) {
+            case 'exam_completed':
+                this.handleExamCompleted(targetExamId, data);
+                break;
+            case 'exam_progress':
+                this.handleExamProgress(targetExamId, data);
+                break;
+            case 'exam_error':
+                this.handleExamError(targetExamId, data);
+                break;
+            // 新增：处理数据采集器的消息
+            case 'SESSION_READY':
+                if (!isSessionReadyMsg(event.data)) {
+                    console.warn('[App] SESSION_READY 消息验证失败');
+                    return;
+                }
+                this.handleSessionReady(targetExamId, data);
+                break;
+            case 'PROGRESS_UPDATE':
+                if (!isProgressUpdateMsg(event.data)) {
+                    console.warn('[App] PROGRESS_UPDATE 消息验证失败');
+                    return;
+                }
+                this.handleProgressUpdate(targetExamId, data);
+                break;
+            case 'PRACTICE_COMPLETE':
+                if (!isPracticeCompleteMsg(event.data)) {
+                    console.warn('[App] PRACTICE_COMPLETE 消息验证失败');
+                    return;
+                }
+                await this.handlePracticeComplete(targetExamId, data);
+                break;
+            case 'ERROR_OCCURRED':
+                this.handleDataCollectionError(targetExamId, data);
+                break;
+            default:
+                console.log('[App] 未处理的消息类型:', type);
+        }
+    }
+
+    /**
      * 与练习页建立握手（重复发送 INIT_SESSION，直到收到 SESSION_READY）
      */
+    // 重试机制：指数退避，最大5次尝试
+    async retrySendInit(examWindow, initPayload, examId, attempt = 1, maxAttempts = 5) {
+        const baseDelay = 500 * Math.pow(2, attempt - 1); // 500ms, 1s, 2s, 4s, 8s
+        const delay = Math.min(baseDelay, 8000); // 最大8s
+
+        try {
+            examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
+            examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
+            console.log(`[App] 发送 INIT_SESSION 尝试 ${attempt}/${maxAttempts}`);
+        } catch (e) {
+            console.warn(`[App] 发送 INIT_SESSION 失败 (尝试 ${attempt}):`, e);
+        }
+
+        // 如果未收到 SESSION_READY，在延迟后重试
+        await new Promise(resolve => setTimeout(resolve, delay));
+
+        // 检查是否收到 SESSION_READY
+        if (this.examWindows && this.examWindows.has(examId) && this.examWindows.get(examId).dataCollectorReady) {
+            console.log('[App] SESSION_READY 已收到，重试成功');
+            return true;
+        }
+
+        if (attempt < maxAttempts) {
+            return this.retrySendInit(examWindow, initPayload, examId, attempt + 1, maxAttempts);
+        } else {
+            // 失败报告
+            if (window.AppStore) {
+                window.AppStore.addError({
+                    message: 'SESSION_READY 丢失，重试失败',
+                    context: `Handshake for examId: ${examId}`,
+                    recoverable: true,
+                    userMessage: '练习页面通信初始化失败，请刷新重试',
+                    actions: ['刷新页面', '检查弹窗设置']
+                });
+            }
+            console.error('[App] SESSION_READY 重试失败，进入降级模式');
+            return false;
+        }
+    }
+
     startExamHandshake(examWindow, examId) {
         if (!this._handshakeTimers) this._handshakeTimers = new Map();
 
@@ -1365,30 +1683,35 @@ class ExamSystemApp {
             sessionId: this.generateSessionId()
         };
 
+        // 初始发送
+        try {
+            examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
+            examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
+            console.log('[System] 发送初始化消息到练习页面:', { type: 'INIT_SESSION', data: {} });
+        } catch (_) { /* 忽略 */ }
+
+        // 启动重试
+        setTimeout(() => {
+            this.retrySendInit(examWindow, initPayload, examId);
+        }, 1000); // 1s 后开始重试检查
+
+        // 旧定时器用于基本心跳
         let attempts = 0;
-        const maxAttempts = 30; // ~9s
+        const maxAttempts = 30;
         const tick = () => {
-            if (examWindow && !examWindow.closed) {
-                try {
-                    // 直接发送两种事件名，确保增强器任何实现都能收到
-                    if (attempts === 0) {
-                        console.log('[System] 发送初始化消息到练习页面:', { type: 'INIT_SESSION', data: {} });
-                    }
-                    examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
-                    examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
-                } catch (_) { /* 忽略 */ }
+            if (examWindow.closed) {
+                clearInterval(timer);
+                this._handshakeTimers.delete(examId);
+                return;
             }
             attempts++;
             if (attempts >= maxAttempts) {
                 clearInterval(timer);
                 this._handshakeTimers.delete(examId);
-                console.warn('[App] 握手超时，练习页可能未加载增强器');
             }
         };
         const timer = setInterval(tick, 300);
         this._handshakeTimers.set(examId, timer);
-        // 立即发送一次
-        tick();
     }
 
     /**
@@ -1579,9 +1902,10 @@ class ExamSystemApp {
 
         try {
             // 优先使用新的练习页面管理器
-            if (window.practicePageManager) {
+            // 通过 App.stores 管理
+            if (this.stores.practicePageManager) {
                 console.log('[App] 使用练习页面管理器启动会话');
-                const sessionId = await window.practicePageManager.startPracticeSession(examId, exam);
+                const sessionId = await this.stores.practicePageManager.startPracticeSession(examId, exam);
                 console.log('[App] 练习会话已启动:', sessionId);
                 
                 // 更新题目状态
@@ -1685,7 +2009,7 @@ class ExamSystemApp {
     handleExamError(examId, errorData) {
         console.error('Exam error:', examId, errorData);
 
-        window.showMessage(`题目出现错误: ${errorData.message || '未知错误'}`, 'error');
+        this.showUserMessage(`题目出现错误: ${errorData.message || '未知错误'}`, 'error');
 
         // 清理会话
         this.cleanupExamSession(examId);
@@ -1749,11 +2073,15 @@ class ExamSystemApp {
 
             // 刷新内存中的练习记录，确保无需手动刷新即可看到
             try {
-                if (typeof window.syncPracticeRecords === 'function') {
-                    window.syncPracticeRecords();
+                // 通过 App.stores 同步
+                const recordStore = this.stores.records || this.stores.recordStore;
+                if (recordStore && typeof recordStore.sync === 'function') {
+                    await recordStore.sync();
                 } else if (window.storage) {
                     const latest = await window.storage.get('practice_records', []);
-                    window.practiceRecords = latest;
+                    if (recordStore) {
+                        recordStore.records = latest;
+                    }
                 }
             } catch (syncErr) {
                 console.warn('[DataCollection] 刷新练习记录失败（UI可能需要手动刷新）:', syncErr);
@@ -1773,7 +2101,7 @@ class ExamSystemApp {
         } catch (error) {
             console.error('[DataCollection] 处理练习完成数据失败:', error);
             // 即使出错也要显示通知
-            window.showMessage('练习已完成，但数据保存可能有问题', 'warning');
+            this.showUserMessage('练习已完成，但数据保存可能有问题', 'warning');
         } finally {
             // 清理会话
             this.cleanupExamSession(examId);
@@ -1847,7 +2175,7 @@ class ExamSystemApp {
             console.log('[DataCollection] 开始保存真实练习数据:', examId, realData);
             
             let examIndex = await storage.get('exam_index', []);
-            const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
+            const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(this.stores.examStore?.examIndex) ? this.stores.examStore.examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []));
             const exam = list.find(e => e.id === examId);
 
             if (!exam) {
@@ -1876,7 +2204,7 @@ class ExamSystemApp {
                    interactions: realData.interactions,
                    isRealData: true,
                    source: realData.scoreInfo?.source || 'unknown'
-               },
+                },
 
                 // 数据来源标识
                 dataSource: 'real',
@@ -1938,35 +2266,37 @@ class ExamSystemApp {
                 console.warn('[DataCollection] 兼容字段填充失败:', compatErr);
             }
 
-            // 直接保存到localStorage（与旧版本完全相同的方式）
-            let practiceRecords = await storage.get('practice_records', []);
-            if (!Array.isArray(practiceRecords)) {
-                // 迁移修复：历史上可能被错误压缩为对象，这里强制纠正为数组
-                practiceRecords = [];
-            }
-            console.log('[DataCollection] 当前记录数量:', practiceRecords.length);
+            // 使用 RecordStore 保存，支持去重
+            const recordStore = this.stores.records || this.stores.recordStore;
+            if (recordStore) {
+                const savedRecord = await recordStore.saveRecord(practiceRecord);
+                if (savedRecord) {
+                    console.log('[DataCollection] ✓ 真实练习数据保存成功:', savedRecord.id);
+                } else {
+                    console.warn('[DataCollection] 记录被去重忽略');
+                }
 
-            practiceRecords.unshift(practiceRecord);
-
-            // 限制记录数量
-            if (practiceRecords.length > 100) {
-                practiceRecords.splice(100);
-            }
-
-            const saveResult = await storage.set('practice_records', practiceRecords);
-            console.log('[DataCollection] 保存结果:', saveResult);
-
-            // 立即验证保存是否成功
-            const verifyRecords = await storage.get('practice_records', []);
-            const savedRecord = Array.isArray(verifyRecords)
-                ? verifyRecords.find(r => r.id === practiceRecord.id)
-                : undefined;
-            
-            if (savedRecord) {
-                console.log('[DataCollection] ✓ 真实练习数据保存成功:', practiceRecord.id);
-                console.log('[DataCollection] ✓ 验证成功，当前总记录数:', verifyRecords.length);
+                // 立即验证
+                await recordStore.loadRecords();
+                const verifyRecords = recordStore.records;
+                const verifySavedRecord = verifyRecords.find(r => r.id === practiceRecord.id);
+                if (verifySavedRecord) {
+                    console.log('[DataCollection] ✓ 验证成功，当前总记录数:', verifyRecords.length);
+                } else {
+                    console.error('[DataCollection] ✗ 保存验证失败，记录未找到');
+                }
             } else {
-                console.error('[DataCollection] ✗ 保存验证失败，记录未找到');
+                // 降级：直接保存
+                let practiceRecords = await storage.get('practice_records', []);
+                if (!Array.isArray(practiceRecords)) {
+                    practiceRecords = [];
+                }
+                practiceRecords.unshift(practiceRecord);
+                if (practiceRecords.length > 100) {
+                    practiceRecords.splice(100);
+                }
+                await storage.set('practice_records', practiceRecords);
+                console.log('[DataCollection] 降级保存成功');
             }
 
         } catch (error) {
@@ -1978,8 +2308,8 @@ class ExamSystemApp {
      * 显示真实完成通知
      */
     async showRealCompletionNotification(examId, realData) {
-        const examIndex = await storage.get('exam_index', []);
-        const list = Array.isArray(examIndex) ? examIndex : [];
+        let examIndex = await storage.get('exam_index', []);
+        const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(this.stores.examStore?.examIndex) ? this.stores.examStore.examIndex : []);
         const exam = list.find(e => e.id === examId);
 
         if (!exam) return;
@@ -2089,7 +2419,7 @@ class ExamSystemApp {
         const accuracy = Math.round((resultData.accuracy || 0) * 100);
         const message = `题目完成！\n${exam.title}\n正确率: ${accuracy}%`;
 
-        window.showMessage(message, 'success');
+        this.showUserMessage(message, 'success');
 
         // 可以显示更详细的结果模态框
         this.showDetailedResults(examId, resultData);
@@ -2136,10 +2466,10 @@ class ExamSystemApp {
                         </div>
                     </div>
                     <div class="result-actions">
-                        <button class="btn btn-primary" onclick="window.app.openExam('${examId}')">
+                        <button class="btn btn-primary" onclick="window.App.openExam('${examId}')">
                             再次练习
                         </button>
-                        <button class="btn btn-secondary" onclick="window.app.navigateToView('analysis')">
+                        <button class="btn btn-secondary" onclick="window.App.navigateToView('analysis')">
                             查看分析
                         </button>
                         <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">
@@ -2190,12 +2520,7 @@ class ExamSystemApp {
             this.examWindows.delete(examId);
         }
 
-        // 清理消息处理器
-        if (this.messageHandlers && this.messageHandlers.has(examId)) {
-            const handler = this.messageHandlers.get(examId);
-            window.removeEventListener('message', handler);
-            this.messageHandlers.delete(examId);
-        }
+        // 消息处理器已集中管理，无需 per-session 清理
 
         // 清理活动会话
         const activeSessions = await storage.get('active_sessions', []);
@@ -2268,7 +2593,7 @@ class ExamSystemApp {
 
         // 显示简单通知
         const message = `练习完成！\n${exam.title}\n正确率: ${accuracy}% | 用时: ${duration}`;
-        window.showMessage(message, 'success');
+        this.showUserMessage(message, 'success');
 
         // 显示详细结果模态框
         setTimeout(() => {
@@ -2331,10 +2656,10 @@ class ExamSystemApp {
                         </div>
                     ` : ''}
                     <div class="result-actions">
-                        <button class="btn btn-primary" onclick="window.app.openExam('${examId}')">
+                        <button class="btn btn-primary" onclick="window.App.openExam('${examId}')">
                             再次练习
                         </button>
-                        <button class="btn btn-secondary" onclick="window.app.navigateToView('practice')">
+                        <button class="btn btn-secondary" onclick="window.App.navigateToView('practice')">
                             查看记录
                         </button>
                         <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">
@@ -2373,8 +2698,8 @@ class ExamSystemApp {
      * 显示题目详情
      */
     showExamDetails(examId) {
-        if (this.components.examBrowser) {
-            this.components.examBrowser.showExamDetails(examId);
+        if (this.ui.examBrowser) {
+            this.ui.examBrowser.showExamDetails(examId);
         }
     }
 
@@ -2689,10 +3014,10 @@ class ExamSystemApp {
             const recoveryOptions = canRecover ? `
                 <div class="recovery-options">
                     <h3>恢复选项</h3>
-                    <button onclick="window.app.attemptRecovery()" class="btn btn-secondary">
+                    <button onclick="window.App.attemptRecovery()" class="btn btn-secondary">
                         尝试恢复
                     </button>
-                    <button onclick="window.app.enterSafeMode()" class="btn btn-outline">
+                    <button onclick="window.App.enterSafeMode()" class="btn btn-outline">
                         安全模式
                     </button>
                 </div>
@@ -2786,7 +3111,7 @@ class ExamSystemApp {
                         </div>
                         
                         <div class="safe-mode-actions">
-                            <button onclick="window.app.initialize()" class="btn btn-primary">
+                            <button onclick="window.App.initialize()" class="btn btn-primary">
                                 尝试完整启动
                             </button>
                             <button onclick="window.location.reload()" class="btn btn-secondary">
@@ -2834,12 +3159,30 @@ class ExamSystemApp {
      * 销毁应用
      */
     destroy() {
+        // 通过 App.events 移除监听
+        this.events.removeAllListeners();
+
         // 清理事件监听器
         window.removeEventListener('resize', this.handleResize);
+
+        // 清理单一消息监听器
+        if (this._messageListenerAttached) {
+            window.removeEventListener('message', this.handleMessage);
+            this._messageListenerAttached = false;
+        }
 
         // 清理会话监控
         if (this.sessionMonitorInterval) {
             clearInterval(this.sessionMonitorInterval);
+        }
+
+        // 清理握手定时器 (Task 36)
+        if (this._handshakeTimers) {
+            this._handshakeTimers.forEach((timer, examId) => {
+                clearTimeout(timer);
+                console.log(`[App] Cleared handshake timer for exam: ${examId}`);
+            });
+            this._handshakeTimers.clear();
         }
 
         // 关闭所有题目窗口
@@ -2858,55 +3201,595 @@ class ExamSystemApp {
                 component.destroy();
             }
         });
+        Object.values(this.ui).forEach(component => {
+            if (component && typeof component.destroy === 'function') {
+                component.destroy();
+            }
+        });
+        Object.values(this.stores).forEach(store => {
+            if (store && typeof store.destroy === 'function') {
+                store.destroy();
+            }
+        });
 
         this.isInitialized = false;
     }
 
-}
+    /**
+     * 验证练习消息 (Task 36)
+     */
+    validatePracticeMessage(data, type) {
+        // 基本结构验证
+        if (!data || typeof data !== 'object') {
+            return { valid: false, reason: 'Invalid message structure' };
+        }
 
-// 新增修复3E：在js/app.js的DOMContentLoaded初始化中去除顶层await
-// 应用启动
-document.addEventListener('DOMContentLoaded', () => {
-    try {
-        (function(){ try { window.app = new ExamSystemApp(); window.app.initialize(); } catch(e) { console.error('[App] 初始化失败:', e); } })();
-    } catch (error) {
-        console.error('Failed to start application:', error);
-        if (window.handleError) {
-            window.handleError(error, 'Application Startup');
-        } else {
-            // Fallback: non-blocking user message if error handler is unavailable
-            try {
-                const container = document.getElementById('message-container');
-                if (container) {
-                    const msg = document.createElement('div');
-                    msg.className = 'message error';
-                    msg.textContent = '系统启动失败，请检查控制台日志。';
-                    container.appendChild(msg);
+        // 来源验证
+        if (data.source !== 'practice_page') {
+            return { valid: false, reason: 'Invalid source' };
+        }
+
+        // 类型特定验证
+        switch (type) {
+            case 'SESSION_READY':
+                if (!data.sessionId || typeof data.sessionId !== 'string') {
+                    return { valid: false, reason: 'Missing or invalid sessionId' };
                 }
-            } catch (_) {
-                // no-op
+                if (!data.examId || typeof data.examId !== 'string') {
+                    return { valid: false, reason: 'Missing or invalid examId' };
+                }
+                break;
+
+            case 'PROGRESS_UPDATE':
+                if (!data.sessionId || typeof data.sessionId !== 'string') {
+                    return { valid: false, reason: 'Missing or invalid sessionId' };
+                }
+                if (!data.examId || typeof data.examId !== 'string') {
+                    return { valid: false, reason: 'Missing or invalid examId' };
+                }
+                if (data.progress !== undefined && typeof data.progress !== 'number') {
+                    return { valid: false, reason: 'Invalid progress value' };
+                }
+                break;
+
+            case 'PRACTICE_COMPLETE':
+                if (!data.sessionId || typeof data.sessionId !== 'string') {
+                    return { valid: false, reason: 'Missing or invalid sessionId' };
+                }
+                if (!data.examId || typeof data.examId !== 'string') {
+                    return { valid: false, reason: 'Missing or invalid examId' };
+                }
+                if (!data.duration || typeof data.duration !== 'number') {
+                    return { valid: false, reason: 'Missing or invalid duration' };
+                }
+                if (!data.score || typeof data.score !== 'object') {
+                    return { valid: false, reason: 'Missing or invalid score data' };
+                }
+                if (typeof data.score.percentage !== 'number') {
+                    return { valid: false, reason: 'Invalid score percentage' };
+                }
+                break;
+
+            case 'ERROR_OCCURRED':
+                if (!data.error || typeof data.error !== 'object') {
+                    return { valid: false, reason: 'Missing or invalid error data' };
+                }
+                break;
+
+            default:
+                return { valid: false, reason: `Unknown message type: ${type}` };
+        }
+
+        return { valid: true };
+    }
+
+    /**
+     * 验证消息来源窗口
+     */
+    validateMessageSource(event, examId) {
+        // 如果有 examWindows 映射，验证来源
+        if (this.examWindows && this.examWindows.has(examId)) {
+            const windowInfo = this.examWindows.get(examId);
+            if (windowInfo.windowRef && event.source !== windowInfo.windowRef) {
+                console.warn(`[App] Message source mismatch for exam ${examId}`);
+                return false;
+            }
+        }
+
+        // file:// 协议下的基本检查
+        if (location.protocol === 'file:') {
+            // 在 file:// 协议下，我们只能做基本检查
+            return event.origin === 'null' || event.origin === location.origin;
+        }
+
+        // HTTP/HTTPS 协议下的严格检查
+        try {
+            const eventOrigin = new URL(event.origin);
+            const currentOrigin = new URL(location.origin);
+
+            // 允许相同域名下的消息
+            if (eventOrigin.hostname === currentOrigin.hostname) {
+                return true;
+            }
+
+            console.warn(`[App] Untrusted message origin: ${event.origin}`);
+            return false;
+        } catch (error) {
+            console.warn('[App] Error validating message origin:', error);
+            return false;
+        }
+    }
+
+    /**
+     * 设置单一消息路由器（防止重复监听）
+     */
+    setupMessageRouter() {
+        // 只在父窗口（非练习窗口）中设置消息路由器 (Task 35)
+        if (typeof window.isPracticeWindow === 'function' && window.isPracticeWindow()) {
+            console.log('[App] Skipping message router setup - running in practice window');
+            return;
+        }
+
+        if (this._messageListenerAttached) {
+            console.warn('[App] Message listener already attached, skipping...');
+            return;
+        }
+
+        this._messageListenerAttached = true;
+        this._processedSessionIds = new Set();
+        console.log('[App] Setting up message router for parent window');
+
+        window.addEventListener('message', (event) => {
+            try {
+                // 基本结构验证
+                if (!event.data || typeof event.data !== 'object') {
+                    console.warn('[App] Invalid message structure:', event.data);
+                    return;
+                }
+
+                const { type, data } = event.data;
+                if (!type) {
+                    console.warn('[App] Message missing type:', event.data);
+                    return;
+                }
+
+                // 严格消息验证 (Task 36)
+                const validation = this.validatePracticeMessage(event.data, type);
+                if (!validation.valid) {
+                    console.warn(`[App] Message validation failed: ${validation.reason}`, event.data);
+                    return;
+                }
+
+                // 来源验证
+                if (data.examId && !this.validateMessageSource(event, data.examId)) {
+                    console.warn(`[App] Message source validation failed for exam ${data.examId}`);
+                    return;
+                }
+
+                console.log(`[App] Received validated message: ${type}`);
+
+                switch (type) {
+                    case 'SESSION_READY':
+                        this.handleSessionReady(event, data);
+                        break;
+                    case 'PROGRESS_UPDATE':
+                        this.handleProgressUpdate(event, data);
+                        break;
+                    case 'PRACTICE_COMPLETE':
+                        this.handlePracticeComplete(event, data);
+                        break;
+                    case 'ERROR_OCCURRED':
+                        this.handleErrorOccurred(event, data);
+                        break;
+                    default:
+                        console.warn(`[App] Unknown message type: ${type}`);
+                }
+            } catch (error) {
+                console.error('[App] Error handling message:', error);
+                this.stores.app?.addError(error);
+            }
+        });
+
+        console.log('[App] Single message router attached');
+    }
+
+    /**
+     * 处理会话准备就绪
+     */
+    handleSessionReady(event, data) {
+        if (!data.sessionId) return;
+
+        const examId = data.examId;
+        if (!examId) return;
+
+        // 清除握手超时
+        if (this._handshakeTimers && this._handshakeTimers.has(examId)) {
+            clearTimeout(this._handshakeTimers.get(examId));
+            this._handshakeTimers.delete(examId);
+        }
+
+        // 标记窗口为就绪状态
+        if (this.examWindows && this.examWindows.has(examId)) {
+            const windowInfo = this.examWindows.get(examId);
+            windowInfo.dataCollectorReady = true;
+            windowInfo.lastUpdate = Date.now();
+            windowInfo.status = 'ready';
+        }
+
+        console.log(`[App] Session ready for exam: ${examId}`);
+    }
+
+    /**
+     * 处理进度更新
+     */
+    handleProgressUpdate(event, data) {
+        if (!data.sessionId || !data.examId) return;
+
+        // 更新窗口状态
+        if (this.examWindows && this.examWindows.has(data.examId)) {
+            const windowInfo = this.examWindows.get(data.examId);
+            windowInfo.lastUpdate = Date.now();
+            windowInfo.status = 'in_progress';
+        }
+
+        console.log(`[App] Progress update for exam: ${data.examId}`);
+    }
+
+    /**
+     * 处理练习完成
+     */
+    async handlePracticeComplete(event, data) {
+        if (!data.sessionId || !data.examId) return;
+
+        // 防重复处理
+        if (this._processedSessionIds.has(data.sessionId)) {
+            console.warn(`[App] Duplicate practice completion detected: ${data.sessionId}`);
+            return;
+        }
+
+        this._processedSessionIds.add(data.sessionId);
+
+        try {
+            // 通过 RecordStore 保存记录
+            if (this.stores.record) {
+                await this.stores.record.savePracticeRecord(data);
+                console.log(`[App] Practice record saved for exam: ${data.examId}`);
+            }
+
+            // 更新窗口状态
+            if (this.examWindows && this.examWindows.has(data.examId)) {
+                const windowInfo = this.examWindows.get(data.examId);
+                windowInfo.status = 'completed';
+                windowInfo.lastUpdate = Date.now();
+            }
+
+        } catch (error) {
+            console.error('[App] Error saving practice record:', error);
+            this.stores.app?.addError(error);
+        }
+    }
+
+    /**
+     * 处理错误发生
+     */
+    handleErrorOccurred(event, data) {
+        console.error('[App] Practice page error:', data);
+        if (this.stores.app) {
+            this.stores.app.addError(data.error || new Error('Unknown practice page error'));
+        }
+    }
+
+    /**
+     * 按需注入脚本（file:// 兼容）
+     */
+    injectScript(src) {
+        return new Promise((resolve, reject) => {
+            // 检查是否已加载
+            if (this._loadedScripts.has(src)) {
+                console.debug(`[Injector] Already loaded: ${src}`);
+                return resolve();
+            }
+
+            console.debug(`[Injector] Loading: ${src}`);
+
+            const s = document.createElement('script');
+            s.src = src;
+            s.async = false; // 保持执行顺序
+
+            s.onload = () => {
+                this._loadedScripts.add(src);
+                console.debug(`[Injector] Loaded: ${src}`);
+                resolve();
+            };
+
+            s.onerror = (e) => {
+                console.error(`[Injector] Failed: ${src}`, e);
+                reject(e);
+            };
+
+            document.head.appendChild(s);
+        });
+    }
+
+    /**
+     * 统一打开考试接口
+     */
+    async openExam(examId) {
+        try {
+            if (!examId) {
+                throw new Error('Exam ID is required');
+            }
+
+            console.log(`[App] Opening exam: ${examId}`);
+
+            // 确保练习记录器已加载
+            if (!window.PracticeRecorder) {
+                await this.injectScript('js/core/practiceRecorder.js');
+            }
+
+            // 获取考试信息
+            let exam;
+            if (this.stores.exams) {
+                exam = this.stores.exams.getExamById(examId);
+            } else {
+                // 回退到全局数据
+                exam = window.completeExamIndex?.find(e => e.id === examId);
+            }
+
+            if (!exam) {
+                throw new Error(`Exam not found: ${examId}`);
+            }
+
+            // 如果是听力考试，确保听力数据已加载
+            if (exam.category === 'listening') {
+                await this.injectScript('assets/scripts/listening-exam-data.js');
+            }
+
+            // 使用练习记录器打开考试
+            if (window.PracticeRecorder) {
+                const recorder = new window.PracticeRecorder();
+                recorder.startPractice(exam);
+            } else {
+                // 回退方案：直接打开考试页面
+                const examUrl = exam.practiceUrl || `exam.html?id=${examId}`;
+                window.open(examUrl, `exam_${examId}`, 'width=1200,height=800,scrollbars=yes,resizable=yes');
+            }
+
+            console.log(`[App] Exam opened successfully: ${examId}`);
+
+        } catch (error) {
+            console.error('[App] Error opening exam:', error);
+            if (this.stores.app) {
+                this.stores.app.addError(error);
+            } else {
+                this.showUserMessage(`打开考试失败: ${error.message}`, 'error');
             }
         }
     }
-});
+
+    /**
+     * 统一查看PDF接口
+     */
+    async viewPDF(examId) {
+        try {
+            if (!examId) {
+                throw new Error('Exam ID is required');
+            }
+
+            console.log(`[App] Viewing PDF for exam: ${examId}`);
+
+            // 确保PDF处理器已加载
+            if (!window.PDFHandler) {
+                await this.injectScript('js/components/PDFHandler.js');
+            }
+
+            // 获取考试信息
+            let exam;
+            if (this.stores.exams) {
+                exam = this.stores.exams.getExamById(examId);
+            } else {
+                // 回退到全局数据
+                exam = window.completeExamIndex?.find(e => e.id === examId);
+            }
+
+            if (!exam) {
+                throw new Error(`Exam not found: ${examId}`);
+            }
+
+            // 检查是否有PDF文件
+            const pdfPath = exam.pdfPath || (exam.path ? `${exam.path}/exam.pdf` : null);
+            if (!pdfPath) {
+                throw new Error(`PDF not available for exam: ${examId}`);
+            }
+
+            // 使用PDF处理器打开PDF
+            if (window.PDFHandler) {
+                const pdfHandler = new window.PDFHandler();
+                pdfHandler.openPDF(pdfPath, exam.title || `Exam ${examId}`);
+            } else {
+                // 回退方案：直接打开PDF文件
+                window.open(pdfPath, '_blank');
+            }
+
+            console.log(`[App] PDF opened successfully: ${examId}`);
+
+        } catch (error) {
+            console.error('[App] Error viewing PDF:', error);
+            if (this.stores.app) {
+                this.stores.app.addError(error);
+            } else {
+                this.showUserMessage(`打开PDF失败: ${error.message}`, 'error');
+            }
+        }
+    }
+
+    /**
+     * 添加窗口事件监听器（带注册）
+     */
+    addWindowListener(type, handler, options) {
+        if (!this._listeners.has(type)) {
+            this._listeners.set(type, []);
+        }
+        this._listeners.get(type).push(handler);
+        window.addEventListener(type, handler, options);
+    }
+
+    /**
+     * 移除窗口事件监听器（带注册清理）
+     */
+    removeWindowListener(type, handler) {
+        if (this._listeners.has(type)) {
+            const handlers = this._listeners.get(type);
+            const index = handlers.indexOf(handler);
+            if (index > -1) {
+                handlers.splice(index, 1);
+            }
+            if (handlers.length === 0) {
+                this._listeners.delete(type);
+            }
+        }
+        window.removeEventListener(type, handler);
+    }
+
+    /**
+     * 添加定时器（带注册）
+     */
+    addInterval(fn, ms) {
+        const id = setInterval(fn, ms);
+        this._intervals.add(id);
+        return {
+            id,
+            clear: () => {
+                clearInterval(id);
+                this._intervals.delete(id);
+            }
+        };
+    }
+
+    /**
+     * 添加延时器（带注册）
+     */
+    addTimeout(fn, ms) {
+        const id = setTimeout(fn, ms);
+        this._timeouts.add(id);
+        return {
+            id,
+            clear: () => {
+                clearTimeout(id);
+                this._timeouts.delete(id);
+            }
+        };
+    }
+
+    /**
+     * 调试报告（显示监听器和定时器统计）
+     */
+    debugReport() {
+        console.group('[App] Debug Report - Listener & Timer Statistics');
+
+        // 监听器统计
+        const listenerStats = [];
+        this._listeners.forEach((handlers, type) => {
+            listenerStats.push({
+                type,
+                count: handlers.length
+            });
+        });
+
+        console.table(listenerStats);
+        console.log(`[App] Total event listener types: ${this._listeners.size}`);
+        console.log(`[App] Total registered listeners: ${listenerStats.reduce((sum, stat) => sum + stat.count, 0)}`);
+
+        // 定时器统计
+        console.log(`[App] Active intervals: ${this._intervals.size}`);
+        console.log(`[App] Active timeouts: ${this._timeouts.size}`);
+
+        // 脚本统计
+        console.log(`[App] Loaded scripts: ${this._loadedScripts.size}`);
+        console.log(`[App] Loaded scripts list:`, Array.from(this._loadedScripts));
+
+        // 消息处理统计
+        console.log(`[App] Processed session IDs: ${this._processedSessionIds?.size || 0}`);
+        console.log(`[App] Message listener attached: ${this._messageListenerAttached}`);
+
+        // 组件统计
+        console.log(`[App] Active stores: ${Object.keys(this.stores).length}`);
+        console.log(`[App] Active UI components: ${Object.keys(this.ui).length}`);
+        console.log(`[App] Active components: ${Object.keys(this.components).length}`);
+
+        console.groupEnd();
+
+        return {
+            listeners: listenerStats,
+            intervals: this._intervals.size,
+            timeouts: this._timeouts.size,
+            scripts: this._loadedScripts.size,
+            processedSessions: this._processedSessionIds?.size || 0,
+            messageListenerAttached: this._messageListenerAttached,
+            stores: Object.keys(this.stores).length,
+            ui: Object.keys(this.ui).length,
+            components: Object.keys(this.components).length
+        };
+    }
+
+    /**
+     * 清理所有注册的监听器和定时器
+     */
+    cleanup() {
+        console.log('[App] Cleaning up registered listeners and timers...');
+
+        // 清理定时器
+        this._intervals.forEach(id => clearInterval(id));
+        this._intervals.clear();
+
+        // 清理延时器
+        this._timeouts.forEach(id => clearTimeout(id));
+        this._timeouts.clear();
+
+        // 清理监听器
+        this._listeners.forEach((handlers, type) => {
+            handlers.forEach(handler => {
+                window.removeEventListener(type, handler);
+            });
+        });
+        this._listeners.clear();
+
+        console.log('[App] Cleanup completed');
+    }
+
+}
+
+// 应用启动 - 统一入口
+(function() {
+    try {
+        window.App = new App();
+        window.App.initialize();
+        console.log('[App] 初始化成功');
+    } catch (error) {
+        console.error('[App] 初始化失败:', error);
+        if (window.handleError) {
+            window.handleError(error, 'Application Startup');
+        }
+    }
+})();
 
 // 页面卸载时清理
 window.addEventListener('beforeunload', () => {
-    if (window.app) {
-        window.app.destroy();
+    if (window.App) {
+        window.App.destroy();
     }
 });
 
-// 调试辅助：导出握手状态
+// 调试辅助：导出握手状态 (通过 App)
 window.getHandshakeState = function() {
     try {
         const state = { timers: [], windows: [] };
-        if (window.app) {
-            if (window.app._handshakeTimers) {
-                state.timers = Array.from(window.app._handshakeTimers.keys());
+        if (window.App) {
+            if (window.App._handshakeTimers) {
+                state.timers = Array.from(window.App._handshakeTimers.keys());
             }
-            if (window.app.examWindows) {
-                window.app.examWindows.forEach((info, id) => {
+            if (window.App.examWindows) {
+                window.App.examWindows.forEach((info, id) => {
                     state.windows.push({
                         examId: id,
                         ready: !!info.dataCollectorReady,

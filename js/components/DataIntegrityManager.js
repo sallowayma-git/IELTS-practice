@@ -9,11 +9,12 @@ class DataIntegrityManager {
         this.dataVersion = '1.0.0';
         this.backupTimer = null;
         this.validationRules = new Map();
+        this.autoBackupEnabled = this.loadAutoBackupSetting();
         
         // 注册默认验证规则
         this.registerDefaultValidationRules();
         
-        // 启动自动备份
+        // 启动自动备份（仅当启用时）
         this.startAutoBackup();
         
         // 尝试立即清理旧备份，防止一启动就触发配额
@@ -65,6 +66,11 @@ class DataIntegrityManager {
     startAutoBackup() {
         if (this.backupTimer) {
             clearInterval(this.backupTimer);
+        }
+
+        if (!this.autoBackupEnabled) {
+            console.log('[DataIntegrityManager] 自动备份已禁用');
+            return;
         }
 
         this.backupTimer = setInterval(() => {
@@ -915,6 +921,35 @@ class DataIntegrityManager {
         this.stopAutoBackup();
         this.validationRules.clear();
     }
+
+    loadAutoBackupSetting() {
+        try {
+            const value = localStorage.getItem('autoBackupEnabled');
+            return value !== null ? JSON.parse(value) : false;
+        } catch (e) {
+            return false; // file:// 兼容，忽略错误
+        }
+    }
+
+    saveAutoBackupSetting() {
+        try {
+            localStorage.setItem('autoBackupEnabled', JSON.stringify(this.autoBackupEnabled));
+        } catch (e) {
+            // file:// 兼容，忽略错误
+        }
+    }
+
+    enableAutoBackup() {
+        this.autoBackupEnabled = true;
+        this.saveAutoBackupSetting();
+        this.startAutoBackup();
+    }
+
+    disableAutoBackup() {
+        this.autoBackupEnabled = false;
+        this.saveAutoBackupSetting();
+        this.stopAutoBackup();
+    }
 }
 
 // 导出类
@@ -1037,3 +1072,6 @@ window.DataIntegrityManager = DataIntegrityManager;
     try { console.warn('[DataIntegrityManager] strong export override install failed:', e); } catch(_) {}
   }
 })();
+
+window.dim = new DataIntegrityManager();
+window.DataIntegrityManagerInstance = window.dim;

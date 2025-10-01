@@ -9,6 +9,8 @@ class ExamCommunication {
         this.examId = null;
         this.isInitialized = false;
         this.messageQueue = [];
+        this.retryAttempts = new Map(); // 按消息ID跟踪重试
+        this.maxRetries = 3;
         
         this.initialize();
     }
@@ -16,19 +18,49 @@ class ExamCommunication {
     /**
      * 初始化通信接口
      */
+    // 类型守卫
+    isValidInitMsg(msg) {
+        return msg.type === 'INIT_SESSION' && msg.data &&
+               typeof msg.data.sessionId === 'string' &&
+               typeof msg.data.examId === 'string' &&
+               typeof msg.data.timestamp === 'number';
+    }
+
+    isValidSessionReadyData(data) {
+        return typeof data.pageType === 'string' && typeof data.url === 'string' && typeof data.timestamp === 'number';
+    }
+
+    isValidProgressData(data) {
+        return typeof data.answeredQuestions === 'number' &&
+               typeof data.totalQuestions === 'number' &&
+               typeof data.elapsedTime === 'number';
+    }
+
+    isValidPracticeCompleteData(data) {
+        return typeof data.sessionId === 'string' &&
+               data.answers && typeof data.answers === 'object' &&
+               typeof data.duration === 'number' &&
+               data.scoreInfo && typeof data.scoreInfo === 'object';
+    }
+
     initialize() {
-        // 监听来自父窗口的消息
-        window.addEventListener('message', (event) => {
-            this.handleParentMessage(event);
-        });
+        // 只在练习窗口中添加消息监听器 (Task 35)
+        if (typeof window.isPracticeWindow === 'function' && window.isPracticeWindow()) {
+            window.addEventListener('message', (event) => {
+                this.handleParentMessage(event);
+            });
+            console.log('[ExamCommunication] Message listener attached for practice window');
+        } else {
+            console.log('[ExamCommunication] Skipping message listener - not in practice window');
+        }
         
         // 页面加载完成后通知父窗口
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => {
-                this.notifyPageReady();
+                this.sendSessionReady();
             });
         } else {
-            this.notifyPageReady();
+            this.sendSessionReady();
         }
         
         // 页面卸载时通知父窗口
@@ -43,14 +75,35 @@ class ExamCommunication {
      * 处理来自父窗口的消息
      */
     handleParentMessage(event) {
-        const { type, data } = event.data || {};
-        
+        if (!event.data || typeof event.data !== 'object') return;
+
+        const { type, data } = event.data;
+
+        // 验证来源（file:// 下放宽）
+        if (event.origin !== '*' && event.origin !== window.location.origin) {
+            console.warn('Invalid message origin:', event.origin);
+            return;
+        }
+
         switch (type) {
-            case 'init_exam_session':
+            case 'INIT_SESSION':
+                if (!this.isValidInitMsg(event.data)) {
+                    console.warn('Invalid INIT_SESSION message');
+                    return;
+                }
                 this.handleSessionInit(data, event.origin);
                 break;
-            case 'request_progress':
-                this.sendProgress();
+            case 'REQUEST_STATUS':
+            case 'HEARTBEAT':
+                if (!this.isValidRequestMsg(event.data)) {
+                    console.warn('Invalid request message');
+                    return;
+                }
+                if (type === 'REQUEST_STATUS') {
+                    this.sendProgress();
+                } else {
+                    this.sendHeartbeatResponse(data.timestamp);
+                }
                 break;
             case 'pause_session':
                 this.handlePauseRequest();
@@ -58,6 +111,8 @@ class ExamCommunication {
             case 'resume_session':
                 this.handleResumeRequest();
                 break;
+            default:
+                console.log('Unhandled message type:', type);
         }
     }
 
@@ -71,13 +126,6 @@ class ExamCommunication {
         this.isInitialized = true;
         
         console.log(`Exam session initialized: ${this.examId}`);
-        
-        // 发送会话开始通知
-        this.sendMessage('session_started', {
-            examId: this.examId,
-            sessionId: this.sessionId,
-            metadata: this.collectPageMetadata()
-        });
         
         // 发送队列中的消息
         this.flushMessageQueue();
@@ -110,43 +158,86 @@ class ExamCommunication {
     /**
      * 通知页面准备就绪
      */
-    notifyPageReady() {
-        // 向父窗口发送页面就绪信号
+    sendSessionReady() {
         if (window.parent && window.parent !== window) {
-            window.parent.postMessage({
-                type: 'page_ready',
-                data: {
-                    url: window.location.href,
-                    title: document.title,
-                    timestamp: new Date().toISOString()
-                }
-            }, '*');
+            const readyData = {
+                pageType: 'practice',
+                url: window.location.href,
+                timestamp: Date.now()
+            };
+
+            if (!this.isValidSessionReadyData(readyData)) {
+                console.error('Invalid SESSION_READY data');
+                return;
+            }
+
+            this.sendMessageWithRetry('SESSION_READY', readyData);
         }
     }
 
     /**
      * 发送消息到父窗口
      */
-    sendMessage(type, data) {
-        const message = {
-            type,
-            data: {
-                ...data,
-                sessionId: this.sessionId,
-                examId: this.examId,
-                timestamp: new Date().toISOString()
-            }
+    // 重试发送消息：指数退避
+    async sendMessageWithRetry(type, data, attempt = 1) {
+        const messageId = `${type}_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+        const baseData = {
+            ...data,
+            sessionId: this.sessionId,
+            examId: this.examId,
+            timestamp: Date.now(),
+            messageId,
+            source: 'practice_page'
         };
-        
-        if (!this.isInitialized) {
-            // 如果未初始化，将消息加入队列
-            this.messageQueue.push(message);
+
+        // 类型特定验证
+        let valid = true;
+        switch (type) {
+            case 'SESSION_READY':
+                valid = this.isValidSessionReadyData(baseData);
+                break;
+            case 'PROGRESS_UPDATE':
+                valid = this.isValidProgressData(baseData);
+                break;
+            case 'PRACTICE_COMPLETE':
+                valid = this.isValidPracticeCompleteData(baseData);
+                break;
+        }
+        if (!valid) {
+            console.error(`Invalid ${type} data`);
             return;
         }
-        
-        if (window.parent && window.parent !== window && this.parentOrigin) {
-            window.parent.postMessage(message, this.parentOrigin);
+
+        const message = { type, data: baseData };
+
+        const sendAttempt = () => {
+            if (window.parent && window.parent !== window && this.parentOrigin) {
+                window.parent.postMessage(message, this.parentOrigin);
+                console.log(`[${type}] 发送尝试 ${attempt}/${this.maxRetries}`);
+            }
+        };
+
+        sendAttempt();
+
+        if (attempt < this.maxRetries) {
+            const delay = 500 * Math.pow(2, attempt - 1); // 500ms, 1s, 2s
+            setTimeout(() => {
+                this.sendMessageWithRetry(type, data, attempt + 1);
+            }, delay);
+        } else if (attempt >= this.maxRetries) {
+            console.error(`[${type}] 重试失败，报告错误`);
+            // 子侧错误报告：发送 ERROR 或 console
+            this.sendError(`Failed to send ${type} after ${this.maxRetries} attempts`);
         }
+    }
+
+    sendMessage(type, data) {
+        if (!this.isInitialized) {
+            this.messageQueue.push({ type, data });
+            return;
+        }
+
+        this.sendMessageWithRetry(type, data);
     }
 
     /**
@@ -154,59 +245,65 @@ class ExamCommunication {
      */
     flushMessageQueue() {
         while (this.messageQueue.length > 0) {
-            const message = this.messageQueue.shift();
-            if (window.parent && window.parent !== window && this.parentOrigin) {
-                window.parent.postMessage(message, this.parentOrigin);
-            }
+            const { type, data } = this.messageQueue.shift();
+            this.sendMessage(type, data);
         }
     }
 
     /**
      * 通知练习开始
      */
-    notifyPracticeStarted(examData = {}) {
-        this.sendMessage('session_started', {
-            examData,
-            startTime: new Date().toISOString()
-        });
+    // 发送进度更新
+    sendProgressUpdate(progressData = {}) {
+        const defaultProgress = {
+            answeredQuestions: 0,
+            totalQuestions: 0,
+            elapsedTime: 0,
+            ...progressData
+        };
+
+        if (!this.isValidProgressData(defaultProgress)) {
+            console.error('Invalid progress data');
+            return;
+        }
+
+        this.sendMessageWithRetry('PROGRESS_UPDATE', defaultProgress);
     }
 
     /**
      * 发送进度更新
      */
-    sendProgress(progressData = {}) {
-        const defaultProgress = {
-            currentQuestion: 0,
-            totalQuestions: 0,
-            answeredQuestions: 0,
-            timeSpent: 0,
-            ...progressData
-        };
-        
-        this.sendMessage('session_progress', {
-            progress: defaultProgress,
-            answers: this.collectAnswers()
-        });
+    // 发送心跳响应
+    sendHeartbeatResponse(parentTimestamp) {
+        this.sendMessageWithRetry('HEARTBEAT_RESPONSE', { timestamp: Date.now(), parentTimestamp });
     }
 
     /**
      * 通知练习完成
      */
     notifyPracticeCompleted(results = {}) {
-        const completionData = {
-            endTime: new Date().toISOString(),
-            results: {
-                score: 0,
-                totalQuestions: 0,
-                correctAnswers: 0,
-                accuracy: 0,
-                answers: [],
-                questionTypePerformance: {},
-                ...results
-            }
+        const scoreInfo = {
+            correct: 0,
+            total: 0,
+            accuracy: 0,
+            percentage: 0,
+            ...results
         };
-        
-        this.sendMessage('session_completed', completionData);
+
+        const completionData = {
+            sessionId: this.sessionId,
+            answers: this.collectAnswers(),
+            duration: Math.floor((Date.now() - this.startTime) / 1000),
+            scoreInfo,
+            timestamp: Date.now()
+        };
+
+        if (!this.isValidPracticeCompleteData(completionData)) {
+            console.error('Invalid practice complete data');
+            return;
+        }
+
+        this.sendMessageWithRetry('PRACTICE_COMPLETE', completionData);
     }
 
     /**
@@ -241,14 +338,25 @@ class ExamCommunication {
     /**
      * 通知错误
      */
+    sendError(message, context = '') {
+        const errorData = {
+            message,
+            context,
+            timestamp: Date.now(),
+            sessionId: this.sessionId
+        };
+        this.sendMessageWithRetry('ERROR_OCCURRED', errorData);
+    }
+
     notifyError(error, context = '') {
-        this.sendMessage('session_error', {
-            error: {
-                message: error.message || error,
-                stack: error.stack,
-                context,
-                timestamp: new Date().toISOString()
-            }
+        this.sendError(error.message || error, context);
+    }
+
+    // 心跳响应
+    sendHeartbeatResponse(parentTimestamp) {
+        this.sendMessageWithRetry('HEARTBEAT_RESPONSE', {
+            timestamp: Date.now(),
+            parentTimestamp
         });
     }
 
@@ -282,6 +390,7 @@ class ExamCommunication {
      * 开始活动监控
      */
     startActivityMonitoring() {
+        this.startTime = Date.now(); // 记录开始时间
         let lastActivity = Date.now();
         
         // 监控用户活动
@@ -307,7 +416,11 @@ class ExamCommunication {
         
         // 定期发送进度更新
         setInterval(() => {
-            this.sendProgress();
+            this.sendProgressUpdate({
+                answeredQuestions: this.collectAnswers().length,
+                totalQuestions: document.querySelectorAll('input[name]').length || 0,
+                elapsedTime: Math.floor((Date.now() - this.startTime) / 1000)
+            });
         }, 30000); // 每30秒发送一次进度
     }
 
@@ -333,10 +446,10 @@ class ExamCommunication {
     autoDetectResults() {
         // 尝试自动检测页面中的结果信息
         const results = {
-            score: 0,
-            totalQuestions: 0,
-            correctAnswers: 0,
+            correct: 0,
+            total: 0,
             accuracy: 0,
+            percentage: 0,
             answers: this.collectAnswers()
         };
         
@@ -349,15 +462,17 @@ class ExamCommunication {
             // 尝试提取分数
             const scoreMatch = text.match(/(\d+)\s*\/\s*(\d+)/);
             if (scoreMatch) {
-                results.correctAnswers = parseInt(scoreMatch[1]);
-                results.totalQuestions = parseInt(scoreMatch[2]);
-                results.accuracy = results.totalQuestions > 0 ? results.correctAnswers / results.totalQuestions : 0;
+                results.correct = parseInt(scoreMatch[1]);
+                results.total = parseInt(scoreMatch[2]);
+                results.accuracy = results.total > 0 ? results.correct / results.total : 0;
+                results.percentage = Math.round(results.accuracy * 100);
             }
             
             // 尝试提取百分比
             const percentMatch = text.match(/(\d+(?:\.\d+)?)\s*%/);
             if (percentMatch) {
                 results.accuracy = parseFloat(percentMatch[1]) / 100;
+                results.percentage = parseFloat(percentMatch[1]);
             }
         });
         
@@ -388,7 +503,7 @@ class ExamCommunication {
                         // 延迟检测结果，确保页面完全加载
                         setTimeout(() => {
                             const results = this.autoDetectResults();
-                            if (results.totalQuestions > 0 || results.accuracy > 0) {
+                            if (results.total > 0 || results.accuracy > 0) {
                                 this.notifyPracticeCompleted(results);
                             }
                         }, 1000);

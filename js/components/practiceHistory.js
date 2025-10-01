@@ -116,19 +116,19 @@ class PracticeHistory {
                 <div class="history-header">
                     <h2>练习历史记录</h2>
                     <div class="history-actions">
-                        <button class="btn btn-primary" onclick="window.app.components.practiceHistory.refreshHistory()">
+                        <button class="btn btn-primary" onclick="window.App.components.practiceHistory.refreshHistory()">
                             <span class="btn-icon">🔄</span>
                             刷新
                         </button>
-                        <button class="btn btn-secondary" onclick="window.app.components.practiceHistory.exportHistory()">
+                        <button class="btn btn-secondary" onclick="window.App.components.practiceHistory.exportHistory()">
                             <span class="btn-icon">📥</span>
                             导出
                         </button>
-                        <button class="btn btn-outline" onclick="window.app.components.practiceHistory.showImportDialog()">
+                        <button class="btn btn-outline" onclick="window.App.components.practiceHistory.showImportDialog()">
                             <span class="btn-icon">📤</span>
                             导入
                         </button>
-                        <button class="btn btn-danger" id="bulk-delete-btn" onclick="window.app.components.practiceHistory.bulkDeleteSelected()" style="display: none;">
+                        <button class="btn btn-danger" id="bulk-delete-btn" onclick="window.App.components.practiceHistory.bulkDeleteSelected()" style="display: none;">
                             <span class="btn-icon">🗑️</span>
                             批量删除
                         </button>
@@ -179,7 +179,7 @@ class PracticeHistory {
                             <input type="text" id="history-search" placeholder="搜索题目标题..." class="search-input">
                         </div>
                         
-                        <button class="btn btn-outline btn-sm" onclick="window.app.components.practiceHistory.resetFilters()">
+                        <button class="btn btn-outline btn-sm" onclick="window.App.components.practiceHistory.resetFilters()">
                             重置筛选
                         </button>
                     </div>
@@ -188,7 +188,7 @@ class PracticeHistory {
                         <input type="date" id="start-date" class="date-input">
                         <span>至</span>
                         <input type="date" id="end-date" class="date-input">
-                        <button class="btn btn-sm btn-primary" onclick="window.app.components.practiceHistory.applyDateRange()">
+                        <button class="btn btn-sm btn-primary" onclick="window.App.components.practiceHistory.applyDateRange()">
                             应用
                         </button>
                     </div>
@@ -294,8 +294,8 @@ class PracticeHistory {
         // 搜索输入事件
         const searchInput = document.getElementById('history-search');
         if (searchInput) {
-            const debounceFunc = (window.Utils && typeof window.Utils.debounce === 'function') 
-                ? Utils.debounce 
+            const debounceFunc = (window.App && window.App.utils && typeof window.App.utils.debounce === 'function')
+                ? window.App.utils.debounce
                 : this.debounce;
             searchInput.addEventListener('input', debounceFunc((e) => {
                 this.searchQuery = e.target.value.trim().toLowerCase();
@@ -340,7 +340,7 @@ class PracticeHistory {
     async loadHistory() {
         try {
             // 获取练习记录器实例
-            const practiceRecorder = window.app?.components?.practiceRecorder;
+            const practiceRecorder = window.App?.components?.practiceRecorder;
             if (!practiceRecorder) {
                 throw new Error('PracticeRecorder not available');
             }
@@ -542,8 +542,8 @@ class PracticeHistory {
                 totalTime: totalTime
             });
             
-            const formattedTime = (window.Utils && typeof window.Utils.formatDuration === 'function') 
-                ? Utils.formatDuration(totalTime)
+            const formattedTime = (window.App && window.App.utils && typeof window.App.utils.formatDuration === 'function')
+                ? window.App.utils.formatDuration(totalTime)
                 : this.formatDurationFallback(totalTime);
             document.getElementById('total-time').textContent = formattedTime;
             document.getElementById('filtered-count').textContent = totalPractices;
@@ -640,11 +640,11 @@ class PracticeHistory {
      */
     createRecordItem(record) {
         const accuracy = Math.round(record.accuracy * 100);
-        const duration = (window.Utils && typeof window.Utils.formatDuration === 'function')
-            ? Utils.formatDuration(record.duration)
+        const duration = (window.App && window.App.utils && typeof window.App.utils.formatDuration === 'function')
+            ? window.App.utils.formatDuration(record.duration)
             : this.formatDurationFallback(record.duration);
-        const startTime = (window.Utils && typeof window.Utils.formatDate === 'function')
-            ? Utils.formatDate(record.startTime, 'YYYY-MM-DD HH:mm')
+        const startTime = (window.App && window.App.utils && typeof window.App.utils.formatDate === 'function')
+            ? window.App.utils.formatDate(record.startTime, 'YYYY-MM-DD HH:mm')
             : this.formatDateFallback(record.startTime, 'YYYY-MM-DD HH:mm');
         
         const accuracyClass = accuracy >= 80 ? 'excellent' : accuracy >= 60 ? 'good' : 'needs-improvement';
@@ -817,10 +817,10 @@ class PracticeHistory {
      * 重新练习题目
      */
     retryExam(record) {
-        if (window.app && typeof window.app.openExam === 'function') {
-            window.app.openExam(record.examId);
+        if (window.App && typeof window.App.openExam === 'function') {
+            window.App.openExam(record.examId);
         } else {
-            window.showMessage('无法重新打开题目', 'error');
+            window.App.showUserMessage('无法重新打开题目', 'error');
         }
     }
 
@@ -854,7 +854,7 @@ class PracticeHistory {
     async bulkDeleteSelected() {
         const selectedIds = new Set(Array.from(this.selectedSet, id => String(id)));
         if (selectedIds.size === 0) {
-            window.showMessage('请先选择要删除的记录', 'warning');
+            window.App.showUserMessage('请先选择要删除的记录', 'warning');
             return;
         }
         if (!confirm(`确定要删除选中 ${selectedIds.size} 条记录吗？此操作不可撤销。`)) return;
@@ -874,13 +874,13 @@ class PracticeHistory {
             } else {
                 this.renderHistoryList();
             }
-            if (typeof window.syncPracticeRecords === 'function') {
-                window.syncPracticeRecords();
+            if (window.App.stores.recordStore && typeof window.App.stores.recordStore.sync === 'function') {
+                window.App.stores.recordStore.sync();
             }
-            window.showMessage(`已删除 ${deletedCount} 条记录`, 'success');
+            window.App.showUserMessage(`已删除 ${deletedCount} 条记录`, 'success');
         } catch (error) {
             console.error('批量删除失败:', error);
-            window.showMessage('批量删除失败', 'error');
+            window.App.showUserMessage('批量删除失败', 'error');
         }
     }
     
@@ -893,14 +893,14 @@ class PracticeHistory {
         if (!record) return;
         
         const accuracy = Math.round(record.accuracy * 100);
-        const duration = (window.Utils && typeof window.Utils.formatDuration === 'function') 
-            ? Utils.formatDuration(record.duration)
+        const duration = (window.App && window.App.utils && typeof window.App.utils.formatDuration === 'function')
+            ? window.App.utils.formatDuration(record.duration)
             : this.formatDurationFallback(record.duration);
-        const startTime = (window.Utils && typeof window.Utils.formatDate === 'function') 
-            ? Utils.formatDate(record.startTime, 'YYYY-MM-DD HH:mm:ss')
+        const startTime = (window.App && window.App.utils && typeof window.App.utils.formatDate === 'function')
+            ? window.App.utils.formatDate(record.startTime, 'YYYY-MM-DD HH:mm:ss')
             : this.formatDateFallback(record.startTime, 'YYYY-MM-DD HH:mm:ss');
-        const endTime = (window.Utils && typeof window.Utils.formatDate === 'function') 
-            ? Utils.formatDate(record.endTime, 'YYYY-MM-DD HH:mm:ss')
+        const endTime = (window.App && window.App.utils && typeof window.App.utils.formatDate === 'function')
+            ? window.App.utils.formatDate(record.endTime, 'YYYY-MM-DD HH:mm:ss')
             : this.formatDateFallback(record.endTime, 'YYYY-MM-DD HH:mm:ss');
         
         // 生成答案详情表格
@@ -1146,11 +1146,11 @@ class PracticeHistory {
             // 刷新显示
             this.refreshHistory();
             
-            window.showMessage('记录已删除', 'success');
+            window.App.showUserMessage('记录已删除', 'success');
             
         } catch (error) {
             console.error('Failed to delete record:', error);
-            window.showMessage('删除记录失败', 'error');
+            window.App.showUserMessage('删除记录失败', 'error');
         }
     }
 
@@ -1198,7 +1198,7 @@ class PracticeHistory {
      */
     exportHistory() {
         try {
-            const practiceRecorder = window.app?.components?.practiceRecorder;
+            const practiceRecorder = window.App?.components?.practiceRecorder;
             if (!practiceRecorder) {
                 throw new Error('PracticeRecorder not available');
             }
@@ -1217,11 +1217,11 @@ class PracticeHistory {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
             
-            window.showMessage('历史记录已导出', 'success');
+            window.App.showUserMessage('历史记录已导出', 'success');
             
         } catch (error) {
             console.error('Failed to export history:', error);
-            window.showMessage('导出失败', 'error');
+            window.App.showUserMessage('导出失败', 'error');
         }
     }
 
@@ -1254,7 +1254,7 @@ class PracticeHistory {
                         <span id="file-name">未选择文件</span>
                     </div>
                     <div class="import-actions">
-                        <button class="btn btn-primary" onclick="window.app.components.practiceHistory.performImport()">
+                        <button class="btn btn-primary" onclick="window.App.components.practiceHistory.performImport()">
                             导入
                         </button>
                         <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">
@@ -1282,7 +1282,7 @@ class PracticeHistory {
         const file = fileInput.files[0];
         
         if (!file) {
-            window.showMessage('请选择要导入的文件', 'warning');
+            window.App.showUserMessage('请选择要导入的文件', 'warning');
             return;
         }
         
@@ -1290,7 +1290,7 @@ class PracticeHistory {
             const importMode = document.querySelector('input[name="import-mode"]:checked').value;
             const fileContent = await this.readFile(file);
             
-            const practiceRecorder = window.app?.components?.practiceRecorder;
+            const practiceRecorder = window.App?.components?.practiceRecorder;
             if (!practiceRecorder) {
                 throw new Error('PracticeRecorder not available');
             }
@@ -1303,11 +1303,11 @@ class PracticeHistory {
             // 刷新历史记录
             this.refreshHistory();
             
-            window.showMessage('数据导入成功', 'success');
+            window.App.showUserMessage('数据导入成功', 'success');
             
         } catch (error) {
             console.error('Failed to import data:', error);
-            window.showMessage('导入失败：' + error.message, 'error');
+            window.App.showUserMessage('导入失败：' + error.message, 'error');
         }
     }
 
@@ -1382,7 +1382,7 @@ class PracticeHistory {
                     <div class="error-state-icon">⚠️</div>
                     <div class="error-state-title">加载失败</div>
                     <div class="error-state-description">${message}</div>
-                    <button class="btn btn-primary" onclick="window.app.components.practiceHistory.refreshHistory()">
+                    <button class="btn btn-primary" onclick="window.App.components.practiceHistory.refreshHistory()">
                         重试
                     </button>
                 </div>
@@ -1465,7 +1465,7 @@ class PracticeHistory {
     exportRecordAsMarkdown(recordId) {
         const record = this.filteredRecords.find(r => r.id === recordId);
         if (!record) {
-            window.showMessage('记录不存在', 'error');
+            window.App.showUserMessage('记录不存在', 'error');
             return;
         }
 
@@ -1485,10 +1485,10 @@ class PracticeHistory {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
 
-            window.showMessage('Markdown文件已导出', 'success');
+            window.App.showUserMessage('Markdown文件已导出', 'success');
         } catch (error) {
             console.error('Markdown导出失败:', error);
-            window.showMessage('导出失败，请重试', 'error');
+            window.App.showUserMessage('导出失败，请重试', 'error');
         }
     }
 
@@ -1498,7 +1498,7 @@ class PracticeHistory {
      */
     exportMultipleRecords(recordIds) {
         if (!recordIds || recordIds.length === 0) {
-            window.showMessage('请选择要导出的记录', 'warning');
+            window.App.showUserMessage('请选择要导出的记录', 'warning');
             return;
         }
 
@@ -1526,10 +1526,10 @@ class PracticeHistory {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
 
-            window.showMessage(`已导出${recordIds.length}条记录`, 'success');
+            window.App.showUserMessage(`已导出${recordIds.length}条记录`, 'success');
         } catch (error) {
             console.error('批量导出失败:', error);
-            window.showMessage('批量导出失败，请重试', 'error');
+            window.App.showUserMessage('批量导出失败，请重试', 'error');
         }
     }
 

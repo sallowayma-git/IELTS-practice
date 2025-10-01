@@ -3,7 +3,9 @@
 
 window.RecordStore = class RecordStore {
     constructor() {
+        if (typeof markStoreInitStart === 'function') markStoreInitStart('RecordStore');
         this.records = [];
+        this.processedSessionIds = new Set(); // 按 sessionId 去重 PRACTICE_COMPLETE
         this.stats = {
             totalPracticed: 0,
             averageScore: 0,
@@ -33,24 +35,74 @@ window.RecordStore = class RecordStore {
             await this.loadRecords();
             this.calculateStats();
             console.log('[RecordStore] Initialized with', this.records.length, 'records');
+            if (typeof markStoreInitEnd === 'function') markStoreInitEnd('RecordStore');
         } catch (error) {
             console.error('[RecordStore] Initialization failed:', error);
+            if (typeof markStoreInitEnd === 'function') markStoreInitEnd('RecordStore');
             throw error;
         }
     }
     
+    normalizeRecord(record) {
+        if (!record || !record.id || !record.examId || !record.date) {
+            return null; // Invalid record
+        }
+
+        const normalized = {
+            id: record.id,
+            examId: record.examId,
+            date: record.date,
+            duration: record.duration || 0,
+            score: {
+                percentage: record.score?.percentage || record.percentage || (record.scoreInfo?.percentage || 0)
+            },
+            dataSource: record.dataSource || 'real',
+            answers: record.answers || (record.realData?.answers || {}),
+            metadata: record.metadata || {},
+            sessionId: record.sessionId, // Preserve for dedup
+            ...record // Preserve other fields but override normalized ones
+        };
+
+        // Migrate old shapes lightly
+        if (record.realData) {
+            // Extract from realData if not already
+            normalized.answers = normalized.answers || record.realData.answers || {};
+            normalized.duration = normalized.duration || record.realData.duration || 0;
+            normalized.metadata.realData = record.realData; // Keep original for legacy if needed
+            delete normalized.realData; // Avoid duplication
+        }
+        if (record.scoreInfo) {
+            normalized.score.percentage = normalized.score.percentage || record.scoreInfo.percentage || 0;
+            normalized.metadata.scoreInfo = record.scoreInfo; // Keep original
+            delete normalized.scoreInfo;
+        }
+
+        // Ensure score.percentage is number
+        normalized.score.percentage = Number(normalized.score.percentage) || 0;
+
+        return normalized;
+    }
+
     async loadRecords() {
         try {
             // Use existing practice_records key
             const rawRecords = await this.storage.get('practice_records', []);
             
-            // Validate and normalize record data
-            this.records = rawRecords.filter(record => 
-                record && record.id && record.examId && record.date
-            );
+            // Normalize and validate record data
+            this.records = rawRecords
+                .map(record => this.normalizeRecord(record))
+                .filter(record => record !== null);
+
+            // 填充去重 Set
+            this.processedSessionIds.clear();
+            this.records.forEach(record => {
+                if (record.sessionId && record.dataSource === 'real') {
+                    this.processedSessionIds.add(record.sessionId);
+                }
+            });
             
             this.notify({ type: 'records_loaded', records: this.records });
-            console.log('[RecordStore] Loaded', this.records.length, 'practice records');
+            console.log('[RecordStore] Loaded', this.records.length, 'practice records (normalized)');
         } catch (error) {
             console.error('[RecordStore] Failed to load records:', error);
             this.records = [];
@@ -60,22 +112,29 @@ window.RecordStore = class RecordStore {
     
     async saveRecord(record) {
         try {
-            // Validate required fields
-            if (!record.examId || !record.score) {
-                throw new Error('Invalid record: missing examId or score');
+            // Validate required fields for normalized structure
+            if (!record.examId || typeof record.score?.percentage !== 'number') {
+                throw new Error('Invalid record: missing examId or score.percentage');
             }
-            
-            // Add metadata
-            const fullRecord = {
-                id: record.id || 'record_' + Date.now(),
-                examId: record.examId,
-                date: record.date || new Date().toISOString(),
-                duration: record.duration || 0,
-                score: record.score,
+
+            // 去重检查：PRACTICE_COMPLETE 按 sessionId
+            if (record.sessionId && record.dataSource === 'real' && this.processedSessionIds.has(record.sessionId)) {
+                console.log('[RecordStore] Duplicate PRACTICE_COMPLETE ignored for sessionId:', record.sessionId);
+                return null; // 已存在，不保存
+            }
+
+            // Normalize to standard shape
+            const fullRecord = this.normalizeRecord({
+                ...record,
+                score: { percentage: record.score?.percentage || record.percentage || 0 },
                 answers: record.answers || {},
-                dataSource: record.dataSource || 'real',
-                ...record
-            };
+                metadata: record.metadata || {}
+            });
+
+            // 添加到 Set
+            if (fullRecord.sessionId && fullRecord.dataSource === 'real') {
+                this.processedSessionIds.add(fullRecord.sessionId);
+            }
             
             // Add to memory
             this.records.push(fullRecord);
@@ -87,7 +146,7 @@ window.RecordStore = class RecordStore {
             this.calculateStats();
             this.notify({ type: 'record_saved', record: fullRecord });
             
-            console.log('[RecordStore] Saved record:', fullRecord.id);
+            console.log('[RecordStore] Saved normalized record:', fullRecord.id);
             return fullRecord;
         } catch (error) {
             console.error('[RecordStore] Failed to save record:', error);
@@ -123,7 +182,7 @@ window.RecordStore = class RecordStore {
         
         if (filters.minScore !== undefined) {
             filtered = filtered.filter(record => {
-                const percentage = record.score?.percentage || record.percentage || 0;
+                const percentage = record.score?.percentage || 0;
                 return percentage >= filters.minScore;
             });
         }
@@ -144,7 +203,7 @@ window.RecordStore = class RecordStore {
         if (records.length > 0) {
             // Average score
             const totalScore = records.reduce((sum, record) => {
-                const percentage = record.score?.percentage || record.percentage || 0;
+                const percentage = record.score?.percentage || 0;
                 return sum + percentage;
             }, 0);
             this.stats.averageScore = Math.round(totalScore / records.length * 10) / 10;
@@ -221,7 +280,7 @@ window.RecordStore = class RecordStore {
             
             const stats = categoryStats[category];
             stats.count++;
-            stats.totalScore += record.score?.percentage || record.percentage || 0;
+            stats.totalScore += record.score?.percentage || 0;
             stats.totalTime += record.duration || 0;
             stats.averageScore = Math.round(stats.totalScore / stats.count * 10) / 10;
         });
@@ -274,6 +333,7 @@ window.RecordStore = class RecordStore {
         try {
             const recordCount = this.records.length;
             this.records = [];
+            this.processedSessionIds.clear();
             await this.storage.set('practice_records', this.records);
             
             this.calculateStats();
@@ -295,7 +355,7 @@ window.RecordStore = class RecordStore {
             throw new Error(`Record validation failed. Missing fields: ${missing.join(', ')}`);
         }
         
-        if (record.score && typeof record.score.percentage !== 'number') {
+        if (typeof record.score.percentage !== 'number') {
             throw new Error('Record score must include percentage as number');
         }
         
@@ -317,23 +377,27 @@ window.RecordStore = class RecordStore {
                 throw new Error('Invalid import data: records must be an array');
             }
             
-            // Validate all records before importing
-            data.records.forEach((record, index) => {
-                try {
-                    this.validateRecord(record);
-                } catch (error) {
-                    throw new Error(`Invalid record at index ${index}: ${error.message}`);
-                }
-            });
+            // Normalize and validate all records before importing
+            const normalizedRecords = data.records
+                .map(record => this.normalizeRecord(record))
+                .filter(record => {
+                    try {
+                        this.validateRecord(record);
+                        return true;
+                    } catch (error) {
+                        console.warn(`Invalid record during import: ${error.message}`);
+                        return false;
+                    }
+                });
             
-            // Import records
-            this.records = data.records;
+            // Import normalized records
+            this.records = normalizedRecords;
             await this.storage.set('practice_records', this.records);
             
             this.calculateStats();
             this.notify({ type: 'records_imported', count: this.records.length });
             
-            console.log('[RecordStore] Imported', this.records.length, 'records');
+            console.log('[RecordStore] Imported', this.records.length, 'normalized records');
             return this.records.length;
         } catch (error) {
             console.error('[RecordStore] Failed to import records:', error);

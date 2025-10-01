@@ -4,7 +4,7 @@
  */
 
 if (!window.practicePageEnhancer) {
-    console.log('[PracticeEnhancer] 初始化增强器');
+    debugLog('[PracticeEnhancer] 初始化增强器');
 
     // 内嵌CorrectAnswerExtractor功能，确保在练习页面中可用
     if (!window.CorrectAnswerExtractor) {
@@ -19,13 +19,13 @@ if (!window.practicePageEnhancer) {
             }
 
             extractFromPage(document = window.document) {
-                console.log('[CorrectAnswerExtractor] 开始提取正确答案');
+                debugLog('[CorrectAnswerExtractor] 开始提取正确答案');
                 
                 for (const strategy of this.extractionStrategies) {
                     try {
                         const answers = strategy(document);
                         if (answers && Object.keys(answers).length > 0) {
-                            console.log('[CorrectAnswerExtractor] 提取成功:', strategy.name, answers);
+                            debugLog('[CorrectAnswerExtractor] 提取成功:', strategy.name, answers);
                             return this.normalizeAnswers(answers);
                         }
                     } catch (error) {
@@ -46,7 +46,7 @@ if (!window.practicePageEnhancer) {
                 
                 for (const objName of possibleAnswerObjects) {
                     if (win[objName] && typeof win[objName] === 'object') {
-                        console.log(`[CorrectAnswerExtractor] 找到全局对象: ${objName}`);
+                        debugLog(`[CorrectAnswerExtractor] 找到全局对象: ${objName}`);
                         return win[objName];
                     }
                 }
@@ -66,7 +66,7 @@ if (!window.practicePageEnhancer) {
                             const answersStr = correctAnswersMatch[1];
                             const answers = this.parseAnswersObject(answersStr);
                             if (answers && Object.keys(answers).length > 0) {
-                                console.log('[CorrectAnswerExtractor] 从脚本变量提取答案:', answers);
+                                debugLog('[CorrectAnswerExtractor] 从脚本变量提取答案:', answers);
                                 return answers;
                             }
                         } catch (error) {
@@ -298,15 +298,15 @@ if (!window.practicePageEnhancer) {
 
         initialize: function () {
             if (this.isInitialized) {
-                console.log('[PracticeEnhancer] 已经初始化，跳过');
+                debugLog('[PracticeEnhancer] 已经初始化，跳过');
                 return;
             }
-            console.log('[PracticeEnhancer] 开始初始化');
+            debugLog('[PracticeEnhancer] 开始初始化');
 
             // 设置共享命名空间
             if (window.storage && typeof window.storage.setNamespace === 'function') {
                 window.storage.setNamespace('exam_system');
-                console.log('[PracticeEnhancer] 已设置共享命名空间: exam_system');
+                debugLog('[PracticeEnhancer] 已设置共享命名空间: exam_system');
 
                 // 验证命名空间设置是否生效
                 setTimeout(() => {
@@ -315,7 +315,7 @@ if (!window.practicePageEnhancer) {
                     window.storage.set(testKey, testValue).then(() => {
                         window.storage.get(testKey).then((retrievedValue) => {
                             if (retrievedValue === testValue) {
-                                console.log('✅ 增强器命名空间设置验证成功: 存储和读取正常');
+                                debugLog('✅ 增强器命名空间设置验证成功: 存储和读取正常');
                             } else {
                                 console.warn('❌ 增强器命名空间设置验证失败: 读取值不匹配');
                             }
@@ -338,7 +338,7 @@ if (!window.practicePageEnhancer) {
             this.interceptSubmit();
             this.setupInteractionTracking();
             this.isInitialized = true;
-            console.log('[PracticeEnhancer] 初始化完成');
+            debugLog('[PracticeEnhancer] 初始化完成');
             
             // 页面加载完成后进行一次初始收集
             if (document.readyState === 'complete') {

@@ -186,10 +186,11 @@ window.PerformanceOptimizer = class PerformanceOptimizer {
         }
         
         // Check for unused scripts (basic heuristic)
+        // Note: Legacy files have been removed in refactoring
         const potentiallyUnused = [
-            'boot-fallbacks.js',
-            'componentChecker.js',
-            'runtime-fixes.js'
+            // 'boot-fallbacks.js',      // Removed - replaced by new error handling
+            // 'componentChecker.js',    // Removed - functionality moved to new architecture
+            // 'runtime-fixes.js'        // Removed - check if still needed
         ];
         
         const unusedScripts = potentiallyUnused.filter(script => 
@@ -349,6 +350,45 @@ window.PerformanceOptimizer = class PerformanceOptimizer {
         
         console.log('[Performance] Cleanup completed');
     }
+
+    // Performance marks for store initialization (console only)
+    markStoreInitStart(name = 'general') {
+        const label = `Store Init ${name} Start`;
+        console.timeStamp(label);
+        console.time(`storeInit-${name}`);
+    }
+
+    markStoreInitEnd(name = 'general') {
+        const label = `Store Init ${name} End`;
+        console.timeEnd(`storeInit-${name}`);
+        console.timeStamp(label);
+    }
+
+    // Performance marks for first render (console only)
+    markFirstRenderStart(name = 'general') {
+        const label = `First Render ${name} Start`;
+        console.timeStamp(label);
+        console.time(`firstRender-${name}`);
+    }
+
+    markFirstRenderEnd(name = 'general') {
+        const label = `First Render ${name} End`;
+        console.timeEnd(`firstRender-${name}`);
+        console.timeStamp(label);
+    }
+
+    // Performance marks for search debounce (console only)
+    markSearchDebounceStart(name = 'general') {
+        const label = `Search Debounce ${name} Start`;
+        console.timeStamp(label);
+        console.time(`searchDebounce-${name}`);
+    }
+
+    markSearchDebounceEnd(name = 'general') {
+        const label = `Search Debounce ${name} End`;
+        console.timeEnd(`searchDebounce-${name}`);
+        console.timeStamp(label);
+    }
 };
 
 // Create global instance
@@ -365,6 +405,43 @@ window.measureMemoryUsage = function() {
 
 window.optimizeScriptLoading = function() {
     return window.performanceOptimizer.optimizeScriptLoading();
+};
+
+// Global functions for performance marks
+window.markStoreInitStart = function(name = 'general') {
+    if (window.performanceOptimizer) {
+        window.performanceOptimizer.markStoreInitStart(name);
+    }
+};
+
+window.markStoreInitEnd = function(name = 'general') {
+    if (window.performanceOptimizer) {
+        window.performanceOptimizer.markStoreInitEnd(name);
+    }
+};
+
+window.markFirstRenderStart = function(name = 'general') {
+    if (window.performanceOptimizer) {
+        window.performanceOptimizer.markFirstRenderStart(name);
+    }
+};
+
+window.markFirstRenderEnd = function(name = 'general') {
+    if (window.performanceOptimizer) {
+        window.performanceOptimizer.markFirstRenderEnd(name);
+    }
+};
+
+window.markSearchDebounceStart = function(name = 'general') {
+    if (window.performanceOptimizer) {
+        window.performanceOptimizer.markSearchDebounceStart(name);
+    }
+};
+
+window.markSearchDebounceEnd = function(name = 'general') {
+    if (window.performanceOptimizer) {
+        window.performanceOptimizer.markSearchDebounceEnd(name);
+    }
 };
 
 // Auto-generate report in debug mode

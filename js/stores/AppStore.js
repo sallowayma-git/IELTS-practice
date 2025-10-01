@@ -3,6 +3,7 @@
 
 window.AppStore = class AppStore {
     constructor() {
+        if (typeof markStoreInitStart === 'function') markStoreInitStart();
         this.currentView = 'overview';
         this.loading = false;
         this.errors = [];
@@ -45,7 +46,7 @@ window.AppStore = class AppStore {
             data: data 
         });
         
-        console.log('[AppStore] View changed:', previousView, '→', viewName);
+        debugLog('[AppStore] View changed:', previousView, '→', viewName);
     }
     
     getCurrentView() {
@@ -72,7 +73,7 @@ window.AppStore = class AppStore {
                 isBack: true
             });
             
-            console.log('[AppStore] Navigated back to:', previousView.view);
+            debugLog('[AppStore] Navigated back to:', previousView.view);
         }
     }
     
@@ -137,7 +138,7 @@ window.AppStore = class AppStore {
         if (index !== -1) {
             const removedError = this.errors.splice(index, 1)[0];
             this.notify({ type: 'error_cleared', error: removedError });
-            console.log('[AppStore] Error cleared:', errorId);
+            debugLog('[AppStore] Error cleared:', errorId);
         }
     }
     
@@ -145,7 +146,7 @@ window.AppStore = class AppStore {
         const errorCount = this.errors.length;
         this.errors = [];
         this.notify({ type: 'errors_cleared', count: errorCount });
-        console.log('[AppStore] All errors cleared:', errorCount);
+        debugLog('[AppStore] All errors cleared:', errorCount);
     }
     
     getErrors(onlyRecoverable = false) {
@@ -168,7 +169,7 @@ window.AppStore = class AppStore {
         });
         
         if (context) {
-            console.log('[AppStore] Loading state:', this.loading, 'Context:', context);
+            debugLog('[AppStore] Loading state:', this.loading, 'Context:', context);
         }
     }
     
@@ -188,6 +189,7 @@ window.AppStore = class AppStore {
         const allComplete = Object.values(this.initializationSteps).every(step => step === true);
         if (allComplete && !this.initialized) {
             this.initialized = true;
+            if (typeof markStoreInitEnd === 'function') markStoreInitEnd();
             this.notify({ type: 'initialization_complete' });
             console.log('[AppStore] Application initialization complete');
         }

@@ -23,10 +23,14 @@ window.ExamStore = class ExamStore {
             if (!this.storage) {
                 throw new Error('Storage system not available. Check script loading order.');
             }
-            
+
             // Load from existing storage keys
             await this.loadExams();
             this.categorizeExams();
+
+            // Expose methods globally for UI access
+            this.exposeToGlobal();
+
             console.log('[ExamStore] Initialized with', this.exams.length, 'exams');
         } catch (error) {
             console.error('[ExamStore] Initialization failed:', error);
@@ -124,6 +128,14 @@ window.ExamStore = class ExamStore {
     async refreshExams() {
         await this.loadExams();
         this.categorizeExams();
+    }
+
+    // Expose refreshExams globally for UI access
+    exposeToGlobal() {
+        if (typeof window !== 'undefined') {
+            window.refreshExamLibrary = () => this.refreshExams();
+            window.loadExamLibrary = () => this.refreshExams();
+        }
     }
     
     getExamPath(exam) {

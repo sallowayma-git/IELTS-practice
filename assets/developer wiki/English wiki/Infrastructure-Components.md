@@ -20,6 +20,74 @@ The infrastructure layer consists of three primary components that work together
 | `ExamBrowserRecovery` | js/components/ExamBrowserRecovery.js | Error detection, handling, and recovery |
 | `BrowseStateManager` | js/components/BrowseStateManager.js | Navigation state persistence and management |
 
+## New Architecture Components
+
+The refactored infrastructure introduces dedicated stores for data management, a BaseComponent pattern for UI modularity, and an EventEmitter for decoupled event routing. These enhance separation of concerns and maintainability.
+
+### Stores Responsibilities (js/stores/)
+Stores serve as the single source of truth for application data, providing reactive APIs for loading, updating, and subscribing to changes. They integrate with `App.events` for notifications.
+
+- **ExamStore (js/stores/ExamStore.js)**:
+  - **Responsibilities**: Manages exam data loading, filtering, and caching. Loads from `complete-exam-data.js` and persists filtered views.
+  - **Public API**:
+    - `ExamStore.loadExams()`: Loads and indexes all exams, returns promise with exam array.
+    - `ExamStore.filterExams(category, difficulty)`: Filters exams by criteria, emits `examsFiltered` event.
+    - `ExamStore.subscribe(callback)`: Registers callback for data changes.
+    - `ExamStore.getExam(examId)`: Retrieves specific exam details.
+
+- **RecordStore (js/stores/RecordStore.js)**:
+  - **Responsibilities**: Handles practice records storage, statistics computation, and history management. Syncs with localStorage.
+  - **Public API**:
+    - `RecordStore.saveRecord(record)`: Saves practice session data, emits `recordSaved` event.
+    - `RecordStore.getStats()`: Computes aggregate statistics (e.g., average score, completion rate).
+    - `RecordStore.getRecords(filter)`: Retrieves filtered history, supports date/range queries.
+    - `RecordStore.subscribe(callback)`: Listens for record updates.
+
+- **AppStore (js/stores/AppStore.js)**:
+  - **Responsibilities**: Oversees global app state, including UI mode, settings, and cross-store coordination.
+  - **Public API**:
+    - `AppStore.init()`: Initializes all stores and sets up event subscriptions.
+    - `AppStore.getState(key)`: Retrieves global state (e.g., current view, theme).
+    - `AppStore.updateState(key, value)`: Updates and persists state changes.
+    - `AppStore.subscribe(callback)`: Global state change listener.
+
+Stores ensure unidirectional data flow: updates trigger events that UI components consume.
+
+### BaseComponent Pattern (js/ui/)
+The `BaseComponent` class in `js/ui/BaseComponent.js` provides a standardized lifecycle for UI elements, promoting reusability and easy attachment/detachment.
+
+- **Pattern Overview**: Components extend `BaseComponent` for DOM manipulation, event binding, and rendering. Supports hierarchical composition.
+- **Key Methods**:
+  - `BaseComponent.attach(container)`: Mounts component to a DOM container, binds events.
+  - `BaseComponent.detach()`: Removes from DOM, cleans up listeners to prevent leaks.
+  - `BaseComponent.render(data)`: Updates internal state and re-renders based on store data.
+- **Usage Example**:
+  ```javascript
+  class ExamList extends BaseComponent {
+    render(exams) {
+      // Generate HTML from exams data
+      this.element.innerHTML = exams.map(exam => `<div>${exam.title}</div>`).join('');
+    }
+  }
+  const list = new ExamList();
+  list.attach(document.getElementById('exam-list'));
+  ExamStore.subscribe((exams) => list.render(exams));
+  ```
+- **Benefits**: Ensures consistent lifecycle management, supports file:// by using global DOM APIs, integrates with events for reactive updates.
+
+### EventEmitter (App.events)
+- **Implementation**: `App.events` is a global EventEmitter instance (built on Node.js-style events, polyfilled for browser).
+- **Responsibilities**: Routes events between stores, UI, and infrastructure without tight coupling. Supports emit, on, off, once.
+- **Public API**:
+  - `App.events.emit(event, data)`: Broadcasts event with payload.
+  - `App.events.on(event, callback)`: Subscribes to event.
+  - `App.events.off(event, callback)`: Unsubscribes.
+  - `App.events.once(event, callback)`: One-time listener.
+- **Integration**: Stores emit on changes (e.g., `App.events.emit('examsLoaded', exams)`); UI subscribes (e.g., `App.events.on('examsLoaded', renderExams)`).
+- **file:// Compatibility**: Relies on global scope, no dynamic requires.
+
+**Sources:** [js/stores/ExamStore.js](https://github.com/sallowayma-git/IELTS-practice/blob/main/js/stores/ExamStore.js), [js/ui/BaseComponent.js](https://github.com/sallowayma-git/IELTS-practice/blob/main/js/ui/BaseComponent.js), [js/app.js](https://github.com/sallowayma-git/IELTS-practice/blob/main/js/app.js)
+
 ## System Architecture
 
 ```mermaid

@@ -45,12 +45,12 @@ subgraph MainApp ["improved-working-system.html"]
     MessageListener
     ViewManager
     DataManager
+end
 
 subgraph AppState ["Application State"]
     ExamIndex
     PracticeRecords
     CurrentView
-end
 end
 
 subgraph LoadedComponents ["Dynamically Loaded Components"]
@@ -64,9 +64,7 @@ end
 ```
 
 **Sources:** [improved-working-system.html L686-L710](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/improved-working-system.html#L686-L710)
-
  [improved-working-system.html L871-L922](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/improved-working-system.html#L871-L922)
-
  [improved-working-system.html L1051-L1057](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/improved-working-system.html#L1051-L1057)
 
 ## Component Loading and Initialization System
@@ -127,7 +125,6 @@ end
 ```
 
 **Sources:** [improved-working-system.html L687-L710](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/improved-working-system.html#L687-L710)
-
  [improved-working-system.html L871-L922](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/improved-working-system.html#L871-L922)
 
 ## Error Handling and Recovery Architecture
@@ -184,12 +181,11 @@ end
 ```
 
 **Sources:** [improved-working-system.html L712-L958](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/improved-working-system.html#L712-L958)
-
  [improved-working-system.html L794-L846](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/improved-working-system.html#L794-L846)
 
 ## Data Architecture and Storage System
 
-The application implements a **layered data architecture** with caching, validation, and backup capabilities.
+The application implements a **layered data architecture** with caching, validation, and backup capabilities. The refactored architecture emphasizes a single source of truth through dedicated stores, unidirectional data flows, and compatibility with file:// environments.
 
 ### Data Flow Architecture
 
@@ -236,11 +232,30 @@ subgraph DataSources ["Data Sources"]
 end
 ```
 
+### Single Source of Truth (Stores)
+- **Stores as Central Data Hub**: Data is managed exclusively through stores in `js/stores/` (e.g., `ExamStore` for exam metadata, `RecordStore` for user practice records, `AppStore` for global app state). This ensures a single source of truth, preventing data inconsistencies.
+- **Reactive Updates**: Stores emit events on changes (e.g., `ExamStore.loadExams()` loads data and triggers `examLoaded` event), allowing UI components to subscribe without direct data access.
+- **Benefits**: Eliminates duplicate state, simplifies debugging, and supports linear flows.
+
+### Unidirectional Data Flow
+- **Linear Flow Pattern**: Data flows strictly from stores to UI via events routed through `App.events` (EventEmitter). UI components do not mutate stores directly; instead, user actions emit events that stores process.
+- **Flow Example**:
+  1. User interacts with UI (e.g., filter exams).
+  2. UI emits event via `App.events`.
+  3. Store processes event (e.g., `ExamStore.filterExams()`).
+  4. Store emits update event.
+  5. UI subscribes and re-renders.
+- **No Cycles**: This unidirectional pattern ensures predictable state management and easier testing.
+
+### file:// Compatibility
+- **Static Loading**: All scripts are loaded synchronously via `<script>` tags in HTML, ensuring dependencies resolve without network requests. Order: utils → stores → ui → app.js.
+- **Global State Management**: State is exposed via `window` globals (e.g., `window.stores.ExamStore`, `window.App.events`) to avoid module systems incompatible with file://.
+- **Storage/Communication**: Relies on localStorage for persistence and postMessage for cross-window ops, both fully supported. No dynamic imports or server calls; fallbacks handle missing files.
+
 **Sources:** [improved-working-system.html L961-L1017](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/improved-working-system.html#L961-L1017)
-
  [improved-working-system.html L1159-L1302](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/improved-working-system.html#L1159-L1302)
-
  [improved-working-system.html L2928-L3169](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/improved-working-system.html#L2928-L3169)
+ [js/stores/ExamStore.js](https://github.com/sallowayma-git/IELTS-practice/blob/main/js/stores/ExamStore.js)
 
 ## View Management and Navigation System
 
@@ -268,9 +283,7 @@ The view management system maintains state through several key functions:
 | `updatePracticeView()` | Practice history management | Calculates statistics and displays records |
 
 **Sources:** [improved-working-system.html L1118-L1156](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/improved-working-system.html#L1118-L1156)
-
  [improved-working-system.html L2756-L2819](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/improved-working-system.html#L2756-L2819)
-
  [improved-working-system.html L2391-L2487](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/improved-working-system.html#L2391-L2487)
 
 ## Inter-Window Communication System
@@ -312,9 +325,7 @@ The message handling system processes different message types:
 | `PRACTICE_COMPLETE` | Practice Window | `handlePracticeDataReceived` | Process final results and save record |
 
 **Sources:** [improved-working-system.html L1647-L1712](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/improved-working-system.html#L1647-L1712)
-
  [improved-working-system.html L2838-L2868](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/improved-working-system.html#L2838-L2868)
-
  [improved-working-system.html L2928-L3169](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/improved-working-system.html#L2928-L3169)
 
 ## Performance Optimization and Caching System
@@ -366,7 +377,5 @@ Performance optimization is handled through several mechanisms:
 * **Debounced Search**: Search operations are delayed by 300ms to reduce unnecessary processing
 
 **Sources:** [improved-working-system.html L1406-L1465](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/improved-working-system.html#L1406-L1465)
-
  [improved-working-system.html L1513-L1566](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/improved-working-system.html#L1513-L1566)
-
  [improved-working-system.html L1596-L1643](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/improved-working-system.html#L1596-L1643)

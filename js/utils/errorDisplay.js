@@ -427,3 +427,108 @@ window.hideErrorMessage = (errorId) => {
 window.clearErrorMessages = () => {
     window.errorDisplay.clear();
 };
+
+// 统一错误服务门面 (Task 31)
+window.ErrorService = {
+    /**
+     * 显示用户错误消息
+     */
+    showUser(message, type = 'error', actions = []) {
+        try {
+            // 使用 ErrorDisplay 显示错误
+            if (window.errorDisplay) {
+                return window.errorDisplay.show(message, type, actions);
+            }
+
+            // 回退方案
+            this.fallbackShow(message, type);
+        } catch (error) {
+            console.error('[ErrorService] Failed to show error:', error);
+            this.fallbackShow(message, type);
+        }
+    },
+
+    /**
+     * 记录错误（开发环境）
+     */
+    log(error, context = 'Unknown') {
+        console.error(`[ErrorService] ${context}:`, error);
+
+        // 在开发环境中显示详细错误
+        if (location.hostname === 'localhost' || location.protocol === 'file:') {
+            console.groupCollapsed(`[ErrorService] ${context} - Details`);
+            console.log('Error:', error);
+            console.log('Stack:', error.stack);
+            console.log('Context:', context);
+            console.groupEnd();
+        }
+    },
+
+    /**
+     * 显示带操作的错误
+     */
+    showErrorWithActions(message, actions = []) {
+        return this.showUser(message, 'error', actions);
+    },
+
+    /**
+     * 显示警告
+     */
+    showWarning(message, actions = []) {
+        return this.showUser(message, 'warning', actions);
+    },
+
+    /**
+     * 显示信息
+     */
+    showInfo(message, actions = []) {
+        return this.showUser(message, 'info', actions);
+    },
+
+    /**
+     * 隐藏特定错误
+     */
+    hide(errorId) {
+        if (window.errorDisplay) {
+            window.errorDisplay.hide(errorId);
+        }
+    },
+
+    /**
+     * 清除所有错误
+     */
+    clear() {
+        if (window.errorDisplay) {
+            window.errorDisplay.clear();
+        }
+    },
+
+    /**
+     * 回退显示方案
+     */
+    fallbackShow(message, type) {
+        switch (type) {
+            case 'error':
+                console.error(`[ErrorService] ${message}`);
+                if (typeof alert !== 'undefined') {
+                    alert(`错误: ${message}`);
+                }
+                break;
+            case 'warning':
+                console.warn(`[ErrorService] ${message}`);
+                break;
+            case 'info':
+                console.log(`[ErrorService] ${message}`);
+                break;
+            default:
+                console.log(`[ErrorService] ${message}`);
+        }
+    }
+};
+
+// 向后兼容别名
+window.showUserMessage = (message, type = 'info', actions = []) => {
+    return window.ErrorService.showUser(message, type, actions);
+};
+
+console.log('[ErrorService] Initialized');
