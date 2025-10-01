@@ -63,8 +63,7 @@ class ExamSystemApp {
             this.isInitialized = true;
             this.showLoading(false);
 
-            console.log('[App] IELTS考试系统初始化成功');
-            this.showUserMessage('系统初始化完成', 'success');
+              this.showUserMessage('系统初始化完成', 'success');
 
         } catch (error) {
             this.showLoading(false);
@@ -123,8 +122,7 @@ class ExamSystemApp {
             this.handleGlobalError(event.error, 'JavaScript错误');
         });
 
-        console.log('[App] 全局错误处理已设置');
-    }
+      }
 
     /**
      * 处理全局错误
@@ -184,8 +182,7 @@ class ExamSystemApp {
         if (window.showMessage) {
             window.showMessage(message, type);
         } else {
-            console.log(`[App] ${type.toUpperCase()}: ${message}`);
-        }
+          }
     }
 
     /**
@@ -195,25 +192,21 @@ class ExamSystemApp {
         // 初始化响应式管理器
         if (window.ResponsiveManager) {
             this.responsiveManager = new ResponsiveManager();
-            console.log('Responsive manager initialized');
         }
 
         // 初始化触摸处理器
         if (window.TouchHandler) {
             this.touchHandler = new TouchHandler();
-            console.log('Touch handler initialized');
         }
 
         // 初始化主题管理器
         if (window.ThemeManager) {
             this.themeManager = new ThemeManager();
-            console.log('Theme manager initialized');
         }
 
         // 初始化键盘快捷键
         if (window.KeyboardShortcuts) {
             this.keyboardShortcuts = new KeyboardShortcuts();
-            console.log('Keyboard shortcuts initialized');
         }
 
 
@@ -221,13 +214,11 @@ class ExamSystemApp {
         // 初始化教程系统
         if (window.TutorialSystem) {
             this.tutorialSystem = new TutorialSystem();
-            console.log('Tutorial system initialized');
         }
 
         // 初始化设置面板
         if (window.SettingsPanel) {
             this.settingsPanel = new SettingsPanel();
-            console.log('Settings panel initialized');
         }
 
         // 设置响应式事件监听
@@ -247,6 +238,8 @@ class ExamSystemApp {
                 if (this.responsiveManager) {
                     this.responsiveManager.recalculateLayout();
                 }
+                // 应用级resize处理
+                this.handleResize();
             }, 250);
         });
 
@@ -329,12 +322,10 @@ class ExamSystemApp {
 
         try {
             // 首先加载核心组件
-            console.log('[App] 开始加载核心组件...');
             await this.waitForComponents(coreComponents, 8000);
             await this.initializeCoreComponents();
 
             // 然后加载可选组件
-            console.log('[App] 开始加载可选组件...');
             try {
                 await this.waitForComponents(optionalComponents, 5000);
                 await this.initializeOptionalComponents();
@@ -343,7 +334,6 @@ class ExamSystemApp {
                 await this.initializeAvailableOptionalComponents();
             }
 
-            console.log('[App] 组件初始化完成');
 
         } catch (error) {
             console.error('[App] 核心组件加载失败:', error);
@@ -355,21 +345,17 @@ class ExamSystemApp {
      * 初始化核心组件
      */
     async initializeCoreComponents() {
-        console.log('[App] 初始化核心组件...');
 
         // ExamBrowser现在是可选组件，不在核心初始化中处理
-        console.log('[App] 核心组件初始化 - ExamBrowser将在可选组件阶段处理');
 
         // 初始化PracticeRecorder（必需，但有降级方案）
         if (window.PracticeRecorder) {
             try {
                 this.components.practiceRecorder = new PracticeRecorder();
                 this.setupPracticeRecorderEvents();
-                console.log('[App] PracticeRecorder初始化成功');
             } catch (error) {
                 console.error('[App] PracticeRecorder初始化失败:', error);
                 this.components.practiceRecorder = this.createFallbackRecorder();
-                console.log('[App] 使用降级版PracticeRecorder');
             }
         } else {
             console.warn('[App] PracticeRecorder类不可用，创建降级记录器');
@@ -381,7 +367,6 @@ class ExamSystemApp {
      * 初始化可选组件
      */
     async initializeOptionalComponents() {
-        console.log('[App] 初始化可选组件...');
 
         const componentInitializers = [
             // ExamBrowser组件已移除，使用内置的题目列表功能
@@ -427,7 +412,6 @@ class ExamSystemApp {
                 try {
                     const componentKey = name.charAt(0).toLowerCase() + name.slice(1);
                     this.components[componentKey] = init();
-                    console.log(`[App] ${name}初始化成功`);
                 } catch (error) {
                     console.error(`[App] ${name}初始化失败:`, error);
                 }
@@ -441,7 +425,6 @@ class ExamSystemApp {
      * 初始化已加载的可选组件
      */
     async initializeAvailableOptionalComponents() {
-        console.log('[App] 初始化已加载的可选组件...');
 
         // 只初始化已经加载的组件
         const availableComponents = [
@@ -450,7 +433,6 @@ class ExamSystemApp {
         ].filter(name => window[name]);
 
         if (availableComponents.length > 0) {
-            console.log(`[App] 发现可用组件: ${availableComponents.join(', ')}`);
 
             // 使用相同的初始化逻辑，但只处理可用的组件
             await this.initializeOptionalComponents();
@@ -468,7 +450,6 @@ class ExamSystemApp {
         const startTime = Date.now();
         const checkInterval = 100;
 
-        console.log(`[App] 等待组件加载: ${requiredClasses.join(', ')}`);
 
         while (Date.now() - startTime < timeout) {
             const loadingStatus = requiredClasses.map(className => {
@@ -483,7 +464,6 @@ class ExamSystemApp {
 
             if (allLoaded) {
                 const elapsed = Date.now() - startTime;
-                console.log(`[App] 所有必需组件已加载 (用时: ${elapsed}ms)`);
                 return true;
             }
 
@@ -492,7 +472,6 @@ class ExamSystemApp {
             const progress = Math.round((loadedCount / requiredClasses.length) * 100);
 
             if ((Date.now() - startTime) % 1000 < checkInterval) {
-                console.log(`[App] 组件加载进度: ${progress}% (${loadedCount}/${requiredClasses.length})`);
             }
 
             await new Promise(resolve => setTimeout(resolve, checkInterval));
@@ -547,15 +526,7 @@ class ExamSystemApp {
             }
         });
 
-        // 窗口大小变化
-        let handleResizeTimeout;
-        window.addEventListener('resize', () => {
-            clearTimeout(handleResizeTimeout);
-            handleResizeTimeout = setTimeout(() => {
-                this.handleResize();
-            }, 250);
-        });
-
+  
         // 页面可见性变化
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden && this.isInitialized) {
@@ -594,7 +565,6 @@ class ExamSystemApp {
     async loadInitialData() {
         try {
             // ExamScanner已移除，题库索引由其他方式管理
-            console.log('[App] 跳过ExamScanner扫描，使用现有题库索引');
 
             // 加载用户统计
             await this.loadUserStats();
@@ -1005,7 +975,6 @@ class ExamSystemApp {
       * 注入数据采集脚本到练习页面
       */
     injectDataCollectionScript(examWindow, examId) {
-        console.log('[DataInjection] 开始注入数据采集脚本:', examId);
 
         // 新增修复3E：修复await语法错误 - 将内部injectScript改为async
         const injectScript = async () => {
@@ -1032,16 +1001,13 @@ class ExamSystemApp {
 
                 // 检查是否已经注入过脚本
                 if (examWindow.practiceDataCollector) {
-                    console.log('[DataInjection] 脚本已存在，发送初始化消息');
                     this.initializePracticeSession(examWindow, examId);
                     return;
                 }
 
-                console.log('[DataInjection] 开始加载脚本文件...');
 
                 // 加载练习页面增强脚本
                 const enhancerScript = await fetch('./js/practice-page-enhancer.js').then(r => r.text());
-                console.log('[DataInjection] 增强脚本加载完成，开始注入...');
 
                 // 注入练习页面增强脚本
                 const enhancerScriptEl = doc.createElement('script');
@@ -1049,7 +1015,6 @@ class ExamSystemApp {
                 enhancerScriptEl.textContent = enhancerScript;
                 doc.head.appendChild(enhancerScriptEl);
 
-                console.log('[DataInjection] 练习页面增强脚本已注入');
 
                 // 等待脚本初始化完成后发送会话信息
                 setTimeout(() => {
@@ -1077,7 +1042,6 @@ class ExamSystemApp {
                 }
             } catch (e) {
                 // 跨域情况，无法注入脚本
-                console.log('[DataInjection] 检测到跨域，无法注入脚本');
             }
         };
 
@@ -1100,7 +1064,6 @@ class ExamSystemApp {
                     answers: {},
                     
                     initialize: function() {
-                        console.log('[InlineCollector] 简化版数据采集器已初始化');
                         this.setupBasicListeners();
                     },
                     
@@ -1147,7 +1110,6 @@ class ExamSystemApp {
             `;
 
             examWindow.document.head.appendChild(inlineScript);
-            console.log('[DataInjection] 内联脚本已注入');
 
             // 初始化会话
             setTimeout(() => {
@@ -1166,7 +1128,6 @@ class ExamSystemApp {
     initializePracticeSession(examWindow, examId) {
         try {
             const sessionId = `${examId}_${Date.now()}`;
-            console.log('[DataInjection] 初始化练习会话:', sessionId);
 
             // 发送会话初始化消息
             examWindow.postMessage({
@@ -1179,7 +1140,6 @@ class ExamSystemApp {
                 }
             }, '*');
 
-            console.log('[DataInjection] 会话初始化消息已发送:', sessionId);
 
             // 存储会话信息
             if (!this.examWindows) {
@@ -1191,7 +1151,6 @@ class ExamSystemApp {
                 windowInfo.sessionId = sessionId;
                 windowInfo.initTime = Date.now();
                 this.examWindows.set(examId, windowInfo);
-                console.log('[DataInjection] 会话信息已更新');
             } else {
                 console.warn('[DataInjection] 未找到窗口信息，创建新的');
                 this.examWindows.set(examId, {
@@ -1283,7 +1242,6 @@ class ExamSystemApp {
 
             // 验证窗口来源（如果可能的话）- 放宽验证条件
             if (event.source && examWindow && event.source !== examWindow) {
-                console.log('[App] 消息来源窗口不匹配，但仍处理消息');
             }
 
             // 放宽消息源过滤，兼容 inline_collector 与 practice_page
@@ -1293,7 +1251,6 @@ class ExamSystemApp {
             }
 
             const { type, data } = event.data || {};
-            console.log('[App] 收到练习页面消息:', type, data);
 
             switch (type) {
                 case 'exam_completed':
@@ -1319,7 +1276,6 @@ class ExamSystemApp {
                     this.handleDataCollectionError(examId, data);
                     break;
                 default:
-                    console.log('[App] 未处理的消息类型:', type);
             }
         };
 
@@ -1340,7 +1296,6 @@ class ExamSystemApp {
             };
             try {
                 // 首选 0.2 的大写事件名，保证 practicePageEnhancer 能收到并设置 sessionId
-                console.log('[System] 发送初始化消息到练习页面:', { type: 'INIT_SESSION', data: {} });
                 examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
                 // 同时发一份旧事件名，兼容历史实现
                 examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
@@ -1372,7 +1327,6 @@ class ExamSystemApp {
                 try {
                     // 直接发送两种事件名，确保增强器任何实现都能收到
                     if (attempts === 0) {
-                        console.log('[System] 发送初始化消息到练习页面:', { type: 'INIT_SESSION', data: {} });
                     }
                     examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
                     examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
@@ -1397,7 +1351,6 @@ class ExamSystemApp {
     createFallbackRecorder() {
         return {
             handleRealPracticeData: async (examId, realData) => {
-                console.log('[FallbackRecorder] 处理真实练习数据:', examId, realData);
                 try {
                     // 获取题目信息
                     const examIndex = await storage.get('exam_index', []);
@@ -1420,7 +1373,6 @@ class ExamSystemApp {
                     }
 
                     await storage.set('practice_records', records);
-                    console.log('[FallbackRecorder] 记录已保存:', practiceRecord.id);
 
                     return practiceRecord;
                 } catch (error) {
@@ -1430,7 +1382,6 @@ class ExamSystemApp {
             },
 
             startSession: (examId) => {
-                console.log('[FallbackRecorder] 启动会话:', examId);
                 // 简单的会话管理
                 return {
                     examId: examId,
@@ -1441,7 +1392,6 @@ class ExamSystemApp {
             },
 
             getPracticeRecords: async (filters = {}) => {
-                console.log('[FallbackRecorder] 获取练习记录');
                 try {
                     const records = await storage.get('practice_records', []);
                     
@@ -1580,9 +1530,7 @@ class ExamSystemApp {
         try {
             // 优先使用新的练习页面管理器
             if (window.practicePageManager) {
-                console.log('[App] 使用练习页面管理器启动会话');
                 const sessionId = await window.practicePageManager.startPracticeSession(examId, exam);
-                console.log('[App] 练习会话已启动:', sessionId);
                 
                 // 更新题目状态
                 this.updateExamStatus(examId, 'in-progress');
@@ -1600,10 +1548,8 @@ class ExamSystemApp {
                     console.warn('[App] PracticeRecorder没有可用的启动方法');
                     sessionData = null;
                 }
-                console.log('[App] 练习会话已通过记录器启动:', sessionData);
             } else {
                 // 降级处理
-                console.log('[App] 使用降级会话管理');
                 const sessionData = {
                     examId: examId,
                     startTime: new Date().toISOString(),
@@ -1631,7 +1577,6 @@ class ExamSystemApp {
      * 降级启动练习会话
      */
     async startPracticeSessionFallback(examId, exam) {
-        console.log('[App] 使用最终降级方案启动练习');
         
         const sessionData = {
             examId: examId,
@@ -1656,7 +1601,6 @@ class ExamSystemApp {
      * 处理题目完成
      */
     handleExamCompleted(examId, resultData) {
-        console.log('Exam completed:', examId, resultData);
 
         // 练习记录器会自动处理完成事件
         // 这里只需要更新UI状态
@@ -1673,7 +1617,6 @@ class ExamSystemApp {
      * 处理题目进度
      */
     handleExamProgress(examId, progressData) {
-        console.log('Exam progress:', examId, progressData);
 
         // 更新进度显示
         this.updateExamProgress(examId, progressData);
@@ -1695,7 +1638,6 @@ class ExamSystemApp {
      * 处理数据采集器会话就绪
      */
     handleSessionReady(examId, data) {
-        console.log('[DataCollection] 会话就绪:', examId, data);
 
         // 更新会话状态
         if (this.examWindows && this.examWindows.has(examId)) {
@@ -1721,7 +1663,6 @@ class ExamSystemApp {
      * 处理练习进度更新
      */
     handleProgressUpdate(examId, data) {
-        console.log('[DataCollection] 进度更新:', examId, data);
 
         // 更新UI中的进度显示
         this.updateRealTimeProgress(examId, data);
@@ -1739,12 +1680,9 @@ class ExamSystemApp {
      * 处理练习完成（真实数据）
      */
     async handlePracticeComplete(examId, data) {
-        console.log('[DataCollection] 练习完成（真实数据）:', examId, data);
-        console.log('[DataCollection] PracticeRecorder状态:', !!this.components.practiceRecorder);
 
         try {
             // 直接保存真实数据（采用旧版本的简单方式）
-            console.log('[DataCollection] 直接保存真实数据');
             await this.saveRealPracticeData(examId, data);
 
             // 刷新内存中的练习记录，确保无需手动刷新即可看到
@@ -1844,7 +1782,6 @@ class ExamSystemApp {
      */
     async saveRealPracticeData(examId, realData) {
         try {
-            console.log('[DataCollection] 开始保存真实练习数据:', examId, realData);
             
             let examIndex = await storage.get('exam_index', []);
             const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
@@ -1944,7 +1881,6 @@ class ExamSystemApp {
                 // 迁移修复：历史上可能被错误压缩为对象，这里强制纠正为数组
                 practiceRecords = [];
             }
-            console.log('[DataCollection] 当前记录数量:', practiceRecords.length);
 
             practiceRecords.unshift(practiceRecord);
 
@@ -1954,7 +1890,6 @@ class ExamSystemApp {
             }
 
             const saveResult = await storage.set('practice_records', practiceRecords);
-            console.log('[DataCollection] 保存结果:', saveResult);
 
             // 立即验证保存是否成功
             const verifyRecords = await storage.get('practice_records', []);
@@ -1963,8 +1898,6 @@ class ExamSystemApp {
                 : undefined;
             
             if (savedRecord) {
-                console.log('[DataCollection] ✓ 真实练习数据保存成功:', practiceRecord.id);
-                console.log('[DataCollection] ✓ 验证成功，当前总记录数:', verifyRecords.length);
             } else {
                 console.error('[DataCollection] ✗ 保存验证失败，记录未找到');
             }
@@ -2015,7 +1948,6 @@ class ExamSystemApp {
      * 处理题目窗口关闭
      */
     handleExamWindowClosed(examId) {
-        console.log('Exam window closed:', examId);
 
         // 更新题目状态
         this.updateExamStatus(examId, 'interrupted');
@@ -2210,7 +2142,6 @@ class ExamSystemApp {
         // 监听练习完成事件
         document.addEventListener('practiceSessionCompleted', (event) => {
             const { examId, practiceRecord } = event.detail;
-            console.log('Practice completed event received:', examId);
 
             // 更新UI
             this.updateExamStatus(examId, 'completed');
@@ -2223,7 +2154,6 @@ class ExamSystemApp {
         // 监听练习开始事件
         document.addEventListener('practiceSessionStarted', (event) => {
             const { examId } = event.detail;
-            console.log('Practice started event received:', examId);
 
             this.updateExamStatus(examId, 'in-progress');
         });
@@ -2246,7 +2176,6 @@ class ExamSystemApp {
         // 监听练习结束事件
         document.addEventListener('practiceSessionEnded', (event) => {
             const { examId, reason } = event.detail;
-            console.log('Practice ended event received:', examId, reason);
 
             if (reason !== 'completed') {
                 this.updateExamStatus(examId, 'interrupted');
@@ -2574,7 +2503,6 @@ class ExamSystemApp {
         // This function is disabled because its logic has been moved to
         // updatePracticeView() in main.js to support virtual scrolling.
         // Leaving this empty prevents it from overwriting the virtual scroller DOM.
-        console.log('[App] updateSimplePracticeView is disabled, functionality moved to main.js.');
         return;
     }
 
@@ -2624,7 +2552,6 @@ class ExamSystemApp {
      */
     loadPracticeRecords() {
         // 练习记录页面逻辑
-        console.log('Loading practice records...');
     }
 
     /**
@@ -2632,7 +2559,6 @@ class ExamSystemApp {
      */
     loadAnalysisData() {
         // 分析页面逻辑
-        console.log('Loading analysis data...');
     }
 
     /**
@@ -2643,7 +2569,6 @@ class ExamSystemApp {
         if (this.components.goalSettings) {
             this.components.goalSettings.refresh();
         }
-        console.log('Goals data loaded');
     }
 
     /**
@@ -2743,7 +2668,6 @@ class ExamSystemApp {
      * 尝试系统恢复
      */
     attemptRecovery() {
-        console.log('[App] 尝试系统恢复...');
         this.showUserMessage('正在尝试恢复系统...', 'info');
 
         // 重置组件状态
@@ -2765,7 +2689,6 @@ class ExamSystemApp {
      * 进入安全模式
      */
     enterSafeMode() {
-        console.log('[App] 进入安全模式...');
         this.showUserMessage('正在启动安全模式...', 'info');
 
         const app = document.getElementById('app');

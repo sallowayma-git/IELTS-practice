@@ -32,7 +32,11 @@
         var originalBuild = window.buildResourcePath;
         window.buildResourcePath = function (exam, kind) {
             var p = '';
-            try { p = originalBuild ? originalBuild(exam, kind) : ''; } catch (_) {}
+            try {
+                p = originalBuild ? originalBuild(exam, kind) : '';
+            } catch (_) {
+                // buildResourcePath失败，使用空字符串作为默认值
+            }
             if (typeof p === 'string') {
                 // 规范化为不含 ".." 的绝对 URL
                 // 去掉开头的 "./"，并使用 URL 解析为绝对路径
@@ -53,7 +57,9 @@
                         var normalized = pdfPath.replace(/^\.\//, '');
                         pdfPath = new URL(normalized, BASE_URL).href;
                     }
-                } catch (_) {}
+                } catch (_) {
+                // URL解析失败，使用原始路径
+            }
                 return _openPDF.call(this, pdfPath, examTitle, options);
             };
             window.PDFHandler.prototype.__designPatched = true;
@@ -72,5 +78,7 @@
             };
             window.showMessage.__designPatched = true;
         }
-    } catch (_) {}
+    } catch (_) {
+                // URL解析失败，使用原始路径
+            }
 })();
