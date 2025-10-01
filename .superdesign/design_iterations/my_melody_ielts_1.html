@@ -2252,9 +2252,10 @@
             <div class="settings-section">
                 <h3>📚 题库管理</h3>
                 <div class="data-actions">
+                    <button class="btn btn-info" onclick="showLibraryConfigModal()">⚙️ 题库配置切换</button>
                     <button class="btn" onclick="loadLibrary()">🔄 重新加载题库</button>
-                    <button class="btn btn-secondary" onclick="checkLibraryUpdates()">📋 检查更新</button>
                     <button class="btn btn-secondary" onclick="libraryInfo()">ℹ️ 题库信息</button>
+                    <button class="btn" style="background: linear-gradient(135deg, #87ceeb, #6bb6d6); color: white; border: 2px solid #87ceeb; font-size: 0.9rem;" onclick="typeof showLibraryConfigListV2 === 'function' ? showLibraryConfigListV2() : loadLibrary(true)">📂 加载题库</button>
                 </div>
             </div>
 
@@ -2310,7 +2311,83 @@
                     </div>
     </div>
 
+    <!-- 题库配置切换模态框 -->
+    <div id="library-config-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3 class="modal-title">📚 题库配置切换</h3>
+                <button class="modal-close" onclick="closeLibraryConfigModal()">✖</button>
+            </div>
+            <div class="modal-body">
+                <div class="exam-list" id="config-list">
+                    <!-- 配置列表将通过JS动态生成 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeLibraryConfigModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+
     <script>
+
+
+        // Global alwaysArray helper
+        function alwaysArray(val) {
+            return Array.isArray(val) ? val : [];
+        }
+
+        // 题库配置切换模态框函数
+        function showLibraryConfigModal() {
+            const modal = document.getElementById('library-config-modal');
+            const listContainer = document.getElementById('config-list');
+            
+            // 计算总题目数
+            const readingCount = Array.isArray(window.completeExamIndex) ? window.completeExamIndex.length : 0;
+            const listeningCount = Array.isArray(window.listeningExamIndex) ? window.listeningExamIndex.length : 0;
+            const totalCount = readingCount + listeningCount;
+            
+            // 当前 active_key
+            const activeKey = window.storage ? window.storage.get('active_exam_index_key', 'exam_index') : 'exam_index';
+            
+            listContainer.innerHTML = `
+                <div class="exam-item">
+                    <div class="exam-title">默认题库 (exam_index)</div>
+                    <div class="exam-meta">
+                        <span>阅读: ${readingCount} 篇</span>
+                        <span>听力: ${listeningCount} 篇</span>
+                        <span>总计: ${totalCount} 篇</span>
+                        ${activeKey === 'exam_index' ? '<span class="best-score">当前激活</span>' : ''}
+                    </div>
+                    <div class="exam-actions">
+                        <button class="btn" onclick="switchToDefaultConfig()">切换到默认</button>
+                        <button class="btn btn-secondary" onclick="loadRealExamLibrary(true)">重新加载</button>
+                    </div>
+                </div>
+            `;
+            
+            modal.style.display = 'flex';
+        }
+        
+        function closeLibraryConfigModal() {
+            document.getElementById('library-config-modal').style.display = 'none';
+        }
+        
+        // 切换到默认配置
+        async function switchToDefaultConfig() {
+            if (window.storage) {
+                await window.storage.set('active_exam_index_key', 'exam_index');
+            }
+            loadRealExamLibrary(true);
+            closeLibraryConfigModal();
+            showNotification('已切换到默认题库配置');
+        }
+        
+        // 原 switchLibraryConfig 函数（保留作为备用）
+        function switchLibraryConfig() {
+            showLibraryConfigModal();
+        }
+
         // 全局状态管理
         class MyMelodyIELTSApp {
             constructor() {
@@ -2334,7 +2411,6 @@
                 this.setupEventListeners();
                 this.createParticles();
                 this.updateUI();
-                this.startDataSync();
                 this.initPracticeReminders();
                 this.initStorageMonitoring();
             }
@@ -2816,15 +2892,6 @@
                     }
                 });
 
-                window.addEventListener('storage-sync', (event) => {
-                    console.log('[Theme] 收到存储同步事件，正在更新练习记录...', event.detail);
-                    // Ensure event.detail is properly formatted
-                    if (event.detail && typeof event.detail === 'object') {
-                        this.loadData();
-                        this.updateUI();
-                    }
-                });
-
                 // 定期保存数据
                 setInterval(() => {
                     if (this.settings.autoSave) {
@@ -2974,6 +3041,7 @@
         // 全局函数
         let app;
 
+
         // 生成云状分布的emoji
         function createEmojiCloud() {
             const emojiCloud = document.getElementById('emojiCloud');
@@ -3120,6 +3188,46 @@
             });
         }
 
+        // 简化题库加载函数：直接从全局索引加载，无缓存/广播
+        async function loadRealExamLibrary(forceFresh = false) {
+            console.log('[Load] 开始加载题库');
+            const activeKey = window.storage ? window.storage.get('active_exam_index_key', 'exam_index') : 'exam_index';
+            let data = [];
+
+            // 从全局索引加载
+            if (Array.isArray(window.completeExamIndex)) {
+                data = data.concat(window.completeExamIndex.map(exam => ({
+                    ...exam,
+                    type: 'reading',
+                    category: exam.category || exam.part || 'P1'
+                })));
+            }
+            if (Array.isArray(window.listeningExamIndex)) {
+                data = data.concat(window.listeningExamIndex.map(exam => ({
+                    ...exam,
+                    type: 'listening',
+                    category: exam.category || exam.part || 'P3'
+                })));
+            }
+
+            // 过滤 active_exam_index_key
+            if (activeKey !== 'exam_index') {
+                data = data.filter(exam => exam.key === activeKey || exam.index_key === activeKey);
+            }
+
+            if (window.app) {
+                window.app.examData = data;
+            }
+
+            console.log('[Load] 总题目:', data.length);
+            updateCategoryStats();
+            updateOverview();
+            if (window.app && window.app.updateUI) {
+                window.app.updateUI();
+            }
+            return data;
+        }
+
         // 数据加载验证函数
         function verifyDataLoading() {
 
@@ -3137,52 +3245,96 @@
         }
 
         // 页面加载完成后初始化
-        document.addEventListener('DOMContentLoaded', () => {
+        if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+            console.log('Document type before DOMContentLoaded listener (init):', typeof document, !!document.addEventListener);
+            document.addEventListener('DOMContentLoaded', () => {
+                console.log('[Init] 页面加载开始初始化...');
 
-            // 首先验证数据加载状态
-            const dataLoaded = verifyDataLoading();
-            if (!dataLoaded) {
-              setTimeout(() => {
-                if (verifyDataLoading()) {
+                // 首先验证数据加载状态
+                const dataLoaded = verifyDataLoading();
+                if (!dataLoaded) {
+                  console.log('[Init] 全局数据索引未就绪，等待加载...');
+                  setTimeout(() => {
+                    if (verifyDataLoading()) {
+                      console.log('[Init] 全局数据索引加载完成');
+                    } else {
+                      console.log('[Init] 全局数据索引加载失败');
+                    }
+                  }, 500);
                 } else {
+                  console.log('[Init] 全局数据索引已就绪');
                 }
-              }, 500);
-            } else {
-            }
 
-            app = new MyMelodyIELTSApp();
-            window.app = app; // 确保全局可访问
+                // 初始化主应用
+                app = new MyMelodyIELTSApp();
+                window.app = app; // 确保全局可访问
+                console.log('[Init] 主应用初始化完成');
 
+                // 初始化题库同步管理器
+                setTimeout(async () => {
+                    try {
+                        console.log('[Init] 开始初始化题库同步管理器...');
+                        if (typeof LibrarySyncManager !== 'undefined') {
+                            window.librarySyncManager = new LibrarySyncManager();
+                            await window.librarySyncManager.init();
+                            console.log('[Init] 题库同步管理器初始化成功');
+                        } else {
+                            console.warn('[Init] LibrarySyncManager 类未定义');
+                        }
+                    } catch (error) {
+                        console.error('[Init] 题库同步管理器初始化失败:', error);
+                    }
+                }, 200);
 
-            // 延迟加载题库数据，确保应用初始化完成
-            setTimeout(() => {
-                if (typeof window.loadRealExamLibrary === 'function') {
-                    window.loadRealExamLibrary(true);
-                }
-                initializePageEffects();
-            }, 100);
+                // 延迟加载题库数据，确保应用和同步管理器都初始化完成
+                setTimeout(async () => {
+                    try {
+                        console.log('[Init] 开始加载题库数据...');
+                        if (typeof window.loadRealExamLibrary === 'function') {
+                            await window.loadRealExamLibrary(true);
+                            console.log('[Init] 题库数据加载完成');
+                        } else {
+                            console.warn('[Init] 题库加载函数未定义');
+                        }
 
-            // 设置DOM加载完成事件
-            if (typeof document !== 'undefined' && document.addEventListener) {
-                document.addEventListener('DOMContentLoaded', function() {
-                    if (window.syncSharedPracticeRecords) window.syncSharedPracticeRecords();
-                    // 页面恢复可见时同步
-                    document.addEventListener('visibilitychange', () => {
-                        if (!document.hidden && window.syncSharedPracticeRecords) window.syncSharedPracticeRecords();
-                    });
-                    // 定时轻量轮询 5s
-                    window._melodySyncTimer && clearInterval(window._melodySyncTimer);
-                    window._melodySyncTimer = setInterval(() => {
+                        // 初始化页面效果
+                        initializePageEffects();
+                        console.log('[Init] 页面效果初始化完成');
+                    } catch (error) {
+                        console.error('[Init] 题库数据加载失败:', error);
+                    }
+                }, 500);
+
+                // 设置DOM加载完成事件
+                if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+                    if (typeof document.addEventListener === 'function') {
+                        document.addEventListener('DOMContentLoaded', function() {
+                            if (window.syncSharedPracticeRecords) window.syncSharedPracticeRecords();
+                            // 页面恢复可见时同步
+                            if (typeof document.addEventListener === 'function') {
+                                document.addEventListener('visibilitychange', () => {
+                                    if (!document.hidden && window.syncSharedPracticeRecords) window.syncSharedPracticeRecords();
+                                });
+                            }
+                            // 定时轻量轮询 5s
+                            window._melodySyncTimer && clearInterval(window._melodySyncTimer);
+                            window._melodySyncTimer = setInterval(() => {
+                                if (window.syncSharedPracticeRecords) window.syncSharedPracticeRecords();
+                            }, 5000);
+                        });
+                    }
+                } else if (typeof window !== 'undefined' && window.addEventListener) {
+                    // 备选方案：使用window的load事件
+                    window.addEventListener('load', function() {
                         if (window.syncSharedPracticeRecords) window.syncSharedPracticeRecords();
-                    }, 5000);
-                });
-            } else if (typeof window !== 'undefined' && window.addEventListener) {
-                // 备选方案：使用window的load事件
-                window.addEventListener('load', function() {
-                    if (window.syncSharedPracticeRecords) window.syncSharedPracticeRecords();
-                });
-            }
-        })();
+                    });
+                }
+
+                console.log('[Init] 页面初始化完成');
+            });
+        } else {
+            console.warn('Document not available for DOMContentLoaded listener (init)');
+        }
 
   // 绑定导入文件事件（如果未绑定）
   if (document.getElementById('melody-import-file')) {
@@ -3950,21 +4102,31 @@
                 }
 
                 // ESC键关闭弹窗
-                document.addEventListener('keydown', function(e) {
-                    if (e.key === 'Escape') {
-                        const modal = document.getElementById('record-details-modal');
-                        if (modal && modal.style.display === 'flex') {
-                            closeRecordDetails();
+                if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+                    console.log('Document type before keydown listener:', typeof document, !!document.addEventListener);
+                    document.addEventListener('keydown', function(e) {
+                        if (e.key === 'Escape') {
+                            const modal = document.getElementById('record-details-modal');
+                            if (modal && modal.style.display === 'flex') {
+                                closeRecordDetails();
+                            }
                         }
-                    }
-                });
+                    });
+                } else {
+                    console.warn('Document not available for keydown listener');
+                }
             } catch (error) {
                 console.error('[Details] Error initializing modal events:', error);
             }
         }
 
         // 页面加载完成后初始化
-        document.addEventListener('DOMContentLoaded', initializeModalEvents);
+        if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+            console.log('Document type before DOMContentLoaded listener (modal):', typeof document, !!document.addEventListener);
+            document.addEventListener('DOMContentLoaded', initializeModalEvents);
+        } else {
+            console.warn('Document not available for DOMContentLoaded listener (modal)');
+        }
 
         // 增强的练习完成监听器 - 捕获各种可能的完成事件
         window.addEventListener('message', (event) => {
@@ -4125,12 +4287,15 @@
         }
 
         function loadLibrary() {
-            app.showNotification('正在重新加载题库...');
-            setTimeout(() => {
-                app.initSampleData();
-                app.updateBrowse();
-                app.showNotification('题库重新加载完成');
-            }, 1000);
+            if (window.librarySyncManager) {
+                app.showNotification('正在重新加载题库...');
+                window.manualSyncLibrary();
+            } else if (typeof window.loadRealExamLibrary === 'function') {
+                app.showNotification('正在重新加载题库...');
+                window.loadRealExamLibrary(true);
+            } else {
+                app.showNotification('题库加载函数未定义，请刷新页面');
+            }
         }
 
         function checkLibraryUpdates() {
@@ -4823,13 +4988,19 @@
 
         function upsertPracticeRecord(rec) {
             console.log('[Record] Starting upsert for:', rec);
-
+        
             // 获取当前的记录列表
             let list = window.storage ? window.storage.get('practice_records', []) : [];
+            console.log('[Record] list type:', typeof list, 'isArray:', Array.isArray(list));
+            if (!Array.isArray(list)) list = [];
             const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-
+        
             // 1. 按sessionId去重
             const bySessionId = (r) => String(r.id) === String(rec.id);
+            if (!Array.isArray(list)) {
+                console.warn('[Record] List is not an array before findIndex, skipping upsert');
+                return;
+            }
             const sessionIdx = list.findIndex(bySessionId);
 
             if (sessionIdx >= 0) {
@@ -4838,6 +5009,10 @@
                 console.log('[Record] Updated existing record by sessionId:', rec.id);
             } else {
                 // 2. 按examId和时间窗口去重（5分钟内）
+                if (!Array.isArray(list)) {
+                    console.warn('[Record] List is not an array before duplicate findIndex, skipping upsert');
+                    return;
+                }
                 const duplicateIdx = list.findIndex(r =>
                     String(r.examId) === String(rec.examId) &&
                     new Date(r.date) > fiveMinutesAgo
@@ -4956,39 +5131,20 @@
                 });
         }
 
-        // 同步真实练习记录
-        function syncRealPracticeRecords() {
-            const storageRecords = window.storage ? window.storage.get('practice_records', []) : [];
-
-            // 智能合并storage记录和app.practiceRecords
-            if (app && app.practiceRecords) {
-                const mergedRecords = [...storageRecords];
-
-                // 保留app.practiceRecords中独有的记录（可能是导入的）
-                app.practiceRecords.forEach(existingRecord => {
-                    const existsInStorage = storageRecords.find(r => r.id === existingRecord.id);
-                    if (!existsInStorage) {
-                        mergedRecords.push(existingRecord);
-                    }
-                });
-
-                // 按日期排序，最新的在前面
-                mergedRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
-
-                app.practiceRecords = mergedRecords;
-                console.log('[Sync] Merged records count:', mergedRecords.length);
-            } else {
-                app.practiceRecords = storageRecords;
-            }
-
-            updateCategoryStats();
-            updateOverview();
-            app.updatePractice();
-        }
 
         // 刷新题库列表
-        function refreshExamList() {
-            loadRealExamLibrary();
+        async function refreshExamList() {
+            try {
+                const config = await getActiveLibraryConfig();
+                await window.librarySyncManager.syncLibraryConfig(config);
+                if (window.app && window.app.updateBrowse) {
+                    window.app.updateBrowse();
+                }
+                app.showNotification('题库已刷新');
+            } catch (error) {
+                console.error('[Refresh] 刷新失败:', error);
+                app.showNotification('刷新题库失败，请重试');
+            }
         }
 
         // 初始化真实数据
@@ -5100,7 +5256,8 @@
 
         // 页面加载时初始化真实数据
         // 设置页面加载完成事件
-        if (typeof document !== 'undefined' && document.addEventListener) {
+        if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+            console.log('Document type before DOMContentLoaded listener (real data):', typeof document, !!document.addEventListener);
             document.addEventListener('DOMContentLoaded', () => {
                 // 确保app对象创建完成后再设置事件监听器
                 setTimeout(() => {
@@ -5122,6 +5279,8 @@
                     window.debugPracticeRecords = debugPracticeRecords;
                 }, 100);
             });
+        } else {
+            console.warn('Document not available for DOMContentLoaded listener (real data)');
         }
 
         // 设置页面事件监听器设置函数
@@ -5301,6 +5460,112 @@
         window.toggleSettingDirect = toggleSettingDirect;
         window.applySettingEffect = applySettingEffect;
         window.ensureSettingsWork = ensureSettingsWork;
+
+        // 测试题库同步功能
+        window.testLibrarySync = function() {
+            console.log('[Test] 开始测试题库同步功能...');
+
+            // 测试1: 检查同步管理器是否已初始化
+            if (window.librarySyncManager) {
+                console.log('[Test] ✅ 同步管理器已初始化');
+                console.log('[Test] 管理器状态:', {
+                    isInitialized: window.librarySyncManager.isInitialized,
+                    currentConfig: window.librarySyncManager.currentConfig,
+                    hasSyncInterval: !!window.librarySyncManager.syncInterval
+                });
+            } else {
+                console.log('[Test] ❌ 同步管理器未初始化');
+                return false;
+            }
+
+            // 测试2: 检查题库数据是否已加载
+            if (window.app && window.app.examData && window.app.examData.length > 0) {
+                console.log('[Test] ✅ 题库数据已加载');
+                console.log('[Test] 题目数量:', window.app.examData.length);
+
+                // 统计分类
+                const reading = window.app.examData.filter(e => e.type === 'reading').length;
+                const listening = window.app.examData.filter(e => e.type === 'listening').length;
+                console.log('[Test] 阅读题目:', reading, '个');
+                console.log('[Test] 听力题目:', listening, '个');
+            } else {
+                console.log('[Test] ❌ 题库数据未加载');
+                return false;
+            }
+
+            // 测试3: 检查分类统计是否正确
+            if (window.updateCategoryStats) {
+                console.log('[Test] ✅ 分类统计函数可用');
+                window.updateCategoryStats();
+                console.log('[Test] 分类统计已更新');
+            } else {
+                console.log('[Test] ❌ 分类统计函数不可用');
+            }
+
+            // 测试4: 检查存储配置
+            if (window.storage) {
+                console.log('[Test] ✅ 存储系统可用');
+                console.log('[Test] 存储命名空间:', window.storage.getNamespace ? window.storage.getNamespace() : '未设置');
+            } else {
+                console.log('[Test] ❌ 存储系统不可用');
+            }
+
+            // 测试5: 模拟配置变化
+            console.log('[Test] 模拟题库配置变化...');
+            if (window.librarySyncManager.handleLibraryConfigChange) {
+                window.librarySyncManager.handleLibraryConfigChange({
+                    key: 'active_exam_index_key',
+                    newValue: 'exam_index'
+                });
+                console.log('[Test] ✅ 配置变化处理函数可用');
+            }
+
+            console.log('[Test] 题库同步功能测试完成');
+            return true;
+        };
+
+        // 手动触发题库同步
+        window.manualSyncLibrary = async function() {
+            console.log('[Manual] 手动触发题库同步...');
+
+            try {
+                if (window.librarySyncManager) {
+                    const config = await window.librarySyncManager.getActiveLibraryConfig();
+                    console.log('[Manual] 当前配置:', config);
+
+                    await window.librarySyncManager.syncLibraryConfig(config);
+                    console.log('[Manual] 手动同步完成');
+                } else {
+                    console.log('[Manual] 同步管理器不可用');
+                }
+            } catch (error) {
+                console.error('[Manual] 手动同步失败:', error);
+            }
+        };
+
+        // 显示同步状态
+        window.showSyncStatus = function() {
+            if (window.librarySyncManager) {
+                console.log('[Status] 同步管理器状态:', {
+                    isInitialized: window.librarySyncManager.isInitialized,
+                    currentConfig: window.librarySyncManager.currentConfig,
+                    lastSyncTime: new Date(window.librarySyncManager.lastSyncTime).toLocaleString(),
+                    retryCount: window.librarySyncManager.retryCount
+                });
+            } else {
+                console.log('[Status] 同步管理器未初始化');
+            }
+
+            if (window.app && window.app.examData) {
+                console.log('[Status] 题库数据状态:', {
+                    totalExams: window.app.examData.length,
+                    reading: window.app.examData.filter(e => e.type === 'reading').length,
+                    listening: window.app.examData.filter(e => e.type === 'listening').length
+                });
+            } else {
+                console.log('[Status] 题库数据未加载');
+            }
+        };
     </script>
 
     <script>
@@ -5532,78 +5797,315 @@
           }
         });
 
-        // 调试代码已清理
-
-        // 调试代码已清理
       };
 
-      window.loadRealExamLibrary = function(forceFresh){
+      // 增强的题库加载函数，支持同步机制
+      window.loadRealExamLibraryWithSync = async function(forceFresh = false) {
+        // 添加加载标志防止重复加载
+        if (window.libraryLoading && !forceFresh) {
+          console.log('[Library] 题库正在加载中，跳过重复调用');
+          return Promise.resolve(window.app ? window.app.examData : []);
+        }
+
+        if (!forceFresh) {
+          // 检查配置变化：如果配置未变且最近加载过（<30s），跳过
+          const lastLoadTime = window.lastLibraryLoadTime || 0;
+          const now = Date.now();
+          if (now - lastLoadTime < 30000) {
+            console.log('[Library] 最近已加载，跳过');
+            return Promise.resolve(window.app ? window.app.examData : []);
+          }
+        }
+
+        window.libraryLoading = true;
         const startTime = performance.now();
-        const activeConfigKey = getActiveLibraryConfigurationKey();
-        const cachedData = window.storage ? window.storage.get(activeConfigKey) : null;
+        console.log('[Library] 开始加载题库数据，强制刷新:', forceFresh);
 
-
-        if (!forceFresh && Array.isArray(cachedData) && cachedData.length > 0) {
-          app.examData = cachedData;
-          finishRealLibraryLoading(startTime);
-          return;
-        }
-
-        if (app && typeof app.showNotification === 'function') {
-          app.showNotification('正在加载题库索引...');
-        }
-
-        const tryBuildFromGlobals = (attempt = 1) => {
-
-          // 检查全局索引状态
-
-          let readingExams = [];
-          let listeningExams = [];
-
-          if (Array.isArray(window.completeExamIndex)) {
-            readingExams = window.completeExamIndex.map(exam => ({ ...exam, type: 'reading' }));
-          } else {
-            console.warn('[Library] 阅读数据索引未加载或不是数组');
+        try {
+          // 检查网络状态
+          if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            console.log('[Library] 网络离线，使用缓存数据');
+            if (window.app && window.app.showNotification) {
+              window.app.showNotification('网络离线，使用缓存数据', 'warning');
+            }
+            return await loadFromCache();
           }
 
-          if (Array.isArray(window.listeningExamIndex)) {
-            listeningExams = window.listeningExamIndex.map(exam => ({ ...exam, type: 'listening' }));
-          } else {
-            console.warn('[Library] 听力数据索引未加载或不是数组');
+          // 获取当前配置
+          const config = await getActiveLibraryConfig();
+          console.log('[Library] 当前配置:', config);
+
+          // 检查是否需要更新
+          if (!forceFresh && !await needsUpdate(config)) {
+            console.log('[Library] 数据未过期，使用缓存');
+            return await loadFromCache();
           }
 
-          const merged = [...readingExams, ...listeningExams];
+          // 显示加载状态
+          if (window.app && window.app.showNotification) {
+            window.app.showNotification('正在加载题库数据...', 'info');
+          }
 
-          if (merged.length > 0) {
-            // 设置数据到app对象
+          // 从全局索引加载数据
+          const data = await loadFromGlobalIndex();
+          console.log('[Library] 从全局索引加载数据完成，数量:', data.length);
+
+          if (data && data.length > 0) {
+            // 更新应用数据
             if (window.app) {
-              window.app.examData = merged;
-            } else {
-              console.warn('[Library] window.app 不存在，无法设置数据');
+              window.app.examData = data;
             }
 
-            if (window.storage) {
-    window.storage.set(activeConfigKey, merged);
-}
+            // 更新缓存
+            await updateCache(data, config);
 
-            finishRealLibraryLoading(startTime);
-            return;
-          }
+            // 广播更新
+            broadcastLibraryUpdate(data);
 
-          if (attempt < 5) {
-            setTimeout(() => tryBuildFromGlobals(attempt + 1), 150);
+            // 更新分类统计
+            if (window.updateCategoryStats) {
+              window.updateCategoryStats();
+            }
+
+            // 更新UI
+            if (window.app && window.app.updateUI) {
+              window.app.updateUI();
+            }
+
+            window.lastLibraryLoadTime = Date.now();
+
+            console.log('[Library] 题库加载完成');
+            if (window.app && window.app.showNotification) {
+              window.app.showNotification(`题库加载完成！共 ${data.length} 个题目`, 'success');
+            }
+
+            return data;
           } else {
-            // 不落盘空数组，避免把"空索引"固化为缓存
-            app.examData = [];
-            finishRealLibraryLoading(startTime);
-            if (app && typeof app.showNotification === 'function') {
-              app.showNotification('题库脚本尚未加载，稍后重试或刷新');
+            throw new Error('题库数据为空');
+          }
+
+        } catch (error) {
+          console.error('[Library] 加载失败:', error);
+
+          // 尝试使用缓存数据
+          try {
+            const cachedData = await loadFromCache();
+            if (cachedData && cachedData.length > 0) {
+              console.log('[Library] 使用缓存数据作为后备');
+              if (window.app && window.app.showNotification) {
+                window.app.showNotification('加载失败，使用缓存数据', 'warning');
+              }
+              return cachedData;
+            }
+          } catch (cacheError) {
+            console.error('[Library] 缓存数据也无法加载:', cacheError);
+          }
+
+          // 如果完全失败，显示错误
+          if (window.app && window.app.showNotification) {
+            window.app.showNotification('题库加载失败，请检查网络连接', 'error');
+          }
+
+          throw error;
+        } finally {
+          window.libraryLoading = false;
+        }
+      };
+
+      // 辅助函数：获取当前配置
+      async function getActiveLibraryConfig() {
+        if (window.storage) {
+          try {
+            const configKey = await window.storage.get('active_exam_index_key', 'exam_index');
+            return {
+              id: configKey,
+              timestamp: Date.now(),
+              source: 'storage'
+            };
+          } catch (error) {
+            console.warn('[Library] 从 storage 获取配置失败:', error);
+          }
+        }
+
+        // 备用：从 localStorage 获取
+        try {
+          const configKey = localStorage.getItem('active_exam_index_key') || 'exam_index';
+          return {
+            id: configKey,
+            timestamp: Date.now(),
+            source: 'localStorage'
+          };
+        } catch (error) {
+          console.warn('[Library] 从 localStorage 获取配置失败:', error);
+          return {
+            id: 'exam_index',
+            timestamp: Date.now(),
+            source: 'default'
+          };
+        }
+      }
+
+      // 辅助函数：检查是否需要更新
+      async function needsUpdate(config) {
+        try {
+          const lastUpdate = localStorage.getItem('last_library_update');
+          if (!lastUpdate) return true;
+
+          const updateTime = parseInt(lastUpdate);
+          const now = Date.now();
+          const fiveMinutes = 5 * 60 * 1000; // 5分钟
+
+          // 如果距离上次更新超过5分钟，认为需要更新
+          if (now - updateTime > fiveMinutes) {
+            console.log('[Library] 缓存已过期，需要更新');
+            return true;
+          }
+
+          // 检查配置是否变化
+          const lastConfig = localStorage.getItem('last_library_config');
+          if (lastConfig !== config.id) {
+            console.log('[Library] 配置已变化，需要更新');
+            return true;
+          }
+
+          return false;
+        } catch (error) {
+          console.warn('[Library] 检查更新状态失败:', error);
+          return true; // 出错时默认需要更新
+        }
+      }
+
+      // 辅助函数：从缓存加载数据
+      async function loadFromCache() {
+        if (window.storage) {
+          try {
+            const config = await getActiveLibraryConfig();
+            const cacheKey = `exam_library_${config.id}`;
+            const cached = await window.storage.get(cacheKey);
+
+            if (Array.isArray(cached) && cached.length > 0) {
+              console.log('[Library] 从缓存加载数据:', cached.length, '个题目');
+              if (window.app) {
+                window.app.examData = cached;
+              }
+              return cached;
+            }
+          } catch (error) {
+            console.warn('[Library] 从 storage 缓存加载失败:', error);
+          }
+        }
+
+        // 备用：从 localStorage 加载
+        try {
+          const cached = localStorage.getItem('myMelodyExamData');
+          if (cached) {
+            const data = JSON.parse(cached);
+            if (Array.isArray(data) && data.length > 0) {
+              console.log('[Library] 从 localStorage 缓存加载数据:', data.length, '个题目');
+              if (window.app) {
+                window.app.examData = data;
+              }
+              return data;
             }
           }
-        };
+        } catch (error) {
+          console.warn('[Library] 从 localStorage 缓存加载失败:', error);
+        }
 
-        tryBuildFromGlobals(1);
-      };
+        // 如果都没有缓存，返回空数组
+        console.log('[Library] 无可用缓存数据');
+        return [];
+      }
+
+      // 辅助函数：从全局索引加载数据
+      async function loadFromGlobalIndex() {
+        console.log('[Library] 从全局索引加载数据...');
+
+        let readingExams = [];
+        let listeningExams = [];
+
+        // 检查全局索引状态
+        if (Array.isArray(window.completeExamIndex)) {
+          readingExams = window.completeExamIndex.map(exam => ({
+            ...exam,
+            type: 'reading',
+            category: exam.category || exam.part || 'P1'
+          }));
+          console.log('[Library] 加载阅读题目:', readingExams.length, '个');
+        } else {
+          console.warn('[Library] 阅读数据索引未加载或不是数组');
+        }
+
+        if (Array.isArray(window.listeningExamIndex)) {
+          listeningExams = window.listeningExamIndex.map(exam => ({
+            ...exam,
+            type: 'listening',
+            category: exam.category || exam.part || 'P1'
+          }));
+          console.log('[Library] 加载听力题目:', listeningExams.length, '个');
+        } else {
+          console.warn('[Library] 听力数据索引未加载或不是数组');
+        }
+
+        const merged = [...readingExams, ...listeningExams];
+        console.log('[Library] 合并后总题目数:', merged.length);
+
+        // 数据验证和清理
+        const validData = merged.filter(exam => {
+          return exam &&
+                 exam.id &&
+                 exam.title &&
+                 (exam.type === 'reading' || exam.type === 'listening');
+        });
+
+        console.log('[Library] 有效题目数:', validData.length);
+        return validData;
+      }
+
+      // 辅助函数：更新缓存
+      async function updateCache(data, config) {
+        try {
+          const cacheKey = `exam_library_${config.id}`;
+
+          // 更新 storage 缓存
+          if (window.storage) {
+            await window.storage.set(cacheKey, data);
+            console.log('[Library] 更新 storage 缓存成功');
+          }
+
+          // 更新 localStorage 缓存
+          localStorage.setItem('myMelodyExamData', JSON.stringify(data));
+          localStorage.setItem('last_library_update', Date.now().toString());
+          localStorage.setItem('last_library_config', config.id);
+
+          console.log('[Library] 更新 localStorage 缓存成功');
+        } catch (error) {
+          console.error('[Library] 更新缓存失败:', error);
+        }
+      }
+
+      // 辅助函数：广播更新
+      function broadcastLibraryUpdate(data) {
+        console.log('[Library] 广播题库更新通知');
+
+        // 向主系统发送更新通知
+        try {
+          if (window.parent && window.parent !== window) {
+            window.parent.postMessage({
+              type: 'LIBRARY_UPDATED',
+              data: {
+                count: data.length,
+                timestamp: Date.now()
+              }
+            }, '*');
+          }
+        } catch (error) {
+          console.warn('[Library] 广播更新失败:', error);
+        }
+      }
+
+      // 兼容性：保留原函数名
+      window.loadRealExamLibrary = window.loadRealExamLibraryWithSync;
     })();
 
     // 简化的页面加载完成检查
@@ -5746,14 +6248,15 @@
 
   // Clean syncSharedPracticeRecords: read/map/update UI/mirror local, ensure full sync incl. deletions
   window.syncSharedPracticeRecords = async function() {
-    if (typeof window.storage !== 'object') {
-      console.warn('[Sync] Storage unavailable');
-      return;
-    }
-    try {
-      // 1. Read primary: practice_records (array)
-      let list = await window.storage.get('practice_records', []);
-      if (!Array.isArray(list)) list = [];
+      if (typeof window.storage !== 'object') {
+        console.warn('[Sync] Storage unavailable');
+        return;
+      }
+      try {
+        // 1. Read primary: practice_records (array)
+        let list = await window.storage.get('practice_records', []);
+        console.log('[Record] syncSharedPracticeRecords list type:', typeof list, 'isArray:', Array.isArray(list));
+        if (!Array.isArray(list)) list = [];
 
       // 2. Fallback to nested: exam_system_practice_records.data (array)
       if (list.length === 0) {
@@ -5762,28 +6265,23 @@
           list = nested.data;
         }
       }
+      if (!Array.isArray(list)) list = [];
 
       // 3. Map all to Melody model (handles derivation/fix)
       const mapped = Array.isArray(list) ? list.map(window.mapToMelodyModel).filter(Boolean) : [];
 
       // 4. Update app/UI if available
       if (window.app && Array.isArray(window.app.practiceRecords)) {
-        // Merge: replace by id/examId, add new, remove missing (full sync for deletions)
-        const appIds = new Set(window.app.practiceRecords.map(r => String(r.id || r.examId)));
-        const mappedIds = new Set(mapped.map(r => String(r.id || r.examId)));
-        // Remove from app if missing in mapped (deletions)
-        window.app.practiceRecords = window.app.practiceRecords.filter(r => mappedIds.has(String(r.id || r.examId)));
-        // Add/update from mapped
-        mapped.forEach(newRec => {
-          const appIdx = window.app.practiceRecords.findIndex(r => String(r.id || r.examId) === String(newRec.id || newRec.examId));
-          if (appIdx >= 0) {
-            window.app.practiceRecords[appIdx] = newRec; // Update
-          } else {
-            window.app.practiceRecords.push(newRec); // Add
+        console.log('[Sync] Before merge: storageRecords.length =', mapped.length, ', app.practiceRecords.length =', app.practiceRecords.length);
+        const merged = [...mapped];
+        app.practiceRecords.forEach(old => {
+          if (!merged.find(r => r.id === old.id || r.examId === old.examId)) {
+            merged.push(old);
           }
         });
-        // Sort by date desc
-        window.app.practiceRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
+        merged.sort((a, b) => new Date(b.date) - new Date(a.date));
+        app.practiceRecords = merged;
+        console.log('[Sync] After: merged.length =', merged.length);
         if (typeof window.app.updateUI === 'function') window.app.updateUI();
         if (typeof window.app.updatePractice === 'function') window.app.updatePractice();
       }
@@ -5915,13 +6413,24 @@
 
     // DOMContentLoaded sync (if not fired yet)
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initSync, { once: true });
+      if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+          console.log('Document type before DOMContentLoaded listener (boot):', typeof document, !!document.addEventListener);
+          document.addEventListener('DOMContentLoaded', initSync, { once: true });
+      } else {
+          console.warn('Document not available for DOMContentLoaded listener (boot)');
+          initSync();
+      }
     } else {
       initSync();
     }
 
     // Visibility change sync
-    document.addEventListener('visibilitychange', visSync, { once: false });
+    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+        console.log('Document type before visibilitychange listener (boot):', typeof document, !!document.addEventListener);
+        document.addEventListener('visibilitychange', visSync, { once: false });
+    } else {
+        console.warn('Document not available for visibilitychange listener (boot)');
+    }
 
     // 5s timer (clear existing to avoid multiples)
     if (window._melodySyncTimer) clearInterval(window._melodySyncTimer);
