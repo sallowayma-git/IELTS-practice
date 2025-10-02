@@ -1,6 +1,7 @@
 /**
- * 数据完整性管理器
+ * 数据完整性管理器 (优化版)
  * 负责数据备份、验证、修复和导入导出功能
+ * 集成了新的数据访问层和缓存策略
  */
 class DataIntegrityManager {
     constructor() {
@@ -9,17 +10,57 @@ class DataIntegrityManager {
         this.dataVersion = '1.0.0';
         this.backupTimer = null;
         this.validationRules = new Map();
-        
+        this.dataAccessLayer = null;
+        this.repositoryFactory = null;
+        this.isInitialized = false;
+
         // 注册默认验证规则
         this.registerDefaultValidationRules();
-        
-        // 启动自动备份
-        this.startAutoBackup();
-        
-        // 尝试立即清理旧备份，防止一启动就触发配额
-        try { this.cleanupOldBackups(); } catch (_) {}
-        
-        console.log('[DataIntegrityManager] 数据完整性管理器已初始化');
+
+        // 延迟初始化，等待数据访问层就绪
+        this.initializeWhenReady();
+
+        console.log('[DataIntegrityManager] 数据完整性管理器已创建');
+    }
+
+    /**
+     * 当数据访问层就绪时初始化
+     */
+    async initializeWhenReady() {
+        try {
+            // 等待数据访问层初始化
+            if (window.dataAccessLayer) {
+                await window.dataAccessLayer.initialize();
+                this.dataAccessLayer = window.dataAccessLayer;
+                this.repositoryFactory = this.dataAccessLayer.repositoryFactory;
+
+                // 启动自动备份
+                this.startAutoBackup();
+
+                // 尝试立即清理旧备份，防止一启动就触发配额
+                try { this.cleanupOldBackups(); } catch (_) {}
+
+                this.isInitialized = true;
+                console.log('[DataIntegrityManager] 数据完整性管理器已初始化');
+            } else {
+                // 如果数据访问层尚未就绪，延迟重试
+                setTimeout(() => this.initializeWhenReady(), 1000);
+            }
+        } catch (error) {
+            console.error('[DataIntegrityManager] 初始化失败:', error);
+            // 降级使用传统方式
+            this.startAutoBackup();
+            this.isInitialized = true;
+        }
+    }
+
+    /**
+     * 确保已初始化
+     */
+    _ensureInitialized() {
+        if (!this.isInitialized) {
+            console.warn('[DataIntegrityManager] 尚未完全初始化，使用降级模式');
+        }
     }
 
     /**
@@ -86,14 +127,16 @@ class DataIntegrityManager {
     }
 
     /**
-     * 执行自动备份
+     * 执行自动备份 (优化版)
      */
     async performAutoBackup() {
         try {
-            const criticalData = this.getCriticalData();
+            const criticalData = await this.getCriticalData();
             if (Object.keys(criticalData).length > 0) {
                 await this.createBackup(criticalData, 'auto');
                 console.log('[DataIntegrityManager] 自动备份完成');
+            } else {
+                console.log('[DataIntegrityManager] 无关键数据需要备份');
             }
         } catch (error) {
             console.error('[DataIntegrityManager] 自动备份失败:', error);
@@ -101,9 +144,52 @@ class DataIntegrityManager {
     }
 
     /**
-     * 获取关键数据
+     * 获取关键数据 (优化版)
      */
-    getCriticalData() {
+    async getCriticalData() {
+        this._ensureInitialized();
+
+        try {
+            const data = {};
+
+            // 使用新的数据访问层获取数据
+            if (this.repositoryFactory) {
+                try {
+                    // 获取练习记录
+                    const practiceRepo = this.repositoryFactory.getPracticeRecordRepository();
+                    const practiceRecords = await practiceRepo.getAll({ limit: 1000 }); // 限制数量避免过大
+                    if (practiceRecords.length > 0) {
+                        data.practice_records = practiceRecords;
+                    }
+
+                    // 获取用户设置
+                    const settingsRepo = this.repositoryFactory.getUserSettingsRepository();
+                    const userSettings = await settingsRepo.getAll();
+                    if (Object.keys(userSettings).length > 0) {
+                        data.user_settings = userSettings;
+                    }
+
+                    console.log(`[DataIntegrityManager] 通过新数据访问层获取到关键数据: ${Object.keys(data).length} 项`);
+                } catch (repoError) {
+                    console.warn('[DataIntegrityManager] 新数据访问层获取失败，降级到传统方式:', repoError);
+                    return this._getCriticalDataLegacy();
+                }
+            } else {
+                // 降级到传统方式
+                return this._getCriticalDataLegacy();
+            }
+
+            return data;
+        } catch (error) {
+            console.error('[DataIntegrityManager] 获取关键数据失败:', error);
+            return this._getCriticalDataLegacy();
+        }
+    }
+
+    /**
+     * 传统方式获取关键数据 (降级方案)
+     */
+    _getCriticalDataLegacy() {
         const criticalKeys = [
             'practice_records',
             'system_settings',
@@ -114,15 +200,27 @@ class DataIntegrityManager {
         const data = {};
         criticalKeys.forEach(key => {
             try {
-                const value = localStorage.getItem(key);
-                if (value) {
-                    data[key] = JSON.parse(value);
+                let value;
+                if (window.storage) {
+                    // 使用存储管理器
+                    value = window.storage.get(key);
+                } else {
+                    // 直接使用localStorage
+                    value = localStorage.getItem(key);
+                    if (value) {
+                        value = JSON.parse(value);
+                    }
+                }
+
+                if (value && (Array.isArray(value) ? value.length > 0 : Object.keys(value).length > 0)) {
+                    data[key] = value;
                 }
             } catch (error) {
                 console.warn(`[DataIntegrityManager] 读取 ${key} 失败:`, error);
             }
         });
 
+        console.log(`[DataIntegrityManager] 通过传统方式获取到关键数据: ${Object.keys(data).length} 项`);
         return data;
     }
 
