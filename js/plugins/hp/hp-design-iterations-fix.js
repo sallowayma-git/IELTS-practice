@@ -24,6 +24,12 @@ jieshenshuduan/**
             setting: { loaded: false, functional: false }
         },
 
+        // Performance optimization: Virtual scroller instance
+        practiceVirtualScroller: null,
+
+        // 事件委托 - 避免handler引用问题
+        _isEventDelegationSetup: false,
+
         /**
          * 初始化插件
          */
@@ -633,35 +639,291 @@ jieshenshuduan/**
 
             const records = hpCore.getRecords();
 
-            container.innerHTML = exams.map(exam => {
-                const isCompleted = records.some(record =>
-                    record.examId === exam.id || record.title === exam.title
-                );
+            // 网格布局修复：保持原有grid布局，使用增量更新
+            const shouldUseIncrementalUpdate = window.performanceOptimizer && exams.length > 20;
 
-                const bestScore = isCompleted ?
-                    Math.max(...records
-                        .filter(record => record.examId === exam.id || record.title === exam.title)
-                        .map(record => (record.score ?? record.percentage ?? 0))) : 0;
+            if (shouldUseIncrementalUpdate) {
+                // 性能优化：增量更新，保持网格布局
+                this._incrementalUpdateGrid(container, exams, records);
+            } else {
+                // 直接渲染：使用DocumentFragment
+                const fragment = document.createDocumentFragment();
 
-                return `
-                    <div class="exam-card" style="background: rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 20px; cursor: pointer; transition: all 0.3s ease;" onclick="hpDesignIterationsFix._openPracticeExam('${exam.id}')">
-                        <div class="exam-title" style="font-weight: 600; margin-bottom: 10px;">${exam.title || '无标题'}</div>
-                        <div class="exam-meta" style="opacity: 0.7; margin-bottom: 15px;">
-                            <span>${exam.type === 'reading' ? '📖 阅读' : '🎧 听力'}</span>
-                            <span>${exam.category || 'P1'}</span>
-                            ${isCompleted ? `<span>最佳 ${bestScore}%</span>` : ''}
-                        </div>
-                        <div class="exam-actions" style="display: flex; gap: 10px;">
-                            <button class="btn" onclick="event.stopPropagation(); hpDesignIterationsFix._openPracticeExam('${exam.id}')">
-                                ${isCompleted ? '重新练习' : '开始练习'}
-                            </button>
-                            <button class="btn btn-secondary" onclick="event.stopPropagation(); hpDesignIterationsFix._viewPracticePDF('${exam.id}')">
-                                查看PDF
-                            </button>
-                        </div>
-                    </div>
+                exams.forEach(exam => {
+                    const element = this._createPracticeCardElement(exam, null, records);
+                    fragment.appendChild(element);
+                });
+
+                // 清空容器并添加新元素
+                container.innerHTML = '';
+                container.appendChild(fragment);
+            }
+        },
+
+        /**
+         * 创建练习卡片DOM元素 - Performance optimized DOM creation
+         */
+        _createPracticeCardElement(exam, index = null, records) {
+            const isCompleted = records.some(record =>
+                record.examId === exam.id || record.title === exam.title
+            );
+
+            const bestScore = isCompleted ?
+                Math.max(...records
+                    .filter(record => record.examId === exam.id || record.title === exam.title)
+                    .map(record => (record.score ?? record.percentage ?? 0))) : 0;
+
+            // 主容器
+            const examCard = document.createElement('div');
+            examCard.className = 'exam-card';
+            examCard.style.cssText = `
+                background: rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 20px;
+                cursor: pointer;
+                transition: all 0.3s ease;
+            `;
+
+            // 事件委托：存储exam ID在data属性中
+            examCard.dataset.examId = exam.id;
+
+            // 标题
+            const title = document.createElement('div');
+            title.className = 'exam-title';
+            title.style.cssText = 'font-weight: 600; margin-bottom: 10px;';
+            title.textContent = exam.title || '无标题';
+
+            // 元信息
+            const meta = document.createElement('div');
+            meta.className = 'exam-meta';
+            meta.style.cssText = 'opacity: 0.7; margin-bottom: 15px;';
+            meta.innerHTML = `
+                <span>${exam.type === 'reading' ? '📖 阅读' : '🎧 听力'}</span>
+                <span>${exam.category || 'P1'}</span>
+                ${isCompleted ? `<span>最佳 ${bestScore}%</span>` : ''}
+            `;
+
+            // 操作按钮
+            const actions = document.createElement('div');
+            actions.className = 'exam-actions';
+            actions.style.cssText = 'display: flex; gap: 10px;';
+
+            const startBtn = document.createElement('button');
+            startBtn.className = 'btn hp-practice-start';
+            startBtn.textContent = isCompleted ? '重新练习' : '开始练习';
+            startBtn.dataset.examId = exam.id;
+
+            const pdfBtn = document.createElement('button');
+            pdfBtn.className = 'btn btn-secondary hp-practice-pdf';
+            pdfBtn.textContent = '查看PDF';
+            pdfBtn.dataset.examId = exam.id;
+
+            actions.appendChild(startBtn);
+            actions.appendChild(pdfBtn);
+
+            // 组装元素
+            examCard.appendChild(title);
+            examCard.appendChild(meta);
+            examCard.appendChild(actions);
+
+            // 设置事件委托（只设置一次）
+            this._setupEventDelegation();
+
+            return examCard;
+        },
+
+        /**
+         * 设置事件委托 - 解决handler引用问题
+         */
+        _setupEventDelegation() {
+            if (this._isEventDelegationSetup) return;
+
+            // 在document或容器上设置事件委托
+            const delegationHandler = (e) => {
+                // 卡片点击
+                const examCard = e.target.closest('.exam-card');
+                if (examCard && examCard.dataset.examId) {
+                    // 只有点击卡片本身（不是按钮）才触发
+                    if (e.target === examCard || e.target.closest('.exam-title, .exam-meta')) {
+                        this._openPracticeExam(examCard.dataset.examId);
+                        return;
+                    }
+                }
+
+                // 开始练习按钮
+                const startBtn = e.target.closest('.hp-practice-start');
+                if (startBtn && startBtn.dataset.examId) {
+                    e.stopPropagation();
+                    this._openPracticeExam(startBtn.dataset.examId);
+                    return;
+                }
+
+                // PDF按钮
+                const pdfBtn = e.target.closest('.hp-practice-pdf');
+                if (pdfBtn && pdfBtn.dataset.examId) {
+                    e.stopPropagation();
+                    this._viewPracticePDF(pdfBtn.dataset.examId);
+                    return;
+                }
+            };
+
+            // 使用document作为委托目标（确保能捕获所有事件）
+            document.addEventListener('click', delegationHandler);
+            this._delegationHandler = delegationHandler;
+            this._isEventDelegationSetup = true;
+
+            console.log('[HP-Design-Iterations-Fix] 事件委托已设置');
+        },
+
+        /**
+         * 网格增量更新 - 保持grid布局的高性能渲染
+         */
+        _incrementalUpdateGrid(container, exams, records) {
+            // 使用requestAnimationFrame批量处理
+            const updateGrid = () => {
+                // 检查是否需要完全重建
+                const currentCards = container.querySelectorAll('.exam-card');
+                const currentCount = currentCards.length;
+                const targetCount = exams.length;
+
+                if (Math.abs(currentCount - targetCount) > targetCount * 0.3) {
+                    // 差异过大，完全重建
+                    this._fullRebuildGrid(container, exams, records);
+                } else {
+                    // 增量更新
+                    this._smartUpdateGrid(container, exams, records, currentCards);
+                }
+            };
+
+            // 使用PerformanceOptimizer的优化渲染
+            if (window.performanceOptimizer && window.performanceOptimizer.optimizeRender) {
+                const optimizedUpdate = window.performanceOptimizer.optimizeRender(updateGrid);
+                optimizedUpdate();
+            } else {
+                requestAnimationFrame(updateGrid);
+            }
+        },
+
+        /**
+         * 完全重建网格
+         */
+        _fullRebuildGrid(container, exams, records) {
+            const fragment = document.createDocumentFragment();
+
+            // 分批处理避免阻塞UI
+            const batchSize = 10;
+            let currentIndex = 0;
+
+            const processBatch = () => {
+                const endIndex = Math.min(currentIndex + batchSize, exams.length);
+
+                for (let i = currentIndex; i < endIndex; i++) {
+                    const element = this._createPracticeCardElement(exams[i], i, records);
+                    fragment.appendChild(element);
+                }
+
+                currentIndex = endIndex;
+
+                if (currentIndex < exams.length) {
+                    // 继续处理下一批
+                    if (window.performanceOptimizer && window.performanceOptimizer.throttle) {
+                        const throttledProcess = window.performanceOptimizer.throttle(processBatch, 16);
+                        throttledProcess();
+                    } else {
+                        setTimeout(processBatch, 16);
+                    }
+                } else {
+                    // 完成，更新DOM
+                    container.innerHTML = '';
+                    container.appendChild(fragment);
+                }
+            };
+
+            processBatch();
+        },
+
+        /**
+         * 智能更新网格 - 复用现有元素
+         */
+        _smartUpdateGrid(container, exams, records, currentCards) {
+            const fragment = document.createDocumentFragment();
+            const existingCards = Array.from(currentCards);
+            let cardIndex = 0;
+
+            exams.forEach((exam, index) => {
+                if (cardIndex < existingCards.length) {
+                    // 复用现有卡片，更新内容
+                    const existingCard = existingCards[cardIndex];
+                    const updatedCard = this._updatePracticeCardElement(existingCard, exam, index, records);
+                    fragment.appendChild(updatedCard);
+                    cardIndex++;
+                } else {
+                    // 创建新卡片
+                    const newCard = this._createPracticeCardElement(exam, index, records);
+                    fragment.appendChild(newCard);
+                }
+            });
+
+            // 移除多余的卡片
+            while (cardIndex < existingCards.length) {
+                const extraCard = existingCards[cardIndex];
+                if (extraCard.parentNode) {
+                    extraCard.parentNode.removeChild(extraCard);
+                }
+                cardIndex++;
+            }
+
+            // 更新容器
+            container.innerHTML = '';
+            container.appendChild(fragment);
+        },
+
+        /**
+         * 更新现有练习卡片元素 - 事件委托版本
+         */
+        _updatePracticeCardElement(existingCard, exam, index, records) {
+            const isCompleted = records.some(record =>
+                record.examId === exam.id || record.title === exam.title
+            );
+
+            const bestScore = isCompleted ?
+                Math.max(...records
+                    .filter(record => record.examId === exam.id || record.title === exam.title)
+                    .map(record => (record.score ?? record.percentage ?? 0))) : 0;
+
+            // 更新exam ID（事件委托依赖这个）
+            existingCard.dataset.examId = exam.id;
+
+            // 更新标题
+            const titleElement = existingCard.querySelector('.exam-title');
+            if (titleElement) {
+                titleElement.textContent = exam.title || '无标题';
+            }
+
+            // 更新元信息
+            const metaElement = existingCard.querySelector('.exam-meta');
+            if (metaElement) {
+                metaElement.innerHTML = `
+                    <span>${exam.type === 'reading' ? '📖 阅读' : '🎧 听力'}</span>
+                    <span>${exam.category || 'P1'}</span>
+                    ${isCompleted ? `<span>最佳 ${bestScore}%</span>` : ''}
                 `;
-            }).join('');
+            }
+
+            // 更新按钮exam ID和文本
+            const startBtn = existingCard.querySelector('.hp-practice-start');
+            if (startBtn) {
+                startBtn.dataset.examId = exam.id;
+                startBtn.textContent = isCompleted ? '重新练习' : '开始练习';
+            }
+
+            const pdfBtn = existingCard.querySelector('.hp-practice-pdf');
+            if (pdfBtn) {
+                pdfBtn.dataset.examId = exam.id;
+            }
+
+            // 事件委托已设置，无需重新绑定事件
+            return existingCard;
         },
 
         /**
@@ -1329,6 +1591,22 @@ jieshenshuduan/**
                 currentPage: this.currentPage,
                 pagesStatus: this.pagesStatus
             };
+        },
+
+        /**
+         * 资源清理 - 事件委托版本
+         */
+        cleanup() {
+            console.log('[HP-Design-Iterations-Fix] 清理插件资源');
+
+            // 清理事件委托
+            if (this._delegationHandler) {
+                document.removeEventListener('click', this._delegationHandler);
+                this._delegationHandler = null;
+            }
+            this._isEventDelegationSetup = false;
+
+            // 网格布局不再使用VirtualScroller，无需额外清理
         }
     };
 
