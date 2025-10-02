@@ -77,13 +77,15 @@ class ExamSystemApp {
         this.setState(path, { ...current, ...updates });
     }
 
-    // 持久化状态到存储
+    // 持久化状态到存储 (使用序列化适配器)
     async persistState(path, storageKey = null) {
         const value = this.getState(path);
         const key = storageKey || path.replace('.', '_');
 
         try {
-            await storage.set(key, value);
+            // 使用StateSerializer确保Set/Map对象正确序列化
+            const serializedValue = StateSerializer.serialize(value);
+            await storage.set(key, serializedValue);
         } catch (error) {
             console.error(`[App] 持久化状态失败 ${path}:`, error);
         }
@@ -100,6 +102,52 @@ class ExamSystemApp {
         } catch (error) {
             console.error('[App] 批量持久化状态失败:', error);
         }
+    }
+
+    // 从存储加载状态 (使用反序列化适配器)
+    async loadState(path, storageKey = null) {
+        const key = storageKey || path.replace('.', '_');
+
+        try {
+            const value = await storage.get(key, null);
+            if (value !== null) {
+                const deserializedValue = StateSerializer.deserialize(value);
+                this.setState(path, deserializedValue);
+                return deserializedValue;
+            }
+        } catch (error) {
+            console.error(`[App] 加载状态失败 ${path}:`, error);
+        }
+        return null;
+    }
+
+    // 加载所有持久化状态
+    async loadPersistedState() {
+        const stateMappings = {
+            'exam': 'app_exam_state',
+            'practice': 'app_practice_state',
+            'ui': 'app_ui_state',
+            'system': 'app_system_state'
+        };
+
+        for (const [path, storageKey] of Object.entries(stateMappings)) {
+            await this.loadState(path, storageKey);
+        }
+
+        console.log('[App] 持久化状态加载完成');
+    }
+
+    // 保存所有状态到持久化存储
+    async saveAllState() {
+        const stateMappings = {
+            'exam': 'app_exam_state',
+            'practice': 'app_practice_state',
+            'ui': 'app_ui_state',
+            'system': 'app_system_state'
+        };
+
+        await this.persistMultipleState(stateMappings);
+        console.log('[App] 所有状态已保存');
     }
 
     // 组件检查功能
@@ -273,6 +321,9 @@ class ExamSystemApp {
             this.updateLoadingMessage('正在初始化状态管理...');
             // 初始化统一状态管理和全局变量兼容层
             this.initializeGlobalCompatibility();
+            this.updateLoadingMessage('正在加载持久化状态...');
+            // 加载持久化状态
+            await this.loadPersistedState();
 
             this.updateLoadingMessage('正在初始化响应式功能...');
             // 初始化响应式管理器

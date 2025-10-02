@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>性能基线测量工具</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .metric-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 10px 0;
+            text-align: center;
+        }
+        .metric-value { font-size: 36px; font-weight: bold; margin: 10px 0; }
+        .metric-label { font-size: 14px; opacity: 0.9; }
+        .metric-trend { font-size: 12px; margin-top: 5px; }
+        .trend-up { color: #4CAF50; }
+        .trend-down { color: #f44336; }
+        .trend-stable { color: #FFC107; }
+        button {
+            padding: 12px 24px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-success { background-color: #28a745; color: white; }
+        .btn-warning { background-color: #ffc107; color: black; }
+        .btn-danger { background-color: #dc3545; color: white; }
+        button:hover { opacity: 0.8; transform: translateY(-1px); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background-color: #28a745;
+            transition: width 0.3s ease;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-idle { background-color: #6c757d; }
+        .status-running { background-color: #17a2b8; animation: pulse 1s infinite; }
+        .status-success { background-color: #28a745; }
+        .status-error { background-color: #dc3545; }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .chart-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+        }
+        .recommendation {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .recommendation.high { background: #f8d7da; border-color: #f5c6cb; }
+        .recommendation.medium { background: #fff3cd; border-color: #ffeaa7; }
+        .recommendation.low { background: #d1ecf1; border-color: #bee5eb; }
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .live-metric {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            margin: 2px;
+        }
+        .metric-fps { background: #e3f2fd; color: #1976d2; }
+        .metric-memory { background: #f3e5f5; color: #7b1fa2; }
+        .metric-delay { background: #e8f5e8; color: #388e3c; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 性能基线测量工具</h1>
+        <p>测量系统性能指标，建立性能基线，识别优化机会</p>
+
+        <div class="test-section">
+            <h3>🎯 测试控制面板</h3>
+
+            <div style="margin: 15px 0;">
+                <span class="status-indicator status-idle" id="testStatus"></span>
+                <button class="btn-primary" onclick="runQuickTest()" id="quickTestBtn">
+                    ⚡ 快速测试 (10秒)
+                </button>
+                <button class="btn-success" onclick="runFullBenchmark()" id="fullTestBtn">
+                    🚀 完整基准测试
+                </button>
+                <button class="btn-warning" onclick="startLiveMonitoring()" id="liveMonitorBtn">
+                    📈 实时监控
+                </button>
+                <button class="btn-danger" onclick="stopLiveMonitoring()" id="stopMonitorBtn" disabled>
+                    ⏹️ 停止监控
+                </button>
+                <button class="btn-secondary" onclick="clearResults()">
+                    🗑️ 清除结果
+                </button>
+            </div>
+
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressBar" style="width: 0%"></div>
+            </div>
+            <div id="progressText" style="text-align: center; margin: 10px 0;">准备就绪</div>
+
+            <div id="liveMetrics" style="margin: 15px 0;">
+                <strong>实时指标:</strong>
+                <span class="live-metric metric-fps" id="liveFps">FPS: --</span>
+                <span class="live-metric metric-memory" id="liveMemory">内存: --</span>
+                <span class="live-metric metric-delay" id="liveDelay">延迟: --</span>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>📈 性能指标</h3>
+
+            <div class="metric-grid" id="metricsGrid">
+                <!-- 指标卡片将在这里动态生成 -->
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>🎯 性能建议</h3>
+            <div id="recommendations">
+                <p>运行测试后将显示性能优化建议...</p>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>📊 详细报告</h3>
+            <pre id="detailedReport">运行测试后将显示详细的性能报告...</pre>
+        </div>
+
+        <div class="test-section">
+            <h3>🔧 高级测试</h3>
+
+            <div style="margin: 15px 0;">
+                <button class="btn-primary" onclick="testDOMPerformance()">
+                    🏗️ DOM性能测试
+                </button>
+                <button class="btn-primary" onclick="testDataProcessingPerformance()">
+                    📊 数据处理测试
+                </button>
+                <button class="btn-primary" onclick="testUIInteractionPerformance()">
+                    🖱️ 交互性能测试
+                </button>
+                <button class="btn-primary" onclick="testVirtualScrollingPerformance()">
+                    📜 虚拟滚动测试
+                </button>
+            </div>
+
+            <div id="advancedResults" style="margin-top: 15px;"></div>
+        </div>
+    </div>
+
+    <!-- 加载必要的脚本 -->
+    <script src="js/utils/storage.js"></script>
+    <script src="js/utils/performanceBaseline.js"></script>
+
+    <script>
+        let performanceBaseline = null;
+        let liveMonitoringInterval = null;
+        let currentTest = null;
+
+        // 检查依赖并初始化
+        function initializePerformanceTool() {
+            try {
+                // 检查必要的依赖
+                if (typeof window.PerformanceBaseline === 'undefined') {
+                    throw new Error('PerformanceBaseline类未加载');
+                }
+
+                // 创建实例
+                performanceBaseline = new PerformanceBaseline();
+                console.log('📊 性能测量工具已加载');
+                updateTestStatus('idle');
+
+                return true;
+            } catch (error) {
+                console.error('❌ 性能工具初始化失败:', error);
+                updateTestStatus('error');
+                updateProgress(100, '初始化失败: ' + error.message);
+
+                // 显示错误信息
+                document.getElementById('metricsGrid').innerHTML =
+                    '<div class="recommendation high"><h4>❌ 初始化失败</h4><p>' + error.message + '</p></div>';
+
+                return false;
+            }
+        }
+
+        // 初始化
+        window.addEventListener('load', () => {
+            // 延迟初始化，确保所有脚本都加载完成
+            setTimeout(() => {
+                initializePerformanceTool();
+            }, 100);
+        });
+
+        // 更新测试状态
+        function updateTestStatus(status) {
+            const indicator = document.getElementById('testStatus');
+            indicator.className = `status-indicator status-${status}`;
+        }
+
+        // 更新进度条
+        function updateProgress(percentage, text = '') {
+            document.getElementById('progressBar').style.width = `${percentage}%`;
+            document.getElementById('progressText').textContent = text;
+        }
+
+        // 更新实时指标
+        function updateLiveMetrics() {
+            if (!performanceBaseline || !performanceBaseline.isMonitoring) return;
+
+            const metrics = performanceBaseline.metrics;
+
+            // FPS
+            if (metrics.fps.length > 0) {
+                const recentFps = metrics.fps.slice(-10); // 最近10帧
+                const avgFps = recentFps.reduce((a, b) => a + b, 0) / recentFps.length;
+                document.getElementById('liveFps').textContent = `FPS: ${avgFps.toFixed(1)}`;
+            }
+
+            // 内存
+            if (metrics.memory.length > 0) {
+                const latestMemory = metrics.memory[metrics.memory.length - 1];
+                const memoryMB = (latestMemory.used / 1024 / 1024).toFixed(1);
+                document.getElementById('liveMemory').textContent = `内存: ${memoryMB}MB`;
+            }
+
+            // 延迟
+            if (metrics.interactionDelay.length > 0) {
+                const recentDelays = metrics.interactionDelay.slice(-5); // 最近5次交互
+                const avgDelay = recentDelays.reduce((a, b) => a + b.delay, 0) / recentDelays.length;
+                document.getElementById('liveDelay').textContent = `延迟: ${avgDelay.toFixed(1)}ms`;
+            }
+        }
+
+        // 快速测试
+        async function runQuickTest() {
+            if (!performanceBaseline) {
+                if (!initializePerformanceTool()) {
+                    alert('性能测量工具初始化失败，请检查控制台错误信息');
+                    return;
+                }
+            }
+
+            updateTestStatus('running');
+            const quickTestBtn = document.getElementById('quickTestBtn');
+            quickTestBtn.disabled = true;
+
+            try {
+                updateProgress(0, '开始快速性能测试...');
+
+                performanceBaseline.startMonitoring(10000); // 10秒测试
+
+                // 更新进度
+                for (let i = 0; i <= 100; i += 10) {
+                    updateProgress(i, `测试进行中... ${i}%`);
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    updateLiveMetrics();
+                }
+
+                updateProgress(100, '测试完成！');
+                updateTestStatus('success');
+                displayResults();
+
+            } catch (error) {
+                console.error('快速测试失败:', error);
+                updateTestStatus('error');
+                updateProgress(100, '测试失败');
+            } finally {
+                quickTestBtn.disabled = false;
+            }
+        }
+
+        // 完整基准测试
+        async function runFullBenchmark() {
+            if (!performanceBaseline) {
+                if (!initializePerformanceTool()) {
+                    alert('性能测量工具初始化失败，请检查控制台错误信息');
+                    return;
+                }
+            }
+
+            updateTestStatus('running');
+            const fullTestBtn = document.getElementById('fullTestBtn');
+            fullTestBtn.disabled = true;
+
+            try {
+                updateProgress(0, '开始完整基准测试...');
+
+                const results = await performanceBaseline.runFullBenchmark();
+
+                updateProgress(100, '基准测试完成！');
+                updateTestStatus('success');
+                displayResults();
+                displayRecommendations();
+
+            } catch (error) {
+                console.error('基准测试失败:', error);
+                updateTestStatus('error');
+                updateProgress(100, '测试失败');
+            } finally {
+                fullTestBtn.disabled = false;
+            }
+        }
+
+        // 开始实时监控
+        function startLiveMonitoring() {
+            if (!performanceBaseline) {
+                if (!initializePerformanceTool()) {
+                    alert('性能测量工具初始化失败，请检查控制台错误信息');
+                    return;
+                }
+            }
+
+            updateTestStatus('running');
+            document.getElementById('liveMonitorBtn').disabled = true;
+            document.getElementById('stopMonitorBtn').disabled = false;
+
+            performanceBaseline.startMonitoring(60000); // 60秒监控
+
+            // 更新实时指标
+            liveMonitoringInterval = setInterval(() => {
+                updateLiveMetrics();
+                if (performanceBaseline.metrics.fps.length > 0) {
+                    displayCurrentMetrics();
+                }
+            }, 1000);
+
+            updateProgress(0, '实时监控中...');
+        }
+
+        // 停止实时监控
+        function stopLiveMonitoring() {
+            if (performanceBaseline) {
+                performanceBaseline.stopMonitoring();
+            }
+
+            if (liveMonitoringInterval) {
+                clearInterval(liveMonitoringInterval);
+                liveMonitoringInterval = null;
+            }
+
+            updateTestStatus('success');
+            document.getElementById('liveMonitorBtn').disabled = false;
+            document.getElementById('stopMonitorBtn').disabled = true;
+            updateProgress(100, '监控已停止');
+
+            displayResults();
+        }
+
+        // 显示结果
+        function displayResults() {
+            const report = performanceBaseline.baselineData;
+            if (!report) return;
+
+            // 显示指标卡片
+            displayMetricCards(report);
+
+            // 显示详细报告
+            document.getElementById('detailedReport').textContent = JSON.stringify(report, null, 2);
+        }
+
+        // 显示指标卡片
+        function displayMetricCards(report) {
+            const metricsGrid = document.getElementById('metricsGrid');
+            let html = '';
+
+            // FPS卡片
+            if (report.fps) {
+                const fpsTrend = report.fps.average >= 50 ? 'trend-up' :
+                                 report.fps.average >= 30 ? 'trend-stable' : 'trend-down';
+                const fpsIcon = report.fps.average >= 50 ? '🟢' :
+                               report.fps.average >= 30 ? '🟡' : '🔴';
+
+                html += `
+                    <div class="metric-card">
+                        <div class="metric-label">平均帧率 (FPS)</div>
+                        <div class="metric-value">${fpsIcon} ${report.fps.average.toFixed(1)}</div>
+                        <div class="metric-trend">
+                            范围: ${report.fps.min.toFixed(1)} - ${report.fps.max.toFixed(1)}
+                        </div>
+                        <div class="metric-trend ${fpsTrend}">
+                            P95: ${report.fps.p95.toFixed(1)} FPS
+                        </div>
+                    </div>
+                `;
+            }
+
+            // 内存卡片
+            if (report.memory) {
+                const memoryMB = (report.memory.used.average / 1024 / 1024).toFixed(1);
+                const memoryIcon = report.memory.utilizationRate.average < 50 ? '🟢' :
+                                  report.memory.utilizationRate.average < 80 ? '🟡' : '🔴';
+
+                html += `
+                    <div class="metric-card">
+                        <div class="metric-label">内存使用</div>
+                        <div class="metric-value">${memoryIcon} ${memoryMB} MB</div>
+                        <div class="metric-trend">
+                            利用率: ${report.memory.utilizationRate.average.toFixed(1)}%
+                        </div>
+                        <div class="metric-trend">
+                            峰值: ${(report.memory.used.max / 1024 / 1024).toFixed(1)} MB
+                        </div>
+                    </div>
+                `;
+            }
+
+            // 交互延迟卡片
+            if (report.interaction) {
+                const delayIcon = report.interaction.average < 50 ? '🟢' :
+                                report.interaction.average < 100 ? '🟡' : '🔴';
+
+                html += `
+                    <div class="metric-card">
+                        <div class="metric-label">交互延迟</div>
+                        <div class="metric-value">${delayIcon} ${report.interaction.average.toFixed(1)} ms</div>
+                        <div class="metric-trend">
+                            范围: ${report.interaction.min.toFixed(1)} - ${report.interaction.max.toFixed(1)} ms
+                        </div>
+                        <div class="metric-trend">
+                            P95: ${report.interaction.p95.toFixed(1)} ms
+                        </div>
+                    </div>
+                `;
+            }
+
+            // 渲染时间卡片
+            if (report.render) {
+                const renderIcon = report.render.average < 16 ? '🟢' :  // 60 FPS = 16ms per frame
+                                 report.render.average < 33 ? '🟡' : '🔴';  // 30 FPS = 33ms per frame
+
+                html += `
+                    <div class="metric-card">
+                        <div class="metric-label">渲染时间</div>
+                        <div class="metric-value">${renderIcon} ${report.render.average.toFixed(1)} ms</div>
+                        <div class="metric-trend">
+                            范围: ${report.render.min.toFixed(1)} - ${report.render.max.toFixed(1)} ms
+                        </div>
+                        <div class="metric-trend">
+                            P95: ${report.render.p95.toFixed(1)} ms
+                        </div>
+                    </div>
+                `;
+            }
+
+            // 系统信息卡片
+            if (report.systemInfo) {
+                html += `
+                    <div class="metric-card">
+                        <div class="metric-label">系统信息</div>
+                        <div class="metric-value">🖥️ ${report.systemInfo.platform}</div>
+                        <div class="metric-trend">
+                            屏幕: ${report.systemInfo.screen.width}x${report.systemInfo.screen.height}
+                        </div>
+                        <div class="metric-trend">
+                            视口: ${report.systemInfo.viewport.width}x${report.systemInfo.viewport.height}
+                        </div>
+                    </div>
+                `;
+            }
+
+            metricsGrid.innerHTML = html;
+        }
+
+        // 显示当前指标（用于实时监控）
+        function displayCurrentMetrics() {
+            const metrics = performanceBaseline.metrics;
+
+            if (metrics.fps.length > 0) {
+                const recentFps = metrics.fps.slice(-30); // 最近30帧
+                const avgFps = recentFps.reduce((a, b) => a + b, 0) / recentFps.length;
+
+                const liveMetricsGrid = document.getElementById('metricsGrid');
+                if (liveMetricsGrid.children.length === 0) {
+                    displayMetricCards(performanceBaseline.baselineData || {
+                        fps: { average: avgFps, min: Math.min(...recentFps), max: Math.max(...recentFps) }
+                    });
+                }
+            }
+        }
+
+        // 显示性能建议
+        function displayRecommendations() {
+            const recommendations = performanceBaseline.getPerformanceRecommendations();
+            if (!recommendations || recommendations.length === 0) {
+                document.getElementById('recommendations').innerHTML =
+                    '<div class="recommendation low">🎉 性能表现良好，暂无优化建议！</div>';
+                return;
+            }
+
+            let html = '';
+            recommendations.forEach(rec => {
+                const severityClass = rec.severity;
+                const severityIcon = rec.severity === 'high' ? '🔴' :
+                                    rec.severity === 'medium' ? '🟡' : '🟢';
+
+                html += `
+                    <div class="recommendation ${severityClass}">
+                        <h4>${severityIcon} ${rec.category} - ${rec.severity.toUpperCase()}</h4>
+                        <p><strong>问题:</strong> ${rec.message}</p>
+                        <p><strong>建议:</strong></p>
+                        <ul>
+                            ${rec.suggestions.map(s => `<li>${s}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            });
+
+            document.getElementById('recommendations').innerHTML = html;
+        }
+
+        // DOM性能测试
+        async function testDOMPerformance() {
+            if (!performanceBaseline) {
+                if (!initializePerformanceTool()) return;
+            }
+
+            document.getElementById('advancedResults').innerHTML = '<div class="info">正在测试DOM性能...</div>';
+            await performanceBaseline.testDOMPerformance();
+
+            const result = document.getElementById('advancedResults');
+            result.innerHTML = '<div class="pass">✅ DOM性能测试完成，请查看控制台了解详细结果</div>';
+        }
+
+        // 数据处理性能测试
+        async function testDataProcessingPerformance() {
+            if (!performanceBaseline) {
+                if (!initializePerformanceTool()) return;
+            }
+
+            document.getElementById('advancedResults').innerHTML = '<div class="info">正在测试数据处理性能...</div>';
+            await performanceBaseline.testDataProcessingPerformance();
+
+            const result = document.getElementById('advancedResults');
+            result.innerHTML = '<div class="pass">✅ 数据处理性能测试完成，请查看控制台了解详细结果</div>';
+        }
+
+        // UI交互性能测试
+        async function testUIInteractionPerformance() {
+            if (!performanceBaseline) {
+                if (!initializePerformanceTool()) return;
+            }
+
+            document.getElementById('advancedResults').innerHTML = '<div class="info">正在测试UI交互性能...</div>';
+            await performanceBaseline.testUIInteractionPerformance();
+
+            const result = document.getElementById('advancedResults');
+            result.innerHTML = '<div class="pass">✅ UI交互性能测试完成，请查看控制台了解详细结果</div>';
+        }
+
+        // 虚拟滚动性能测试
+        async function testVirtualScrollingPerformance() {
+            if (!performanceBaseline) {
+                if (!initializePerformanceTool()) return;
+            }
+
+            document.getElementById('advancedResults').innerHTML = '<div class="info">正在测试虚拟滚动性能...</div>';
+
+            // 创建大量测试数据
+            const largeDataSet = Array.from({ length: 10000 }, (_, i) => ({
+                id: i,
+                title: `虚拟滚动测试项目 ${i}`,
+                description: `这是第 ${i} 个测试项目的描述内容`,
+                category: ['阅读', '听力', '写作', '口语'][i % 4],
+                score: Math.floor(Math.random() * 100)
+            }));
+
+            // 创建测试容器
+            const container = document.createElement('div');
+            container.id = 'virtual-scroll-test';
+            container.style.cssText = 'height: 400px; overflow-y: auto; border: 1px solid #ddd; margin: 10px 0;';
+            document.body.appendChild(container);
+
+            try {
+                const startTime = performance.now();
+
+                // 模拟虚拟滚动：只渲染可见区域的元素
+                const itemHeight = 40;
+                const visibleCount = Math.ceil(400 / itemHeight) + 2; // +2 for buffer
+                let scrollTop = 0;
+
+                const renderVisibleItems = () => {
+                    const startIndex = Math.floor(scrollTop / itemHeight);
+                    const endIndex = Math.min(startIndex + visibleCount, largeDataSet.length);
+
+                    container.innerHTML = '';
+                    for (let i = startIndex; i < endIndex; i++) {
+                        const item = largeDataSet[i];
+                        const div = document.createElement('div');
+                        div.style.cssText = `height: ${itemHeight}px; padding: 10px; border-bottom: 1px solid #eee;`;
+                        div.innerHTML = `<strong>${item.title}</strong> - ${item.category} (${item.score}分)`;
+                        container.appendChild(div);
+                    }
+                };
+
+                // 初始渲染
+                renderVisibleItems();
+
+                // 测试滚动性能
+                const scrollTestDuration = 5000; // 5秒
+                const scrollInterval = setInterval(() => {
+                    scrollTop += itemHeight * 2;
+                    if (scrollTop > (largeDataSet.length - visibleCount) * itemHeight) {
+                        scrollTop = 0;
+                    }
+                    container.scrollTop = scrollTop;
+                    renderVisibleItems();
+                }, 16); // ~60 FPS
+
+                await new Promise(resolve => setTimeout(resolve, scrollTestDuration));
+                clearInterval(scrollInterval);
+
+                const endTime = performance.now();
+                const totalTime = endTime - startTime;
+                const scrollOperations = (scrollTestDuration / 16);
+                const avgScrollTime = totalTime / scrollOperations;
+
+                document.getElementById('advancedResults').innerHTML = `
+                    <div class="pass">
+                        ✅ 虚拟滚动性能测试完成<br>
+                        总时间: ${totalTime.toFixed(2)}ms<br>
+                        滚动操作: ${scrollOperations.toFixed(0)} 次<br>
+                        平均滚动时间: ${avgScrollTime.toFixed(2)}ms<br>
+                        数据量: ${largeDataSet.length} 项<br>
+                        可见区域: ${visibleCount} 项
+                    </div>
+                `;
+
+            } finally {
+                // 清理测试元素
+                document.body.removeChild(container);
+            }
+        }
+
+        // 清除结果
+        function clearResults() {
+            if (performanceBaseline) {
+                performanceBaseline.metrics = {
+                    fps: [],
+                    memory: [],
+                    interactionDelay: [],
+                    renderTime: [],
+                    loadTime: null
+                };
+                performanceBaseline.baselineData = null;
+            }
+
+            document.getElementById('metricsGrid').innerHTML = '';
+            document.getElementById('recommendations').innerHTML = '<p>运行测试后将显示性能优化建议...</p>';
+            document.getElementById('detailedReport').textContent = '运行测试后将显示详细的性能报告...';
+            document.getElementById('advancedResults').innerHTML = '';
+            document.getElementById('liveFps').textContent = 'FPS: --';
+            document.getElementById('liveMemory').textContent = '内存: --';
+            document.getElementById('liveDelay').textContent = '延迟: --';
+
+            updateTestStatus('idle');
+            updateProgress(0, '准备就绪');
+        }
+    </script>
+</body>
+</html>

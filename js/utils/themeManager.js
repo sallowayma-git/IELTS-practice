@@ -102,8 +102,8 @@ class ThemeManager {
         this.init();
     }
     
-    init() {
-        this.loadSettings();
+    async init() {
+        await this.loadSettings();
         this.setupSystemThemeDetection();
         this.applyCurrentTheme();
         this.setupEventListeners();
@@ -112,21 +112,21 @@ class ThemeManager {
     /**
      * 加载保存的设置
      */
-    loadSettings() {
-        const savedSettings = window.storage?.get('theme_settings', {});
+    async loadSettings() {
+        const savedSettings = await window.storage?.get('theme_settings', {});
         this.settings = { ...this.settings, ...savedSettings };
         
-        const savedTheme = window.storage?.get('current_theme', 'light');
+        const savedTheme = await window.storage?.get('current_theme', 'light');
         this.currentTheme = savedTheme;
     }
     
     /**
      * 保存设置
      */
-    saveSettings() {
+    async saveSettings() {
         if (window.storage) {
-            window.storage.set('theme_settings', this.settings);
-            window.storage.set('current_theme', this.currentTheme);
+            await window.storage.set('theme_settings', this.settings);
+            await window.storage.set('current_theme', this.currentTheme);
         }
     }
     
@@ -302,16 +302,18 @@ class ThemeManager {
     /**
      * 切换高对比度
      */
-    toggleHighContrast() {
+    async toggleHighContrast() {
         this.settings.highContrast = !this.settings.highContrast;
         
         if (this.settings.highContrast) {
+            await window.storage?.set('previous_theme', this.currentTheme); // Save current before switch
             this.setTheme('highContrast');
         } else {
             // 恢复到之前的主题或默认主题
-            const previousTheme = window.storage?.get('previous_theme', 'light');
+            const previousTheme = await window.storage?.get('previous_theme', 'light');
             this.setTheme(previousTheme);
         }
+        await this.saveSettings(); // Ensure saved
     }
     
     /**
@@ -357,7 +359,7 @@ class ThemeManager {
     /**
      * 重置为默认设置
      */
-    resetToDefaults() {
+    async resetToDefaults() {
         this.currentTheme = 'light';
         this.settings = {
             fontSize: 'normal',
@@ -367,7 +369,7 @@ class ThemeManager {
         };
         
         this.applyCurrentTheme();
-        this.saveSettings();
+        await this.saveSettings();
         
         if (window.showMessage) {
             window.showMessage('主题设置已重置为默认值', 'info');

@@ -10,7 +10,8 @@ class SettingsPanel {
         this.init();
     }
     
-    init() {
+    async init() {
+        this.settings = await this.loadSettings();
         this.createSettingsButton();
         this.setupEventListeners();
     }
@@ -18,29 +19,30 @@ class SettingsPanel {
     /**
      * 加载设置
      */
-    loadSettings() {
+    async loadSettings() {
+        const themeSettings = await window.storage?.get('theme_settings', {});
         return {
-            theme: window.storage?.get('current_theme', 'light'),
-            fontSize: window.storage?.get('theme_settings', {}).fontSize || 'normal',
-            reduceMotion: window.storage?.get('theme_settings', {}).reduceMotion || false,
-            highContrast: window.storage?.get('theme_settings', {}).highContrast || false,
-            autoTheme: window.storage?.get('theme_settings', {}).autoTheme || true,
-            keyboardShortcuts: window.storage?.get('keyboard_shortcuts_enabled', true),
-            soundEffects: window.storage?.get('sound_effects_enabled', false),
-            autoSave: window.storage?.get('auto_save_enabled', true),
-            notifications: window.storage?.get('notifications_enabled', true)
+            theme: await window.storage?.get('current_theme', 'light'),
+            fontSize: themeSettings.fontSize || 'normal',
+            reduceMotion: themeSettings.reduceMotion || false,
+            highContrast: themeSettings.highContrast || false,
+            autoTheme: themeSettings.autoTheme || true,
+            keyboardShortcuts: await window.storage?.get('keyboard_shortcuts_enabled', true),
+            soundEffects: await window.storage?.get('sound_effects_enabled', false),
+            autoSave: await window.storage?.get('auto_save_enabled', true),
+            notifications: await window.storage?.get('notifications_enabled', true)
         };
     }
     
     /**
      * 保存设置
      */
-    saveSettings() {
+    async saveSettings() {
         if (window.storage) {
-            window.storage.set('keyboard_shortcuts_enabled', this.settings.keyboardShortcuts);
-            window.storage.set('sound_effects_enabled', this.settings.soundEffects);
-            window.storage.set('auto_save_enabled', this.settings.autoSave);
-            window.storage.set('notifications_enabled', this.settings.notifications);
+            await window.storage.set('keyboard_shortcuts_enabled', this.settings.keyboardShortcuts);
+            await window.storage.set('sound_effects_enabled', this.settings.soundEffects);
+            await window.storage.set('auto_save_enabled', this.settings.autoSave);
+            await window.storage.set('notifications_enabled', this.settings.notifications);
         }
     }
     
@@ -515,6 +517,8 @@ class SettingsPanel {
             });
         }
 
+        this.calculateStorageUsage();  // Call the async method
+
         // 加载题库
         const libraryLoaderBtn = modal.querySelector('#library-loader');
         if (libraryLoaderBtn) {
@@ -585,8 +589,8 @@ class SettingsPanel {
         
         const saveBtn = modal.querySelector('.save-settings');
         if (saveBtn) {
-            saveBtn.addEventListener('click', () => {
-                this.saveSettings();
+            saveBtn.addEventListener('click', async () => {
+                await this.saveSettings();
                 this.hide();
                 if (window.showMessage) {
                     window.showMessage('设置已保存', 'success');
@@ -622,11 +626,15 @@ class SettingsPanel {
     /**
      * 确认清除数据
      */
-    confirmClearData() {
+    async confirmClearData() {
         const confirmed = confirm('确定要清除所有数据吗？这个操作无法撤销。');
         if (confirmed) {
             try {
-                localStorage.clear();
+                if (window.storage && typeof window.storage.clear === 'function') {
+                    await window.storage.clear();
+                } else {
+                    localStorage.clear();
+                }
                 if (window.showMessage) {
                     window.showMessage('所有数据已清除', 'info');
                 }
@@ -676,12 +684,45 @@ class SettingsPanel {
     }
     
     /**
+     * 计算存储使用量
+     */
+    async calculateStorageUsage() {
+        setTimeout(async () => {
+            const usageElement = document.querySelector('#storage-usage');
+            if (usageElement) {
+                try {
+                    let totalSize = 0;
+                    if (window.storage && typeof window.storage.keys === 'function') {
+                        const keys = await window.storage.keys();
+                        for (const key of keys) {
+                            const value = await window.storage.get(key);
+                            totalSize += JSON.stringify(value).length;
+                        }
+                    } else {
+                        // Fallback to localStorage
+                        for (let i = 0; i < localStorage.length; i++) {
+                            const key = localStorage.key(i);
+                            if (key) {
+                                totalSize += localStorage.getItem(key).length;
+                            }
+                        }
+                    }
+                    
+                    const sizeInKB = (totalSize / 1024).toFixed(2);
+                    usageElement.textContent = `${sizeInKB} KB`;
+                } catch (error) {
+                    usageElement.textContent = '无法计算';
+                }
+            }
+        }, 100);
+    }
+    /**
      * 导出设置
      */
-    exportSettings() {
+    async exportSettings() {
         const allSettings = {
-            theme: window.storage?.get('current_theme'),
-            themeSettings: window.storage?.get('theme_settings'),
+            theme: await window.storage?.get('current_theme'),
+            themeSettings: await window.storage?.get('theme_settings'),
             appSettings: this.settings,
             exportDate: new Date().toISOString()
         };
