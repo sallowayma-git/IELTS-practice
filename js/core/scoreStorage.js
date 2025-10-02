@@ -7,14 +7,12 @@ class ScoreStorage {
         this.storageKeys = {
             practiceRecords: 'practice_records',
             userStats: 'user_stats',
-            backupData: 'backup_data',
             storageVersion: 'storage_version'
         };
-        
+
         this.currentVersion = '1.0.0';
         this.maxRecords = 1000;
-        this.backupInterval = 24 * 60 * 60 * 1000; // 24小时
-        
+
         this.initialize();
     }
 
@@ -29,9 +27,6 @@ class ScoreStorage {
 
         // 初始化数据结构
         await this.initializeDataStructures();
-
-        // 设置自动备份
-        this.setupAutoBackup();
 
         // 暂时禁用清理过期数据，避免误删新记录
         // await this.cleanupExpiredData();
@@ -638,75 +633,87 @@ class ScoreStorage {
     }
 
     /**
-     * 创建数据备份
+     * 创建数据备份 - 使用DataBackupManager
      */
     async createBackup(backupName = null) {
-        const timestamp = new Date().toISOString();
-        const backupId = backupName || `backup_${timestamp.replace(/[:.]/g, '-')}`;
-        
-        const backupData = {
-            id: backupId,
-            timestamp,
-            version: this.currentVersion,
-            data: {
-                practiceRecords: await storage.get(this.storageKeys.practiceRecords, []),
-                userStats: await storage.get(this.storageKeys.userStats, {}),
-                storageVersion: await storage.get(this.storageKeys.storageVersion)
+        if (window.DataBackupManager) {
+            const backupManager = new DataBackupManager();
+            const practiceRecords = await storage.get(this.storageKeys.practiceRecords, []);
+            const userStats = await storage.get(this.storageKeys.userStats, {});
+
+            // 构建与DataBackupManager兼容的备份对象
+            const backup = {
+                id: backupName || `score_backup_${Date.now()}`,
+                timestamp: new Date().toISOString(),
+                type: 'score_storage',
+                data: {
+                    practiceRecords,
+                    userStats,
+                    storageVersion: await storage.get(this.storageKeys.storageVersion)
+                }
+            };
+
+            // 获取现有备份
+            const backups = await storage.get('manual_backups', []);
+            backups.unshift(backup);
+
+            // 保持最多20个备份
+            if (backups.length > 20) {
+                backups.splice(20);
             }
-        };
-        
-        // 获取现有备份
-        const backups = await storage.get(this.storageKeys.backupData, []);
-        const safeBackups = Array.isArray(backups) ? backups : [];
-        
-        // 添加新备份
-        safeBackups.push(backupData);
-        
-        // 保持最近10个备份
-        if (safeBackups.length > 10) {
-            safeBackups.splice(0, safeBackups.length - 10);
+
+            await storage.set('manual_backups', backups);
+            console.log('[ScoreStorage] Backup created:', backup.id);
+            return backup.id;
+        } else {
+            // 降级：不创建备份
+            console.warn('[ScoreStorage] DataBackupManager not available, skipping backup');
+            return null;
         }
-        
-        // 保存备份
-        await storage.set(this.storageKeys.backupData, safeBackups);
-        
-        console.log('Backup created:', backupId);
-        return backupId;
     }
 
     /**
-     * 恢复数据备份
+     * 恢复数据备份 - 直接操作manual_backups存储
      */
     async restoreBackup(backupId) {
-        const backups = await storage.get(this.storageKeys.backupData, []);
-        const list = Array.isArray(backups) ? backups : [];
-        const backup = list.find(b => b.id === backupId);
-        
-        if (!backup) {
-            throw new Error(`Backup not found: ${backupId}`);
-        }
-        
         try {
-            // 恢复数据
-            await storage.set(this.storageKeys.practiceRecords, backup.data.practiceRecords);
-            await storage.set(this.storageKeys.userStats, backup.data.userStats);
-            await storage.set(this.storageKeys.storageVersion, backup.data.storageVersion);
+            const backups = await storage.get('manual_backups', []);
+            const backup = backups.find(b => b.id === backupId);
 
-            console.log('Backup restored:', backupId);
-            return true;
+            if (!backup) {
+                throw new Error(`Backup not found: ${backupId}`);
+            }
 
+            if (backup.data) {
+                await storage.set(this.storageKeys.practiceRecords, backup.data.practiceRecords);
+                await storage.set(this.storageKeys.userStats, backup.data.userStats);
+                if (backup.data.storageVersion) {
+                    await storage.set(this.storageKeys.storageVersion, backup.data.storageVersion);
+                }
+            }
+
+            console.log('[ScoreStorage] Backup restored:', backupId);
+            return backup;
         } catch (error) {
-            console.error('Failed to restore backup:', error);
+            console.error('[ScoreStorage] Failed to restore backup:', error);
             throw error;
         }
     }
 
     /**
-     * 获取备份列表
+     * 获取备份列表 - 直接从manual_backups存储获取
      */
     async getBackups() {
-        return (await storage.get(this.storageKeys.backupData, []))
-            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        try {
+            const backups = await storage.get('manual_backups', []);
+            // 只返回score_storage类型的备份，按时间倒序排列
+            return backups
+                .filter(b => b.type === 'score_storage')
+                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        } catch (error) {
+            console.error('[ScoreStorage] Failed to get backups:', error);
+            return [];
+        }
     }
 
     /**
@@ -815,69 +822,7 @@ class ScoreStorage {
         }
     }
 
-    /**
-     * 设置自动备份
-     */
-    async setupAutoBackup() {
-        // 检查上次备份时间
-        const lastBackup = await this.getLastBackupTime();
-        const now = Date.now();
-
-        if (!lastBackup || (now - lastBackup) > this.backupInterval) {
-            await this.createBackup();
-        }
-
-        // 设置定期备份
-        setInterval(async () => {
-            await this.createBackup();
-        }, this.backupInterval);
-    }
-
-    /**
-     * 获取最后备份时间
-     */
-    async getLastBackupTime() {
-        try {
-            const backupsRaw = await storage.get(this.storageKeys.backupData, []);
-            const backups = Array.isArray(backupsRaw) ? backupsRaw : [];
-            if (backups.length === 0) return null;
-            const lastBackup = backups[backups.length - 1] || {};
-            const ts = (lastBackup && lastBackup.timestamp) ? lastBackup.timestamp : null;
-            return ts ? new Date(ts).getTime() : null;
-        } catch (e) {
-            return null;
-        }
-    }
-
-    /**
-     * 清理过期数据
-     */
-    async cleanupExpiredData() {
-        // 清理超过1年的练习记录
-        const oneYearAgo = new Date();
-        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-
-        const records = await storage.get(this.storageKeys.practiceRecords, []);
-        const validRecords = records.filter(record =>
-            new Date(record.startTime) > oneYearAgo
-        );
-
-        if (validRecords.length !== records.length) {
-            await storage.set(this.storageKeys.practiceRecords, validRecords);
-            console.log(`Cleaned up ${records.length - validRecords.length} expired records`);
-        }
-
-        // 清理过期备份
-        const backups = await storage.get(this.storageKeys.backupData, []);
-        const validBackups = backups.filter(backup =>
-            new Date(backup.timestamp) > oneYearAgo
-        );
-
-        if (validBackups.length !== backups.length) {
-            await storage.set(this.storageKeys.backupData, validBackups);
-            console.log(`Cleaned up ${backups.length - validBackups.length} expired backups`);
-        }
-    }
+    // Note: 备份相关方法已移除，现在使用DataBackupManager
 
     /**
      * 生成记录ID
@@ -917,14 +862,7 @@ class ScoreStorage {
         return jsonString.length; // 字节数的近似值
     }
 
-    /**
-     * 销毁存储系统
-     */
-    async destroy() {
-        // 创建最终备份
-        await this.createBackup('final_backup');
-        console.log('ScoreStorage destroyed');
-    }
+    // Note: destroy方法已移除，因为备份功能现在由DataBackupManager处理
 }
 
 // 确保全局可用
