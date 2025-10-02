@@ -413,15 +413,152 @@ class PerformanceOptimizer {
     }
     
     /**
+     * 记录加载时间 - 向后兼容API修复
+     */
+    recordLoadTime(loadTime) {
+        console.log(`[PerformanceOptimizer] 记录加载时间: ${loadTime}ms`);
+        this.performanceMetrics.loadTime = this.performanceMetrics.loadTime || [];
+        this.performanceMetrics.loadTime.push(loadTime);
+
+        // 只保留最近100次记录
+        if (this.performanceMetrics.loadTime.length > 100) {
+            this.performanceMetrics.loadTime.shift();
+        }
+    }
+
+    /**
+     * 记录渲染时间 - 向后兼容API修复
+     */
+    recordRenderTime(renderTime) {
+        console.log(`[PerformanceOptimizer] 记录渲染时间: ${renderTime}ms`);
+
+        // 复用现有的renderTime数组
+        this.performanceMetrics.renderTime.push(renderTime);
+
+        // 只保留最近100次记录
+        if (this.performanceMetrics.renderTime.length > 100) {
+            this.performanceMetrics.renderTime.shift();
+        }
+    }
+
+    /**
+     * 清理资源 - 向后兼容API修复
+     */
+    cleanup() {
+        console.log('[PerformanceOptimizer] 清理资源');
+
+        // 清理过期缓存
+        this.cleanExpiredCache();
+
+        // 清理性能指标（保留基础结构）
+        this.performanceMetrics = {
+            renderTime: [],
+            scrollPerformance: [],
+            cacheHits: this.performanceMetrics.cacheHits,
+            cacheMisses: this.performanceMetrics.cacheMisses,
+            loadTime: this.performanceMetrics.loadTime || []
+        };
+    }
+
+    /**
+     * 获取性能报告 - 兼容性修复：恢复旧字段结构
+     */
+    getPerformanceReport() {
+        const stats = this.getPerformanceStats();
+        const loadTimes = this.performanceMetrics.loadTime || [];
+        const renderTimes = this.performanceMetrics.renderTime;
+
+        // 计算平均值
+        const avgLoadTime = loadTimes.length > 0
+            ? loadTimes.reduce((a, b) => a + b, 0) / loadTimes.length
+            : 0;
+        const avgRenderTime = renderTimes.length > 0
+            ? renderTimes.reduce((a, b) => a + b, 0) / renderTimes.length
+            : 0;
+
+        // 估算缓存大小（简化计算）
+        const estimatedCacheSize = this.cache.size * 1024; // 假设每项1KB
+
+        return {
+            // 新结构（保留）
+            timestamp: new Date().toISOString(),
+            summary: {
+                averageRenderTime: parseFloat(stats.averageRenderTime),
+                cacheHitRate: parseFloat(stats.cacheHitRate),
+                cacheSize: stats.cacheSize,
+                totalCacheHits: stats.totalCacheHits,
+                totalCacheMisses: stats.totalCacheMisses
+            },
+            detailed: {
+                recentRenderTimes: renderTimes.slice(-10),
+                recentLoadTimes: loadTimes.slice(-10),
+                cacheEntries: Array.from(this.cache.keys()).slice(0, 10)
+            },
+            recommendations: this.generateRecommendations(stats),
+
+            // 旧结构（兼容性修复）
+            cache: {
+                itemCount: this.cache.size,
+                totalSize: estimatedCacheSize,
+                hitRate: parseFloat(stats.cacheHitRate)
+            },
+            performance: {
+                averageLoadTime: Math.round(avgLoadTime),
+                averageRenderTime: Math.round(avgRenderTime),
+                totalLoadSamples: loadTimes.length,
+                totalRenderSamples: renderTimes.length
+            },
+            memory: {
+                used: Math.round(estimatedCacheSize / 1024 / 1024), // MB
+                total: Math.round(estimatedCacheSize / 1024 / 1024), // MB
+                limit: 100 // MB，假设限制
+            }
+        };
+    }
+
+    /**
+     * 生成性能建议
+     */
+    generateRecommendations(stats) {
+        const recommendations = [];
+
+        if (parseFloat(stats.cacheHitRate) < 70) {
+            recommendations.push({
+                type: 'cache',
+                message: '缓存命中率较低，建议增加缓存时间或预加载策略'
+            });
+        }
+
+        if (parseFloat(stats.averageRenderTime) > 100) {
+            recommendations.push({
+                type: 'render',
+                message: '平均渲染时间较长，建议使用虚拟滚动或减少DOM操作'
+            });
+        }
+
+        if (stats.cacheSize > 1000) {
+            recommendations.push({
+                type: 'memory',
+                message: '缓存项较多，建议定期清理或优化缓存策略'
+            });
+        }
+
+        return recommendations.length > 0 ? recommendations : [{
+            type: 'good',
+            message: '系统性能良好，无明显问题'
+        }];
+    }
+
+    /**
      * 销毁性能优化器
      */
     destroy() {
         console.log('[PerformanceOptimizer] 销毁性能优化器');
-        
+
         // 清理缓存
         this.cache.clear();
         this.cacheTTL.clear();
-        
+
         // 断开观察者
         this.observers.forEach(observer => {
             observer.disconnect();

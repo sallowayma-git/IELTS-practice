@@ -20,7 +20,13 @@ class PracticeHistory {
             maxAccuracy: 100
         };
         this.searchQuery = '';
-        
+
+        // 性能优化：虚拟滚动器实例
+        this.virtualScroller = null;
+
+        // 兼容性修复：保存原始方法支持enhancer
+        this._originalCreateRecordItem = this.createRecordItem.bind(this);
+
         this.initialize();
     }
 
@@ -615,7 +621,7 @@ class PracticeHistory {
     renderHistoryList() {
         const historyList = document.getElementById('history-list');
         if (!historyList) return;
-        
+
         if (this.filteredRecords.length === 0) {
             historyList.innerHTML = `
                 <div class="empty-state">
@@ -626,13 +632,68 @@ class PracticeHistory {
             `;
             return;
         }
-        
+
         // 计算当前页的记录
         const startIndex = (this.currentPage - 1) * this.recordsPerPage;
         const endIndex = startIndex + this.recordsPerPage;
         const pageRecords = this.filteredRecords.slice(startIndex, endIndex);
-        
-        historyList.innerHTML = pageRecords.map(record => this.createRecordItem(record)).join('');
+
+        // 性能修复：智能选择渲染方式，保持enhancer兼容性
+        if (window.performanceOptimizer && pageRecords.length > 10) {
+            // 销毁现有虚拟滚动器
+            if (this.virtualScroller) {
+                this.virtualScroller.destroy();
+                this.virtualScroller = null;
+            }
+
+            // 创建虚拟滚动器
+            this.virtualScroller = window.performanceOptimizer.createVirtualScroller(
+                historyList,
+                pageRecords,
+                (record, index) => {
+                    // 检查是否有enhancer修改了createRecordItem
+                    if (window.practiceHistoryEnhancer && this.createRecordItem !== this._originalCreateRecordItem) {
+                        // 使用enhancer增强的HTML创建DOM
+                        const html = this.createRecordItem(record);
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = html;
+                        return tempDiv.firstElementChild;
+                    } else {
+                        // 使用优化的DOM创建
+                        return this.createRecordElement(record, index);
+                    }
+                },
+                {
+                    itemHeight: 120,
+                    bufferSize: 3,
+                    containerHeight: 600
+                }
+            );
+        } else {
+            // 降级方案：使用DocumentFragment，保持enhancer兼容性
+            const fragment = document.createDocumentFragment();
+
+            if (window.practiceHistoryEnhancer && this.createRecordItem !== this._originalCreateRecordItem) {
+                // 使用enhancer增强的HTML创建
+                pageRecords.forEach(record => {
+                    const html = this.createRecordItem(record);
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = html;
+                    fragment.appendChild(tempDiv.firstElementChild);
+                });
+            } else {
+                // 使用优化的DOM创建
+                pageRecords.forEach(record => {
+                    fragment.appendChild(this.createRecordElement(record));
+                });
+            }
+
+            // 清空容器并添加新元素
+            while (historyList.firstChild) {
+                historyList.removeChild(historyList.firstChild);
+            }
+            historyList.appendChild(fragment);
+        }
     }
 
     /**
@@ -697,6 +758,138 @@ class PracticeHistory {
                 </div>
             </div>
         `;
+    }
+
+    /**
+     * 创建记录项DOM元素 - Performance optimized DOM creation
+     */
+    createRecordElement(record, index = null) {
+        const accuracy = Math.round(record.accuracy * 100);
+        const duration = (window.Utils && typeof window.Utils.formatDuration === 'function')
+            ? Utils.formatDuration(record.duration)
+            : this.formatDurationFallback(record.duration);
+        const startTime = (window.Utils && typeof window.Utils.formatDate === 'function')
+            ? Utils.formatDate(record.startTime, 'YYYY-MM-DD HH:mm')
+            : this.formatDateFallback(record.startTime, 'YYYY-MM-DD HH:mm');
+
+        const accuracyClass = accuracy >= 80 ? 'excellent' : accuracy >= 60 ? 'good' : 'needs-improvement';
+        const statusClass = record.status === 'completed' ? 'completed' : 'interrupted';
+        const recordIdStr = String(record.id);
+        const isSelected = this.selectedSet.has(recordIdStr);
+
+        // 创建文档片段提高性能
+        const fragment = document.createDocumentFragment();
+
+        // 主容器
+        const recordItem = document.createElement('div');
+        recordItem.className = 'history-record-item';
+        recordItem.dataset.recordId = recordIdStr;
+
+        // 记录主内容
+        const recordMain = document.createElement('div');
+        recordMain.className = 'record-main';
+
+        // 复选框
+        const checkboxDiv = document.createElement('div');
+        checkboxDiv.className = 'record-checkbox';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.dataset.recordId = recordIdStr;
+        checkbox.checked = isSelected;
+        checkboxDiv.appendChild(checkbox);
+
+        // 状态指示器
+        const statusDiv = document.createElement('div');
+        statusDiv.className = 'record-status';
+        const statusIndicator = document.createElement('div');
+        statusIndicator.className = `status-indicator ${statusClass}`;
+        statusDiv.appendChild(statusIndicator);
+
+        // 内容区域
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'record-content';
+
+        const title = document.createElement('h4');
+        title.className = 'record-title clickable practice-record-title';
+        title.textContent = record.metadata.examTitle || record.examId;
+        title.title = '点击查看详情';
+
+        // 兼容性修复：保持与practiceHistoryEnhancer的兼容性
+        title.addEventListener('click', () => {
+            // 优先使用enhancer的详情显示
+            if (window.practiceHistoryEnhancer && window.practiceHistoryEnhancer.showRecordDetails) {
+                window.practiceHistoryEnhancer.showRecordDetails(record.id);
+            } else {
+                // 降级到内置的详情显示
+                this.showRecordDetails(record.id);
+            }
+        });
+
+        const meta = document.createElement('div');
+        meta.className = 'record-meta';
+        meta.innerHTML = `
+            <span class="record-category">${record.metadata.category || 'Unknown'}</span>
+            <span class="record-frequency">${record.metadata.frequency === 'high' ? '高频' : '次高频'}</span>
+            <span class="record-time">${startTime}</span>
+        `;
+
+        contentDiv.appendChild(title);
+        contentDiv.appendChild(meta);
+
+        // 统计信息
+        const statsDiv = document.createElement('div');
+        statsDiv.className = 'record-stats';
+        statsDiv.innerHTML = `
+            <div class="stat-item">
+                <span class="stat-value accuracy-${accuracyClass}">${accuracy}%</span>
+                <span class="stat-label">正确率</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value">${duration}</span>
+                <span class="stat-label">用时</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value">${record.correctAnswers}/${record.totalQuestions}</span>
+                <span class="stat-label">题目</span>
+            </div>
+        `;
+
+        // 操作按钮
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'record-actions';
+
+        const retryBtn = document.createElement('button');
+        retryBtn.className = 'btn btn-sm btn-primary';
+        retryBtn.dataset.historyAction = 'retry';
+        retryBtn.dataset.recordId = recordIdStr;
+        retryBtn.textContent = '重新练习';
+
+        const detailsBtn = document.createElement('button');
+        detailsBtn.className = 'btn btn-sm btn-secondary';
+        detailsBtn.dataset.historyAction = 'details';
+        detailsBtn.dataset.recordId = recordIdStr;
+        detailsBtn.textContent = '查看详情';
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'btn btn-sm btn-outline';
+        deleteBtn.dataset.historyAction = 'delete';
+        deleteBtn.dataset.recordId = recordIdStr;
+        deleteBtn.textContent = '删除';
+
+        actionsDiv.appendChild(retryBtn);
+        actionsDiv.appendChild(detailsBtn);
+        actionsDiv.appendChild(deleteBtn);
+
+        // 组装元素
+        recordMain.appendChild(checkboxDiv);
+        recordMain.appendChild(statusDiv);
+        recordMain.appendChild(contentDiv);
+        recordMain.appendChild(statsDiv);
+        recordMain.appendChild(actionsDiv);
+
+        recordItem.appendChild(recordMain);
+
+        return recordItem;
     }
 
     /**
@@ -1538,6 +1731,15 @@ class PracticeHistory {
      */
     destroy() {
         console.log('PracticeHistory component destroyed');
+
+        // 性能优化：虚拟滚动器清理
+        if (this.virtualScroller) {
+            this.virtualScroller.destroy();
+            this.virtualScroller = null;
+        }
+
+        // 清理事件监听器
+        this.selectedSet.clear();
     }
 }
 

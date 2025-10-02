@@ -53,6 +53,14 @@ function initializeLegacyComponents() {
         console.warn('[System] DataIntegrityManager类未加载');
     }
 
+    // 初始化性能优化器 - 关键性能修复
+    if (window.PerformanceOptimizer) {
+        window.performanceOptimizer = new PerformanceOptimizer();
+        console.log('[System] 性能优化器已初始化');
+    } else {
+        console.warn('[System] PerformanceOptimizer类未加载');
+    }
+
     // Clean up old cache and configurations for v1.1.0 upgrade (one-time only)
     try {
       const done = localStorage.getItem('upgrade_v1_1_0_cleanup_done');
@@ -767,13 +775,70 @@ function displayExams(exams) {
 
     if (exams.length === 0) {
         container.innerHTML = `<div style="text-align: center; padding: 40px;"><p>未找到匹配的题目</p></div>`;
-    } else {
-        container.innerHTML = `<div class="exam-list">${exams.map(renderExamItem).join('')}</div>`;
+        if (loadingIndicator) loadingIndicator.style.display = 'none';
+        return;
     }
+
+    // Grid布局友好渲染：保持CSS Grid，使用DocumentFragment优化
+    const examList = document.createElement('div');
+    examList.className = 'exam-list';
+
+    // 大数据集时使用分批渲染优化
+    if (window.performanceOptimizer && exams.length > 50) {
+        renderExamListBatched(exams, examList, createExamElement);
+    } else {
+        // 直接渲染：使用DocumentFragment
+        const fragment = document.createDocumentFragment();
+
+        exams.forEach(exam => {
+            const element = createExamElement(exam);
+            fragment.appendChild(element);
+        });
+
+        examList.appendChild(fragment);
+    }
+
+    // 清空容器并添加新元素
+    container.innerHTML = '';
+    container.appendChild(examList);
 
     if (loadingIndicator) {
         loadingIndicator.style.display = 'none';
     }
+}
+
+/**
+ * 分批渲染考试列表 - Grid布局友好优化
+ */
+function renderExamListBatched(exams, container, createElementFn) {
+    const batchSize = 20;
+    let currentIndex = 0;
+
+    const processBatch = () => {
+        const endIndex = Math.min(currentIndex + batchSize, exams.length);
+        const fragment = document.createDocumentFragment();
+
+        for (let i = currentIndex; i < endIndex; i++) {
+            const element = createElementFn(exams[i]);
+            fragment.appendChild(element);
+        }
+
+        container.appendChild(fragment);
+        currentIndex = endIndex;
+
+        if (currentIndex < exams.length) {
+            // 继续处理下一批，使用requestAnimationFrame避免阻塞UI
+            if (window.performanceOptimizer && window.performanceOptimizer.throttle) {
+                const throttledProcess = window.performanceOptimizer.throttle(processBatch, 16);
+                requestAnimationFrame(throttledProcess);
+            } else {
+                requestAnimationFrame(processBatch);
+            }
+        }
+    };
+
+    // 开始分批处理
+    requestAnimationFrame(processBatch);
 }
 
 function getExamCompletionStatus(exam) {
@@ -807,6 +872,81 @@ function renderExamItem(exam) {
             </div>
         </div>
     `;
+}
+
+/**
+ * 创建考试项DOM元素 - Performance optimized DOM element creation
+ */
+function createExamElement(exam, index = null) {
+    const status = getExamCompletionStatus(exam);
+    const dot = status ? createCompletionDot(status.percentage) : null;
+
+    // 主容器
+    const examItem = document.createElement('div');
+    examItem.className = 'exam-item';
+    examItem.dataset.examId = exam.id;
+
+    // 考试信息区域
+    const examInfo = document.createElement('div');
+    examInfo.className = 'exam-info';
+
+    const infoContent = document.createElement('div');
+
+    const title = document.createElement('h4');
+    if (dot) {
+        title.appendChild(dot);
+    }
+    title.appendChild(document.createTextNode(exam.title));
+
+    const meta = document.createElement('div');
+    meta.className = 'exam-meta';
+    meta.textContent = `${exam.category} | ${exam.type}`;
+
+    infoContent.appendChild(title);
+    infoContent.appendChild(meta);
+    examInfo.appendChild(infoContent);
+
+    // 操作按钮区域
+    const examActions = document.createElement('div');
+    examActions.className = 'exam-actions';
+
+    const startBtn = document.createElement('button');
+    startBtn.className = 'btn exam-item-action-btn';
+    startBtn.textContent = '开始';
+    startBtn.addEventListener('click', () => openExam(exam.id));
+
+    const pdfBtn = document.createElement('button');
+    pdfBtn.className = 'btn btn-secondary exam-item-action-btn';
+    pdfBtn.textContent = 'PDF';
+    pdfBtn.addEventListener('click', () => viewPDF(exam.id));
+
+    examActions.appendChild(startBtn);
+    examActions.appendChild(pdfBtn);
+
+    // 组装元素
+    examItem.appendChild(examInfo);
+    examItem.appendChild(examActions);
+
+    return examItem;
+}
+
+/**
+ * 创建完成状态指示点 - Performance optimized completion indicator creation
+ */
+function createCompletionDot(percentage) {
+    const dot = document.createElement('span');
+    dot.className = 'completion-dot';
+    dot.style.cssText = `
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: ${getScoreColor(percentage)};
+        margin-right: 8px;
+        vertical-align: middle;
+        box-shadow: 0 0 0 2px rgba(0,0,0,0.1);
+    `;
+    return dot;
 }
 
 function resolveExamBasePath(exam) {
