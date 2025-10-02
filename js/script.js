@@ -324,7 +324,8 @@ window.__legacyBrowseType = window.__legacyBrowseType || 'all';
 window.__browseFilter = window.__browseFilter || { category: 'all', type: 'all' };
 
 // 练习记录数据（使用统一的键名）
-let practiceRecords = await storage.get('practice_records', []);
+let practiceRecords = [];
+let practiceRecordsInitialized = false;
 let practiceStats = {
     totalPracticed: 0,
     totalScore: 0,
@@ -423,12 +424,12 @@ function getViewName(viewName) {
 }
 
 // 优化的题库加载函数
-function loadLibrary() {
+async function loadLibrary() {
     const startTime = performance.now();
     const activeConfigKey = getActiveLibraryConfigurationKey();
 
     // 尝试从localStorage加载当前活动的题库
-    const cachedData = storage.get(activeConfigKey);
+    const cachedData = await storage.get(activeConfigKey);
     if (cachedData) {
         console.log(`[System] 使用localStorage中key为'${activeConfigKey}'的题库数据`);
         examIndex = normalizeExamIndex(cachedData);
@@ -583,13 +584,13 @@ const EXAM_CONFIGS_KEY = 'exam_index_configurations';
 const ACTIVE_CONFIG_KEY = 'active_exam_index_key';
 
 // 获取所有题库配置
-function getLibraryConfigurations() {
-    return storage.get(EXAM_CONFIGS_KEY, []);
+async function getLibraryConfigurations() {
+    return await storage.get(EXAM_CONFIGS_KEY, []);
 }
 
 // 保存题库配置
-function saveLibraryConfiguration(name, key, examCount) {
-    const configs = getLibraryConfigurations();
+async function saveLibraryConfiguration(name, key, examCount) {
+    const configs = await getLibraryConfigurations();
     const newConfig = { name, key, examCount, timestamp: Date.now() };
     // 避免重复添加
     if (!configs.some(config => config.key === key)) {
@@ -604,8 +605,8 @@ function setActiveLibraryConfiguration(key) {
 }
 
 // 获取活动题库配置的key
-function getActiveLibraryConfigurationKey() {
-    return storage.get(ACTIVE_CONFIG_KEY, 'exam_index'); // 默认使用 'exam_index'
+async function getActiveLibraryConfigurationKey() {
+    return await storage.get(ACTIVE_CONFIG_KEY, 'exam_index'); // 默认使用 'exam_index'
 }
 
 // 触发文件夹选择器
@@ -1411,7 +1412,7 @@ function checkSystemStatus() {
 }
 
 // 数据一致性验证和修复
-function validateAndFixDataConsistency() {
+async function validateAndFixDataConsistency() {
     console.log('[System] 开始数据一致性验证和修复...');
 
     if (!window.DataConsistencyManager) {
@@ -1422,7 +1423,7 @@ function validateAndFixDataConsistency() {
 
     try {
         const manager = new DataConsistencyManager();
-        const practiceRecords = storage.get('practice_records', []);
+        const practiceRecords = await storage.get('practice_records', []);
 
         if (practiceRecords.length === 0) {
             showMessage('没有练习记录需要验证', 'info');
@@ -1654,14 +1655,13 @@ async function createManualBackup() {
     }
 }
 
-// 显示备份列表
-function showBackupList() {
+async function showBackupList() {
     if (!window.dataIntegrityManager) {
         showMessage('数据完整性管理器未初始化', 'error');
         return;
     }
 
-    const backups = window.dataIntegrityManager.getBackupList();
+    const backups = await window.dataIntegrityManager.getBackupList();
 
     if (backups.length === 0) {
         showMessage('暂无备份记录', 'info');
@@ -1683,7 +1683,7 @@ function showBackupList() {
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.1);">
                         <div>
                             <strong>${typeIcon} ${backup.id}</strong><br>
-                            <small>${date} • ${sizeKB} KB • v${backup.version}</small>
+                            <small>${date} - ${sizeKB} KB - v${backup.version}</small>
                         </div>
                         <button class="btn btn-secondary" onclick="restoreBackup('${backup.id}')" style="margin-left: 10px;">恢复</button>
                     </div>
@@ -1692,7 +1692,7 @@ function showBackupList() {
 
     backupHtml += `
                     </div>
-                    <button class="btn btn-secondary" onclick="this.parentElement.parentElement.remove()">关闭</button>
+                    <button class="btn btn-secondary" onclick="this.parentElement.remove()">关闭</button>
                 </div>
             `;
 
@@ -2310,4 +2310,37 @@ function showRecordDetails(recordId) {
             const accuracy = Math.round(record.accuracy * 100);
             const duration = Math.round(record.duration / 60);
 
-            alert(`练习记录详情：\n\n题目：${record.title}\n分类：${record.category}\n时间：${date.toLocaleString()}\n准确率：${accuracy}%\n用
+            alert(`练习记录详情：\n\n题目：${record.title}\n分类：${record.category}\n时间：${date.toLocaleString()}\n准确率：${accuracy}%\n用时：${duration}分钟`);
+        }
+    } catch (error) {
+        console.error('[Practice] 显示记录详情失败:', error);
+        showMessage('显示记录详情失败: ' + error.message, 'error');
+    }
+}
+
+// 异步初始化练习记录数据
+async function initializePracticeRecords() {
+    if (practiceRecordsInitialized) return;
+
+    try {
+        practiceRecords = await storage.get('practice_records', []);
+        practiceRecordsInitialized = true;
+        console.log('[Script] 练习记录数据初始化完成，共', practiceRecords.length, '条记录');
+    } catch (error) {
+        console.error('[Script] 练习记录初始化失败:', error);
+        practiceRecords = [];
+        practiceRecordsInitialized = true;
+    }
+}
+
+// 确保练习记录已初始化的辅助函数
+async function ensurePracticeRecordsInitialized() {
+    if (!practiceRecordsInitialized) {
+        await initializePracticeRecords();
+    }
+}
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', async () => {
+    await initializePracticeRecords();
+});

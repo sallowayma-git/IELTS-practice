@@ -1,21 +1,21 @@
 // Main JavaScript logic for the application
 // This file is the result of refactoring the inline script from improved-working-system.html
 
-// --- Global State & Variables ---
+// === 关键全局状态变量 (必须保持全局可访问) ===
 let examIndex = [];
+let practiceRecords = [];
+let filteredExams = [];
 let currentCategory = 'all';
 let currentExamType = 'all';
-let filteredExams = [];
-let practiceRecords = [];
+let bulkDeleteMode = false;
+let selectedRecords = new Set();
+let fallbackExamSessions = new Map();
+let processedSessions = new Set();
+let practiceListScroller = null;
 let app = null;
 let pdfHandler = null;
 let browseStateManager = null;
-let practiceListScroller = null;
-const processedSessions = new Set();
-let bulkDeleteMode = false;
-let selectedRecords = new Set();
-// 降级握手映射：sessionId -> { examId, timer }
-const fallbackExamSessions = new Map();
+
 
 const preferredFirstExamByCategory = {
   'P1_reading': { id: 'p1-09', title: 'Listening to the Ocean 海洋探测' },
@@ -393,8 +393,7 @@ function updateOverview() {
     let html = '<h3 style="grid-column: 1 / -1;">阅读</h3>';
     ['P1','P2','P3'].forEach(cat => {
         const onclickStr = "browseCategory('" + cat + "', 'reading')";
-        html += ''
-        + '<div class="category-card">'
+        html += '<div class="category-card">'
         +   '<div class="category-header">'
         +     '<div class="category-icon">📖</div>'
         +     '<div>'
@@ -415,8 +414,7 @@ function updateOverview() {
             const count = listeningStats[cat] ? listeningStats[cat].total : 0;
             if (count > 0) {
                 const onclickStr = "browseCategory('" + cat + "', 'listening')";
-                html += ''
-                + '<div class="category-card">'
+                html += '<div class="category-card">'
                 +   '<div class="category-header">'
                 +     '<div class="category-icon">🎧</div>'
                 +     '<div>'
@@ -1780,79 +1778,93 @@ function isQuotaExceeded(error) {
     ));
 }
 
-function showBackupList() {
+async function showBackupList() {
     if (!window.dataIntegrityManager) {
         showMessage('数据完整性管理器未初始化', 'error');
         return;
     }
 
-    const backups = window.dataIntegrityManager.getBackupList();
+    const backups = await window.dataIntegrityManager.getBackupList();
 
     if (backups.length === 0) {
         showMessage('暂无备份记录', 'info');
         return;
     }
 
+    // 恢复备份 - 暴露到全局作用域
+    window.restoreBackup = async function(backupId) {
+        if (!window.dataIntegrityManager) {
+            showMessage('数据完整性管理器未初始化', 'error');
+            return;
+        }
+
+        if (!confirm(`确定要恢复备份 ${backupId} 吗？当前数据将被覆盖。`)) {
+            return;
+        }
+
+        try {
+            showMessage('正在恢复备份...', 'info');
+            await window.dataIntegrityManager.restoreBackup(backupId);
+            showMessage('备份恢复成功', 'success');
+            // 恢复成功后刷新备份列表
+            setTimeout(() => showBackupList(), 1000);
+        } catch (error) {
+            console.error('[DataManagement] 恢复备份失败:', error);
+            showMessage('备份恢复失败: ' + error.message, 'error');
+        }
+    }
+
+    // 生成备份列表HTML
+    let backupItemsHtml = backups.map(backup => `
+        <div style="background: rgba(255, 255, 255, 0.05); padding: 10px; margin: 5px 0; border-radius: 5px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <strong>${backup.id}</strong><br>
+                <small>${new Date(backup.timestamp).toLocaleString()}</small><br>
+                <small>类型: ${backup.type} | 版本: ${backup.version}</small>
+            </div>
+            <button onclick="restoreBackup('${backup.id}')" style="background: #28a745; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">恢复</button>
+        </div>
+    `).join('');
+
     let backupHtml = `
-                <div style="background: rgba(255, 255, 255, 0.1); padding: 20px; border-radius: 10px; margin: 20px 0;">
-                    <h3>📋 备份列表</h3>
-                    <div style="max-height: 300px; overflow-y: auto; margin: 15px 0;">
-            `;
+        <div style="background: rgba(255, 255, 255, 0.1); padding: 20px; border-radius: 10px; margin: 20px 0;">
+            <h3>📋 备份列表</h3>
+            <div style="max-height: 300px; overflow-y: auto; margin: 15px 0;">
+                ${backupItemsHtml}
+            </div>
+        </div>
+    `;
 
-    backups.forEach(backup => {
-        const date = new Date(backup.timestamp).toLocaleString();
-        const sizeKB = Math.round(backup.size / 1024);
-        const typeIcon = backup.type === 'auto' ? '🔄' : backup.type === 'manual' ? '👤' : '⚠️';
+    // 插入到DOM中 - 使用appendChild避免销毁现有事件
+    const settingsView = document.getElementById('settings-view');
+    if (settingsView) {
+        // 检查是否已有备份列表，如果有则先移除
+        const existingBackupList = settingsView.querySelector('.backup-list-container');
+        if (existingBackupList) {
+            existingBackupList.remove();
+        }
 
-        backupHtml += `
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.1);">
-                        <div>
-                            <strong>${typeIcon} ${backup.id}</strong><br>
-                            <small>${date} - ${sizeKB} KB - v${backup.version}</small>
-                        </div>
-                        <button class="btn btn-secondary" onclick="restoreBackup('${backup.id}')" style="margin-left: 10px;">恢复</button>
-                    </div>
-                `;
-    });
+        // 创建备份列表容器
+        const backupContainer = document.createElement('div');
+        backupContainer.className = 'backup-list-container';
+        backupContainer.innerHTML = backupHtml;
 
-    backupHtml += `
-                    </div>
-                    <button class="btn btn-secondary" onclick="this.parentElement.remove()">关闭</button>
-                </div>
-            `;
-
-    // 显示备份列表
-    const container = document.getElementById('settings-view');
-    const existingList = container.querySelector('.backup-list');
-    if (existingList) {
-        existingList.remove();
-    }
-
-    const listDiv = document.createElement('div');
-    listDiv.className = 'backup-list';
-    listDiv.innerHTML = backupHtml;
-    container.appendChild(listDiv);
-}
-
-// 恢复备份
-async function restoreBackup(backupId) {
-    if (!window.dataIntegrityManager) {
-        showMessage('数据完整性管理器未初始化', 'error');
-        return;
-    }
-
-    if (!confirm(`确定要恢复备份 ${backupId} 吗？当前数据将被覆盖。`)) {
-        return;
-    }
-
-    try {
-        showMessage('正在恢复备份...', 'info');
-        await window.dataIntegrityManager.restoreBackup(backupId);
-        showMessage('备份恢复成功', 'success');
-        // The page will now sync automatically without a reload.
-    } catch (error) {
-        console.error('[DataManagement] 恢复备份失败:', error);
-        showMessage('备份恢复失败: ' + error.message, 'error');
+        // 插入到设置视图的开头
+        settingsView.insertBefore(backupContainer, settingsView.firstChild);
+    } else {
+        // 如果没有settings-view，创建一个临时的modal显示
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 10000;
+        `;
+        modal.innerHTML = `
+            <div style="background: #2d3748; padding: 30px; border-radius: 10px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto;">
+                ${backupHtml}
+                <button onclick="this.parentElement.parentElement.remove()" style="background: #e53e3e; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-top: 20px;">关闭</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
     }
 }
 
@@ -1945,7 +1957,7 @@ async function showLibraryConfigListV2() {
         <div style="background: #D9CBBA; padding: 20px; border-radius: 10px; margin: 20px 0; border:2px solid #737373; box-shadow: 0 10px 30px rgba(0,0,0,0.35); color:#000000;">
             <h3 style="margin:0 0 10px; color: #000000;">📚 题库配置列表</h3>
             <div style="max-height: 320px; overflow-y: auto; margin: 10px 0;">
-    `;
+        `;
     const activeKey = await getActiveLibraryConfigurationKey();
     configs.forEach(cfg => {
         const date = new Date(cfg.timestamp).toLocaleString();
@@ -1982,12 +1994,6 @@ async function showLibraryConfigListV2() {
     container.appendChild(listDiv);
 }
 
-
-// （已移除）导出调试信息函数在当前版本不再暴露到设置页按钮
-
-
-
-
 // Safe exporter (compat with old UI)
 async function exportPracticeData() {
     try {
@@ -2013,9 +2019,9 @@ async function exportPracticeData() {
 
 // 新增修复3C：在js/main.js末尾添加监听examIndexLoaded事件，调用loadExamList()并隐藏浏览页spinner
 window.addEventListener('examIndexLoaded', () => {
-  try {
-    if (typeof loadExamList === 'function') loadExamList();
-    const loading = document.querySelector('#browse-view .loading');
-    if (loading) loading.style.display = 'none';
-  } catch (_) {}
+    try {
+        if (typeof loadExamList === 'function') loadExamList();
+        const loading = document.querySelector('#browse-view .loading');
+        if (loading) loading.style.display = 'none';
+    } catch (_) {}
 });

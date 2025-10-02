@@ -92,7 +92,7 @@
   }
 
   if (typeof window.showBackupList !== 'function') {
-    window.showBackupList = function(){
+    window.showBackupList = async function(){
       if (!window.dataIntegrityManager && window.DataIntegrityManager) {
         try{ window.dataIntegrityManager = new window.DataIntegrityManager(); } catch(_){}
       }
@@ -100,7 +100,7 @@
         window.showMessage && window.showMessage('数据管理模块未初始化','error');
         return;
       }
-      var backups = window.dataIntegrityManager.getBackupList()||[];
+      var backups = await window.dataIntegrityManager.getBackupList()||[];
       if (backups.length===0){ window.showMessage && window.showMessage('暂无备份记录','info'); return; }
       var container = document.getElementById('settings-view') || document.body;
       var existing = container.querySelector('.backup-list'); if (existing) existing.remove();
@@ -122,6 +122,39 @@
         ' <button class="btn btn-secondary" onclick="this.parentElement.remove()">关闭</button>'+
         '</div>';
       listDiv.innerHTML = html; container.appendChild(listDiv);
+
+      // 确保restoreBackup函数在fallback路径中可用
+      if (typeof window.restoreBackup !== 'function') {
+        window.restoreBackup = async function(backupId) {
+          if (!backupId) {
+            window.showMessage && window.showMessage('无效的备份ID', 'error');
+            return;
+          }
+
+          if (!confirm('确定要恢复备份 ' + backupId + ' 吗？当前数据将被覆盖。')) {
+            return;
+          }
+
+          try {
+            window.showMessage && window.showMessage('正在恢复备份...', 'info');
+
+            if (window.dataIntegrityManager && typeof window.dataIntegrityManager.restoreBackup === 'function') {
+              await window.dataIntegrityManager.restoreBackup(backupId);
+              window.showMessage && window.showMessage('备份恢复成功', 'success');
+              // 移除备份列表并重新显示
+              var backupList = document.querySelector('.backup-list');
+              if (backupList) backupList.remove();
+              setTimeout(() => window.showBackupList && window.showBackupList(), 1000);
+            } else {
+              // 降级恢复逻辑
+              window.showMessage && window.showMessage('数据管理模块不可用，无法恢复备份', 'error');
+            }
+          } catch (error) {
+            console.error('[Fallback] 恢复备份失败:', error);
+            window.showMessage && window.showMessage('备份恢复失败: ' + (error.message || error), 'error');
+          }
+        };
+      }
     };
   }
   function ensureDefaultConfig(){
