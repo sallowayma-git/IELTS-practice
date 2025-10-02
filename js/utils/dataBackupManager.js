@@ -1041,10 +1041,8 @@ class DataBackupManager {
                 throw new Error(`Backup ${backupId} not found.`);
             }
 
-            for (const [key, value] of Object.entries(backup.data || {})) {
-                await storage.set(key, value);
-            }
-            return true;
+            // 返回备份对象，让调用者决定如何处理数据
+            return backup;
         } catch (error) {
             console.error('[DataBackupManager] backup restore failed', error);
             throw error;
