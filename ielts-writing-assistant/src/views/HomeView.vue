@@ -1,123 +1,73 @@
 <template>
   <div class="home-container">
-    <el-container>
-      <el-header class="header">
-        <div class="header-content">
-          <h1>🎓 雅思AI作文评判助手</h1>
-          <p>智能评估 · 实时反馈 · 精准提分</p>
-        </div>
-      </el-header>
+    <h1>🎓 雅思AI作文评判助手</h1>
+    <p>智能评估 · 实时反馈 · 精准提分</p>
 
-      <el-main class="main-content">
-        <div class="welcome-section">
-          <el-card class="welcome-card">
-            <h2>欢迎使用AI作文评判系统</h2>
-            <p>基于先进的人工智能技术，为您提供专业的雅思写作评估服务</p>
+    <div class="action-section">
+      <el-row :gutter="20">
+        <el-col :span="8">
+          <el-card class="action-card" @click="goToWriting">
+            <div class="card-content">
+              <div class="icon">✏️</div>
+              <h3>开始写作</h3>
+              <p>选择题目开始练习</p>
+            </div>
           </el-card>
-        </div>
+        </el-col>
 
-        <div class="action-section">
-          <el-row :gutter="20">
-            <el-col :span="8">
-              <el-card class="action-card" @click="goToWriting">
-                <div class="card-content">
-                  <div class="icon">✏️</div>
-                  <h3>开始写作</h3>
-                  <p>选择题目开始练习</p>
-                </div>
-              </el-card>
-            </el-col>
-
-            <el-col :span="8">
-              <el-card class="action-card" @click="goToLegacyIndex">
-                <div class="card-content">
-                  <div class="icon">📚</div>
-                  <h3>听力与阅读</h3>
-                  <p>提升听力理解和阅读分析能力</p>
-                </div>
-              </el-card>
-            </el-col>
-
-            <el-col :span="8">
-              <el-card class="action-card" @click="goToLegacy('vocabulary')">
-                <div class="card-content">
-                  <div class="icon">📝</div>
-                  <h3>词汇练习</h3>
-                  <p>扩充词汇量</p>
-                </div>
-              </el-card>
-            </el-col>
-          </el-row>
-        </div>
-
-        <div class="secondary-section">
-          <el-row :gutter="20">
-            <el-col :span="12">
-              <el-card class="action-card" @click="goToHistory">
-                <div class="card-content">
-                  <div class="icon">⏰</div>
-                  <h3>历史记录</h3>
-                  <p>查看练习历史和进度分析</p>
-                </div>
-              </el-card>
-            </el-col>
-
-            <el-col :span="8">
-              <el-card class="action-card" @click="goToDiagnostic">
-                <div class="card-content">
-                  <div class="icon">🔧</div>
-                  <h3>系统诊断</h3>
-                  <p>查看系统状态和日志信息</p>
-                </div>
-              </el-card>
-            </el-col>
-            <el-col :span="8">
-              <el-card class="action-card" @click="goToSettings">
-                <div class="card-content">
-                  <div class="icon">⚙️</div>
-                  <h3>设置</h3>
-                  <p>配置系统参数和个人偏好</p>
-                </div>
-              </el-card>
-            </el-col>
-          </el-row>
-        </div>
-
-        <div class="stats-section">
-          <el-card>
-            <el-row :gutter="20">
-              <el-col :span="6">
-                <el-statistic title="总练习次数" :value="statistics.totalPractices" />
-              </el-col>
-              <el-col :span="6">
-                <el-statistic title="平均分数" :value="statistics.averageScore" suffix="分" />
-              </el-col>
-              <el-col :span="6">
-                <el-statistic title="最高分数" :value="statistics.highestScore" suffix="分" />
-              </el-col>
-              <el-col :span="6">
-                <el-statistic title="练习天数" :value="statistics.practiceDays" suffix="天" />
-              </el-col>
-            </el-row>
+        <el-col :span="8">
+          <el-card class="action-card" @click="goToLegacyIndex">
+            <div class="card-content">
+              <div class="icon">📚</div>
+              <h3>听力与阅读</h3>
+              <p>提升听力理解和阅读分析能力</p>
+            </div>
           </el-card>
-        </div>
-      </el-main>
-    </el-container>
+        </el-col>
+
+        <el-col :span="8">
+          <el-card class="action-card" @click="goToHistory">
+            <div class="card-content">
+              <div class="icon">⏰</div>
+              <h3>历史记录</h3>
+              <p>查看练习历史和进度分析</p>
+            </div>
+          </el-card>
+        </el-col>
+      </el-row>
+    </div>
+
+    <!-- 第二行功能卡片 -->
+    <div class="secondary-section">
+      <el-row :gutter="20">
+        <el-col :span="12">
+          <el-card class="action-card" @click="goToDiagnostic">
+            <div class="card-content">
+              <div class="icon">🔧</div>
+              <h3>系统诊断</h3>
+              <p>查看系统状态和日志信息</p>
+            </div>
+          </el-card>
+        </el-col>
+
+        <el-col :span="12">
+          <el-card class="action-card" @click="goToSettings">
+            <div class="card-content">
+              <div class="icon">⚙️</div>
+              <h3>设置</h3>
+              <p>配置系统参数和个人偏好</p>
+            </div>
+          </el-card>
+        </el-col>
+      </el-row>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
-
-const statistics = ref({
-  totalPractices: 0,
-  averageScore: 0,
-  highestScore: 0,
-  practiceDays: 0
-})
 
 const goToWriting = () => {
   try {
@@ -130,14 +80,6 @@ const goToWriting = () => {
 const goToHistory = () => {
   try {
     router.push('/history')
-  } catch (error) {
-    console.error('路由跳转失败:', error)
-  }
-}
-
-const goToLegacy = (module) => {
-  try {
-    router.push(`/legacy/${module}`)
   } catch (error) {
     console.error('路由跳转失败:', error)
   }
@@ -166,78 +108,37 @@ const goToSettings = () => {
     console.error('路由跳转失败:', error)
   }
 }
-
-const loadStatistics = async () => {
-  try {
-    // TODO: 从后端加载统计数据
-    statistics.value = {
-      totalPractices: 12,
-      averageScore: 6.5,
-      highestScore: 7.5,
-      practiceDays: 8
-    }
-  } catch (error) {
-    console.error('加载统计数据失败:', error)
-  }
-}
-
-onMounted(() => {
-  console.log('HomeView 组件已挂载')
-  loadStatistics()
-})
 </script>
 
 <style scoped>
 .home-container {
-  height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-
-.header {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  color: white;
+  padding: 2rem;
   text-align: center;
-  line-height: 1.2;
-  height: auto;
-  padding: 1rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  color: white;
 }
 
-.header-content h1 {
+.home-container h1 {
   font-size: 2.5rem;
   margin-bottom: 0.5rem;
   font-weight: 600;
 }
 
-.main-content {
-  padding: 2rem;
+.home-container p {
+  font-size: 1.2rem;
+  margin-bottom: 2rem;
+  opacity: 0.9;
+}
+
+.action-section {
   max-width: 1200px;
   margin: 0 auto;
 }
 
-.welcome-section {
-  margin-bottom: 2rem;
-}
-
-.welcome-card {
-  text-align: center;
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-}
-
-.welcome-card h2 {
-  color: #2c3e50;
-  margin-bottom: 1rem;
-  font-size: 1.8rem;
-}
-
-.action-section {
-  margin-bottom: 2rem;
-}
-
 .secondary-section {
-  margin-bottom: 2rem;
+  max-width: 1200px;
+  margin: 20px auto 0;
 }
 
 .action-card {
@@ -274,22 +175,5 @@ onMounted(() => {
   color: #7f8c8d;
   margin: 0;
   font-size: 0.9rem;
-}
-
-.stats-section {
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-}
-
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .header-content h1 {
-    font-size: 2rem;
-  }
-
-  .main-content {
-    padding: 1rem;
-  }
 }
 </style>
