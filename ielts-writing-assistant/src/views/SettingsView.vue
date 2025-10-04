@@ -88,46 +88,28 @@
             <div v-show="activeMenu === 'ai'" class="setting-content">
               <el-card>
                 <template #header>
-                  <span>AI配置</span>
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>AI配置</span>
+                    <el-button type="primary" @click="showAIConfigDialog = true">
+                      配置AI服务
+                    </el-button>
+                  </div>
                 </template>
-                <el-form :model="aiSettings" label-width="120px">
-                  <el-form-item label="AI服务商">
-                    <el-select v-model="aiSettings.provider">
-                      <el-option label="OpenAI" value="openai" />
-                      <el-option label="Azure OpenAI" value="azure" />
-                      <el-option label="本地模型" value="local" />
-                    </el-select>
-                  </el-form-item>
-                  <el-form-item label="API密钥" v-if="aiSettings.provider !== 'local'">
-                    <el-input
-                      v-model="aiSettings.apiKey"
-                      type="password"
-                      placeholder="请输入API密钥"
-                      show-password
-                    />
-                  </el-form-item>
-                  <el-form-item label="模型选择">
-                    <el-select v-model="aiSettings.model">
-                      <el-option label="GPT-4" value="gpt-4" />
-                      <el-option label="GPT-3.5 Turbo" value="gpt-3.5-turbo" />
-                      <el-option label="Claude" value="claude" />
-                    </el-select>
-                  </el-form-item>
-                  <el-form-item label="响应速度">
-                    <el-radio-group v-model="aiSettings.speed">
-                      <el-radio label="fast">快速</el-radio>
-                      <el-radio label="balanced">平衡</el-radio>
-                      <el-radio label="quality">高质量</el-radio>
-                    </el-radio-group>
-                  </el-form-item>
-                  <el-form-item label="流式响应">
-                    <el-switch v-model="aiSettings.streaming" />
-                  </el-form-item>
-                  <el-form-item>
-                    <el-button type="primary" @click="saveAISettings">保存设置</el-button>
-                    <el-button @click="testAIConnection" :loading="testingConnection">测试连接</el-button>
-                  </el-form-item>
-                </el-form>
+                <div class="ai-status-display">
+                  <el-descriptions :column="1" border>
+                    <el-descriptions-item label="当前服务商">
+                      {{ aiSettings.provider || '未配置' }}
+                    </el-descriptions-item>
+                    <el-descriptions-item label="模型">
+                      {{ aiSettings.model || '未配置' }}
+                    </el-descriptions-item>
+                    <el-descriptions-item label="流式响应">
+                      <el-tag :type="aiSettings.streaming ? 'success' : 'info'">
+                        {{ aiSettings.streaming ? '已启用' : '已禁用' }}
+                      </el-tag>
+                    </el-descriptions-item>
+                  </el-descriptions>
+                </div>
               </el-card>
             </div>
 
@@ -243,6 +225,12 @@
       </el-main>
     </el-container>
   </div>
+
+  <!-- AI配置对话框 -->
+  <AIConfigDialog
+    v-model="showAIConfigDialog"
+    @success="handleAIConfigSuccess"
+  />
 </template>
 
 <script setup>
@@ -253,10 +241,12 @@ import {
   Download, Upload, FolderOpened, Delete, Warning
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import AIConfigDialog from '@/components/AIConfigDialog.vue'
 
 const router = useRouter()
 
 const activeMenu = ref('general')
+const showAIConfigDialog = ref(false)
 const testingConnection = ref(false)
 
 const generalSettings = ref({
@@ -380,8 +370,25 @@ const showChangelog = () => {
   ElMessage.info('更新日志功能开发中...')
 }
 
-const loadSettings = () => {
-  // TODO: 从本地存储加载设置
+// AI配置成功处理
+const handleAIConfigSuccess = () => {
+  ElMessage.success('AI配置已更新')
+  loadSettings() // 重新加载设置
+}
+
+const loadSettings = async () => {
+  try {
+    // 从设置API加载AI配置
+    const response = await fetch('/api/settings/')
+    if (response.ok) {
+      const data = await response.json()
+      if (data.success && data.data.ai) {
+        aiSettings.value = { ...aiSettings.value, ...data.data.ai }
+      }
+    }
+  } catch (error) {
+    console.error('加载设置失败:', error)
+  }
 }
 
 onMounted(() => {

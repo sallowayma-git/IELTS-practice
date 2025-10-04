@@ -204,13 +204,12 @@ router.post('/submit', async (req, res, next) => {
             })}\n\n`)
           }
         )) {
-          res.write(`data: ${JSON.stringify(chunk)}\n\n`)
-
           if (chunk.type === 'complete') {
             // 保存评估结果到数据库
             const savedResult = await saveAssessmentResult(req.db, writingId, chunk.content)
             // 将保存的ID添加到结果中
             chunk.content.id = savedResult.id
+            // 现在才发送包含ID的complete事件
             res.write(`data: ${JSON.stringify(chunk)}\n\n`)
             break
           }
@@ -218,6 +217,9 @@ router.post('/submit', async (req, res, next) => {
           if (chunk.type === 'error') {
             throw new Error(chunk.error.message)
           }
+
+          // 对于其他类型的事件，直接发送
+          res.write(`data: ${JSON.stringify(chunk)}\n\n`)
         }
 
         // 发送完成事件
