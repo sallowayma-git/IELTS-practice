@@ -18,7 +18,7 @@
 
         <div class="action-section">
           <el-row :gutter="20">
-            <el-col :span="6">
+            <el-col :span="8">
               <el-card class="action-card" @click="goToWriting">
                 <div class="card-content">
                   <div class="icon">✏️</div>
@@ -28,27 +28,17 @@
               </el-card>
             </el-col>
 
-            <el-col :span="6">
-              <el-card class="action-card" @click="goToLegacy('listening')">
+            <el-col :span="8">
+              <el-card class="action-card" @click="goToLegacyIndex">
                 <div class="card-content">
-                  <div class="icon">🎧</div>
-                  <h3>听力练习</h3>
-                  <p>提高听力理解能力</p>
+                  <div class="icon">📚</div>
+                  <h3>听力与阅读</h3>
+                  <p>提升听力理解和阅读分析能力</p>
                 </div>
               </el-card>
             </el-col>
 
-            <el-col :span="6">
-              <el-card class="action-card" @click="goToLegacy('reading')">
-                <div class="card-content">
-                  <div class="icon">📖</div>
-                  <h3>阅读理解</h3>
-                  <p>练习阅读分析能力</p>
-                </div>
-              </el-card>
-            </el-col>
-
-            <el-col :span="6">
+            <el-col :span="8">
               <el-card class="action-card" @click="goToLegacy('vocabulary')">
                 <div class="card-content">
                   <div class="icon">📝</div>
@@ -72,7 +62,16 @@
               </el-card>
             </el-col>
 
-            <el-col :span="12">
+            <el-col :span="8">
+              <el-card class="action-card" @click="goToDiagnostic">
+                <div class="card-content">
+                  <div class="icon">🔧</div>
+                  <h3>系统诊断</h3>
+                  <p>查看系统状态和日志信息</p>
+                </div>
+              </el-card>
+            </el-col>
+            <el-col :span="8">
               <el-card class="action-card" @click="goToSettings">
                 <div class="card-content">
                   <div class="icon">⚙️</div>
@@ -139,6 +138,22 @@ const goToHistory = () => {
 const goToLegacy = (module) => {
   try {
     router.push(`/legacy/${module}`)
+  } catch (error) {
+    console.error('路由跳转失败:', error)
+  }
+}
+
+const goToLegacyIndex = () => {
+  try {
+    window.location.href = '/index.html'
+  } catch (error) {
+    console.error('跳转失败:', error)
+  }
+}
+
+const goToDiagnostic = () => {
+  try {
+    router.push('/diagnostic')
   } catch (error) {
     console.error('路由跳转失败:', error)
   }

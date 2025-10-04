@@ -13,6 +13,8 @@ const writingRoutes = require('./routes/writing')
 const assessmentRoutes = require('./routes/assessment')
 const historyRoutes = require('./routes/history')
 const settingsRoutes = require('./routes/settings')
+const logsRoutes = require('./routes/logs')
+const diagnosticRoutes = require('./routes/diagnostic')
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -162,6 +164,8 @@ app.use('/api/analysis', require('./routes/analysis'))
 app.use('/api/export', require('./routes/export'))
 app.use('/api/history', historyRoutes)
 app.use('/api/settings', settingsRoutes)
+app.use('/api/logs', logsRoutes)
+app.use('/api/diagnostic', diagnosticRoutes)
 
 // 错误处理中间件 - 必须在所有路由之后
 app.use(errorHandler.middleware())
