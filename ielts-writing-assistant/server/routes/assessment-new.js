@@ -208,7 +208,10 @@ router.post('/submit', async (req, res, next) => {
 
           if (chunk.type === 'complete') {
             // 保存评估结果到数据库
-            await saveAssessmentResult(req.db, writingId, chunk.content)
+            const savedResult = await saveAssessmentResult(req.db, writingId, chunk.content)
+            // 将保存的ID添加到结果中
+            chunk.content.id = savedResult.id
+            res.write(`data: ${JSON.stringify(chunk)}\n\n`)
             break
           }
 
