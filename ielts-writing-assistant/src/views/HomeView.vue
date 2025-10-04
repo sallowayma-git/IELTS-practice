@@ -21,7 +21,7 @@
             <el-col :span="6">
               <el-card class="action-card" @click="goToWriting">
                 <div class="card-content">
-                  <el-icon size="48" color="#409EFF"><EditPen /></el-icon>
+                  <div class="icon">✏️</div>
                   <h3>开始写作</h3>
                   <p>选择题目开始练习</p>
                 </div>
@@ -31,7 +31,7 @@
             <el-col :span="6">
               <el-card class="action-card" @click="goToLegacy('listening')">
                 <div class="card-content">
-                  <el-icon size="48" color="#909399"><Headphones /></el-icon>
+                  <div class="icon">🎧</div>
                   <h3>听力练习</h3>
                   <p>提高听力理解能力</p>
                 </div>
@@ -41,7 +41,7 @@
             <el-col :span="6">
               <el-card class="action-card" @click="goToLegacy('reading')">
                 <div class="card-content">
-                  <el-icon size="48" color="#67C23A"><Reading /></el-icon>
+                  <div class="icon">📖</div>
                   <h3>阅读理解</h3>
                   <p>练习阅读分析能力</p>
                 </div>
@@ -51,7 +51,7 @@
             <el-col :span="6">
               <el-card class="action-card" @click="goToLegacy('vocabulary')">
                 <div class="card-content">
-                  <el-icon size="48" color="#E6A23C"><Notebook /></el-icon>
+                  <div class="icon">📝</div>
                   <h3>词汇练习</h3>
                   <p>扩充词汇量</p>
                 </div>
@@ -65,7 +65,7 @@
             <el-col :span="12">
               <el-card class="action-card" @click="goToHistory">
                 <div class="card-content">
-                  <el-icon size="48" color="#F56C6C"><Clock /></el-icon>
+                  <div class="icon">⏰</div>
                   <h3>历史记录</h3>
                   <p>查看练习历史和进度分析</p>
                 </div>
@@ -75,7 +75,7 @@
             <el-col :span="12">
               <el-card class="action-card" @click="goToSettings">
                 <div class="card-content">
-                  <el-icon size="48" color="#409EFF"><Setting /></el-icon>
+                  <div class="icon">⚙️</div>
                   <h3>设置</h3>
                   <p>配置系统参数和个人偏好</p>
                 </div>
@@ -85,20 +85,22 @@
         </div>
 
         <div class="stats-section">
-          <el-row :gutter="20">
-            <el-col :span="6">
-              <el-statistic title="总练习次数" :value="statistics.totalPractices" />
-            </el-col>
-            <el-col :span="6">
-              <el-statistic title="平均分数" :value="statistics.averageScore" suffix="分" />
-            </el-col>
-            <el-col :span="6">
-              <el-statistic title="最高分数" :value="statistics.highestScore" suffix="分" />
-            </el-col>
-            <el-col :span="6">
-              <el-statistic title="练习天数" :value="statistics.practiceDays" suffix="天" />
-            </el-col>
-          </el-row>
+          <el-card>
+            <el-row :gutter="20">
+              <el-col :span="6">
+                <el-statistic title="总练习次数" :value="statistics.totalPractices" />
+              </el-col>
+              <el-col :span="6">
+                <el-statistic title="平均分数" :value="statistics.averageScore" suffix="分" />
+              </el-col>
+              <el-col :span="6">
+                <el-statistic title="最高分数" :value="statistics.highestScore" suffix="分" />
+              </el-col>
+              <el-col :span="6">
+                <el-statistic title="练习天数" :value="statistics.practiceDays" suffix="天" />
+              </el-col>
+            </el-row>
+          </el-card>
         </div>
       </el-main>
     </el-container>
@@ -108,7 +110,6 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { EditPen, Clock, Setting, Headphones, Reading, Notebook } from '@element-plus/icons-vue'
 
 const router = useRouter()
 
@@ -120,32 +121,53 @@ const statistics = ref({
 })
 
 const goToWriting = () => {
-  router.push('/writing')
+  try {
+    router.push('/writing')
+  } catch (error) {
+    console.error('路由跳转失败:', error)
+  }
 }
 
 const goToHistory = () => {
-  router.push('/history')
+  try {
+    router.push('/history')
+  } catch (error) {
+    console.error('路由跳转失败:', error)
+  }
 }
 
 const goToLegacy = (module) => {
-  router.push(`/legacy/${module}`)
+  try {
+    router.push(`/legacy/${module}`)
+  } catch (error) {
+    console.error('路由跳转失败:', error)
+  }
 }
 
 const goToSettings = () => {
-  router.push('/settings')
+  try {
+    router.push('/settings')
+  } catch (error) {
+    console.error('路由跳转失败:', error)
+  }
 }
 
 const loadStatistics = async () => {
-  // TODO: 从后端加载统计数据
-  statistics.value = {
-    totalPractices: 12,
-    averageScore: 6.5,
-    highestScore: 7.5,
-    practiceDays: 8
+  try {
+    // TODO: 从后端加载统计数据
+    statistics.value = {
+      totalPractices: 12,
+      averageScore: 6.5,
+      highestScore: 7.5,
+      practiceDays: 8
+    }
+  } catch (error) {
+    console.error('加载统计数据失败:', error)
   }
 }
 
 onMounted(() => {
+  console.log('HomeView 组件已挂载')
   loadStatistics()
 })
 </script>
@@ -162,6 +184,8 @@ onMounted(() => {
   color: white;
   text-align: center;
   line-height: 1.2;
+  height: auto;
+  padding: 1rem;
 }
 
 .header-content h1 {
@@ -190,6 +214,7 @@ onMounted(() => {
 .welcome-card h2 {
   color: #2c3e50;
   margin-bottom: 1rem;
+  font-size: 1.8rem;
 }
 
 .action-section {
@@ -206,6 +231,7 @@ onMounted(() => {
   background: rgba(255, 255, 255, 0.95);
   border-radius: 16px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  margin-bottom: 1rem;
 }
 
 .action-card:hover {
@@ -218,20 +244,37 @@ onMounted(() => {
   padding: 1rem;
 }
 
+.icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
 .card-content h3 {
   margin: 1rem 0 0.5rem 0;
   color: #2c3e50;
+  font-size: 1.2rem;
 }
 
 .card-content p {
   color: #7f8c8d;
   margin: 0;
+  font-size: 0.9rem;
 }
 
 .stats-section {
   background: rgba(255, 255, 255, 0.95);
   border-radius: 16px;
-  padding: 2rem;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .header-content h1 {
+    font-size: 2rem;
+  }
+
+  .main-content {
+    padding: 1rem;
+  }
 }
 </style>

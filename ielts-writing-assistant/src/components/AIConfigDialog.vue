@@ -31,6 +31,8 @@
           <el-select v-model="form.model" placeholder="选择模型">
             <el-option label="GPT-4" value="gpt-4" />
             <el-option label="GPT-3.5 Turbo" value="gpt-3.5-turbo" />
+            <el-option label="GPT-4o" value="gpt-4o" />
+            <el-option label="GPT-4o Mini" value="gpt-4o-mini" />
           </el-select>
         </el-form-item>
         <el-form-item label="响应速度" prop="speed">
@@ -60,6 +62,41 @@
         </el-form-item>
         <el-form-item label="API版本" prop="apiVersion">
           <el-input v-model="form.apiVersion" placeholder="2024-02-15-preview" />
+        </el-form-item>
+      </template>
+
+      <!-- OpenRouter配置 -->
+      <template v-if="form.provider === 'openrouter'">
+        <el-form-item label="API密钥" prop="apiKey">
+          <el-input
+            v-model="form.apiKey"
+            type="password"
+            placeholder="请输入OpenRouter API密钥"
+            show-password
+          />
+        </el-form-item>
+        <el-form-item label="模型" prop="model">
+          <el-select v-model="form.model" placeholder="选择模型">
+            <el-option label="OpenAI GPT-4o" value="openai/gpt-4o" />
+            <el-option label="OpenAI GPT-4o Mini" value="openai/gpt-4o-mini" />
+            <el-option label="OpenAI GPT-4" value="openai/gpt-4" />
+            <el-option label="OpenAI GPT-3.5 Turbo" value="openai/gpt-3.5-turbo" />
+            <el-option label="Anthropic Claude 3.5 Sonnet" value="anthropic/claude-3.5-sonnet" />
+            <el-option label="Google Gemini Pro" value="google/gemini-pro" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="应用名称" prop="appName">
+          <el-input v-model="form.appName" placeholder="IELTS Writing Assistant" />
+        </el-form-item>
+        <el-form-item label="网站URL" prop="siteUrl">
+          <el-input v-model="form.siteUrl" placeholder="https://your-website.com" />
+        </el-form-item>
+        <el-form-item label="响应速度" prop="speed">
+          <el-radio-group v-model="form.speed">
+            <el-radio label="fast">快速</el-radio>
+            <el-radio label="balanced">平衡</el-radio>
+            <el-radio label="quality">高质量</el-radio>
+          </el-radio-group>
         </el-form-item>
       </template>
 
@@ -131,6 +168,7 @@ const formRef = ref()
 const providers = ref([
   { label: 'OpenAI GPT', value: 'openai' },
   { label: 'Azure OpenAI', value: 'azure' },
+  { label: 'OpenRouter', value: 'openrouter' },
   { label: '模拟服务', value: 'mock' }
 ])
 

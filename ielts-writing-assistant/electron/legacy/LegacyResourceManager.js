@@ -236,8 +236,6 @@ body {
   .listening-module { /* 听力模块样式 */ }
   .reading-module { /* 阅读模块样式 */ }
   .vocabulary-module { /* 词汇模块样式 */ }
-`
-  }
 
   /**
    * 生成模拟JS

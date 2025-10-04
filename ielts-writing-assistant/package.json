@@ -46,7 +46,7 @@
     "electron-log": "^5.0.0",
     "uuid": "^9.0.0",
     "cors": "^2.8.5",
-    "json2csv": "^6.1.0"
+    "json2csv": "^5.0.7"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.0",

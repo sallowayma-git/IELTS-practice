@@ -1,5 +1,5 @@
 const BaseLLMService = require('./base')
-const { buildScoringPrompt, buildGrammarPrompt } = require('../prompts/ielts-scoring-prompt')
+const { buildScoringPrompt, buildGrammarPrompt } = require('../../prompts/ielts-scoring-prompt')
 const IELTSScoringEngine = require('../scoringEngine')
 
 /**
@@ -17,7 +17,7 @@ class MockLLMService extends BaseLLMService {
   async testConnection() {
     // 模拟连接测试
     await this.delay(500)
-    return Math.random() > 0.1 // 90%成功率
+    return true // 始终成功
   }
 
   async assessEssay(params) {
