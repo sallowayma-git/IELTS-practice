@@ -19,14 +19,38 @@
 - **AI服务**: OpenAI API / Azure OpenAI
 - **构建工具**: Vite
 
-## 快速开始
+## 📥 安装应用
 
-### 环境要求
+### 用户安装
 
-- Node.js >= 20
+#### Windows
+
+1. 下载最新的 `.exe` 安装程序
+2. 双击运行并按照提示完成安装
+3. 从桌面快捷方式启动应用
+
+#### macOS
+
+1. 下载最新的 `.dmg` 文件
+2. 双击打开并将应用拖拽到 Applications 文件夹
+3. 从 Launchpad 或 Applications 文件夹启动应用
+
+#### Linux
+
+1. 下载最新的 `.AppImage` 文件
+2. 添加执行权限：`chmod +x *.AppImage`
+3. 双击运行或在终端中执行
+
+详细安装说明请参考：[安装指南](docs/INSTALLATION.md)
+
+### 开发者设置
+
+#### 环境要求
+
+- Node.js >= 18
 - npm >= 9
 
-### 安装依赖
+#### 安装依赖
 
 ```bash
 # 进入项目目录
@@ -36,7 +60,7 @@ cd ielts-writing-assistant
 npm install
 ```
 
-### 开发模式
+#### 开发模式
 
 ```bash
 # 启动开发服务器
@@ -47,6 +71,21 @@ npm run dev
 - Vue开发服务器 (http://localhost:5173)
 - Express后端服务 (http://localhost:3001)
 - Electron桌面应用
+
+#### 构建应用
+
+```bash
+# 构建生产版本
+npm run build
+
+# 打包 Electron 应用
+npm run build:electron
+
+# 构建所有平台
+npm run dist:all
+```
+
+详细构建说明请参考：[构建指南](docs/BUILD.md)
 
 ### 生产构建
 
@@ -166,6 +205,64 @@ MIT License
 4. 推送到分支 (`git push origin feature/AmazingFeature`)
 5. 创建 Pull Request
 
-## 支持
+## 🔄 自动更新
 
-如有问题或建议，请提交Issue或联系开发团队。
+应用支持自动更新功能：
+
+1. **检查更新**: 应用启动时自动检查新版本
+2. **下载更新**: 后台静默下载更新包
+3. **安装更新**: 重启应用并完成更新安装
+
+如遇更新问题，可手动下载最新版本覆盖安装。
+
+## 📖 文档
+
+- [用户手册](docs/USER_MANUAL.md)
+- [安装指南](docs/INSTALLATION.md)
+- [构建指南](docs/BUILD.md)
+- [API文档](docs/API_DOCUMENTATION.md)
+- [题库管理文档](docs/QUESTION_BANK_MANAGEMENT.md)
+
+## 🗺️ 路线图
+
+### v1.1 (计划中)
+- [ ] 更多AI模型支持
+- [ ] 团队协作功能
+- [ ] 云端同步
+- [ ] 移动端支持
+
+### v1.2 (计划中)
+- [ ] 高级统计分析
+- [ ] 自定义评估模板
+- [ ] 语音输入功能
+- [ ] 多语言界面
+
+## 许可证
+
+MIT License
+
+## 贡献指南
+
+我们欢迎所有形式的贡献：
+
+1. **报告问题**: 在 GitHub Issues 中报告 Bug
+2. **功能建议**: 提出新功能的想法和建议
+3. **代码贡献**: 提交 Pull Request
+4. **文档改进**: 帮助完善文档
+
+### 开发规范
+
+- 遵循 ESLint 代码规范
+- 编写单元测试
+- 更新相关文档
+- 提交前运行 `npm run test`
+
+## 📞 技术支持
+
+- **GitHub Issues**: [提交问题](https://github.com/your-repo/issues)
+- **用户社区**: [讨论区](https://github.com/your-repo/discussions)
+- **邮件支持**: support@ielts-writing-assistant.com
+
+---
+
+**© 2025 IELTS Writing Assistant Team. 保留所有权利。**

@@ -188,6 +188,50 @@ contextBridge.exposeInMainWorld('electronAPI', {
     off: (eventName, callback) => {
       ipcRenderer.removeListener(`questionbank:event-${eventName}`, callback)
     }
+  },
+
+  // 自动更新API
+  updater: {
+    // 检查更新
+    checkForUpdates: () => ipcRenderer.invoke('updater-check-for-updates'),
+
+    // 下载更新
+    downloadUpdate: () => ipcRenderer.invoke('updater-download-update'),
+
+    // 安装更新
+    installUpdate: () => ipcRenderer.invoke('updater-install-update'),
+
+    // 获取版本信息
+    getVersion: () => ipcRenderer.invoke('updater-get-version'),
+
+    // 获取更新状态
+    getStatus: () => ipcRenderer.invoke('updater-get-status'),
+
+    // 配置更新服务器
+    configure: (config) => ipcRenderer.invoke('updater-configure', config),
+
+    // 获取更新配置
+    getConfig: () => ipcRenderer.invoke('updater-get-config'),
+
+    // 事件监听
+    on: (eventName, callback) => {
+      const validEvents = [
+        'update-status',
+        'update-available',
+        'update-not-available',
+        'download-progress',
+        'update-downloaded',
+        'update-error'
+      ]
+      if (validEvents.includes(eventName)) {
+        ipcRenderer.on(eventName, callback)
+      }
+    },
+
+    // 移除事件监听
+    off: (eventName, callback) => {
+      ipcRenderer.removeListener(eventName, callback)
+    }
   }
 })
 

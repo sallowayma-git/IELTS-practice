@@ -10,12 +10,20 @@
     "dev:electron": "wait-on http://localhost:5173 && electron .",
     "build": "vite build",
     "build:electron": "npm run build && electron-builder",
+    "build:win": "npm run build && electron-builder --win",
+    "build:mac": "npm run build && electron-builder --mac",
+    "build:linux": "npm run build && electron-builder --linux",
+    "dist": "npm run build && electron-builder --publish=never",
+    "dist:all": "npm run build && electron-builder -mwl",
     "preview": "vite preview",
     "test": "vitest",
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore",
     "icons": "cd assets && ./create-icons.sh",
     "init-db": "node server/database/init-topics.js",
-    "test-system": "node server/test-system.js"
+    "test-system": "node server/test-system.js",
+    "postinstall": "electron-builder install-app-deps",
+    "pack": "npm run build && electron-builder --dir",
+    "release": "npm run build && electron-builder --publish=always"
   },
   "dependencies": {
     "vue": "^3.4.0",
@@ -34,6 +42,8 @@
     "openai": "^4.20.0",
     "axios": "^1.6.0",
     "electron-store": "^8.1.0",
+    "electron-updater": "^6.1.0",
+    "electron-log": "^5.0.0",
     "uuid": "^9.0.0",
     "cors": "^2.8.5",
     "json2csv": "^6.1.0"
@@ -52,29 +62,140 @@
     "@vue/test-utils": "^2.4.0"
   },
   "build": {
-    "appId": "com.ielts.writing.assistant",
-    "productName": "雅思AI作文评判助手",
+    "productName": "IELTS Writing Assistant",
+    "appId": "com.ielts.assistant.app",
+    "copyright": "Copyright © 2025 ${author}",
     "directories": {
-      "output": "dist-electron"
+      "output": "dist-electron",
+      "buildResources": "build",
+      "cache": "cache",
+      "app": "dist"
     },
     "files": [
       "dist/**/*",
       "server/**/*",
       "electron/**/*",
-      "node_modules/**/*"
+      "build/**/*",
+      "node_modules/**/*",
+      "package.json",
+      "README.md",
+      "LICENSE",
+      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+      "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
+      "!**/node_modules/.bin",
+      "!**/*.{iml,o,hprof,orig,pcap,png,bmp,jpg,jpeg,tiff,pdf,doc,docx,xls,xlsx,ppt,pptx}",
+      "!**/._*",
+      "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}",
+      "!**/{__pycache__,thumbs.db,.flowconfig,.idea,.vs,.nyc_project}",
+      "!**/{appveyor.yml,.travis.yml,circle.yml}",
+      "!**/{npm-debug.log,yarn.lock,yarn-integrity,yarn-error.log,lerna-debug.log}",
+      "!**/{.eslintcache,.stylelintcache}"
     ],
-    "mac": {
-      "category": "public.app-category.education",
-      "icon": "assets/icon.icns"
-    },
+    "extraResources": [
+      {
+        "from": "resources/",
+        "to": "resources/",
+        "filter": ["**/*"]
+      }
+    ],
     "win": {
-      "target": "nsis",
-      "icon": "assets/icon.ico"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "resources/icon.ico",
+      "requestedExecutionLevel": "asInvoker",
+      "verifyUpdateCodeSignature": false,
+      "artifactName": "${productName}-${version}.${ext}",
+      "publisherName": "IELTS Assistant Team",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "${productName}"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "resources/icon.icns",
+      "category": "public.app-category.education",
+      "darkModeSupport": true,
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "inherit",
+      "extendInfo": {
+        "CFBundleIdentifier": "com.ielts.assistant.app"
+      }
     },
     "linux": {
-      "target": "AppImage",
-      "icon": "assets/icon.png"
-    }
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm"
+      ],
+      "icon": "resources/icon.png",
+      "category": "Education",
+      "desktop": {
+        "Name": "${productName}",
+        "Comment": "IELTS Writing Assistant",
+        "Keywords": "education;ielts;writing;assistant;",
+        "Exec": "/opt/${productName}/${productName} %U",
+        "Icon": "${productName}"
+      }
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "installerIcon": "resources/installer.ico",
+      "installerHeaderIcon": "resources/header-icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "${productName}",
+      "include": "installer.nsh",
+      "script": "installer.nsh",
+      "uninstallDisplayName": "${productName}",
+      "language": "2052",
+      "displayLanguageSelector": true
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "your-username",
+        "repo": "ielts-writing-assistant",
+        "private": false,
+        "releaseType": "release"
+      }
+    ],
+    "releaseInfo": {
+      "releaseNotesFile": "RELEASE.md"
+    },
+    "afterSign": "scripts/notarize.js",
+    "beforePack": "scripts/prepack.js",
+    "afterPack": "scripts/postpack.js",
+    "prepack": "scripts/prepack.json"
   },
   "keywords": ["ielts", "writing", "ai", "assessment", "electron", "vue"],
   "author": "IELTS Writing Assistant Team",

@@ -7,11 +7,13 @@ const isDev = process.env.NODE_ENV === 'development'
 const LegacyService = require('./services/LegacyService')
 const QuestionBankService = require('./services/QuestionBankService')
 const QuestionBankIPC = require('./services/QuestionBankIPC')
+const UpdateService = require('./services/UpdateService')
 
 // 保持对窗口对象的全局引用
 let mainWindow
 let legacyService
 let questionBankService
+let updateService
 
 function createWindow() {
   // 创建浏览器窗口
@@ -44,6 +46,23 @@ function createWindow() {
   mainWindow.once('ready-to-show', async () => {
     mainWindow.show()
     mainWindow.focus()
+
+    // 初始化更新服务
+    try {
+      updateService = new UpdateService()
+      updateService.setMainWindow(mainWindow)
+
+      // 在生产环境启用自动更新检查
+      if (!isDev) {
+        updateService.setupPeriodicCheck()
+        console.log('✅ 更新服务初始化成功')
+      } else {
+        updateService.disableAutoUpdate()
+        console.log('🔧 开发环境，自动更新已禁用')
+      }
+    } catch (error) {
+      console.error('❌ 更新服务启动失败:', error)
+    }
 
     // 初始化Legacy服务
     try {
@@ -78,6 +97,11 @@ function createWindow() {
 
   // 当窗口关闭时
   mainWindow.on('closed', () => {
+    // 清理更新服务
+    if (updateService) {
+      updateService = null
+    }
+
     // 清理Legacy服务
     if (legacyService) {
       legacyService.cleanup()
