@@ -7,7 +7,7 @@
           <h2>练习历史</h2>
         </div>
         <div class="header-right">
-          <el-button @click="exportHistory" :icon="Download">导出记录</el-button>
+          <el-button @click="showExportDialog" :icon="Download">导出记录</el-button>
         </div>
       </el-header>
 
@@ -37,6 +37,21 @@
             </el-col>
           </el-row>
         </div>
+
+        <!-- 评分分析面板 (Phase 2) -->
+        <el-card class="analysis-card">
+          <template #header>
+            <div class="analysis-header">
+              <span>评分趋势分析</span>
+              <el-switch
+                v-model="showAnalysis"
+                active-text="显示"
+                inactive-text="隐藏"
+              />
+            </div>
+          </template>
+          <ScoreAnalysisPanel v-if="showAnalysis" />
+        </el-card>
 
         <!-- 筛选和搜索 -->
         <el-card class="filter-card">
@@ -144,6 +159,13 @@
         </el-card>
       </el-main>
     </el-container>
+
+    <!-- 导出对话框 -->
+    <ExportDialog
+      v-model="exportDialogVisible"
+      :current-filters="filters"
+      @export-completed="handleExportCompleted"
+    />
   </div>
 </template>
 
@@ -152,11 +174,15 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowLeft, Download, Refresh, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import ScoreAnalysisPanel from '@/components/ScoreAnalysisPanel.vue'
+import ExportDialog from '@/components/ExportDialog.vue'
 
 const router = useRouter()
 
 const loading = ref(false)
 const historyData = ref([])
+const showAnalysis = ref(true) // Phase 2: 评分分析面板显示状态
+const exportDialogVisible = ref(false) // P2-3: 导出对话框显示状态
 
 const statistics = ref({
   totalCount: 0,
@@ -230,9 +256,12 @@ const goBack = () => {
   router.push('/')
 }
 
-const exportHistory = () => {
-  // TODO: 实现导出功能
-  ElMessage.info('导出功能开发中...')
+const showExportDialog = () => {
+  exportDialogVisible.value = true
+}
+
+const handleExportCompleted = (result) => {
+  ElMessage.success(`导出完成: ${result.filename} (${result.count}条记录)`)
 }
 
 const refreshHistory = () => {
@@ -404,6 +433,16 @@ onMounted(() => {
 
 .stat-card {
   text-align: center;
+}
+
+.analysis-card {
+  margin-bottom: 1.5rem;
+}
+
+.analysis-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .filter-card {

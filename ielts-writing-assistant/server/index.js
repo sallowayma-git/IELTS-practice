@@ -157,6 +157,9 @@ app.use((req, res, next) => {
 // API路由 - 直接使用，错误处理中间件会捕获异步错误
 app.use('/api/writing', writingRoutes)
 app.use('/api/assessment', require('./routes/assessment-new'))
+app.use('/api/grammar', require('./routes/grammar'))
+app.use('/api/analysis', require('./routes/analysis'))
+app.use('/api/export', require('./routes/export'))
 app.use('/api/history', historyRoutes)
 app.use('/api/settings', settingsRoutes)
 

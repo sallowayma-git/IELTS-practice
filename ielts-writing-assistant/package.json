@@ -35,7 +35,8 @@
     "axios": "^1.6.0",
     "electron-store": "^8.1.0",
     "uuid": "^9.0.0",
-    "cors": "^2.8.5"
+    "cors": "^2.8.5",
+    "json2csv": "^6.1.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.0",

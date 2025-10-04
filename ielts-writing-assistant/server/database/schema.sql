@@ -88,6 +88,45 @@ CREATE TABLE IF NOT EXISTS assessment_results (
     FOREIGN KEY (writing_id) REFERENCES writing_records (id) ON DELETE CASCADE
 );
 
+-- 4.1. 评估标注表 (Phase 2 新增)
+CREATE TABLE IF NOT EXISTS evaluation_annotations (
+    id TEXT PRIMARY KEY,
+    assessment_result_id TEXT NOT NULL,
+    writing_id TEXT NOT NULL,
+
+    -- 错误定位信息
+    start_index INTEGER NOT NULL,
+    end_index INTEGER NOT NULL,
+    error_text TEXT NOT NULL,
+    suggested_text TEXT,
+
+    -- 错误分类
+    category TEXT NOT NULL CHECK (category IN ('grammar', 'vocabulary', 'structure', 'punctuation', 'style')),
+    severity TEXT NOT NULL CHECK (severity IN ('error', 'warning', 'suggestion')),
+    error_type TEXT NOT NULL, -- 具体错误类型，如 'subject_verb_agreement', 'spelling', 'article_usage'
+
+    -- 反馈信息
+    message TEXT NOT NULL, -- 错误描述
+    explanation TEXT, -- 详细解释
+    example TEXT, -- 正确示例
+
+    -- 元数据
+    ai_model TEXT,
+    ai_provider TEXT,
+    confidence_score REAL CHECK (confidence_score >= 0 AND confidence_score <= 1),
+
+    -- 状态
+    status TEXT DEFAULT 'active' CHECK (status IN ('active', 'ignored', 'resolved')),
+    user_action TEXT CHECK (user_action IN ('pending', 'accepted', 'rejected', 'ignored')),
+    user_notes TEXT,
+
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (assessment_result_id) REFERENCES assessment_results (id) ON DELETE CASCADE,
+    FOREIGN KEY (writing_id) REFERENCES writing_records (id) ON DELETE CASCADE
+);
+
 -- 5. 用户设置表
 CREATE TABLE IF NOT EXISTS user_settings (
     id TEXT PRIMARY KEY,

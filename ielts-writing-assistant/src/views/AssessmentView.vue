@@ -60,6 +60,20 @@
             </div>
           </el-card>
 
+          <!-- 语法错误标注 (Phase 2) -->
+          <el-card class="grammar-annotations-card" v-if="assessmentResult.id">
+            <template #header>
+              <span>语法错误标注</span>
+            </template>
+            <GrammarHighlightPanel
+              :writing-id="assessmentResult.writingId"
+              :assessment-result-id="assessmentResult.id"
+              :content="assessmentResult.originalContent"
+              @annotation-selected="handleAnnotationSelected"
+              @annotation-updated="handleAnnotationUpdated"
+            />
+          </el-card>
+
           <!-- 原文展示 -->
           <el-card class="original-content-card">
             <template #header>
@@ -107,6 +121,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ArrowLeft, Download } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import GrammarHighlightPanel from '@/components/GrammarHighlightPanel.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -151,81 +166,94 @@ const handleSuggestion = (suggestion) => {
   ElMessage.info(`${suggestion.action}功能开发中...`)
 }
 
+// 语法标注处理函数 (Phase 2)
+const handleAnnotationSelected = (annotation) => {
+  // 高亮原文中的对应部分
+  ElMessage.info(`定位到语法问题: ${annotation.message}`)
+  // TODO: 实现原文高亮功能
+}
+
+const handleAnnotationUpdated = (annotation) => {
+  ElMessage.success(`语法建议已${annotation.user_action === 'accepted' ? '采纳' : '忽略'}`)
+}
+
 const loadAssessmentResult = async () => {
   loading.value = true
 
   try {
     const assessmentId = route.params.id
 
-    // TODO: 从后端加载评测结果
-    // 模拟数据
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    // 从后端加载评测结果
+    const response = await fetch(`/api/assessment/results/${assessmentId}`)
 
+    if (!response.ok) {
+      throw new Error('获取评测结果失败')
+    }
+
+    const data = await response.json()
+
+    if (!data.success) {
+      throw new Error(data.message || '获取评测结果失败')
+    }
+
+    // 转换数据格式
+    const result = data.data
     assessmentResult.value = {
-      id: assessmentId,
-      overallScore: 6.5,
-      level: '合格水平',
-      description: '文章结构清晰，论点基本明确，但在语法准确性和词汇使用方面还有提升空间。',
+      id: result.id,
+      writingId: result.writing_id,
+      overallScore: result.overall_score,
+      level: result.level,
+      description: result.description,
+      originalContent: '', // 需要从writing_records表获取
       criteria: [
         {
           name: '任务回应',
-          score: 7.0,
-          feedback: '很好地回应了题目要求，观点明确'
+          score: result.task_response_score,
+          feedback: result.task_response_feedback
         },
         {
           name: '连贯与衔接',
-          score: 6.5,
-          feedback: '文章结构基本合理，衔接词使用得当'
+          score: result.coherence_score,
+          feedback: result.coherence_feedback
         },
         {
           name: '词汇资源',
-          score: 6.0,
-          feedback: '词汇量适中，但可以更丰富多样'
+          score: result.vocabulary_score,
+          feedback: result.vocabulary_feedback
         },
         {
           name: '语法准确性',
-          score: 6.5,
-          feedback: '语法基本正确，存在少量错误'
+          score: result.grammar_score,
+          feedback: result.grammar_feedback
         }
       ],
       detailedFeedback: [
         {
           title: '优点',
-          items: [
-            '文章结构清晰，段落划分合理',
-            '论点明确，有适当的论证',
-            '使用了多种句式结构',
-            '词汇使用较为准确'
-          ]
+          items: result.strengths || []
         },
         {
           title: '需要改进',
-          items: [
-            '部分句子存在语法错误',
-            '词汇使用可以更加丰富',
-            '部分论证不够深入',
-            '可以增加更多的例证'
-          ]
+          items: result.improvements || []
         }
       ],
-      originalContent: '<p>这里显示用户的原文内容...</p>',
-      suggestions: [
-        {
-          title: '语法改进',
-          content: '建议重点复习时态和主谓一致',
-          type: 'warning',
-          icon: 'Warning',
-          action: '查看语法练习'
-        },
-        {
-          title: '词汇提升',
-          content: '多使用学术词汇和同义词替换',
-          type: 'primary',
-          icon: 'Star',
-          action: '查看词汇推荐'
-        }
-      ]
+      suggestions: result.suggestions || []
     }
+
+    // 获取原文内容
+    try {
+      const writingResponse = await fetch(`/api/writing/records/${result.writing_id}`)
+      if (writingResponse.ok) {
+        const writingData = await writingResponse.json()
+        if (writingData.success) {
+          assessmentResult.value.originalContent = writingData.data.content
+        }
+      }
+    } catch (error) {
+      console.error('获取原文内容失败:', error)
+      assessmentResult.value.originalContent = '<p>原文内容加载失败</p>'
+    }
+
   } catch (error) {
     ElMessage.error('加载评测结果失败')
   } finally {
