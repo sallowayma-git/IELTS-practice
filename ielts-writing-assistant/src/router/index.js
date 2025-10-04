@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import legacyRoutes from './legacy'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -27,7 +28,9 @@ const router = createRouter({
       path: '/settings',
       name: 'Settings',
       component: () => import('@/views/SettingsView.vue')
-    }
+    },
+    // Legacy系统路由
+    ...legacyRoutes
   ]
 })
 

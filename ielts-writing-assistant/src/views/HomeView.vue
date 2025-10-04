@@ -18,7 +18,7 @@
 
         <div class="action-section">
           <el-row :gutter="20">
-            <el-col :span="8">
+            <el-col :span="6">
               <el-card class="action-card" @click="goToWriting">
                 <div class="card-content">
                   <el-icon size="48" color="#409EFF"><EditPen /></el-icon>
@@ -28,22 +28,56 @@
               </el-card>
             </el-col>
 
-            <el-col :span="8">
-              <el-card class="action-card" @click="goToHistory">
+            <el-col :span="6">
+              <el-card class="action-card" @click="goToLegacy('listening')">
                 <div class="card-content">
-                  <el-icon size="48" color="#67C23A"><Clock /></el-icon>
-                  <h3>历史记录</h3>
-                  <p>查看练习历史</p>
+                  <el-icon size="48" color="#909399"><Headphones /></el-icon>
+                  <h3>听力练习</h3>
+                  <p>提高听力理解能力</p>
                 </div>
               </el-card>
             </el-col>
 
-            <el-col :span="8">
+            <el-col :span="6">
+              <el-card class="action-card" @click="goToLegacy('reading')">
+                <div class="card-content">
+                  <el-icon size="48" color="#67C23A"><Reading /></el-icon>
+                  <h3>阅读理解</h3>
+                  <p>练习阅读分析能力</p>
+                </div>
+              </el-card>
+            </el-col>
+
+            <el-col :span="6">
+              <el-card class="action-card" @click="goToLegacy('vocabulary')">
+                <div class="card-content">
+                  <el-icon size="48" color="#E6A23C"><Notebook /></el-icon>
+                  <h3>词汇练习</h3>
+                  <p>扩充词汇量</p>
+                </div>
+              </el-card>
+            </el-col>
+          </el-row>
+        </div>
+
+        <div class="secondary-section">
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-card class="action-card" @click="goToHistory">
+                <div class="card-content">
+                  <el-icon size="48" color="#F56C6C"><Clock /></el-icon>
+                  <h3>历史记录</h3>
+                  <p>查看练习历史和进度分析</p>
+                </div>
+              </el-card>
+            </el-col>
+
+            <el-col :span="12">
               <el-card class="action-card" @click="goToSettings">
                 <div class="card-content">
-                  <el-icon size="48" color="#E6A23C"><Setting /></el-icon>
+                  <el-icon size="48" color="#409EFF"><Setting /></el-icon>
                   <h3>设置</h3>
-                  <p>配置系统参数</p>
+                  <p>配置系统参数和个人偏好</p>
                 </div>
               </el-card>
             </el-col>
@@ -74,7 +108,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { EditPen, Clock, Setting } from '@element-plus/icons-vue'
+import { EditPen, Clock, Setting, Headphones, Reading, Notebook } from '@element-plus/icons-vue'
 
 const router = useRouter()
 
@@ -91,6 +125,10 @@ const goToWriting = () => {
 
 const goToHistory = () => {
   router.push('/history')
+}
+
+const goToLegacy = (module) => {
+  router.push(`/legacy/${module}`)
 }
 
 const goToSettings = () => {
@@ -155,6 +193,10 @@ onMounted(() => {
 }
 
 .action-section {
+  margin-bottom: 2rem;
+}
+
+.secondary-section {
   margin-bottom: 2rem;
 }
 

@@ -3,8 +3,12 @@ const path = require('path')
 const { getIconPath } = require('./utils')
 const isDev = process.env.NODE_ENV === 'development'
 
+// 导入Legacy服务
+const LegacyService = require('./services/LegacyService')
+
 // 保持对窗口对象的全局引用
 let mainWindow
+let legacyService
 
 function createWindow() {
   // 创建浏览器窗口
@@ -34,13 +38,31 @@ function createWindow() {
   }
 
   // 当窗口准备好显示时
-  mainWindow.once('ready-to-show', () => {
+  mainWindow.once('ready-to-show', async () => {
     mainWindow.show()
     mainWindow.focus()
+
+    // 初始化Legacy服务
+    try {
+      legacyService = new LegacyService()
+      const initialized = await legacyService.initialize(mainWindow)
+      if (initialized) {
+        console.log('✅ Legacy服务初始化成功')
+      } else {
+        console.error('❌ Legacy服务初始化失败')
+      }
+    } catch (error) {
+      console.error('❌ Legacy服务启动失败:', error)
+    }
   })
 
   // 当窗口关闭时
   mainWindow.on('closed', () => {
+    // 清理Legacy服务
+    if (legacyService) {
+      legacyService.cleanup()
+      legacyService = null
+    }
     mainWindow = null
   })
 
@@ -235,5 +257,8 @@ if (!gotTheLock) {
     }
   })
 }
+
+// 导出legacyService实例供外部访问
+global.legacyService = legacyService
 
 console.log('雅思AI作文评判助手启动完成')

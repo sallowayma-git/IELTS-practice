@@ -1,13 +1,17 @@
 const BaseLLMService = require('./base')
+const { buildScoringPrompt, buildGrammarPrompt } = require('../prompts/ielts-scoring-prompt')
+const IELTSScoringEngine = require('../scoringEngine')
 
 /**
  * Mock AI服务 - 用于开发测试
+ * 使用专业雅思评分提示词和评分引擎生成高质量反馈
  */
 class MockLLMService extends BaseLLMService {
   constructor(config) {
     super(config)
     this.responseTime = config.responseTime || 2000 // 模拟响应时间
     this.errorRate = config.errorRate || 0 // 错误率
+    this.scoringEngine = new IELTSScoringEngine()
   }
 
   async testConnection() {
@@ -27,9 +31,7 @@ class MockLLMService extends BaseLLMService {
       throw new Error('模拟AI服务错误')
     }
 
-    const content = params.content
-    const wordCount = this.estimateTokens(content)
-    const result = this.generateMockResult(content, wordCount)
+    const result = this.generateMockResult(params)
     const evaluationTime = Date.now() - startTime
 
     return {
@@ -40,8 +42,8 @@ class MockLLMService extends BaseLLMService {
         evaluationTime,
         tokenUsage: {
           input: this.estimateTokens(this.buildAssessmentPrompt(params)),
-          output: 800,
-          total: this.estimateTokens(this.buildAssessmentPrompt(params)) + 800
+          output: this.estimateTokens(JSON.stringify(result)),
+          total: this.estimateTokens(this.buildAssessmentPrompt(params)) + this.estimateTokens(JSON.stringify(result))
         },
         confidence: this.calculateConfidence(result)
       }
@@ -50,9 +52,7 @@ class MockLLMService extends BaseLLMService {
 
   async* assessEssayStream(params, onProgress) {
     const startTime = Date.now()
-    const content = params.content
-    const wordCount = this.estimateTokens(content)
-    const result = this.generateMockResult(content, wordCount)
+    const result = this.generateMockResult(params)
 
     // 模拟流式输出
     const stages = [
@@ -91,8 +91,8 @@ class MockLLMService extends BaseLLMService {
           evaluationTime,
           tokenUsage: {
             input: this.estimateTokens(this.buildAssessmentPrompt(params)),
-            output: 800,
-            total: this.estimateTokens(this.buildAssessmentPrompt(params)) + 800
+            output: this.estimateTokens(JSON.stringify(result)),
+            total: this.estimateTokens(this.buildAssessmentPrompt(params)) + this.estimateTokens(JSON.stringify(result))
           },
           confidence: this.calculateConfidence(result)
         }
@@ -117,55 +117,28 @@ class MockLLMService extends BaseLLMService {
     }
   }
 
-  generateMockResult(content, wordCount) {
-    // 基于内容生成模拟评分
-    let baseScore = 5.0
+  generateMockResult(params) {
+    // 使用专业评分引擎生成高质量评分
+    const result = this.scoringEngine.generateDetailedAssessment(params)
 
-    // 根据字数调整分数
-    if (wordCount >= 250) baseScore += 0.5
-    if (wordCount >= 300) baseScore += 0.5
-    if (wordCount >= 350) baseScore += 0.3
+    // 添加一些随机性，模拟真实AI的变化
+    const variance = 0.1
+    result.overall_score += (Math.random() - 0.5) * variance
+    result.overall_score = Math.max(1.0, Math.min(9.0, parseFloat(result.overall_score.toFixed(1))))
 
-    // 添加随机波动
-    const randomVariation = (Math.random() - 0.5) * 1.5
-    let overallScore = Math.max(4.0, Math.min(8.5, baseScore + randomVariation))
+    // 确保各项分数的一致性
+    const scores = [result.task_response.score, result.coherence.score, result.vocabulary.score, result.grammar.score]
+    scores.forEach(score => {
+      score += (Math.random() - 0.5) * variance * 0.5
+      score = Math.max(1.0, Math.min(9.0, parseFloat(score.toFixed(1))))
+    })
 
-    // 生成各维度分数
-    const taskResponseScore = Math.max(4.0, Math.min(9.0, overallScore + (Math.random() - 0.5)))
-    const coherenceScore = Math.max(4.0, Math.min(9.0, overallScore + (Math.random() - 0.5)))
-    const vocabularyScore = Math.max(4.0, Math.min(9.0, overallScore + (Math.random() - 0.5)))
-    const grammarScore = Math.max(4.0, Math.min(9.0, overallScore + (Math.random() - 0.5)))
+    result.task_response.score = scores[0]
+    result.coherence.score = scores[1]
+    result.vocabulary.score = scores[2]
+    result.grammar.score = scores[3]
 
-    // 确定等级
-    let level = '需要改进'
-    if (overallScore >= 7.0) level = '优秀水平'
-    else if (overallScore >= 6.0) level = '合格水平'
-    else if (overallScore >= 5.0) level = '基础水平'
-
-    return {
-      overall_score: parseFloat(overallScore.toFixed(1)),
-      level,
-      description: this.generateDescription(overallScore),
-      task_response: {
-        score: parseFloat(taskResponseScore.toFixed(1)),
-        feedback: this.generateCriteriaFeedback('task_response', taskResponseScore)
-      },
-      coherence: {
-        score: parseFloat(coherenceScore.toFixed(1)),
-        feedback: this.generateCriteriaFeedback('coherence', coherenceScore)
-      },
-      vocabulary: {
-        score: parseFloat(vocabularyScore.toFixed(1)),
-        feedback: this.generateCriteriaFeedback('vocabulary', vocabularyScore)
-      },
-      grammar: {
-        score: parseFloat(grammarScore.toFixed(1)),
-        feedback: this.generateCriteriaFeedback('grammar', grammarScore)
-      },
-      strengths: this.generateStrengths(overallScore),
-      improvements: this.generateImprovements(overallScore),
-      suggestions: this.generateSuggestions(overallScore)
-    }
+    return result
   }
 
   generateDescription(score) {
@@ -301,6 +274,26 @@ class MockLLMService extends BaseLLMService {
 
   delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms))
+  }
+
+  // 构建专业雅思评分提示词
+  buildAssessmentPrompt(params) {
+    const { content, topic, type = 'Task 2' } = params
+    const wordCount = this.estimateTokens(content)
+    const taskType = type === 'Task 1' ? 'Task 1 (Academic)' : 'Task 2 (Academic)'
+
+    return buildScoringPrompt(
+      content,
+      taskType,
+      topic?.title || 'IELTS Writing Task',
+      wordCount,
+      6.0 // 目标分数
+    )
+  }
+
+  // 构建语法检查提示词
+  buildGrammarPrompt(text) {
+    return buildGrammarPrompt(text)
   }
 }
 

@@ -30,6 +30,115 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 移除监听器
   removeAllListeners: (channel) => {
     ipcRenderer.removeAllListeners(channel)
+  },
+
+  // Legacy系统API
+  legacy: {
+    // BrowserView管理
+    createBrowserView: (options) => ipcRenderer.invoke('legacy:create-browser-view', options),
+    activateBrowserView: (viewId) => ipcRenderer.invoke('legacy:activate-browser-view', viewId),
+    deactivateBrowserView: (viewId) => ipcRenderer.invoke('legacy:deactivate-browser-view', viewId),
+    destroyBrowserView: (viewId) => ipcRenderer.invoke('legacy:destroy-browser-view', viewId),
+    resizeBrowserView: (viewId, bounds) => ipcRenderer.invoke('legacy:resize-browser-view', viewId, bounds),
+    reloadBrowserView: (viewId) => ipcRenderer.invoke('legacy:reload-browser-view', viewId),
+    executeJavaScript: (viewId, code) => ipcRenderer.invoke('legacy:execute-javascript', viewId, code),
+
+    // 资源管理器方法调用
+    resourceManager: {
+      initialize: () => ipcRenderer.invoke('legacy:resource-manager-initialize'),
+      checkLegacySystem: () => ipcRenderer.invoke('legacy:resource-manager-check-legacy-system'),
+      getModuleUrl: (moduleName) => ipcRenderer.invoke('legacy:resource-manager-get-module-url', moduleName),
+      getAvailableModules: () => ipcRenderer.invoke('legacy:resource-manager-get-available-modules'),
+      getModuleInfo: (moduleName) => ipcRenderer.invoke('legacy:resource-manager-get-module-info', moduleName),
+      hasModule: (moduleName) => ipcRenderer.invoke('legacy:resource-manager-has-module', moduleName),
+      getResourcePath: (relativePath) => ipcRenderer.invoke('legacy:resource-manager-get-resource-path', relativePath),
+      hasResource: (relativePath) => ipcRenderer.invoke('legacy:resource-manager-has-resource', relativePath)
+    },
+
+    // 通信
+    sendMessage: (viewId, message) => ipcRenderer.invoke('legacy:send-message', viewId, message),
+
+    // 存储操作
+    storage: {
+      get: (key) => ipcRenderer.invoke('legacy:storage-get', key),
+      set: (key, value) => ipcRenderer.invoke('legacy:storage-set', key, value),
+      remove: (key) => ipcRenderer.invoke('legacy:storage-remove', key),
+      clear: () => ipcRenderer.invoke('legacy:storage-clear')
+    },
+
+    // 文件系统操作
+    fs: {
+      readFile: (filePath) => ipcRenderer.invoke('legacy:fs-readFile', filePath),
+      writeFile: (filePath, data) => ipcRenderer.invoke('legacy:fs-writeFile', filePath, data),
+      exists: (filePath) => ipcRenderer.invoke('legacy:fs-exists', filePath),
+      allowedPaths: () => ipcRenderer.invoke('legacy:fs-allowedPaths')
+    },
+
+    // 网络请求
+    fetch: (url, options) => ipcRenderer.invoke('legacy:fetch', url, options),
+
+    // 窗口控制
+    window: {
+      minimize: () => ipcRenderer.invoke('legacy:window-minimize'),
+      maximize: () => ipcRenderer.invoke('legacy:window-maximize'),
+      close: () => ipcRenderer.invoke('legacy:window-close'),
+      setTitle: (title) => ipcRenderer.invoke('legacy:window-setTitle', title)
+    },
+
+    // 开发者工具
+    dev: {
+      openDevTools: () => ipcRenderer.invoke('legacy:dev-openDevTools')
+    },
+
+    // 事件监听
+    on: (channel, callback) => {
+      const validChannels = [
+        'legacy:command',
+        'legacy:navigate',
+        'legacy:reload',
+        'legacy:config',
+        'legacy:event',
+        'legacy:browserview-event'
+      ]
+      if (validChannels.includes(channel)) {
+        ipcRenderer.on(channel, callback)
+      }
+    },
+
+    // BrowserView事件监听
+    onBrowserViewEvent: (eventType, callback) => {
+      ipcRenderer.on(`legacy:browserview-${eventType}`, callback)
+    },
+
+    removeBrowserViewEventListener: (eventType, callback) => {
+      ipcRenderer.removeListener(`legacy:browserview-${eventType}`, callback)
+    },
+
+    // 发送事件
+    send: (channel, data) => {
+      const validChannels = [
+        'legacy:ready',
+        'legacy:module-loaded',
+        'legacy:event',
+        'legacy:command',
+        'legacy:error',
+        'legacy:log'
+      ]
+      if (validChannels.includes(channel)) {
+        ipcRenderer.send(channel, data)
+      }
+    },
+
+    // 一次性监听
+    once: (channel, callback) => {
+      const validChannels = [
+        'legacy:ready',
+        'legacy:destroy'
+      ]
+      if (validChannels.includes(channel)) {
+        ipcRenderer.once(channel, callback)
+      }
+    }
   }
 })
 

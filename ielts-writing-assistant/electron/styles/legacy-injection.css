@@ -1,0 +1,502 @@
+/**
+ * Legacy系统注入样式
+ * 为Legacy系统提供现代化的UI样式和集成效果
+ */
+
+/* 全局样式重置和基础设置 */
+.legacy-injection-root {
+  --legacy-injection-primary: #409eff;
+  --legacy-injection-success: #67c23a;
+  --legacy-injection-warning: #e6a23c;
+  --legacy-injection-danger: #f56c6c;
+  --legacy-injection-info: #909399;
+
+  --legacy-injection-bg: #ffffff;
+  --legacy-injection-text: #303133;
+  --legacy-injection-text-secondary: #606266;
+  --legacy-injection-border: #dcdfe6;
+  --legacy-injection-border-light: #e4e7ed;
+  --legacy-injection-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  line-height: 1.6;
+  color: var(--legacy-injection-text);
+}
+
+/* 页面容器适配 */
+.legacy-injection-root body {
+  margin: 0;
+  padding: 0;
+  background: var(--legacy-injection-bg);
+}
+
+/* 导航栏样式增强 */
+.legacy-injection-root .legacy-header {
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  border-bottom: 1px solid var(--legacy-injection-border-light);
+  box-shadow: var(--legacy-injection-shadow);
+  padding: 1rem 2rem;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(8px);
+}
+
+.legacy-injection-root .legacy-header h1 {
+  color: var(--legacy-injection-text);
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.legacy-injection-root .legacy-nav {
+  display: flex;
+  gap: 2rem;
+  margin-top: 1rem;
+}
+
+.legacy-injection-root .nav-link {
+  text-decoration: none;
+  color: var(--legacy-injection-text-secondary);
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.legacy-injection-root .nav-link::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 100%;
+  background: linear-gradient(90deg, var(--legacy-injection-primary), #66b1ff);
+  transition: width 0.3s ease;
+  z-index: -1;
+}
+
+.legacy-injection-root .nav-link:hover {
+  color: var(--legacy-injection-primary);
+  transform: translateY(-1px);
+}
+
+.legacy-injection-root .nav-link:hover::before {
+  width: 100%;
+}
+
+.legacy-injection-root .nav-link.active {
+  color: white;
+  background: linear-gradient(135deg, var(--legacy-injection-primary), #66b1ff);
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3);
+}
+
+/* 内容区域增强 */
+.legacy-injection-root #legacy-content {
+  background: var(--legacy-injection-bg);
+  border-radius: 12px;
+  padding: 2rem;
+  margin: 2rem;
+  box-shadow: var(--legacy-injection-shadow);
+  border: 1px solid var(--legacy-injection-border-light);
+  min-height: 400px;
+}
+
+/* 加载动画增强 */
+.legacy-injection-root .loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--legacy-injection-border-light);
+  border-top: 4px solid var(--legacy-injection-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 1rem;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.legacy-injection-root .loading-text {
+  color: var(--legacy-injection-text-secondary);
+  font-size: 1rem;
+  text-align: center;
+}
+
+/* 错误消息样式 */
+.legacy-injection-root .error-message {
+  background: linear-gradient(135deg, #fef0f0 0%, #fde2e2 100%);
+  border: 1px solid #f5c6cb;
+  border-radius: 8px;
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--legacy-injection-danger);
+  margin: 2rem auto;
+  max-width: 400px;
+}
+
+.legacy-injection-root .error-message h4 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.1rem;
+  color: #c53030;
+}
+
+.legacy-injection-root .error-message p {
+  margin: 0.5rem 0;
+  color: #742a2a;
+}
+
+.legacy-injection-root .error-message button {
+  background: var(--legacy-injection-danger);
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  margin-top: 1rem;
+  transition: all 0.3s ease;
+}
+
+.legacy-injection-root .error-message button:hover {
+  background: #e53e3e;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(245, 108, 108, 0.3);
+}
+
+/* 模块容器样式 */
+.legacy-injection-root .module-content {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.legacy-injection-root .module-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.legacy-injection-root .module-header h1 {
+  color: var(--legacy-injection-text);
+  font-size: 2rem;
+  margin-bottom: 1rem;
+  background: linear-gradient(135deg, var(--legacy-injection-primary), #66b1ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.legacy-injection-root .module-header p {
+  color: var(--legacy-injection-text-secondary);
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.legacy-injection-root .module-features {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 2rem;
+}
+
+.legacy-injection-root .feature-tag {
+  background: linear-gradient(135deg, #ecf5ff 0%, #e1f3ff 100%);
+  color: var(--legacy-injection-primary);
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border: 1px solid #b3d8ff;
+  transition: all 0.3s ease;
+}
+
+.legacy-injection-root .feature-tag:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.2);
+}
+
+/* 练习容器样式 */
+.legacy-injection-root .exercise-container {
+  background: var(--legacy-injection-bg);
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: var(--legacy-injection-shadow);
+  border: 1px solid var(--legacy-injection-border-light);
+  margin-top: 2rem;
+}
+
+.legacy-injection-root .practice-controls {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin: 2rem 0;
+  flex-wrap: wrap;
+}
+
+.legacy-injection-root .control-btn {
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, var(--legacy-injection-primary), #66b1ff);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.legacy-injection-root .control-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.legacy-injection-root .control-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(64, 158, 255, 0.4);
+}
+
+.legacy-injection-root .control-btn:hover::before {
+  left: 100%;
+}
+
+.legacy-injection-root .control-btn:disabled {
+  background: linear-gradient(135deg, #c0c4cc, #d3d4d6);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .legacy-injection-root .legacy-header {
+    padding: 1rem;
+  }
+
+  .legacy-injection-root .legacy-header h1 {
+    font-size: 1.3rem;
+  }
+
+  .legacy-injection-root .legacy-nav {
+    gap: 1rem;
+    justify-content: center;
+  }
+
+  .legacy-injection-root .nav-link {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.9rem;
+  }
+
+  .legacy-injection-root #legacy-content {
+    margin: 1rem;
+    padding: 1.5rem;
+  }
+
+  .legacy-injection-root .module-header h1 {
+    font-size: 1.6rem;
+  }
+
+  .legacy-injection-root .practice-controls {
+    gap: 0.5rem;
+  }
+
+  .legacy-injection-root .control-btn {
+    padding: 0.6rem 1.2rem;
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .legacy-injection-root .legacy-header {
+    padding: 0.75rem;
+  }
+
+  .legacy-injection-root .legacy-nav {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .legacy-injection-root #legacy-content {
+    margin: 0.5rem;
+    padding: 1rem;
+  }
+
+  .legacy-injection-root .module-header h1 {
+    font-size: 1.4rem;
+  }
+
+  .legacy-injection-root .practice-controls {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .legacy-injection-root .control-btn {
+    width: 100%;
+    max-width: 200px;
+  }
+}
+
+/* 深色模式支持 */
+@media (prefers-color-scheme: dark) {
+  .legacy-injection-root {
+    --legacy-injection-bg: #1a1a1a;
+    --legacy-injection-text: #e5e5e5;
+    --legacy-injection-text-secondary: #a0a0a0;
+    --legacy-injection-border: #404040;
+    --legacy-injection-border-light: #333333;
+    --legacy-injection-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .legacy-injection-root .legacy-header {
+    background: linear-gradient(135deg, #2a2a2a 0%, #1f1f1f 100%);
+  }
+
+  .legacy-injection-root #legacy-content {
+    background: #1a1a1a;
+  }
+
+  .legacy-injection-root .exercise-container {
+    background: #1a1a1a;
+  }
+
+  .legacy-injection-root .feature-tag {
+    background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%);
+    border-color: #2c5282;
+  }
+
+  .legacy-injection-root .error-message {
+    background: linear-gradient(135deg, #4a2c2a 0%, #5c3737 100%);
+    border-color: #5c3737;
+  }
+}
+
+/* 高对比度模式支持 */
+@media (prefers-contrast: high) {
+  .legacy-injection-root {
+    --legacy-injection-border: #000000;
+    --legacy-injection-text: #000000;
+    --legacy-injection-bg: #ffffff;
+  }
+
+  .legacy-injection-root .legacy-header,
+  .legacy-injection-root #legacy-content,
+  .legacy-injection-root .exercise-container {
+    border: 2px solid var(--legacy-injection-border);
+  }
+}
+
+/* 动画性能优化 */
+@media (prefers-reduced-motion: reduce) {
+  .legacy-injection-root * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* 打印样式 */
+@media print {
+  .legacy-injection-root .legacy-header,
+  .legacy-injection-root .practice-controls,
+  .legacy-injection-root .loading-spinner {
+    display: none !important;
+  }
+
+  .legacy-injection-root #legacy-content {
+    box-shadow: none;
+    border: 1px solid #ccc;
+    margin: 0;
+    padding: 1rem;
+  }
+}
+
+/* 焦点样式 */
+.legacy-injection-root button:focus,
+.legacy-injection-root .nav-link:focus {
+  outline: 2px solid var(--legacy-injection-primary);
+  outline-offset: 2px;
+}
+
+/* 选择文本样式 */
+.legacy-injection-root ::selection {
+  background: rgba(64, 158, 255, 0.2);
+}
+
+/* 滚动条样式 */
+.legacy-injection-root ::-webkit-scrollbar {
+  width: 8px;
+}
+
+.legacy-injection-root ::-webkit-scrollbar-track {
+  background: var(--legacy-injection-border-light);
+  border-radius: 4px;
+}
+
+.legacy-injection-root ::-webkit-scrollbar-thumb {
+  background: var(--legacy-injection-text-secondary);
+  border-radius: 4px;
+}
+
+.legacy-injection-root ::-webkit-scrollbar-thumb:hover {
+  background: var(--legacy-injection-text);
+}
+
+/* 工具提示样式 */
+.legacy-injection-root [title] {
+  position: relative;
+}
+
+.legacy-injection-root [title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+/* 特殊元素样式 */
+.legacy-injection-root .highlight {
+  background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+  border-left: 4px solid var(--legacy-injection-warning);
+  padding: 1rem;
+  margin: 1rem 0;
+  border-radius: 0 8px 8px 0;
+}
+
+.legacy-injection-root .success-box {
+  background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+  border-left: 4px solid var(--legacy-injection-success);
+  padding: 1rem;
+  margin: 1rem 0;
+  border-radius: 0 8px 8px 0;
+  color: #155724;
+}
+
+.legacy-injection-root .info-box {
+  background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
+  border-left: 4px solid var(--legacy-injection-info);
+  padding: 1rem;
+  margin: 1rem 0;
+  border-radius: 0 8px 8px 0;
+  color: #0c5460;
+}
