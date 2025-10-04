@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, Menu, shell } = require('electron')
 const path = require('path')
+const { getIconPath } = require('./utils')
 const isDev = process.env.NODE_ENV === 'development'
 
 // 保持对窗口对象的全局引用
@@ -18,8 +19,8 @@ function createWindow() {
       enableRemoteModule: false,
       preload: path.join(__dirname, 'preload.js')
     },
-    icon: path.join(__dirname, '../assets/icon.png'),
-    titleBarStyle: 'default', // macOS风格标题栏
+    icon: getIconPath(), // 使用跨平台图标解决方案
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     show: false // 先不显示，等加载完成后再显示
   })
 

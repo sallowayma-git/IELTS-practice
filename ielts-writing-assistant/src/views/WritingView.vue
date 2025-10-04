@@ -22,10 +22,13 @@
                 <el-button type="text" @click="changeTopic">换一题</el-button>
               </div>
             </template>
-            <div class="topic-content">
+            <div class="topic-content" v-if="currentTopic">
               <h3>{{ currentTopic.title }}</h3>
               <p class="topic-type">{{ currentTopic.type }}</p>
               <div class="topic-description" v-html="currentTopic.content"></div>
+            </div>
+            <div v-else class="topic-loading">
+              <el-skeleton :rows="3" animated />
             </div>
           </el-card>
         </div>
@@ -36,12 +39,12 @@
               <div class="card-header">
                 <span>写作区域</span>
                 <div class="word-count">
-                  字数: {{ wordCount }} / {{ currentTopic.minWords }}+
+                  字数: {{ wordCount }} / {{ currentTopic?.min_words || 250 }}+
                 </div>
               </div>
             </template>
             <div class="editor-container">
-              <div ref="editorRef" class="editor"></div>
+              <editor-content :editor="editor" class="editor" />
             </div>
           </el-card>
         </div>
@@ -56,7 +59,7 @@
             </el-col>
             <el-col :span="6">
               <el-button @click="showTimer" :icon="Timer">
-                {{ timerDisplay }}
+                {{ formattedTime }}
               </el-button>
             </el-col>
             <el-col :span="6">
@@ -70,104 +73,99 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowLeft, Download, Delete, Timer, QuestionFilled } from '@element-plus/icons-vue'
-import { useEditor, EditorContent } from '@tiptap/vue-3'
+import { useEditor } from '@tiptap/vue-3'
+import { EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import { ElMessage } from 'element-plus'
+import { useWritingStore } from '@/stores/writing'
+import { useAssessmentStore } from '@/stores/assessment'
+import { storeToRefs } from 'pinia'
 
 const router = useRouter()
+const writingStore = useWritingStore()
+const assessmentStore = useAssessmentStore()
 
-const submitting = ref(false)
-const wordCount = ref(0)
-const timerSeconds = ref(0)
-const timerInterval = ref(null)
-const editorRef = ref(null)
+// 从store获取响应式状态
+const {
+  isSubmitting: submitting,
+  wordCount,
+  timerSeconds,
+  currentTopic,
+  formattedTime,
+  wordCountValid,
+  writingContent,
+  isTimerRunning
+} = storeToRefs(writingStore)
 
-const currentTopic = ref({
-  id: 1,
-  title: '环境问题',
-  type: 'Task 2 - 议论文',
-  content: `
-    <p><strong>题目：</strong></p>
-    <p>Environmental problems are too big for individual countries and individual people to address. In other words, we have reached the stage where the only way to protect the environment is at an international level.</p>
-    <p><strong>To what extent do you agree or disagree with this statement?</strong></p>
-    <p><strong>要求：</strong>至少250词</p>
-  `,
-  minWords: 250,
-  timeLimit: 40 * 60 // 40分钟
-})
+// 监听编辑器内容变化
+const handleEditorUpdate = ({ editor }) => {
+  const content = editor.getHTML()
+  writingStore.updateContent(content)
+}
 
-const timerDisplay = computed(() => {
-  const minutes = Math.floor(timerSeconds.value / 60)
-  const seconds = timerSeconds.value % 60
-  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
-})
-
+// Tiptap编辑器
 const editor = useEditor({
   content: '',
   extensions: [StarterKit],
-  onUpdate: ({ editor }) => {
-    const text = editor.getText()
-    wordCount.value = text.length
-  }
+  onUpdate: handleEditorUpdate
 })
 
 const goBack = () => {
   router.push('/')
 }
 
-const changeTopic = () => {
-  // TODO: 实现换题功能
-  ElMessage.info('换题功能开发中...')
+const changeTopic = async () => {
+  try {
+    await writingStore.getRandomTopic()
+    ElMessage.success('题目已更换')
+  } catch (error) {
+    ElMessage.error('换题失败')
+  }
 }
 
 const submitWriting = async () => {
-  if (wordCount.value < currentTopic.value.minWords) {
-    ElMessage.warning(`字数不足，最少需要${currentTopic.value.minWords}词`)
+  if (!wordCountValid.value) {
+    ElMessage.warning(`字数不足，最少需要${currentTopic.value?.min_words || 250}词`)
     return
   }
 
-  submitting.value = true
-
   try {
-    // TODO: 提交作文到后端进行AI评判
-    const content = editor.value?.getHTML() || ''
-
-    // 模拟提交过程
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    const result = await writingStore.submitWriting()
 
     // 跳转到评估结果页面
-    router.push(`/assessment/${Date.now()}`)
+    router.push(`/assessment/${result.id}`)
   } catch (error) {
-    ElMessage.error('提交失败，请重试')
-  } finally {
-    submitting.value = false
+    ElMessage.error(error.message || '提交失败，请重试')
   }
 }
 
-const saveDraft = () => {
-  const content = editor.value?.getHTML() || ''
-  // TODO: 保存草稿到本地存储
-  localStorage.setItem('writing-draft', content)
-  ElMessage.success('草稿已保存')
+const saveDraft = async () => {
+  try {
+    await writingStore.saveDraft()
+    ElMessage.success('草稿已保存')
+  } catch (error) {
+    ElMessage.error('保存草稿失败')
+  }
 }
 
 const clearContent = () => {
-  editor.value?.commands.clearContent()
-  wordCount.value = 0
+  // 先清空编辑器
+  if (editor.value) {
+    editor.value.commands.clearContent()
+  }
+  // 再重置store状态
+  writingStore.resetWriting()
 }
 
 const showTimer = () => {
-  if (timerInterval.value) {
-    clearInterval(timerInterval.value)
-    timerInterval.value = null
+  if (isTimerRunning.value) {
+    writingStore.stopTimer()
     ElMessage.info('计时器已停止')
   } else {
-    timerInterval.value = setInterval(() => {
-      timerSeconds.value++
-    }, 1000)
+    writingStore.startTimer()
     ElMessage.info('计时器已启动')
   }
 }
@@ -176,17 +174,43 @@ const showTips = () => {
   ElMessage.info('写作提示功能开发中...')
 }
 
-const loadDraft = () => {
-  const draft = localStorage.getItem('writing-draft')
-  if (draft && editor.value) {
-    editor.value.commands.setContent(draft)
-    const text = editor.value.getText()
-    wordCount.value = text.length
+// 监听writingContent变化，同步到编辑器
+watch(writingContent, (newContent) => {
+  if (editor.value && newContent !== editor.value.getHTML()) {
+    editor.value.commands.setContent(newContent)
   }
-}
+})
 
-onMounted(() => {
-  loadDraft()
+// 监听currentTopic变化，换题时清空编辑器
+watch(currentTopic, (newTopic, oldTopic) => {
+  if (newTopic && oldTopic && newTopic.id !== oldTopic.id && editor.value) {
+    // 换题时清空编辑器内容
+    editor.value.commands.clearContent()
+  }
+})
+
+onMounted(async () => {
+  // 加载草稿
+  await writingStore.loadDraft()
+
+  // 如果没有题目，获取一个随机题目
+  if (!currentTopic.value) {
+    try {
+      await writingStore.getRandomTopic()
+    } catch (error) {
+      console.error('获取题目失败:', error)
+    }
+  }
+
+  // 如果有草稿内容，设置到编辑器
+  if (writingContent.value && editor.value) {
+    editor.value.commands.setContent(writingContent.value)
+  }
+})
+
+// 组件卸载时清理
+onUnmounted(() => {
+  writingStore.cleanup()
 })
 </script>
 
@@ -281,5 +305,9 @@ onMounted(() => {
   padding: 1rem;
   border-radius: 8px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+}
+
+.topic-loading {
+  padding: 1rem;
 }
 </style>

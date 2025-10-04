@@ -23,13 +23,16 @@
     "@tiptap/starter-kit": "^2.1.0",
     "@tiptap/extension-highlight": "^2.1.0",
     "@tiptap/extension-underline": "^2.1.0",
+    "@tiptap/vue-3": "^2.1.0",
     "echarts": "^5.4.0",
     "vue-echarts": "^6.6.0",
     "express": "^4.18.0",
     "better-sqlite3": "^9.2.0",
     "openai": "^4.20.0",
     "axios": "^1.6.0",
-    "electron-store": "^8.1.0"
+    "electron-store": "^8.1.0",
+    "uuid": "^9.0.0",
+    "cors": "^2.8.5"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.0",
@@ -57,13 +60,16 @@
       "node_modules/**/*"
     ],
     "mac": {
-      "category": "public.app-category.education"
+      "category": "public.app-category.education",
+      "icon": "assets/icon.icns"
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "assets/icon.ico"
     },
     "linux": {
-      "target": "AppImage"
+      "target": "AppImage",
+      "icon": "assets/icon.png"
     }
   },
   "keywords": ["ielts", "writing", "ai", "assessment", "electron", "vue"],

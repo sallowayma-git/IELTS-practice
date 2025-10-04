@@ -94,16 +94,6 @@ app.use((req, res, next) => {
   next()
 })
 
-// 错误处理中间件
-app.use((err, req, res, next) => {
-  console.error('服务器错误:', err)
-  res.status(500).json({
-    success: false,
-    message: '服务器内部错误',
-    error: process.env.NODE_ENV === 'development' ? err.message : undefined
-  })
-})
-
 // 数据库中间件 - 将数据库实例附加到请求对象
 app.use((req, res, next) => {
   req.db = db
@@ -115,6 +105,16 @@ app.use('/api/writing', writingRoutes)
 app.use('/api/assessment', assessmentRoutes)
 app.use('/api/history', historyRoutes)
 app.use('/api/settings', settingsRoutes)
+
+// 错误处理中间件 - 必须在所有路由之后
+app.use((err, req, res, next) => {
+  console.error('服务器错误:', err)
+  res.status(500).json({
+    success: false,
+    message: '服务器内部错误',
+    error: process.env.NODE_ENV === 'development' ? err.message : undefined
+  })
+})
 
 // 健康检查
 app.get('/api/health', (req, res) => {
