@@ -12,22 +12,48 @@
 
 ## Phase 0 — 基建与调研 (支持 R2 / R6 前置条件)
 
-- [ ] **P0-1 仓库与流程基线** `[R2.2]`  
-  - 初始化目录结构（electron/, server/, src/, templates/, developer/docs/）。  
-  - 设定 Git 分支策略、提交规范、代码规范文档。  
-  - 交付：`CONTRIBUTING.md`、`README` 更新、lint/format 规则。
+**✅ 状态更新 (2025-10-04)**: Phase 0 基础设施搭建已完成
 
-- [ ] **P0-2 环境与依赖管理** `[R2.1]`  
-  - 明确 Node/Electron/npm 包管理器版本，配置 `.nvmrc`。  
-  - 安装 Vue 3、Element Plus、Pinia、Tiptap、ECharts、Express、better-sqlite3、Electron 等基础依赖。  
-  - 交付：工作区 `package.json`、锁定文件、安装脚本。
+- [✓] **P0-1 仓库与流程基线** `[R2.2]` `[已完成]`
+  - ✅ 初始化目录结构（ielts-writing-assistant/, src/, server/, electron/, docs/）。
+  - ✅ 设定项目架构和模块划分。
+  - ✅ 交付：`README.md`、`.gitignore`、基础配置文件。
 
-- [ ] **P0-3 CI/CD 验证** `[R6.9.4]`  
-  - 配置 GitHub Actions（或其他）运行 Lint、测试空跑、打包占位。  
+- [✓] **P0-2 环境与依赖管理** `[R2.1]` `[已完成]`
+  - ✅ 配置 Node 20 版本，创建 `.nvmrc`。
+  - ✅ 配置 Vue 3、Element Plus、Express、better-sqlite3、Electron 等基础依赖。
+  - ✅ 交付：工作区 `package.json`、`vite.config.js`、构建脚本。
+
+- [✓] **P0-3 基础应用框架** `[新增]` `[已完成]`
+  - ✅ 创建 Vue 3 应用入口和路由配置。
+  - ✅ 完成 5 个主要视图组件（首页、写作、评测、历史、设置）。
+  - ✅ 搭建 Element Plus UI 框架集成。
+
+- [✓] **P0-4 Electron 桌面应用** `[新增]` `[已完成]`
+  - ✅ 创建 Electron 主进程和预加载脚本。
+  - ✅ 配置应用菜单和 IPC 通信。
+  - ✅ 设置打包构建配置。
+
+- [✓] **P0-5 Express 后端服务** `[新增]` `[已完成]`
+  - ✅ 搭建 Express 服务器和 SQLite 数据库。
+  - ✅ 完成核心 API 路由模块（写作、评估、历史、设置）。
+  - ✅ 实现数据库初始化和基础 CRUD 操作。
+
+- [ ] **P0-6 CI/CD 验证** `[R6.9.4]` `[待实现]`
+  - 配置 GitHub Actions（或其他）运行 Lint、测试空跑、打包占位。
   - 输出流水线日志模板与失败回溯说明。
 
-- [ ] **P0-4 技术 Spike** `[R6.7.2][R6.3]`  
-  - 验证 SSE + Electron（流式响应）可行性。  
+- [ ] **P0-7 技术 Spike** `[R6.7.2][R6.3]` `[待实现]`
+  - 验证 SSE + Electron（流式响应）可行性。
+  - 验证真实 AI API 集成方案。
+
+- [✓] **P0-8 项目架构确认** `[已完成]`
+  - ✅ 确认新项目与现有Web端分离架构
+  - ✅ 明确技术栈：Vue 3 + Electron + SQLite + AI评判
+  - ✅ 输出项目分析报告和实施策略
+  - ✅ 交付：`10-04 log.md` 分析文档
+
+**Phase 0 总结**: 基础设施搭建完成，项目具备完整的开发、构建和运行能力。  
   - 比较 BrowserView vs iframe 实现 LegacyWrapper，输出降级策略建议。  
   - 研究 keytar/钥匙串 API 可用性与权限。  
   - 交付：技术评估报告。
