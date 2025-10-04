@@ -34,6 +34,10 @@
                   <el-icon><Database /></el-icon>
                   <span>数据管理</span>
                 </el-menu-item>
+                <el-menu-item index="questionbank">
+                  <el-icon><Reading /></el-icon>
+                  <span>题库管理</span>
+                </el-menu-item>
                 <el-menu-item index="about">
                   <el-icon><InfoFilled /></el-icon>
                   <span>关于</span>
@@ -183,6 +187,11 @@
               </el-space>
             </div>
 
+            <!-- 题库管理 -->
+            <div v-show="activeMenu === 'questionbank'" class="setting-content">
+              <QuestionBankManager />
+            </div>
+
             <!-- 关于 -->
             <div v-show="activeMenu === 'about'" class="setting-content">
               <el-card>
@@ -237,11 +246,12 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  ArrowLeft, Setting, Magic, EditPen, Database, InfoFilled,
+  ArrowLeft, Setting, Magic, EditPen, Database, InfoFilled, Reading,
   Download, Upload, FolderOpened, Delete, Warning
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import AIConfigDialog from '@/components/AIConfigDialog.vue'
+import QuestionBankManager from '@/components/QuestionBankManager.vue'
 
 const router = useRouter()
 

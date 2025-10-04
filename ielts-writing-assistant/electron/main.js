@@ -3,12 +3,15 @@ const path = require('path')
 const { getIconPath } = require('./utils')
 const isDev = process.env.NODE_ENV === 'development'
 
-// 导入Legacy服务
+// 导入服务
 const LegacyService = require('./services/LegacyService')
+const QuestionBankService = require('./services/QuestionBankService')
+const QuestionBankIPC = require('./services/QuestionBankIPC')
 
 // 保持对窗口对象的全局引用
 let mainWindow
 let legacyService
+let questionBankService
 
 function createWindow() {
   // 创建浏览器窗口
@@ -45,14 +48,31 @@ function createWindow() {
     // 初始化Legacy服务
     try {
       legacyService = new LegacyService()
-      const initialized = await legacyService.initialize(mainWindow)
-      if (initialized) {
+      const legacyInitialized = await legacyService.initialize(mainWindow)
+      if (legacyInitialized) {
         console.log('✅ Legacy服务初始化成功')
       } else {
         console.error('❌ Legacy服务初始化失败')
       }
     } catch (error) {
       console.error('❌ Legacy服务启动失败:', error)
+    }
+
+    // 初始化题库服务
+    try {
+      questionBankService = new QuestionBankService()
+      const questionBankInitialized = await questionBankService.initialize()
+      if (questionBankInitialized) {
+        console.log('✅ 题库服务初始化成功')
+
+        // 注册题库IPC处理器
+        const questionBankIPC = new QuestionBankIPC(questionBankService)
+        questionBankIPC.registerHandlers()
+      } else {
+        console.error('❌ 题库服务初始化失败')
+      }
+    } catch (error) {
+      console.error('❌ 题库服务启动失败:', error)
     }
   })
 
@@ -63,6 +83,13 @@ function createWindow() {
       legacyService.cleanup()
       legacyService = null
     }
+
+    // 清理题库服务
+    if (questionBankService) {
+      questionBankService.cleanup()
+      questionBankService = null
+    }
+
     mainWindow = null
   })
 

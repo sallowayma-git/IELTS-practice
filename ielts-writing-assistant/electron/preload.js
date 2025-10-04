@@ -139,6 +139,55 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.once(channel, callback)
       }
     }
+  },
+
+  // 题库管理API
+  questionBank: {
+    // 服务管理
+    initialize: () => ipcRenderer.invoke('questionbank:initialize'),
+    getStatus: () => ipcRenderer.invoke('questionbank:get-status'),
+
+    // 题库导入
+    selectDirectory: () => ipcRenderer.invoke('questionbank:select-directory'),
+    import: (selectedPath) => ipcRenderer.invoke('questionbank:import', selectedPath),
+
+    // 题目查询
+    getQuestions: (options) => ipcRenderer.invoke('questionbank:get-questions', options),
+    getQuestionById: (questionId) => ipcRenderer.invoke('questionbank:get-question-by-id', questionId),
+    getStatistics: () => ipcRenderer.invoke('questionbank:get-statistics'),
+
+    // 题库管理
+    refreshIndex: () => ipcRenderer.invoke('questionbank:refresh-index'),
+    validateIntegrity: () => ipcRenderer.invoke('questionbank:validate-integrity'),
+    createBackup: () => ipcRenderer.invoke('questionbank:create-backup'),
+
+    // 事件监听
+    addEventListener: (eventName, callback) => {
+      return ipcRenderer.invoke('questionbank:add-event-listener', eventName)
+    },
+    removeEventListener: (listenerId) => ipcRenderer.invoke('questionbank:remove-event-listener', listenerId),
+
+    // 事件订阅
+    on: (eventName, callback) => {
+      const validEvents = [
+        'service-initialized',
+        'service-error',
+        'import-started',
+        'import-progress',
+        'import-completed',
+        'import-failed',
+        'index-loaded',
+        'index-saved'
+      ]
+      if (validEvents.includes(eventName)) {
+        ipcRenderer.on(`questionbank:event-${eventName}`, callback)
+      }
+    },
+
+    // 移除事件监听
+    off: (eventName, callback) => {
+      ipcRenderer.removeListener(`questionbank:event-${eventName}`, callback)
+    }
   }
 })
 
