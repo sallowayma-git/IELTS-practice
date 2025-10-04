@@ -1,0 +1,8 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="256" height="256" rx="48" fill="#667eea"/>
+  <rect x="40" y="60" width="176" height="136" rx="8" fill="white" fill-opacity="0.9"/>
+  <path d="M64 88h128M64 112h128M64 136h96M64 160h112" stroke="#667eea" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="200" cy="200" r="24" fill="#4CAF50"/>
+  <path d="M192 200l8 8 16-16" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="128" y="36" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="24" font-weight="bold">IELTS</text>
+</svg>

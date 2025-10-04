@@ -19,7 +19,8 @@ function getIconPath() {
       iconCandidates.push('icon.png', 'icon.svg', 'icon.ico')
       break
     case 'darwin':
-      iconCandidates.push('icon.icns', 'icon.svg', 'icon.png')
+      // macOS优先使用icns，其次是png（支持较好），最后是svg（可能不支持）
+      iconCandidates.push('icon.icns', 'icon.png', 'icon.svg')
       break
     default:
       iconCandidates.push('icon.png', 'icon.svg')
