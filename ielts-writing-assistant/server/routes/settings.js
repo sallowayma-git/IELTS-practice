@@ -8,14 +8,20 @@ router.get('/', (req, res) => {
   try {
     const settings = {}
 
-    const stmt = req.db.prepare('SELECT key, value FROM user_settings')
+    const stmt = req.db.prepare('SELECT category, key, value FROM user_settings')
     const rows = stmt.all()
 
     rows.forEach(row => {
       try {
-        settings[row.key] = JSON.parse(row.value)
+        if (!settings[row.category]) {
+          settings[row.category] = {}
+        }
+        settings[row.category][row.key] = JSON.parse(row.value)
       } catch (error) {
-        settings[row.key] = row.value
+        if (!settings[row.category]) {
+          settings[row.category] = {}
+        }
+        settings[row.category][row.key] = row.value
       }
     })
 
@@ -84,11 +90,11 @@ router.put('/', (req, res) => {
         const fullKey = `${category}.${key}`
 
         const stmt = req.db.prepare(`
-          INSERT OR REPLACE INTO user_settings (key, value, updated_at)
-          VALUES (?, ?, CURRENT_TIMESTAMP)
+          INSERT OR REPLACE INTO user_settings (user_id, category, key, value, updated_at)
+          VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
         `)
 
-        stmt.run(fullKey, value)
+        stmt.run(null, category, key, value)
       })
     })
 

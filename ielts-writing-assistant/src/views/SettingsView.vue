@@ -258,9 +258,9 @@
                         </el-col>
                         <el-col :span="8">
                           <el-statistic
-                            title="状态"
+                            title="正常项目"
                             :value="getHealthyCount()"
-                            suffix="/ 4"
+                            :suffix="`/ ${diagnosticResults.length}`"
                           />
                         </el-col>
                         <el-col :span="8">
@@ -272,50 +272,48 @@
                       </el-row>
                     </div>
 
-                    <!-- 诊断详情 - 使用虚拟滚动 -->
+                    <!-- 诊断详情 - 使用普通滚动列表 -->
                     <div class="diagnostic-details-container">
-                      <el-virtual-list
-                        :data="diagnosticResults"
-                        :height="400"
-                        :item-size="120"
-                      >
-                        <template #default="{ item, index }">
-                          <div class="diagnostic-item">
-                            <el-card class="diagnostic-card" :class="`diagnostic-${item.type}`">
-                              <template #header>
-                                <div class="diagnostic-card-header">
-                                  <div class="diagnostic-icon">
-                                    <el-icon :size="24" :color="item.color">
-                                      <component :is="item.icon" />
-                                    </el-icon>
-                                  </div>
-                                  <div class="diagnostic-title">
-                                    <h4>{{ item.title }}</h4>
-                                    <p>{{ item.description }}</p>
-                                  </div>
-                                  <div class="diagnostic-status">
-                                    <el-tag :type="item.type === 'success' ? 'success' : item.type === 'warning' ? 'warning' : 'danger'">
-                                      {{ item.type === 'success' ? '正常' : item.type === 'warning' ? '警告' : '错误' }}
-                                    </el-tag>
-                                  </div>
+                      <div class="diagnostic-list">
+                        <div
+                          v-for="(item, index) in diagnosticResults"
+                          :key="index"
+                          class="diagnostic-item"
+                        >
+                          <el-card class="diagnostic-card" :class="`diagnostic-${item.type}`">
+                            <template #header>
+                              <div class="diagnostic-card-header">
+                                <div class="diagnostic-icon">
+                                  <el-icon :size="24" :color="getIconColor(item.type)">
+                                    <component :is="getIcon(item.type)" />
+                                  </el-icon>
                                 </div>
-                              </template>
-
-                              <div v-if="item.details" class="diagnostic-info">
-                                <el-descriptions :column="2" size="small" border>
-                                  <el-descriptions-item
-                                    v-for="(value, key) in item.details"
-                                    :key="key"
-                                    :label="key"
-                                  >
-                                    <span class="diagnostic-value">{{ formatDiagnosticValue(value) }}</span>
-                                  </el-descriptions-item>
-                                </el-descriptions>
+                                <div class="diagnostic-title">
+                                  <h4>{{ item.title }}</h4>
+                                  <p>{{ item.description }}</p>
+                                </div>
+                                <div class="diagnostic-status">
+                                  <el-tag :type="getTagType(item.type)">
+                                    {{ getStatusText(item.type) }}
+                                  </el-tag>
+                                </div>
                               </div>
-                            </el-card>
-                          </div>
-                        </template>
-                      </el-virtual-list>
+                            </template>
+
+                            <div v-if="item.details" class="diagnostic-info">
+                              <el-descriptions :column="2" size="small" border>
+                                <el-descriptions-item
+                                  v-for="(value, key) in item.details"
+                                  :key="key"
+                                  :label="key"
+                                >
+                                  <span class="diagnostic-value">{{ formatDiagnosticValue(value) }}</span>
+                                </el-descriptions-item>
+                              </el-descriptions>
+                            </div>
+                          </el-card>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -370,7 +368,7 @@
   </div>
 
   <!-- AI配置对话框 -->
-  <AIConfigDialog
+  <EnhancedAIConfigDialog
     v-model="showAIConfigDialog"
     @success="handleAIConfigSuccess"
   />
@@ -381,10 +379,11 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   ArrowLeft, Setting, Cpu, EditPen, DataBoard, InfoFilled, Reading, ArrowRight,
-  Download, Upload, FolderOpened, Delete, Warning, Monitor, Files, CircleClose
+  Download, Upload, FolderOpened, Delete, Warning, Monitor, Files, CircleCloseFilled,
+  SuccessFilled, WarningFilled
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import AIConfigDialog from '@/components/AIConfigDialog.vue'
+import EnhancedAIConfigDialog from '@/components/EnhancedAIConfigDialog.vue'
 // import QuestionBankManager from '@/components/QuestionBankManager.vue'
 // 题库管理组件暂时不启用
 
@@ -479,8 +478,8 @@ const diagnoseFrontend = async () => {
   const language = navigator.language
 
   diagnosticResults.value.push({
-    type: 'primary',
-    icon: 'Monitor',
+    type: 'success',
+    icon: Monitor,
     color: '#67c23a',
     title: '前端环境',
     description: '浏览器环境正常',
@@ -507,7 +506,7 @@ const diagnoseFrontend = async () => {
   } catch (error) {
     diagnosticResults.value.push({
       type: 'warning',
-      icon: 'Warning',
+      icon: WarningFilled,
       color: '#e6a23c',
       title: '本地存储',
       description: 'LocalStorage可能受限'
@@ -522,7 +521,7 @@ const diagnoseBackend = async () => {
 
     diagnosticResults.value.push({
       type: 'success',
-      icon: 'Setting',
+      icon: Setting,
       color: '#67c23a',
       title: '后端服务',
       description: '后端服务连接正常',
@@ -531,7 +530,7 @@ const diagnoseBackend = async () => {
   } catch (error) {
     diagnosticResults.value.push({
       type: 'error',
-      icon: 'CircleClose',
+      icon: CircleCloseFilled,
       color: '#f56c6c',
       title: '后端服务',
       description: '无法连接到后端服务',
@@ -547,7 +546,7 @@ const diagnoseAIServices = async () => {
 
     diagnosticResults.value.push({
       type: 'success',
-      icon: 'Cpu',
+      icon: Cpu,
       color: '#67c23a',
       title: 'AI服务',
       description: 'AI服务配置正常',
@@ -559,7 +558,7 @@ const diagnoseAIServices = async () => {
   } catch (error) {
     diagnosticResults.value.push({
       type: 'warning',
-      icon: 'Warning',
+      icon: WarningFilled,
       color: '#e6a23c',
       title: 'AI服务',
       description: 'AI服务配置可能有问题',
@@ -575,7 +574,7 @@ const diagnoseDatabase = async () => {
 
     diagnosticResults.value.push({
       type: 'success',
-      icon: 'FolderOpened',
+      icon: FolderOpened,
       color: '#67c23a',
       title: '数据库',
       description: '数据库连接正常',
@@ -587,7 +586,7 @@ const diagnoseDatabase = async () => {
   } catch (error) {
     diagnosticResults.value.push({
       type: 'error',
-      icon: 'CircleClose',
+      icon: CircleCloseFilled,
       color: '#f56c6c',
       title: '数据库',
       description: '数据库连接失败',
@@ -697,6 +696,62 @@ const loadSettings = async () => {
 // 获取健康检查数量
 const getHealthyCount = () => {
   return diagnosticResults.value.filter(item => item.type === 'success').length
+}
+
+// 获取诊断图标
+const getIcon = (type) => {
+  switch (type) {
+    case 'success':
+      return SuccessFilled
+    case 'warning':
+      return WarningFilled
+    case 'error':
+      return CircleCloseFilled
+    default:
+      return Monitor
+  }
+}
+
+// 获取图标颜色
+const getIconColor = (type) => {
+  switch (type) {
+    case 'success':
+      return '#67c23a'
+    case 'warning':
+      return '#e6a23c'
+    case 'error':
+      return '#f56c6c'
+    default:
+      return '#909399'
+  }
+}
+
+// 获取标签类型
+const getTagType = (type) => {
+  switch (type) {
+    case 'success':
+      return 'success'
+    case 'warning':
+      return 'warning'
+    case 'error':
+      return 'danger'
+    default:
+      return 'info'
+  }
+}
+
+// 获取状态文本
+const getStatusText = (type) => {
+  switch (type) {
+    case 'success':
+      return '正常'
+    case 'warning':
+      return '警告'
+    case 'error':
+      return '错误'
+    default:
+      return '未知'
+  }
 }
 
 // 格式化诊断值
@@ -1119,16 +1174,19 @@ onMounted(() => {
   color: var(--danger-color);
 }
 
-/* 虚拟滚动样式优化 */
-.el-virtual-list {
+/* 诊断列表样式优化 */
+.diagnostic-list {
+  max-height: 400px;
+  overflow-y: auto;
   border-radius: var(--radius-md);
+  border: 1px solid var(--border-light);
 }
 
-.el-virtual-list__item {
+.diagnostic-item {
   border-bottom: 1px solid var(--border-light);
 }
 
-.el-virtual-list__item:last-child {
+.diagnostic-item:last-child {
   border-bottom: none;
 }
 
