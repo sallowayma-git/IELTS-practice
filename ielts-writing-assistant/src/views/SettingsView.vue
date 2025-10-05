@@ -31,12 +31,16 @@
                   <span>写作设置</span>
                 </el-menu-item>
                 <el-menu-item index="data">
-                  <el-icon><Database /></el-icon>
+                  <el-icon><DataBoard /></el-icon>
                   <span>数据管理</span>
                 </el-menu-item>
                 <el-menu-item index="questionbank">
                   <el-icon><Reading /></el-icon>
                   <span>题库管理</span>
+                </el-menu-item>
+                <el-menu-item index="diagnostic">
+                  <el-icon><Monitor /></el-icon>
+                  <span>系统诊断</span>
                 </el-menu-item>
                 <el-menu-item index="about">
                   <el-icon><InfoFilled /></el-icon>
@@ -94,9 +98,7 @@
                 <template #header>
                   <div style="display: flex; justify-content: space-between; align-items: center;">
                     <span>AI配置</span>
-                    <el-button type="primary" @click="showAIConfigDialog = true">
-                      配置AI服务
-                    </el-button>
+                    <el-button type="primary" disabled>配置AI服务</el-button>
                   </div>
                 </template>
                 <div class="ai-status-display">
@@ -189,7 +191,55 @@
 
             <!-- 题库管理 -->
             <div v-show="activeMenu === 'questionbank'" class="setting-content">
-              <QuestionBankManager />
+              <!-- <QuestionBankManager /> -->
+              <div class="placeholder-panel">
+                <el-empty description="题库管理功能暂时不可用" />
+              </div>
+            </div>
+
+            <!-- 系统诊断 -->
+            <div v-show="activeMenu === 'diagnostic'" class="setting-content">
+              <el-card>
+                <template #header>
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>系统诊断</span>
+                    <el-button @click="runDiagnostic" :loading="diagnosing">
+                      <el-icon><Monitor /></el-icon>
+                      开始诊断
+                    </el-button>
+                  </div>
+                </template>
+
+                <div class="diagnostic-content">
+                  <el-empty v-if="!diagnosticResults.length" description="点击"开始诊断"查看系统状态" />
+
+                  <div v-else>
+                    <el-timeline>
+                      <el-timeline-item
+                        v-for="(item, index) in diagnosticResults"
+                        :key="index"
+                        :type="item.type"
+                        :icon="item.icon"
+                        :color="item.color"
+                      >
+                        <h4>{{ item.title }}</h4>
+                        <p>{{ item.description }}</p>
+                        <div v-if="item.details" class="diagnostic-details">
+                          <el-descriptions :column="2" size="small" border>
+                            <el-descriptions-item
+                              v-for="(value, key) in item.details"
+                              :key="key"
+                              :label="key"
+                            >
+                              {{ value }}
+                            </el-descriptions-item>
+                          </el-descriptions>
+                        </div>
+                      </el-timeline-item>
+                    </el-timeline>
+                  </div>
+                </div>
+              </el-card>
             </div>
 
             <!-- 关于 -->
@@ -236,28 +286,33 @@
   </div>
 
   <!-- AI配置对话框 -->
-  <AIConfigDialog
+  <!-- <AIConfigDialog
     v-model="showAIConfigDialog"
     @success="handleAIConfigSuccess"
-  />
+  /> -->
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  ArrowLeft, Setting, Magic, EditPen, Database, InfoFilled, Reading,
-  Download, Upload, FolderOpened, Delete, Warning
+  ArrowLeft, Setting, Magic, EditPen, DataBoard, InfoFilled, Reading,
+  Download, Upload, FolderOpened, Delete, Warning, Monitor
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import AIConfigDialog from '@/components/AIConfigDialog.vue'
-import QuestionBankManager from '@/components/QuestionBankManager.vue'
+// import AIConfigDialog from '@/components/AIConfigDialog.vue'
+// import QuestionBankManager from '@/components/QuestionBankManager.vue'
+// 暂时注释掉有问题的导入
 
 const router = useRouter()
 
 const activeMenu = ref('general')
 const showAIConfigDialog = ref(false)
 const testingConnection = ref(false)
+
+// 系统诊断状态
+const diagnosing = ref(false)
+const diagnosticResults = ref([])
 
 const generalSettings = ref({
   language: 'zh-CN',
@@ -301,6 +356,156 @@ const goBack = () => {
 
 const handleMenuSelect = (key) => {
   activeMenu.value = key
+}
+
+// 系统诊断方法
+const runDiagnostic = async () => {
+  diagnosing.value = true
+  diagnosticResults.value = []
+
+  try {
+    // 前端环境诊断
+    await diagnoseFrontend()
+
+    // 后端连接诊断
+    await diagnoseBackend()
+
+    // AI服务诊断
+    await diagnoseAIServices()
+
+    // 数据库诊断
+    await diagnoseDatabase()
+
+    ElMessage.success('系统诊断完成')
+  } catch (error) {
+    console.error('诊断过程出错:', error)
+    ElMessage.error('诊断过程中出现错误')
+  } finally {
+    diagnosing.value = false
+  }
+}
+
+const diagnoseFrontend = async () => {
+  const userAgent = navigator.userAgent
+  const platform = navigator.platform
+  const language = navigator.language
+
+  diagnosticResults.value.push({
+    type: 'primary',
+    icon: 'Monitor',
+    color: '#67c23a',
+    title: '前端环境',
+    description: '浏览器环境正常',
+    details: {
+      '浏览器': userAgent,
+      '平台': platform,
+      '语言': language,
+      '屏幕分辨率': `${screen.width} × ${screen.height}`,
+      'URL协议': location.protocol
+    }
+  })
+
+  // 检查本地存储
+  try {
+    localStorage.setItem('test', 'test')
+    localStorage.removeItem('test')
+    diagnosticResults.value.push({
+      type: 'success',
+      icon: 'Document',
+      color: '#67c23a',
+      title: '本地存储',
+      description: 'LocalStorage工作正常'
+    })
+  } catch (error) {
+    diagnosticResults.value.push({
+      type: 'warning',
+      icon: 'Warning',
+      color: '#e6a23c',
+      title: '本地存储',
+      description: 'LocalStorage可能受限'
+    })
+  }
+}
+
+const diagnoseBackend = async () => {
+  try {
+    const response = await fetch('/api/system/status')
+    const data = await response.json()
+
+    diagnosticResults.value.push({
+      type: 'success',
+      icon: 'Server',
+      color: '#67c23a',
+      title: '后端服务',
+      description: '后端服务连接正常',
+      details: data
+    })
+  } catch (error) {
+    diagnosticResults.value.push({
+      type: 'error',
+      icon: 'Close',
+      color: '#f56c6c',
+      title: '后端服务',
+      description: '无法连接到后端服务',
+      details: { '错误': error.message }
+    })
+  }
+}
+
+const diagnoseAIServices = async () => {
+  try {
+    const response = await fetch('/api/ai/providers')
+    const data = await response.json()
+
+    diagnosticResults.value.push({
+      type: 'success',
+      icon: 'Magic',
+      color: '#67c23a',
+      title: 'AI服务',
+      description: 'AI服务配置正常',
+      details: {
+        '已配置提供商': data.providers?.length || 0,
+        '默认提供商': data.default || '未设置'
+      }
+    })
+  } catch (error) {
+    diagnosticResults.value.push({
+      type: 'warning',
+      icon: 'Warning',
+      color: '#e6a23c',
+      title: 'AI服务',
+      description: 'AI服务配置可能有问题',
+      details: { '错误': error.message }
+    })
+  }
+}
+
+const diagnoseDatabase = async () => {
+  try {
+    const response = await fetch('/api/database/status')
+    const data = await response.json()
+
+    diagnosticResults.value.push({
+      type: 'success',
+      icon: 'FolderOpened',
+      color: '#67c23a',
+      title: '数据库',
+      description: '数据库连接正常',
+      details: {
+        '数据库类型': data.type || 'SQLite',
+        '状态': data.status || '连接正常'
+      }
+    })
+  } catch (error) {
+    diagnosticResults.value.push({
+      type: 'error',
+      icon: 'Close',
+      color: '#f56c6c',
+      title: '数据库',
+      description: '数据库连接失败',
+      details: { '错误': error.message }
+    })
+  }
 }
 
 const saveGeneralSettings = () => {
@@ -474,5 +679,30 @@ onMounted(() => {
 .links h4 {
   color: #2c3e50;
   margin-bottom: 1rem;
+}
+
+/* 系统诊断样式 */
+.diagnostic-content {
+  min-height: 300px;
+}
+
+.diagnostic-details {
+  margin-top: 12px;
+}
+
+.el-timeline {
+  padding: 20px 0;
+}
+
+.el-timeline-item h4 {
+  margin: 0 0 8px 0;
+  color: #303133;
+  font-size: 16px;
+}
+
+.el-timeline-item p {
+  margin: 0 0 4px 0;
+  color: #606266;
+  font-size: 14px;
 }
 </style>

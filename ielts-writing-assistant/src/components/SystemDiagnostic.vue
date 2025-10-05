@@ -40,7 +40,7 @@
             <el-col :span="6">
               <div class="overview-item">
                 <div class="overview-icon" :class="getStatusClass(systemInfo.backend.status)">
-                  <el-icon><Server /></el-icon>
+                  <el-icon><Setting /></el-icon>
                 </div>
                 <div class="overview-content">
                   <div class="overview-title">后端服务</div>
@@ -216,9 +216,9 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Monitor, Server, Coin, MagicStick, Refresh, Download } from '@element-plus/icons-vue'
+import { Monitor, Setting, Coin, MagicStick, Refresh, Download } from '@element-plus/icons-vue'
 
 // 状态管理
 const diagnosing = ref(false)

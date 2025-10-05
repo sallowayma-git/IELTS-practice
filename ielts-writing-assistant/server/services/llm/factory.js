@@ -1,5 +1,5 @@
 const OpenAIService = require('./openai')
-const AzureOpenAIService = require('./azure')
+const GeminiService = require('./gemini')
 const MockLLMService = require('./mock')
 
 /**
@@ -87,8 +87,7 @@ class LLMServiceFactory {
 
 // 注册默认的服务提供商
 LLMServiceFactory.registerProvider('openai', OpenAIService)
-LLMServiceFactory.registerProvider('azure', AzureOpenAIService)
-LLMServiceFactory.registerProvider('azure-openai', AzureOpenAIService)
+LLMServiceFactory.registerProvider('gemini', GeminiService)
 LLMServiceFactory.registerProvider('mock', MockLLMService)
 
 module.exports = LLMServiceFactory

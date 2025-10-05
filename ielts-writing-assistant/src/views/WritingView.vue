@@ -5,8 +5,47 @@
         <div class="header-left">
           <el-button @click="goBack" :icon="ArrowLeft">返回</el-button>
           <h2>写作练习</h2>
+
+          <!-- 题目类型选择 -->
+          <el-radio-group v-model="selectedTaskType" @change="onTaskTypeChange" style="margin-left: 20px;">
+            <el-radio-button label="task1">Task 1</el-radio-button>
+            <el-radio-button label="task2">Task 2</el-radio-button>
+          </el-radio-group>
         </div>
         <div class="header-right">
+          <!-- LLM供应商选择 -->
+          <el-select
+            v-model="selectedProvider"
+            placeholder="选择AI供应商"
+            size="small"
+            @change="onProviderChange"
+            style="width: 140px; margin-right: 8px;">
+            <el-option
+              v-for="provider in availableProviders"
+              :key="provider.value"
+              :label="provider.label"
+              :value="provider.value">
+              <span style="float: left">{{ provider.label }}</span>
+              <span style="float: right; color: #8492a6; font-size: 13px">{{ provider.desc }}</span>
+            </el-option>
+          </el-select>
+
+          <!-- 模型选择 -->
+          <el-select
+            v-model="selectedModel"
+            placeholder="选择模型"
+            size="small"
+            style="width: 160px; margin-right: 8px;">
+            <el-option
+              v-for="model in availableModels"
+              :key="model.value"
+              :label="model.label"
+              :value="model.value">
+              <span style="float: left">{{ model.label }}</span>
+              <span style="float: right; color: #8492a6; font-size: 13px">{{ model.desc }}</span>
+            </el-option>
+          </el-select>
+
           <el-button @click="saveDraft" :icon="Download">保存草稿</el-button>
           <el-button @click="clearContent" :icon="Delete">清空内容</el-button>
           <el-button @click="submitWriting" :loading="submitting" type="primary">
@@ -45,7 +84,12 @@
           <el-card class="topic-card" v-if="currentTopic">
             <template #header>
               <div class="topic-header">
-                <span>{{ currentTopic.title }}</span>
+                <div class="topic-title-section">
+                  <el-tag :type="selectedTaskType === 'task1' ? 'primary' : 'success'" size="small">
+                    {{ selectedTaskType === 'task1' ? 'Task 1 - 图表描述' : 'Task 2 - 议论文' }}
+                  </el-tag>
+                  <span style="margin-left: 12px;">{{ currentTopic.title }}</span>
+                </div>
                 <el-button type="text" @click="changeTopic">换一题</el-button>
               </div>
             </template>
@@ -105,6 +149,49 @@ const submitting = ref(false)
 const showResult = ref(false)
 const assessmentResult = ref(null)
 
+// AI模型配置状态
+const selectedProvider = ref('openai')
+const selectedModel = ref('gpt-4-turbo')
+
+// 题目类型状态
+const selectedTaskType = ref('task1')
+
+// 可用的AI供应商
+const availableProviders = ref([
+  { value: 'openai', label: 'OpenAI', desc: 'GPT模型' },
+  { value: 'openrouter', label: 'OpenRouter', desc: '多模型聚合' },
+  { value: 'deepseek', label: 'DeepSeek', desc: '国产模型' },
+  { value: 'gemini', label: 'Gemini', desc: 'Google模型' }
+])
+
+// 各供应商的可用模型
+const providerModels = {
+  openai: [
+    { value: 'gpt-4-turbo', label: 'GPT-4 Turbo', desc: '最强推理' },
+    { value: 'gpt-4', label: 'GPT-4', desc: '平衡性能' },
+    { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo', desc: '经济快速' }
+  ],
+  openrouter: [
+    { value: 'anthropic/claude-3-opus', label: 'Claude 3 Opus', desc: '顶级推理' },
+    { value: 'anthropic/claude-3-sonnet', label: 'Claude 3 Sonnet', desc: '平衡' },
+    { value: 'google/gemini-pro', label: 'Gemini Pro', desc: 'Google模型' }
+  ],
+  deepseek: [
+    { value: 'deepseek-chat', label: 'DeepSeek Chat', desc: '对话模型' },
+    { value: 'deepseek-coder', label: 'DeepSeek Coder', desc: '代码专家' }
+  ],
+  gemini: [
+    { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro', desc: 'Google顶级模型' },
+    { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash', desc: '快速响应' },
+    { value: 'gemini-pro', label: 'Gemini Pro', desc: '平衡性能' }
+  ]
+}
+
+// 当前可用的模型列表（根据选择的供应商动态更新）
+const availableModels = computed(() => {
+  return providerModels[selectedProvider.value] || []
+})
+
 // 计时器
 const startTime = ref(null)
 const elapsedTime = ref(0)
@@ -132,10 +219,38 @@ onUnmounted(() => {
   stopTimer()
 })
 
+// 方法
+// 供应商变化处理
+const onProviderChange = () => {
+  // 当供应商变化时，自动选择该供应商的第一个可用模型
+  const models = providerModels[selectedProvider.value]
+  if (models && models.length > 0) {
+    selectedModel.value = models[0].value
+  }
+  ElMessage.success(`已切换到 ${availableProviders.value.find(p => p.value === selectedProvider.value)?.label}`)
+}
+
+// 题目类型变化处理
+const onTaskTypeChange = () => {
+  // 清空当前内容和结果
+  writingContent.value = ''
+  showResult.value = false
+  assessmentResult.value = null
+  stopTimer()
+  startTime.value = null
+  elapsedTime.value = 0
+
+  // 重新加载题目
+  loadTopic()
+
+  const taskTypeLabel = selectedTaskType.value === 'task1' ? 'Task 1 (图表描述)' : 'Task 2 (议论文)'
+  ElMessage.success(`已切换到 ${taskTypeLabel}`)
+}
+
 // 加载题目
 const loadTopic = async () => {
   try {
-    const response = await fetch('/api/writing/topics/random')
+    const response = await fetch(`/api/writing/topics/random?taskType=${selectedTaskType.value}`)
     const data = await response.json()
     if (data.success) {
       currentTopic.value = data.data
@@ -217,6 +332,11 @@ const submitWriting = async () => {
         content: writingContent.value,
         wordCount: wordCount.value,
         timeSpent: elapsedTime.value,
+        // 添加题目类型
+        taskType: selectedTaskType.value,
+        // 添加AI模型配置
+        aiProvider: selectedProvider.value,
+        aiModel: selectedModel.value,
       }),
     })
 
@@ -362,6 +482,12 @@ const goBack = () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.topic-title-section {
+  display: flex;
+  align-items: center;
+  flex: 1;
 }
 
 .topic-content {

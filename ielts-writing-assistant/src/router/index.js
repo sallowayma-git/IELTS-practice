@@ -34,12 +34,7 @@ const router = createRouter({
       name: 'Settings',
       component: () => import('@/views/SettingsView.vue')
     },
-    {
-      path: '/diagnostic',
-      name: 'Diagnostic',
-      component: () => import('@/views/DiagnosticView.vue')
-    },
-    // Legacy系统路由
+      // Legacy系统路由
     ...legacyRoutes
   ]
 })

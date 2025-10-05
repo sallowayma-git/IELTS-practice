@@ -44,24 +44,22 @@
         </el-form-item>
       </template>
 
-      <!-- Azure OpenAI配置 -->
-      <template v-if="form.provider === 'azure'">
+      <!-- Gemini配置 -->
+      <template v-if="form.provider === 'gemini'">
         <el-form-item label="API密钥" prop="apiKey">
           <el-input
             v-model="form.apiKey"
             type="password"
-            placeholder="请输入Azure OpenAI API密钥"
+            placeholder="请输入Gemini API密钥"
             show-password
           />
         </el-form-item>
-        <el-form-item label="部署名称" prop="deployment">
-          <el-input v-model="form.deployment" placeholder="Azure部署名称" />
-        </el-form-item>
-        <el-form-item label="端点" prop="endpoint">
-          <el-input v-model="form.endpoint" placeholder="https://your-resource.openai.azure.com" />
-        </el-form-item>
-        <el-form-item label="API版本" prop="apiVersion">
-          <el-input v-model="form.apiVersion" placeholder="2024-02-15-preview" />
+        <el-form-item label="模型名称" prop="model">
+          <el-select v-model="form.model" placeholder="选择Gemini模型">
+            <el-option label="Gemini 1.5 Pro" value="gemini-1.5-pro" />
+            <el-option label="Gemini 1.5 Flash" value="gemini-1.5-flash" />
+            <el-option label="Gemini Pro" value="gemini-pro" />
+          </el-select>
         </el-form-item>
       </template>
 
@@ -97,6 +95,24 @@
             <el-radio label="balanced">平衡</el-radio>
             <el-radio label="quality">高质量</el-radio>
           </el-radio-group>
+        </el-form-item>
+      </template>
+
+      <!-- DeepSeek配置 -->
+      <template v-if="form.provider === 'deepseek'">
+        <el-form-item label="API密钥" prop="apiKey">
+          <el-input
+            v-model="form.apiKey"
+            type="password"
+            placeholder="请输入DeepSeek API密钥"
+            show-password
+          />
+        </el-form-item>
+        <el-form-item label="模型名称" prop="model">
+          <el-select v-model="form.model" placeholder="选择DeepSeek模型">
+            <el-option label="DeepSeek Chat" value="deepseek-chat" />
+            <el-option label="DeepSeek Coder" value="deepseek-coder" />
+          </el-select>
         </el-form-item>
       </template>
 
@@ -167,7 +183,8 @@ const formRef = ref()
 
 const providers = ref([
   { label: 'OpenAI GPT', value: 'openai' },
-  { label: 'Azure OpenAI', value: 'azure' },
+  { label: 'Google Gemini', value: 'gemini' },
+  { label: 'DeepSeek', value: 'deepseek' },
   { label: 'OpenRouter', value: 'openrouter' },
   { label: '模拟服务', value: 'mock' }
 ])

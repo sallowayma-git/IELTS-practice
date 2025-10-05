@@ -40,17 +40,7 @@
     <!-- 第二行功能卡片 -->
     <div class="secondary-section">
       <el-row :gutter="20">
-        <el-col :span="12">
-          <el-card class="action-card" @click="goToDiagnostic">
-            <div class="card-content">
-              <div class="icon">🔧</div>
-              <h3>系统诊断</h3>
-              <p>查看系统状态和日志信息</p>
-            </div>
-          </el-card>
-        </el-col>
-
-        <el-col :span="12">
+        <el-col :span="12" :offset="6">
           <el-card class="action-card" @click="goToSettings">
             <div class="card-content">
               <div class="icon">⚙️</div>
@@ -93,13 +83,6 @@ const goToLegacyIndex = () => {
   }
 }
 
-const goToDiagnostic = () => {
-  try {
-    router.push('/diagnostic')
-  } catch (error) {
-    console.error('路由跳转失败:', error)
-  }
-}
 
 const goToSettings = () => {
   try {
