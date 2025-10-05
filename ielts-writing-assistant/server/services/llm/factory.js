@@ -1,5 +1,7 @@
 const OpenAIService = require('./openai')
 const GeminiService = require('./gemini')
+const DeepSeekService = require('./deepseek')
+const OpenRouterService = require('./openrouter')
 const MockLLMService = require('./mock')
 
 /**
@@ -88,6 +90,8 @@ class LLMServiceFactory {
 // 注册默认的服务提供商
 LLMServiceFactory.registerProvider('openai', OpenAIService)
 LLMServiceFactory.registerProvider('gemini', GeminiService)
+LLMServiceFactory.registerProvider('deepseek', DeepSeekService)
+LLMServiceFactory.registerProvider('openrouter', OpenRouterService)
 LLMServiceFactory.registerProvider('mock', MockLLMService)
 
 module.exports = LLMServiceFactory

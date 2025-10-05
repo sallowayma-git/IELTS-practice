@@ -28,11 +28,12 @@
           />
         </el-form-item>
         <el-form-item label="模型" prop="model">
-          <el-select v-model="form.model" placeholder="选择模型">
-            <el-option label="GPT-4" value="gpt-4" />
-            <el-option label="GPT-3.5 Turbo" value="gpt-3.5-turbo" />
+          <el-select v-model="form.model" placeholder="选择模型" filterable>
             <el-option label="GPT-4o" value="gpt-4o" />
             <el-option label="GPT-4o Mini" value="gpt-4o-mini" />
+            <el-option label="GPT-4 Turbo" value="gpt-4-turbo" />
+            <el-option label="GPT-4" value="gpt-4" />
+            <el-option label="GPT-3.5 Turbo" value="gpt-3.5-turbo" />
           </el-select>
         </el-form-item>
         <el-form-item label="响应速度" prop="speed">
@@ -55,9 +56,11 @@
           />
         </el-form-item>
         <el-form-item label="模型名称" prop="model">
-          <el-select v-model="form.model" placeholder="选择Gemini模型">
+          <el-select v-model="form.model" placeholder="选择Gemini模型" filterable>
+            <el-option label="Gemini 2.0 Flash Exp" value="gemini-2.0-flash-exp" />
             <el-option label="Gemini 1.5 Pro" value="gemini-1.5-pro" />
             <el-option label="Gemini 1.5 Flash" value="gemini-1.5-flash" />
+            <el-option label="Gemini 1.5 Flash-8B" value="gemini-1.5-flash-8b" />
             <el-option label="Gemini Pro" value="gemini-pro" />
           </el-select>
         </el-form-item>
@@ -74,20 +77,17 @@
           />
         </el-form-item>
         <el-form-item label="模型" prop="model">
-          <el-select v-model="form.model" placeholder="选择模型">
+          <el-select v-model="form.model" placeholder="选择模型" filterable>
             <el-option label="OpenAI GPT-4o" value="openai/gpt-4o" />
             <el-option label="OpenAI GPT-4o Mini" value="openai/gpt-4o-mini" />
-            <el-option label="OpenAI GPT-4" value="openai/gpt-4" />
+            <el-option label="OpenAI GPT-4 Turbo" value="openai/gpt-4-turbo" />
             <el-option label="OpenAI GPT-3.5 Turbo" value="openai/gpt-3.5-turbo" />
             <el-option label="Anthropic Claude 3.5 Sonnet" value="anthropic/claude-3.5-sonnet" />
-            <el-option label="Google Gemini Pro" value="google/gemini-pro" />
+            <el-option label="Anthropic Claude 3.5 Haiku" value="anthropic/claude-3.5-haiku" />
+            <el-option label="Google Gemini 2.0 Flash Exp" value="google/gemini-2.0-flash-exp" />
+            <el-option label="Google Gemini 1.5 Pro" value="google/gemini-1.5-pro" />
+            <el-option label="DeepSeek Chat" value="deepseek/deepseek-chat" />
           </el-select>
-        </el-form-item>
-        <el-form-item label="应用名称" prop="appName">
-          <el-input v-model="form.appName" placeholder="IELTS Writing Assistant" />
-        </el-form-item>
-        <el-form-item label="网站URL" prop="siteUrl">
-          <el-input v-model="form.siteUrl" placeholder="https://your-website.com" />
         </el-form-item>
         <el-form-item label="响应速度" prop="speed">
           <el-radio-group v-model="form.speed">
@@ -96,6 +96,24 @@
             <el-radio label="quality">高质量</el-radio>
           </el-radio-group>
         </el-form-item>
+
+        <!-- 高级设置 -->
+        <el-collapse>
+          <el-collapse-item title="高级设置" name="advanced">
+            <el-form-item label="应用名称" prop="appName">
+              <el-input v-model="form.appName" placeholder="IELTS Writing Assistant" />
+              <div style="margin-top: 4px; color: #909399; font-size: 12px;">
+                在OpenRouter中显示的应用名称
+              </div>
+            </el-form-item>
+            <el-form-item label="网站URL" prop="siteUrl">
+              <el-input v-model="form.siteUrl" placeholder="https://your-website.com" />
+              <div style="margin-top: 4px; color: #909399; font-size: 12px;">
+                用于OpenRouter统计的网站地址
+              </div>
+            </el-form-item>
+          </el-collapse-item>
+        </el-collapse>
       </template>
 
       <!-- DeepSeek配置 -->

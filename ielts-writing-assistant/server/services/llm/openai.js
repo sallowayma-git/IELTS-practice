@@ -8,10 +8,10 @@ class OpenAIService extends BaseLLMService {
   constructor(config) {
     super(config)
     this.client = new OpenAI({
-      apiKey: config.apiKey,
-      baseURL: config.baseURL
+      apiKey: config.apiKey || process.env.OPENAI_API_KEY,
+      baseURL: config.baseURL || process.env.OPENAI_BASE_URL
     })
-    this.model = config.model || 'gpt-3.5-turbo'
+    this.model = config.model || process.env.DEFAULT_AI_MODEL || 'gpt-4o'
     this.maxTokens = config.maxTokens || 2000
     this.temperature = config.temperature || 0.3
   }

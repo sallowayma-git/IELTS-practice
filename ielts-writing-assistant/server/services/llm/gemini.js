@@ -187,6 +187,14 @@ Please evaluate this essay based on IELTS writing criteria and provide a detaile
 Provide only the JSON response without any additional text.`
   }
 
+  getModelInfo() {
+    return {
+      provider: 'gemini',
+      model: this.model,
+      apiKey: this.apiKey ? '***' + this.apiKey.slice(-4) : '未配置'
+    }
+  }
+
   getServiceInfo() {
     return {
       name: 'Google Gemini',
