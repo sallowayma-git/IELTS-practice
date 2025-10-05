@@ -1,63 +1,85 @@
 <template>
   <div class="settings-container">
     <el-container>
+      <!-- 顶部导航栏 -->
       <el-header class="settings-header">
-        <div class="header-left">
-          <el-button @click="goBack" :icon="ArrowLeft">返回</el-button>
-          <h2>系统设置</h2>
+        <div class="header-content">
+          <el-breadcrumb separator="/" class="header-breadcrumb">
+            <el-breadcrumb-item @click="goBack" class="breadcrumb-item">
+              <el-icon><ArrowLeft /></el-icon>
+              首页
+            </el-breadcrumb-item>
+            <el-breadcrumb-item>系统设置</el-breadcrumb-item>
+          </el-breadcrumb>
+          <div class="header-title">
+            <h2>系统设置</h2>
+            <p class="header-subtitle">配置应用参数和个人偏好</p>
+          </div>
         </div>
       </el-header>
 
+      <!-- 主体内容区 -->
       <el-main class="settings-main">
-        <el-row :gutter="20">
-          <!-- 左侧菜单 -->
-          <el-col :span="6">
-            <el-card class="menu-card">
+        <div class="settings-layout">
+          <!-- 左侧导航 -->
+          <el-aside width="240px" class="settings-aside">
+            <div class="menu-container">
               <el-menu
                 :default-active="activeMenu"
                 @select="handleMenuSelect"
                 class="settings-menu"
               >
-                <el-menu-item index="general">
-                  <el-icon><Setting /></el-icon>
-                  <span>常规设置</span>
+                <el-menu-item index="general" class="menu-item">
+                  <el-icon class="menu-icon"><Setting /></el-icon>
+                  <span class="menu-text">常规设置</span>
+                  <el-icon class="menu-arrow"><ArrowRight /></el-icon>
                 </el-menu-item>
-                <el-menu-item index="ai">
-                  <el-icon><Magic /></el-icon>
-                  <span>AI配置</span>
+                <el-menu-item index="ai" class="menu-item">
+                  <el-icon class="menu-icon"><Cpu /></el-icon>
+                  <span class="menu-text">AI配置</span>
+                  <el-icon class="menu-arrow"><ArrowRight /></el-icon>
                 </el-menu-item>
-                <el-menu-item index="writing">
-                  <el-icon><EditPen /></el-icon>
-                  <span>写作设置</span>
+                <el-menu-item index="writing" class="menu-item">
+                  <el-icon class="menu-icon"><EditPen /></el-icon>
+                  <span class="menu-text">写作设置</span>
+                  <el-icon class="menu-arrow"><ArrowRight /></el-icon>
                 </el-menu-item>
-                <el-menu-item index="data">
-                  <el-icon><DataBoard /></el-icon>
-                  <span>数据管理</span>
+                <el-menu-item index="data" class="menu-item">
+                  <el-icon class="menu-icon"><DataBoard /></el-icon>
+                  <span class="menu-text">数据管理</span>
+                  <el-icon class="menu-arrow"><ArrowRight /></el-icon>
                 </el-menu-item>
-                <el-menu-item index="questionbank">
-                  <el-icon><Reading /></el-icon>
-                  <span>题库管理</span>
+                <el-menu-item index="questionbank" class="menu-item">
+                  <el-icon class="menu-icon"><Reading /></el-icon>
+                  <span class="menu-text">题库管理</span>
+                  <el-icon class="menu-arrow"><ArrowRight /></el-icon>
                 </el-menu-item>
-                <el-menu-item index="diagnostic">
-                  <el-icon><Monitor /></el-icon>
-                  <span>系统诊断</span>
+                <el-menu-item index="diagnostic" class="menu-item">
+                  <el-icon class="menu-icon"><Monitor /></el-icon>
+                  <span class="menu-text">系统诊断</span>
+                  <el-icon class="menu-arrow"><ArrowRight /></el-icon>
                 </el-menu-item>
-                <el-menu-item index="about">
-                  <el-icon><InfoFilled /></el-icon>
-                  <span>关于</span>
+                <el-menu-item index="about" class="menu-item">
+                  <el-icon class="menu-icon"><InfoFilled /></el-icon>
+                  <span class="menu-text">关于</span>
+                  <el-icon class="menu-arrow"><ArrowRight /></el-icon>
                 </el-menu-item>
               </el-menu>
-            </el-card>
-          </el-col>
+            </div>
+          </el-aside>
 
           <!-- 右侧内容 -->
-          <el-col :span="18">
-            <!-- 常规设置 -->
-            <div v-show="activeMenu === 'general'" class="setting-content">
-              <el-card>
-                <template #header>
-                  <span>常规设置</span>
-                </template>
+          <el-main class="settings-content">
+            <div class="content-wrapper">
+              <!-- 常规设置 -->
+              <div v-show="activeMenu === 'general'" class="setting-content">
+                <el-card class="setting-card">
+                  <template #header>
+                    <div class="card-header">
+                      <el-icon class="card-icon"><Setting /></el-icon>
+                      <span class="card-title">常规设置</span>
+                    </div>
+                  </template>
                 <el-form :model="generalSettings" label-width="120px">
                   <el-form-item label="界面语言">
                     <el-select v-model="generalSettings.language">
@@ -94,11 +116,15 @@
 
             <!-- AI配置 -->
             <div v-show="activeMenu === 'ai'" class="setting-content">
-              <el-card>
+              <el-card class="setting-card">
                 <template #header>
-                  <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span>AI配置</span>
-                    <el-button type="primary" disabled>配置AI服务</el-button>
+                  <div class="card-header">
+                    <el-icon class="card-icon"><Cpu /></el-icon>
+                    <span class="card-title">AI配置</span>
+                    <el-button type="primary" @click="openAIConfig" class="header-action">
+                      <el-icon><Setting /></el-icon>
+                      配置AI服务
+                    </el-button>
                   </div>
                 </template>
                 <div class="ai-status-display">
@@ -121,9 +147,12 @@
 
             <!-- 写作设置 -->
             <div v-show="activeMenu === 'writing'" class="setting-content">
-              <el-card>
+              <el-card class="setting-card">
                 <template #header>
-                  <span>写作设置</span>
+                  <div class="card-header">
+                    <el-icon class="card-icon"><EditPen /></el-icon>
+                    <span class="card-title">写作设置</span>
+                  </div>
                 </template>
                 <el-form :model="writingSettings" label-width="120px">
                   <el-form-item label="默认字体大小">
@@ -161,10 +190,13 @@
 
             <!-- 数据管理 -->
             <div v-show="activeMenu === 'data'" class="setting-content">
-              <el-space direction="vertical" style="width: 100%;">
-                <el-card>
+              <div class="content-grid">
+                <el-card class="setting-card">
                   <template #header>
-                    <span>数据管理</span>
+                    <div class="card-header">
+                      <el-icon class="card-icon"><DataBoard /></el-icon>
+                      <span class="card-title">数据管理</span>
+                    </div>
                   </template>
                   <el-space direction="vertical" style="width: 100%;">
                     <el-button @click="exportData" :icon="Download">导出数据</el-button>
@@ -175,9 +207,12 @@
                   </el-space>
                 </el-card>
 
-                <el-card>
+                <el-card class="setting-card">
                   <template #header>
-                    <span>存储信息</span>
+                    <div class="card-header">
+                      <el-icon class="card-icon"><DataBoard /></el-icon>
+                      <span class="card-title">存储信息</span>
+                    </div>
                   </template>
                   <el-descriptions :column="1" border>
                     <el-descriptions-item label="数据库大小">{{ storageInfo.dbSize }}</el-descriptions-item>
@@ -186,7 +221,7 @@
                     <el-descriptions-item label="最后备份">{{ storageInfo.lastBackup }}</el-descriptions-item>
                   </el-descriptions>
                 </el-card>
-              </el-space>
+              </div>
             </div>
 
             <!-- 题库管理 -->
@@ -199,11 +234,12 @@
 
             <!-- 系统诊断 -->
             <div v-show="activeMenu === 'diagnostic'" class="setting-content">
-              <el-card>
+              <el-card class="setting-card">
                 <template #header>
-                  <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span>系统诊断</span>
-                    <el-button @click="runDiagnostic" :loading="diagnosing">
+                  <div class="card-header">
+                    <el-icon class="card-icon"><Monitor /></el-icon>
+                    <span class="card-title">系统诊断</span>
+                    <el-button @click="runDiagnostic" :loading="diagnosing" class="header-action">
                       <el-icon><Monitor /></el-icon>
                       开始诊断
                     </el-button>
@@ -211,7 +247,7 @@
                 </template>
 
                 <div class="diagnostic-content">
-                  <el-empty v-if="!diagnosticResults.length" description="点击"开始诊断"查看系统状态" />
+                  <el-empty v-if="!diagnosticResults.length" description="点击「开始诊断」查看系统状态" />
 
                   <div v-else>
                     <el-timeline>
@@ -244,9 +280,12 @@
 
             <!-- 关于 -->
             <div v-show="activeMenu === 'about'" class="setting-content">
-              <el-card>
+              <el-card class="setting-card">
                 <template #header>
-                  <span>关于应用</span>
+                  <div class="card-header">
+                    <el-icon class="card-icon"><InfoFilled /></el-icon>
+                    <span class="card-title">关于应用</span>
+                  </div>
                 </template>
                 <div class="about-content">
                   <div class="app-info">
@@ -279,30 +318,31 @@
                 </div>
               </el-card>
             </div>
-          </el-col>
-        </el-row>
+            </div>
+          </el-main>
+        </div>
       </el-main>
     </el-container>
   </div>
 
   <!-- AI配置对话框 -->
-  <!-- <AIConfigDialog
+  <AIConfigDialog
     v-model="showAIConfigDialog"
     @success="handleAIConfigSuccess"
-  /> -->
+  />
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  ArrowLeft, Setting, Magic, EditPen, DataBoard, InfoFilled, Reading,
-  Download, Upload, FolderOpened, Delete, Warning, Monitor
+  ArrowLeft, Setting, Cpu, EditPen, DataBoard, InfoFilled, Reading, ArrowRight,
+  Download, Upload, FolderOpened, Delete, Warning, Monitor, Files, CircleClose
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-// import AIConfigDialog from '@/components/AIConfigDialog.vue'
+import AIConfigDialog from '@/components/AIConfigDialog.vue'
 // import QuestionBankManager from '@/components/QuestionBankManager.vue'
-// 暂时注释掉有问题的导入
+// 题库管理组件暂时不启用
 
 const router = useRouter()
 
@@ -358,6 +398,10 @@ const handleMenuSelect = (key) => {
   activeMenu.value = key
 }
 
+const openAIConfig = () => {
+  showAIConfigDialog.value = true
+}
+
 // 系统诊断方法
 const runDiagnostic = async () => {
   diagnosing.value = true
@@ -411,7 +455,7 @@ const diagnoseFrontend = async () => {
     localStorage.removeItem('test')
     diagnosticResults.value.push({
       type: 'success',
-      icon: 'Document',
+      icon: 'Files',
       color: '#67c23a',
       title: '本地存储',
       description: 'LocalStorage工作正常'
@@ -434,7 +478,7 @@ const diagnoseBackend = async () => {
 
     diagnosticResults.value.push({
       type: 'success',
-      icon: 'Server',
+      icon: 'Setting',
       color: '#67c23a',
       title: '后端服务',
       description: '后端服务连接正常',
@@ -443,7 +487,7 @@ const diagnoseBackend = async () => {
   } catch (error) {
     diagnosticResults.value.push({
       type: 'error',
-      icon: 'Close',
+      icon: 'CircleClose',
       color: '#f56c6c',
       title: '后端服务',
       description: '无法连接到后端服务',
@@ -459,7 +503,7 @@ const diagnoseAIServices = async () => {
 
     diagnosticResults.value.push({
       type: 'success',
-      icon: 'Magic',
+      icon: 'Cpu',
       color: '#67c23a',
       title: 'AI服务',
       description: 'AI服务配置正常',
@@ -499,7 +543,7 @@ const diagnoseDatabase = async () => {
   } catch (error) {
     diagnosticResults.value.push({
       type: 'error',
-      icon: 'Close',
+      icon: 'CircleClose',
       color: '#f56c6c',
       title: '数据库',
       description: '数据库连接失败',
@@ -612,97 +656,457 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* CSS变量定义 */
+:root {
+  --primary-color: #409EFF;
+  --success-color: #67C23A;
+  --warning-color: #E6A23C;
+  --danger-color: #F56C6C;
+  --info-color: #909399;
+  --bg-primary: #F5F7FA;
+  --bg-secondary: #FFFFFF;
+  --bg-tertiary: #FAFAFA;
+  --text-primary: #303133;
+  --text-secondary: #606266;
+  --text-tertiary: #909399;
+  --border-color: #DCDFE6;
+  --border-light: #EBEEF5;
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+}
+
+/* 主容器 */
 .settings-container {
   height: 100vh;
-  background: #f5f7fa;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e9ecef 100%);
+  display: flex;
+  flex-direction: column;
 }
 
+/* 顶部导航栏 */
 .settings-header {
-  background: white;
-  border-bottom: 1px solid #e4e7ed;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 2rem;
-}
-
-.header-left {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-light);
+  box-shadow: var(--shadow-sm);
+  padding: 0;
+  height: 80px;
   display: flex;
   align-items: center;
-  gap: 1rem;
 }
 
-.header-left h2 {
-  margin: 0;
-  color: #2c3e50;
-}
-
-.settings-main {
-  padding: 2rem;
-  max-width: 1200px;
+.header-content {
+  width: 100%;
+  max-width: 1400px;
   margin: 0 auto;
-  height: calc(100vh - 60px);
-  overflow-y: auto;
+  padding: 0 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
-.menu-card {
-  height: fit-content;
+.header-breadcrumb {
+  flex: 1;
+}
+
+.breadcrumb-item {
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+
+.breadcrumb-item:hover {
+  color: var(--primary-color);
+}
+
+.header-title {
+  text-align: center;
+  flex: 2;
+}
+
+.header-title h2 {
+  margin: 0 0 4px 0;
+  color: var(--text-primary);
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.header-subtitle {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: 14px;
+}
+
+/* 主体内容区 */
+.settings-main {
+  flex: 1;
+  padding: 0;
+  overflow: hidden;
+}
+
+.settings-layout {
+  height: 100%;
+  display: flex;
+  max-width: 1400px;
+  margin: 0 auto;
+  background: var(--bg-secondary);
+  box-shadow: var(--shadow-md);
+}
+
+/* 左侧导航 */
+.settings-aside {
+  background: var(--bg-tertiary);
+  border-right: 1px solid var(--border-light);
+  padding: 0;
+}
+
+.menu-container {
+  height: 100%;
+  padding: 1rem 0;
 }
 
 .settings-menu {
-  border-right: none;
+  border: none;
+  background: transparent;
 }
 
+.menu-item {
+  margin: 4px 12px;
+  border-radius: var(--radius-md);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.menu-item:hover {
+  background: rgba(64, 158, 255, 0.08);
+  transform: translateX(4px);
+}
+
+.menu-item.is-active {
+  background: linear-gradient(135deg, var(--primary-color), #66b3ff);
+  color: white;
+  box-shadow: var(--shadow-sm);
+}
+
+.menu-item.is-active .menu-icon,
+.menu-item.is-active .menu-text,
+.menu-item.is-active .menu-arrow {
+  color: white;
+}
+
+.menu-icon {
+  margin-right: 12px;
+  font-size: 18px;
+  transition: transform 0.3s ease;
+}
+
+.menu-item:hover .menu-icon {
+  transform: scale(1.1);
+}
+
+.menu-text {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.menu-arrow {
+  margin-left: auto;
+  font-size: 14px;
+  opacity: 0.6;
+  transition: transform 0.3s ease;
+}
+
+.menu-item:hover .menu-arrow {
+  transform: translateX(4px);
+  opacity: 1;
+}
+
+/* 右侧内容区 */
+.settings-content {
+  flex: 1;
+  padding: 2rem;
+  overflow-y: auto;
+  background: var(--bg-primary);
+}
+
+.content-wrapper {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+/* 设置卡片 */
+.setting-card {
+  margin-bottom: 1.5rem;
+  border: none;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.setting-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0;
+}
+
+.card-icon {
+  margin-right: 12px;
+  font-size: 20px;
+  color: var(--primary-color);
+}
+
+.card-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.header-action {
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.header-action:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+/* 内容区域样式 */
 .setting-content {
-  height: fit-content;
+  animation: fadeIn 0.5s ease;
 }
 
-.about-content {
-  line-height: 1.6;
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.app-info h3 {
-  color: #2c3e50;
-  margin-bottom: 1rem;
+.content-grid {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: 1fr;
 }
 
-.app-info p {
-  color: #606266;
-  margin: 0.5rem 0;
+/* AI状态显示 */
+.ai-status-display {
+  padding: 1rem 0;
 }
 
-.tech-info h4 {
-  color: #2c3e50;
-  margin-bottom: 1rem;
+.ai-status-display .el-descriptions {
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
 }
 
-.links h4 {
-  color: #2c3e50;
-  margin-bottom: 1rem;
+/* 表单样式优化 */
+.el-form {
+  padding: 1rem 0;
+}
+
+.el-form-item {
+  margin-bottom: 1.5rem;
+}
+
+.el-form-item__label {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.el-input,
+.el-select,
+.el-slider,
+.el-input-number {
+  border-radius: var(--radius-sm);
+}
+
+.el-button {
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.el-button:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+/* 数据管理按钮组 */
+.el-space {
+  width: 100%;
+}
+
+.el-space .el-button {
+  width: 100%;
+  margin-bottom: 0.5rem;
+  justify-content: flex-start;
 }
 
 /* 系统诊断样式 */
 .diagnostic-content {
-  min-height: 300px;
-}
-
-.diagnostic-details {
-  margin-top: 12px;
+  min-height: 400px;
+  padding: 1rem 0;
 }
 
 .el-timeline {
-  padding: 20px 0;
+  padding: 1rem 0;
+}
+
+.el-timeline-item__node {
+  background: var(--bg-secondary);
+  box-shadow: var(--shadow-sm);
+}
+
+.el-timeline-item__wrapper {
+  padding-left: 1.5rem;
 }
 
 .el-timeline-item h4 {
   margin: 0 0 8px 0;
-  color: #303133;
+  color: var(--text-primary);
   font-size: 16px;
+  font-weight: 600;
 }
 
 .el-timeline-item p {
-  margin: 0 0 4px 0;
-  color: #606266;
+  margin: 0 0 8px 0;
+  color: var(--text-secondary);
   font-size: 14px;
+  line-height: 1.5;
+}
+
+.diagnostic-details {
+  margin-top: 12px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+}
+
+/* 关于页面样式 */
+.about-content {
+  line-height: 1.8;
+}
+
+.app-info {
+  text-align: center;
+  padding: 2rem 0;
+}
+
+.app-info h3 {
+  color: var(--text-primary);
+  margin-bottom: 1rem;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.app-info p {
+  color: var(--text-secondary);
+  margin: 0.5rem 0;
+  font-size: 14px;
+}
+
+.tech-info h4,
+.links h4 {
+  color: var(--text-primary);
+  margin-bottom: 1rem;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.el-tag {
+  margin: 4px;
+  border-radius: var(--radius-sm);
+}
+
+.el-link {
+  margin: 8px 0;
+}
+
+/* 响应式设计 */
+@media (max-width: 1200px) {
+  .settings-aside {
+    width: 200px !important;
+  }
+
+  .content-wrapper {
+    max-width: 800px;
+  }
+}
+
+@media (max-width: 768px) {
+  .settings-layout {
+    flex-direction: column;
+  }
+
+  .settings-aside {
+    width: 100% !important;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .settings-content {
+    padding: 1rem;
+  }
+
+  .header-content {
+    padding: 0 1rem;
+  }
+
+  .header-title {
+    text-align: left;
+  }
+}
+
+/* 滚动条样式 */
+.settings-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.settings-content::-webkit-scrollbar-track {
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+}
+
+.settings-content::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+.settings-content::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}
+
+/* 动画和过渡效果 */
+.menu-item,
+.setting-card,
+.el-button {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 空状态样式 */
+.el-empty {
+  padding: 3rem 0;
+}
+
+.el-empty__description {
+  color: var(--text-tertiary);
 }
 </style>

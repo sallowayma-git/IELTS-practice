@@ -17,7 +17,7 @@ const logsRoutes = require('./routes/logs')
 const diagnosticRoutes = require('./routes/diagnostic')
 
 const app = express()
-const PORT = process.env.PORT || 3001
+const PORT = process.env.PORT || 3010
 
 // 创建数据库目录
 const dbDir = path.join(__dirname, '../data')
@@ -178,6 +178,82 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
     version: '1.0.0'
   })
+})
+
+// 系统状态API - 供前端诊断使用
+app.get('/api/system/status', (req, res) => {
+  try {
+    const systemStatus = {
+      success: true,
+      data: {
+        status: 'running',
+        uptime: process.uptime(),
+        memory: process.memoryUsage(),
+        platform: process.platform,
+        nodeVersion: process.version,
+        timestamp: new Date().toISOString(),
+        port: PORT,
+        environment: process.env.NODE_ENV || 'development'
+      }
+    }
+    res.json(systemStatus)
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: '获取系统状态失败',
+      error: error.message
+    })
+  }
+})
+
+// AI提供商状态API
+app.get('/api/ai/providers', (req, res) => {
+  try {
+    // 这里应该从设置中读取实际的AI配置
+    const aiProviders = {
+      success: true,
+      data: {
+        providers: ['openai', 'gemini', 'deepseek', 'openrouter', 'mock'],
+        default: 'mock', // 从配置中读取
+        configured: ['mock'], // 实际已配置的提供商
+        timestamp: new Date().toISOString()
+      }
+    }
+    res.json(aiProviders)
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: '获取AI提供商失败',
+      error: error.message
+    })
+  }
+})
+
+// 数据库状态API
+app.get('/api/database/status', (req, res) => {
+  try {
+    // 检查数据库连接
+    const dbCheck = db.prepare('SELECT 1 as test').get()
+    const dbStats = {
+      success: true,
+      data: {
+        status: 'connected',
+        type: 'SQLite',
+        path: dbPath,
+        size: 'N/A', // 可以通过fs.stat获取实际文件大小
+        tables: ['users', 'topics', 'writing_records', 'assessment_results'],
+        timestamp: new Date().toISOString(),
+        testQuery: dbCheck ? 'success' : 'failed'
+      }
+    }
+    res.json(dbStats)
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: '获取数据库状态失败',
+      error: error.message
+    })
+  }
 })
 
 // 获取应用信息
