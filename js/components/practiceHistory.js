@@ -297,29 +297,68 @@ class PracticeHistory {
             });
         }
         
-        // 搜索输入事件
-        const searchInput = document.getElementById('history-search');
-        if (searchInput) {
-            const debounceFunc = (window.Utils && typeof window.Utils.debounce === 'function') 
-                ? Utils.debounce 
-                : this.debounce;
-            searchInput.addEventListener('input', debounceFunc((e) => {
-                this.searchQuery = e.target.value.trim().toLowerCase();
-                this.applyFilters();
-            }, 300));
+        // 搜索输入事件 - 使用事件委托如果可用
+        if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
+            const handleSearch = (e) => {
+                const debounceFunc = (window.Utils && typeof window.Utils.debounce === 'function')
+                    ? Utils.debounce
+                    : this.debounce;
+                debounceFunc(() => {
+                    this.searchQuery = e.target.value.trim().toLowerCase();
+                    this.applyFilters();
+                }, 300)();
+            };
+
+            window.DOM.delegate('input', '#history-search', handleSearch);
+            console.log('[PracticeHistory] 搜索输入使用事件委托');
+        } else {
+            // Fallback to direct event binding
+            const searchInput = document.getElementById('history-search');
+            if (searchInput) {
+                const debounceFunc = (window.Utils && typeof window.Utils.debounce === 'function')
+                    ? Utils.debounce
+                    : this.debounce;
+                searchInput.addEventListener('input', debounceFunc((e) => {
+                    this.searchQuery = e.target.value.trim().toLowerCase();
+                    this.applyFilters();
+                }, 300));
+            }
         }
         
-        // 日期范围筛选器
-        const dateRangeFilter = document.getElementById('date-range-filter');
-        if (dateRangeFilter) {
-            dateRangeFilter.addEventListener('change', (e) => {
+        // 日期范围筛选器 - 使用事件委托如果可用
+        if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
+            const handleDateRange = (e) => {
                 const customDateRange = document.getElementById('custom-date-range');
                 if (e.target.value === 'custom') {
-                    customDateRange.style.display = 'block';
+                    if (typeof window.DOM !== 'undefined' && window.DOM.show) {
+                        window.DOM.show(customDateRange);
+                    } else {
+                        customDateRange.style.display = 'block';
+                    }
                 } else {
-                    customDateRange.style.display = 'none';
+                    if (typeof window.DOM !== 'undefined' && window.DOM.hide) {
+                        window.DOM.hide(customDateRange);
+                    } else {
+                        customDateRange.style.display = 'none';
+                    }
                 }
-            });
+            };
+
+            window.DOM.delegate('change', '#date-range-filter', handleDateRange);
+            console.log('[PracticeHistory] 日期筛选器使用事件委托');
+        } else {
+            // Fallback to direct event binding
+            const dateRangeFilter = document.getElementById('date-range-filter');
+            if (dateRangeFilter) {
+                dateRangeFilter.addEventListener('change', (e) => {
+                    const customDateRange = document.getElementById('custom-date-range');
+                    if (e.target.value === 'custom') {
+                        customDateRange.style.display = 'block';
+                    } else {
+                        customDateRange.style.display = 'none';
+                    }
+                });
+            }
         }
     }
 

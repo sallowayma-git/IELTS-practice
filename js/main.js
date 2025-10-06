@@ -775,7 +775,13 @@ function displayExams(exams) {
 
     if (exams.length === 0) {
         container.innerHTML = `<div style="text-align: center; padding: 40px;"><p>未找到匹配的题目</p></div>`;
-        if (loadingIndicator) loadingIndicator.style.display = 'none';
+        if (loadingIndicator) {
+        if (typeof window.DOM !== 'undefined' && window.DOM.hide) {
+            window.DOM.hide(loadingIndicator);
+        } else {
+            loadingIndicator.style.display = 'none';
+        }
+    }
         return;
     }
 
@@ -803,7 +809,12 @@ function displayExams(exams) {
     container.appendChild(examList);
 
     if (loadingIndicator) {
-        loadingIndicator.style.display = 'none';
+        if (typeof window.DOM !== 'undefined' && window.DOM.hide) {
+                window.DOM.hide(loadingIndicator);
+            } else {
+                loadingIndicator.style.display = 'none';
+            }
+        }
     }
 }
 
@@ -1243,12 +1254,25 @@ function handleFolderSelection(event) { /* legacy stub - replaced by modal-speci
 function showLibraryLoaderModal() {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay show';
-    overlay.style.position = 'fixed';
-    overlay.style.inset = '0';
-    overlay.style.background = 'rgba(0,0,0,0.65)';
-    overlay.style.backdropFilter = 'blur(1px)';
-    overlay.style.zIndex = '1000';
-    overlay.style.display = 'flex';
+    // 使用DOMStyles工具库批量设置样式
+    if (typeof window.DOM !== 'undefined' && window.DOM.setStyle) {
+        window.DOM.setStyle(overlay, {
+            position: 'fixed',
+            inset: '0',
+            background: 'rgba(0,0,0,0.65)',
+            backdropFilter: 'blur(1px)',
+            zIndex: '1000',
+            display: 'flex'
+        });
+    } else {
+        // Fallback to individual style assignments
+        overlay.style.position = 'fixed';
+        overlay.style.inset = '0';
+        overlay.style.background = 'rgba(0,0,0,0.65)';
+        overlay.style.backdropFilter = 'blur(1px)';
+        overlay.style.zIndex = '1000';
+        overlay.style.display = 'flex';
+    }
     overlay.style.alignItems = 'center';
     overlay.style.justifyContent = 'center';
 

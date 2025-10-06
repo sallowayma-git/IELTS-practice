@@ -8,6 +8,10 @@ class QuestionTypePractice {
         this.mixedModeEnabled = false;
         this.selectedQuestionTypes = new Set();
         this.questionTypeStats = new Map();
+
+        // 全局引用，供事件委托使用
+        window.questionTypePractice = this;
+
         this.initialize();
     }
 
@@ -41,48 +45,141 @@ class QuestionTypePractice {
      * 设置事件监听器
      */
     setupEventListeners() {
-        document.addEventListener('click', (e) => {
+        // 使用事件委托替换独立监听器
+        if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
             // 题型练习模式选择
-            const questionTypeBtn = e.target.closest('[data-question-type]');
-            if (questionTypeBtn) {
-                const questionType = questionTypeBtn.dataset.questionType;
-                this.startQuestionTypePractice(questionType);
-            }
+            window.DOM.delegate('click', '[data-question-type]', function(e) {
+                const questionType = this.dataset.questionType;
+                window.questionTypePractice.startQuestionTypePractice(questionType);
+            });
 
             // 混合练习模式
-            const mixedPracticeBtn = e.target.closest('.start-mixed-practice');
-            if (mixedPracticeBtn) {
-                this.startMixedPractice();
-            }
+            window.DOM.delegate('click', '.start-mixed-practice', function(e) {
+                window.questionTypePractice.startMixedPractice();
+            });
 
             // 题型选择（混合模式）
-            const typeCheckbox = e.target.closest('.question-type-checkbox');
-            if (typeCheckbox) {
-                const checkbox = typeCheckbox.querySelector('input[type="checkbox"]');
+            window.DOM.delegate('click', '.question-type-checkbox', function(e) {
+                const checkbox = this.querySelector('input[type="checkbox"]');
                 const questionType = checkbox.value;
-                
+
                 if (checkbox.checked) {
-                    this.selectedQuestionTypes.add(questionType);
+                    window.questionTypePractice.selectedQuestionTypes.add(questionType);
                 } else {
-                    this.selectedQuestionTypes.delete(questionType);
+                    window.questionTypePractice.selectedQuestionTypes.delete(questionType);
                 }
-                
-                this.updateMixedPracticeButton();
-            }
+
+                window.questionTypePractice.updateMixedPracticeButton();
+            });
 
             // 题型详情查看
-            const detailsBtn = e.target.closest('.view-question-type-details');
-            if (detailsBtn) {
-                const questionType = detailsBtn.dataset.questionType;
-                this.showQuestionTypeDetails(questionType);
-            }
-        });
+            window.DOM.delegate('click', '.view-question-type-details', function(e) {
+                const questionType = this.dataset.questionType;
+                window.questionTypePractice.showQuestionTypeDetails(questionType);
+            });
 
-        // 监听练习完成事件
-        document.addEventListener('practiceSessionCompleted', (event) => {
-            const { examId, practiceRecord } = event.detail;
-            this.updateQuestionTypeStats(examId, practiceRecord);
-        });
+            // 返回按钮
+            window.DOM.delegate('click', '#back-to-specialized-practice', function(e) {
+                if (window.app && typeof window.app.navigateToView === 'function') {
+                    window.app.navigateToView('specialized-practice');
+                }
+            });
+
+            // 模式切换按钮
+            window.DOM.delegate('click', '.mode-btn', function(e) {
+                // 移除其他按钮的active类
+                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+
+                const mode = this.dataset.mode;
+                window.questionTypePractice.mixedModeEnabled = mode === 'mixed';
+                window.questionTypePractice.updateQuestionTypePracticeView();
+            });
+
+            // 选择器按钮
+            window.DOM.delegate('click', '.select-all-types', function(e) {
+                const selectorContainer = this.closest('.question-type-selector');
+                if (selectorContainer) {
+                    const checkboxes = selectorContainer.querySelectorAll('input[type="checkbox"]');
+                    checkboxes.forEach(cb => {
+                        cb.checked = true;
+                        window.questionTypePractice.selectedQuestionTypes.add(cb.value);
+                    });
+                    window.questionTypePractice.updateMixedPracticeButton();
+                }
+            });
+
+            window.DOM.delegate('click', '.clear-all-types', function(e) {
+                const selectorContainer = this.closest('.question-type-selector');
+                if (selectorContainer) {
+                    const checkboxes = selectorContainer.querySelectorAll('input[type="checkbox"]');
+                    checkboxes.forEach(cb => {
+                        cb.checked = false;
+                    });
+                    window.questionTypePractice.selectedQuestionTypes.clear();
+                    window.questionTypePractice.updateMixedPracticeButton();
+                }
+            });
+
+            window.DOM.delegate('click', '.select-weak-types', function(e) {
+                window.questionTypePractice.selectWeakQuestionTypes();
+                window.questionTypePractice.updateMixedPracticeButton();
+            });
+
+            // 模态框背景点击关闭
+            window.DOM.delegate('click', '.modal-overlay.show', function(e) {
+                if (e.target === this) {
+                    this.remove();
+                }
+            });
+
+            // 自定义事件监听（这些事件不能用DOM.delegate处理）
+            document.addEventListener('practiceSessionCompleted', (event) => {
+                const { examId, practiceRecord } = event.detail;
+                window.questionTypePractice.updateQuestionTypeStats(examId, practiceRecord);
+            });
+
+            console.log('[QuestionTypePractice] 使用事件委托设置监听器');
+        } else {
+            // 降级到传统监听器
+            document.addEventListener('click', (e) => {
+                const questionTypeBtn = e.target.closest('[data-question-type]');
+                if (questionTypeBtn) {
+                    const questionType = questionTypeBtn.dataset.questionType;
+                    this.startQuestionTypePractice(questionType);
+                }
+
+                const mixedPracticeBtn = e.target.closest('.start-mixed-practice');
+                if (mixedPracticeBtn) {
+                    this.startMixedPractice();
+                }
+
+                const typeCheckbox = e.target.closest('.question-type-checkbox');
+                if (typeCheckbox) {
+                    const checkbox = typeCheckbox.querySelector('input[type="checkbox"]');
+                    const questionType = checkbox.value;
+
+                    if (checkbox.checked) {
+                        this.selectedQuestionTypes.add(questionType);
+                    } else {
+                        this.selectedQuestionTypes.delete(questionType);
+                    }
+
+                    this.updateMixedPracticeButton();
+                }
+
+                const detailsBtn = e.target.closest('.view-question-type-details');
+                if (detailsBtn) {
+                    const questionType = detailsBtn.dataset.questionType;
+                    this.showQuestionTypeDetails(questionType);
+                }
+            });
+
+            document.addEventListener('practiceSessionCompleted', (event) => {
+                const { examId, practiceRecord } = event.detail;
+                this.updateQuestionTypeStats(examId, practiceRecord);
+            });
+        }
     }
 
     /**
@@ -201,28 +298,7 @@ class QuestionTypePractice {
 
         mainContent.appendChild(questionTypeView);
 
-        // 设置返回按钮事件
-        const backBtn = questionTypeView.querySelector('#back-to-specialized-practice');
-        if (backBtn) {
-            backBtn.addEventListener('click', () => {
-                if (window.app && typeof window.app.navigateToView === 'function') {
-                    window.app.navigateToView('specialized-practice');
-                }
-            });
-        }
-
-        // 设置模式切换事件
-        const modeButtons = questionTypeView.querySelectorAll('.mode-btn');
-        modeButtons.forEach(btn => {
-            btn.addEventListener('click', () => {
-                modeButtons.forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                
-                const mode = btn.dataset.mode;
-                this.mixedModeEnabled = mode === 'mixed';
-                this.updateQuestionTypePracticeView();
-            });
-        });
+        // 返回按钮和模式切换事件已通过事件委托处理
     }
 
     /**
@@ -447,38 +523,7 @@ class QuestionTypePractice {
             </div>
         `;
 
-        // 设置选择器事件
-        const selectAllBtn = selectorContainer.querySelector('.select-all-types');
-        const clearAllBtn = selectorContainer.querySelector('.clear-all-types');
-        const selectWeakBtn = selectorContainer.querySelector('.select-weak-types');
-
-        if (selectAllBtn) {
-            selectAllBtn.addEventListener('click', () => {
-                const checkboxes = selectorContainer.querySelectorAll('input[type="checkbox"]');
-                checkboxes.forEach(cb => {
-                    cb.checked = true;
-                    this.selectedQuestionTypes.add(cb.value);
-                });
-                this.updateMixedPracticeButton();
-            });
-        }
-
-        if (clearAllBtn) {
-            clearAllBtn.addEventListener('click', () => {
-                const checkboxes = selectorContainer.querySelectorAll('input[type="checkbox"]');
-                checkboxes.forEach(cb => {
-                    cb.checked = false;
-                });
-                this.selectedQuestionTypes.clear();
-                this.updateMixedPracticeButton();
-            });
-        }
-
-        if (selectWeakBtn) {
-            selectWeakBtn.addEventListener('click', () => {
-                this.selectWeakQuestionTypes();
-            });
-        }
+        // 选择器事件已通过事件委托处理
     }
 
     /**
@@ -1083,12 +1128,7 @@ class QuestionTypePractice {
         
         document.body.appendChild(modalOverlay);
         
-        // 点击背景关闭
-        modalOverlay.addEventListener('click', (e) => {
-            if (e.target === modalOverlay) {
-                modalOverlay.remove();
-            }
-        });
+        // 模态框背景点击关闭已通过事件委托处理
     }
 
     /**

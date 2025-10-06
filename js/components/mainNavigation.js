@@ -7,6 +7,10 @@ class MainNavigation {
         this.currentView = 'overview';
         this.categoryStats = {};
         this.searchQuery = '';
+
+        // 全局引用，供事件委托使用
+        window.mainNavigation = this;
+
         this.initialize();
     }
 
@@ -24,44 +28,82 @@ class MainNavigation {
      * 设置事件监听器
      */
     setupEventListeners() {
-        // 分类卡片点击事件
-        document.addEventListener('click', (e) => {
-            const categoryCard = e.target.closest('.category-card');
-            if (categoryCard) {
-                const category = categoryCard.dataset.category;
-                this.handleCategoryClick(category, e);
-            }
+        // 使用事件委托替换独立监听器
+        if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
+            // 分类卡片点击事件
+            window.DOM.delegate('click', '.category-card', function(e) {
+                const category = this.dataset.category;
+                window.mainNavigation.handleCategoryClick(category, e);
+            });
 
             // 快速访问按钮
-            const actionBtn = e.target.closest('[data-action]');
-            if (actionBtn) {
+            window.DOM.delegate('click', '[data-action]', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
-                const action = actionBtn.dataset.action;
-                const category = actionBtn.dataset.category;
-                this.handleCategoryAction(action, category);
-            }
-        });
+                const action = this.dataset.action;
+                const category = this.dataset.category;
+                window.mainNavigation.handleCategoryAction(action, category);
+            });
 
-        // 键盘快捷键
-        document.addEventListener('keydown', (e) => {
-            if (e.ctrlKey || e.metaKey) {
-                switch (e.key) {
-                    case '1':
-                        e.preventDefault();
-                        this.handleCategoryAction('browse', 'P1');
-                        break;
-                    case '2':
-                        e.preventDefault();
-                        this.handleCategoryAction('browse', 'P2');
-                        break;
-                    case '3':
-                        e.preventDefault();
-                        this.handleCategoryAction('browse', 'P3');
-                        break;
+            // 键盘快捷键（必须使用document.addEventListener，因为DOM.delegate不支持document作为selector）
+            document.addEventListener('keydown', function(e) {
+                if (e.ctrlKey || e.metaKey) {
+                    switch (e.key) {
+                        case '1':
+                            e.preventDefault();
+                            window.mainNavigation.handleCategoryAction('browse', 'P1');
+                            break;
+                        case '2':
+                            e.preventDefault();
+                            window.mainNavigation.handleCategoryAction('browse', 'P2');
+                            break;
+                        case '3':
+                            e.preventDefault();
+                            window.mainNavigation.handleCategoryAction('browse', 'P3');
+                            break;
+                    }
                 }
-            }
-        });
+            });
+
+            console.log('[MainNavigation] 使用事件委托设置监听器');
+        } else {
+            // 降级到传统监听器
+            document.addEventListener('click', (e) => {
+                const categoryCard = e.target.closest('.category-card');
+                if (categoryCard) {
+                    const category = categoryCard.dataset.category;
+                    this.handleCategoryClick(category, e);
+                }
+
+                const actionBtn = e.target.closest('[data-action]');
+                if (actionBtn) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const action = actionBtn.dataset.action;
+                    const category = actionBtn.dataset.category;
+                    this.handleCategoryAction(action, category);
+                }
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (e.ctrlKey || e.metaKey) {
+                    switch (e.key) {
+                        case '1':
+                            e.preventDefault();
+                            this.handleCategoryAction('browse', 'P1');
+                            break;
+                        case '2':
+                            e.preventDefault();
+                            this.handleCategoryAction('browse', 'P2');
+                            break;
+                        case '3':
+                            e.preventDefault();
+                            this.handleCategoryAction('browse', 'P3');
+                            break;
+                    }
+                }
+            });
+        }
     }
 
     /**
@@ -234,7 +276,12 @@ class MainNavigation {
             // 更新进度条
             const progressBar = document.querySelector(`[data-category="${category}"] .progress-fill`);
             if (progressBar) {
-                progressBar.style.width = `${stats.progress}%`;
+                // 使用DOMStyles工具
+                if (typeof window.DOMStyles !== 'undefined' && window.DOMStyles.setStyle) {
+                    window.DOMStyles.setStyle(progressBar, { width: `${stats.progress}%` });
+                } else {
+                    progressBar.style.width = `${stats.progress}%`;
+                }
                 progressBar.dataset.progress = stats.progress;
             }
             
