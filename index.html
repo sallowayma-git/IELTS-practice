@@ -115,10 +115,10 @@
                 <h3>🔧 系统管理</h3>
                 <p style="margin: 15px 0; opacity: 0.9;">系统工具和设置选项</p>
                 <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
-                    <button class="btn btn-warning" onclick="clearCache()">🗑️ 清除缓存</button>
-                    <button class="btn" onclick="showLibraryLoaderModal()">📂 加载题库</button>
-                    <button class="btn btn-info" onclick="showLibraryConfigListV2()">⚙️ 题库配置切换</button>
-                    <button class="btn btn-warning" onclick="loadLibrary(true); showMessage('题库已强制刷新', 'success')">🔄 强制刷新题库</button>
+                    <button class="btn btn-warning" id="clear-cache-btn">🗑️ 清除缓存</button>
+                    <button class="btn" id="load-library-btn">📂 加载题库</button>
+                    <button class="btn btn-info" id="library-config-btn">⚙️ 题库配置切换</button>
+                    <button class="btn btn-warning" id="force-refresh-btn">🔄 强制刷新题库</button>
                 </div>
             </div>
 
@@ -126,10 +126,10 @@
                 <h3>💾 数据管理</h3>
                 <p style="margin: 15px 0; opacity: 0.9;">数据备份、导入导出和完整性检查</p>
                 <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button class="btn" onclick="createManualBackup()">💾 创建备份</button>
-                    <button class="btn btn-secondary" onclick="showBackupList()">📋 备份列表</button>
-                    <button class="btn btn-info" onclick="exportAllData()">📤 导出数据</button>
-                    <button class="btn btn-warning" onclick="importData()">📥 导入数据</button>
+                    <button class="btn" id="create-backup-btn">💾 创建备份</button>
+                    <button class="btn btn-secondary" id="backup-list-btn">📋 备份列表</button>
+                    <button class="btn btn-info" id="export-data-btn">📤 导出数据</button>
+                    <button class="btn btn-warning" id="import-data-btn">📥 导入数据</button>
                 </div>
             </div>
 

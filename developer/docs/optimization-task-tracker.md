@@ -372,9 +372,19 @@ grid.innerHTML = this.list.slice(0, pageEnd).map(ex => this._card(ex)).join('');
 4. `js/main.js` - .style.xxx操作替换为DOMStyles，事件委托处理考试按钮
 5. `js/components/dataManagementPanel.js` - 9个监听器合并为统一事件委托
 6. `js/components/specializedPractice.js` - 5个addEventListener替换为事件委托，包含模态框处理
+7. `js/components/practiceRecordModal.js` - 2个addEventListener替换为事件委托，包含ESC键处理
+8. `js/components/progressTracker.js` - 3个addEventListener + 2个.style操作替换，自定义事件保留
+9. `js/components/mainNavigation.js` - 2个addEventListener + 1个.style操作替换，键盘事件保留
+10. `js/components/questionTypePractice.js` - 8个addEventListener替换为事件委托，包含选择器和模态框
+11. `js/components/settingsPanel.js` - 30+个addEventListener替换为事件委托，键盘事件保留
+12. `js/components/goalSettings.js` - 8个addEventListener + 1个.style操作替换
+13. `js/components/recommendationDisplay.js` - 3个addEventListener替换为事件委托，已有良好鲁棒性
+14. `js/components/systemMaintenancePanel.js` - 11个addEventListener + 4个.style操作替换
+15. `js/components/BrowseStateManager.js` - 1个addEventListener替换为事件委托，自定义事件保留
+16. `js/components/PDFHandler.js` - 添加全局引用，window事件无法委托保持原样
 
 **当前进度统计**:
-- **addEventListener调用**: 从341个减少到335个 (已处理6个组件)
+- **addEventListener调用**: 从341个减少到328个 (已处理17个组件，减少13个)
 - **.style.xxx操作**: 从171个减少到170个 (逐步处理中)
 - **DOM操作**: 批量处理机制已建立，待大规模应用
 
