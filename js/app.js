@@ -688,7 +688,11 @@ class ExamSystemApp {
                 name: 'DataManagementPanel', init: () => {
                     const container = document.createElement('div');
                     container.id = 'dataManagementPanel';
-                    container.style.display = 'none';
+                    if (typeof window.DOM !== 'undefined' && window.DOM.hide) {
+                        window.DOM.hide(container);
+                    } else {
+                        container.style.display = 'none';
+                    }
                     document.body.appendChild(container);
                     const instance = new DataManagementPanel(container);
                     window.dataManagementPanel = instance;
@@ -699,7 +703,11 @@ class ExamSystemApp {
                 name: 'SystemMaintenancePanel', init: () => {
                     const container = document.createElement('div');
                     container.id = 'systemMaintenancePanel';
-                    container.style.display = 'none';
+                    if (typeof window.DOM !== 'undefined' && window.DOM.hide) {
+                        window.DOM.hide(container);
+                    } else {
+                        container.style.display = 'none';
+                    }
                     document.body.appendChild(container);
                     const instance = new SystemMaintenancePanel(container);
                     window.systemMaintenancePanel = instance;
@@ -2787,7 +2795,15 @@ class ExamSystemApp {
     showLoading(show) {
         const loading = document.getElementById('loading');
         if (loading) {
-            loading.style.display = show ? 'flex' : 'none';
+            if (typeof window.DOM !== 'undefined') {
+                if (show) {
+                    window.DOM.show(loading, 'flex');
+                } else {
+                    window.DOM.hide(loading);
+                }
+            } else {
+                loading.style.display = show ? 'flex' : 'none';
+            }
         }
     }
 
