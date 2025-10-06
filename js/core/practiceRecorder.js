@@ -36,7 +36,7 @@ class PracticeRecorder {
         // 启动自动保存
         this.startAutoSave();
 
-        // 页面卸载时保存数据
+        // 页面卸载时保存数据 - 全局事件必须使用原生 addEventListener
         window.addEventListener('beforeunload', () => {
             this.saveAllSessions();
         });
@@ -64,12 +64,12 @@ class PracticeRecorder {
      * 设置消息监听器
      */
     setupMessageListeners() {
-        // 监听来自考试窗口的消息
+        // 监听来自考试窗口的消息 - 全局事件必须使用原生 addEventListener
         window.addEventListener('message', (event) => {
             this.handleExamMessage(event);
         });
-        
-        // 监听页面可见性变化
+
+        // 监听页面可见性变化 - 全局事件必须使用原生 addEventListener
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden) {
                 this.checkSessionStatus();

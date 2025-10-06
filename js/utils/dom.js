@@ -14,7 +14,8 @@ class DOMEvents {
     }
 
     setupGlobalDelegates() {
-        // 全局点击事件委托
+        // DOM委托工具核心监听器 - 必须使用原生 addEventListener
+        // 这些是全局事件监听器，用于支持整个应用的事件委托系统
         document.addEventListener('click', (e) => {
             this.handleDelegatedEvent('click', e);
         });
