@@ -56,7 +56,8 @@ class ResponsiveManager {
      */
     setupResizeListener() {
         let resizeTimer;
-        
+
+        // Window resize events must use native addEventListener - global events cannot use delegation
         window.addEventListener('resize', () => {
             clearTimeout(resizeTimer);
             resizeTimer = setTimeout(() => {
@@ -69,12 +70,13 @@ class ResponsiveManager {
      * 设置屏幕方向变化监听
      */
     setupOrientationListener() {
+        // Orientation change events must use native addEventListener - global events cannot use delegation
         window.addEventListener('orientationchange', () => {
             setTimeout(() => {
                 this.handleOrientationChange();
             }, 100);
         });
-        
+
         // 现代浏览器的屏幕方向API
         if (screen.orientation) {
             screen.orientation.addEventListener('change', () => {
@@ -441,15 +443,17 @@ class ResponsiveManager {
         const focusableElements = document.querySelectorAll(
             'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
         );
-        
+
+        // focus/blur事件不在DOM委托支持范围内，必须使用原生 addEventListener
+        // 并且需要使用capture: true来正确处理焦点事件
         focusableElements.forEach(element => {
             element.addEventListener('focus', () => {
                 element.classList.add('keyboard-focus');
-            });
-            
+            }, true);
+
             element.addEventListener('blur', () => {
                 element.classList.remove('keyboard-focus');
-            });
+            }, true);
         });
     }
     
