@@ -367,6 +367,10 @@ async function loadLibrary(forceReload = false) {
         finishLibraryLoading(startTime);
     } catch (error) {
         console.error('[Library] 加载题库失败:', error);
+        if (typeof showMessage === 'function') {
+            showMessage('题库刷新失败: ' + (error?.message || error), 'error');
+        }
+        window.__forceLibraryRefreshInProgress = false;
         examIndex = [];
         finishLibraryLoading(startTime);
     }
@@ -1951,8 +1955,51 @@ async function showBackupList() {
 
     const backups = await window.dataIntegrityManager.getBackupList();
 
+    const settingsView = document.getElementById('settings-view');
+
+    const renderBackupContainer = (innerHtml) => {
+        const existingBackupList = settingsView?.querySelector('.backup-list-container');
+        if (existingBackupList) existingBackupList.remove();
+
+        const backupContainer = document.createElement('div');
+        backupContainer.className = 'backup-list-container';
+        backupContainer.innerHTML = `
+            <div style="margin-top: 30px;">
+                <h3>📋 备份列表</h3>
+                <div style="background: rgba(255, 255, 255, 0.1); padding: 20px; border-radius: 10px; margin-top: 15px; max-height: 300px; overflow-y: auto;">
+                    ${innerHtml}
+                </div>
+            </div>
+        `;
+
+        const mainCard = settingsView?.querySelector(':scope > div');
+        if (mainCard) {
+            mainCard.appendChild(backupContainer);
+        } else if (settingsView) {
+            settingsView.appendChild(backupContainer);
+        } else {
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 10000;
+            `;
+            modal.innerHTML = `
+                <div style="background: #2d3748; padding: 30px; border-radius: 10px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto;">
+                    <div style="max-height: 300px; overflow-y: auto; margin-bottom: 20px;">
+                        ${innerHtml}
+                    </div>
+                    <button onclick="this.parentElement.parentElement.remove()" style="background: #e53e3e; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">关闭</button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+    };
+
     if (backups.length === 0) {
-        showMessage('暂无备份记录', 'info');
+        renderBackupContainer('<p style="color: #e2e8f0;">暂无备份记录。</p>');
+        if (typeof showMessage === 'function') {
+            showMessage('暂无备份记录', 'info');
+        }
         return;
     }
 
@@ -1991,46 +2038,7 @@ async function showBackupList() {
         </div>
     `).join('');
 
-    let backupHtml = `
-        <div style="background: rgba(255, 255, 255, 0.1); padding: 20px; border-radius: 10px; margin: 20px 0;">
-            <h3>📋 备份列表</h3>
-            <div style="max-height: 300px; overflow-y: auto; margin: 15px 0;">
-                ${backupItemsHtml}
-            </div>
-        </div>
-    `;
-
-    // 插入到DOM中 - 使用appendChild避免销毁现有事件
-    const settingsView = document.getElementById('settings-view');
-    if (settingsView) {
-        // 检查是否已有备份列表，如果有则先移除
-        const existingBackupList = settingsView.querySelector('.backup-list-container');
-        if (existingBackupList) {
-            existingBackupList.remove();
-        }
-
-        // 创建备份列表容器
-        const backupContainer = document.createElement('div');
-        backupContainer.className = 'backup-list-container';
-        backupContainer.innerHTML = backupHtml;
-
-        // 插入到设置视图的开头
-        settingsView.insertBefore(backupContainer, settingsView.firstChild);
-    } else {
-        // 如果没有settings-view，创建一个临时的modal显示
-        const modal = document.createElement('div');
-        modal.style.cssText = `
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 10000;
-        `;
-        modal.innerHTML = `
-            <div style="background: #2d3748; padding: 30px; border-radius: 10px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto;">
-                ${backupHtml}
-                <button onclick="this.parentElement.parentElement.remove()" style="background: #e53e3e; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-top: 20px;">关闭</button>
-            </div>
-        `;
-        document.body.appendChild(modal);
-    }
+    renderBackupContainer(backupItemsHtml);
 }
 
 function exportAllData() {
@@ -2182,9 +2190,86 @@ async function exportPracticeData() {
     }
 }
 
+function setupIndexSettingsButtons() {
+    const bindings = [
+        ['clear-cache-btn', () => typeof clearCache === 'function' && clearCache()],
+        ['load-library-btn', () => {
+            if (typeof showLibraryLoaderModal === 'function') {
+                showLibraryLoaderModal();
+            } else if (typeof loadLibrary === 'function') {
+                loadLibrary(false);
+            }
+        }],
+        ['library-config-btn', () => typeof showLibraryConfigListV2 === 'function' && showLibraryConfigListV2()],
+        ['force-refresh-btn', () => {
+            const notify = (type, msg) => {
+                if (typeof showMessage === 'function') {
+                    showMessage(msg, type);
+                }
+            };
+
+            notify('info', '正在强制刷新题库...');
+
+            if (typeof loadLibrary === 'function') {
+                try {
+                    window.__forceLibraryRefreshInProgress = true;
+                    const result = loadLibrary(true);
+                    if (result && typeof result.then === 'function') {
+                        result.then(() => {
+                            if (window.__forceLibraryRefreshInProgress) {
+                                notify('success', '题库刷新完成');
+                                window.__forceLibraryRefreshInProgress = false;
+                            }
+                        }).catch((error) => {
+                            notify('error', '题库刷新失败: ' + (error?.message || error));
+                            window.__forceLibraryRefreshInProgress = false;
+                        });
+                    } else {
+                        setTimeout(() => {
+                            if (window.__forceLibraryRefreshInProgress) {
+                                notify('success', '题库刷新完成');
+                                window.__forceLibraryRefreshInProgress = false;
+                            }
+                        }, 800);
+                    }
+                } catch (error) {
+                    notify('error', '题库刷新失败: ' + (error?.message || error));
+                    window.__forceLibraryRefreshInProgress = false;
+                }
+            }
+        }],
+        ['create-backup-btn', () => typeof createManualBackup === 'function' && createManualBackup()],
+        ['backup-list-btn', () => typeof showBackupList === 'function' && showBackupList()],
+        ['export-data-btn', () => typeof exportAllData === 'function' && exportAllData()],
+        ['import-data-btn', () => typeof importData === 'function' && importData()]
+    ];
+
+    bindings.forEach(([id, handler]) => {
+        const button = document.getElementById(id);
+        if (button && typeof handler === 'function') {
+            button.addEventListener('click', (event) => {
+                event.preventDefault();
+                handler();
+            });
+        }
+    });
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupIndexSettingsButtons);
+} else {
+    setupIndexSettingsButtons();
+}
+
 // 新增修复3C：在js/main.js末尾添加监听examIndexLoaded事件，调用loadExamList()并隐藏浏览页spinner
 window.addEventListener('examIndexLoaded', () => {
     try {
+        if (window.__forceLibraryRefreshInProgress) {
+            if (typeof showMessage === 'function') {
+                showMessage('题库刷新完成', 'success');
+            }
+            window.__forceLibraryRefreshInProgress = false;
+        }
         if (typeof loadExamList === 'function') loadExamList();
         const loading = document.querySelector('#browse-view .loading');
         if (loading) loading.style.display = 'none';

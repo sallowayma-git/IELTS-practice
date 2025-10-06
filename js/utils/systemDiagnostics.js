@@ -503,7 +503,7 @@ class SystemDiagnostics {
      * 错误日志收集
      */
     setupErrorLogging() {
-        // 全局错误监听
+        // 全局错误监听 - 必须使用原生 addEventListener
         window.addEventListener('error', (event) => {
             this.logError({
                 type: 'javascript_error',
@@ -516,7 +516,7 @@ class SystemDiagnostics {
             });
         });
 
-        // Promise 拒绝监听
+        // Promise 拒绝监听 - 必须使用原生 addEventListener
         window.addEventListener('unhandledrejection', (event) => {
             this.logError({
                 type: 'unhandled_promise_rejection',

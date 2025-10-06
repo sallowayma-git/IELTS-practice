@@ -22,14 +22,15 @@ class KeyboardShortcuts {
      * 设置事件监听器
      */
     setupEventListeners() {
+        // 键盘事件和自定义事件必须使用原生 addEventListener
         document.addEventListener('keydown', this.handleKeyDown.bind(this));
         document.addEventListener('keyup', this.handleKeyUp.bind(this));
-        
-        // 监听模态框打开/关闭
+
+        // 监听模态框打开/关闭 - 自定义事件，必须使用原生监听
         document.addEventListener('modalOpened', (e) => {
             this.modalStack.push(e.detail.modalId);
         });
-        
+
         document.addEventListener('modalClosed', (e) => {
             const index = this.modalStack.indexOf(e.detail.modalId);
             if (index > -1) {

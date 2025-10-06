@@ -156,7 +156,7 @@ class TutorialSystem {
      * 设置事件监听器
      */
     setupEventListeners() {
-        // 键盘快捷键
+        // 键盘快捷键 - 必须使用原生 addEventListener
         document.addEventListener('keydown', (e) => {
             if (this.isActive) {
                 switch (e.key) {
@@ -418,25 +418,49 @@ class TutorialSystem {
      * 设置提示框事件监听器
      */
     setupTooltipEvents(tooltip) {
-        const prevBtn = tooltip.querySelector('.tutorial-prev');
-        const nextBtn = tooltip.querySelector('.tutorial-next');
-        const completeBtn = tooltip.querySelector('.tutorial-complete');
-        const skipBtn = tooltip.querySelector('.tutorial-skip');
-        
-        if (prevBtn) {
-            prevBtn.addEventListener('click', () => this.previousStep());
-        }
-        
-        if (nextBtn) {
-            nextBtn.addEventListener('click', () => this.nextStep());
-        }
-        
-        if (completeBtn) {
-            completeBtn.addEventListener('click', () => this.completeTutorial());
-        }
-        
-        if (skipBtn) {
-            skipBtn.addEventListener('click', () => this.stop());
+        // 教程控制按钮 - 可以使用事件委托优化
+        if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
+            window.DOM.delegate('click', '.tutorial-prev', (e) => {
+                const btn = e.target.closest('.tutorial-prev');
+                if (!btn) return;
+                this.previousStep();
+            });
+            window.DOM.delegate('click', '.tutorial-next', (e) => {
+                const btn = e.target.closest('.tutorial-next');
+                if (!btn) return;
+                this.nextStep();
+            });
+            window.DOM.delegate('click', '.tutorial-complete', (e) => {
+                const btn = e.target.closest('.tutorial-complete');
+                if (!btn) return;
+                this.completeTutorial();
+            });
+            window.DOM.delegate('click', '.tutorial-skip', (e) => {
+                const btn = e.target.closest('.tutorial-skip');
+                if (!btn) return;
+                this.stop();
+            });
+        } else {
+            const prevBtn = tooltip.querySelector('.tutorial-prev');
+            const nextBtn = tooltip.querySelector('.tutorial-next');
+            const completeBtn = tooltip.querySelector('.tutorial-complete');
+            const skipBtn = tooltip.querySelector('.tutorial-skip');
+
+            if (prevBtn) {
+                prevBtn.addEventListener('click', () => this.previousStep());
+            }
+
+            if (nextBtn) {
+                nextBtn.addEventListener('click', () => this.nextStep());
+            }
+
+            if (completeBtn) {
+                completeBtn.addEventListener('click', () => this.completeTutorial());
+            }
+
+            if (skipBtn) {
+                skipBtn.addEventListener('click', () => this.stop());
+            }
         }
     }
     
@@ -570,16 +594,26 @@ class TutorialSystem {
         
         this.showModal(selectorContent);
         
-        // 设置事件监听器
+        // 设置事件监听器 - 可以使用事件委托优化
         setTimeout(() => {
-            const startButtons = document.querySelectorAll('.start-tutorial');
-            startButtons.forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const tutorialKey = e.target.dataset.tutorial;
+            if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
+                window.DOM.delegate('click', '.start-tutorial', (e) => {
+                    const btn = e.target.closest('.start-tutorial');
+                    if (!btn) return;
+                    const tutorialKey = btn.dataset.tutorial;
                     document.querySelector('.modal-overlay').remove();
                     this.start(tutorialKey);
                 });
-            });
+            } else {
+                const startButtons = document.querySelectorAll('.start-tutorial');
+                startButtons.forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const tutorialKey = e.target.dataset.tutorial;
+                        document.querySelector('.modal-overlay').remove();
+                        this.start(tutorialKey);
+                    });
+                });
+            }
         }, 100);
     }
     
@@ -593,19 +627,28 @@ class TutorialSystem {
         
         document.body.appendChild(modalOverlay);
         
-        // 点击背景关闭
+        // 点击背景关闭 - 动态创建，保持原生监听
         modalOverlay.addEventListener('click', (e) => {
             if (e.target === modalOverlay) {
                 modalOverlay.remove();
             }
         });
-        
-        // 关闭按钮
-        const closeBtn = modalOverlay.querySelector('.modal-close');
-        if (closeBtn) {
-            closeBtn.addEventListener('click', () => {
-                modalOverlay.remove();
+
+        // 关闭按钮 - 可以使用事件委托优化
+        if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
+            window.DOM.delegate('click', '.modal-close', (e) => {
+                const btn = e.target.closest('.modal-close');
+                if (!btn) return;
+                const modal = document.querySelector('.modal-overlay');
+                if (modal) modal.remove();
             });
+        } else {
+            const closeBtn = modalOverlay.querySelector('.modal-close');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', () => {
+                    modalOverlay.remove();
+                });
+            }
         }
     }
 }

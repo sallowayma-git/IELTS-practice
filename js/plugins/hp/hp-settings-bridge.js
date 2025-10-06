@@ -6,9 +6,14 @@
   'use strict';
   if (typeof hpCore === 'undefined') { console.error('[HP-Settings-Bridge] hpCore missing'); return; }
 
-  function qGroups(){
-    // two button stacks in the template share the same class set
-    return Array.from(document.querySelectorAll('.flex.flex-1.gap-3.max-w-[480px].flex-col.items-stretch.px-4.py-3'));
+  function attachButtonById(id, handler){
+    const btn = document.getElementById(id);
+    if (!btn) return false;
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      handler();
+    });
+    return true;
   }
 
   function clearCache(){ try { localStorage.clear(); sessionStorage.clear(); hpCore.showMessage('缓存已清理','success'); setTimeout(()=>location.reload(),600); } catch(e){ alert('清理失败: '+e); } }
@@ -21,20 +26,40 @@
   function importData(){ try { if (typeof window.importData==='function') return window.importData(); hpCore.showMessage('导入不可用','warning'); } catch(e){ console.warn(e); } }
 
   function wire(){
-    const groups = qGroups();
-    if (groups[0]){
-      const btns = groups[0].querySelectorAll('button');
-      btns[0] && btns[0].addEventListener('click', (e)=>{ e.preventDefault(); clearCache(); });
-      btns[1] && btns[1].addEventListener('click', (e)=>{ e.preventDefault(); loadLib(false); });
-      btns[2] && btns[2].addEventListener('click', (e)=>{ e.preventDefault(); showConfigs(); });
-      btns[3] && btns[3].addEventListener('click', (e)=>{ e.preventDefault(); forceRefresh(); });
-    }
-    if (groups[1]){
-      const btns = groups[1].querySelectorAll('button');
-      btns[0] && btns[0].addEventListener('click', (e)=>{ e.preventDefault(); createBackup(); });
-      btns[1] && btns[1].addEventListener('click', (e)=>{ e.preventDefault(); backupList(); });
-      btns[2] && btns[2].addEventListener('click', (e)=>{ e.preventDefault(); exportData(); });
-      btns[3] && btns[3].addEventListener('click', (e)=>{ e.preventDefault(); importData(); });
+    // 优先使用显式ID绑定
+    const primaryBindings = [
+      attachButtonById('clear-cache-btn', clearCache),
+      attachButtonById('load-library-btn', () => loadLib(false)),
+      attachButtonById('library-config-btn', showConfigs),
+      attachButtonById('force-refresh-btn', forceRefresh),
+      attachButtonById('create-backup-btn', createBackup),
+      attachButtonById('backup-list-btn', backupList),
+      attachButtonById('export-data-btn', exportData),
+      attachButtonById('import-data-btn', importData)
+    ];
+
+    const allIdsBound = primaryBindings.every(Boolean);
+
+    if (!allIdsBound) {
+      try {
+        const groups = Array.from(document.querySelectorAll('.flex.flex-1.gap-3.flex-col.items-stretch'));
+        if (groups[0]) {
+          const btns = groups[0].querySelectorAll('button');
+          btns[0] && btns[0].addEventListener('click', (e)=>{ e.preventDefault(); clearCache(); });
+          btns[1] && btns[1].addEventListener('click', (e)=>{ e.preventDefault(); loadLib(false); });
+          btns[2] && btns[2].addEventListener('click', (e)=>{ e.preventDefault(); showConfigs(); });
+          btns[3] && btns[3].addEventListener('click', (e)=>{ e.preventDefault(); forceRefresh(); });
+        }
+        if (groups[1]) {
+          const btns = groups[1].querySelectorAll('button');
+          btns[0] && btns[0].addEventListener('click', (e)=>{ e.preventDefault(); createBackup(); });
+          btns[1] && btns[1].addEventListener('click', (e)=>{ e.preventDefault(); backupList(); });
+          btns[2] && btns[2].addEventListener('click', (e)=>{ e.preventDefault(); exportData(); });
+          btns[3] && btns[3].addEventListener('click', (e)=>{ e.preventDefault(); importData(); });
+        }
+      } catch (e) {
+        console.warn('[HP-Settings-Bridge] fallback 按钮绑定失败:', e);
+      }
     }
 
     // Text-based fallback binding for all buttons (no :contains, works on file://)
@@ -77,9 +102,18 @@
         }
       };
 
-      // Delegate to buttons in settings containers and specific IDs
-      window.DOM.delegate('click', '.flex.flex-1.gap-3.max-w-\\[480px\\].flex-col.items-stretch.px-4.py-3 button, #clear-cache-btn, #load-library-btn, #library-config-btn, #force-refresh-btn, #create-backup-btn, #backup-list-btn, #export-data-btn, #import-data-btn', handleSettingsClick);
-      console.log('[HP-Settings-Bridge] 使用事件委托设置按钮(扩展范围)');
+      // 使用稳定的选择器进行事件委托，避免转义问题
+      try {
+        // 使用更简单的选择器，依赖handleSettingsClick内部的文本匹配
+      const delegateSelector = '.settings-card button, .settings-actions button, button#clear-cache-btn, button#load-library-btn, button#library-config-btn, button#force-refresh-btn, button#create-backup-btn, button#backup-list-btn, button#export-data-btn, button#import-data-btn';
+        window.DOM.delegate('click', delegateSelector, handleSettingsClick);
+        console.log('[HP-Settings-Bridge] 使用稳定选择器事件委托');
+      } catch (e) {
+        console.warn('[HP-Settings-Bridge] 委托选择器失败，使用备用方案:', e);
+        // 使用通用按钮委托 + 文本匹配
+        window.DOM.delegate('click', 'button', handleSettingsClick);
+        console.log('[HP-Settings-Bridge] 使用通用按钮委托');
+      }
     } else {
       // Fallback to original text-based binding
       Array.from(document.querySelectorAll('button')).forEach(function(b){
