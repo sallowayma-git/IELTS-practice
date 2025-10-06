@@ -395,6 +395,7 @@ grid.innerHTML = this.list.slice(0, pageEnd).map(ex => this._card(ex)).join('');
 - "修一块，测一块"比全局重构更安全可靠
 
 **下一步计划**:
+- **下一个目标**: 集中处理 `js/components/settingsPanel.js`，该文件包含超过30个 `addEventListener`，是重构的重点。
 - 继续按视图模块逐步替换addEventListener
 - 重点处理高频路径的.style.xxx操作
 - 建立自动化监控重复代码的工具

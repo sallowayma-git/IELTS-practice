@@ -213,7 +213,7 @@ class GoalManager {
      * 初始化进度跟踪
      */
     initializeProgressTracking() {
-        // 监听练习完成事件
+        // 监听练习完成事件 - 自定义事件必须使用原生 addEventListener
         document.addEventListener('practiceSessionCompleted', (event) => {
             const { practiceRecord } = event.detail;
             this.updateProgress(practiceRecord);
