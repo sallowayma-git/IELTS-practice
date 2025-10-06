@@ -376,7 +376,7 @@ grid.innerHTML = this.list.slice(0, pageEnd).map(ex => this._card(ex)).join('');
 8. `js/components/progressTracker.js` - 3个addEventListener + 2个.style操作替换，自定义事件保留
 9. `js/components/mainNavigation.js` - 2个addEventListener + 1个.style操作替换，键盘事件保留
 10. `js/components/questionTypePractice.js` - 8个addEventListener替换为事件委托，包含选择器和模态框
-11. `js/components/settingsPanel.js` - 30+个addEventListener替换为事件委托，键盘事件保留
+11. `js/components/settingsPanel.js` - 超过30个 `addEventListener` 调用被重构为基于父容器的单一事件委托模式，显著简化了代码结构。
 12. `js/components/goalSettings.js` - 8个addEventListener + 1个.style操作替换
 13. `js/components/recommendationDisplay.js` - 3个addEventListener替换为事件委托，已有良好鲁棒性
 14. `js/components/systemMaintenancePanel.js` - 11个addEventListener + 4个.style操作替换
@@ -395,7 +395,7 @@ grid.innerHTML = this.list.slice(0, pageEnd).map(ex => this._card(ex)).join('');
 - "修一块，测一块"比全局重构更安全可靠
 
 **下一步计划**:
-- **下一个目标**: 集中处理 `js/components/settingsPanel.js`，该文件包含超过30个 `addEventListener`，是重构的重点。
+- **下一个目标**: `js/utils/tutorialSystem.js`。该文件包含多个UI控件的事件监听，是应用正确委托模式的下一个练习目标。
 - 继续按视图模块逐步替换addEventListener
 - 重点处理高频路径的.style.xxx操作
 - 建立自动化监控重复代码的工具
