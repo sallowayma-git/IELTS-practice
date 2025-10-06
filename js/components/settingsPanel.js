@@ -513,194 +513,124 @@ class SettingsPanel {
      * 设置设置项事件监听器
      */
     setupSettingsEvents(modal) {
-        // 主题选择
-        const themeSelect = modal.querySelector('#theme-select');
-        if (themeSelect) {
-            themeSelect.addEventListener('change', (e) => {
-                if (window.app?.themeManager) {
-                    window.app.themeManager.setTheme(e.target.value);
-                }
-            });
-        }
-        
-        // 自动主题
-        const autoThemeToggle = modal.querySelector('#auto-theme');
-        if (autoThemeToggle) {
-            autoThemeToggle.addEventListener('change', (e) => {
-                if (window.app?.themeManager) {
-                    window.app.themeManager.toggleAutoTheme();
-                }
-            });
-        }
-        
-        // 字体大小
-        const fontSizeSelect = modal.querySelector('#font-size-select');
-        if (fontSizeSelect) {
-            fontSizeSelect.addEventListener('change', (e) => {
-                if (window.app?.themeManager) {
-                    window.app.themeManager.setFontSize(e.target.value);
-                }
-            });
-        }
-        
-        // 高对比度
-        const highContrastToggle = modal.querySelector('#high-contrast');
-        if (highContrastToggle) {
-            highContrastToggle.addEventListener('change', (e) => {
-                if (window.app?.themeManager) {
-                    window.app.themeManager.toggleHighContrast();
-                }
-            });
-        }
-        
-        // 减少动画
-        const reduceMotionToggle = modal.querySelector('#reduce-motion');
-        if (reduceMotionToggle) {
-            reduceMotionToggle.addEventListener('change', (e) => {
-                if (window.app?.themeManager) {
-                    window.app.themeManager.toggleReduceMotion();
-                }
-            });
-        }
-        
-        // 键盘快捷键
-        const keyboardShortcutsToggle = modal.querySelector('#keyboard-shortcuts');
-        if (keyboardShortcutsToggle) {
-            keyboardShortcutsToggle.addEventListener('change', (e) => {
-                this.settings.keyboardShortcuts = e.target.checked;
-                if (window.app?.keyboardShortcuts) {
-                    if (e.target.checked) {
-                        window.app.keyboardShortcuts.enable();
-                    } else {
-                        window.app.keyboardShortcuts.disable();
+        const settingsContainer = modal.querySelector('.modal-body'); // 假设所有设置项都在.modal-body内
+        if (!settingsContainer) return;
+
+        const handleChange = (e) => {
+            const target = e.target;
+            if (!target) return;
+
+            const id = target.id;
+            const themeManager = window.app?.themeManager;
+            const keyboardShortcuts = window.app?.keyboardShortcuts;
+
+            switch (id) {
+                case 'theme-select':
+                    themeManager?.setTheme(target.value);
+                    break;
+                case 'auto-theme':
+                    themeManager?.toggleAutoTheme();
+                    break;
+                case 'font-size-select':
+                    themeManager?.setFontSize(target.value);
+                    break;
+                case 'high-contrast':
+                    themeManager?.toggleHighContrast();
+                    break;
+                case 'reduce-motion':
+                    themeManager?.toggleReduceMotion();
+                    break;
+                case 'keyboard-shortcuts':
+                    this.settings.keyboardShortcuts = target.checked;
+                    if (keyboardShortcuts) {
+                        target.checked ? keyboardShortcuts.enable() : keyboardShortcuts.disable();
                     }
-                }
-            });
-        }
-        
-        // 查看快捷键
-        const viewShortcutsBtn = modal.querySelector('#view-shortcuts');
-        if (viewShortcutsBtn) {
-            viewShortcutsBtn.addEventListener('click', () => {
-                if (window.app?.keyboardShortcuts) {
-                    window.app.keyboardShortcuts.showShortcutsModal();
-                }
-            });
-        }
-        
-        // 其他设置
-        const soundEffectsToggle = modal.querySelector('#sound-effects');
-        if (soundEffectsToggle) {
-            soundEffectsToggle.addEventListener('change', (e) => {
-                this.settings.soundEffects = e.target.checked;
-            });
-        }
-        
-        const notificationsToggle = modal.querySelector('#notifications');
-        if (notificationsToggle) {
-            notificationsToggle.addEventListener('change', (e) => {
-                this.settings.notifications = e.target.checked;
-            });
-        }
-        
-        const autoSaveToggle = modal.querySelector('#auto-save');
-        if (autoSaveToggle) {
-            autoSaveToggle.addEventListener('change', (e) => {
-                this.settings.autoSave = e.target.checked;
-            });
-        }
-        
-        // 数据管理
-        const dataManagementBtn = modal.querySelector('#data-management');
-        if (dataManagementBtn) {
-            dataManagementBtn.addEventListener('click', () => {
-                this.hide();
-                if (window.dataManagementPanel) {
-                    window.dataManagementPanel.show();
-                }
-            });
-        }
+                    break;
+                case 'sound-effects':
+                    this.settings.soundEffects = target.checked;
+                    break;
+                case 'notifications':
+                    this.settings.notifications = target.checked;
+                    break;
+                case 'auto-save':
+                    this.settings.autoSave = target.checked;
+                    break;
+            }
+        };
 
-        this.calculateStorageUsage();  // Call the async method
+        const handleClick = (e) => {
+            const target = e.target;
+            if (!target) return;
 
-        // 加载题库
-        const libraryLoaderBtn = modal.querySelector('#library-loader');
-        if (libraryLoaderBtn) {
-            libraryLoaderBtn.addEventListener('click', () => {
-                this.hide();
-                if (window.showLibraryLoaderModal) {
-                    window.showLibraryLoaderModal();
-                } else if (window.showMessage) {
-                    window.showMessage('加载题库功能尚未初始化', 'warning');
-                }
-            });
-        }
-        
-        // 系统维护
-        const systemMaintenanceBtn = modal.querySelector('#system-maintenance');
-        if (systemMaintenanceBtn) {
-            systemMaintenanceBtn.addEventListener('click', () => {
-                this.hide();
-                if (window.systemMaintenancePanel) {
-                    window.systemMaintenancePanel.show();
-                }
-            });
-        }
-        
-        // 清除数据
-        const clearDataBtn = modal.querySelector('#clear-data');
-        if (clearDataBtn) {
-            clearDataBtn.addEventListener('click', () => {
-                this.confirmClearData();
-            });
-        }
-        
-        // 重置教程
-        const resetTutorialsBtn = modal.querySelector('#reset-tutorials');
-        if (resetTutorialsBtn) {
-            resetTutorialsBtn.addEventListener('click', () => {
-                if (window.app?.tutorialSystem) {
-                    window.app.tutorialSystem.resetTutorialProgress();
-                }
-            });
-        }
-        
-        // 显示教程
-        const showTutorialsBtn = modal.querySelector('#show-tutorials');
-        if (showTutorialsBtn) {
-            showTutorialsBtn.addEventListener('click', () => {
-                if (window.app?.tutorialSystem) {
+            const id = target.id;
+
+            switch (id) {
+                case 'view-shortcuts':
+                    window.app?.keyboardShortcuts?.showShortcutsModal();
+                    break;
+                case 'data-management':
                     this.hide();
-                    window.app.tutorialSystem.showTutorialSelector();
-                }
-            });
+                    if (window.dataManagementPanel) {
+                        window.dataManagementPanel.show();
+                    }
+                    break;
+                case 'library-loader':
+                    this.hide();
+                    if (window.showLibraryLoaderModal) {
+                        window.showLibraryLoaderModal();
+                    } else if (window.showMessage) {
+                        window.showMessage('加载题库功能尚未初始化', 'warning');
+                    }
+                    break;
+                case 'system-maintenance':
+                    this.hide();
+                    if (window.systemMaintenancePanel) {
+                        window.systemMaintenancePanel.show();
+                    }
+                    break;
+                case 'clear-data':
+                    this.confirmClearData();
+                    break;
+                case 'reset-tutorials':
+                    if (window.app?.tutorialSystem) {
+                        window.app.tutorialSystem.resetTutorialProgress();
+                    }
+                    break;
+                case 'show-tutorials':
+                    if (window.app?.tutorialSystem) {
+                        this.hide();
+                        window.app.tutorialSystem.showTutorialSelector();
+                    }
+                    break;
+                case 'reset-settings':
+                    this.resetToDefaults();
+                    break;
+                case 'export-settings':
+                    this.exportSettings();
+                    break;
+                case 'save-settings':
+                    (async () => {
+                        await this.saveSettings();
+                        this.hide();
+                        if (window.showMessage) {
+                            window.showMessage('设置已保存', 'success');
+                        }
+                    })();
+                    break;
+            }
+        };
+
+        // 使用统一的事件委托
+        if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
+            window.DOM.delegate('change', '.modal-body', handleChange);
+            window.DOM.delegate('click', '.modal-body', handleClick);
+        } else {
+            // Fallback: 仍然需要为每个元素添加监听器，但逻辑是集中的
+            settingsContainer.addEventListener('change', handleChange);
+            settingsContainer.addEventListener('click', handleClick);
         }
-        
-        // 底部按钮
-        const resetBtn = modal.querySelector('.reset-settings');
-        if (resetBtn) {
-            resetBtn.addEventListener('click', () => {
-                this.resetToDefaults();
-            });
-        }
-        
-        const exportBtn = modal.querySelector('.export-settings');
-        if (exportBtn) {
-            exportBtn.addEventListener('click', () => {
-                this.exportSettings();
-            });
-        }
-        
-        const saveBtn = modal.querySelector('.save-settings');
-        if (saveBtn) {
-            saveBtn.addEventListener('click', async () => {
-                await this.saveSettings();
-                this.hide();
-                if (window.showMessage) {
-                    window.showMessage('设置已保存', 'success');
-                }
-            });
-        }
+
+        this.calculateStorageUsage();
     }
     
     /**
