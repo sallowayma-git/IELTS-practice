@@ -8,6 +8,10 @@ class SpecializedPractice {
         this.currentCategory = null;
         this.practiceSession = null;
         this.achievements = new Map();
+
+        // 全局引用，供事件委托使用
+        window.specializedPractice = this;
+
         this.initialize();
     }
 
@@ -41,28 +45,69 @@ class SpecializedPractice {
      * 设置事件监听器
      */
     setupEventListeners() {
-        document.addEventListener('click', (e) => {
-            // 专项练习模式选择
-            const modeBtn = e.target.closest('[data-practice-mode]');
-            if (modeBtn) {
-                const mode = modeBtn.dataset.practiceMode;
-                const category = modeBtn.dataset.category;
-                this.startSpecializedPractice(mode, category);
-            }
+        // 使用事件委托替换独立监听器
+        if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
+            // 专项练习模式选择和成就查看
+            window.DOM.delegate('click', '[data-practice-mode]', function(e) {
+                const mode = this.dataset.practiceMode;
+                const category = this.dataset.category;
+                window.specializedPractice.startSpecializedPractice(mode, category);
+            });
 
-            // 成就查看
-            const achievementBtn = e.target.closest('.achievement-item');
-            if (achievementBtn) {
-                const achievementId = achievementBtn.dataset.achievementId;
-                this.showAchievementDetails(achievementId);
-            }
-        });
+            window.DOM.delegate('click', '.achievement-item', function(e) {
+                const achievementId = this.dataset.achievementId;
+                window.specializedPractice.showAchievementDetails(achievementId);
+            });
 
-        // 监听练习完成事件
-        document.addEventListener('practiceSessionCompleted', (event) => {
-            const { examId, practiceRecord } = event.detail;
-            this.handlePracticeCompletion(examId, practiceRecord);
-        });
+            // 专项练习视图内的特定按钮
+            window.DOM.delegate('click', '#back-to-overview-from-specialized', function(e) {
+                if (window.app && typeof window.app.navigateToView === 'function') {
+                    window.app.navigateToView('overview');
+                }
+            });
+
+            // 筛选器变化事件
+            window.DOM.delegate('change', '#category-selector', function(e) {
+                window.specializedPractice.updateSpecializedExamList();
+            });
+
+            window.DOM.delegate('change', '#difficulty-selector', function(e) {
+                window.specializedPractice.updateSpecializedExamList();
+            });
+
+            // 模态框背景点击关闭
+            window.DOM.delegate('click', '.modal-overlay.show', function(e) {
+                if (e.target === this) {
+                    this.remove();
+                }
+            });
+
+            console.log('[SpecializedPractice] 使用事件委托设置监听器');
+        } else {
+            // 降级到传统监听器
+            document.addEventListener('click', (e) => {
+                // 专项练习模式选择
+                const modeBtn = e.target.closest('[data-practice-mode]');
+                if (modeBtn) {
+                    const mode = modeBtn.dataset.practiceMode;
+                    const category = modeBtn.dataset.category;
+                    this.startSpecializedPractice(mode, category);
+                }
+
+                // 成就查看
+                const achievementBtn = e.target.closest('.achievement-item');
+                if (achievementBtn) {
+                    const achievementId = achievementBtn.dataset.achievementId;
+                    this.showAchievementDetails(achievementId);
+                }
+            });
+
+            // 监听练习完成事件
+            document.addEventListener('practiceSessionCompleted', (event) => {
+                const { examId, practiceRecord } = event.detail;
+                this.handlePracticeCompletion(examId, practiceRecord);
+            });
+        }
     }
 
     /**
@@ -229,31 +274,7 @@ class SpecializedPractice {
 
         mainContent.appendChild(specializedView);
 
-        // 设置返回按钮事件
-        const backBtn = specializedView.querySelector('#back-to-overview-from-specialized');
-        if (backBtn) {
-            backBtn.addEventListener('click', () => {
-                if (window.app && typeof window.app.navigateToView === 'function') {
-                    window.app.navigateToView('overview');
-                }
-            });
-        }
-
-        // 设置筛选器事件
-        const categorySelector = specializedView.querySelector('#category-selector');
-        const difficultySelector = specializedView.querySelector('#difficulty-selector');
-
-        if (categorySelector) {
-            categorySelector.addEventListener('change', () => {
-                this.updateSpecializedExamList();
-            });
-        }
-
-        if (difficultySelector) {
-            difficultySelector.addEventListener('change', () => {
-                this.updateSpecializedExamList();
-            });
-        }
+        // 返回按钮和筛选器事件已通过事件委托处理
     }
 
     /**
@@ -792,15 +813,10 @@ class SpecializedPractice {
         const modalOverlay = document.createElement('div');
         modalOverlay.className = 'modal-overlay show';
         modalOverlay.innerHTML = `<div class="modal">${content}</div>`;
-        
+
         document.body.appendChild(modalOverlay);
-        
-        // 点击背景关闭
-        modalOverlay.addEventListener('click', (e) => {
-            if (e.target === modalOverlay) {
-                modalOverlay.remove();
-            }
-        });
+
+        // 模态框背景点击关闭已通过事件委托处理
     }
 
     /**

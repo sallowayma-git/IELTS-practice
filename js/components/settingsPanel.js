@@ -6,7 +6,10 @@ class SettingsPanel {
     constructor() {
         this.isVisible = false;
         this.settings = this.loadSettings();
-        
+
+        // 全局引用，供事件委托使用
+        window.settingsPanel = this;
+
         this.init();
     }
     
@@ -56,7 +59,7 @@ class SettingsPanel {
         settingsButton.title = '系统设置 (Ctrl+Shift+S)';
         settingsButton.setAttribute('aria-label', '打开系统设置');
         
-        settingsButton.addEventListener('click', () => this.show());
+        // 设置按钮点击已通过事件委托处理
         
         // 添加到页面
         document.body.appendChild(settingsButton);
@@ -108,17 +111,136 @@ class SettingsPanel {
      * 设置事件监听器
      */
     setupEventListeners() {
-        // 键盘快捷键
-        document.addEventListener('keydown', (e) => {
-            if (e.ctrlKey && e.shiftKey && e.key === 'S') {
-                e.preventDefault();
-                this.toggle();
-            }
-            
-            if (e.key === 'Escape' && this.isVisible) {
-                this.hide();
-            }
-        });
+        // 使用事件委托替换独立监听器
+        if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
+            // 设置按钮点击
+            window.DOM.delegate('click', '.settings-button', function(e) {
+                window.settingsPanel.show();
+            });
+
+            // 模态框事件
+            window.DOM.delegate('click', '.modal-close', function(e) {
+                window.settingsPanel.hide();
+            });
+
+            window.DOM.delegate('click', '.settings-overlay', function(e) {
+                if (e.target === this) {
+                    window.settingsPanel.hide();
+                }
+            });
+
+            // 标签切换
+            window.DOM.delegate('click', '.settings-tab', function(e) {
+                window.settingsPanel.switchTab(this.dataset.tab);
+            });
+
+            // 键盘快捷键（必须使用document.addEventListener，因为DOM.delegate不支持document作为selector）
+            document.addEventListener('keydown', function(e) {
+                if (e.ctrlKey && e.shiftKey && e.key === 'S') {
+                    e.preventDefault();
+                    window.settingsPanel.toggle();
+                }
+
+                if (e.key === 'Escape' && window.settingsPanel.isVisible) {
+                    window.settingsPanel.hide();
+                }
+            });
+
+            // 设置项变化事件
+            window.DOM.delegate('change', '#theme-select', function(e) {
+                window.settingsPanel.updateSetting('theme', this.value);
+            });
+
+            window.DOM.delegate('change', '#auto-theme-toggle', function(e) {
+                window.settingsPanel.updateSetting('autoTheme', this.checked);
+            });
+
+            window.DOM.delegate('change', '#font-size-select', function(e) {
+                window.settingsPanel.updateSetting('fontSize', this.value);
+            });
+
+            window.DOM.delegate('change', '#high-contrast-toggle', function(e) {
+                window.settingsPanel.updateSetting('highContrast', this.checked);
+            });
+
+            window.DOM.delegate('change', '#reduce-motion-toggle', function(e) {
+                window.settingsPanel.updateSetting('reduceMotion', this.checked);
+            });
+
+            window.DOM.delegate('change', '#keyboard-shortcuts-toggle', function(e) {
+                window.settingsPanel.updateSetting('keyboardShortcuts', this.checked);
+            });
+
+            window.DOM.delegate('click', '#view-shortcuts-btn', function(e) {
+                window.settingsPanel.showKeyboardShortcuts();
+            });
+
+            // 声音设置
+            window.DOM.delegate('change', '#sound-effects-toggle', function(e) {
+                window.settingsPanel.updateSetting('soundEffects', this.checked);
+            });
+
+            window.DOM.delegate('change', '#notifications-toggle', function(e) {
+                window.settingsPanel.updateSetting('notifications', this.checked);
+            });
+
+            window.DOM.delegate('change', '#auto-save-toggle', function(e) {
+                window.settingsPanel.updateSetting('autoSave', this.checked);
+            });
+
+            // 数据管理按钮
+            window.DOM.delegate('click', '#data-management-btn', function(e) {
+                window.settingsPanel.openDataManagement();
+            });
+
+            window.DOM.delegate('click', '#library-loader-btn', function(e) {
+                window.settingsPanel.openLibraryLoader();
+            });
+
+            window.DOM.delegate('click', '#system-maintenance-btn', function(e) {
+                window.settingsPanel.openSystemMaintenance();
+            });
+
+            window.DOM.delegate('click', '#clear-data-btn', function(e) {
+                window.settingsPanel.clearAllData();
+            });
+
+            window.DOM.delegate('click', '#reset-tutorials-btn', function(e) {
+                window.settingsPanel.resetTutorials();
+            });
+
+            window.DOM.delegate('click', '#show-tutorials-btn', function(e) {
+                window.settingsPanel.showTutorials();
+            });
+
+            // 关于页面按钮
+            window.DOM.delegate('click', '#reset-settings-btn', function(e) {
+                window.settingsPanel.resetSettings();
+            });
+
+            window.DOM.delegate('click', '#export-settings-btn', function(e) {
+                window.settingsPanel.exportSettings();
+            });
+
+            window.DOM.delegate('click', '#save-settings-btn', async function(e) {
+                await window.settingsPanel.saveSettings();
+                window.settingsPanel.showMessage('设置已保存', 'success');
+            });
+
+            console.log('[SettingsPanel] 使用事件委托设置监听器');
+        } else {
+            // 降级到传统监听器
+            document.addEventListener('keydown', (e) => {
+                if (e.ctrlKey && e.shiftKey && e.key === 'S') {
+                    e.preventDefault();
+                    this.toggle();
+                }
+
+                if (e.key === 'Escape' && this.isVisible) {
+                    this.hide();
+                }
+            });
+        }
     }
     
     /**
@@ -362,28 +484,10 @@ class SettingsPanel {
      * 设置模态框事件监听器
      */
     setupModalEvents(overlay, modal) {
-        // 关闭按钮
-        const closeBtn = modal.querySelector('.modal-close');
-        closeBtn.addEventListener('click', () => this.hide());
-        
-        // 点击背景关闭
-        overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) {
-                this.hide();
-            }
-        });
-        
-        // 标签切换
-        const tabs = modal.querySelectorAll('.settings-tab');
-        tabs.forEach(tab => {
-            tab.addEventListener('click', () => {
-                this.switchTab(tab.dataset.tab);
-            });
-        });
-        
-        // 设置项事件
-        this.setupSettingsEvents(modal);
-        
+        // 模态框事件已通过事件委托处理
+
+        // 设置项事件已通过事件委托处理
+
         // 计算存储使用量
         this.calculateStorageUsage();
     }

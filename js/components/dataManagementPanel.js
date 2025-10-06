@@ -208,51 +208,51 @@ class DataManagementPanel {
     bindEvents() {
         const panel = this.container.querySelector('.data-management-panel');
 
-        // 关闭按钮
-        panel.querySelector('[data-action="close"]').addEventListener('click', () => {
-            this.hide();
+        // 使用统一的事件委托处理所有按钮
+        panel.addEventListener('click', (e) => {
+            const button = e.target.closest('[data-action]');
+            if (!button) return;
+
+            const action = button.dataset.action;
+
+            switch (action) {
+                case 'close':
+                    this.hide();
+                    break;
+                case 'export':
+                    this.handleExport();
+                    break;
+                case 'selectFile':
+                    panel.querySelector('#importFile').click();
+                    break;
+                case 'import':
+                    this.handleImport();
+                    break;
+                case 'cleanup':
+                    this.handleCleanup();
+                    break;
+            }
         });
 
-        // 导出按钮
-        panel.querySelector('[data-action="export"]').addEventListener('click', () => {
-            this.handleExport();
-        });
-
-        // 文件选择
-        panel.querySelector('[data-action="selectFile"]').addEventListener('click', () => {
-            panel.querySelector('#importFile').click();
-        });
-
+        // 文件选择change事件仍然需要单独绑定
         panel.querySelector('#importFile').addEventListener('change', (e) => {
             this.handleFileSelect(e);
         });
+        console.log('[DataManagementPanel] 使用统一事件委托处理按钮');
 
-        // 导入按钮 - 使用事件委托
+        // 历史标签切换 - 使用事件委托
         panel.addEventListener('click', (e) => {
-            console.log('Click on:', e.target.tagName, e.target.className, 'dataset.action:', e.target.dataset.action);
-            if (e.target.dataset.action === 'import') {
-                this.handleImport();
+            const tabBtn = e.target.closest('.tab-btn');
+            if (tabBtn) {
+                this.switchHistoryTab(tabBtn.dataset.tab);
             }
-        });
-        console.log('[DataManagementPanel] Event listener added for import button');
-
-        // 清理按钮
-        panel.querySelector('[data-action="cleanup"]').addEventListener('click', () => {
-            this.handleCleanup();
-        });
-
-        // 历史标签切换
-        panel.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                this.switchHistoryTab(e.target.dataset.tab);
-            });
         });
 
         // 清理选项变化监听
-        panel.querySelectorAll('.cleanup-checkboxes input[type="checkbox"]').forEach(checkbox => {
-            checkbox.addEventListener('change', () => {
+        panel.addEventListener('change', (e) => {
+            if (e.target.classList.contains('cleanup-checkbox') && e.target.type === 'checkbox') {
                 this.updateCleanupButton();
-            });
+            }
         });
     }
 

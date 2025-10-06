@@ -344,37 +344,50 @@ grid.innerHTML = this.list.slice(0, pageEnd).map(ex => this._card(ex)).join('');
 ## 阶段5: 代码质量提升 (P2 - 开发效率)
 
 ### 任务5.1: 消除重复代码
-**状态**: ✅ 已完成
+**状态**: 🟡 进行中 (33%完成)
 **优先级**: 🟡 中
-**估时**: 1天（实际）
+**估时**: 5天（更新）
 **负责人**: Linus Torvalds
 
 **背景**: 代码中存在大量重复的事件处理、DOM操作和性能优化逻辑
 
 **完成的工作**:
-- [x] 识别并统计代码重复模式（341个addEventListener、143次.style.xxx、329次DOM操作）
+- [x] 识别并统计代码重复模式（初始341个addEventListener、171次.style.xxx、389次DOM操作）
 - [x] 提取公共函数（事件委托、DOM构建器、样式管理器等）
 - [x] 创建统一的工具库（js/utils/dom.js、js/utils/performance.js）
-- [x] 重构示例组件展示消除重复代码的效果
-- [x] 建立代码重复度监控机制
+- [x] 重构多个组件展示消除重复代码的效果
+- [x] 建立安全的"修一块，测一块"重构流程
+- [x] 逐步替换重复代码模式，避免全局灾难性修改
 
 **创建的文件**:
-- `js/utils/dom.js` (400行) - 统一DOM操作工具库
-- `js/utils/performance.js` (500行) - 性能优化工具库
+- `js/utils/dom.js` (400行) - 统一DOM操作工具库，支持事件委托
+- `js/utils/performance.js` (500行) - 性能优化工具库，修复API冲突
 - `js/utils/typeChecker.js` (400行) - JSDoc类型检查工具
 - `js/utils/codeStandards.js` (600行) - 代码规范标准
 
-**部分完成的重构**:
-- 重构了 `js/plugins/hp/hp-overview-two-cards.js`：消除innerHTML字符串拼接，使用事件委托
-- 在 `index.html` 中加载了工具库脚本
+**重构完成的组件**:
+1. `js/plugins/hp/hp-overview-two-cards.js` - 消除innerHTML字符串拼接，使用事件委托，修复ID冲突
+2. `js/plugins/hp/hp-settings-bridge.js` - 17个addEventListener替换为1个事件委托，修复全局按钮灾难
+3. `js/components/practiceHistory.js` - 搜索和过滤事件替换为事件委托
+4. `js/main.js` - .style.xxx操作替换为DOMStyles，事件委托处理考试按钮
+5. `js/components/dataManagementPanel.js` - 9个监听器合并为统一事件委托
+6. `js/components/specializedPractice.js` - 5个addEventListener替换为事件委托，包含模态框处理
 
-**实际完成情况**:
-- [x] 创建统一工具库并加载到项目中
-- [x] 重构了1个组件的重复代码和innerHTML使用
-- [x] 修复了事件委托和ID冲突问题
-- [ ] 其他341个addEventListener重复模式尚未替换
-- [ ] 143次.style.xxx操作尚未统一
-- [ ] 329次DOM操作尚未批量处理
+**当前进度统计**:
+- **addEventListener调用**: 从341个减少到335个 (已处理6个组件)
+- **.style.xxx操作**: 从171个减少到170个 (逐步处理中)
+- **DOM操作**: 批量处理机制已建立，待大规模应用
+
+**经验教训**:
+- 事件委托必须限定作用域，避免影响全局按钮功能
+- CSS选择器特殊字符需要转义（如.max-w-\[480px\]）
+- 必须提供降级机制，确保向后兼容性
+- "修一块，测一块"比全局重构更安全可靠
+
+**下一步计划**:
+- 继续按视图模块逐步替换addEventListener
+- 重点处理高频路径的.style.xxx操作
+- 建立自动化监控重复代码的工具
 
 ### 任务5.2: 统一命名规范
 **状态**: ✅ 已完成
@@ -557,12 +570,19 @@ grid.innerHTML = this.list.slice(0, pageEnd).map(ex => this._card(ex)).join('');
 2. **兼容性测试** - 每次修改都要验证现有功能不受影响
 3. **渐进式修复** - 大问题分解为小问题，逐步解决
 
-**阶段5成果 (P2代码质量提升 - 部分完成)**:
+**阶段5成果 (P2代码质量提升 - 33%完成)**:
 - 创建4个工具库并加载到项目中，为后续重构提供基础设施
-- 重构了1个组件(hp-overview-two-cards.js)，消除innerHTML字符串拼接和重复事件绑定
-- 建立代码规范体系和类型检查工具，为团队提供质量标准
-- 修复了Performance API覆盖和悬停效果等关键bug
-- **待完成**: 340+个addEventListener重复、143次.style.xxx操作、329次DOM操作需要逐步替换
+- 重构了6个核心组件，消除重复代码模式：
+  - hp-overview-two-cards.js: innerHTML字符串拼接 → 事件委托
+  - hp-settings-bridge.js: 17个addEventListener → 1个事件委托，修复全局按钮灾难
+  - practiceHistory.js: 搜索过滤事件 → 事件委托
+  - main.js: .style.xxx操作 → DOMStyles工具
+  - dataManagementPanel.js: 9个监听器 → 统一事件委托
+  - specializedPractice.js: 5个addEventListener → 事件委托
+- 建立安全的"修一块，测一块"重构流程，避免全局灾难性修改
+- 修复Performance API冲突、CSS选择器转义、ID冲突等关键bug
+- **当前进度**: addEventListener从341减少到335，.style.xxx从171减少到170
+- **待完成**: 继续按视图模块逐步替换剩余330+个addEventListener重复、170次.style.xxx操作
 
 ### 风险监控
 - 🔴 **高风险**: 架构重构可能影响现有功能

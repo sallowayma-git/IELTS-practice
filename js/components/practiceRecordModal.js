@@ -6,6 +6,9 @@ class PracticeRecordModal {
     constructor() {
         this.modalId = 'practice-record-modal';
         this.isVisible = false;
+
+        // 全局引用，供事件委托使用
+        window.practiceRecordModal = this;
     }
 
     /**
@@ -597,22 +600,42 @@ class PracticeRecordModal {
      * 设置事件监听器
      */
     setupEventListeners() {
-        const modal = document.getElementById(this.modalId);
-        if (!modal) return;
-        
-        // 点击背景关闭弹窗
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                this.hide();
-            }
-        });
-        
-        // ESC键关闭弹窗
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && this.isVisible) {
-                this.hide();
-            }
-        });
+        // 使用事件委托替换独立监听器
+        if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
+            // 模态框背景点击关闭
+            window.DOM.delegate('click', `#${this.modalId}`, function(e) {
+                if (e.target === this) {
+                    window.practiceRecordModal.hide();
+                }
+            });
+
+            // ESC键关闭弹窗
+            window.DOM.delegate('keydown', document, function(e) {
+                if (e.key === 'Escape' && window.practiceRecordModal.isVisible) {
+                    window.practiceRecordModal.hide();
+                }
+            });
+
+            console.log('[PracticeRecordModal] 使用事件委托设置监听器');
+        } else {
+            // 降级到传统监听器
+            const modal = document.getElementById(this.modalId);
+            if (!modal) return;
+
+            // 点击背景关闭弹窗
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    this.hide();
+                }
+            });
+
+            // ESC键关闭弹窗
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && this.isVisible) {
+                    this.hide();
+                }
+            });
+        }
     }
 }
 

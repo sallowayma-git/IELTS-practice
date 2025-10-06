@@ -255,7 +255,10 @@ class SystemMaintenancePanel {
         // 标签切换
         panel.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                this.switchTab(e.target.dataset.tab);
+                const tabBtn = e.target.closest('.tab-btn');
+                if (tabBtn) {
+                    this.switchTab(tabBtn.dataset.tab);
+                }
             });
         });
 
