@@ -137,14 +137,16 @@ class ThemeManager {
         if (window.matchMedia) {
             const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
             const reduceMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-            
+
+            // Note: MediaQueryEventListeners cannot be easily replaced with event delegation
+            // These are system-level media queries that need the traditional addEventListener
             // 监听系统主题变化
             darkModeQuery.addEventListener('change', (e) => {
                 if (this.settings.autoTheme) {
                     this.setTheme(e.matches ? 'dark' : 'light');
                 }
             });
-            
+
             // 监听减少动画偏好
             reduceMotionQuery.addEventListener('change', (e) => {
                 this.settings.reduceMotion = e.matches;
@@ -165,7 +167,7 @@ class ThemeManager {
      * 设置事件监听器
      */
     setupEventListeners() {
-        // 监听键盘快捷键
+        // 监听键盘快捷键 - 全局事件必须使用原生 addEventListener
         document.addEventListener('keydown', (e) => {
             if (e.ctrlKey && e.shiftKey && e.key === 'T') {
                 e.preventDefault();
