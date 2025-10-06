@@ -47,35 +47,39 @@
 
         const text = (button.textContent || '').trim();
 
-        // Only handle settings-related buttons, ignore all others
-        if (!(/清.*缓存|加载.*题库|重新加载|配置|题库配置|强制.*刷新|创建.*备份|备份.*列表|导出|导入/.test(text))) {
+        // Only handle settings-related buttons by text or ID
+        const buttonId = button.id;
+        const isTextMatch = /清.*缓存|加载.*题库|重新加载|配置|题库配置|强制.*刷新|创建.*备份|备份.*列表|导出|导入/.test(text);
+        const isIdMatch = buttonId && /clear-cache-btn|load-library-btn|library-config-btn|force-refresh-btn|create-backup-btn|backup-list-btn|export-data-btn|import-data-btn/.test(buttonId);
+
+        if (!isTextMatch && !isIdMatch) {
           return; // Don't preventDefault for non-settings buttons
         }
 
         e.preventDefault();
 
-        if (/清.*缓存/.test(text)) {
+        if (/清.*缓存/.test(text) || buttonId === 'clear-cache-btn') {
           clearCache();
-        } else if (/加载.*题库|重新加载/.test(text)) {
+        } else if (/加载.*题库|重新加载/.test(text) || buttonId === 'load-library-btn') {
           loadLib(false);
-        } else if (/配置|题库配置/.test(text)) {
+        } else if (/配置|题库配置/.test(text) || buttonId === 'library-config-btn') {
           showConfigs();
-        } else if (/强制.*刷新/.test(text)) {
+        } else if (/强制.*刷新/.test(text) || buttonId === 'force-refresh-btn') {
           forceRefresh();
-        } else if (/创建.*备份/.test(text)) {
+        } else if (/创建.*备份/.test(text) || buttonId === 'create-backup-btn') {
           createBackup();
-        } else if (/备份.*列表/.test(text)) {
+        } else if (/备份.*列表/.test(text) || buttonId === 'backup-list-btn') {
           backupList();
-        } else if (/导出/.test(text)) {
+        } else if (/导出/.test(text) || buttonId === 'export-data-btn') {
           exportData();
-        } else if (/导入/.test(text)) {
+        } else if (/导入/.test(text) || buttonId === 'import-data-btn') {
           importData();
         }
       };
 
-      // Only delegate to buttons within relevant containers (escape special CSS characters)
-      window.DOM.delegate('click', '.flex.flex-1.gap-3.max-w-\\[480px\\].flex-col.items-stretch.px-4.py-3 button', handleSettingsClick);
-      console.log('[HP-Settings-Bridge] 使用事件委托设置按钮(限定范围)');
+      // Delegate to buttons in settings containers and specific IDs
+      window.DOM.delegate('click', '.flex.flex-1.gap-3.max-w-\\[480px\\].flex-col.items-stretch.px-4.py-3 button, #clear-cache-btn, #load-library-btn, #library-config-btn, #force-refresh-btn, #create-backup-btn, #backup-list-btn, #export-data-btn, #import-data-btn', handleSettingsClick);
+      console.log('[HP-Settings-Bridge] 使用事件委托设置按钮(扩展范围)');
     } else {
       // Fallback to original text-based binding
       Array.from(document.querySelectorAll('button')).forEach(function(b){

@@ -810,10 +810,9 @@ function displayExams(exams) {
 
     if (loadingIndicator) {
         if (typeof window.DOM !== 'undefined' && window.DOM.hide) {
-                window.DOM.hide(loadingIndicator);
-            } else {
-                loadingIndicator.style.display = 'none';
-            }
+            window.DOM.hide(loadingIndicator);
+        } else {
+            loadingIndicator.style.display = 'none';
         }
     }
 }

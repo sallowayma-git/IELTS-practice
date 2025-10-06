@@ -8,7 +8,10 @@ class SystemMaintenancePanel {
         this.diagnostics = new SystemDiagnostics();
         this.isVisible = false;
         this.activeTab = 'health';
-        
+
+        // 全局引用，供事件委托使用
+        window.systemMaintenancePanel = this;
+
         this.initialize();
     }
 
@@ -247,64 +250,117 @@ class SystemMaintenancePanel {
     bindEvents() {
         const panel = this.container.querySelector('.system-maintenance-panel');
 
-        // 关闭按钮
-        panel.querySelector('[data-action="close"]').addEventListener('click', () => {
-            this.hide();
-        });
+        // 使用事件委托替换独立监听器
+        if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
+            // 关闭按钮
+            window.DOM.delegate('click', '[data-action="close"]', function(e) {
+                window.systemMaintenancePanel.hide();
+            });
 
-        // 标签切换
-        panel.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const tabBtn = e.target.closest('.tab-btn');
+            // 标签切换
+            window.DOM.delegate('click', '.tab-btn', function(e) {
+                const tabBtn = this.closest('.tab-btn');
                 if (tabBtn) {
-                    this.switchTab(tabBtn.dataset.tab);
+                    window.systemMaintenancePanel.switchTab(tabBtn.dataset.tab);
                 }
             });
-        });
 
-        // 系统健康操作
-        panel.querySelector('[data-action="runDiagnostics"]')?.addEventListener('click', () => {
-            this.runDiagnostics();
-        });
+            // 系统健康操作
+            window.DOM.delegate('click', '[data-action="runDiagnostics"]', function(e) {
+                window.systemMaintenancePanel.runDiagnostics();
+            });
 
-        panel.querySelector('[data-action="performMaintenance"]')?.addEventListener('click', () => {
-            this.performQuickMaintenance();
-        });
+            window.DOM.delegate('click', '[data-action="performMaintenance"]', function(e) {
+                window.systemMaintenancePanel.performQuickMaintenance();
+            });
 
-        panel.querySelector('[data-action="clearCache"]')?.addEventListener('click', () => {
-            this.clearCache();
-        });
+            window.DOM.delegate('click', '[data-action="clearCache"]', function(e) {
+                window.systemMaintenancePanel.clearCache();
+            });
 
-        // 完整性检查操作
-        panel.querySelector('[data-action="startIntegrityCheck"]')?.addEventListener('click', () => {
-            this.startIntegrityCheck();
-        });
+            // 完整性检查操作
+            window.DOM.delegate('click', '[data-action="startIntegrityCheck"]', function(e) {
+                window.systemMaintenancePanel.startIntegrityCheck();
+            });
 
-        // 性能监控操作
-        panel.querySelector('[data-action="startPerformanceTest"]')?.addEventListener('click', () => {
-            this.startPerformanceTest();
-        });
+            // 性能监控操作
+            window.DOM.delegate('click', '[data-action="startPerformanceTest"]', function(e) {
+                window.systemMaintenancePanel.startPerformanceTest();
+            });
 
-        // 错误日志操作
-        panel.querySelector('[data-action="analyzeErrors"]')?.addEventListener('click', () => {
-            this.analyzeErrors();
-        });
+            // 错误日志操作
+            window.DOM.delegate('click', '[data-action="analyzeErrors"]', function(e) {
+                window.systemMaintenancePanel.analyzeErrors();
+            });
 
-        panel.querySelector('[data-action="clearErrorLogs"]')?.addEventListener('click', () => {
-            this.clearErrorLogs();
-        });
+            window.DOM.delegate('click', '[data-action="clearErrorLogs"]', function(e) {
+                window.systemMaintenancePanel.clearErrorLogs();
+            });
 
-        // 维护任务操作
-        panel.querySelector('[data-action="executeMaintenance"]')?.addEventListener('click', () => {
-            this.executeMaintenance();
-        });
+            // 维护任务操作
+            window.DOM.delegate('click', '[data-action="executeMaintenance"]', function(e) {
+                window.systemMaintenancePanel.executeMaintenance();
+            });
+
+            console.log('[SystemMaintenancePanel] 使用事件委托设置监听器');
+        } else {
+            // 降级到传统监听器
+            panel.querySelector('[data-action="close"]')?.addEventListener('click', () => {
+                this.hide();
+            });
+
+            panel.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const tabBtn = e.target.closest('.tab-btn');
+                    if (tabBtn) {
+                        this.switchTab(tabBtn.dataset.tab);
+                    }
+                });
+            });
+
+            panel.querySelector('[data-action="runDiagnostics"]')?.addEventListener('click', () => {
+                this.runDiagnostics();
+            });
+
+            panel.querySelector('[data-action="performMaintenance"]')?.addEventListener('click', () => {
+                this.performQuickMaintenance();
+            });
+
+            panel.querySelector('[data-action="clearCache"]')?.addEventListener('click', () => {
+                this.clearCache();
+            });
+
+            panel.querySelector('[data-action="startIntegrityCheck"]')?.addEventListener('click', () => {
+                this.startIntegrityCheck();
+            });
+
+            panel.querySelector('[data-action="startPerformanceTest"]')?.addEventListener('click', () => {
+                this.startPerformanceTest();
+            });
+
+            panel.querySelector('[data-action="analyzeErrors"]')?.addEventListener('click', () => {
+                this.analyzeErrors();
+            });
+
+            panel.querySelector('[data-action="clearErrorLogs"]')?.addEventListener('click', () => {
+                this.clearErrorLogs();
+            });
+
+            panel.querySelector('[data-action="executeMaintenance"]')?.addEventListener('click', () => {
+                this.executeMaintenance();
+            });
+        }
     }
 
     /**
      * 显示面板
      */
     show() {
-        this.container.style.display = 'block';
+        if (typeof window.DOMStyles !== 'undefined' && window.DOMStyles.setStyle) {
+            window.DOMStyles.setStyle(this.container, { display: 'block' });
+        } else {
+            this.container.style.display = 'block';
+        }
         this.isVisible = true;
         this.loadSystemHealth();
     }
@@ -313,7 +369,11 @@ class SystemMaintenancePanel {
      * 隐藏面板
      */
     hide() {
-        this.container.style.display = 'none';
+        if (typeof window.DOMStyles !== 'undefined' && window.DOMStyles.setStyle) {
+            window.DOMStyles.setStyle(this.container, { display: 'none' });
+        } else {
+            this.container.style.display = 'none';
+        }
         this.isVisible = false;
     }
 
@@ -806,9 +866,13 @@ class SystemMaintenancePanel {
     showProgress(text) {
         const overlay = document.getElementById('progressOverlay');
         const progressText = document.getElementById('progressText');
-        
+
         progressText.textContent = text;
-        overlay.style.display = 'flex';
+        if (typeof window.DOMStyles !== 'undefined' && window.DOMStyles.setStyle) {
+            window.DOMStyles.setStyle(overlay, { display: 'flex' });
+        } else {
+            overlay.style.display = 'flex';
+        }
     }
 
     /**
@@ -816,7 +880,11 @@ class SystemMaintenancePanel {
      */
     hideProgress() {
         const overlay = document.getElementById('progressOverlay');
-        overlay.style.display = 'none';
+        if (typeof window.DOMStyles !== 'undefined' && window.DOMStyles.setStyle) {
+            window.DOMStyles.setStyle(overlay, { display: 'none' });
+        } else {
+            overlay.style.display = 'none';
+        }
     }
 
     /**

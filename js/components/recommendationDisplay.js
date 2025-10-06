@@ -7,6 +7,10 @@ class RecommendationDisplay {
         this.recommendationEngine = null;
         this.currentRecommendations = null;
         this.refreshInterval = null;
+
+        // 全局引用，供事件委托使用
+        window.recommendationDisplay = this;
+
         this.initialize();
     }
 
@@ -32,33 +36,54 @@ class RecommendationDisplay {
      * 设置事件监听器
      */
     setupEventListeners() {
-        // 推荐项点击事件
-        document.addEventListener('click', (e) => {
-            const recommendationItem = e.target.closest('.recommendation-item');
-            if (recommendationItem) {
-                const recommendationId = recommendationItem.dataset.recommendationId;
-                this.handleRecommendationClick(recommendationId, e);
-            }
+        // 使用事件委托替换独立监听器
+        if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
+            // 推荐项点击事件
+            window.DOM.delegate('click', '.recommendation-item', function(e) {
+                const recommendationId = this.dataset.recommendationId;
+                window.recommendationDisplay.handleRecommendationClick(recommendationId, e);
+            });
 
             // 刷新推荐按钮
-            const refreshBtn = e.target.closest('.refresh-recommendations');
-            if (refreshBtn) {
+            window.DOM.delegate('click', '.refresh-recommendations', function(e) {
                 e.preventDefault();
-                this.refreshRecommendations();
-            }
+                window.recommendationDisplay.refreshRecommendations();
+            });
 
             // 推荐设置按钮
-            const settingsBtn = e.target.closest('.recommendation-settings');
-            if (settingsBtn) {
+            window.DOM.delegate('click', '.recommendation-settings', function(e) {
                 e.preventDefault();
-                this.showRecommendationSettings();
-            }
-        });
+                window.recommendationDisplay.showRecommendationSettings();
+            });
 
-        // 监听练习完成事件，自动更新推荐
+            console.log('[RecommendationDisplay] 使用事件委托设置监听器');
+        } else {
+            // 降级到传统监听器
+            document.addEventListener('click', (e) => {
+                const recommendationItem = e.target.closest('.recommendation-item');
+                if (recommendationItem) {
+                    const recommendationId = recommendationItem.dataset.recommendationId;
+                    this.handleRecommendationClick(recommendationId, e);
+                }
+
+                const refreshBtn = e.target.closest('.refresh-recommendations');
+                if (refreshBtn) {
+                    e.preventDefault();
+                    this.refreshRecommendations();
+                }
+
+                const settingsBtn = e.target.closest('.recommendation-settings');
+                if (settingsBtn) {
+                    e.preventDefault();
+                    this.showRecommendationSettings();
+                }
+            });
+        }
+
+        // 自定义事件监听（这些事件不能用DOM.delegate处理）
         document.addEventListener('practiceSessionCompleted', () => {
             setTimeout(() => {
-                this.loadRecommendations();
+                window.recommendationDisplay.loadRecommendations();
             }, 1000);
         });
     }
@@ -710,21 +735,7 @@ class RecommendationDisplay {
         
         document.body.appendChild(modalOverlay);
         
-        // 点击背景关闭
-        modalOverlay.addEventListener('click', (e) => {
-            if (e.target === modalOverlay) {
-                modalOverlay.remove();
-            }
-        });
-        
-        // ESC键关闭
-        const escHandler = (e) => {
-            if (e.key === 'Escape') {
-                modalOverlay.remove();
-                document.removeEventListener('keydown', escHandler);
-            }
-        };
-        document.addEventListener('keydown', escHandler);
+        // 模态框事件已通过事件委托处理
     }
 
     // 辅助方法 - 获取各种标签和样式类
