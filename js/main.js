@@ -913,12 +913,14 @@ function createExamElement(exam, index = null) {
     const startBtn = document.createElement('button');
     startBtn.className = 'btn exam-item-action-btn';
     startBtn.textContent = '开始';
-    startBtn.addEventListener('click', () => openExam(exam.id));
+    startBtn.dataset.examId = exam.id;
+    startBtn.dataset.action = 'start';
 
     const pdfBtn = document.createElement('button');
     pdfBtn.className = 'btn btn-secondary exam-item-action-btn';
     pdfBtn.textContent = 'PDF';
-    pdfBtn.addEventListener('click', () => viewPDF(exam.id));
+    pdfBtn.dataset.examId = exam.id;
+    pdfBtn.dataset.action = 'pdf';
 
     examActions.appendChild(startBtn);
     examActions.appendChild(pdfBtn);
@@ -2165,3 +2167,22 @@ window.addEventListener('examIndexLoaded', () => {
         if (loading) loading.style.display = 'none';
     } catch (_) {}
 });
+
+// 添加事件委托处理考试操作按钮
+if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
+    window.DOM.delegate('click', '[data-action="start"]', function() {
+        const examId = this.dataset.examId;
+        if (examId && typeof openExam === 'function') {
+            openExam(examId);
+        }
+    });
+
+    window.DOM.delegate('click', '[data-action="pdf"]', function() {
+        const examId = this.dataset.examId;
+        if (examId && typeof viewPDF === 'function') {
+            viewPDF(examId);
+        }
+    });
+
+    console.log('[Main] 考试操作按钮事件委托已设置');
+}
