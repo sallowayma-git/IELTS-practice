@@ -4,7 +4,7 @@ import axios from 'axios'
 
 // 创建axios实例
 const api = axios.create({
-  baseURL: 'http://localhost:3001/api',
+  baseURL: '/api',
   timeout: 10000
 })
 
@@ -18,6 +18,9 @@ export const useWritingStore = defineStore('writing', () => {
   const timerInterval = ref(null)
   const isSubmitting = ref(false)
   const currentWritingId = ref(null)
+  const taskType = ref('task1')
+  const aiProvider = ref('openai')
+  const aiModel = ref('gpt-4-turbo')
 
   // 计算属性
   const formattedTime = computed(() => {
@@ -46,16 +49,47 @@ export const useWritingStore = defineStore('writing', () => {
 
   const getRandomTopic = async (type = null) => {
     try {
-      const params = type ? { type, limit: 1 } : { limit: 1 }
-      const response = await api.get('/writing/topics', { params })
-      if (response.data.success && response.data.data.length > 0) {
-        currentTopic.value = response.data.data[0]
+      const params = type ? { taskType: type } : {}
+      const response = await api.get('/writing/topics/random', { params })
+      if (response.data.success && response.data.data) {
+        currentTopic.value = response.data.data
+        resetWriting()
+        return
+      }
+      // 如果后端不支持随机接口，则回退到列表接口
+      const fallbackParams = type ? { type, limit: 1 } : { limit: 1 }
+      const fallbackResponse = await api.get('/writing/topics', { params: fallbackParams })
+      if (fallbackResponse.data.success && Array.isArray(fallbackResponse.data.data) && fallbackResponse.data.data.length > 0) {
+        currentTopic.value = fallbackResponse.data.data[0]
         resetWriting()
       }
     } catch (error) {
       console.error('获取随机题目失败:', error)
-      throw error
+      currentTopic.value = {
+        id: 'local-fallback',
+        title: 'Some people think that universities should provide graduates with practical skills for the workplace.',
+        type: 'task2',
+        content:
+          'Some people think that universities should provide graduates with the knowledge and skills needed in the workplace. Others think that university education should be more theoretical. Discuss both views and give your own opinion.',
+        min_words: 250,
+        time_limit: 40
+      }
+      resetWriting()
     }
+  }
+
+  const setTaskType = async (type) => {
+    if (taskType.value === type) return
+    taskType.value = type
+    await getRandomTopic(type)
+  }
+
+  const setAiProvider = (provider) => {
+    aiProvider.value = provider
+  }
+
+  const setAiModel = (model) => {
+    aiModel.value = model
   }
 
   const updateContent = (content) => {
@@ -147,7 +181,7 @@ export const useWritingStore = defineStore('writing', () => {
     }
   }
 
-  const submitWriting = async () => {
+  const submitWriting = async (options = {}) => {
     if (!currentTopic.value || !writingContent.value) {
       throw new Error('缺少题目或内容')
     }
@@ -174,6 +208,7 @@ export const useWritingStore = defineStore('writing', () => {
         const response = await api.post('/writing/records', data)
         if (response.data.success) {
           writingId = response.data.data.id
+          currentWritingId.value = writingId
         }
       } else {
         await api.put(`/writing/records/${writingId}`, data)
@@ -183,14 +218,19 @@ export const useWritingStore = defineStore('writing', () => {
       const assessmentResponse = await api.post('/assessment/submit', {
         writingId,
         content: writingContent.value,
-        topic: currentTopic.value
+        topic: currentTopic.value,
+        taskType: options.taskType || taskType.value,
+        aiProvider: options.aiProvider || aiProvider.value,
+        aiModel: options.aiModel || aiModel.value
       })
 
       if (assessmentResponse.data.success) {
         // 清除本地草稿
         localStorage.removeItem('writing-draft')
-        resetWriting()
-        return assessmentResponse.data.data
+        return {
+          result: assessmentResponse.data.data,
+          writingId
+        }
       }
 
     } catch (error) {
@@ -215,6 +255,9 @@ export const useWritingStore = defineStore('writing', () => {
     isTimerRunning,
     isSubmitting,
     currentWritingId,
+    taskType,
+    aiProvider,
+    aiModel,
 
     // 计算属性
     formattedTime,
@@ -223,6 +266,9 @@ export const useWritingStore = defineStore('writing', () => {
     // 方法
     selectTopic,
     getRandomTopic,
+    setTaskType,
+    setAiProvider,
+    setAiModel,
     updateContent,
     startTimer,
     stopTimer,

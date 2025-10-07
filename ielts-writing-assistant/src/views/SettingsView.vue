@@ -1,5 +1,5 @@
 <template>
-  <div class="settings-container">
+  <div class="settings-container" data-test="settings-view">
     <el-container>
       <!-- 顶部导航栏 -->
       <el-header class="settings-header">

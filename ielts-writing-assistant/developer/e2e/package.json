@@ -1,0 +1,12 @@
+{
+  "name": "ielts-writing-assistant-e2e",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "install-deps": "npx playwright install --with-deps"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.2"
+  }
+}
