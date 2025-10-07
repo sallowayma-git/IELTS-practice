@@ -6,6 +6,12 @@
 **原则**: Linus式简单设计 - 消除复杂性，专注数据结构
 **时间线**: 6个阶段，每阶段1-2周
 
+### 2025-10-07 审计摘要
+- App 架构重构尚未落地：`js/app.js` 仍有 3000+ 行，legacy 全局变量大量存在，说明阶段2 目标失效，需要重新拆分职责。【F:js/app.js†L1-L120】【F:js/main.js†L1-L40】
+- 数据层改造完全缺失：仓库不存在 `js/data/` 目录，仍依赖简单存储包装器，阶段3 需重新规划交付路径。【8ca829†L1-L3】【F:js/utils/simpleStorageWrapper.js†L1-L120】
+- DOM 渲染依旧大量使用 `innerHTML` 与逐个监听，性能风险未解除，阶段4/5 的统计数据需要重新计量与治理。【68bbaa†L1-L3】【69a7f3†L1-L3】
+- 新增端到端测试跑道，已可覆盖核心用户旅程，为后续大规模重构提供安全网；其余单元/集成测试仍待搭建。【F:developer/tests/e2e/app-e2e-runner.html†L1-L120】【F:developer/tests/js/e2e/appE2ETest.js†L1-L240】
+
 ## 阶段1: 紧急修复 (P0 - 生产风险)
 
 ### 任务1.1: 清理调试代码
@@ -61,96 +67,92 @@
 ## 阶段2: 架构重构 (P1 - 核心问题)
 
 ### 任务2.1: 简化巨石文件
-**状态**: ✅ 已完成
+**状态**: ⚠️ 回归（需重新评估，2025-10-07 审计）
 **优先级**: 🔴 紧急
 **估时**: 2天
-**负责人**: GLM 4.6
+**负责人**: 待指派
 
-**目标**: 简化app.js，移除冗余功能，减少复杂度
+**审计发现 (2025-10-07)**:
+- `js/app.js` 当前仍有 3014 行，较文档记录的 2663 行显著增长，且大量职责依旧集中在单体类中，说明巨石文件并未真正拆分。【F:js/app.js†L1-L120】
+- 遗留的 `js/main.js` 保留 10+ 个全局变量 (`examIndex`、`practiceRecords` 等)，与 App 类的状态管理重复，形成双写路径并增加调试复杂度。【F:js/main.js†L1-L40】
+- App 初始化流程仍跨越 300+ 行并包含 UI、状态持久化、事件绑定等多重职责，未形成可维护的模块边界。
 
-**完成的工作**:
-- [x] 移除调试辅助功能 (getHandshakeState等)
-- [x] 清理冗余方法和占位符
-- [x] 删除不必要的UI更新方法
-- [x] 简化事件监听器管理
+**需要完成的工作**:
+- 划清 App 与 legacy 层的边界，逐步迁移 `js/main.js` 中的全局状态和渲染职责。
+- 将初始化流程拆分为可单测的子模块（状态加载、组件初始化、UI 注入等），并提供清晰的依赖契约。
+- 在拆分过程中保持行为回归测试覆盖（参考阶段6新增的 E2E 测试），防止再度回归为巨石结构。
 
-**优化结果**:
-- app.js从2847行减少到2663行
-- 净减少184行代码 (6.5%减少)
-- 保持核心功能完整性
-- 遵循Linus式简洁原则
-
-**验收标准**:
-- ✅ 文件行数显著减少
-- ✅ 核心功能保持完整
-- ✅ 代码可读性提升
+**验证标准（更新）**:
+- App 主文件行数与职责数量显著下降，关键流程通过模块化单元覆盖。
+- legacy 全局变量迁移到统一状态接口，对外仅暴露只读访问或兼容适配层。
+- 初始化流程具备失败降级路径和明确的模块日志，可由测试套件验证。
 
 ### 任务2.2: 统一状态管理
-**状态**: ✅ 已完成
+**状态**: ❌ 未完成（2025-10-07 审计）
 **优先级**: 🔴 紧急
 **估时**: 2天
-**负责人**: GLM 4.6
+**负责人**: 待指派
 
-**目标**: 消除19个全局变量，创建统一状态管理
+**审计发现**:
+- App 内部确实声明了统一状态结构，但 `js/main.js`、`js/script.js` 等遗留模块仍直接读写 `examIndex`、`practiceRecords` 等全局变量，未通过 App 状态接口访问。【F:js/main.js†L1-L120】【F:js/script.js†L386-L444】
+- 浏览视图、练习视图逻辑在 App 与 legacy 两处重复实现（如 `loadExamList` 与 `app.browseCategory`），存在竞争条件与状态错位风险。
+- `StateSerializer` 仅用于局部持久化，未形成“统一状态入口”所需的订阅通知与一致性校验。
 
-**完成的工作**:
-- [x] 分析所有全局变量的用途
-- [x] 设计状态数据结构
-- [x] 在ExamSystemApp中集成状态管理
-- [x] 实现向后兼容的全局变量访问层
-- [x] 实现状态持久化机制
-- [x] 集成到应用生命周期
+**下一步计划**:
+- 将 `js/main.js` 中的 `loadExamList`、`syncPracticeRecords` 等核心函数迁移到 App，并通过兼容层暴露只读 API。
+- 引入集中事件总线或订阅机制，确保 legacy 调用通过 App 管道执行，杜绝直接写入全局状态。
+- 扩展 `StateSerializer` 与 `storage` 适配器，提供原子更新/回滚能力，为后续数据层重构做准备。
 
-**状态设计**:
-```javascript
-this.state = {
-    exam: {
-        index: [],
-        currentCategory: 'all',
-        currentExamType: 'all',
-        filteredExams: [],
-        configurations: {},
-        activeConfigKey: 'exam_index'
-    },
-    practice: {
-        records: [],
-        selectedRecords: new Set(),
-        bulkDeleteMode: false,
-        dataCollector: null
-    },
-    ui: {
-        browseFilter: { category: 'all', type: 'all' },
-        pendingBrowseFilter: null,
-        legacyBrowseType: 'all',
-        currentVirtualScroller: null,
-        loading: false,
-        loadingMessage: ''
-    },
-    components: {
-        dataIntegrityManager: null,
-        pdfHandler: null,
-        browseStateManager: null,
-        practiceListScroller: null
-    },
-    system: {
-        processedSessions: new Set(),
-        fallbackExamSessions: new Map(),
-        failedScripts: new Set()
-    }
-};
-```
+**验收标准（更新）**:
+- 所有读写 `examIndex`、`practiceRecords` 的路径均通过单一状态接口执行，可由静态检查与测试验证。
+- App 状态变更可触发统一的 UI 更新，legacy 层仅保留最薄的适配壳。
+- 状态持久化具备失败回滚与版本迁移策略，测试覆盖核心行为。
 
-**技术优势**:
-- 集中管理所有状态
-- 向后兼容现有代码
-- 自动持久化到本地存储
-- 内存管理和清理机制
+### 任务2.4: 概览视图装配层重建（新增）
+**状态**: 🟢 初版完成（2025-10-08，待回归验证）
+**优先级**: 🔴 紧急
+**估时**: 3天
+**负责人**: 待指派
 
-**验收标准**:
-- ✅ 全局变量统一管理
-- ✅ 状态变更可追踪
-- ✅ 状态持久化正常工作
-- ✅ 现有代码无需修改
+**背景**:
+- `updateOverview` 仍以字符串拼接方式渲染 10+ 个 UI 块，DOM 更新不可测试且难以维护。
+- 概览页按钮直接依赖内联 `onclick`，无法复用 `DOMEvents` 的事件委托体系，导致逐个绑定重复。
+- `examIndex` 统计逻辑散落在 legacy 代码中，后续其他视图无法复用，阻碍状态迁移。
+
+**子任务**:
+- [x] 规划概览视图抽象与事件委托策略（2025-10-08）
+- [x] 提取考试统计计算服务，统一输出阅读/听力分组数据
+- [x] 实现 `OverviewView` 模块，使用 `DOMBuilder.replaceContent` 渲染卡片
+- [x] 将 `updateOverview` 重定向至新视图模块，移除 `innerHTML` 依赖
+- [x] 更新 E2E 覆盖，校验概览按钮的 `data-*` 属性与事件委托
+
+**验收标准（新增）**:
+- 概览页 DOM 渲染通过 `OverviewView` 统一管理，无内联 `onclick` 字符串。
+- 统计逻辑封装为独立服务，可被 App 状态层或其他视图调用。
+- 端到端测试验证阅读/听力入口按钮可用且具备语义化数据属性。
+
+### 任务2.5: Legacy 状态桥接层（新增）
+**状态**: 🟢 首版完成（2025-10-08）
+**优先级**: 🔴 紧急
+**估时**: 3天
+**负责人**: 待指派
+
+**背景**:
+- `js/main.js` 仍维护 `examIndex`、`practiceRecords`、`filteredExams` 等全局变量，与 `ExamSystemApp.state` 双写，拆分责任时容易出现状态不同步。
+- `ExamSystemApp.initializeGlobalCompatibility` 通过 `Object.defineProperty` 暴露状态，却在 legacy 初始化之前执行，导致早期写入的数据无法同步回 App。
+- 题库刷新与练习同步流程散落在 legacy 代码中，既无法被 App 感知，也无法触发状态持久化，破坏阶段2「统一状态管理」目标。
+
+**子任务**:
+- [x] 梳理 `examIndex` 与 `practiceRecords` 在 legacy 层的写入路径，标记需要桥接的入口函数。
+- [x] 设计 `LegacyStateBridge` 单例：缓存初始写入、在 App 连接后回放、并向外暴露 `setExamIndex` / `setPracticeRecords` / `setBrowseFilter` 等接口。
+- [x] 在 `ExamSystemApp.initializeGlobalCompatibility` 期间注册桥接层，确保 App 状态变更会同步 legacy 全局变量。
+- [x] 重写 `loadLibrary`、`syncPracticeRecords`、`finishLibraryLoading` 等关键路径，统一调用桥接接口，移除直接赋值。
+- [x] 扩充端到端测试，验证 `window.app.state` 与 legacy 全局变量保持一致，并覆盖题库刷新后的同步行为。
+
+**验收标准（新增）**:
+- `js/main.js` 内对 `examIndex`、`practiceRecords` 的写入全部通过桥接接口完成，`rg "= \["` 无遗留直写。
+- App 状态层能在初始化前后接收 legacy 初始化的数据，刷新题库后 `window.app.getState('exam.index')` 与 `window.examIndex` 完全一致。
+- 新增的 E2E 测试在桥接逻辑失效时会失败，为后续逐步删除 legacy 全局变量提供安全网。
 
 ### 任务2.3: 合并冗余组件
 **状态**: ✅ 已完成
@@ -199,119 +201,70 @@ this.state = {
 
 ## 阶段3: 数据层优化 (P1 - 核心问题)
 
-### 任务3.1: 统一数据访问层
-**状态**: ✅ 已完成
+### 任务3.1: 精简存储访问策略（方向调整）
+**状态**: 🟡 待规划（Repository 方案已废弃，2025-10-08）
 **优先级**: 🟡 高
 **估时**: 3天
-**负责人**: GLM 4.6
+**负责人**: 待指派
 
-**目标**: 抽象数据访问接口，创建Repository模式，统一localStorage操作
+**调整说明**:
+- 原计划的 Repository / DataAccessLayer 架构被认定为过度设计，将不再推进企业级抽象层。
+- 现有 `SimpleStorageWrapper` + `StateSerializer` 仍是主干，需要在现有模式下补齐数据一致性与降级能力。
+- 目标转向精简 API、保证兼容性，而非引入新的状态容器或仓库模式。
 
-**完成的工作**:
-- [x] 分析现有44个文件中的数据访问模式
-- [x] 实现BaseRepository抽象基类
-- [x] 创建PracticeRecordRepository、ExamIndexRepository、UserSettingsRepository
-- [x] 实现LRU和TTL缓存策略
-- [x] 创建DataAccessLayer统一管理所有Repository
-- [x] 实现事务支持和批量操作
-- [x] 添加向后兼容的包装器
+**规划要点**:
+- 归档 legacy 模块直接访问 `storage` 的调用点，分阶段切换到统一的轻量封装函数。
+- 补充存储访问的输入校验、默认值策略与错误恢复日志，而不是引入全新的事务层。
+- 设计数据迁移/备份脚本的最小闭环，确保 IndexedDB/localStorage 异常时可恢复关键数据。
 
-**创建的文件**:
-- `js/data/repository.js` (1298行) - Repository模式实现
-- `js/data/cache.js` (485行) - 缓存策略系统
-- `js/data/dataAccessLayer.js` (398行) - 数据访问层集成
-- `js/data/dataValidator.js` (567行) - 数据验证和迁移系统
-
-**技术优势**:
-- 统一的数据访问接口
-- 智能缓存提升性能
-- 内置数据验证机制
-- 支持事务和批量操作
-- 完全向后兼容
-
-**验收标准**:
-- ✅ 数据访问接口统一
-- ✅ 数据验证完整
-- ✅ 缓存策略有效
+**验收标准（草案）**:
+- 所有跨模块共享的键名通过常量/枚举统一声明，并附带版本标识。
+- 存储写入路径具备失败回滚与错误日志记录，端到端测试覆盖备份-恢复流程。
+- 文档更新新的轻量 API 用法，并废弃 Repository 模式的旧说明。
 
 ### 任务3.2: 优化数据完整性管理
-**状态**: ✅ 已完成
+**状态**: 🟡 进行中（依赖数据层重构）
 **优先级**: 🟡 高
 **估时**: 2天
-**负责人**: GLM 4.6
+**负责人**: 待指派
 
-**目标**: 简化DataIntegrityManager，优化备份策略，改进数据恢复机制
+**审计发现**:
+- `DataIntegrityManager` 仍以内置的 `SimpleStorageWrapper` 为核心依赖，注释中明确“使用简单存储包装器替代复杂的数据访问层”，说明数据访问层尚未构建，仅完成最小可用的包装。【F:js/components/DataIntegrityManager.js†L1-L44】
+- 备份/恢复流程依赖固定数量的本地快照，未引入文档宣称的验证工厂、迁移管理或自动修复机制，相关类在代码库中不存在。
+- 自动备份、清理等流程缺乏可观测指标与失败重试策略，一旦 IndexedDB/localStorage 出现异常，仍可能造成数据丢失。
 
-**完成的工作**:
-- [x] 更新DataIntegrityManager集成新的数据访问层
-- [x] 实现异步数据获取和备份操作
-- [x] 创建DataValidator基类和ValidationRuleFactory
-- [x] 实现PracticeRecordValidator专门验证练习记录
-- [x] 开发DataMigrationManager支持版本迁移
-- [x] 创建DataRepairer自动修复数据问题
-- [x] 添加降级机制确保向后兼容
+**后续工作**:
+- 待任务3.1 交付后，将 DataIntegrityManager 切换到新的 DataAccessLayer，提供一致的事务处理和验证接口。
+- 实现独立的验证器与迁移器模块，至少覆盖练习记录、备份元数据两条关键数据路径，并提供失败回滚。
+- 增加可观测性（操作计数、最后一次成功时间等）并编写端到端测试验证备份-恢复闭环。
 
-**修改的文件**:
-- `js/components/DataIntegrityManager.js` - 集成新数据访问层，优化备份流程
-
-**技术改进**:
-- 异步备份操作不阻塞主线程
-- 智能数据验证支持批量处理
-- 自动数据修复机制
-- 完整的版本迁移支持
-- 详细的操作日志和追踪
-
-**性能提升**:
-- 备份速度提升约30%
-- 数据验证性能提升50%
-- 存储访问效率显著改善
-
-**验收标准**:
-- ✅ 备份恢复功能正常
-- ✅ 数据迁移无丢失
-- ✅ 性能显著提升
+**验收标准（更新）**:
+- DataIntegrityManager 仅依赖 DataAccessLayer/Repository 提供的数据接口，无直接 storage 操作。
+- 备份、恢复、迁移、验证逻辑配套自动化测试，覆盖正常与异常路径。
+- 具备可追踪的操作日志与告警阈值，在测试环境可复现并验证恢复流程。
 
 ## 阶段4: 性能灾难修复 (P0 - 紧急风险)
 
-### 任务4.1: 消除innerHTML暴力操作
-**状态**: ✅ 已完成
+### 任务4.1: 消除 innerHTML 暴力操作
+**状态**: ❌ 未完成（2025-10-07 审计）
 **优先级**: 🔴 紧急
-**估时**: 2天（实际：1天）
-**负责人**: Linus Torvalds
+**估时**: 2天
+**负责人**: 待指派
 
-**问题发现**: 139个innerHTML直接赋值 + 6个insertAdjacentHTML
-**根本原因**: 有VirtualScroller和PerformanceOptimizer却不用，到处用1998年DHTML手法
+**审计发现**:
+- 目前 `js/` 目录仍有 163 处 `innerHTML` 直接赋值，数量高于文档记录的 139 处，表明大部分 DOM 拼接尚未替换。【68bbaa†L1-L3】
+- 核心路径如 `updateOverview` 依旧构造长字符串并一次性写入 `innerHTML`，未采用增量更新或模板渲染。【F:js/main.js†L388-L447】
+- `practiceHistory`、`hp-` 系列插件仍混用 `innerHTML` 与 `DocumentFragment`，缺乏统一策略，性能问题依旧可能在大列表场景复现。
 
-**关键性能罪犯**:
-```javascript
-// 循环中使用，最糟糕
-historyList.innerHTML = pageRecords.map(record => this.createRecordItem(record)).join('');
-container.innerHTML = `<div class="exam-list">${exams.map(renderExamItem).join('')}</div>`;
-grid.innerHTML = this.list.slice(0, pageEnd).map(ex => this._card(ex)).join('');
-```
+**整改计划**:
+- 优先替换首页概览、题库列表、练习记录等高频视图的 `innerHTML` 写入，改用虚拟节点或批量 DOM API。
+- 为列表渲染引入通用的渲染器工具，结合 `PerformanceOptimizer` 提供的批量调度能力，消除手工字符串拼接。
+- 针对仍需字符串渲染的极端场景，至少加入 `DOMParser`/模板缓存，并确保测试覆盖渲染性能。
 
-**修复成果**:
-- [x] 诊断性能瓶颈
-- [x] 实例化全局PerformanceOptimizer + 补齐缺失API方法
-- [x] 修复practiceHistory.js分页innerHTML - 使用VirtualScroller + enhancer兼容
-- [x] 修复main.js题库浏览innerHTML - 移除VirtualScroller，保持Grid布局
-- [x] 修复hp-design-iterations-fix.js网格innerHTML - 改用事件委托，增量更新
-- [x] 修复事件绑定错乱问题 - 事件委托方案
-- [x] 建立Grid友好的渲染策略
-
-**额外修复**:
-- [x] PerformanceOptimizer API完整性 - 添加recordLoadTime等缺失方法
-- [x] practiceHistoryEnhancer兼容性 - 智能渲染选择
-- [x] getPerformanceReport结构兼容 - 双重结构返回
-- [x] 事件委托重构 - 解决handler引用问题
-
-**验收标准**:
-- [x] 识别所有139个innerHTML操作
-- [x] 关键列表使用优化渲染
-- [x] 事件绑定正确且稳定
-- [x] 渲染性能提升>80%
-- [x] 完全向后兼容
-- [x] Grid布局保持完整
+**验收标准（更新）**:
+- `rg "innerHTML"` 计数显著下降，保留项须在文档中列出合理性说明。
+- 核心视图的渲染逻辑使用统一的 DOM 工具函数，并通过 E2E 测试验证在真实数据集下的性能。
+- 渲染回退路径（无 VirtualScroller 时）也不再依赖大块字符串拼接。
 
 ### 任务4.2: 统一性能优化架构
 **状态**: ✅ 已完成
@@ -344,61 +297,29 @@ grid.innerHTML = this.list.slice(0, pageEnd).map(ex => this._card(ex)).join('');
 ## 阶段5: 代码质量提升 (P2 - 开发效率)
 
 ### 任务5.1: 消除重复代码
-**状态**: 🟡 进行中 (33%完成)
+**状态**: 🟡 进行中（<15% 完成，2025-10-07 审计）
 **优先级**: 🟡 中
-**估时**: 5天（更新）
-**负责人**: Linus Torvalds
+**估时**: 5天
+**负责人**: 待指派
 
-**背景**: 代码中存在大量重复的事件处理、DOM操作和性能优化逻辑
+**审计数据**:
+- 当前仓库存在 343 处 `addEventListener` 调用，与原始基线相比未见明显下降，说明大部分事件仍为逐个绑定。【69a7f3†L1-L3】
+- `.style.` 直接操作约 170 处，仅有零星封装，尚未建立统一样式管理模型。【6fab72†L1-L3】
+- `innerHTML` 仍有 163 次使用，与阶段4目标冲突，说明渲染层抽象未统一。【68bbaa†L1-L3】
 
-**完成的工作**:
-- [x] 识别并统计代码重复模式（初始341个addEventListener、171次.style.xxx、389次DOM操作）
-- [x] 提取公共函数（事件委托、DOM构建器、样式管理器等）
-- [x] 创建统一的工具库（js/utils/dom.js、js/utils/performance.js）
-- [x] 重构多个组件展示消除重复代码的效果
-- [x] 建立安全的"修一块，测一块"重构流程
-- [x] 逐步替换重复代码模式，避免全局灾难性修改
+**已有资产**:
+- `js/utils/dom.js`、`js/utils/performance.js`、`js/utils/typeChecker.js`、`js/utils/codeStandards.js` 已存在，可作为后续重构基础。【F:js/utils/dom.js†L1-L120】【F:js/utils/performance.js†L1-L120】
+- 局部组件（如 `settings`、`hp` 系列）已引入委托与工具函数，但未形成跨模块规范。
 
-**创建的文件**:
-- `js/utils/dom.js` (400行) - 统一DOM操作工具库，支持事件委托
-- `js/utils/performance.js` (500行) - 性能优化工具库，修复API冲突
-- `js/utils/typeChecker.js` (400行) - JSDoc类型检查工具
-- `js/utils/codeStandards.js` (600行) - 代码规范标准
+**下一步重点**:
+- 制定明确的事件委托与样式封装基准线，从导航、题库、练习三大主视图开始逐步替换。
+- 引入静态检查脚本（基于 `rg`/ESLint 规则）持续跟踪 `addEventListener`、`.style`、`innerHTML` 数量，纳入 CI 阶段。
+- 结合阶段6新增的 E2E 测试，在每次替换后运行回归，确保行为一致。
 
-**重构完成的组件**:
-1. `js/plugins/hp/hp-overview-two-cards.js` - 消除innerHTML字符串拼接，使用事件委托，修复ID冲突
-2. `js/plugins/hp/hp-settings-bridge.js` - 17个addEventListener替换为1个事件委托，修复全局按钮灾难
-3. `js/components/practiceHistory.js` - 搜索和过滤事件替换为事件委托
-4. `js/main.js` - .style.xxx操作替换为DOMStyles，事件委托处理考试按钮
-5. `js/components/dataManagementPanel.js` - 9个监听器合并为统一事件委托
-6. `js/components/specializedPractice.js` - 5个addEventListener替换为事件委托，包含模态框处理
-7. `js/components/practiceRecordModal.js` - 2个addEventListener替换为事件委托，包含ESC键处理
-8. `js/components/progressTracker.js` - 3个addEventListener + 2个.style操作替换，自定义事件保留
-9. `js/components/mainNavigation.js` - 2个addEventListener + 1个.style操作替换，键盘事件保留
-10. `js/components/questionTypePractice.js` - 8个addEventListener替换为事件委托，包含选择器和模态框
-11. `js/components/settingsPanel.js` - 超过30个 `addEventListener` 调用被重构为基于父容器的单一事件委托模式，显著简化了代码结构。
-12. `js/components/goalSettings.js` - 8个addEventListener + 1个.style操作替换
-13. `js/components/recommendationDisplay.js` - 3个addEventListener替换为事件委托，已有良好鲁棒性
-14. `js/components/systemMaintenancePanel.js` - 11个addEventListener + 4个.style操作替换
-15. `js/components/BrowseStateManager.js` - 1个addEventListener替换为事件委托，自定义事件保留
-16. `js/components/PDFHandler.js` - 添加全局引用，window事件无法委托保持原样
-
-**当前进度统计**:
-- **addEventListener调用**: 从341个减少到328个 (已处理17个组件，减少13个)
-- **.style.xxx操作**: 从171个减少到170个 (逐步处理中)
-- **DOM操作**: 批量处理机制已建立，待大规模应用
-
-**经验教训**:
-- 事件委托必须限定作用域，避免影响全局按钮功能
-- CSS选择器特殊字符需要转义（如.max-w-\[480px\]）
-- 必须提供降级机制，确保向后兼容性
-- "修一块，测一块"比全局重构更安全可靠
-
-**下一步计划**:
-- **下一个目标**: `js/utils/tutorialSystem.js`。该文件包含多个UI控件的事件监听，是应用正确委托模式的下一个练习目标。
-- 继续按视图模块逐步替换addEventListener
-- 重点处理高频路径的.style.xxx操作
-- 建立自动化监控重复代码的工具
+**验收标准（更新）**:
+- 关键视图组件的事件全部通过委托或统一管理器注册，重复率显著下降。
+- 样式修改封装为工具函数或 CSS 变量，无裸 `element.style.xxx` 调用。
+- DOM 结构构建统一由 `dom.js` 等工具生成，`innerHTML` 仅保留在文档化的少数特例。
 
 ### 任务5.2: 统一命名规范
 **状态**: ✅ 已完成
@@ -476,21 +397,39 @@ grid.innerHTML = this.list.slice(0, pageEnd).map(ex => this._card(ex)).join('');
 ## 阶段6: 测试与文档 (P2 - 开发效率)
 
 ### 任务6.1: 添加测试覆盖
-**状态**: ⏳ 待开始
+**状态**: 🟡 进行中（E2E 基线已建立）
 **优先级**: 🟡 中
 **估时**: 5天
-**负责人**: 待分配
+**负责人**: gpt-5-codex
 
-**子任务**:
-- [ ] 搭建测试框架
-- [ ] 编写单元测试
-- [ ] 添加集成测试
-- [ ] 配置CI/CD流程
+**最新进展**:
+- 新增端到端测试跑道：`developer/tests/e2e/app-e2e-runner.html` 通过隐藏 iframe 加载主应用并执行导航、题库筛选、搜索、练习记录同步等核心流程验证。【F:developer/tests/e2e/app-e2e-runner.html†L1-L120】
+- 对应的执行脚本 `developer/tests/js/e2e/appE2ETest.js` 提供等待机制、结果表、数据备份与恢复逻辑，为后续扩展测试用例奠定基础。【F:developer/tests/js/e2e/appE2ETest.js†L1-L240】
 
-**验收标准**:
-- 单元测试覆盖率>70%
-- 集成测试覆盖核心流程
-- CI/CD流程正常运行
+**待办事项**:
+- 单元测试与模块级集成测试仍未搭建，需要补充基础框架（推荐 Vitest/Jest + jsdom）。
+- 将 E2E 脚本接入自动化流水线（本地 npm script + CI 配置），确保回归可重复执行。
+- 根据阶段5重构计划扩展测试矩阵，覆盖事件委托、数据迁移等关键路径。
+
+**2025-10-09 离线执行兼容性计划**:
+- [x] 复盘 `file://` 场景的浏览器安全限制，确认 `fetch` 与 `XMLHttpRequest` 均会因跨源策略失败，需引入独立加载通道。
+- [x] 将 `index.html` 生成受控快照，随 E2E 资产分发，在同源无法获取时以内联方式挂载主应用。
+- [x] 在离线模式下记录加载路径并提供用户提示，确保使用快照时可见可诊断。
+
+**2025-10-10 离线资源定位修复计划**:
+- [x] 重新计算 `index.html` 与静态资源在 `developer/tests/e2e/` 相对路径下的真实位置，矫正目标 URL。
+- [x] 在引导逻辑中根据运行页面 URL 动态推导 `<base href>`，同时覆盖网络加载与快照加载两种路径。
+- [x] 补充 E2E 测试运行记录字段，显示资源加载根路径以便诊断 file:// 环境。
+
+**2025-10-11 file:// 根目录推导加固计划**:
+- [x] 复现 file:// 环境下 `<base>` 指向 `developer/` 的问题，确认资源查找落在错误目录导致初始化超时。
+- [x] 编写 `computeBaseHref` 的路径剥离逻辑，遇到 `/developer/tests/e2e/` 时回退到仓库根目录，避免环境差异造成静态资源 404。
+- [x] 验证推导结果通过测试结果表暴露，确保使用快照时能看到真实基路径并定位潜在偏差。
+
+**验收标准（更新）**:
+- 单元测试覆盖率 ≥70%，E2E 脚本纳入 CI 并提供运行日志。
+- 关键用户旅程（概览→题库→搜索→练习记录）全部实现自动验证，且失败时能快速定位原因。
+- 文档化测试运行方式，并在 PR 模板中强制勾选执行项。
 
 ### 任务6.2: 完善文档
 **状态**: ⏳ 待开始
@@ -529,15 +468,15 @@ grid.innerHTML = this.list.slice(0, pageEnd).map(ex => this._card(ex)).join('');
 
 ## 进度追踪
 
-### 总体进度
+### 总体进度（2025-10-07 更新）
 - **阶段1 (紧急修复)**: 3/3 任务完成 ✅
-- **阶段2 (架构重构)**: 3/3 任务完成 ✅
-- **阶段3 (数据层优化)**: 2/2 任务完成 ✅
-- **阶段4 (性能灾难修复)**: 2/2 任务完成 ✅
-- **阶段5 (代码质量)**: 1/3 任务完成 (部分完成)
-- **阶段6 (测试文档)**: 1/3 任务完成
+- **阶段2 (架构重构)**: 1/3 任务完成，2 项回归需重新规划 ⚠️
+- **阶段3 (数据层优化)**: 0/2 任务完成，整体尚未启动 ❌
+- **阶段4 (性能灾难修复)**: 1/2 任务完成，innerHTML 优化未落地 ⚠️
+- **阶段5 (代码质量)**: 2/3 任务完成，重复代码治理持续中 🟡
+- **阶段6 (测试文档)**: 1/3 任务完成，E2E 基线已建立 🟡
 
-**总体进度**: 12/16 任务完成 (75%)
+**总体进度**: 8/16 任务完成 (50%)
 
 ### 已完成成果
 **阶段1成果 (P0紧急修复)**:
@@ -545,24 +484,17 @@ grid.innerHTML = this.list.slice(0, pageEnd).map(ex => this._card(ex)).join('');
 - 修复内存泄漏，统一事件监听器管理
 - 改进错误处理，添加有意义的注释
 
-**阶段2成果 (P1核心问题)**:
-- 简化app.js，减少184行冗余代码
-- 统一19个全局变量状态管理
-- 合并冗余组件，减少4个文件，优化971行代码
+**阶段2现状 (P1架构重构 - 需重新推进)**:
+- App 主体仍为 3000+ 行巨石文件，legacy 全局状态与新状态管理并存，2.1/2.2 未落地。【F:js/app.js†L1-L120】【F:js/main.js†L1-L120】
+- 组件合并（2.3）已完成，SystemDiagnostics 等文件在仓库中可用，后续工作需围绕状态拆分继续推进。
 
-**阶段3成果 (P1核心问题)**:
-- 创建Repository模式，统一数据访问接口 (4个新文件，2748行代码)
-- 实现智能缓存策略，提升数据访问性能
-- 建立完整的数据验证和修复机制
-- 优化数据完整性管理，备份性能提升30%
+**阶段3现状 (P1数据层 - 尚未启动)**:
+- Repository/DataAccessLayer 未创建，仍依赖 `StorageManager` 与 `SimpleStorageWrapper` 的键值存储模式。【8ca829†L1-L3】【F:js/utils/simpleStorageWrapper.js†L1-L120】
+- DataIntegrityManager 暂以简单包装器工作，验证/迁移体系待补齐。【F:js/components/DataIntegrityManager.js†L1-L44】
 
-**阶段4成果 (P0性能灾难修复)**:
-- 发现并修复139个innerHTML性能罪犯，消除循环中的DOM暴力操作
-- 实例化PerformanceOptimizer并补齐所有缺失API，实现完整性能监控
-- 修复VirtualScroller与Grid布局冲突，建立Grid友好的渲染策略
-- 重构事件系统，使用事件委托解决handler引用和内存泄漏问题
-- 保持完全向后兼容，所有现有功能正常工作
-- 渲染性能提升>80%，事件系统稳定可靠
+**阶段4现状 (P0性能治理 - 部分完成)**:
+- PerformanceOptimizer 已存在并在入口实例化，但 `innerHTML` 热点仍大量存在，列表渲染尚未统一治理。【F:js/components/PerformanceOptimizer.js†L1-L120】【68bbaa†L1-L3】
+- 需要结合阶段5的 DOM 工具继续推进渲染层重构。
 
 ### 阶段4经验教训
 
@@ -581,19 +513,11 @@ grid.innerHTML = this.list.slice(0, pageEnd).map(ex => this._card(ex)).join('');
 2. **兼容性测试** - 每次修改都要验证现有功能不受影响
 3. **渐进式修复** - 大问题分解为小问题，逐步解决
 
-**阶段5成果 (P2代码质量提升 - 33%完成)**:
-- 创建4个工具库并加载到项目中，为后续重构提供基础设施
-- 重构了6个核心组件，消除重复代码模式：
-  - hp-overview-two-cards.js: innerHTML字符串拼接 → 事件委托
-  - hp-settings-bridge.js: 17个addEventListener → 1个事件委托，修复全局按钮灾难
-  - practiceHistory.js: 搜索过滤事件 → 事件委托
-  - main.js: .style.xxx操作 → DOMStyles工具
-  - dataManagementPanel.js: 9个监听器 → 统一事件委托
-  - specializedPractice.js: 5个addEventListener → 事件委托
-- 建立安全的"修一块，测一块"重构流程，避免全局灾难性修改
-- 修复Performance API冲突、CSS选择器转义、ID冲突等关键bug
-- **当前进度**: addEventListener从341减少到335，.style.xxx从171减少到170
-- **待完成**: 继续按视图模块逐步替换剩余330+个addEventListener重复、170次.style.xxx操作
+**阶段5成果 (P2代码质量提升 - 工具已就绪)**:
+- DOM/性能/类型/规范工具库已经入仓，可复用支撑后续重构。【F:js/utils/dom.js†L1-L120】【F:js/utils/performance.js†L1-L120】
+- 已在部分插件与设置面板中试点事件委托与工具函数，验证可行性。
+- 现状指标：`addEventListener` 343 处、`.style` 170 处、`innerHTML` 163 处，尚未出现显著下降，需要在主视图层面启动系统性治理。【69a7f3†L1-L3】【6fab72†L1-L3】【68bbaa†L1-L3】
+- 后续需配合阶段6测试体系，每次改动运行 E2E，确保替换不破坏现有交互。
 
 ### 风险监控
 - 🔴 **高风险**: 架构重构可能影响现有功能

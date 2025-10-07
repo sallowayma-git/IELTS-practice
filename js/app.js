@@ -305,6 +305,14 @@ class ExamSystemApp {
 
         // 全局组件检查函数
         window.checkComponents = () => this.checkComponents();
+
+        if (window.LegacyStateBridge && typeof window.LegacyStateBridge.connect === 'function') {
+            try {
+                window.LegacyStateBridge.connect(this);
+            } catch (error) {
+                console.warn('[App] LegacyStateBridge connect failed:', error);
+            }
+        }
     }
 
     /**

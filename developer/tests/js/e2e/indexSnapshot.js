@@ -1,7 +1,10 @@
-<!DOCTYPE html>
+// Auto-generated snapshot for offline E2E bootstrap.
+// Update when index.html structure changes.
+window.__APP_INDEX_HTML_SNAPSHOT__ = `<!DOCTYPE html>
 <html lang="zh-CN">
 
 <head>
+    <base href="../../">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>考试总览系统</title>
@@ -373,3 +376,4 @@
 </body>
 
 </html>
+`
