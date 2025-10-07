@@ -17,6 +17,73 @@ let pdfHandler = null;
 let browseStateManager = null;
 
 
+const legacyBridge = window.LegacyStateBridge ? window.LegacyStateBridge.getInstance() : null;
+
+if (legacyBridge) {
+    legacyBridge.on('examIndex', (value) => {
+        examIndex = Array.isArray(value) ? value : [];
+    });
+
+    legacyBridge.on('practiceRecords', (value) => {
+        practiceRecords = Array.isArray(value) ? value : [];
+    });
+
+    legacyBridge.on('browseFilter', (value = { category: 'all', type: 'all' }) => {
+        currentCategory = value && value.category ? value.category : 'all';
+        currentExamType = value && value.type ? value.type : 'all';
+    });
+
+    const initialExamIndex = legacyBridge.getExamIndex();
+    if (Array.isArray(initialExamIndex) && initialExamIndex.length) {
+        examIndex = initialExamIndex;
+    }
+
+    const initialPracticeRecords = legacyBridge.getPracticeRecords();
+    if (Array.isArray(initialPracticeRecords) && initialPracticeRecords.length) {
+        practiceRecords = initialPracticeRecords;
+    }
+
+    const initialFilter = legacyBridge.getBrowseFilter();
+    if (initialFilter) {
+        currentCategory = initialFilter.category || currentCategory;
+        currentExamType = initialFilter.type || currentExamType;
+    }
+}
+
+function setExamIndexState(list) {
+    const normalized = Array.isArray(list) ? list : [];
+    if (legacyBridge) {
+        return legacyBridge.setExamIndex(normalized);
+    }
+    try { window.examIndex = normalized; } catch (_) {}
+    return normalized;
+}
+
+function setPracticeRecordsState(records) {
+    const normalized = Array.isArray(records) ? records : [];
+    if (legacyBridge) {
+        return legacyBridge.setPracticeRecords(normalized);
+    }
+    try { window.practiceRecords = normalized; } catch (_) {}
+    return normalized;
+}
+
+function setBrowseFilterState(category = 'all', type = 'all') {
+    const normalized = {
+        category: typeof category === 'string' ? category : 'all',
+        type: typeof type === 'string' ? type : 'all'
+    };
+    currentCategory = normalized.category;
+    currentExamType = normalized.type;
+    if (legacyBridge) {
+        legacyBridge.setBrowseFilter(normalized);
+    } else {
+        try { window.__browseFilter = normalized; } catch (_) {}
+    }
+    return normalized;
+}
+
+
 const preferredFirstExamByCategory = {
   'P1_reading': { id: 'p1-09', title: 'Listening to the Ocean 海洋探测' },
   'P2_reading': { id: 'p2-high-12', title: 'The fascinating world of attine ants 切叶蚁' },
@@ -206,8 +273,7 @@ async function syncPracticeRecords() {
     } catch (e) { console.warn('[System] normalize durations failed:', e); }
 
     // 新增修复3D：确保全局变量是UI的单一数据源
-    window.practiceRecords = records;
-    practiceRecords = records; // also update the local-scoped variable
+    practiceRecords = setPracticeRecordsState(records);
 
     console.log(`[System] ${records.length} 条练习记录已加载到内存。`);
     updatePracticeView();
@@ -327,7 +393,7 @@ async function loadLibrary(forceReload = false) {
 
     // 仅当缓存为非空数组时使用缓存
     if (!forceReload && Array.isArray(cachedData) && cachedData.length > 0) {
-        examIndex = cachedData;
+        examIndex = setExamIndexState(cachedData);
         try {
             const configs = await storage.get('exam_index_configurations', []);
             if (!configs.some(c => c.key === 'exam_index')) {
@@ -354,12 +420,12 @@ async function loadLibrary(forceReload = false) {
         }
 
         if (readingExams.length === 0 && listeningExams.length === 0) {
-            examIndex = [];
+            examIndex = setExamIndexState([]);
             finishLibraryLoading(startTime); // 不写入空索引，避免污染缓存
             return;
         }
 
-        examIndex = [...readingExams, ...listeningExams];
+        examIndex = setExamIndexState([...readingExams, ...listeningExams]);
         await storage.set(activeConfigKey, examIndex);
         await saveLibraryConfiguration('默认题库', activeConfigKey, examIndex.length);
         await setActiveLibraryConfiguration(activeConfigKey);
@@ -371,13 +437,15 @@ async function loadLibrary(forceReload = false) {
             showMessage('题库刷新失败: ' + (error?.message || error), 'error');
         }
         window.__forceLibraryRefreshInProgress = false;
-        examIndex = [];
+        examIndex = setExamIndexState([]);
         finishLibraryLoading(startTime);
     }
 }
 function finishLibraryLoading(startTime) {
     const loadTime = performance.now() - startTime;
-    try { window.examIndex = examIndex; } catch (_) {}
+    if (!legacyBridge) {
+        try { window.examIndex = examIndex; } catch (_) {}
+    }
     // 修复题库索引加载链路问题：顺序为设置window.examIndex → updateOverview() → dispatchEvent('examIndexLoaded')
     updateOverview();
     window.dispatchEvent(new CustomEvent('examIndexLoaded'));
@@ -385,65 +453,118 @@ function finishLibraryLoading(startTime) {
 
 // --- UI Update Functions ---
 
-function updateOverview() {
-    const readingExams = examIndex.filter(e => e.type === 'reading');
-    const listeningExams = examIndex.filter(e => e.type === 'listening');
+let overviewViewInstance = null;
 
-    const readingStats = { P1: { total: 0 }, P2: { total: 0 }, P3: { total: 0 } };
-    readingExams.forEach(exam => { if (readingStats[exam.category]) readingStats[exam.category].total++; });
-
-    const listeningStats = { P3: { total: 0 }, P4: { total: 0 } };
-    listeningExams.forEach(exam => {
-        if (exam.category && listeningStats[exam.category]) {
-            listeningStats[exam.category].total++;
-        } else {
-            console.warn('[Overview] 未知听力类别:', exam.category, exam);
+function getOverviewView() {
+    if (!overviewViewInstance) {
+        const OverviewView = window.AppViews && window.AppViews.OverviewView;
+        if (typeof OverviewView !== 'function') {
+            console.warn('[Overview] 未加载 OverviewView 模块，使用回退渲染逻辑');
+            return null;
         }
-    });
+        overviewViewInstance = new OverviewView({});
+    }
+    return overviewViewInstance;
+}
 
+function updateOverview() {
     const categoryContainer = document.getElementById('category-overview');
-    let html = '<h3 style="grid-column: 1 / -1;">阅读</h3>';
-    ['P1','P2','P3'].forEach(cat => {
-        const onclickStr = "browseCategory('" + cat + "', 'reading')";
-        html += '<div class="category-card">'
-        +   '<div class="category-header">'
-        +     '<div class="category-icon">📖</div>'
-        +     '<div>'
-        +       '<div class="category-title">' + cat + ' 阅读</div>'
-        +       '<div class="category-meta">' + (readingStats[cat] ? readingStats[cat].total : 0) + ' 篇</div>'
-        +     '</div>'
-        +   '</div>'
-        +   '<div class="category-actions" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: nowrap;">'
-        +     '<button class="btn" onclick="' + onclickStr + '">📚 浏览题库</button>'
-        +     '<button class="btn btn-secondary" onclick="startRandomPractice(\'' + cat + '\', \'reading\')">🎲 随机练习</button>'
-        +   '</div>'
-        + '</div>';
-    });
-
-    if (listeningExams.length > 0) {
-        html += '<h3 style="margin-top: 40px; grid-column: 1 / -1;">听力</h3>';
-        ['P3','P4'].forEach(cat => {
-            const count = listeningStats[cat] ? listeningStats[cat].total : 0;
-            if (count > 0) {
-                const onclickStr = "browseCategory('" + cat + "', 'listening')";
-                html += '<div class="category-card">'
-                +   '<div class="category-header">'
-                +     '<div class="category-icon">🎧</div>'
-                +     '<div>'
-                +       '<div class="category-title">' + cat + ' 听力</div>'
-                +       '<div class="category-meta">' + count + ' 篇</div>'
-                +     '</div>'
-                +   '</div>'
-                +   '<div class="category-actions" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: nowrap;">'
-                +     '<button class="btn" onclick="' + onclickStr + '">📚 浏览题库</button>'
-                +     '<button class="btn btn-secondary" onclick="startRandomPractice(\'' + cat + '\', \'listening\')">🎲 随机练习</button>'
-                +   '</div>'
-                + '</div>';
-            }
-        });
+    if (!categoryContainer) {
+        console.warn('[Overview] 找不到 category-overview 容器');
+        return;
     }
 
-    categoryContainer.innerHTML = html;
+    const statsService = window.AppServices && window.AppServices.overviewStats;
+    const stats = statsService ?
+        statsService.calculate(window.examIndex || []) :
+        {
+            reading: [],
+            listening: [],
+            meta: {
+                readingUnknown: 0,
+                listeningUnknown: 0,
+                total: Array.isArray(window.examIndex) ? window.examIndex.length : 0,
+                readingUnknownEntries: [],
+                listeningUnknownEntries: []
+            }
+        };
+
+    const view = getOverviewView();
+    if (view && window.DOM && window.DOM.builder) {
+        view.render(stats, {
+            container: categoryContainer,
+            actions: {
+                onBrowseCategory: (category, type) => {
+                    if (typeof browseCategory === 'function') {
+                        browseCategory(category, type);
+                    }
+                },
+                onRandomPractice: (category, type) => {
+                    if (typeof startRandomPractice === 'function') {
+                        startRandomPractice(category, type);
+                    }
+                }
+            }
+        });
+
+        if (stats.meta?.readingUnknownEntries?.length) {
+            console.warn('[Overview] 未知阅读类别:', stats.meta.readingUnknownEntries);
+        }
+        if (stats.meta?.listeningUnknownEntries?.length) {
+            console.warn('[Overview] 未知听力类别:', stats.meta.listeningUnknownEntries);
+        }
+        return;
+    }
+
+    categoryContainer.innerHTML = renderOverviewLegacy(stats);
+}
+
+function renderOverviewLegacy(stats) {
+    const readingHtml = (stats.reading || []).map((entry) => {
+        const browse = `browseCategory(\'${entry.category}\', \'${entry.type}\')`;
+        const random = `startRandomPractice(\'${entry.category}\', \'${entry.type}\')`;
+        return (
+            '<div class="category-card">'
+            +   '<div class="category-header">'
+            +     '<div class="category-icon">' + (entry.type === 'reading' ? '📖' : '🎧') + '</div>'
+            +     '<div>'
+            +       '<div class="category-title">' + entry.category + (entry.type === 'reading' ? ' 阅读' : ' 听力') + '</div>'
+            +       '<div class="category-meta">' + entry.total + ' 篇</div>'
+            +     '</div>'
+            +   '</div>'
+            +   '<div class="category-actions" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: nowrap;">'
+            +     '<button class="btn" onclick="' + browse + '">📚 浏览题库</button>'
+            +     '<button class="btn btn-secondary" onclick="' + random + '">🎲 随机练习</button>'
+            +   '</div>'
+            + '</div>'
+        );
+    }).join('');
+
+    const listening = (stats.listening || []).filter((entry) => entry.total > 0).map((entry) => {
+        const browse = `browseCategory(\'${entry.category}\', \'${entry.type}\')`;
+        const random = `startRandomPractice(\'${entry.category}\', \'${entry.type}\')`;
+        return (
+            '<div class="category-card">'
+            +   '<div class="category-header">'
+            +     '<div class="category-icon">🎧</div>'
+            +     '<div>'
+            +       '<div class="category-title">' + entry.category + ' 听力</div>'
+            +       '<div class="category-meta">' + entry.total + ' 篇</div>'
+            +     '</div>'
+            +   '</div>'
+            +   '<div class="category-actions" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: nowrap;">'
+            +     '<button class="btn" onclick="' + browse + '">📚 浏览题库</button>'
+            +     '<button class="btn btn-secondary" onclick="' + random + '">🎲 随机练习</button>'
+            +   '</div>'
+            + '</div>'
+        );
+    }).join('');
+
+    let html = '<h3 style="grid-column: 1 / -1;">阅读</h3>' + readingHtml;
+    if (listening) {
+        html += '<h3 style="margin-top: 40px; grid-column: 1 / -1;">听力</h3>' + listening;
+    }
+    return html;
 }
 
 function getScoreColor(percentage) {
@@ -586,13 +707,11 @@ function browseCategory(category, type = 'reading') {
 
     // 先设置筛选器，确保 App 路径也能获取到筛选参数
     try {
-        currentCategory = category;
-        currentExamType = type;
+        setBrowseFilterState(category, type);
 
         // 设置待处理筛选器，确保组件未初始化时筛选不会丢失
         try {
             window.__pendingBrowseFilter = { category, type };
-            window.__browseFilter = { category, type };
         } catch (_) {
             // 如果全局变量设置失败，继续执行
         }
@@ -645,8 +764,7 @@ function browseCategory(category, type = 'reading') {
 }
 
 function filterByType(type) {
-    currentExamType = type;
-    currentCategory = 'all';
+    setBrowseFilterState('all', type);
     document.getElementById('browse-title').textContent = '📚 题库浏览';
     loadExamList();
 }
@@ -676,11 +794,7 @@ function applyBrowseFilter(category = 'all', type = null) {
             } catch (_) { type = 'all'; }
         }
 
-        currentExamType = type;
-        currentCategory = normalizedCategory;
-        try {
-            window.__browseFilter = { category: normalizedCategory, type };
-        } catch (_) {}
+        setBrowseFilterState(normalizedCategory, type);
 
         // 保持标题简洁
         const titleEl = document.getElementById('browse-title');
@@ -694,8 +808,7 @@ function applyBrowseFilter(category = 'all', type = null) {
         loadExamList();
     } catch (e) {
         console.warn('[Browse] 应用筛选失败，回退到默认列表:', e);
-        currentExamType = 'all';
-        currentCategory = 'all';
+        setBrowseFilterState('all', 'all');
         loadExamList();
     }
 }
@@ -703,8 +816,7 @@ function applyBrowseFilter(category = 'all', type = null) {
 // Initialize browse view when it's activated
 function initializeBrowseView() {
     console.log('[System] Initializing browse view...');
-    currentCategory = 'all';
-    currentExamType = 'all';
+    setBrowseFilterState('all', 'all');
     document.getElementById('browse-title').textContent = '📚 题库浏览';
     loadExamList();
 }
@@ -1461,7 +1573,7 @@ async function handleLibraryUpload(options, files) {
         const incName = `${type === 'reading' ? '阅读' : '听力'}增量-${new Date().toLocaleString()}`;
         await saveLibraryConfiguration(incName, targetKey, newIndex.length);
         showMessage('索引已更新；正在刷新界面...', 'success');
-        examIndex = newIndex;
+        examIndex = setExamIndexState(newIndex);
         // 也导出一次，便于归档
         try { exportExamIndexToScriptFile(newIndex, incName); } catch(_) {}
         updateOverview();
@@ -1734,7 +1846,7 @@ async function bulkDeleteRecords() {
     const deletedCount = records.length - recordsToKeep.length;
 
     await storage.set('practice_records', recordsToKeep);
-    practiceRecords = recordsToKeep;
+    practiceRecords = setPracticeRecordsState(recordsToKeep);
 
     syncPracticeRecords(); // Re-sync and update UI
 
@@ -1796,7 +1908,7 @@ async function deleteRecord(recordId) {
 
 async function clearPracticeData() {
     if (confirm('确定要清除所有练习记录吗？此操作不可恢复。')) {
-        practiceRecords = [];
+        practiceRecords = setPracticeRecordsState([]);
         await storage.set('practice_records', []); // Use storage helper
         processedSessions.clear();
         updatePracticeView();
@@ -1818,6 +1930,7 @@ async function clearCache() {
         try { localStorage.clear(); } catch(_) {}
         try { sessionStorage.clear(); } catch(_) {}
 
+        setPracticeRecordsState([]);
         if (window.performanceOptimizer) {
             // optional cleanup hook
             // window.performanceOptimizer.cleanup();
