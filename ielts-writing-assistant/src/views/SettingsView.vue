@@ -226,10 +226,7 @@
 
             <!-- 题库管理 -->
             <div v-show="activeMenu === 'questionbank'" class="setting-content">
-              <!-- <QuestionBankManager /> -->
-              <div class="placeholder-panel">
-                <el-empty description="题库管理功能暂时不可用" />
-              </div>
+              <QuestionBankImportPanel />
             </div>
 
             <!-- 系统诊断 -->
@@ -384,8 +381,7 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import EnhancedAIConfigDialog from '@/components/EnhancedAIConfigDialog.vue'
-// import QuestionBankManager from '@/components/QuestionBankManager.vue'
-// 题库管理组件暂时不启用
+import QuestionBankImportPanel from '@/components/QuestionBankImportPanel.vue'
 
 const router = useRouter()
 
@@ -421,10 +417,10 @@ const writingSettings = ref({
 })
 
 const storageInfo = ref({
-  dbSize: '2.5 MB',
-  recordCount: 15,
-  cacheSize: '512 KB',
-  lastBackup: '2024-10-03 15:30:00'
+  dbSize: '--',
+  recordCount: 0,
+  cacheSize: '--',
+  lastBackup: '--'
 })
 
 const appInfo = ref({
@@ -693,6 +689,26 @@ const loadSettings = async () => {
   }
 }
 
+const loadStorageInfo = async () => {
+  try {
+    const response = await fetch('/api/settings/storage-info')
+    if (!response.ok) {
+      throw new Error('获取存储信息失败')
+    }
+    const data = await response.json()
+    if (data.success && data.data) {
+      storageInfo.value = {
+        dbSize: data.data.dbSize || '--',
+        recordCount: data.data.recordCount || 0,
+        cacheSize: data.data.cacheSize || '--',
+        lastBackup: data.data.lastBackup || '--'
+      }
+    }
+  } catch (error) {
+    console.error('加载存储信息失败:', error)
+  }
+}
+
 // 获取健康检查数量
 const getHealthyCount = () => {
   return diagnosticResults.value.filter(item => item.type === 'success').length
@@ -768,6 +784,7 @@ const formatDiagnosticValue = (value) => {
 
 onMounted(() => {
   loadSettings()
+  loadStorageInfo()
 })
 </script>
 

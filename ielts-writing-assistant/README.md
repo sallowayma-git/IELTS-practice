@@ -60,6 +60,25 @@ cd ielts-writing-assistant
 npm install
 ```
 
+### 纯静态离线体验
+
+在网络受限或仅需验证前端交互流程的场景下，可以使用项目内置的 **静态体验版**：
+
+```text
+static/index.html
+```
+
+该页面仅依赖原生 HTML/CSS/JavaScript，可直接通过 `file://` 协议或任何静态文件服务器打开。
+
+1. 打开 `static/index.html`，等待顶部状态提示从“JS 环境未预热”切换为“JS 环境已就绪”；
+2. 随机题目按钮会在本地随机切换题库；
+3. 在作文输入框中输入文本，实时观察词数、句数和词汇多样性统计；
+4. 点击“开始评估”触发前端评分逻辑，并在右侧面板查看分项得分、反馈建议与历史记录。
+
+该离线页面专为沙箱端到端测试设计：顶部会展示“静态离线演示模式”横幅以明确区别于 Vite 正式界面，主页包含需求文档中描述的写作评估、历史数据与设置卡片布局，并保留 Legacy 听力/阅读模块的入口提示，方便对照集成要求。
+
+在静态模式下，点击“听力练习（Legacy）”或“阅读练习（Legacy）”按钮不会跳转实际页面，而是更新提示文案，提醒需在 Vue Router 中加载对应的 legacy 模块。
+
 #### 开发模式
 
 ```bash
@@ -86,6 +105,16 @@ npm run dist:all
 ```
 
 详细构建说明请参考：[构建指南](docs/BUILD.md)
+
+### 开发测试资产
+
+所有沙箱演示、自动化脚本与临时校验工具统一存放在 `develop-test/` 目录，便于投产前一键移除：
+
+- Python 自动化脚本与端到端测试：`develop-test/test-streaming-e2e.py`、`develop-test/verify-db-api-consistency.py`
+- Shell / Node 辅助脚本：`develop-test/test-e2e-simple.sh`、`develop-test/test-fixes.js`
+- 语法快速检查工具：`develop-test/quick-synt-check.py`
+
+如需纳入正式构建，可直接排除整个目录，不会影响主业务代码。
 
 ### 生产构建
 

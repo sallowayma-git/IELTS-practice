@@ -122,20 +122,22 @@ import { useRouter, useRoute } from 'vue-router'
 import { ArrowLeft, Download } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import GrammarHighlightPanel from '@/components/GrammarHighlightPanel.vue'
+import { useAssessmentStore } from '@/stores/assessment'
 
 const router = useRouter()
 const route = useRoute()
+const assessmentStore = useAssessmentStore()
 
 const loading = ref(true)
-const assessmentResult = ref(null)
+const assessmentResult = computed(() => assessmentStore.currentAssessment)
 
 const scorePercentage = computed(() => {
-  if (!assessmentResult.value) return 0
+  if (!assessmentResult.value?.overallScore) return 0
   return (assessmentResult.value.overallScore / 9) * 100
 })
 
 const scoreColor = computed(() => {
-  if (!assessmentResult.value) return '#409EFF'
+  if (!assessmentResult.value?.overallScore) return '#409EFF'
   const score = assessmentResult.value.overallScore
   if (score >= 7) return '#67C23A'
   if (score >= 6) return '#E6A23C'
@@ -182,78 +184,11 @@ const loadAssessmentResult = async () => {
 
   try {
     const assessmentId = route.params.id
-
-    // 从后端加载评测结果
-    const response = await fetch(`/api/assessment/results/${assessmentId}`)
-
-    if (!response.ok) {
-      throw new Error('获取评测结果失败')
+    if (!assessmentId) {
+      throw new Error('缺少评估ID')
     }
 
-    const data = await response.json()
-
-    if (!data.success) {
-      throw new Error(data.message || '获取评测结果失败')
-    }
-
-    // 转换数据格式
-    const result = data.data
-    assessmentResult.value = {
-      id: result.id,
-      writingId: result.writing_id,
-      overallScore: result.overall_score,
-      level: result.level,
-      description: result.description,
-      originalContent: '', // 需要从writing_records表获取
-      criteria: [
-        {
-          name: '任务回应',
-          score: result.task_response_score,
-          feedback: result.task_response_feedback
-        },
-        {
-          name: '连贯与衔接',
-          score: result.coherence_score,
-          feedback: result.coherence_feedback
-        },
-        {
-          name: '词汇资源',
-          score: result.vocabulary_score,
-          feedback: result.vocabulary_feedback
-        },
-        {
-          name: '语法准确性',
-          score: result.grammar_score,
-          feedback: result.grammar_feedback
-        }
-      ],
-      detailedFeedback: [
-        {
-          title: '优点',
-          items: result.strengths || []
-        },
-        {
-          title: '需要改进',
-          items: result.improvements || []
-        }
-      ],
-      suggestions: result.suggestions || []
-    }
-
-    // 获取原文内容
-    try {
-      const writingResponse = await fetch(`/api/writing/records/${result.writing_id}`)
-      if (writingResponse.ok) {
-        const writingData = await writingResponse.json()
-        if (writingData.success) {
-          assessmentResult.value.originalContent = writingData.data.content
-        }
-      }
-    } catch (error) {
-      console.error('获取原文内容失败:', error)
-      assessmentResult.value.originalContent = '<p>原文内容加载失败</p>'
-    }
-
+    await assessmentStore.getAssessmentById(assessmentId, { includeContent: true })
   } catch (error) {
     ElMessage.error('加载评测结果失败')
   } finally {

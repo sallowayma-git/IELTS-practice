@@ -208,7 +208,11 @@ const filteredHistory = computed(() => {
 
   // 类型筛选
   if (filters.value.type) {
-    result = result.filter(item => item.type.toLowerCase().includes(filters.value.type))
+    const typeFilter = filters.value.type.toLowerCase()
+    result = result.filter(item => {
+      const normalizedType = item.type?.toLowerCase().replace(/\s+/g, '')
+      return normalizedType === typeFilter
+    })
   }
 
   // 分数筛选
@@ -269,7 +273,11 @@ const refreshHistory = () => {
 }
 
 const viewDetail = (record) => {
-  router.push(`/assessment/${record.id}`)
+  if (!record.assessmentId) {
+    ElMessage.warning('该记录尚未生成评估结果')
+    return
+  }
+  router.push(`/assessment/${record.assessmentId}`)
 }
 
 const deleteRecord = async (record) => {
@@ -284,14 +292,22 @@ const deleteRecord = async (record) => {
       }
     )
 
-    // TODO: 调用后端API删除记录
-    const index = historyData.value.findIndex(item => item.id === record.id)
-    if (index > -1) {
-      historyData.value.splice(index, 1)
-      ElMessage.success('删除成功')
+    const response = await fetch(`/api/history/records/${record.id}`, { method: 'DELETE' })
+    if (!response.ok) {
+      throw new Error('删除失败')
     }
+    const data = await response.json()
+    if (!data.success) {
+      throw new Error(data.message || '删除失败')
+    }
+
+    historyData.value = historyData.value.filter(item => item.id !== record.id)
+    ElMessage.success('删除成功')
+    loadStatisticsData()
   } catch (error) {
-    // 用户取消删除
+    if (error !== 'cancel') {
+      console.error(error)
+    }
   }
 }
 
@@ -324,64 +340,62 @@ const getScoreTagType = (score) => {
   return 'danger'
 }
 
+const loadStatisticsData = async () => {
+  try {
+    const response = await fetch('/api/history/statistics')
+    if (!response.ok) {
+      throw new Error('获取统计失败')
+    }
+    const data = await response.json()
+    if (!data.success) {
+      throw new Error(data.message || '获取统计失败')
+    }
+    const stats = data.data || {}
+    statistics.value = {
+      totalCount: Number(stats.totalCount) || 0,
+      averageScore: Number(stats.averageScore) || 0,
+      highestScore: Number(stats.highestScore) || 0,
+      monthlyCount: Number(stats.monthlyCount) || 0
+    }
+  } catch (error) {
+    console.error('获取统计数据失败:', error)
+  }
+}
+
 const loadHistory = async () => {
   loading.value = true
 
   try {
-    // TODO: 从后端加载历史记录
-    // 模拟数据
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    const params = new URLSearchParams({
+      page: 1,
+      limit: 200
+    })
 
-    historyData.value = [
-      {
-        id: '1',
-        date: '2024-10-04 14:30:00',
-        topic: '环境问题与个人责任',
-        type: 'Task 2',
-        wordCount: 285,
-        score: 6.5,
-        timeSpent: 2400 // 40分钟
-      },
-      {
-        id: '2',
-        date: '2024-10-03 16:45:00',
-        topic: '教育投资分析',
-        type: 'Task 2',
-        wordCount: 312,
-        score: 7.0,
-        timeSpent: 2700 // 45分钟
-      },
-      {
-        id: '3',
-        date: '2024-10-02 10:20:00',
-        topic: '城市人口增长图表',
-        type: 'Task 1',
-        wordCount: 198,
-        score: 6.0,
-        timeSpent: 1800 // 30分钟
-      }
-    ]
-
-    // 计算统计数据
-    const totalCount = historyData.value.length
-    const totalScore = historyData.value.reduce((sum, item) => sum + item.score, 0)
-    const averageScore = totalCount > 0 ? totalScore / totalCount : 0
-    const highestScore = totalCount > 0 ? Math.max(...historyData.value.map(item => item.score)) : 0
-
-    const currentMonth = new Date().getMonth()
-    const monthlyCount = historyData.value.filter(item => {
-      const itemMonth = new Date(item.date).getMonth()
-      return itemMonth === currentMonth
-    }).length
-
-    statistics.value = {
-      totalCount,
-      averageScore,
-      highestScore,
-      monthlyCount
+    const response = await fetch(`/api/history/records?${params.toString()}`)
+    if (!response.ok) {
+      throw new Error('获取历史记录失败')
     }
 
+    const data = await response.json()
+    if (!data.success) {
+      throw new Error(data.message || '获取历史记录失败')
+    }
+
+    const records = data.data?.records || []
+    historyData.value = records.map(record => ({
+      id: record.id,
+      assessmentId: record.assessmentId,
+      date: record.date,
+      topic: record.topic,
+      type: record.type,
+      wordCount: record.wordCount,
+      score: record.score !== undefined && record.score !== null ? Number(record.score) : null,
+      timeSpent: record.timeSpent
+    }))
+
+    await loadStatisticsData()
   } catch (error) {
+    console.error('加载历史记录失败:', error)
     ElMessage.error('加载历史记录失败')
   } finally {
     loading.value = false

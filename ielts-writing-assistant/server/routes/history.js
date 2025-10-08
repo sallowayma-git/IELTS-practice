@@ -21,7 +21,8 @@ router.get('/records', (req, res) => {
         wr.*,
         ar.overall_score,
         ar.level,
-        ar.created_at as assessment_date
+        ar.created_at as assessment_date,
+        ar.id as assessment_id
       FROM writing_records wr
       LEFT JOIN assessment_results ar ON wr.id = ar.writing_id
       WHERE 1=1
@@ -93,6 +94,7 @@ router.get('/records', (req, res) => {
     // 格式化数据
     const formattedRecords = records.map(record => ({
       id: record.id,
+      assessmentId: record.assessment_id,
       date: record.created_at,
       assessmentDate: record.assessment_date,
       topic: record.topic_title,
