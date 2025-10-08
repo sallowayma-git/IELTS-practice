@@ -516,55 +516,196 @@ function updateOverview() {
         return;
     }
 
-    categoryContainer.innerHTML = renderOverviewLegacy(stats);
+    renderOverviewLegacy(categoryContainer, stats);
+    setupOverviewInteractions();
 }
 
-function renderOverviewLegacy(stats) {
-    const readingHtml = (stats.reading || []).map((entry) => {
-        const browse = `browseCategory(\'${entry.category}\', \'${entry.type}\')`;
-        const random = `startRandomPractice(\'${entry.category}\', \'${entry.type}\')`;
-        return (
-            '<div class="category-card">'
-            +   '<div class="category-header">'
-            +     '<div class="category-icon">' + (entry.type === 'reading' ? '📖' : '🎧') + '</div>'
-            +     '<div>'
-            +       '<div class="category-title">' + entry.category + (entry.type === 'reading' ? ' 阅读' : ' 听力') + '</div>'
-            +       '<div class="category-meta">' + entry.total + ' 篇</div>'
-            +     '</div>'
-            +   '</div>'
-            +   '<div class="category-actions" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: nowrap;">'
-            +     '<button class="btn" onclick="' + browse + '">📚 浏览题库</button>'
-            +     '<button class="btn btn-secondary" onclick="' + random + '">🎲 随机练习</button>'
-            +   '</div>'
-            + '</div>'
-        );
-    }).join('');
+function renderOverviewLegacy(container, stats) {
+    if (!container) return;
 
-    const listening = (stats.listening || []).filter((entry) => entry.total > 0).map((entry) => {
-        const browse = `browseCategory(\'${entry.category}\', \'${entry.type}\')`;
-        const random = `startRandomPractice(\'${entry.category}\', \'${entry.type}\')`;
-        return (
-            '<div class="category-card">'
-            +   '<div class="category-header">'
-            +     '<div class="category-icon">🎧</div>'
-            +     '<div>'
-            +       '<div class="category-title">' + entry.category + ' 听力</div>'
-            +       '<div class="category-meta">' + entry.total + ' 篇</div>'
-            +     '</div>'
-            +   '</div>'
-            +   '<div class="category-actions" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: nowrap;">'
-            +     '<button class="btn" onclick="' + browse + '">📚 浏览题库</button>'
-            +     '<button class="btn btn-secondary" onclick="' + random + '">🎲 随机练习</button>'
-            +   '</div>'
-            + '</div>'
-        );
-    }).join('');
+    const domApi = (typeof window !== 'undefined' && window.DOM) ? window.DOM : null;
 
-    let html = '<h3 style="grid-column: 1 / -1;">阅读</h3>' + readingHtml;
-    if (listening) {
-        html += '<h3 style="margin-top: 40px; grid-column: 1 / -1;">听力</h3>' + listening;
+    const fallbackCreate = (tag, attributes = {}, children = []) => {
+        const element = document.createElement(tag);
+
+        Object.entries(attributes || {}).forEach(([key, value]) => {
+            if (value == null || value === false) return;
+            if (key === 'className') {
+                element.className = value;
+            } else if (key === 'dataset' && typeof value === 'object') {
+                Object.entries(value).forEach(([dataKey, dataValue]) => {
+                    if (dataValue != null) element.dataset[dataKey] = String(dataValue);
+                });
+            } else if (key === 'style' && typeof value === 'object') {
+                Object.assign(element.style, value);
+            } else {
+                element.setAttribute(key, value === true ? '' : value);
+            }
+        });
+
+        const normalizedChildren = Array.isArray(children) ? children : [children];
+        normalizedChildren.forEach((child) => {
+            if (child == null) return;
+            if (typeof child === 'string') {
+                element.appendChild(document.createTextNode(child));
+            } else if (child instanceof Node) {
+                element.appendChild(child);
+            }
+        });
+
+        return element;
+    };
+
+    const create = domApi && typeof domApi.create === 'function'
+        ? (...args) => domApi.create(...args)
+        : fallbackCreate;
+
+    const replaceContent = domApi && typeof domApi.replaceContent === 'function'
+        ? (content) => domApi.replaceContent(container, content)
+        : (content) => {
+            while (container.firstChild) {
+                container.removeChild(container.firstChild);
+            }
+            const normalized = Array.isArray(content) ? content : [content];
+            normalized.forEach((child) => {
+                if (!child) return;
+                container.appendChild(child);
+            });
+        };
+
+    const sections = [];
+
+    const createSection = (title, entries, typeIcon) => {
+        if (!entries || entries.length === 0) {
+            return;
+        }
+
+        sections.push(create('h3', {
+            className: 'overview-section-title',
+            dataset: { overviewSection: title }
+        }, [
+            create('span', { className: 'overview-section-icon', ariaHidden: 'true' }, typeIcon),
+            create('span', { className: 'overview-section-label' }, title)
+        ]));
+
+        entries.forEach((entry) => {
+            sections.push(create('div', {
+                className: 'category-card',
+                dataset: {
+                    category: entry.category,
+                    examType: entry.type
+                }
+            }, [
+                create('div', { className: 'category-header' }, [
+                    create('div', {
+                        className: 'category-icon',
+                        ariaHidden: 'true'
+                    }, entry.type === 'reading' ? '📖' : '🎧'),
+                    create('div', { className: 'category-details' }, [
+                        create('div', { className: 'category-title' }, [
+                            entry.category,
+                            ' ',
+                            entry.type === 'reading' ? '阅读' : '听力'
+                        ]),
+                        create('div', { className: 'category-meta' }, `${entry.total} 篇`)
+                    ])
+                ]),
+                create('div', { className: 'category-card-actions' }, [
+                    create('button', {
+                        type: 'button',
+                        className: 'btn category-action-button',
+                        dataset: {
+                            overviewAction: 'browse',
+                            category: entry.category,
+                            examType: entry.type
+                        }
+                    }, [
+                        create('span', { className: 'category-action-icon', ariaHidden: 'true' }, '📚'),
+                        create('span', { className: 'category-action-label' }, '浏览题库')
+                    ]),
+                    create('button', {
+                        type: 'button',
+                        className: 'btn btn-secondary category-action-button',
+                        dataset: {
+                            overviewAction: 'random',
+                            category: entry.category,
+                            examType: entry.type
+                        }
+                    }, [
+                        create('span', { className: 'category-action-icon', ariaHidden: 'true' }, '🎲'),
+                        create('span', { className: 'category-action-label' }, '随机练习')
+                    ])
+                ])
+            ]));
+        });
+    };
+
+    createSection('阅读', stats.reading || [], '📖');
+    createSection('听力', (stats.listening || []).filter((entry) => entry.total > 0), '🎧');
+
+    if (sections.length === 0) {
+        sections.push(create('p', { className: 'overview-empty' }, '暂无题库数据'));
     }
-    return html;
+
+    replaceContent(sections);
+}
+
+let overviewDelegatesConfigured = false;
+
+function setupOverviewInteractions() {
+    if (overviewDelegatesConfigured) {
+        return;
+    }
+
+    const container = document.getElementById('category-overview');
+    if (!container) {
+        return;
+    }
+
+    const invokeAction = (target, event) => {
+        const category = target.dataset.category;
+        const type = target.dataset.examType || 'reading';
+        const action = target.dataset.overviewAction;
+
+        if (!action || !category) {
+            return;
+        }
+
+        event.preventDefault();
+
+        if (action === 'browse') {
+            if (typeof browseCategory === 'function') {
+                browseCategory(category, type);
+            } else {
+                try { applyBrowseFilter(category, type); } catch (_) {}
+            }
+            return;
+        }
+
+        if (action === 'random' && typeof startRandomPractice === 'function') {
+            startRandomPractice(category, type);
+        }
+    };
+
+    const hasDomDelegate = typeof window !== 'undefined'
+        && window.DOM
+        && typeof window.DOM.delegate === 'function';
+
+    if (hasDomDelegate) {
+        window.DOM.delegate('click', '#category-overview [data-overview-action]', function(event) {
+            invokeAction(this, event);
+        });
+    } else {
+        container.addEventListener('click', (event) => {
+            const target = event.target.closest('[data-overview-action]');
+            if (!target || !container.contains(target)) {
+                return;
+            }
+            invokeAction(target, event);
+        });
+    }
+
+    overviewDelegatesConfigured = true;
 }
 
 function getScoreColor(percentage) {
@@ -594,38 +735,207 @@ function getDurationColor(seconds) {
 }
 
 function renderPracticeRecordItem(record) {
-    const item = document.createElement("div");
-    item.className = "history-item";
+    const domApi = (typeof window !== 'undefined' && window.DOM && typeof window.DOM.create === 'function') ? window.DOM : null;
+    const fallbackCreate = (tag, attributes = {}, children = []) => {
+        const element = document.createElement(tag);
+        Object.entries(attributes || {}).forEach(([key, value]) => {
+            if (value == null || value === false) return;
+            if (key === 'className') {
+                element.className = value;
+            } else if (key === 'dataset' && typeof value === 'object') {
+                Object.entries(value).forEach(([dataKey, dataValue]) => {
+                    if (dataValue != null) element.dataset[dataKey] = String(dataValue);
+                });
+            } else if (key === 'style' && typeof value === 'object') {
+                Object.assign(element.style, value);
+            } else {
+                element.setAttribute(key, value === true ? '' : value);
+            }
+        });
+
+        const normalizedChildren = Array.isArray(children) ? children : [children];
+        normalizedChildren.forEach((child) => {
+            if (child == null) return;
+            if (typeof child === 'string') {
+                element.appendChild(document.createTextNode(child));
+            } else if (child instanceof Node) {
+                element.appendChild(child);
+            }
+        });
+        return element;
+    };
+
+    const create = domApi ? domApi.create.bind(domApi) : fallbackCreate;
+
+    const item = create('div', {
+        className: 'history-item',
+        dataset: { recordId: record.id }
+    });
 
     const durationInSeconds = Number(record.duration || 0);
     const durationStr = formatDurationShort(durationInSeconds);
     const durationColor = getDurationColor(durationInSeconds);
 
-    const isSelected = selectedRecords.has(record.id);
-    if (bulkDeleteMode && isSelected) item.classList.add("history-item-selected");
-    item.dataset.recordId = record.id;
-    item.onclick = () => { if (bulkDeleteMode) toggleRecordSelection(record.id); };
-
-    const title = record.title || "无标题";
+    const title = record.title || '无标题';
     const dateText = new Date(record.date).toLocaleString();
     const percentage = (typeof record.percentage === 'number') ? record.percentage : Math.round(((record.accuracy || 0) * 100));
 
-    item.innerHTML = ''
-        + '<div class="record-info" style="cursor: ' + (bulkDeleteMode ? 'pointer' : 'default') + ';">'
-        +   '<a href="#" class="practice-record-title" onclick="event.stopPropagation(); showRecordDetails(\'' + record.id + '\'); return false;"><strong>' + title + '</strong></a>'
-        +   '<div class="record-meta-line">'
-        +     '<small class="record-date">' + dateText + '</small>'
-        +     '<small class="record-duration-value"><strong>用时</strong><strong class="duration-time" style="color: ' + durationColor + ';">' + durationStr + '</strong></small>'
-        +   '</div>'
-        + '</div>'
-        + '<div class="record-percentage-container" style="flex-grow: 1; text-align: right; padding-right: 5px;">'
-        +   '<div class="record-percentage" style="color: ' + getScoreColor(percentage) + ';">' + percentage + '%</div>'
-        + '</div>'
-        + '<div class="record-actions-container" style="flex-shrink: 0;">'
-        +   (bulkDeleteMode ? '' : '<button class="delete-record-btn" onclick="event.stopPropagation(); deleteRecord(\'' + record.id + '\')" title="删除此记录">🗑️</button>')
-        + '</div>';
+    const info = create('div', {
+        className: 'record-info' + (bulkDeleteMode ? ' record-info-selectable' : '')
+    }, [
+        create('a', {
+            href: '#',
+            className: 'practice-record-title',
+            dataset: { recordAction: 'details', recordId: record.id }
+        }, [
+            create('strong', undefined, title)
+        ]),
+        create('div', { className: 'record-meta-line' }, [
+            create('small', { className: 'record-date' }, dateText),
+            create('small', { className: 'record-duration-value' }, [
+                create('strong', undefined, '用时'),
+                create('strong', {
+                    className: 'duration-time',
+                    style: { color: durationColor }
+                }, durationStr)
+            ])
+        ])
+    ]);
+
+    const percentageContainer = create('div', { className: 'record-percentage-container' }, [
+        create('div', {
+            className: 'record-percentage',
+            style: { color: getScoreColor(percentage) }
+        }, `${percentage}%`)
+    ]);
+
+    const actions = !bulkDeleteMode ? create('div', { className: 'record-actions-container' }, [
+        create('button', {
+            type: 'button',
+            className: 'delete-record-btn',
+            title: '删除此记录',
+            dataset: { recordAction: 'delete', recordId: record.id }
+        }, '🗑️')
+    ]) : null;
+
+    if (bulkDeleteMode && selectedRecords.has(record.id)) {
+        item.classList.add('history-item-selected');
+    }
+
+    if (bulkDeleteMode) {
+        item.classList.add('history-item-selectable');
+    }
+
+    [info, percentageContainer, actions].forEach((child) => {
+        if (child) item.appendChild(child);
+    });
 
     return item;
+}
+
+function clearPracticeHistoryContainer(container) {
+    if (!container) return;
+    while (container.firstChild) {
+        container.removeChild(container.firstChild);
+    }
+}
+
+function renderPracticeHistoryEmptyState(container) {
+    if (!container) return;
+    clearPracticeHistoryContainer(container);
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'practice-history-empty';
+
+    const icon = document.createElement('div');
+    icon.className = 'practice-history-empty-icon';
+    icon.textContent = '📂';
+
+    const text = document.createElement('p');
+    text.className = 'practice-history-empty-text';
+    text.textContent = '暂无任何练习记录';
+
+    wrapper.appendChild(icon);
+    wrapper.appendChild(text);
+    container.appendChild(wrapper);
+}
+
+let practiceHistoryDelegatesConfigured = false;
+
+function setupPracticeHistoryInteractions() {
+    if (practiceHistoryDelegatesConfigured) {
+        return;
+    }
+
+    const container = document.getElementById('practice-history-list');
+    if (!container) {
+        return;
+    }
+
+    const handleDetails = (recordId, event) => {
+        if (!recordId) return;
+        if (event) event.preventDefault();
+        if (typeof showRecordDetails === 'function') {
+            showRecordDetails(recordId);
+        }
+    };
+
+    const handleDelete = (recordId, event) => {
+        if (!recordId) return;
+        if (event) event.preventDefault();
+        if (typeof deleteRecord === 'function') {
+            deleteRecord(recordId);
+        }
+    };
+
+    const handleSelection = (recordId, event) => {
+        if (!bulkDeleteMode || !recordId) return;
+        if (event) event.preventDefault();
+        toggleRecordSelection(recordId);
+    };
+
+    const hasDomDelegate = typeof window !== 'undefined' && window.DOM && typeof window.DOM.delegate === 'function';
+
+    if (hasDomDelegate) {
+        window.DOM.delegate('click', '#practice-history-list [data-record-action="details"]', function(event) {
+            handleDetails(this.dataset.recordId, event);
+        });
+
+        window.DOM.delegate('click', '#practice-history-list [data-record-action="delete"]', function(event) {
+            handleDelete(this.dataset.recordId, event);
+        });
+
+        window.DOM.delegate('click', '#practice-history-list .history-item', function(event) {
+            const actionTarget = event.target.closest('[data-record-action]');
+            if (actionTarget) return;
+            handleSelection(this.dataset.recordId, event);
+        });
+    } else {
+        container.addEventListener('click', (event) => {
+            const detailsTarget = event.target.closest('[data-record-action="details"]');
+            if (detailsTarget && container.contains(detailsTarget)) {
+                handleDetails(detailsTarget.dataset.recordId, event);
+                return;
+            }
+
+            const deleteTarget = event.target.closest('[data-record-action="delete"]');
+            if (deleteTarget && container.contains(deleteTarget)) {
+                handleDelete(deleteTarget.dataset.recordId, event);
+                return;
+            }
+
+            const item = event.target.closest('.history-item');
+            if (item && container.contains(item)) {
+                const actionTarget = event.target.closest('[data-record-action]');
+                if (actionTarget) {
+                    return;
+                }
+                handleSelection(item.dataset.recordId, event);
+            }
+        });
+    }
+
+    practiceHistoryDelegatesConfigured = true;
 }
 
 function updatePracticeView() {
@@ -669,6 +979,12 @@ function updatePracticeView() {
 
     // --- 3. Filter and Render History List ---
     const historyContainer = document.getElementById('practice-history-list');
+    if (!historyContainer) {
+        return;
+    }
+
+    setupPracticeHistoryInteractions();
+
     let recordsToShow = records.sort((a,b) => new Date(b.date) - new Date(a.date));
 
     if (currentExamType !== 'all') {
@@ -687,15 +1003,21 @@ function updatePracticeView() {
     }
 
     if (recordsToShow.length === 0) {
-        historyContainer.innerHTML = `<div style="text-align: center; padding: 40px; opacity: 0.7;"><div style="font-size: 3em; margin-bottom: 15px;">📂</div><p>暂无任何练习记录</p></div>`;
+        renderPracticeHistoryEmptyState(historyContainer);
         return;
     }
-    
+
+    clearPracticeHistoryContainer(historyContainer);
+
     if (window.VirtualScroller) {
         practiceListScroller = new VirtualScroller(historyContainer, recordsToShow, renderPracticeRecordItem, { itemHeight: 100, containerHeight: 650 }); // 增加itemHeight以匹配新的gap和padding
     } else {
-        // Fallback to simple rendering if VirtualScroller is not available
-        historyContainer.innerHTML = recordsToShow.map(record => renderPracticeRecordItem(record).outerHTML).join('');
+        const fragment = document.createDocumentFragment();
+        recordsToShow.forEach((record) => {
+            const node = renderPracticeRecordItem(record);
+            if (node) fragment.appendChild(node);
+        });
+        historyContainer.appendChild(fragment);
     }
 }
 
@@ -889,47 +1211,135 @@ function displayExams(exams) {
     const container = document.getElementById('exam-list-container');
     const loadingIndicator = document.querySelector('#browse-view .loading');
 
-    if (exams.length === 0) {
-        container.innerHTML = `<div style="text-align: center; padding: 40px;"><p>未找到匹配的题目</p></div>`;
-        if (loadingIndicator) {
-        if (typeof window.DOM !== 'undefined' && window.DOM.hide) {
-            window.DOM.hide(loadingIndicator);
-        } else {
-            loadingIndicator.style.display = 'none';
-        }
-    }
+    if (!container) {
         return;
     }
 
-    // Grid布局友好渲染：保持CSS Grid，使用DocumentFragment优化
-    const examList = document.createElement('div');
-    examList.className = 'exam-list';
+    const domApi = (typeof window !== 'undefined' && window.DOM) ? window.DOM : null;
 
-    // 大数据集时使用分批渲染优化
+    if (!Array.isArray(exams) || exams.length === 0) {
+        renderExamEmptyState(container);
+        if (loadingIndicator) {
+            if (domApi && typeof domApi.hide === 'function') {
+                domApi.hide(loadingIndicator);
+            } else {
+                loadingIndicator.style.display = 'none';
+            }
+        }
+        return;
+    }
+
+    const fallbackCreate = (tag, attributes = {}, children = []) => {
+        const element = document.createElement(tag);
+        Object.entries(attributes || {}).forEach(([key, value]) => {
+            if (value == null || value === false) return;
+            if (key === 'className') {
+                element.className = value;
+            } else if (key === 'dataset' && typeof value === 'object') {
+                Object.entries(value).forEach(([dataKey, dataValue]) => {
+                    if (dataValue != null) element.dataset[dataKey] = String(dataValue);
+                });
+            } else {
+                element.setAttribute(key, value === true ? '' : value);
+            }
+        });
+
+        const normalizedChildren = Array.isArray(children) ? children : [children];
+        normalizedChildren.forEach((child) => {
+            if (child == null) return;
+            if (typeof child === 'string') {
+                element.appendChild(document.createTextNode(child));
+            } else if (child instanceof Node) {
+                element.appendChild(child);
+            }
+        });
+        return element;
+    };
+
+    const create = domApi && typeof domApi.create === 'function'
+        ? (...args) => domApi.create(...args)
+        : fallbackCreate;
+
+    const examList = create('div', { className: 'exam-list' });
+
     if (window.performanceOptimizer && exams.length > 50) {
         renderExamListBatched(exams, examList, createExamElement);
     } else {
-        // 直接渲染：使用DocumentFragment
         const fragment = document.createDocumentFragment();
-
-        exams.forEach(exam => {
+        exams.forEach((exam) => {
             const element = createExamElement(exam);
-            fragment.appendChild(element);
+            if (element) {
+                fragment.appendChild(element);
+            }
         });
-
         examList.appendChild(fragment);
     }
 
-    // 清空容器并添加新元素
-    container.innerHTML = '';
-    container.appendChild(examList);
+    if (domApi && typeof domApi.replaceContent === 'function') {
+        domApi.replaceContent(container, [examList]);
+    } else {
+        container.innerHTML = '';
+        container.appendChild(examList);
+    }
 
     if (loadingIndicator) {
-        if (typeof window.DOM !== 'undefined' && window.DOM.hide) {
-            window.DOM.hide(loadingIndicator);
+        if (domApi && typeof domApi.hide === 'function') {
+            domApi.hide(loadingIndicator);
         } else {
             loadingIndicator.style.display = 'none';
         }
+    }
+
+    setupExamActionHandlers();
+}
+
+function renderExamEmptyState(container) {
+    if (!container) return;
+
+    const domApi = (typeof window !== 'undefined' && window.DOM) ? window.DOM : null;
+
+    const fallbackCreate = (tag, attributes = {}, children = []) => {
+        const element = document.createElement(tag);
+        Object.entries(attributes || {}).forEach(([key, value]) => {
+            if (value == null || value === false) return;
+            if (key === 'className') {
+                element.className = value;
+            } else if (key === 'dataset' && typeof value === 'object') {
+                Object.entries(value).forEach(([dataKey, dataValue]) => {
+                    if (dataValue != null) element.dataset[dataKey] = String(dataValue);
+                });
+            } else {
+                element.setAttribute(key, value === true ? '' : value);
+            }
+        });
+
+        const normalizedChildren = Array.isArray(children) ? children : [children];
+        normalizedChildren.forEach((child) => {
+            if (child == null) return;
+            if (typeof child === 'string') {
+                element.appendChild(document.createTextNode(child));
+            } else if (child instanceof Node) {
+                element.appendChild(child);
+            }
+        });
+        return element;
+    };
+
+    const create = domApi && typeof domApi.create === 'function'
+        ? (...args) => domApi.create(...args)
+        : fallbackCreate;
+
+    const emptyState = create('div', { className: 'exam-list-empty', role: 'status' }, [
+        create('div', { className: 'exam-list-empty-icon', ariaHidden: 'true' }, '🔍'),
+        create('p', { className: 'exam-list-empty-text' }, '未找到匹配的题目'),
+        create('p', { className: 'exam-list-empty-hint' }, '请调整筛选条件或搜索词后再试')
+    ]);
+
+    if (domApi && typeof domApi.replaceContent === 'function') {
+        domApi.replaceContent(container, [emptyState]);
+    } else {
+        container.innerHTML = '';
+        container.appendChild(emptyState);
     }
 }
 
@@ -1063,18 +1473,24 @@ function createExamElement(exam, index = null) {
  */
 function createCompletionDot(percentage) {
     const dot = document.createElement('span');
-    dot.className = 'completion-dot';
-    dot.style.cssText = `
-        display: inline-block;
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background: ${getScoreColor(percentage)};
-        margin-right: 8px;
-        vertical-align: middle;
-        box-shadow: 0 0 0 2px rgba(0,0,0,0.1);
-    `;
+    const levelClass = getCompletionDotClass(percentage);
+    dot.className = `completion-dot${levelClass ? ' ' + levelClass : ''}`;
+    dot.setAttribute('aria-hidden', 'true');
+    if (typeof percentage === 'number') {
+        dot.title = `最近正确率 ${Math.round(percentage)}%`;
+    }
     return dot;
+}
+
+function getCompletionDotClass(percentage) {
+    if (typeof percentage !== 'number') {
+        return '';
+    }
+
+    if (percentage >= 90) return 'completion-dot--excellent';
+    if (percentage >= 75) return 'completion-dot--strong';
+    if (percentage >= 60) return 'completion-dot--average';
+    return 'completion-dot--weak';
 }
 
 function resolveExamBasePath(exam) {
@@ -1324,11 +1740,25 @@ function showMessage(message, type = 'info', duration = 4000) {
     if (!container) return;
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${type}`;
-    messageDiv.innerHTML = '<strong>' + (type === 'error' ? '错误' : '成功') + '</strong> ' + (message || '');
+    messageDiv.setAttribute('role', 'alert');
+
+    const label = document.createElement('strong');
+    label.className = 'message-label';
+    label.textContent = type === 'error' ? '错误' : '成功';
+    messageDiv.appendChild(label);
+
+    if (message) {
+        messageDiv.appendChild(document.createTextNode(' '));
+        const body = document.createElement('span');
+        body.className = 'message-text';
+        body.textContent = message;
+        messageDiv.appendChild(body);
+    }
+
     container.appendChild(messageDiv);
     setTimeout(() => {
-        messageDiv.style.opacity = '0';
-        setTimeout(() => messageDiv.remove(), 300);
+        messageDiv.classList.add('message-leaving');
+        setTimeout(() => messageDiv.remove(), 320);
     }, duration);
 }
 
@@ -1367,127 +1797,206 @@ function handleFolderSelection(event) { /* legacy stub - replaced by modal-speci
 
 // --- Library Loader Modal and Index Management ---
 function showLibraryLoaderModal() {
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay show';
-    // 使用DOMStyles工具库批量设置样式
-    if (typeof window.DOM !== 'undefined' && window.DOM.setStyle) {
-        window.DOM.setStyle(overlay, {
-            position: 'fixed',
-            inset: '0',
-            background: 'rgba(0,0,0,0.65)',
-            backdropFilter: 'blur(1px)',
-            zIndex: '1000',
-            display: 'flex'
+    const domApi = typeof window.DOM !== 'undefined' ? window.DOM : null;
+    const fallbackCreate = (tag, attributes = {}, children = []) => {
+        const element = document.createElement(tag);
+        Object.entries(attributes || {}).forEach(([key, value]) => {
+            if (value == null || value === false) return;
+            if (key === 'className') {
+                element.className = value;
+            } else if (key === 'dataset' && typeof value === 'object') {
+                Object.entries(value).forEach(([dataKey, dataValue]) => {
+                    if (dataValue != null) element.dataset[dataKey] = String(dataValue);
+                });
+            } else if (key === 'style' && typeof value === 'object') {
+                Object.assign(element.style, value);
+            } else {
+                element.setAttribute(key, value === true ? '' : value);
+            }
         });
-    } else {
-        // Fallback to individual style assignments
-        overlay.style.position = 'fixed';
-        overlay.style.inset = '0';
-        overlay.style.background = 'rgba(0,0,0,0.65)';
-        overlay.style.backdropFilter = 'blur(1px)';
-        overlay.style.zIndex = '1000';
-        overlay.style.display = 'flex';
-    }
-    overlay.style.alignItems = 'center';
-    overlay.style.justifyContent = 'center';
 
-    const modal = document.createElement('div');
-    modal.className = 'modal';
-    modal.style.maxWidth = '900px';
-    modal.style.width = '90%';
-    modal.style.background = 'linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.9))';
-    modal.style.color = '#1e293b';
-    modal.style.border = 'none';
-    modal.style.borderRadius = '20px';
-    modal.style.boxShadow = '0 25px 60px rgba(0,0,0,0.15), 0 0 0 1px rgba(255,255,255,0.2)';
-    modal.style.backdropFilter = 'blur(20px)';
-    modal.innerHTML = `
-        <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 20px 20px 0 0;">
-            <h2 style="margin: 0; font-size: 1.5em; font-weight: 600;">📚 加载题库</h2>
-            <button class="modal-close" aria-label="关闭" style="background: rgba(255,255,255,0.2); border: none; color: white; width: 32px; height: 32px; border-radius: 50%; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;">×</button>
-        </div>
-        <div class="modal-body" style="padding: 30px;">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
-                <div style="border: 2px solid rgba(102, 126, 234, 0.2); border-radius: 16px; padding: 24px; background: linear-gradient(135deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05)); transition: all 0.3s ease;">
-                    <h3 style="margin: 0 0 12px 0; color: #667eea; font-size: 1.2em;">📖 阅读题库加载</h3>
-                    <p style="margin: 0 0 20px 0; color: #64748b; line-height: 1.6;">支持全量重载与增量更新。请上传包含题目HTML/PDF的根文件夹。</p>
-                    <div style="display:flex; gap:12px; flex-wrap: wrap;">
-                        <button class="btn" id="reading-full-btn" style="background: linear-gradient(135deg, #667eea, #764ba2); border: none; color: white; padding: 12px 20px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">全量重载</button>
-                        <button class="btn btn-secondary" id="reading-inc-btn" style="background: rgba(102, 126, 234, 0.1); border: 2px solid rgba(102, 126, 234, 0.3); color: #667eea; padding: 12px 20px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">增量更新</button>
-                    </div>
-                    <input type="file" id="reading-full-input" webkitdirectory multiple style="display:none;" />
-                    <input type="file" id="reading-inc-input" webkitdirectory multiple style="display:none;" />
-                    <div style="margin-top:16px; font-size: 0.85em; color: #94a3b8;">
-                        💡 建议路径：.../3. 所有文章(9.4)[134篇]/...
-                    </div>
-                </div>
-                <div style="border: 2px solid rgba(118, 75, 162, 0.2); border-radius: 16px; padding: 24px; background: linear-gradient(135deg, rgba(118, 75, 162, 0.05), rgba(102, 126, 234, 0.05)); transition: all 0.3s ease;">
-                    <h3 style="margin: 0 0 12px 0; color: #764ba2; font-size: 1.2em;">🎧 听力题库加载</h3>
-                    <p style="margin: 0 0 20px 0; color: #64748b; line-height: 1.6;">支持全量重载与增量更新。请上传包含题目HTML/PDF/音频的根文件夹。</p>
-                    <div style="display:flex; gap:12px; flex-wrap: wrap;">
-                        <button class="btn" id="listening-full-btn" style="background: linear-gradient(135deg, #764ba2, #667eea); border: none; color: white; padding: 12px 20px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">全量重载</button>
-                        <button class="btn btn-secondary" id="listening-inc-btn" style="background: rgba(118, 75, 162, 0.1); border: 2px solid rgba(118, 75, 162, 0.3); color: #764ba2; padding: 12px 20px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">增量更新</button>
-                    </div>
-                    <input type="file" id="listening-full-input" webkitdirectory multiple style="display:none;" />
-                    <input type="file" id="listening-inc-input" webkitdirectory multiple style="display:none;" />
-                    <div style="margin-top:16px; font-size: 0.85em; color: #94a3b8;">
-                        💡 建议路径：ListeningPractice/P3 或 ListeningPractice/P4
-                    </div>
-                </div>
-            </div>
-            <div style="margin-top:24px; padding: 20px; background: linear-gradient(135deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05)); border-radius: 12px; border: 1px solid rgba(102, 126, 234, 0.1);">
-                <div style="font-weight:600; color: #1e293b; margin-bottom: 12px; font-size: 1.1em;">📋 操作说明</div>
-                <ul style="margin:0; padding-left: 20px; line-height:1.7; color: #64748b;">
-                    <li>全量重载会替换当前配置中对应类型（阅读/听力）的全部索引，并保留另一类型原有数据。</li>
-                    <li>增量更新会将新文件生成的新索引追加到当前配置。若当前为默认配置，则会自动复制为新配置后再追加，确保默认配置不被影响。</li>
-                </ul>
-            </div>
-        </div>
-        <div class="modal-footer" style="padding: 20px 30px; background: rgba(248, 250, 252, 0.8); border-radius: 0 0 20px 20px; border-top: 1px solid rgba(226, 232, 240, 0.5);">
-            <button class="btn btn-secondary" id="close-loader" style="background: rgba(100, 116, 139, 0.1); border: 2px solid rgba(100, 116, 139, 0.2); color: #64748b; padding: 12px 24px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;">关闭</button>
-        </div>
-    `;
+        const items = Array.isArray(children) ? children : [children];
+        for (const child of items) {
+            if (child == null) continue;
+            if (typeof child === 'string') {
+                element.appendChild(document.createTextNode(child));
+            } else if (child instanceof Node) {
+                element.appendChild(child);
+            }
+        }
+        return element;
+    };
+
+    const create = domApi && typeof domApi.create === 'function' ? domApi.create : fallbackCreate;
+    const ensureArray = (value) => (Array.isArray(value) ? value : [value]);
+
+    const createLoaderCard = (type, title, description, hint) => {
+        const prefix = type === 'reading' ? 'reading' : 'listening';
+        return create('div', {
+            className: `library-loader-card library-loader-card--${type}`
+        }, [
+            create('h3', { className: 'library-loader-card-title' }, title),
+            create('p', { className: 'library-loader-card-description' }, description),
+            create('div', { className: 'library-loader-actions' }, [
+                create('button', {
+                    type: 'button',
+                    className: 'btn library-loader-primary',
+                    id: `${prefix}-full-btn`,
+                    dataset: {
+                        libraryAction: 'trigger-input',
+                        libraryTarget: `${prefix}-full-input`
+                    }
+                }, '全量重载'),
+                create('button', {
+                    type: 'button',
+                    className: 'btn btn-secondary library-loader-secondary',
+                    id: `${prefix}-inc-btn`,
+                    dataset: {
+                        libraryAction: 'trigger-input',
+                        libraryTarget: `${prefix}-inc-input`
+                    }
+                }, '增量更新')
+            ]),
+            create('input', {
+                type: 'file',
+                id: `${prefix}-full-input`,
+                className: 'library-loader-input',
+                multiple: '',
+                webkitdirectory: '',
+                dataset: {
+                    libraryType: type,
+                    libraryMode: 'full'
+                }
+            }),
+            create('input', {
+                type: 'file',
+                id: `${prefix}-inc-input`,
+                className: 'library-loader-input',
+                multiple: '',
+                webkitdirectory: '',
+                dataset: {
+                    libraryType: type,
+                    libraryMode: 'incremental'
+                }
+            }),
+            create('p', { className: 'library-loader-hint' }, hint)
+        ]);
+    };
+
+    const overlay = create('div', {
+        className: 'modal-overlay show library-loader-overlay',
+        id: 'library-loader-overlay',
+        role: 'dialog',
+        ariaModal: 'true',
+        ariaLabelledby: 'library-loader-title'
+    });
+
+    const modal = create('div', {
+        className: 'modal library-loader-modal',
+        role: 'document'
+    });
+
+    const header = create('div', {
+        className: 'modal-header library-loader-header'
+    }, [
+        create('h2', { className: 'modal-title', id: 'library-loader-title' }, '📚 加载题库'),
+        create('button', {
+            type: 'button',
+            className: 'modal-close library-loader-close',
+            ariaLabel: '关闭',
+            dataset: { libraryAction: 'close' }
+        }, '×')
+    ]);
+
+    const body = create('div', { className: 'modal-body library-loader-body' }, [
+        create('div', { className: 'library-loader-grid' }, [
+            createLoaderCard('reading', '📖 阅读题库加载', '支持全量重载与增量更新。请上传包含题目HTML/PDF的根文件夹。', '💡 建议路径：.../3. 所有文章(9.4)[134篇]/...'),
+            createLoaderCard('listening', '🎧 听力题库加载', '支持全量重载与增量更新。请上传包含题目HTML/PDF/音频的根文件夹。', '💡 建议路径：ListeningPractice/P3 或 ListeningPractice/P4')
+        ]),
+        create('div', { className: 'library-loader-instructions' }, [
+            create('div', { className: 'library-loader-instructions-title' }, '📋 操作说明'),
+            create('ul', { className: 'library-loader-instructions-list' }, [
+                create('li', null, '全量重载会替换当前配置中对应类型（阅读/听力）的全部索引，并保留另一类型原有数据。'),
+                create('li', null, '增量更新会将新文件生成的新索引追加到当前配置。若当前为默认配置，则会自动复制为新配置后再追加，确保默认配置不被影响。')
+            ])
+        ])
+    ]);
+
+    const footer = create('div', { className: 'modal-footer library-loader-footer' }, [
+        create('button', {
+            type: 'button',
+            className: 'btn btn-secondary library-loader-close-btn',
+            id: 'close-loader',
+            dataset: { libraryAction: 'close' }
+        }, '关闭')
+    ]);
+
+    ensureArray([header, body, footer]).forEach((section) => {
+        if (section) modal.appendChild(section);
+    });
 
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
 
-    // Scoped styles for better visual integration
-    try {
-        const styleEl = document.createElement('style');
-        styleEl.textContent = `
-            .library-loader-modal .btn{appearance:none;border:1px solid rgba(255,255,255,0.15);background:linear-gradient(180deg, rgba(59,130,246,0.25), rgba(59,130,246,0.15));color:#e5e7eb;border-radius:8px;padding:8px 14px;transition:all .2s ease}
-            .library-loader-modal .btn:hover{border-color:rgba(255,255,255,0.25);background:linear-gradient(180deg, rgba(59,130,246,0.35), rgba(59,130,246,0.22))}
-            .library-loader-modal .btn.btn-secondary{background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.15)}
-            .library-loader-modal .btn.btn-secondary:hover{background:rgba(255,255,255,0.12)}
-            .library-loader-modal h2,.library-loader-modal h3{margin:0 0 8px}
-            .library-loader-modal .modal-header{display:flex;justify-content:space-between;align-items:center;padding-bottom:8px}
-            .library-loader-modal .modal-footer{}
-        `;
-        // add scoping class
-        modal.className += ' library-loader-modal';
-        modal.prepend(styleEl);
-    } catch(_) {}
-
-    const close = () => { overlay.remove(); };
-    modal.querySelector('.modal-close').addEventListener('click', close);
-    modal.querySelector('#close-loader').addEventListener('click', close);
-
-    const wire = (btnId, inputId, type, mode) => {
-        const btn = modal.querySelector(btnId);
-        const input = modal.querySelector(inputId);
-        btn.addEventListener('click', () => input.click());
-        input.addEventListener('change', async (e) => {
-            const files = Array.from(e.target.files || []);
-            if (files.length === 0) return;
-            await handleLibraryUpload({ type, mode }, files);
-            close();
+    const cleanup = () => {
+        delegates.forEach((token) => {
+            if (token && typeof token.remove === 'function') {
+                token.remove();
+            }
         });
+        delegates.length = 0;
+        overlay.remove();
     };
 
-    wire('#reading-full-btn', '#reading-full-input', 'reading', 'full');
-    wire('#reading-inc-btn', '#reading-inc-input', 'reading', 'incremental');
-    wire('#listening-full-btn', '#listening-full-input', 'listening', 'full');
-    wire('#listening-inc-btn', '#listening-inc-input', 'listening', 'incremental');
+    const handleAction = function(event) {
+        if (!overlay.contains(this)) return;
+        const action = this.dataset.libraryAction;
+        if (action === 'close') {
+            event.preventDefault();
+            cleanup();
+            return;
+        }
+
+        if (action === 'trigger-input') {
+            event.preventDefault();
+            const targetId = this.dataset.libraryTarget;
+            const input = targetId ? overlay.querySelector(`#${targetId}`) : null;
+            if (input) {
+                input.click();
+            }
+        }
+    };
+
+    const handleChange = async function(event) {
+        if (!overlay.contains(this)) return;
+        const files = Array.from(this.files || []);
+        if (files.length === 0) return;
+
+        const type = this.dataset.libraryType;
+        const mode = this.dataset.libraryMode;
+        if (!type || !mode) return;
+
+        await handleLibraryUpload({ type, mode }, files);
+        cleanup();
+    };
+
+    const delegates = [];
+    if (domApi && typeof domApi.delegate === 'function') {
+        delegates.push(domApi.delegate('click', '.library-loader-overlay [data-library-action]', handleAction));
+        delegates.push(domApi.delegate('change', '.library-loader-overlay .library-loader-input', handleChange));
+    } else {
+        overlay.addEventListener('click', (event) => {
+            const target = event.target.closest('[data-library-action]');
+            if (!target || !overlay.contains(target)) return;
+            handleAction.call(target, event);
+        });
+
+        overlay.addEventListener('change', (event) => {
+            const target = event.target.closest('.library-loader-input');
+            if (!target || !overlay.contains(target)) return;
+            handleChange.call(target, event);
+        });
+    }
 }
 
 // expose modal launcher globally for SettingsPanel button
@@ -2066,92 +2575,215 @@ async function showBackupList() {
         return;
     }
 
+    setupBackupListInteractions();
+
     const backups = await window.dataIntegrityManager.getBackupList();
-
     const settingsView = document.getElementById('settings-view');
+    const domApi = (typeof window !== 'undefined' && window.DOM) ? window.DOM : null;
 
-    const renderBackupContainer = (innerHtml) => {
-        const existingBackupList = settingsView?.querySelector('.backup-list-container');
-        if (existingBackupList) existingBackupList.remove();
+    const fallbackCreate = (tag, attributes = {}, children = []) => {
+        const element = document.createElement(tag);
+        Object.entries(attributes || {}).forEach(([key, value]) => {
+            if (value == null || value === false) return;
+            if (key === 'className') {
+                element.className = value;
+            } else if (key === 'dataset' && typeof value === 'object') {
+                Object.entries(value).forEach(([dataKey, dataValue]) => {
+                    if (dataValue != null) element.dataset[dataKey] = String(dataValue);
+                });
+            } else if (key === 'style' && typeof value === 'object') {
+                Object.assign(element.style, value);
+            } else {
+                element.setAttribute(key, value === true ? '' : value);
+            }
+        });
 
-        const backupContainer = document.createElement('div');
-        backupContainer.className = 'backup-list-container';
-        backupContainer.innerHTML = `
-            <div style="margin-top: 30px;">
-                <h3>📋 备份列表</h3>
-                <div style="background: rgba(255, 255, 255, 0.1); padding: 20px; border-radius: 10px; margin-top: 15px; max-height: 300px; overflow-y: auto;">
-                    ${innerHtml}
-                </div>
-            </div>
-        `;
-
-        const mainCard = settingsView?.querySelector(':scope > div');
-        if (mainCard) {
-            mainCard.appendChild(backupContainer);
-        } else if (settingsView) {
-            settingsView.appendChild(backupContainer);
-        } else {
-            const modal = document.createElement('div');
-            modal.style.cssText = `
-                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-                background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 10000;
-            `;
-            modal.innerHTML = `
-                <div style="background: #2d3748; padding: 30px; border-radius: 10px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto;">
-                    <div style="max-height: 300px; overflow-y: auto; margin-bottom: 20px;">
-                        ${innerHtml}
-                    </div>
-                    <button onclick="this.parentElement.parentElement.remove()" style="background: #e53e3e; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">关闭</button>
-                </div>
-            `;
-            document.body.appendChild(modal);
-        }
+        const normalizedChildren = Array.isArray(children) ? children : [children];
+        normalizedChildren.forEach((child) => {
+            if (child == null) return;
+            if (typeof child === 'string') {
+                element.appendChild(document.createTextNode(child));
+            } else if (child instanceof Node) {
+                element.appendChild(child);
+            }
+        });
+        return element;
     };
 
-    if (backups.length === 0) {
-        renderBackupContainer('<p style="color: #e2e8f0;">暂无备份记录。</p>');
-        if (typeof showMessage === 'function') {
+    const create = domApi && typeof domApi.create === 'function'
+        ? (...args) => domApi.create(...args)
+        : fallbackCreate;
+
+    const buildEntries = () => {
+        if (!Array.isArray(backups) || backups.length === 0) {
+            return [
+                create('div', { className: 'backup-list-empty' }, [
+                    create('div', { className: 'backup-list-empty-icon', ariaHidden: 'true' }, '📂'),
+                    create('p', { className: 'backup-list-empty-text' }, '暂无备份记录。'),
+                    create('p', { className: 'backup-list-empty-hint' }, '创建手动备份后将显示在此列表中。')
+                ])
+            ];
+        }
+
+        return backups.map((backup) => create('div', {
+            className: 'backup-entry',
+            dataset: { backupId: backup.id }
+        }, [
+            create('div', { className: 'backup-entry-info' }, [
+                create('strong', { className: 'backup-entry-id' }, backup.id),
+                create('div', { className: 'backup-entry-meta' }, new Date(backup.timestamp).toLocaleString()),
+                create('div', { className: 'backup-entry-meta' }, `类型: ${backup.type} | 版本: ${backup.version}`)
+            ]),
+            create('div', { className: 'backup-entry-actions' }, [
+                create('button', {
+                    type: 'button',
+                    className: 'btn btn-success backup-entry-restore',
+                    dataset: {
+                        backupAction: 'restore',
+                        backupId: backup.id
+                    }
+                }, '恢复')
+            ])
+        ]));
+    };
+
+    const existingContainer = settingsView?.querySelector('.backup-list-container');
+    if (existingContainer) {
+        existingContainer.remove();
+    }
+
+    const existingOverlay = document.querySelector('.backup-modal-overlay');
+    if (existingOverlay) {
+        existingOverlay.remove();
+    }
+
+    const card = create('div', { className: 'backup-list-card' }, [
+        create('div', { className: 'backup-list-header' }, [
+            create('h3', { className: 'backup-list-title' }, [
+                create('span', { className: 'backup-list-title-icon', ariaHidden: 'true' }, '📋'),
+                create('span', { className: 'backup-list-title-text' }, '备份列表')
+            ])
+        ]),
+        create('div', { className: 'backup-list-scroll' }, buildEntries())
+    ]);
+
+    if (settingsView) {
+        const container = create('div', { className: 'backup-list-container' }, card);
+        const mainCard = settingsView.querySelector(':scope > div');
+        if (mainCard) {
+            mainCard.appendChild(container);
+        } else {
+            settingsView.appendChild(container);
+        }
+
+        if (!Array.isArray(backups) || backups.length === 0) {
             showMessage('暂无备份记录', 'info');
         }
         return;
     }
 
-    // 恢复备份 - 暴露到全局作用域
-    window.restoreBackup = async function(backupId) {
-        if (!window.dataIntegrityManager) {
-            showMessage('数据完整性管理器未初始化', 'error');
-            return;
-        }
+    const overlay = create('div', { className: 'backup-modal-overlay' }, [
+        create('div', { className: 'backup-modal' }, [
+            create('div', { className: 'backup-modal-header' }, [
+                create('h3', { className: 'backup-modal-title' }, [
+                    create('span', { className: 'backup-list-title-icon', ariaHidden: 'true' }, '📋'),
+                    create('span', { className: 'backup-list-title-text' }, '备份列表')
+                ]),
+                create('button', {
+                    type: 'button',
+                    className: 'btn btn-secondary backup-modal-close',
+                    dataset: { backupAction: 'close-modal' },
+                    ariaLabel: '关闭备份列表'
+                }, '关闭')
+            ]),
+            create('div', { className: 'backup-modal-body' }, buildEntries()),
+            create('div', { className: 'backup-modal-footer' }, [
+                create('button', {
+                    type: 'button',
+                    className: 'btn btn-secondary backup-modal-close',
+                    dataset: { backupAction: 'close-modal' }
+                }, '关闭')
+            ])
+        ])
+    ]);
 
-        if (!confirm(`确定要恢复备份 ${backupId} 吗？当前数据将被覆盖。`)) {
-            return;
-        }
+    document.body.appendChild(overlay);
 
-        try {
-            showMessage('正在恢复备份...', 'info');
-            await window.dataIntegrityManager.restoreBackup(backupId);
-            showMessage('备份恢复成功', 'success');
-            // 恢复成功后刷新备份列表
-            setTimeout(() => showBackupList(), 1000);
-        } catch (error) {
-            console.error('[DataManagement] 恢复备份失败:', error);
-            showMessage('备份恢复失败: ' + error.message, 'error');
-        }
+    if (!Array.isArray(backups) || backups.length === 0) {
+        showMessage('暂无备份记录', 'info');
+    }
+}
+
+let backupListDelegatesConfigured = false;
+
+function setupBackupListInteractions() {
+    if (backupListDelegatesConfigured) {
+        return;
     }
 
-    // 生成备份列表HTML
-    let backupItemsHtml = backups.map(backup => `
-        <div style="background: rgba(255, 255, 255, 0.05); padding: 10px; margin: 5px 0; border-radius: 5px; display: flex; justify-content: space-between; align-items: center;">
-            <div>
-                <strong>${backup.id}</strong><br>
-                <small>${new Date(backup.timestamp).toLocaleString()}</small><br>
-                <small>类型: ${backup.type} | 版本: ${backup.version}</small>
-            </div>
-            <button onclick="restoreBackup('${backup.id}')" style="background: #28a745; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">恢复</button>
-        </div>
-    `).join('');
+    const handle = async (target, event) => {
+        const action = target.dataset.backupAction;
+        if (!action) {
+            return;
+        }
 
-    renderBackupContainer(backupItemsHtml);
+        if (action === 'restore') {
+            const backupId = target.dataset.backupId;
+            if (!backupId) {
+                return;
+            }
+
+            event.preventDefault();
+
+            if (!window.dataIntegrityManager) {
+                showMessage('数据完整性管理器未初始化', 'error');
+                return;
+            }
+
+            if (!confirm(`确定要恢复备份 ${backupId} 吗？当前数据将被覆盖。`)) {
+                return;
+            }
+
+            try {
+                showMessage('正在恢复备份...', 'info');
+                await window.dataIntegrityManager.restoreBackup(backupId);
+                showMessage('备份恢复成功', 'success');
+                setTimeout(() => showBackupList(), 1000);
+            } catch (error) {
+                console.error('[DataManagement] 恢复备份失败:', error);
+                showMessage('备份恢复失败: ' + (error?.message || error), 'error');
+            }
+            return;
+        }
+
+        if (action === 'close-modal') {
+            event.preventDefault();
+            const overlay = document.querySelector('.backup-modal-overlay');
+            if (overlay) {
+                overlay.remove();
+            }
+        }
+    };
+
+    const hasDomDelegate = typeof window !== 'undefined'
+        && window.DOM
+        && typeof window.DOM.delegate === 'function';
+
+    if (hasDomDelegate) {
+        window.DOM.delegate('click', '[data-backup-action]', function(event) {
+            handle(this, event);
+        });
+    } else {
+        document.addEventListener('click', (event) => {
+            const target = event.target.closest('[data-backup-action]');
+            if (!target) {
+                return;
+            }
+            handle(target, event);
+        });
+    }
+
+    backupListDelegatesConfigured = true;
 }
 
 function exportAllData() {
@@ -2389,21 +3021,61 @@ window.addEventListener('examIndexLoaded', () => {
     } catch (_) {}
 });
 
-// 添加事件委托处理考试操作按钮
-if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
-    window.DOM.delegate('click', '[data-action="start"]', function() {
-        const examId = this.dataset.examId;
-        if (examId && typeof openExam === 'function') {
-            openExam(examId);
-        }
-    });
+let examActionHandlersConfigured = false;
 
-    window.DOM.delegate('click', '[data-action="pdf"]', function() {
-        const examId = this.dataset.examId;
-        if (examId && typeof viewPDF === 'function') {
+function setupExamActionHandlers() {
+    if (examActionHandlersConfigured) {
+        return;
+    }
+
+    const invoke = (target, event) => {
+        const action = target.dataset.action;
+        const examId = target.dataset.examId;
+        if (!action || !examId) {
+            return;
+        }
+
+        event.preventDefault();
+
+        if (action === 'start' && typeof openExam === 'function') {
+            openExam(examId);
+            return;
+        }
+
+        if (action === 'pdf' && typeof viewPDF === 'function') {
             viewPDF(examId);
         }
-    });
+    };
 
+    const hasDomDelegate = typeof window !== 'undefined'
+        && window.DOM
+        && typeof window.DOM.delegate === 'function';
+
+    if (hasDomDelegate) {
+        window.DOM.delegate('click', '[data-action="start"]', function(event) {
+            invoke(this, event);
+        });
+        window.DOM.delegate('click', '[data-action="pdf"]', function(event) {
+            invoke(this, event);
+        });
+    } else {
+        document.addEventListener('click', (event) => {
+            const target = event.target.closest('[data-action]');
+            if (!target) {
+                return;
+            }
+
+            const container = document.getElementById('exam-list-container');
+            if (container && !container.contains(target)) {
+                return;
+            }
+
+            invoke(target, event);
+        });
+    }
+
+    examActionHandlersConfigured = true;
     console.log('[Main] 考试操作按钮事件委托已设置');
 }
+
+setupExamActionHandlers();
