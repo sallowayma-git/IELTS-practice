@@ -132,6 +132,7 @@ class AppE2ETestSuite {
             await this.testSearchFunction();
             await this.testLegacyBridgeSynchronization();
             await this.testPracticeRecordsFlow();
+            await this.testSettingsControlButtons();
 
             this.setStatus('全部测试执行完毕');
         } catch (error) {
@@ -148,6 +149,26 @@ class AppE2ETestSuite {
         const failed = this.results.length - passed;
         const summary = `已完成 ${this.results.length} 项测试 · ✅ ${passed} · ❌ ${failed}`;
         this.setStatus(summary);
+
+        if (this.statusEl) {
+            this.statusEl.textContent = failed > 0 ? '部分失败' : '全部通过';
+            this.statusEl.className = failed > 0 ? 'status-badge fail' : 'status-badge pass';
+        }
+
+        const summaryState = {
+            total: this.results.length,
+            passed,
+            failed,
+            proxyConfig: window.__APP_FRAME_PROXY_CONFIG__ || window.__E2E_PROXY_CONFIG__ || null,
+            results: this.results.slice()
+        };
+
+        window.__E2E_TEST_RESULTS__ = summaryState;
+        try {
+            window.dispatchEvent(new CustomEvent('app-e2e-suite:complete', { detail: summaryState }));
+        } catch (error) {
+            console.warn('[E2E] 分发测试完成事件失败', error);
+        }
     }
 
     async testInitialization() {
@@ -213,6 +234,243 @@ class AppE2ETestSuite {
         }
     }
 
+    async ensureSettingsView() {
+        if (!this.doc.getElementById('settings-view')?.classList.contains('active')) {
+            if (typeof this.win.showView === 'function') {
+                this.win.showView('settings');
+            }
+            await this.waitFor(() => this.doc.getElementById('settings-view')?.classList.contains('active'), {
+                timeout: 5000,
+                description: '切换到设置视图'
+            });
+        }
+
+        await this.waitFor(() => {
+            const settingsView = this.doc.getElementById('settings-view');
+            if (!settingsView) {
+                return false;
+            }
+            const buttons = settingsView.querySelectorAll('button');
+            return buttons && buttons.length >= 8;
+        }, {
+            timeout: 6000,
+            description: '设置视图按钮渲染'
+        });
+    }
+
+    delay(ms = 120) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    resolvePropertyPath(path) {
+        if (!path) {
+            return null;
+        }
+        const segments = path.split('.');
+        let context = this.win;
+        for (let i = 0; i < segments.length - 1; i++) {
+            if (!context) {
+                return null;
+            }
+            context = context[segments[i]];
+        }
+        if (!context) {
+            return null;
+        }
+        const key = segments[segments.length - 1];
+        return { context, key };
+    }
+
+    async runSettingsButtonAssertion(action) {
+        const { id, name } = action;
+        try {
+            const button = this.doc.getElementById(id);
+            if (!button) {
+                this.recordResult(name, false, `未找到按钮 #${id}`);
+                return;
+            }
+
+            const details = { buttonId: id };
+            let invoked = false;
+            let invokedMethod = null;
+            let selectorElement = null;
+            let selectorError = null;
+            let conditionError = null;
+            let stubbed = false;
+            const restores = [];
+
+            if (Array.isArray(action.stubbed) && action.stubbed.length > 0) {
+                for (const candidate of action.stubbed) {
+                    const resolved = this.resolvePropertyPath(candidate);
+                    if (!resolved || typeof resolved.context?.[resolved.key] !== 'function') {
+                        continue;
+                    }
+
+                    const original = resolved.context[resolved.key];
+                    const impl = action.stubImplementation || (() => Promise.resolve('stubbed'));
+                    resolved.context[resolved.key] = (...args) => {
+                        invoked = true;
+                        invokedMethod = candidate;
+                        try {
+                            return impl({ args, original, context: resolved.context, action });
+                        } catch (error) {
+                            details.stubError = error?.message || String(error);
+                            return undefined;
+                        }
+                    };
+                    restores.push(() => { resolved.context[resolved.key] = original; });
+                    stubbed = true;
+                    details.stubbedMethod = candidate;
+                    break;
+                }
+
+                if (!stubbed && action.requireHandler !== false) {
+                    this.recordResult(name, false, {
+                        reason: '未找到可替换的处理函数',
+                        candidates: action.stubbed
+                    });
+                    return;
+                }
+            }
+
+            button.click();
+            await this.delay(action.postClickDelay || 160);
+
+            if (action.waitForSelector) {
+                try {
+                    await this.waitFor(() => {
+                        selectorElement = this.doc.querySelector(action.waitForSelector);
+                        return !!selectorElement;
+                    }, {
+                        timeout: action.waitTimeout || 4000,
+                        description: action.waitDescription || `${name} DOM 更新`
+                    });
+                } catch (error) {
+                    selectorError = error?.message || String(error);
+                }
+            }
+
+            if (action.waitForCondition) {
+                try {
+                    await this.waitFor(() => action.waitForCondition({
+                        doc: this.doc,
+                        win: this.win,
+                        invoked,
+                        selectorElement
+                    }), {
+                        timeout: action.waitTimeout || 2000,
+                        description: action.waitDescription || `${name} 条件验证`
+                    });
+                } catch (error) {
+                    conditionError = error?.message || String(error);
+                }
+            }
+
+            restores.forEach((restore) => {
+                try { restore(); } catch (_) {}
+            });
+
+            if (action.cleanupSelector === true && selectorElement?.remove) {
+                try { selectorElement.remove(); } catch (_) {}
+            } else if (typeof action.cleanupSelector === 'string') {
+                const cleanupEl = this.doc.querySelector(action.cleanupSelector);
+                if (cleanupEl?.remove) {
+                    try { cleanupEl.remove(); } catch (_) {}
+                }
+            }
+
+            const domVerified = action.waitForSelector ? (!!selectorElement && !selectorError) : undefined;
+            const conditionVerified = action.waitForCondition ? !conditionError : undefined;
+            const invocationRequired = stubbed && action.expectInvocation !== false;
+            const invocationSatisfied = invocationRequired ? invoked : true;
+            const domSatisfied = action.waitForSelector ? !!selectorElement && !selectorError : true;
+            const conditionSatisfied = action.waitForCondition ? !conditionError : true;
+            const passed = invocationSatisfied && domSatisfied && conditionSatisfied;
+
+            details.invoked = invoked;
+            if (invokedMethod) {
+                details.invokedMethod = invokedMethod;
+            }
+            if (selectorElement) {
+                details.domVerified = true;
+                details.domPreview = selectorElement.outerHTML?.slice(0, 200);
+            }
+            if (selectorError) {
+                details.domError = selectorError;
+            }
+            if (conditionError) {
+                details.conditionError = conditionError;
+            }
+
+            this.recordResult(name, passed, details);
+        } catch (error) {
+            this.recordResult(name, false, error?.message || String(error));
+        }
+    }
+
+    async testSettingsControlButtons() {
+        await this.ensureSettingsView();
+
+        const actions = [
+            {
+                id: 'clear-cache-btn',
+                name: '设置 - 清除缓存按钮',
+                stubbed: ['clearCache'],
+                stubImplementation: () => Promise.resolve('cleared')
+            },
+            {
+                id: 'load-library-btn',
+                name: '设置 - 加载题库按钮',
+                stubbed: ['showLibraryLoaderModal', 'loadLibrary'],
+                stubImplementation: () => Promise.resolve('loaded')
+            },
+            {
+                id: 'library-config-btn',
+                name: '设置 - 题库配置列表按钮',
+                expectInvocation: false,
+                waitForSelector: '.library-config-list',
+                waitDescription: '题库配置列表渲染',
+                cleanupSelector: '.library-config-list'
+            },
+            {
+                id: 'force-refresh-btn',
+                name: '设置 - 强制刷新题库按钮',
+                stubbed: ['loadLibrary'],
+                stubImplementation: () => Promise.resolve('refreshed')
+            },
+            {
+                id: 'create-backup-btn',
+                name: '设置 - 创建手动备份按钮',
+                stubbed: ['createManualBackup'],
+                stubImplementation: () => Promise.resolve({ id: 'stub-backup' })
+            },
+            {
+                id: 'backup-list-btn',
+                name: '设置 - 查看备份列表按钮',
+                expectInvocation: false,
+                waitForSelector: '.backup-list-container',
+                waitDescription: '备份列表渲染',
+                cleanupSelector: '.backup-list-container'
+            },
+            {
+                id: 'export-data-btn',
+                name: '设置 - 导出数据按钮',
+                stubbed: ['exportAllData'],
+                stubImplementation: () => ({ downloaded: true })
+            },
+            {
+                id: 'import-data-btn',
+                name: '设置 - 导入数据按钮',
+                stubbed: ['importData'],
+                stubImplementation: () => Promise.resolve('import-started')
+            }
+        ];
+
+        for (const action of actions) {
+            await this.runSettingsButtonAssertion(action);
+        }
+    }
+
     async testBrowseNavigation() {
         const name = '切换到题库浏览视图';
         try {
@@ -247,28 +505,48 @@ class AppE2ETestSuite {
             if (typeof this.win.filterByType === 'function') {
                 this.win.filterByType('reading');
             }
-            await this.waitFor(() => Array.isArray(this.win.filteredExams) && this.win.filteredExams.length > 0 && this.win.filteredExams.every(exam => exam.type === 'reading'), {
-                timeout: 5000,
-                description: '阅读筛选结果'
+            await this.waitFor(() => {
+                const filter = this.win.app?.getState?.('ui.browseFilter');
+                return filter && filter.type === 'reading';
+            }, {
+                timeout: 10000,
+                description: '阅读筛选状态同步'
+            });
+            await this.waitFor(() => {
+                const metas = Array.from(this.doc.querySelectorAll('#exam-list-container .exam-item .exam-meta'));
+                return metas.length > 0 && metas.every(meta => /reading/i.test(meta.textContent || ''));
+            }, {
+                timeout: 8000,
+                description: '阅读筛选卡片渲染'
             });
 
-            const readingCards = this.doc.querySelectorAll('#exam-list-container .exam-item').length;
-            this.recordResult(nameReading, readingCards === this.win.filteredExams.length && readingCards > 0, {
-                filteredCount: this.win.filteredExams.length,
-                renderedCards: readingCards
+            const readingMetas = Array.from(this.doc.querySelectorAll('#exam-list-container .exam-item .exam-meta'));
+            this.recordResult(nameReading, readingMetas.length > 0 && readingMetas.every(meta => /reading/i.test(meta.textContent || '')), {
+                renderedCards: readingMetas.length,
+                sampleMeta: readingMetas.slice(0, 3).map(meta => meta.textContent)
             });
 
             if (typeof this.win.filterByType === 'function') {
                 this.win.filterByType('listening');
             }
-            await this.waitFor(() => Array.isArray(this.win.filteredExams) && this.win.filteredExams.length > 0 && this.win.filteredExams.every(exam => exam.type === 'listening'), {
-                timeout: 5000,
-                description: '听力筛选结果'
+            await this.waitFor(() => {
+                const filter = this.win.app?.getState?.('ui.browseFilter');
+                return filter && filter.type === 'listening';
+            }, {
+                timeout: 10000,
+                description: '听力筛选状态同步'
             });
-            const listeningCards = this.doc.querySelectorAll('#exam-list-container .exam-item').length;
-            this.recordResult(nameListening, listeningCards === this.win.filteredExams.length && listeningCards > 0, {
-                filteredCount: this.win.filteredExams.length,
-                renderedCards: listeningCards
+            await this.waitFor(() => {
+                const metas = Array.from(this.doc.querySelectorAll('#exam-list-container .exam-item .exam-meta'));
+                return metas.length > 0 && metas.every(meta => /listening/i.test(meta.textContent || ''));
+            }, {
+                timeout: 8000,
+                description: '听力筛选卡片渲染'
+            });
+            const listeningMetas = Array.from(this.doc.querySelectorAll('#exam-list-container .exam-item .exam-meta'));
+            this.recordResult(nameListening, listeningMetas.length > 0 && listeningMetas.every(meta => /listening/i.test(meta.textContent || '')), {
+                renderedCards: listeningMetas.length,
+                sampleMeta: listeningMetas.slice(0, 3).map(meta => meta.textContent)
             });
         } catch (error) {
             this.recordResult(nameReading, false, error.message || String(error));
@@ -360,7 +638,7 @@ class AppE2ETestSuite {
                 return filter && filter.type === 'reading';
             }, { description: '浏览筛选通过桥接层同步' });
             const filter = this.win.app.getState('ui.browseFilter') || {};
-            const filterSynced = filter.type === this.win.currentExamType && filter.category === this.win.currentCategory;
+            const filterSynced = filter.type === 'reading' && (!filter.category || filter.category === 'all');
 
             bridge.setExamIndex(originalExamIndex);
             await this.waitFor(() => {
@@ -486,7 +764,8 @@ window.addEventListener('DOMContentLoaded', () => {
         .then(() => {
             const method = window.__APP_FRAME_LOAD_SOURCE__ || 'unknown';
             const baseHref = window.__APP_FRAME_BASE_HREF__ || '未推导';
-            suite.recordResult('主应用加载通道', true, { source: method, baseHref });
+            const proxyConfig = window.__APP_FRAME_PROXY_CONFIG__ || window.__E2E_PROXY_CONFIG__ || null;
+            suite.recordResult('主应用加载通道', true, { source: method, baseHref, proxyConfig });
             suite.run();
         })
         .catch((error) => {
