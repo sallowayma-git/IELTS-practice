@@ -395,7 +395,19 @@ function normalizeTopicRecord(raw) {
   }
 
   const title = (raw.title || raw.Title || '').toString().trim()
-  const content = (raw.content || raw.Content || raw.prompt || '').toString().trim()
+  const content = (
+    raw.content ||
+    raw.Content ||
+    raw.prompt ||
+    raw.Prompt ||
+    raw.description ||
+    raw.Description ||
+    raw.body ||
+    raw.Body ||
+    ''
+  )
+    .toString()
+    .trim()
 
   if (!title) {
     throw new Error('缺少题目标题')
