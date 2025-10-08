@@ -1,0 +1,450 @@
+{
+  "generatedAt": "2025-10-07T17:29:34Z",
+  "targetUrl": "http://127.0.0.1:8000/developer/tests/e2e/app-e2e-runner.html?NO_PROXY=main%2Cproxy%2Cbrowser",
+  "proxyEnvironment": {
+    "NO_PROXY": "main,proxy,browser"
+  },
+  "statusText": "已完成 17 项测试 · ✅ 17 · ❌ 0",
+  "statusBadge": "全部通过",
+  "results": {
+    "total": 17,
+    "passed": 17,
+    "failed": 0,
+    "proxyConfig": {
+      "NO_PROXY": "main,proxy,browser"
+    },
+    "results": [
+      {
+        "name": "主应用加载通道",
+        "passed": true,
+        "details": {
+          "source": "network",
+          "baseHref": "http://127.0.0.1:8000/",
+          "proxyConfig": {
+            "NO_PROXY": "main,proxy,browser"
+          }
+        }
+      },
+      {
+        "name": "应用初始化状态",
+        "passed": true,
+        "details": {
+          "activeView": "overview-view",
+          "activeNav": "overview",
+          "appInitialized": true
+        }
+      },
+      {
+        "name": "概览视图渲染结构",
+        "passed": true,
+        "details": {
+          "cardCount": 5,
+          "buttonCount": 10,
+          "sampleDatasets": [
+            {
+              "action": "browse-category",
+              "category": "P1",
+              "type": "reading"
+            },
+            {
+              "action": "browse-category",
+              "category": "P2",
+              "type": "reading"
+            },
+            {
+              "action": "browse-category",
+              "category": "P3",
+              "type": "reading"
+            },
+            {
+              "action": "browse-category",
+              "category": "P3",
+              "type": "listening"
+            }
+          ]
+        }
+      },
+      {
+        "name": "切换到题库浏览视图",
+        "passed": true,
+        "details": {
+          "activeView": true,
+          "activeNav": "browse"
+        }
+      },
+      {
+        "name": "题库筛选 - 阅读分类",
+        "passed": true,
+        "details": {
+          "renderedCards": 40,
+          "sampleMeta": [
+            "P1 | reading",
+            "P1 | reading",
+            "P1 | reading"
+          ]
+        }
+      },
+      {
+        "name": "题库筛选 - 听力分类",
+        "passed": true,
+        "details": {
+          "renderedCards": 60,
+          "sampleMeta": [
+            "P3 | listening",
+            "P3 | listening",
+            "P3 | listening"
+          ]
+        }
+      },
+      {
+        "name": "题库搜索功能",
+        "passed": true,
+        "details": {
+          "matches": [
+            "Listening to the Ocean 海洋探测"
+          ],
+          "matchCount": 1
+        }
+      },
+      {
+        "name": "Legacy 状态桥同步",
+        "passed": true,
+        "details": {
+          "examSampleSize": 1,
+          "practiceSampleSize": 0,
+          "filterSnapshot": {
+            "category": "all",
+            "type": "reading"
+          }
+        }
+      },
+      {
+        "name": "练习记录同步流程",
+        "passed": true,
+        "details": {
+          "total": "1",
+          "average": "85.0%",
+          "studyTime": "30",
+          "streak": "1"
+        }
+      },
+      {
+        "name": "设置 - 清除缓存按钮",
+        "passed": true,
+        "details": {
+          "buttonId": "clear-cache-btn",
+          "stubbedMethod": "clearCache",
+          "invoked": true,
+          "invokedMethod": "clearCache"
+        }
+      },
+      {
+        "name": "设置 - 加载题库按钮",
+        "passed": true,
+        "details": {
+          "buttonId": "load-library-btn",
+          "stubbedMethod": "showLibraryLoaderModal",
+          "invoked": true,
+          "invokedMethod": "showLibraryLoaderModal"
+        }
+      },
+      {
+        "name": "设置 - 题库配置列表按钮",
+        "passed": true,
+        "details": {
+          "buttonId": "library-config-btn",
+          "invoked": false,
+          "domVerified": true,
+          "domPreview": "<div class=\"library-config-list\">..."
+        }
+      },
+      {
+        "name": "设置 - 强制刷新题库按钮",
+        "passed": true,
+        "details": {
+          "buttonId": "force-refresh-btn",
+          "stubbedMethod": "loadLibrary",
+          "invoked": true,
+          "invokedMethod": "loadLibrary"
+        }
+      },
+      {
+        "name": "设置 - 创建手动备份按钮",
+        "passed": true,
+        "details": {
+          "buttonId": "create-backup-btn",
+          "stubbedMethod": "createManualBackup",
+          "invoked": true,
+          "invokedMethod": "createManualBackup"
+        }
+      },
+      {
+        "name": "设置 - 查看备份列表按钮",
+        "passed": true,
+        "details": {
+          "buttonId": "backup-list-btn",
+          "invoked": false,
+          "domVerified": true,
+          "domPreview": "<div class=\"backup-list-container\">..."
+        }
+      },
+      {
+        "name": "设置 - 导出数据按钮",
+        "passed": true,
+        "details": {
+          "buttonId": "export-data-btn",
+          "stubbedMethod": "exportAllData",
+          "invoked": true,
+          "invokedMethod": "exportAllData"
+        }
+      },
+      {
+        "name": "设置 - 导入数据按钮",
+        "passed": true,
+        "details": {
+          "buttonId": "import-data-btn",
+          "stubbedMethod": "importData",
+          "invoked": true,
+          "invokedMethod": "importData"
+        }
+      }
+    ]
+  },
+  "consoleLogs": [
+    "An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing.",
+    "An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing.",
+    "[Storage] 开始初始化存储系统",
+    "[Storage] localStorage 可用，将使用 localStorage 作为主要存储",
+    "[Storage] 强制初始化 IndexedDB 以实现 Hybrid 模式",
+    "[Storage] 开始初始化 IndexedDB",
+    "[Storage] 打开 IndexedDB 数据库: ExamSystemDB, 版本: 1",
+    "[Storage] 启动存储监控...",
+    "[Storage] 命名空间已设置为: exam_system_",
+    "主页面已设置共享命名空间: exam_system",
+    "[DOM] DOM工具库已加载，统一事件委托、DOM创建和样式管理",
+    "[AppPerformance] 性能工具库已加载，统一缓存、防抖节流、渲染监控和内存管理",
+    "[TypeChecker] JSDoc类型检查工具已加载",
+    "[CodeStandards] 代码规范已加载，Linus式简洁标准生效",
+    "[Main] 考试操作按钮事件委托已设置",
+    "[RuntimeFixes] PracticeRecorder.recoverTemporaryRecords 已替换为异步实现",
+    "[PracticeHistoryEnhancer] 开始初始化",
+    "[App] Optional dependency missing: Utils (continuing)",
+    "[Storage] 等待 IndexedDB ready",
+    "[Storage] 开始初始化 IndexedDB",
+    "[Storage] 打开 IndexedDB 数据库: ExamSystemDB, 版本: 1",
+    "[Storage] IndexedDB 升级事件触发，旧版本: 0 新版本: 1",
+    "[Storage] 创建 objectStore: keyValueStore",
+    "[Storage] objectStore 创建成功",
+    "[Storage] IndexedDB 初始化成功，数据库: ExamSystemDB 版本: 1",
+    "[Storage] 开始从 localStorage 迁移数据",
+    "[Storage] 开始数据迁移",
+    "[Storage] 发现 0 条需要迁移的键",
+    "[Storage] 无数据需要迁移",
+    "[Storage] IndexedDB 初始化成功，数据库: ExamSystemDB 版本: 1",
+    "[Storage] 开始从 localStorage 迁移数据",
+    "[Storage] 开始数据迁移",
+    "[Storage] 发现 0 条需要迁移的键",
+    "[Storage] 无数据需要迁移",
+    "[Storage] 当前版本: null, 目标版本: 1.0.0",
+    "[Storage] 首次安装，初始化默认数据",
+    "Upgrading storage from unknown to 1.0.0",
+    "[Storage] 开始设置键: system_version",
+    "[Storage] 数据大小: 79 字节",
+    "[Storage] 尝试使用 IndexedDB 存储",
+    "[Storage] 初始化默认数据: user_stats",
+    "[Storage] 开始设置键: user_stats",
+    "[Storage] 数据大小: 227 字节",
+    "[Storage] 尝试使用 IndexedDB 存储",
+    "[Storage] IndexedDB 存储成功",
+    "[Storage] IndexedDB 存储成功",
+    "[Storage] 检测到未完成迁移，开始执行...",
+    "[Storage] 开始迁移遗留数据",
+    "[Storage] 无遗留数据需要迁移",
+    "[Storage] 开始设置键: migration_completed",
+    "[Storage] 数据大小: 76 字节",
+    "[Storage] 尝试使用 IndexedDB 存储",
+    "[Storage] 开始从备份恢复数据",
+    "[Storage] 初始化默认数据: settings",
+    "[Storage] 开始设置键: settings",
+    "[Storage] 数据大小: 149 字节",
+    "[Storage] 尝试使用 IndexedDB 存储",
+    "[Storage] IndexedDB 存储成功",
+    "[App] 持久化状态加载完成",
+    "ScoreStorage initialized",
+    "PracticeRecorder initialized",
+    "[DataManagementPanel] 使用统一事件委托处理按钮",
+    "[PDFHandler] PDF Handler initialized",
+    "[System] PDF处理器已初始化",
+    "[BrowseStateManager] 初始化浏览状态管理器",
+    "[BrowseStateManager] 使用事件委托设置监听器",
+    "[System] 浏览状态管理器已初始化",
+    "[DataIntegrityManager] 使用简单存储包装器",
+    "[DataIntegrityManager] 自动备份已启动 (600秒间隔)",
+    "[DataIntegrityManager] 数据完整性管理器已创建",
+    "[System] 数据完整性管理器已初始化",
+    "[PerformanceOptimizer] 初始化性能优化器",
+    "[System] 性能优化器已初始化",
+    "[System] 正在清理旧缓存与配置...",
+    "[System] 首次运行，执行升级清理...",
+    "[System] 正在清理旧缓存与配置...",
+    "[System] 正在从存储中同步练习记录...",
+    "[Storage] 无备份可用，数据可能丢失，请手动恢复",
+    "[Storage] 开始设置键: data_restored",
+    "[Storage] 数据大小: 76 字节",
+    "[Storage] 尝试使用 IndexedDB 存储",
+    "[Storage] IndexedDB 存储成功",
+    "[System] 收到存储同步事件，正在更新练习记录... {key: settings}",
+    "[System] 正在从存储中同步练习记录...",
+    "[Storage] 检查 MyMelody 遗留键迁移...",
+    "[Storage] 开始设置键: storage_version",
+    "[Storage] 数据大小: 79 字节",
+    "[Storage] 尝试使用 IndexedDB 存储",
+    "Restored 0 active sessions",
+    "[Storage] 开始设置键: backup_settings",
+    "[Storage] 数据大小: 202 字节",
+    "[Storage] 尝试使用 IndexedDB 存储",
+    "DataManagementPanel initialized",
+    "[DataIntegrityManager] 数据完整性管理器已初始化",
+    "[System] 0 条练习记录已加载到内存。",
+    "[PracticeHistoryEnhancer] 检测到练习历史组件",
+    "[PracticeHistoryEnhancer] 检测到全局导出函数",
+    "[PracticeHistoryEnhancer] 全局函数已增强",
+    "[PracticeHistoryEnhancer] 练习历史增强功能已初始化",
+    "[Storage] IndexedDB 存储成功",
+    "[System] 收到存储同步事件，正在更新练习记录... {key: data_restored}",
+    "[System] 正在从存储中同步练习记录...",
+    "[System] 0 条练习记录已加载到内存。",
+    "[Storage] 初始化默认数据: exam_index",
+    "[Storage] 开始设置键: exam_index",
+    "[Storage] 数据大小: 76 字节",
+    "[Storage] 尝试使用 IndexedDB 存储",
+    "[Storage] 无 MyMelody 遗留数据需要迁移",
+    "[Storage] 开始设置键: my_melody_migration_completed",
+    "[Storage] 数据大小: 76 字节",
+    "[Storage] 尝试使用 IndexedDB 存储",
+    "[Storage] IndexedDB 存储成功",
+    "[System] 收到存储同步事件，正在更新练习记录... {key: storage_version}",
+    "[System] 正在从存储中同步练习记录...",
+    "Storage version initialized: 1.0.0",
+    "[PracticeRecorder] 没有需要恢复的临时记录",
+    "[Storage] IndexedDB 存储成功",
+    "[System] 收到存储同步事件，正在更新练习记录... {key: backup_settings}",
+    "[System] 正在从存储中同步练习记录...",
+    "[Storage] 开始设置键: exam_index_configurations",
+    "[Storage] 数据大小: 74 字节",
+    "[Storage] 尝试使用 IndexedDB 存储",
+    "[Storage] 开始设置键: exam_index_configurations",
+    "[Storage] 数据大小: 74 字节",
+    "[Storage] 尝试使用 IndexedDB 存储",
+    "[Storage] 开始设置键: exam_index",
+    "[Storage] 数据大小: 75145 字节",
+    "[Storage] 尝试使用 IndexedDB 存储",
+    "[Storage] IndexedDB 存储成功",
+    "[System] 收到存储同步事件，正在更新练习记录... {key: exam_index}",
+    "[System] 正在从存储中同步练习记录...",
+    "[Storage] IndexedDB 存储成功",
+    "[System] 收到存储同步事件，正在更新练习记录... {key: my_melody_migration_completed}",
+    "[System] 正在从存储中同步练习记录...",
+    "[System] 0 条练习记录已加载到内存。",
+    "[ScoreStorage] 初始化练习记录数组",
+    "[Storage] 开始设置键: practice_records",
+    "[Storage] 数据大小: 74 字节",
+    "[Storage] 尝试使用 IndexedDB 存储",
+    "[System] 0 条练习记录已加载到内存。",
+    "[Storage] IndexedDB 存储成功",
+    "[System] 收到存储同步事件，正在更新练习记录... {key: exam_index_configurations}",
+    "[System] 正在从存储中同步练习记录...",
+    "[System] 旧缓存清理完成",
+    "[Storage] IndexedDB 存储成功",
+    "[System] 收到存储同步事件，正在更新练习记录... {key: exam_index_configurations}",
+    "[System] 正在从存储中同步练习记录...",
+    "[System] 旧缓存清理完成",
+    "[Storage] IndexedDB 存储成功",
+    "[System] 收到存储同步事件，正在更新练习记录... {key: exam_index}",
+    "[System] 正在从存储中同步练习记录...",
+    "[System] 0 条练习记录已加载到内存。",
+    "[Storage] 初始化默认数据: practice_records",
+    "[Storage] 开始设置键: practice_records",
+    "[Storage] 数据大小: 74 字节",
+    "[Storage] 尝试使用 IndexedDB 存储",
+    "[System] 0 条练习记录已加载到内存。",
+    "[Storage] IndexedDB 存储成功",
+    "[System] 收到存储同步事件，正在更新练习记录... {key: practice_records}",
+    "[System] 正在从存储中同步练习记录...",
+    "[System] 0 条练习记录已加载到内存。",
+    "[System] 0 条练习记录已加载到内存。",
+    "[System] 0 条练习记录已加载到内存。",
+    "[Storage] 开始设置键: exam_index_configurations",
+    "[Storage] 数据大小: 150 字节",
+    "[Storage] 尝试使用 IndexedDB 存储",
+    "[Storage] IndexedDB 存储成功",
+    "[System] 收到存储同步事件，正在更新练习记录... {key: practice_records}",
+    "[System] 正在从存储中同步练习记录...",
+    "[System] 0 条练习记录已加载到内存。",
+    "[ScoreStorage] 保留现有用户统计",
+    "[Storage] IndexedDB 存储成功",
+    "[System] 收到存储同步事件，正在更新练习记录... {key: exam_index_configurations}",
+    "[System] 正在从存储中同步练习记录...",
+    "[Storage] 开始设置键: active_exam_index_key",
+    "[Storage] 数据大小: 84 字节",
+    "[Storage] 尝试使用 IndexedDB 存储",
+    "[System] 0 条练习记录已加载到内存。",
+    "[Storage] 初始化默认数据: learning_goals",
+    "[Storage] 开始设置键: learning_goals",
+    "[Storage] 数据大小: 74 字节",
+    "[Storage] 尝试使用 IndexedDB 存储",
+    "[System] 0 条练习记录已加载到内存。",
+    "[Storage] IndexedDB 存储成功",
+    "[System] 收到存储同步事件，正在更新练习记录... {key: active_exam_index_key}",
+    "[System] 正在从存储中同步练习记录...",
+    "[Storage] IndexedDB 存储成功",
+    "[System] 收到存储同步事件，正在更新练习记录... {key: learning_goals}",
+    "[System] 正在从存储中同步练习记录...",
+    "[System] 0 条练习记录已加载到内存。",
+    "[System] 0 条练习记录已加载到内存。",
+    "[Search] 执行搜索，查询词: ocean",
+    "[Search] 当前 filteredExams 数量: 226",
+    "[Search] 搜索结果数量: 1",
+    "[Storage] 开始设置键: practice_records",
+    "[Storage] 数据大小: 74 字节",
+    "[Storage] 尝试使用 IndexedDB 存储",
+    "[Storage] IndexedDB 存储成功",
+    "[System] 收到存储同步事件，正在更新练习记录... {key: practice_records}",
+    "[System] 正在从存储中同步练习记录...",
+    "[System] 正在从存储中同步练习记录...",
+    "[System] 0 条练习记录已加载到内存。",
+    "[System] 0 条练习记录已加载到内存。",
+    "[Storage] 开始设置键: practice_records",
+    "[Storage] 数据大小: 267 字节",
+    "[Storage] 尝试使用 IndexedDB 存储",
+    "[Storage] IndexedDB 存储成功",
+    "[System] 收到存储同步事件，正在更新练习记录... {key: practice_records}",
+    "[System] 正在从存储中同步练习记录...",
+    "[System] 正在从存储中同步练习记录...",
+    "[System] 1 条练习记录已加载到内存。",
+    "[VirtualScroller] 初始化虚拟滚动器 {items: 1, itemHeight: 100, containerHeight: 650}",
+    "[System] 1 条练习记录已加载到内存。",
+    "[VirtualScroller] 销毁虚拟滚动器",
+    "[VirtualScroller] 初始化虚拟滚动器 {items: 1, itemHeight: 100, containerHeight: 650}",
+    "[Storage] 开始设置键: namespace_test",
+    "[Storage] 数据大小: 98 字节",
+    "[Storage] 尝试使用 IndexedDB 存储",
+    "[Storage] IndexedDB 存储成功",
+    "[System] 收到存储同步事件，正在更新练习记录... {key: namespace_test}",
+    "[System] 正在从存储中同步练习记录...",
+    "[System] 1 条练习记录已加载到内存。",
+    "[VirtualScroller] 销毁虚拟滚动器",
+    "[VirtualScroller] 初始化虚拟滚动器 {items: 1, itemHeight: 100, containerHeight: 650}",
+    "✅ 命名空间设置验证成功: 存储和读取正常",
+    "[Storage] 开始设置键: practice_records",
+    "[Storage] 数据大小: 74 字节",
+    "[Storage] 尝试使用 IndexedDB 存储",
+    "[Storage] IndexedDB 存储成功",
+    "[System] 收到存储同步事件，正在更新练习记录... {key: practice_records}",
+    "[System] 正在从存储中同步练习记录...",
+    "[System] 正在从存储中同步练习记录...",
+    "[System] 0 条练习记录已加载到内存。",
+    "[VirtualScroller] 销毁虚拟滚动器",
+    "[System] 0 条练习记录已加载到内存。"
+  ]
+}
