@@ -663,22 +663,30 @@ class App {
         }
 
         // 初始化 RecordStore
+        const previousRecordStore = this.stores.recordStore;
+        const previousRecords = this.stores.records;
+
         if (window.RecordStore) {
             try {
-                this.stores.recordStore = new window.RecordStore();
-                await this.stores.recordStore.initialize();
+                const recordStoreInstance = new window.RecordStore();
+                await recordStoreInstance.initialize();
+                this.stores.recordStore = recordStoreInstance;
+                this.stores.records = recordStoreInstance;
                 console.log('[App] RecordStore 初始化成功');
             } catch (error) {
                 console.error('[App] RecordStore 初始化失败:', error);
-                this.stores.recordStore = null;
+                this.stores.recordStore = previousRecordStore;
+                this.stores.records = previousRecords;
             }
         } else {
             console.warn('[App] RecordStore 类不可用');
-            this.stores.recordStore = null;
+            this.stores.recordStore = previousRecordStore;
+            this.stores.records = previousRecords;
         }
 
         // Store 命名适配器 - 提供一致的访问方式 (Task 34)
         this.setupStoreAdapters();
+        this.syncGlobalStores();
     }
 
     /**
