@@ -702,10 +702,10 @@ if (!window.EventEmitter) {
 }
 
 // Global event bus for cross-component communication
-// Guard against redefinition
+// Guard against redefinition - defer to events.js as canonical source
 if (!window.globalEventBus) {
     window.globalEventBus = new window.EventEmitter();
-    console.log('[Events] EventEmitter initialized from helpers.js');
+    // No log here - let events.js handle canonical initialization log
 }
 
 // Utility functions for window context detection (Task 35)
@@ -1148,9 +1148,14 @@ window.ErrorHandler = class ErrorHandler {
   }
 
   /**
-   * 规范化错误对象
+   * 规范化错误对象 (Task 102: 增强错误标准化)
    */
   normalizeError(error) {
+    // 处理null/undefined
+    if (error === null || error === undefined) {
+      return new Error('Null or undefined error occurred');
+    }
+
     if (error instanceof Error) {
       return error;
     }
@@ -1161,19 +1166,33 @@ window.ErrorHandler = class ErrorHandler {
 
     if (error && typeof error === 'object') {
       // 尝试从对象中提取错误信息
-      const message = error.message || error.error || JSON.stringify(error);
+      let message = 'Unknown error object';
+
+      try {
+        message = error.message || error.error || error.msg ||
+                 (typeof error.toString === 'function' ? error.toString() : JSON.stringify(error));
+      } catch (e) {
+        message = '[Object error - unable to stringify]';
+      }
+
       const normalizedError = new Error(message);
 
-      // 保留原始对象的属性
-      Object.keys(error).forEach(key => {
-        normalizedError[key] = error[key];
-      });
+      // 保留原始对象的属性（避免循环引用）
+      try {
+        Object.keys(error).forEach(key => {
+          if (typeof error[key] !== 'function' && key !== 'constructor') {
+            normalizedError[key] = error[key];
+          }
+        });
+      } catch (e) {
+        console.warn('[Error normalization] Failed to copy error properties:', e);
+      }
 
       return normalizedError;
     }
 
-    // 未知类型的错误
-    return new Error(`Unknown error type: ${typeof error}`);
+    // 其他类型（number, boolean, function等）
+    return new Error(`Error of type ${typeof error}: ${String(error)}`);
   }
 
   /**

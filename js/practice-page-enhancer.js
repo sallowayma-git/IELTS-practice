@@ -359,6 +359,12 @@ if (!window.practicePageEnhancer) {
         },
 
         setupCommunication: function () {
+            // 只在练习窗口中添加消息监听器 (Task 35/43)
+            if (typeof window.isPracticeWindow === 'function' && !window.isPracticeWindow()) {
+                debugLog('[PracticeEnhancer] Skipping communication setup - not in practice window');
+                return;
+            }
+
             this.parentWindow = window.opener || window.parent;
             if (!this.parentWindow || this.parentWindow === window) {
                 console.warn('[PracticeEnhancer] 未检测到父窗口');

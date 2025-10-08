@@ -1,7 +1,9 @@
 // events.js - Simple EventEmitter class for store-to-UI communication
 // Provides event system for reactive architecture (file:// compatible)
+// Canonical source - guarded against redefinition (Task 65)
 
-window.EventEmitter = class EventEmitter {
+if (!window.EventEmitter) {
+    window.EventEmitter = class EventEmitter {
     constructor() {
         this.listeners = new Map();
     }
@@ -67,11 +69,13 @@ window.EventEmitter = class EventEmitter {
     eventTypes() {
         return Array.from(this.listeners.keys());
     }
-};
+    };
+
+} // End EventEmitter guard
 
 // Global event bus for cross-component communication
-// Guard against redefinition
+// Guard against redefinition - single source of truth
 if (!window.globalEventBus) {
-    window.globalEventBus = new EventEmitter();
-    console.log('[Events] EventEmitter initialized from events.js');
+    window.globalEventBus = new window.EventEmitter();
+    console.log('[Events] EventEmitter initialized - canonical source');
 }

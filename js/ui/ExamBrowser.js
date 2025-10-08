@@ -2,20 +2,111 @@
 // Coordinates FilterBar, ExamList, Pagination components
 // Inherits from BaseComponent, handles store integration and actions
 
+// BaseComponent 兜底处理 (Task 74)
+if (!window.BaseComponent) {
+    window.BaseComponent = class {
+        constructor() { this.subscriptions = []; }
+        attach() {}
+        detach() { this.subscriptions.forEach(u => u()); }
+        render() {}
+        addSubscription(u) { this.subscriptions.push(u); }
+        addEventListener() {}
+        setupEventListeners() {}
+        subscribeToStores() {}
+        cleanupEventListeners() {}
+        unsubscribeFromStores() {}
+    };
+    console.warn('[ExamBrowser] BaseComponent missing, using fallback');
+}
+
+// UI子组件兜底处理 (Task 81)
+if (!window.ExamFilterBar) {
+    window.ExamFilterBar = class {
+        constructor(){}
+        render(){} update(){} destroy(){}
+        attach(){}
+        setCategory(){} setType(){} setSearch(){}
+    };
+}
+if (!window.ExamList) {
+    window.ExamList = class {
+        constructor(){}
+        render(){} update(){} destroy(){}
+        attach(){}
+        setExams(){} clear(){}
+    };
+}
+if (!window.Pagination) {
+    window.Pagination = class {
+        constructor(){}
+        render(){} update(){} destroy(){}
+        attach(){}
+        setCurrentPage(){} setTotalPages(){}
+    };
+}
+
 class ExamBrowser extends BaseComponent {
     constructor(stores) {
-        super(stores, {
+        // Task 101: stores容错处理
+        const safeStores = stores || window.App?.stores || {
+            exams: { subscribe: () => {}, exams: [] },
+            app: { subscribe: () => () => {}, addError: () => {} },
+            records: { subscribe: () => {}, stats: {} }
+        };
+
+        // Task 91: 必须先调用super()
+        super(safeStores, {
             container: document.getElementById('browse-view'),
             categoryOverview: document.getElementById('category-overview'),
             loading: document.querySelector('.loading')
         });
-        this.currentCategory = 'all';
-        this.currentType = 'all';
-        this.searchQuery = '';
-        this.currentPage = 1;
-        this._isRendering = false;
-        this.checkRequiredElements();
-        this.initSubComponents();
+
+        this._failed = false; // Task 82: 错误状态标记
+        this._subscriptions = []; // 订阅管理
+
+        // Task 97: 设置视图名称
+        this.setViewName('browse');
+
+        try {
+            this.currentCategory = 'all';
+            this.currentType = 'all';
+            this.searchQuery = '';
+            this.currentPage = 1;
+            this._isRendering = false;
+
+            // Safe Mode 跳过昂贵设置 (Task 77)
+            this.isSafeMode = window.__SAFE_MODE__ === true;
+            if (this.isSafeMode) {
+                if (window.__DEBUG__) console.debug('[ExamBrowser] Safe Mode: 跳过虚拟滚动和昂贵Observer');
+                this.virtualScrollEnabled = false;
+                this.observersEnabled = false;
+            } else {
+                this.virtualScrollEnabled = true;
+                this.observersEnabled = true;
+            }
+
+            this.checkRequiredElements();
+            this.initSubComponents();
+        } catch (error) {
+            this._failed = true;
+            console.error('[ExamBrowser] UI bootstrap failed:', error);
+            if (window.ErrorService) {
+                window.ErrorService.showWarning('浏览界面初始化失败: ' + error.message);
+            }
+            this.cleanupSubscriptions();
+        }
+    }
+
+    // Task 82: 清理订阅，防止错误风暴
+    cleanupSubscriptions() {
+        this._subscriptions.forEach(unsubscribe => {
+            try {
+                unsubscribe();
+            } catch (e) {
+                if (window.__DEBUG__) console.debug('[ExamBrowser] Failed to cleanup subscription:', e);
+            }
+        });
+        this._subscriptions = [];
     }
 
     checkRequiredElements() {
@@ -133,7 +224,24 @@ class ExamBrowser extends BaseComponent {
     }
 
     getFilteredExams() {
-        let exams = this.stores.exams.exams || [];
+        let exams = [];
+
+        // Task 85: 数据兜底，尝试从多个来源获取数据
+        if (this.stores.exams && Array.isArray(this.stores.exams.exams)) {
+            exams = this.stores.exams.exams;
+        } else if (window.examIndex && Array.isArray(window.examIndex)) {
+            exams = window.examIndex;
+        } else if (window.storage) {
+            // 尝试从localStorage获取
+            try {
+                const storedExams = window.storage.get('exam_index');
+                if (Array.isArray(storedExams)) {
+                    exams = storedExams;
+                }
+            } catch (e) {
+                if (window.__DEBUG__) console.debug('[ExamBrowser] Failed to load exams from storage:', e);
+            }
+        }
 
         if (this.currentCategory !== 'all') {
             exams = exams.filter(exam => exam.category === this.currentCategory);
@@ -160,22 +268,70 @@ class ExamBrowser extends BaseComponent {
         return exams;
     }
 
-    render() {
+    // Task 84: 实际渲染方法，由基类render调用
+    _doActualRender() {
+        // Task 82: 错误防护 - 失败时短路
+        if (this._failed) {
+            if (window.__DEBUG__) console.debug('[ExamBrowser] Skipping render due to failed initialization');
+            return;
+        }
+
         if (this._isRendering) return;
         this._isRendering = true;
 
         try {
             const allExams = this.getFilteredExams();
+
+            // Task 85: 空数据保护，避免冻结
+            if (!Array.isArray(allExams) || allExams.length === 0) {
+                this.renderEmptyState();
+                return;
+            }
+
+            // Safe Mode下限制渲染数量
+            const maxItems = this.isSafeMode ? 50 : allExams.length;
+            const displayExams = allExams.slice(0, maxItems);
             const total = allExams.length;
-            const startIndex = (this.currentPage - 1) * this.pagination.pageSize;
-            const paginatedExams = allExams.slice(startIndex, startIndex + this.pagination.pageSize);
+
+            // Task 95: 分页空值安全
+            const pageSize = this.pagination && this.pagination.pageSize ? parseInt(this.pagination.pageSize) || 20 : 20;
+            const startIndex = Math.max(0, (parseInt(this.currentPage) || 1) - 1) * pageSize;
+            const endIndex = Math.min(displayExams.length, startIndex + pageSize);
+            const paginatedExams = displayExams.slice(startIndex, endIndex);
 
             this.examList.setExams(paginatedExams);
-            this.pagination.setTotal(total);
-            this.pagination.setPage(this.currentPage);
+
+            // 安全调用pagination方法
+            if (this.pagination && typeof this.pagination.setTotal === 'function') {
+                this.pagination.setTotal(total);
+            }
+            if (this.pagination && typeof this.pagination.setPage === 'function') {
+                this.pagination.setPage(this.currentPage);
+            }
         } finally {
             setTimeout(() => { this._isRendering = false; }, 0);
         }
+    }
+
+    // Task 85: 空状态渲染
+    renderEmptyState() {
+        if (this.elements.container) {
+            this.elements.container.innerHTML = `
+                <div style="text-align: center; padding: 60px 20px; color: #666;">
+                    <div style="font-size: 3em; margin-bottom: 20px;">📚</div>
+                    <h3>暂无考试数据</h3>
+                    <p>系统中还没有加载任何考试题库</p>
+                    <button class="btn" onclick="window.App.loadLibrary && window.App.loadLibrary(true)">
+                        重新加载题库
+                    </button>
+                </div>
+            `;
+        }
+    }
+
+    // 保持向后兼容的render方法
+    render() {
+        super.render();
     }
 
     updateLoadingState(isLoading) {
@@ -301,18 +457,11 @@ class ExamBrowser extends BaseComponent {
 
     handlePdfView(examId) {
         try {
-            const exam = this.stores.exams.getExamById(examId);
-            if (!exam) throw new Error(`Exam not found: ${examId}`);
-
-            const pdfPath = exam.path + exam.filename.replace('.html', '.pdf');
-
-            console.log('[ExamBrowser] Opening PDF:', examId, pdfPath);
-
-            if (window.PDFHandler && window.PDFHandler.openPDF) {
-                window.PDFHandler.openPDF(pdfPath, exam);
+            // Use centralized App.viewPDF for consistent path handling (Task 45)
+            if (window.App && typeof window.App.viewPDF === 'function') {
+                window.App.viewPDF(examId);
             } else {
-                const pdfWindow = window.open(pdfPath, '_blank');
-                if (!pdfWindow) throw new Error('Failed to open PDF. Check popup blocker.');
+                throw new Error('App.viewPDF not available');
             }
         } catch (error) {
             console.error('[ExamBrowser] Failed to open PDF:', error);

@@ -244,7 +244,9 @@ class ThemeManager {
         this.applyCurrentTheme();
         this.saveSettings();
         
-        if (window.showMessage) {
+        if (window.ErrorService) {
+            window.ErrorService.showInfo(`已切换到${this.themes[themeName].name}`);
+        } else if (window.showMessage) {
             window.showMessage(`已切换到${this.themes[themeName].name}`, 'info');
         }
     }
@@ -281,7 +283,11 @@ class ThemeManager {
                 'large': '大',
                 'extra-large': '特大'
             };
-            window.showMessage(`字体大小已设置为${sizeNames[size]}`, 'info');
+            if (window.ErrorService) {
+                window.ErrorService.showInfo(`字体大小已设置为${sizeNames[size]}`);
+            } else {
+                window.showMessage(`字体大小已设置为${sizeNames[size]}`, 'info');
+            }
         }
     }
     

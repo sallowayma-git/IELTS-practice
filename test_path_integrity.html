@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>路径完整性检查器测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        .button:hover {
+            background: #0056b3;
+        }
+        .button.danger {
+            background: #dc3545;
+        }
+        .button.danger:hover {
+            background: #c82333;
+        }
+        .results {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid #ddd;
+            margin-top: 20px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .url-input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-family: monospace;
+        }
+        .section {
+            margin-bottom: 30px;
+        }
+        h2 {
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+        .info {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #007bff;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 路径完整性检查器</h1>
+
+    <div class="container">
+        <h2>说明</h2>
+        <div class="info">
+            <p>此工具用于检查HTML文件中的脚本引用是否有效，输出PASS/FAIL报告。</p>
+            <p>支持检查当前页面或指定的URL列表。</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>检查选项</h2>
+
+        <div class="section">
+            <h3>选项 1: 检查当前页面</h3>
+            <p>检查当前HTML页面中的所有脚本引用。</p>
+            <button class="button" onclick="checkCurrentPage()">检查当前页面</button>
+        </div>
+
+        <div class="section">
+            <h3>选项 2: 检查指定URL</h3>
+            <p>输入要检查的HTML文件URL，每行一个：</p>
+            <textarea class="url-input" id="urlList" rows="6" placeholder="例如：
+index.html
+test_file_protocol.html
+.superdesign/design_iterations/ielts_academic_functional_2.html"></textarea>
+            <button class="button" onclick="checkUrls()">检查指定URL</button>
+            <button class="button danger" onclick="clearResults()">清空结果</button>
+        </div>
+
+        <div class="section">
+            <h3>选项 3: 检查默认页面</h3>
+            <p>检查常用的HTML页面：</p>
+            <button class="button" onclick="checkDefaultPages()">检查默认页面</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>检查结果</h2>
+        <div class="results" id="results">等待检查...</div>
+    </div>
+
+    <!-- 加载路径完整性检查器 -->
+    <script src="tests/path-integrity-checker.js"></script>
+
+    <script>
+        // 保存原始console.log以捕获输出
+        const originalConsoleLog = console.log;
+        let logOutput = '';
+
+        console.log = function(...args) {
+            originalConsoleLog.apply(console, args);
+            logOutput += args.join(' ') + '\n';
+            updateResults();
+        };
+
+        function updateResults() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.textContent = logOutput;
+            resultsDiv.scrollTop = resultsDiv.scrollHeight;
+        }
+
+        function clearResults() {
+            logOutput = '';
+            updateResults();
+        }
+
+        async function checkCurrentPage() {
+            clearResults();
+            console.log('🚀 开始检查当前页面...');
+
+            try {
+                await runPathIntegrityCheck();
+                console.log('\n✅ 当前页面检查完成');
+            } catch (error) {
+                console.log(`❌ 检查失败: ${error.message}`);
+            }
+        }
+
+        async function checkUrls() {
+            const urlList = document.getElementById('urlList').value.trim();
+
+            if (!urlList) {
+                alert('请输入要检查的URL列表');
+                return;
+            }
+
+            const urls = urlList.split('\n')
+                .map(url => url.trim())
+                .filter(url => url.length > 0);
+
+            if (urls.length === 0) {
+                alert('请输入有效的URL');
+                return;
+            }
+
+            clearResults();
+            console.log(`🚀 开始检查 ${urls.length} 个指定URL...`);
+            console.log('URL列表:');
+            urls.forEach(url => console.log(`  - ${url}`));
+
+            try {
+                await runPathIntegrityCheck(urls);
+                console.log('\n✅ 指定URL检查完成');
+            } catch (error) {
+                console.log(`❌ 检查失败: ${error.message}`);
+            }
+        }
+
+        async function checkDefaultPages() {
+            const defaultUrls = [
+                'index.html',
+                'test_file_protocol.html',
+                '.superdesign/design_iterations/ielts_academic_functional_2.html',
+                '.superdesign/design_iterations/HP/practice.html',
+                '.superdesign/design_iterations/my_melody_ielts_1.html'
+            ];
+
+            // 设置URL列表到输入框
+            document.getElementById('urlList').value = defaultUrls.join('\n');
+
+            // 自动开始检查
+            await checkUrls();
+        }
+
+        // 页面加载完成后的初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('✅ 路径完整性检查器测试页面已加载');
+            console.log('选择一个检查选项开始测试');
+        });
+    </script>
+</body>
+</html>

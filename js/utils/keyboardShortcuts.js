@@ -819,7 +819,9 @@ class KeyboardShortcuts {
      * 显示快捷键反馈
      */
     showShortcutFeedback(message, type = 'info') {
-        if (window.showMessage) {
+        if (window.ErrorService) {
+            window.ErrorService.showUser(message, type);
+        } else if (window.showMessage) {
             window.showMessage(message, type);
         } else {
             console.log(`Shortcut: ${message}`);

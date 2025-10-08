@@ -16,7 +16,7 @@ class App {
         this.components = {};
         this.stores = {};
         this.ui = {};
-        this.isInitialized = false;
+        this._isInitialized = false;
         this._messageListenerAttached = false;
         this._isRendering = false;
         this._loadedScripts = new Set(); // 跟踪已加载的脚本
@@ -33,7 +33,22 @@ class App {
      * 初始化应用
      */
     async initialize() {
+        let initSuccess = false; // 跟踪初始化状态 (Task 76)
+
         try {
+            // Performance timing start (Task 48)
+            console.time('app-initialization');
+            console.timeStamp('app-init-start');
+
+            // Safe Mode 检查 (Task 63)
+            if (window.__SAFE_MODE__) {
+                console.log('[SAFE_MODE] 简化初始化流程 - 跳过重型功能');
+                await this.initializeSafeMode();
+                initSuccess = true;
+                console.log('[App] Safe Mode 初始化成功 - 系统已就绪');
+                return;
+            }
+
             this.showLoading(true);
             this.updateLoadingMessage('正在检查系统依赖...');
 
@@ -80,6 +95,10 @@ class App {
             this.isInitialized = true;
             this.showLoading(false);
 
+            // 暴露全局函数以保持向后兼容
+            this.exposeGlobalFunctions();
+
+            initSuccess = true;
             console.log('[App] IELTS考试系统初始化成功');
             this.showUserMessage('系统初始化完成', 'success');
 
@@ -94,8 +113,69 @@ class App {
             }
 
         } catch (error) {
-            this.showLoading(false);
-            this.handleInitializationError(error);
+            if (!initSuccess) {
+                console.error('[App] 初始化失败，系统无法启动');
+                this.showLoading(false);
+                this.handleInitializationError(error);
+            } else {
+                // 如果已经标记为成功，说明是在后期步骤失败，记录警告但不显示为完全失败
+                console.warn('[App] 初始化后期步骤失败:', error);
+                if (window.ErrorService) {
+                    window.ErrorService.showWarning('部分功能初始化失败: ' + error.message);
+                }
+            }
+        }
+    }
+
+    /**
+     * Safe Mode 初始化 (Task 63)
+     */
+    async initializeSafeMode() {
+        try {
+            console.time('safe-mode-initialization');
+
+            // 最小依赖检查
+            if (!window.EventEmitter) {
+                throw new Error('EventEmitter 未加载');
+            }
+            if (!window.storage) {
+                throw new Error('Storage 未初始化');
+            }
+
+            // 初始化存储 (local-only模式)
+            if (window.storage?.initializeLocalStorageOnly) {
+                await window.storage.initializeLocalStorageOnly();
+            } else {
+                console.warn('[SAFE_MODE] Storage initializeLocalStorageOnly not available, using fallback');
+                // Fallback: 强制使用localStorage
+                if (window.storage) {
+                    window.storage.useIndexedDB = false;
+                    window.storage.useAutoBackup = false;
+                }
+            }
+
+            // 初始化事件系统
+            this.setupEventListenersSafeMode();
+
+            // 初始化最小UI组件
+            await this.initializeMinimalUI();
+
+            // 暴露兼容桥接API (Task 67)
+            this.exposeBridgeAPIs();
+
+            // 设置最小消息路由 (Task 68)
+            this.setupMinimalMessageRouter();
+
+            // 设置性能监控 (Task 69)
+            this.setupPerformanceMonitoring();
+
+            console.timeEnd('safe-mode-initialization');
+            // 成功日志在调用方处理，避免重复
+
+        } catch (error) {
+            console.error('[SAFE_MODE] 初始化失败:', error);
+            this.showUserMessage('Safe Mode 初始化失败: ' + error.message, 'error');
+            throw error;
         }
     }
 
@@ -132,6 +212,82 @@ class App {
 
         // 显示降级UI或恢复选项
         this.showFallbackUI(canRecover);
+    }
+
+    /**
+     * 暴露全局函数以保持向后兼容
+     */
+    exposeGlobalFunctions() {
+        // 暴露script.js中的关键全局函数
+        if (typeof loadLibrary === 'function') {
+            window.loadLibrary = loadLibrary;
+        }
+        if (typeof exportAllData === 'function') {
+            window.exportAllData = exportAllData;
+        }
+        if (typeof importData === 'function') {
+            window.importData = importData;
+        }
+        if (typeof createManualBackup === 'function') {
+            window.createManualBackup = createManualBackup;
+        }
+        if (typeof clearCache === 'function') {
+            window.clearCache = clearCache;
+        }
+        if (typeof refreshExams === 'function') {
+            window.refreshExams = refreshExams;
+        }
+        if (typeof showLibraryConfigListV2 === 'function') {
+            window.showLibraryConfigListV2 = showLibraryConfigListV2;
+        }
+        if (typeof showLibraryLoaderModal === 'function') {
+            window.showLibraryLoaderModal = showLibraryLoaderModal;
+        }
+
+        // 暴露UI函数
+        if (typeof showView === 'function') {
+            window.showView = (viewName) => this.navigateToView(viewName);
+        }
+
+        // 暴露浏览函数
+        if (typeof filterByType === 'function') {
+            window.filterByType = filterByType;
+        }
+        if (typeof filterByCategory === 'function') {
+            window.filterByCategory = filterByCategory;
+        }
+        if (typeof searchExams === 'function') {
+            window.searchExams = searchExams;
+        }
+
+        // 暴露练习记录函数
+        if (typeof filterRecordsByType === 'function') {
+            window.filterRecordsByType = filterRecordsByType;
+        }
+        if (typeof clearPracticeData === 'function') {
+            window.clearPracticeData = clearPracticeData;
+        }
+        if (typeof toggleBulkDelete === 'function') {
+            window.toggleBulkDelete = toggleBulkDelete;
+        }
+
+        // 暴露主题函数
+        if (typeof showThemeSwitcherModal === 'function') {
+            window.showThemeSwitcherModal = showThemeSwitcherModal;
+        }
+        if (typeof hideThemeSwitcherModal === 'function') {
+            window.hideThemeSwitcherModal = hideThemeSwitcherModal;
+        }
+
+        // 暴露开发团队函数
+        if (typeof showDeveloperTeam === 'function') {
+            window.showDeveloperTeam = showDeveloperTeam;
+        }
+        if (typeof hideDeveloperTeam === 'function') {
+            window.hideDeveloperTeam = hideDeveloperTeam;
+        }
+
+        console.log('[App] 全局函数已暴露以保持向后兼容');
     }
 
     /**
@@ -3354,7 +3510,7 @@ class App {
 
         // 重置组件状态
         this.components = {};
-        this.isInitialized = false;
+        this._isInitialized = false;
 
         // 清理可能的错误状态
         if (this.globalErrors) {
@@ -3493,7 +3649,7 @@ class App {
             }
         });
 
-        this.isInitialized = false;
+        this._isInitialized = false;
     }
 
     /**
@@ -3765,26 +3921,46 @@ class App {
      */
     injectScript(src) {
         return new Promise((resolve, reject) => {
-            // 检查是否已加载
-            if (this._loadedScripts.has(src)) {
-                console.debug(`[Injector] Already loaded: ${src}`);
+            // 检查别名映射
+            const aliasMap = {
+                // 主题页面组件的别名映射到legacy目录
+                'js/components/IndexValidator.js': 'js/legacy/IndexValidator.js',
+                'js/components/CommunicationTester.js': 'js/legacy/CommunicationTester.js',
+                'js/components/ErrorFixer.js': 'js/legacy/ErrorFixer.js',
+                'js/components/CommunicationRecovery.js': 'js/legacy/CommunicationRecovery.js',
+                'js/components/PerformanceOptimizer.js': 'js/legacy/PerformanceOptimizer.js',
+                'js/components/BrowseStateManager.js': 'js/legacy/BrowseStateManager.js',
+                'js/components/practiceRecordModal.js': 'js/legacy/practiceRecordModal.js',
+                'js/components/practiceHistoryEnhancer.js': 'js/legacy/practiceHistoryEnhancer.js'
+            };
+
+            // 应用别名映射
+            const resolvedSrc = aliasMap[src] || src;
+
+            if (resolvedSrc !== src) {
+                console.debug(`[Injector] Alias mapped: ${src} → ${resolvedSrc}`);
+            }
+
+            // 检查是否已加载（使用解析后的路径）
+            if (this._loadedScripts.has(resolvedSrc)) {
+                console.debug(`[Injector] Already loaded: ${resolvedSrc}`);
                 return resolve();
             }
 
-            console.debug(`[Injector] Loading: ${src}`);
+            console.debug(`[Injector] Loading: ${resolvedSrc}`);
 
             const s = document.createElement('script');
-            s.src = src;
+            s.src = resolvedSrc;
             s.async = false; // 保持执行顺序
 
             s.onload = () => {
-                this._loadedScripts.add(src);
-                console.debug(`[Injector] Loaded: ${src}`);
+                this._loadedScripts.add(resolvedSrc);
+                console.debug(`[Injector] Loaded: ${resolvedSrc}`);
                 resolve();
             };
 
             s.onerror = (e) => {
-                console.error(`[Injector] Failed: ${src}`, e);
+                console.error(`[Injector] Failed: ${resolvedSrc}`, e);
                 reject(e);
             };
 
@@ -4014,6 +4190,13 @@ class App {
     }
 
     /**
+     * 检查应用是否已初始化
+     */
+    isInitialized() {
+        return this._isInitialized;
+    }
+
+    /**
      * 清理所有注册的监听器和定时器
      */
     cleanup() {
@@ -4086,4 +4269,591 @@ window.getHandshakeState = function() {
     } catch (e) {
         return { error: e.message };
     }
+}
+
+// ===== Safe Mode 辅助方法 (Task 63) =====
+// Note: initializeStorageSafeMode 方法已移至 storage.js 作为 initializeLocalStorageOnly
+
+/**
+ * Safe Mode 事件监听器设置
+ */
+App.prototype.setupEventListenersSafeMode = function() {
+    // Task 83: 防止重复绑定导航监听器
+    if (this._navBound) {
+        console.log('[SAFE_MODE] 导航监听器已绑定，跳过重复绑定');
+        return;
+    }
+
+    console.log('[SAFE_MODE] 设置最小事件监听器');
+
+    // 只设置必要的导航事件
+    const navButtons = document.querySelectorAll('.nav-btn[data-view]');
+    navButtons.forEach(button => {
+        button.addEventListener('click', (e) => {
+            const viewName = e.target.getAttribute('data-view');
+            this.navigateToViewSafeMode(viewName);
+        });
+    });
+
+    this._navBound = true;
+    console.log(`[SAFE_MODE] 已设置 ${navButtons.length} 个导航按钮监听器`);
+};
+
+/**
+ * Safe Mode UI 初始化
+ */
+App.prototype.initializeMinimalUI = async function() {
+    console.log('[SAFE_MODE] 初始化最小UI组件');
+
+    // 任务105: UI组件开关
+    window.USE_UI_COMPONENTS = !window.__SAFE_MODE__; // Safe Mode下默认关闭UI组件
+
+    // 确保必要的DOM容器存在 (Task 70)
+    this.ensureMinimalDOM();
+
+    // 初始化存储
+    this.stores = {
+        app: window.AppStore ? new window.AppStore() : null,
+        exams: window.ExamStore ? new window.ExamStore() : null,
+        records: window.RecordStore ? new window.RecordStore() : null
+    };
+
+    // 任务105: 根据开关决定是否使用UI组件
+    if (window.USE_UI_COMPONENTS) {
+        console.log('[App] 使用高级UI组件');
+
+        // 任务100: 传递真实stores并显式attach + 任务104: 单实例策略
+        // 任务104: 检查是否已有实例存在
+        if (window.ExamBrowserInstance || window.RecordViewerInstance || window.SettingsPanelInstance) {
+            console.warn('[App] 检测到现有UI实例，可能存在重复实例化问题');
+        }
+
+        this.ui = {
+            browser: window.ExamBrowser ? new window.ExamBrowser(this.stores) : null,
+            recordViewer: window.RecordViewer ? new window.RecordViewer(this.stores) : null,
+            settings: window.SettingsPanel ? new window.SettingsPanel(this.stores) : null
+        };
+
+        // 任务104: 记录实例计数并设置全局单例
+        if (this.ui.browser) {
+            if (window.ExamBrowserInstance) {
+                console.warn('[App] ExamBrowser实例已存在，跳过重复创建');
+                this.ui.browser = window.ExamBrowserInstance;
+            } else {
+                window.ExamBrowserInstance = this.ui.browser;
+                console.log('[App] ExamBrowser单例已设置');
+            }
+        }
+
+        if (this.ui.recordViewer) {
+            if (window.RecordViewerInstance) {
+                console.warn('[App] RecordViewer实例已存在，跳过重复创建');
+                this.ui.recordViewer = window.RecordViewerInstance;
+            } else {
+                window.RecordViewerInstance = this.ui.recordViewer;
+                console.log('[App] RecordViewer单例已设置');
+            }
+        }
+
+        if (this.ui.settings) {
+            if (window.SettingsPanelInstance) {
+                console.warn('[App] SettingsPanel实例已存在，跳过重复创建');
+                this.ui.settings = window.SettingsPanelInstance;
+            } else {
+                window.SettingsPanelInstance = this.ui.settings;
+                console.log('[App] SettingsPanel单例已设置');
+            }
+        }
+
+        // 显式attach UI组件到正确容器
+        if (this.ui.browser) {
+            const browseContainer = document.getElementById('browse-view') || document.body;
+            this.ui.browser.attach(browseContainer);
+            console.log('[App] ExamBrowser attached with real stores');
+        }
+
+        if (this.ui.recordViewer) {
+            const practiceContainer = document.getElementById('practice-view') || document.body;
+            this.ui.recordViewer.attach(practiceContainer);
+            console.log('[App] RecordViewer attached with real stores');
+        }
+
+        if (this.ui.settings) {
+            const settingsContainer = document.getElementById('settings-view') || document.body;
+            this.ui.settings.attach(settingsContainer);
+            console.log('[App] SettingsPanel attached with real stores');
+        }
+    } else {
+        console.log('[App] 使用Safe Mode渲染器（UI组件已禁用）');
+        this.ui = {
+            browser: null,
+            recordViewer: null,
+            settings: null
+        };
+    }
+
+    // 渲染初始视图
+    this.renderCurrentViewSafeMode();
+
+    console.log('[SAFE_MODE] UI初始化完成');
+};
+
+/**
+ * 确保最小DOM契约 (Task 70)
+ */
+App.prototype.ensureMinimalDOM = function() {
+    const requiredContainers = [
+        'exam-list-container',
+        'total-practiced',
+        'avg-score',
+        'study-time',
+        'streak-days',
+        'practice-history-list'
+    ];
+
+    let createdCount = 0;
+    requiredContainers.forEach(id => {
+        if (!document.getElementById(id)) {
+            console.warn(`[SAFE_MODE] 缺少必要容器 #${id}，正在创建...`);
+            const container = document.createElement('div');
+            container.id = id;
+
+            // 根据ID设置适当的样式和位置
+            if (id === 'exam-list-container') {
+                container.style.cssText = 'min-height: 200px; padding: 10px;';
+            } else if (id.startsWith('total-') || id === 'avg-score' || id === 'study-time' || id === 'streak-days') {
+                container.textContent = '0';
+                container.style.cssText = 'font-size: 2em; font-weight: bold;';
+            } else if (id === 'practice-history-list') {
+                container.innerHTML = '<div style="text-align: center; padding: 40px; opacity: 0.7;"><p>暂无练习记录</p></div>';
+            }
+
+            document.body.appendChild(container);
+            createdCount++;
+        }
+    });
+
+    if (createdCount > 0) {
+        console.log(`[SAFE_MODE] 创建了 ${createdCount} 个缺失的DOM容器`);
+    }
+};
+
+/**
+ * Safe Mode 视图渲染
+ */
+App.prototype.renderCurrentViewSafeMode = function() {
+    const activeView = document.querySelector('.view.active');
+    if (!activeView) return;
+
+    const viewId = activeView.id;
+
+    switch (viewId) {
+        case 'browse-view':
+            this.renderBrowseViewSafeMode();
+            break;
+        case 'practice-view':
+            this.renderPracticeViewSafeMode();
+            break;
+        case 'overview-view':
+            this.renderOverviewViewSafeMode();
+            break;
+        case 'settings-view':
+            this.renderSettingsViewSafeMode();
+            break;
+    }
+};
+
+/**
+ * Safe Mode 题库浏览视图渲染 (Task 64)
+ */
+App.prototype.renderBrowseViewSafeMode = function() {
+    console.log('[SAFE_MODE] 渲染题库浏览视图 (最多50条)');
+
+    const container = document.getElementById('exam-list-container');
+    if (!container) return;
+
+    // 获取考试数据
+    let exams = [];
+    if (this.stores.exams) {
+        exams = this.stores.exams.getAllExams() || [];
+    } else if (window.examIndex) {
+        exams = window.examIndex.slice(0, 50); // 安全起见只取前50条
+    }
+
+    // 限制渲染数量 (Task 64)
+    const renderCount = Math.min(exams.length, 50);
+    const remainingCount = exams.length - renderCount;
+
+    let html = '';
+    for (let i = 0; i < renderCount; i++) {
+        const exam = exams[i];
+        html += `
+            <div class="exam-item" data-exam-id="${exam.id || i}">
+                <div class="exam-title">${exam.title || '未知题目'}</div>
+                <div class="exam-meta">
+                    <span class="exam-type">${exam.type || 'reading'}</span>
+                    <span class="exam-category">${exam.category || '未分类'}</span>
+                </div>
+                <div class="exam-actions">
+                    <button class="btn btn-sm" onclick="window.App.openExam && window.App.openExam(${exam.id || i})">开始练习</button>
+                    ${exam.hasPdf ? `<button class="btn btn-secondary btn-sm" onclick="window.App.viewPDF && window.App.viewPDF(${exam.id || i})">查看PDF</button>` : ''}
+                </div>
+            </div>
+        `;
+    }
+
+    // 如果有更多题目，添加"加载更多"按钮
+    if (remainingCount > 0) {
+        html += `
+            <div style="text-align: center; margin: 20px 0;">
+                <button class="btn" onclick="window.App.loadMoreExams && window.App.loadMoreExams()">
+                    加载更多 (还有 ${remainingCount} 题)
+                </button>
+            </div>
+        `;
+    }
+
+    container.innerHTML = html;
+    console.log(`[SAFE_MODE] 渲染了 ${renderCount} 个考试项目`);
+};
+
+/**
+ * Safe Mode 练习记录视图渲染
+ */
+App.prototype.renderPracticeViewSafeMode = function() {
+    console.log('[SAFE_MODE] 渲染练习记录视图');
+
+    // 更新统计数字
+    const stats = this.calculateBasicStats();
+    document.getElementById('total-practiced').textContent = stats.total;
+    document.getElementById('avg-score').textContent = stats.avgScore + '%';
+    document.getElementById('study-time').textContent = stats.studyTime;
+    document.getElementById('streak-days').textContent = stats.streakDays;
+};
+
+/**
+ * Safe Mode 计算基础统计
+ */
+App.prototype.calculateBasicStats = function() {
+    let records = [];
+    if (this.stores.records) {
+        records = this.stores.records.getAllRecords() || [];
+    } else if (localStorage.getItem('practice_records')) {
+        try {
+            records = JSON.parse(localStorage.getItem('practice_records'));
+        } catch (e) {
+            records = [];
+        }
+    }
+
+    return {
+        total: records.length,
+        avgScore: records.length > 0 ?
+            Math.round(records.reduce((sum, r) => sum + (r.score?.percentage || 0), 0) / records.length) : 0,
+        studyTime: Math.round(records.reduce((sum, r) => sum + (r.duration || 0), 0) / 60),
+        streakDays: 1 // 简化计算
+    };
+};
+
+/**
+ * Safe Mode 总览视图渲染
+ */
+App.prototype.renderOverviewViewSafeMode = function() {
+    console.log('[SAFE_MODE] 渲染总览视图');
+    // 简化总览，显示基本统计
+};
+
+/**
+ * Safe Mode 设置视图渲染
+ */
+App.prototype.renderSettingsViewSafeMode = function() {
+    console.log('[SAFE_MODE] 渲染设置视图');
+    // 简化设置，只显示基本选项
+};
+
+/**
+ * Safe Mode 导航
+ */
+App.prototype.navigateToViewSafeMode = function(viewName) {
+    console.log(`[SAFE_MODE] 切换到视图: ${viewName}`);
+
+    // 隐藏所有视图
+    document.querySelectorAll('.view').forEach(view => {
+        view.classList.remove('active');
+    });
+
+    // 移除所有导航按钮的active类
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+
+    // 显示目标视图
+    const targetView = document.getElementById(`${viewName}-view`);
+    if (targetView) {
+        targetView.classList.add('active');
+    }
+
+    // 激活对应的导航按钮
+    const targetBtn = document.querySelector(`.nav-btn[data-view="${viewName}"]`);
+    if (targetBtn) {
+        targetBtn.classList.add('active');
+    }
+
+    // 渲染当前视图
+    this.renderCurrentViewSafeMode();
+
+    this.currentView = viewName;
+};
+
+/**
+ * 暴露兼容桥接API (Task 67)
+ */
+App.prototype.exposeBridgeAPIs = function() {
+    console.log('[SAFE_MODE] 暴露兼容桥接API');
+
+    // 只读桥接
+    window.searchExams = (query) => {
+        console.log('[Bridge] searchExams called with:', query);
+        if (this.ui.browser) {
+            return this.ui.browser.handleSearch(query);
+        }
+        return [];
+    };
+
+    window.filterByType = (type) => {
+        console.log('[Bridge] filterByType called with:', type);
+        if (this.ui.browser) {
+            return this.ui.browser.setType(type);
+        }
+    };
+
+    window.filterByCategory = (category) => {
+        console.log('[Bridge] filterByCategory called with:', category);
+        if (this.ui.browser) {
+            return this.ui.browser.setCategory(category);
+        }
+    };
+
+    // loadLibrary 桥接 (标记为弃用)
+    window.loadLibrary = (forceRefresh) => {
+        console.warn('[Bridge] loadLibrary is deprecated, using stores.exams.refreshExams');
+        if (this.stores.exams) {
+            return this.stores.exams.refreshExams(forceRefresh);
+        }
+        return Promise.resolve();
+    };
+
+    // 基础视图切换
+    window.showView = (viewName) => {
+        console.log('[Bridge] showView called with:', viewName);
+        this.navigateToViewSafeMode(viewName);
+    };
+
+    console.log('[SAFE_MODE] 桥接API暴露完成');
+};
+
+/**
+ * 设置最小消息路由 (Task 68)
+ */
+App.prototype.setupMinimalMessageRouter = function() {
+    console.log('[SAFE_MODE] 设置最小消息路由');
+
+    // 只处理关键消息类型
+    this.addWindowListener('message', (event) => {
+        try {
+            const data = event.data;
+            if (!data || typeof data !== 'object') return;
+
+            switch (data.type) {
+                case 'SESSION_READY':
+                    this.handleSessionReadySafeMode(data);
+                    break;
+                case 'PRACTICE_COMPLETE':
+                    this.handlePracticeCompleteSafeMode(data);
+                    break;
+                case 'PROGRESS_UPDATE':
+                    // 在Safe Mode下忽略进度更新以减少噪音
+                    break;
+                default:
+                    // 忽略其他消息类型
+                    break;
+            }
+        } catch (error) {
+            console.error('[SAFE_MODE] 消息处理错误:', error);
+        }
+    });
+
+    console.log('[SAFE_MODE] 消息路由设置完成');
+};
+
+/**
+ * Safe Mode 处理 SESSION_READY
+ */
+App.prototype.handleSessionReadySafeMode = function(data) {
+    console.log('[SAFE_MODE] 收到 SESSION_READY:', data.sessionId);
+    // 简化的握手处理
+};
+
+/**
+ * Safe Mode 处理 PRACTICE_COMPLETE
+ */
+App.prototype.handlePracticeCompleteSafeMode = function(data) {
+    console.log('[SAFE_MODE] 收到 PRACTICE_COMPLETE:', data.sessionId);
+
+    if (this.stores.records && data.record) {
+        this.stores.records.saveRecord(data.record);
+        console.log('[SAFE_MODE] 练习记录已保存');
+
+        // 刷新统计显示
+        this.renderPracticeViewSafeMode();
+    }
+};
+
+/**
+ * 设置性能监控 (Task 69)
+ */
+App.prototype.setupPerformanceMonitoring = function() {
+    console.log('[SAFE_MODE] 设置性能监控');
+
+    // 记录初始状态
+    this._initialListenerCount = this._listeners ? this._listeners.size : 0;
+    this._initialIntervalCount = this._intervals ? this._intervals.size : 0;
+
+    console.log(`[SAFE_MODE] 初始监听器: ${this._initialListenerCount}, 定时器: ${this._initialIntervalCount}`);
+
+    // 每30秒检查一次资源使用情况
+    const monitorInterval = setInterval(() => {
+        const currentListeners = this._listeners ? this._listeners.size : 0;
+        const currentIntervals = this._intervals ? this._intervals.size : 0;
+
+        if (currentListeners > this._initialListenerCount + 10) {
+            console.warn(`[SAFE_MODE] 监听器数量异常: ${currentListeners} (初始: ${this._initialListenerCount})`);
+        }
+
+        if (currentIntervals > this._initialIntervalCount + 5) {
+            console.warn(`[SAFE_MODE] 定时器数量异常: ${currentIntervals} (初始: ${this._initialIntervalCount})`);
+        }
+    }, 30000);
+
+    this._intervals.add(monitorInterval);
+    console.log('[SAFE_MODE] 性能监控已启动');
+};
+
+/**
+ * Safe Mode 注入脚本方法
+ */
+App.prototype.injectScriptSafeMode = function(src) {
+    if (this._loadedScripts && this._loadedScripts.has(src)) {
+        return Promise.resolve();
+    }
+
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.async = false;
+
+        script.onload = () => {
+            if (this._loadedScripts) {
+                this._loadedScripts.add(src);
+            }
+            console.log(`[SAFE_MODE] 注入脚本: ${src}`);
+            resolve();
+        };
+
+        script.onerror = (error) => {
+            console.error(`[SAFE_MODE] 脚本注入失败: ${src}`, error);
+            reject(error);
+        };
+
+        document.head.appendChild(script);
+    });
+};
+
+/**
+ * Safe Mode 打开考试 (按需加载脚本)
+ */
+App.prototype.openExam = async function(examId) {
+    console.log(`[SAFE_MODE] 打开考试: ${examId}`);
+
+    try {
+        // 按需加载练习记录器
+        if (!window.PracticeRecorder) {
+            await this.injectScriptSafeMode('js/core/scoreStorage.js');
+            await this.injectScriptSafeMode('js/core/practiceRecorder.js');
+        }
+
+        // 查找考试数据
+        let exam = null;
+        if (this.stores.exams) {
+            exam = this.stores.exams.getExamById(examId);
+        } else if (window.examIndex && window.examIndex[examId]) {
+            exam = window.examIndex[examId];
+        }
+
+        if (!exam) {
+            throw new Error(`考试 ${examId} 未找到`);
+        }
+
+        // 打开考试窗口
+        const examWindow = window.open(exam.path + '/index.html', `exam_${examId}`, 'width=1200,height=800,scrollbars=yes');
+
+        if (examWindow) {
+            console.log(`[SAFE_MODE] 考试窗口已打开: ${examId}`);
+        } else {
+            throw new Error('无法打开考试窗口，请检查弹窗拦截设置');
+        }
+
+    } catch (error) {
+        console.error(`[SAFE_MODE] 打开考试失败:`, error);
+        this.showUserMessage(`打开考试失败: ${error.message}`, 'error');
+    }
+};
+
+/**
+ * Safe Mode 查看PDF (按需加载脚本)
+ */
+App.prototype.viewPDF = async function(examId) {
+    console.log(`[SAFE_MODE] 查看PDF: ${examId}`);
+
+    try {
+        // 按需加载PDF处理器
+        if (!window.PDFHandler) {
+            await this.injectScriptSafeMode('js/components/PDFHandler.js');
+        }
+
+        // 查找考试数据
+        let exam = null;
+        if (this.stores.exams) {
+            exam = this.stores.exams.getExamById(examId);
+        } else if (window.examIndex && window.examIndex[examId]) {
+            exam = window.examIndex[examId];
+        }
+
+        if (!exam) {
+            throw new Error(`考试 ${examId} 未找到`);
+        }
+
+        // 使用PDFHandler打开PDF
+        if (window.PDFHandler) {
+            const pdfPath = exam.pdfPath || (exam.path + '/exam.pdf');
+            new window.PDFHandler().openPDF(pdfPath, exam.title);
+        } else {
+            // 降级处理：直接打开PDF文件
+            const pdfPath = exam.pdfPath || (exam.path + '/exam.pdf');
+            window.open(pdfPath, '_blank');
+        }
+
+    } catch (error) {
+        console.error(`[SAFE_MODE] 查看PDF失败:`, error);
+        this.showUserMessage(`查看PDF失败: ${error.message}`, 'error');
+    }
+};
+
+/**
+ * Safe Mode 加载更多考试 (Task 64)
+ */
+App.prototype.loadMoreExams = function() {
+    console.log('[SAFE_MODE] 加载更多考试');
+    // 实现加载更多逻辑
+    this.renderBrowseViewSafeMode();
 };

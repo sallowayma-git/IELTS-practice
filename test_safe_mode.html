@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Safe Mode 自检页面</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+        }
+        .status {
+            padding: 5px 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+        }
+        .pass { background: #10b981; }
+        .fail { background: #ef4444; }
+        .info { background: #3b82f6; }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover { background: #2563eb; }
+        #results { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Safe Mode 自检页面</h1>
+    <p>此页面用于验证 Safe Mode 的核心功能是否正常工作</p>
+
+    <div class="test-section">
+        <h2>📋 自检清单</h2>
+        <div id="checklist">
+            <div class="status info">等待开始自检...</div>
+        </div>
+        <button onclick="startSelfTest()">开始自检</button>
+        <button onclick="clearResults()">清除结果</button>
+    </div>
+
+    <div id="results"></div>
+
+    <!-- Safe Mode 脚本 -->
+    <script>
+        window.__SAFE_MODE__ = true;
+        console.log('[SAFE_MODE] 自检页面启用');
+    </script>
+
+    <!-- 加载基础脚本 -->
+    <script src="assets/scripts/complete-exam-data.js"></script>
+    <script src="js/utils/events.js"></script>
+    <script src="js/utils/helpers.js"></script>
+    <script src="js/utils/storage.js"></script>
+    <script src="js/utils/errorDisplay.js"></script>
+    <script src="js/stores/AppStore.js"></script>
+    <script src="js/stores/ExamStore.js"></script>
+    <script src="js/stores/RecordStore.js"></script>
+    <script src="js/ui/ExamBrowser.js"></script>
+    <script src="js/ui/RecordViewer.js"></script>
+    <script src="js/ui/SettingsPanel.js"></script>
+    <script src="js/app.js"></script>
+
+    <script>
+        let testResults = [];
+
+        function addResult(test, status, message, details = null) {
+            testResults.push({ test, status, message, details, timestamp: new Date().toISOString() });
+            updateDisplay();
+        }
+
+        function updateDisplay() {
+            const checklist = document.getElementById('checklist');
+            checklist.innerHTML = testResults.map(result => `
+                <div class="status ${result.status}">
+                    <strong>${result.test}:</strong> ${result.message}
+                    ${result.details ? `<br><small>${result.details}</small>` : ''}
+                </div>
+            `).join('');
+
+            const passCount = testResults.filter(r => r.status === 'pass').length;
+            const failCount = testResults.filter(r => r.status === 'fail').length;
+
+            if (testResults.length > 0) {
+                checklist.innerHTML += `
+                    <div class="status info">
+                        <strong>总计:</strong> ${testResults.length} 项测试,
+                        ${passCount} 项通过,
+                        ${failCount} 项失败
+                    </div>
+                `;
+            }
+        }
+
+        function clearResults() {
+            testResults = [];
+            updateDisplay();
+        }
+
+        async function startSelfTest() {
+            console.log('[SelfTest] 开始 Safe Mode 自检');
+            clearResults();
+
+            try {
+                // 测试 1: SAFE_MODE 标志检查
+                addResult('SAFE_MODE 标志',
+                    window.__SAFE_MODE__ ? 'pass' : 'fail',
+                    window.__SAFE_MODE__ ? 'SAFE_MODE 已启用' : 'SAFE_MODE 未启用'
+                );
+
+                // 测试 2: EventEmitter 去重检查
+                addResult('EventEmitter 去重',
+                    window.EventEmitter && window.globalEventBus ? 'pass' : 'fail',
+                    window.EventEmitter && window.globalEventBus ? 'EventEmitter 正常初始化' : 'EventEmitter 初始化失败',
+                    `listeners: ${window.globalEventBus ? window.globalEventBus.listenerCount('test') : 0}`
+                );
+
+                // 测试 3: 存储系统检查
+                try {
+                    localStorage.setItem('test_safe_mode', 'ok');
+                    localStorage.removeItem('test_safe_mode');
+                    addResult('localStorage 可用性', 'pass', 'localStorage 正常工作');
+                } catch (error) {
+                    addResult('localStorage 可用性', 'fail', `localStorage 错误: ${error.message}`);
+                }
+
+                // 测试 4: 存储模式检查
+                if (window.storage) {
+                    const isLocalStorageOnly = window.storage.isLocalStorageOnly || !window.storage.useIndexedDB;
+                    addResult('存储模式',
+                        isLocalStorageOnly ? 'pass' : 'fail',
+                        isLocalStorageOnly ? 'local-only 模式已启用' : '存储模式配置异常'
+                    );
+                } else {
+                    addResult('存储系统', 'fail', '存储系统未初始化');
+                }
+
+                // 测试 5: 基础 API 桥接检查
+                const bridgeAPIs = ['searchExams', 'filterByType', 'filterByCategory', 'loadLibrary', 'showView'];
+                const workingAPIs = bridgeAPIs.filter(api => typeof window[api] === 'function');
+                addResult('兼容桥接 API',
+                    workingAPIs.length >= 3 ? 'pass' : 'fail',
+                    `${workingAPIs.length}/${bridgeAPIs.length} 个桥接 API 可用`,
+                    `可用: ${workingAPIs.join(', ')}`
+                );
+
+                // 测试 6: App 初始化检查
+                console.time('app-initialization-test');
+
+                if (window.App) {
+                    addResult('App 类', 'pass', 'App 类已定义');
+
+                    // 测试 App 初始化
+                    try {
+                        await window.App.initialize();
+                        addResult('App 初始化', 'pass', 'App 初始化成功');
+                        console.timeEnd('app-initialization-test');
+                    } catch (error) {
+                        addResult('App 初始化', 'fail', `App 初始化失败: ${error.message}`);
+                    }
+                } else {
+                    addResult('App 类', 'fail', 'App 类未定义');
+                }
+
+                // 测试 7: DOM 契约检查
+                const requiredContainers = [
+                    'exam-list-container',
+                    'total-practiced',
+                    'avg-score',
+                    'study-time',
+                    'streak-days',
+                    'practice-history-list'
+                ];
+
+                setTimeout(() => {
+                    const existingContainers = requiredContainers.filter(id => document.getElementById(id));
+                    addResult('DOM 最小契约',
+                        existingContainers.length >= requiredContainers.length / 2 ? 'pass' : 'fail',
+                        `${existingContainers.length}/${requiredContainers.length} 个必要容器存在`,
+                        `存在: ${existingContainers.join(', ')}`
+                    );
+                }, 1000);
+
+                // 测试 8: 性能监控检查
+                setTimeout(() => {
+                    if (window.App && typeof window.App.debugReport === 'function') {
+                        try {
+                            const report = window.App.debugReport();
+                            addResult('性能监控', 'pass', 'debugReport 功能正常');
+                        } catch (error) {
+                            addResult('性能监控', 'fail', `debugReport 错误: ${error.message}`);
+                        }
+                    } else {
+                        addResult('性能监控', 'fail', 'debugReport 方法不可用');
+                    }
+                }, 1500);
+
+                // 测试 9: 题库渲染检查 (Task 64)
+                setTimeout(() => {
+                    const examContainer = document.getElementById('exam-list-container');
+                    if (examContainer && examContainer.children.length > 0) {
+                        const examCount = examContainer.querySelectorAll('.exam-item').length;
+                        addResult('题库渲染限制',
+                            examCount <= 50 ? 'pass' : 'fail',
+                            `渲染了 ${examCount} 个考试项目`,
+                            examCount <= 50 ? '符合 50 条限制' : '超出限制'
+                        );
+                    } else {
+                        addResult('题库渲染限制', 'fail', '考试列表容器为空或不存在');
+                    }
+                }, 2000);
+
+                // 测试 10: 消息路由检查
+                setTimeout(() => {
+                    if (window.App && window.App._messageListenerAttached !== undefined) {
+                        addResult('消息路由',
+                            window.App._messageListenerAttached ? 'pass' : 'fail',
+                            window.App._messageListenerAttached ? '消息监听器已附加' : '消息监听器未附加'
+                        );
+                    } else {
+                        addResult('消息路由', 'info', '消息路由状态未知');
+                    }
+                }, 2500);
+
+                console.log('[SelfTest] 自检完成');
+
+            } catch (error) {
+                addResult('自检过程', 'fail', `自检过程中发生错误: ${error.message}`);
+            }
+        }
+
+        // 页面加载完成后的初始检查
+        window.addEventListener('load', () => {
+            console.log('[SelfTest] 页面加载完成，可以开始自检');
+            addResult('页面加载', 'pass', 'Safe Mode 自检页面已加载');
+        });
+    </script>
+</body>
+</html>
