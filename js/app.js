@@ -339,6 +339,10 @@ class App {
         window.stores.exams = this.stores.exams;
         window.stores.recordStore = this.stores.recordStore;
         window.stores.records = this.stores.records;
+
+        if (window.App && window.App.stores !== this.stores) {
+            window.App.stores = this.stores;
+        }
     }
 
     bootstrapUiControllers() {
@@ -711,13 +715,15 @@ class App {
             // 开发模式下添加弃用日志
             if (location.hostname === 'localhost' || location.protocol === 'file:') {
                 const originalExamStore = this.stores.examStore;
-                this.stores.examStore = new Proxy(originalExamStore, {
+                const proxiedExamStore = new Proxy(originalExamStore, {
                     get(target, prop) {
                         if (prop === 'deprecatedAccess') return true;
                         console.warn('[App] DEPRECATED: Using examStore - consider switching to stores.exams');
                         return target[prop];
                     }
                 });
+                this.stores.examStore = proxiedExamStore;
+                this.stores.exams = proxiedExamStore;
             }
         }
 
@@ -727,13 +733,15 @@ class App {
             // 开发模式下添加弃用日志
             if (location.hostname === 'localhost' || location.protocol === 'file:') {
                 const originalRecordStore = this.stores.recordStore;
-                this.stores.recordStore = new Proxy(originalRecordStore, {
+                const proxiedRecordStore = new Proxy(originalRecordStore, {
                     get(target, prop) {
                         if (prop === 'deprecatedAccess') return true;
                         console.warn('[App] DEPRECATED: Using recordStore - consider switching to stores.records');
                         return target[prop];
                     }
                 });
+                this.stores.recordStore = proxiedRecordStore;
+                this.stores.records = proxiedRecordStore;
             }
         }
 
