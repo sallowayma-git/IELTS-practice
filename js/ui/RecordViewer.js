@@ -385,10 +385,18 @@ class RecordViewer extends BaseComponent {
     static instance = null;
 }
 
-// Export and set global instance
-const recordViewerInstance = new RecordViewer(window.stores || { records: {}, exams: {}, app: {} });
+// Export and provide bootstrap helper for controlled initialization
 window.RecordViewer = RecordViewer;
-window.RecordViewerInstance = recordViewerInstance;
-recordViewerInstance.attach(document.getElementById('practice-view') || document.body);
 
-console.log('[RecordViewer] Controller initialized');
+RecordViewer.bootstrap = function bootstrapRecordViewer(stores = null, options = {}) {
+    const resolvedStores = stores || (window.stores || { records: {}, exams: {}, app: {} });
+    const instance = new RecordViewer(resolvedStores);
+    const container = options.container || document.getElementById('practice-view') || document.body;
+    if (container) {
+        instance.attach(container);
+    }
+    RecordViewer.instance = instance;
+    window.RecordViewerInstance = instance;
+    console.log('[RecordViewer] Controller initialized');
+    return instance;
+};

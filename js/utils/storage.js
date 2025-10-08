@@ -6,7 +6,17 @@ class StorageManager {
     constructor() {
         this.prefix = 'exam_system_';
         this.version = '1.0.0';
-        this.initializeStorage();
+        this.isReady = false;
+        this.readyPromise = this.initializeStorage()
+            .then(() => {
+                this.isReady = true;
+                return true;
+            })
+            .catch(error => {
+                console.error('[Storage] 初始化失败:', error);
+                this.isReady = false;
+                throw error;
+            });
     }
 
     /**
@@ -51,6 +61,10 @@ class StorageManager {
             console.warn('[Storage] localStorage 不可用，fallback 到 IndexedDB:', error);
             await this.initializeIndexedDBStorage();
         }
+    }
+
+    whenReady() {
+        return this.readyPromise || Promise.resolve(true);
     }
 
     /**
@@ -1294,5 +1308,13 @@ class StorageManager {
 // 创建全局存储实例
 window.storage = new StorageManager();
 
-// 启动存储监控
-window.storage.startStorageMonitoring();
+// 等待存储系统就绪后再启动监控，确保 API 可用
+if (window.storage && typeof window.storage.whenReady === 'function') {
+    window.storage.whenReady()
+        .then(() => window.storage.startStorageMonitoring())
+        .catch(error => {
+            console.warn('[Storage] 初始化未完成，跳过存储监控:', error);
+        });
+} else if (window.storage && typeof window.storage.startStorageMonitoring === 'function') {
+    window.storage.startStorageMonitoring();
+}

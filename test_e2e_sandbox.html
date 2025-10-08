@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IELTS 系统 file:// 端到端沙箱</title>
+    <style>
+        :root {
+            color-scheme: light dark;
+        }
+        body {
+            margin: 0;
+            font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+            background: #0b1120;
+            color: #e2e8f0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        header {
+            padding: 24px;
+            background: linear-gradient(135deg, rgba(14, 165, 233, 0.85), rgba(129, 140, 248, 0.85));
+            box-shadow: 0 20px 40px rgba(8, 47, 73, 0.45);
+        }
+        header h1 {
+            margin: 0 0 8px 0;
+            font-size: 24px;
+            font-weight: 700;
+            color: #fff;
+        }
+        header p {
+            margin: 0;
+            color: rgba(255, 255, 255, 0.75);
+            font-size: 14px;
+        }
+        main {
+            flex: 1;
+            display: grid;
+            gap: 20px;
+            padding: 24px;
+            grid-template-columns: 320px 1fr;
+        }
+        @media (max-width: 960px) {
+            main {
+                grid-template-columns: 1fr;
+            }
+        }
+        .panel {
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            border-radius: 16px;
+            padding: 20px;
+            backdrop-filter: blur(14px);
+            box-shadow: 0 25px 50px rgba(15, 23, 42, 0.35);
+        }
+        .panel h2 {
+            margin: 0 0 12px 0;
+            font-size: 18px;
+            font-weight: 600;
+            color: #bae6fd;
+        }
+        .actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+        button {
+            border: none;
+            border-radius: 10px;
+            padding: 10px 16px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            background: linear-gradient(135deg, #6366f1, #22d3ee);
+            color: white;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+        }
+        button:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 12px 20px rgba(99, 102, 241, 0.35);
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        .status {
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 16px;
+            font-size: 14px;
+            line-height: 1.6;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            background: rgba(15, 23, 42, 0.6);
+        }
+        .status[data-state="pass"] { color: #4ade80; border-color: rgba(74, 222, 128, 0.35); background: rgba(34, 197, 94, 0.12); }
+        .status[data-state="fail"] { color: #f87171; border-color: rgba(248, 113, 113, 0.35); background: rgba(248, 113, 113, 0.12); }
+        .status[data-state="running"] { color: #38bdf8; border-color: rgba(56, 189, 248, 0.35); background: rgba(56, 189, 248, 0.12); }
+        .log-container {
+            height: 320px;
+            overflow-y: auto;
+            border-radius: 12px;
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            padding: 12px;
+            font-family: "Fira Code", "JetBrains Mono", monospace;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+        .log-entry {
+            padding: 6px 8px;
+            border-radius: 8px;
+            margin-bottom: 6px;
+            word-break: break-word;
+        }
+        .log-entry[data-level="info"] { background: rgba(148, 163, 184, 0.12); color: #cbd5f5; }
+        .log-entry[data-level="warn"] { background: rgba(250, 204, 21, 0.16); color: #facc15; }
+        .log-entry[data-level="error"] { background: rgba(248, 113, 113, 0.16); color: #fecaca; }
+        .log-entry[data-level="dom"] { background: rgba(56, 189, 248, 0.16); color: #bae6fd; }
+        iframe {
+            width: 100%;
+            min-height: 720px;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            border-radius: 16px;
+            background: white;
+            box-shadow: 0 25px 45px rgba(15, 23, 42, 0.35);
+        }
+        footer {
+            padding: 16px 24px;
+            font-size: 12px;
+            color: rgba(226, 232, 240, 0.65);
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>🧪 IELTS 系统 file:// 沙箱</h1>
+        <p>在 iframe 内以 file:// 方式加载 index.html，记录控制台输出与 DOM 变化。</p>
+    </header>
+    <main>
+        <section class="panel">
+            <h2>测试控制台</h2>
+            <div id="run-status" class="status">等待沙箱加载...</div>
+            <div class="actions">
+                <button id="run-tests" disabled>运行默认流程</button>
+                <button id="reload-frame">重新加载</button>
+                <button id="clear-log">清空日志</button>
+            </div>
+            <div class="log-container" id="log"></div>
+        </section>
+        <section class="panel">
+            <h2>沙箱浏览器</h2>
+            <iframe id="sandbox-frame" src="index.html" sandbox="allow-scripts allow-same-origin"></iframe>
+        </section>
+    </main>
+    <footer>提示：所有脚本均在浏览器本地环境运行，无需任何服务器依赖。</footer>
+    <script src="tests/e2e/sandbox-driver.js"></script>
+</body>
+</html>

@@ -40,6 +40,9 @@ class App {
             // 检查必要的依赖
             this.checkDependencies();
 
+            this.updateLoadingMessage('正在初始化数据层...');
+            await this.initializeStores();
+
             this.updateLoadingMessage('正在初始化响应式功能...');
             // 初始化响应式管理器
             this.initializeResponsiveFeatures();
@@ -79,6 +82,16 @@ class App {
 
             console.log('[App] IELTS考试系统初始化成功');
             this.showUserMessage('系统初始化完成', 'success');
+
+            // 向兼容层广播就绪状态
+            if (!window.app) {
+                window.app = this;
+            }
+            try {
+                window.dispatchEvent(new CustomEvent('app:ready', { detail: this }));
+            } catch (eventError) {
+                console.warn('[App] 分发 app:ready 事件失败:', eventError);
+            }
 
         } catch (error) {
             this.showLoading(false);
@@ -248,15 +261,262 @@ class App {
             console.log('Tutorial system initialized');
         }
 
-        // 初始化设置面板
-        if (window.SettingsPanel) {
-            this.ui.settingsPanel = new SettingsPanel();
-            console.log('Settings panel initialized');
-        }
-
         // 设置响应式事件监听
         this.setupResponsiveEvents();
     }
+
+    async initializeStores() {
+        console.log('[App] 初始化数据存储层...');
+
+        if (!window.storage) {
+            throw new Error('StorageManager 未加载，无法初始化数据层');
+        }
+
+        if (typeof window.storage.whenReady === 'function') {
+            try {
+                await window.storage.whenReady();
+            } catch (error) {
+                console.warn('[App] 等待存储系统就绪时发生警告:', error);
+            }
+        }
+
+        window.stores = window.stores || {};
+
+        if (window.AppStore) {
+            this.stores.app = new window.AppStore();
+        } else {
+            console.warn('[App] AppStore 未加载，启用降级实现');
+            this.stores.app = this.createFallbackAppStore();
+        }
+
+        if (window.ExamStore) {
+            try {
+                const examStore = new window.ExamStore();
+                await examStore.initialize();
+                this.stores.examStore = examStore;
+                this.stores.exams = examStore;
+            } catch (error) {
+                console.error('[App] ExamStore 初始化失败，使用降级实现:', error);
+                this.stores.examStore = this.createFallbackExamStore();
+                this.stores.exams = this.stores.examStore;
+            }
+        } else {
+            console.warn('[App] ExamStore 未加载，启用降级实现');
+            this.stores.examStore = this.createFallbackExamStore();
+            this.stores.exams = this.stores.examStore;
+        }
+
+        if (window.RecordStore) {
+            try {
+                const recordStore = new window.RecordStore();
+                await recordStore.initialize();
+                this.stores.recordStore = recordStore;
+                this.stores.records = recordStore;
+            } catch (error) {
+                console.error('[App] RecordStore 初始化失败，使用降级实现:', error);
+                this.stores.recordStore = this.createFallbackRecordStore();
+                this.stores.records = this.stores.recordStore;
+            }
+        } else {
+            console.warn('[App] RecordStore 未加载，启用降级实现');
+            this.stores.recordStore = this.createFallbackRecordStore();
+            this.stores.records = this.stores.recordStore;
+        }
+
+        this.syncGlobalStores();
+
+        console.log('[App] Stores 准备完成:', {
+            app: !!this.stores.app,
+            exams: !!this.stores.exams,
+            records: !!this.stores.records
+        });
+    }
+
+    syncGlobalStores() {
+        window.stores = window.stores || {};
+        window.stores.app = this.stores.app;
+        window.stores.examStore = this.stores.examStore;
+        window.stores.exams = this.stores.exams;
+        window.stores.recordStore = this.stores.recordStore;
+        window.stores.records = this.stores.records;
+    }
+
+    bootstrapUiControllers() {
+        const sharedStores = {
+            exams: this.stores.exams,
+            records: this.stores.records,
+            app: this.stores.app
+        };
+
+        if (!this.ui.examBrowser) {
+            if (window.ExamBrowser && typeof window.ExamBrowser.bootstrap === 'function') {
+                this.ui.examBrowser = window.ExamBrowser.bootstrap(sharedStores, {
+                    container: document.getElementById('browse-view')
+                });
+            } else if (window.ExamBrowserInstance) {
+                this.ui.examBrowser = window.ExamBrowserInstance;
+            } else {
+                console.warn('[App] 未找到 ExamBrowser 引导函数');
+            }
+        }
+
+        if (!this.ui.recordViewer) {
+            if (window.RecordViewer && typeof window.RecordViewer.bootstrap === 'function') {
+                this.ui.recordViewer = window.RecordViewer.bootstrap(sharedStores, {
+                    container: document.getElementById('practice-view')
+                });
+            } else if (window.RecordViewerInstance) {
+                this.ui.recordViewer = window.RecordViewerInstance;
+            } else {
+                console.warn('[App] 未找到 RecordViewer 引导函数');
+            }
+        }
+
+        if (!this.ui.settingsPanel) {
+            if (window.SettingsPanel && typeof window.SettingsPanel.bootstrap === 'function') {
+                this.ui.settingsPanel = window.SettingsPanel.bootstrap(sharedStores, {
+                    container: document.getElementById('settings-view')
+                });
+            } else if (window.SettingsPanelInstance) {
+                this.ui.settingsPanel = window.SettingsPanelInstance;
+            } else {
+                console.warn('[App] 未找到 SettingsPanel 引导函数');
+            }
+        }
+    }
+
+    createFallbackAppStore() {
+        const observers = new Set();
+        const store = {
+            currentView: 'overview',
+            navigation: { history: [], currentIndex: -1 },
+            subscribe(callback) {
+                if (typeof callback === 'function') {
+                    observers.add(callback);
+                    return () => observers.delete(callback);
+                }
+                return () => {};
+            },
+            notify(event) {
+                observers.forEach(cb => {
+                    try {
+                        cb(event);
+                    } catch (error) {
+                        console.error('[FallbackAppStore] Observer error:', error);
+                    }
+                });
+            },
+            setView(viewName, data = null) {
+                const nextView = viewName || store.currentView;
+                store.currentView = nextView;
+                store.navigation.history.push({ view: nextView, data, timestamp: Date.now() });
+                store.navigation.currentIndex = store.navigation.history.length - 1;
+                store.notify({ type: 'view_changed', view: nextView, data });
+            },
+            setLoading() {},
+            addError() { return null; },
+            clearAllErrors() {},
+            getErrors() { return []; }
+        };
+        return store;
+    }
+
+    createFallbackExamStore() {
+        const observers = new Set();
+        const store = {
+            exams: [],
+            subscribe(callback) {
+                if (typeof callback === 'function') {
+                    observers.add(callback);
+                    return () => observers.delete(callback);
+                }
+                return () => {};
+            },
+            notify(event) {
+                observers.forEach(cb => {
+                    try {
+                        cb(event);
+                    } catch (error) {
+                        console.error('[FallbackExamStore] Observer error:', error);
+                    }
+                });
+            },
+            async loadExams() { return store.exams; },
+            async refreshExams() { return store.exams; },
+            getExamsByCategory(category) {
+                if (!category || category === 'all') {
+                    return store.exams;
+                }
+                return store.exams.filter(exam => exam.category === category);
+            },
+            searchExams(query) {
+                if (!query) {
+                    return store.exams;
+                }
+                const lower = String(query).toLowerCase();
+                return store.exams.filter(exam =>
+                    (exam.title || '').toLowerCase().includes(lower)
+                );
+            },
+            getExamById(examId) {
+                return store.exams.find(exam => exam.id === examId) || null;
+            },
+            getCategoryStats() {
+                return {};
+            }
+        };
+        return store;
+    }
+
+    createFallbackRecordStore() {
+        const observers = new Set();
+        const store = {
+            records: [],
+            stats: {
+                totalPracticed: 0,
+                averageScore: 0,
+                studyTime: 0,
+                streakDays: 0,
+                categoryStats: {}
+            },
+            subscribe(callback) {
+                if (typeof callback === 'function') {
+                    observers.add(callback);
+                    return () => observers.delete(callback);
+                }
+                return () => {};
+            },
+            notify(event) {
+                observers.forEach(cb => {
+                    try {
+                        cb(event);
+                    } catch (error) {
+                        console.error('[FallbackRecordStore] Observer error:', error);
+                    }
+                });
+            },
+            async saveRecord(record) {
+                const normalized = record || {};
+                store.records.push(normalized);
+                store.notify({ type: 'record_saved', record: normalized });
+                return normalized;
+            },
+            async loadRecords() {
+                return store.records;
+            },
+            getRecords() {
+                return [...store.records];
+            },
+            getRecordById(recordId) {
+                return store.records.find(record => record.id === recordId) || null;
+            },
+            calculateStats() {
+                return store.stats;
+            }
+        };
+        return store;
+    }
+
 
     /**
      * 设置响应式事件监听
@@ -268,8 +528,8 @@ class App {
         window.addEventListener('resize', () => {
             clearTimeout(resizeTimeout);
             resizeTimeout = setTimeout(() => {
-                if (this.responsiveManager) {
-                    this.responsiveManager.recalculateLayout();
+                if (this.ui.responsiveManager) {
+                    this.ui.responsiveManager.recalculateLayout();
                 }
             }, 250);
         });
@@ -277,8 +537,8 @@ class App {
         // 监听方向变化
         window.addEventListener('orientationchange', () => {
             setTimeout(() => {
-                if (this.responsiveManager) {
-                    this.responsiveManager.recalculateLayout();
+                if (this.ui.responsiveManager) {
+                    this.ui.responsiveManager.recalculateLayout();
                 }
                 this.adjustForOrientation();
             }, 100);
@@ -367,6 +627,7 @@ class App {
                 await this.initializeAvailableOptionalComponents();
             }
 
+            this.bootstrapUiControllers();
             console.log('[App] 组件初始化完成');
 
         } catch (error) {
@@ -876,6 +1137,10 @@ class App {
             if (targetView) {
                 targetView.classList.add('active');
                 this.currentView = viewName;
+
+                if (this.stores.app && typeof this.stores.app.setView === 'function') {
+                    this.stores.app.setView(viewName);
+                }
 
                 // 更新导航状态
                 document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -3763,6 +4028,7 @@ class App {
 (function() {
     try {
         window.App = new App();
+        window.app = window.App;
         window.App.initialize();
         console.log('[App] 初始化成功');
     } catch (error) {

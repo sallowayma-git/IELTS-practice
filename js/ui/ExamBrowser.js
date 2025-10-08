@@ -369,10 +369,18 @@ class ExamBrowser extends BaseComponent {
     static instance = null;
 }
 
-// Export and set global instance
-const examBrowserInstance = new ExamBrowser(window.stores || { exams: {}, app: {}, records: {} });
+// Export and provide bootstrap helper for controlled initialization
 window.ExamBrowser = ExamBrowser;
-window.ExamBrowserInstance = examBrowserInstance;
-examBrowserInstance.attach(document.getElementById('browse-view') || document.body);
 
-console.log('[ExamBrowser] Controller initialized');
+ExamBrowser.bootstrap = function bootstrapExamBrowser(stores = null, options = {}) {
+    const resolvedStores = stores || (window.stores || { exams: {}, app: {}, records: {} });
+    const instance = new ExamBrowser(resolvedStores);
+    const container = options.container || document.getElementById('browse-view') || document.body;
+    if (container) {
+        instance.attach(container);
+    }
+    ExamBrowser.instance = instance;
+    window.ExamBrowserInstance = instance;
+    console.log('[ExamBrowser] Controller initialized');
+    return instance;
+};

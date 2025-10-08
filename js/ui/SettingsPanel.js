@@ -189,10 +189,18 @@ class SettingsPanel extends BaseComponent {
     static instance = null;
 }
 
-// Export and set global instance
-const settingsPanelInstance = new SettingsPanel(window.stores || { exams: {}, app: {} });
+// Export and provide bootstrap helper for controlled initialization
 window.SettingsPanel = SettingsPanel;
-window.SettingsPanelInstance = settingsPanelInstance;
-settingsPanelInstance.attach(document.getElementById('settings-view') || document.body);
 
-console.log('[SettingsPanel] Panel initialized');
+SettingsPanel.bootstrap = function bootstrapSettingsPanel(stores = null, options = {}) {
+    const resolvedStores = stores || (window.stores || { exams: {}, app: {} });
+    const instance = new SettingsPanel(resolvedStores);
+    const container = options.container || document.getElementById('settings-view') || document.body;
+    if (container) {
+        instance.attach(container);
+    }
+    SettingsPanel.instance = instance;
+    window.SettingsPanelInstance = instance;
+    console.log('[SettingsPanel] Panel initialized');
+    return instance;
+};
