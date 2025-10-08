@@ -419,6 +419,17 @@ Sources: [js/components/practiceHistory.js L717-L832](https://github.com/sallowa
 
  [js/components/practiceHistory.js L836-L931](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/js/components/practiceHistory.js#L836-L931)
 
+### Library Loader Modal Refresh (2025-10-12)
+
+- `showLibraryLoaderModal` has been rebuilt on top of the shared DOM builder and event delegation utilities. Buttons, file inputs, and teardown logic are now data-attribute driven, removing the legacy `innerHTML` template and eight direct `addEventListener` bindings while keeping legacy fallbacks for environments without the helper library.【F:js/main.js†L1369-L1569】
+- Dedicated styling rules in `css/main.css` provide the gradient header, two-column card layout, and responsive behavior for the loader modal, replacing 40+ inline declarations and aligning the component with the global theming system.【F:css/main.css†L1559-L1772】
+
+### Overview, Browse & Backup UI Modernization (2025-10-13)
+
+- The dashboard fallback renderer now uses `window.DOM.create` to build category cards, exposing `data-overview-action` hooks that reuse the central delegation pipeline and eliminate inline `onclick` strings.【F:js/main.js†L493-L688】
+- Browse list empty states are standardized with semantic markup and shared helpers so the experience matches design tokens even when filters yield zero results.【F:js/main.js†L1002-L1095】【F:css/main.css†L480-L548】
+- Settings backups render through DOM Builder with delegated restore/close actions, avoiding global callbacks and providing a consistent modal fallback for environments without the settings view container.【F:js/main.js†L2488-L2626】【F:css/main.css†L1099-L1174】
+
 ### Markdown Export System
 
 The component supports exporting practice records in Markdown format for external analysis:
