@@ -21,7 +21,7 @@ const diagnosticRoutes = require('./routes/diagnostic')
 const apiKeysRoutes = require('./routes/api-keys')
 
 const app = express()
-const PORT = process.env.PORT || 3010
+const PORT = process.env.PORT || 3001
 
 // 创建数据库目录
 const dbDir = path.join(__dirname, '../data')

@@ -53,13 +53,19 @@ const startEvaluation = async () => {
     currentStep.value = 1
     bootstrapProgress()
     currentStep.value = 2
-    const { result } = await writingStore.submitWriting({
+    const { result, writingId } = await writingStore.submitWriting({
       taskType: writingStore.taskType,
       aiProvider: writingStore.aiProvider,
       aiModel: writingStore.aiModel
     })
     finalize()
-    assessmentStore.currentAssessment = result
+    assessmentStore.setCurrentAssessment(result, {
+      writingId,
+      content: writingStore.writingContent,
+      topicTitle: writingStore.currentTopic?.title,
+      metadata: result.metadata || {},
+      wordCount: writingStore.wordCount
+    })
     router.replace({ name: 'WritingResult' })
   } catch (error) {
     ElMessage.error(error?.message || '评分失败，请稍后重试')

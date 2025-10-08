@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>雅思AI作文评判助手（静态体验版）</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="environment-banner" role="status">
+      <strong>静态离线演示模式</strong>
+      <span>
+        本页面用于沙箱端到端测试，布局遵循《雅思AI作文评判应用完整需求文档》，但不等同于 Vite 开发服务
+        器 <code>http://localhost:5175</code> 的正式界面。
+      </span>
+    </div>
+    <main class="app-shell">
+      <header class="app-header">
+        <div>
+          <h1>雅思AI作文评判助手</h1>
+          <p class="subtitle">离线静态体验版 · 用于沙箱内端到端交互测试</p>
+        </div>
+        <div class="header-meta">
+          <button id="start-writing-btn" class="btn btn--primary">开始写作</button>
+          <span id="environment-status" class="pill">JS 环境未预热</span>
+          <span class="pill secondary" id="last-evaluated">尚未评估</span>
+        </div>
+      </header>
+
+      <nav class="app-nav" aria-label="应用导航">
+        <button class="nav-btn is-active" data-view="home">写作评估</button>
+        <button class="nav-btn" data-view="history">历史数据</button>
+        <button class="nav-btn" data-view="settings">系统设置</button>
+        <button
+          class="nav-btn nav-btn--external"
+          data-module="listening"
+          type="button"
+          aria-disabled="true"
+          title="正式应用中将通过 Vue Router 打开 legacy/listening"
+        >
+          听力练习（Legacy）
+        </button>
+        <button
+          class="nav-btn nav-btn--external"
+          data-module="reading"
+          type="button"
+          aria-disabled="true"
+          title="正式应用中将通过 Vue Router 打开 legacy/reading"
+        >
+          阅读练习（Legacy）
+        </button>
+      </nav>
+
+      <section id="view-home" class="workspace view is-active" aria-labelledby="nav-home">
+        <div class="callout callout--info" id="static-mode-callout">
+          <div class="callout-title">需求对齐提醒</div>
+          <p class="callout-description">
+            当前演示聚焦「写作评估」主流程，并通过静态数据模拟题库、历史记录与数据库写入，以便核对需求文档中
+            的 UI 布局与交互节点。
+          </p>
+          <p class="callout-note" id="legacy-entry-note" aria-live="polite">
+            Legacy 听力/阅读模块在正式应用中通过 Vue Router 嵌入，此处点击导航将展示提示而非跳转实际页面。
+          </p>
+        </div>
+        <aside class="panel panel--topics">
+          <h2>写作题库</h2>
+          <div class="topic-card">
+            <h3 id="topic-title">准备题目中...</h3>
+            <p id="topic-description" class="topic-description">加载题目...</p>
+            <div class="topic-meta">
+              <span id="topic-type" class="badge"></span>
+              <span id="topic-words" class="badge"></span>
+            </div>
+            <button id="random-topic-btn" class="btn btn--ghost">换一个题目</button>
+          </div>
+          <div class="tips">
+            <h3>小贴士</h3>
+            <ul>
+              <li>保证文章至少 250 词</li>
+              <li>多使用高级词汇和复杂句型</li>
+              <li>段落之间需要清晰的衔接</li>
+            </ul>
+          </div>
+        </aside>
+
+        <section class="panel panel--editor">
+          <h2>作文输入区</h2>
+          <label class="sr-only" for="essay-input">输入你的作文</label>
+          <textarea
+            id="essay-input"
+            placeholder="请在此粘贴或输入你的雅思作文..."
+            spellcheck="false"
+          ></textarea>
+          <div class="editor-toolbar">
+            <div class="metric"><span class="label">词数</span><span id="word-count" class="value">0</span></div>
+            <div class="metric"><span class="label">句数</span><span id="sentence-count" class="value">0</span></div>
+            <div class="metric"><span class="label">词汇多样性</span><span id="lexical-variety" class="value">0%</span></div>
+            <div class="metric"><span class="label">连贯度</span><span id="cohesion-score" class="value">--</span></div>
+          </div>
+          <div class="action-row">
+            <button id="reset-btn" class="btn btn--ghost">清空内容</button>
+            <button id="evaluate-btn" class="btn btn--primary">提交评估</button>
+          </div>
+        </section>
+
+        <aside class="panel panel--results">
+          <h2>评估结果</h2>
+          <div id="score-display" class="score-card">
+            <div class="score-value">--</div>
+            <div class="score-label">综合评分 (0 - 9)</div>
+          </div>
+          <div class="score-breakdown">
+            <div class="breakdown-item">
+              <span>任务回应</span>
+              <strong id="score-task">--</strong>
+            </div>
+            <div class="breakdown-item">
+              <span>连贯与衔接</span>
+              <strong id="score-coherence">--</strong>
+            </div>
+            <div class="breakdown-item">
+              <span>词汇资源</span>
+              <strong id="score-lexical">--</strong>
+            </div>
+            <div class="breakdown-item">
+              <span>语法多样性</span>
+              <strong id="score-grammar">--</strong>
+            </div>
+          </div>
+          <section class="feedback">
+            <h3>反馈建议</h3>
+            <ul id="feedback-list"></ul>
+          </section>
+          <section class="history">
+            <div class="history-header">
+              <h3>历史评估记录</h3>
+              <button id="view-history-btn" class="btn btn--ghost btn--small">查看历史</button>
+            </div>
+            <ul id="history-list" class="history-list" aria-live="polite"></ul>
+          </section>
+          <section class="database-status" aria-live="polite">
+            <h3>数据库写入状态</h3>
+            <p id="db-status">尚未写入任何历史记录。</p>
+          </section>
+        </aside>
+      </section>
+
+      <section id="view-history" class="view" aria-labelledby="nav-history">
+        <header class="view-header">
+          <h2>历史记录看板</h2>
+          <p class="view-subtitle">展示最近的雅思作文评估结果，支持筛选与追踪。</p>
+        </header>
+        <div class="history-board">
+          <div class="history-metrics">
+            <div class="metric-card">
+              <span class="metric-label">已评估作文</span>
+              <strong id="history-total">0</strong>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">平均分</span>
+              <strong id="history-average">--</strong>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">最近题目</span>
+              <strong id="history-latest">--</strong>
+            </div>
+          </div>
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>时间</th>
+                <th>题目</th>
+                <th>总分</th>
+                <th>反馈亮点</th>
+              </tr>
+            </thead>
+            <tbody id="history-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="view-settings" class="view" aria-labelledby="nav-settings">
+        <header class="view-header">
+          <h2>系统设置</h2>
+          <p class="view-subtitle">在纯静态模式下模拟题库导入与服务状态。</p>
+        </header>
+        <div class="settings-grid">
+          <section class="settings-card">
+            <header>
+              <h3>题库导入</h3>
+              <p>支持 CSV 文件，字段：title,description,type,minWords。</p>
+            </header>
+            <div class="settings-body">
+              <input type="file" id="import-input" accept=".csv" hidden />
+              <button id="import-btn" class="btn btn--primary">导入题库</button>
+              <p id="import-status" class="import-status">尚未执行导入。</p>
+              <ul id="import-summary" class="import-summary"></ul>
+            </div>
+          </section>
+          <section class="settings-card">
+            <header>
+              <h3>系统监控</h3>
+            </header>
+            <div class="settings-body">
+              <ul class="monitor-list">
+                <li><span class="monitor-label">Vite 前端</span><span class="monitor-value badge badge--offline">未连接（静态模式）</span></li>
+                <li><span class="monitor-label">Express API</span><span class="monitor-value badge badge--offline">未连接（静态模式）</span></li>
+                <li><span class="monitor-label">SQLite 数据库</span><span class="monitor-value badge badge--success" id="mock-db-indicator">内存模拟可用</span></li>
+              </ul>
+            </div>
+          </section>
+          <section class="settings-card settings-card--requirements">
+            <header>
+              <h3>需求文档对照清单</h3>
+              <p>根据《雅思AI作文评判应用完整需求文档》总结的关键模块覆盖情况。</p>
+            </header>
+            <div class="settings-body">
+              <ul id="requirement-checklist" class="requirement-checklist" aria-live="polite"></ul>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+    <script src="./app.js"></script>
+  </body>
+</html>
