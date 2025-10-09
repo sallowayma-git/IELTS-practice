@@ -249,6 +249,13 @@
       if (view === 'settings') this.updateSettingsMeta();
     },
 
+    clearContainer(node) {
+      if (!node) return;
+      while (node.firstChild) {
+        node.removeChild(node.firstChild);
+      }
+    },
+
     renderOverview() {
       const exams = hpCore.getExamIndex() || [];
       const records = hpCore.getRecords() || [];
@@ -263,7 +270,7 @@
       if (!this.dom.quickCards) return;
 
       const featured = exams.slice(0, 4);
-      this.dom.quickCards.innerHTML = '';
+      this.clearContainer(this.dom.quickCards);
 
       if (!featured.length) {
         const placeholder = document.createElement('div');
@@ -353,7 +360,7 @@
       if (!filtered.length) {
         this.destroyPracticeVirtualizer();
         this.dom.practiceList.dataset.mode = 'empty';
-        this.dom.practiceList.innerHTML = '';
+        this.clearContainer(this.dom.practiceList);
         if (this.dom.practiceEmpty) {
           this.dom.practiceEmpty.classList.remove('hidden');
         }
@@ -372,7 +379,7 @@
       const limited = filtered.slice(0, 120);
       this.destroyPracticeVirtualizer();
       this.dom.practiceList.dataset.mode = 'static';
-      this.dom.practiceList.innerHTML = '';
+      this.clearContainer(this.dom.practiceList);
       const fragment = document.createDocumentFragment();
       limited.forEach((exam) => {
         fragment.appendChild(this.createPracticeCardElement(exam));
@@ -550,7 +557,7 @@
 
       if (!records.length) {
         const tbody = this.dom.historyTable.querySelector('tbody');
-        if (tbody) tbody.innerHTML = '';
+        if (tbody) this.clearContainer(tbody);
         this.dom.historyTable.classList.add('hidden');
         this.dom.historyEmpty.classList.remove('hidden');
         this.renderHistoryTrend([]);
@@ -566,7 +573,7 @@
 
       const tbody = this.dom.historyTable.querySelector('tbody');
       if (tbody) {
-        tbody.innerHTML = '';
+        this.clearContainer(tbody);
         const fragment = document.createDocumentFragment();
         records.slice(0, 150).forEach((record) => {
           const exam = examById.get(record.examId) || {};

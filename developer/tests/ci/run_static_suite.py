@@ -8,11 +8,12 @@ invoked locally or inside CI before changes are merged.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -37,6 +38,77 @@ def _check_html_doctype(path: Path) -> Tuple[bool, str]:
     except Exception as exc:  # pragma: no cover - defensive guard
         return False, f"无法解析 HTML：{exc}"
     return parser.has_doctype, "检测到 <!DOCTYPE html>" if parser.has_doctype else "缺少 <!DOCTYPE html>"
+
+class _AppStructureParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.nav_views: List[str] = []
+        self.settings_button_ids: List[str] = []
+        self._nav_depth = 0
+        self._settings_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: List[Tuple[str, Optional[str]]]) -> None:  # pragma: no cover - HTMLParser API
+        attr_dict = {name: value for name, value in attrs}
+
+        if tag == "nav" and attr_dict.get("class") and "main-nav" in attr_dict.get("class", ""):
+            self._nav_depth += 1
+        elif self._nav_depth > 0 and tag == "nav":
+            self._nav_depth += 1
+
+        if self._nav_depth > 0 and tag == "button":
+            data_view = attr_dict.get("data-view")
+            if data_view:
+                self.nav_views.append(data_view)
+
+        if tag == "div" and attr_dict.get("id") == "settings-view":
+            self._settings_depth += 1
+        elif self._settings_depth > 0 and tag == "div":
+            self._settings_depth += 1
+
+        if self._settings_depth > 0 and tag == "button":
+            button_id = attr_dict.get("id")
+            if button_id:
+                self.settings_button_ids.append(button_id)
+
+    def handle_endtag(self, tag: str) -> None:  # pragma: no cover - HTMLParser API
+        if tag == "nav" and self._nav_depth > 0:
+            self._nav_depth -= 1
+        if tag == "div" and self._settings_depth > 0:
+            self._settings_depth -= 1
+
+
+def _parse_app_structure(index_path: Path) -> _AppStructureParser:
+    parser = _AppStructureParser()
+    parser.feed(index_path.read_text(encoding="utf-8"))
+    parser.close()
+    return parser
+
+
+def _load_interaction_targets(path: Path) -> Tuple[Optional[Dict[str, List[str]]], str]:
+    if not path.exists():
+        return None, "配置文件缺失"
+    try:
+        content = path.read_text(encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - file IO errors
+        return None, f"读取失败：{exc}"
+
+    match = re.search(r"Object\.freeze\(\s*(\{[\s\S]*?\})\s*\)", content)
+    if not match:
+        return None, "未找到交互目标对象"
+
+    try:
+        data = json.loads(match.group(1))
+    except json.JSONDecodeError as exc:
+        return None, f"解析失败：{exc}"
+
+    if not isinstance(data, dict):
+        return None, "数据结构不是对象"
+
+    for key in ("mainNavigationViews", "settingsButtonIds"):
+        if key not in data or not isinstance(data[key], list):
+            return None, f"缺少字段：{key}"
+
+    return data, "已解析交互目标"
 
 
 def _check_contains(path: Path, snippet: str) -> Tuple[bool, str]:
@@ -102,6 +174,42 @@ def run_checks() -> Tuple[List[dict], bool]:
             script_passed, script_detail = _ensure_exists(script_path)
             results.append(_format_result(f"E2E 依赖 {script_path.name}", script_passed, script_detail))
             all_passed &= script_passed
+
+        interaction_path = REPO_ROOT / "developer" / "tests" / "js" / "e2e" / "interactionTargets.js"
+        targets, detail = _load_interaction_targets(interaction_path)
+        targets_passed = targets is not None
+        results.append(_format_result("E2E 交互目标配置", targets_passed, detail))
+        all_passed &= targets_passed
+
+        if targets_passed:
+            structure = _parse_app_structure(index_file)
+            nav_dom = sorted(set(structure.nav_views))
+            nav_config = sorted(set(targets["mainNavigationViews"]))
+            nav_missing_in_config = sorted(set(nav_dom) - set(nav_config))
+            nav_missing_in_dom = sorted(set(nav_config) - set(nav_dom))
+            nav_passed = not nav_missing_in_config and not nav_missing_in_dom
+            nav_detail = {
+                "dom": nav_dom,
+                "config": nav_config,
+                "domOnly": nav_missing_in_config,
+                "configOnly": nav_missing_in_dom,
+            }
+            results.append(_format_result("导航视图覆盖", nav_passed, nav_detail))
+            all_passed &= nav_passed
+
+            settings_dom = sorted(set(structure.settings_button_ids))
+            settings_config = sorted(set(targets["settingsButtonIds"]))
+            settings_missing_in_config = sorted(set(settings_dom) - set(settings_config))
+            settings_missing_in_dom = sorted(set(settings_config) - set(settings_dom))
+            settings_passed = not settings_missing_in_config and not settings_missing_in_dom
+            settings_detail = {
+                "dom": settings_dom,
+                "config": settings_config,
+                "domOnly": settings_missing_in_config,
+                "configOnly": settings_missing_in_dom,
+            }
+            results.append(_format_result("设置按钮覆盖", settings_passed, settings_detail))
+            all_passed &= settings_passed
 
     return results, all_passed
 

@@ -10,6 +10,15 @@
 (function () {
   'use strict';
 
+  const stateAdapter = window.LegacyStateAdapter ? window.LegacyStateAdapter.getInstance() : null;
+  const legacyBridge = window.LegacyStateBridge && typeof window.LegacyStateBridge.getInstance === 'function'
+    ? window.LegacyStateBridge.getInstance()
+    : null;
+
+  function cloneArray(value) {
+    return Array.isArray(value) ? value.slice() : [];
+  }
+
   if (window.hpCore && window.hpCore.__stable) {
     try { console.log('[HP Core] Already initialized'); } catch (_) {}
     return;
@@ -121,15 +130,38 @@
       q.forEach(fn => { try { fn(); } catch (e) { console.error('[hpCore ready cb error]', e); } });
     },
     _broadcastDataUpdated(data) {
-      if (data && data.examIndex) this.examIndex = data.examIndex;
-      if (data && data.practiceRecords) this.practiceRecords = data.practiceRecords;
-      try { if (this.examIndex) window.examIndex = this.examIndex; } catch(_){}
+      const payload = data || {};
+
+      if (payload.examIndex) {
+        this.examIndex = cloneArray(payload.examIndex);
+        if (payload.__source !== 'hp-core') {
+          syncExamIndex(this.examIndex);
+        }
+      }
+
+      if (payload.practiceRecords) {
+        this.practiceRecords = cloneArray(payload.practiceRecords);
+        if (payload.__source !== 'hp-core') {
+          syncPracticeRecords(this.practiceRecords);
+        }
+      }
+
       this.lastUpdateTime = Date.now();
     },
     _loadExamIndex() {
       try {
+        const existing = readExamIndexSnapshot();
+        if (existing.length) {
+          this._setExamIndex(existing);
+          return;
+        }
+
         const fromStorage = (window.storage && storage.get) ? storage.get('exam_index', null) : null;
-        if (Array.isArray(fromStorage) && fromStorage.length) return this._setExamIndex(fromStorage);
+        if (Array.isArray(fromStorage) && fromStorage.length) {
+          this._setExamIndex(fromStorage);
+          return;
+        }
+
         const reading = markTypes(window.completeExamIndex || [], 'reading');
         const listening = markTypes(window.listeningExamIndex || [], 'listening');
         const merged = reading.concat(listening);
@@ -138,13 +170,24 @@
       } catch (e) { console.warn('[hpCore] _loadExamIndex failed', e); }
     },
     _setExamIndex(list) {
-      if (!Array.isArray(list)) list = [];
-      this.examIndex = list;
-      try { window.examIndex = list; } catch(_){}
-      this.emit('dataUpdated', { examIndex: list, practiceRecords: this.practiceRecords });
+      const normalized = cloneArray(list);
+      const synced = syncExamIndex(normalized);
+      this.examIndex = synced;
+      this.emit('dataUpdated', {
+        examIndex: synced,
+        practiceRecords: this.practiceRecords,
+        __source: 'hp-core'
+      });
+      return synced;
     },
     async _loadRecords() {
       try {
+        const existing = readPracticeRecordsSnapshot();
+        if (existing.length) {
+          this._setRecords(existing);
+          return;
+        }
+
         let rec = null;
         if (window.storage && storage.get) rec = await storage.get('practice_records', null);
         if (!rec) rec = window.practiceRecords || [];
@@ -152,9 +195,15 @@
       } catch (e) { console.warn('[hpCore] _loadRecords failed', e); }
     },
     _setRecords(list) {
-      if (!Array.isArray(list)) list = [];
-      this.practiceRecords = list;
-      this.emit('dataUpdated', { examIndex: this.examIndex, practiceRecords: list });
+      const normalized = cloneArray(list);
+      const synced = syncPracticeRecords(normalized);
+      this.practiceRecords = synced;
+      this.emit('dataUpdated', {
+        examIndex: this.examIndex,
+        practiceRecords: synced,
+        __source: 'hp-core'
+      });
+      return synced;
     },
     _installListeners() {
       window.addEventListener('storage', (e) => {
@@ -176,6 +225,77 @@
     }
   };
 
+  function readExamIndexSnapshot() {
+    if (stateAdapter && typeof stateAdapter.getExamIndex === 'function') {
+      return cloneArray(stateAdapter.getExamIndex());
+    }
+    if (Array.isArray(window.examIndex)) {
+      return cloneArray(window.examIndex);
+    }
+    return cloneArray(hpCore.examIndex);
+  }
+
+  function readPracticeRecordsSnapshot() {
+    if (stateAdapter && typeof stateAdapter.getPracticeRecords === 'function') {
+      return cloneArray(stateAdapter.getPracticeRecords());
+    }
+    if (Array.isArray(window.practiceRecords)) {
+      return cloneArray(window.practiceRecords);
+    }
+    return cloneArray(hpCore.practiceRecords);
+  }
+
+  function syncExamIndex(list) {
+    const normalized = cloneArray(list);
+    let synced = normalized;
+
+    if (stateAdapter && typeof stateAdapter.setExamIndex === 'function') {
+      synced = cloneArray(stateAdapter.setExamIndex(normalized, { source: 'hp-core' }));
+    } else if (legacyBridge && typeof legacyBridge.setExamIndex === 'function') {
+      synced = cloneArray(legacyBridge.setExamIndex(normalized, { source: 'hp-core' }));
+    } else {
+      try { window.examIndex = synced.slice(); } catch (_) {}
+    }
+    hpCore.examIndex = synced;
+    return synced;
+  }
+
+  function syncPracticeRecords(list) {
+    const normalized = cloneArray(list);
+    let synced = normalized;
+
+    if (stateAdapter && typeof stateAdapter.setPracticeRecords === 'function') {
+      synced = cloneArray(stateAdapter.setPracticeRecords(normalized, { source: 'hp-core' }));
+    } else if (legacyBridge && typeof legacyBridge.setPracticeRecords === 'function') {
+      synced = cloneArray(legacyBridge.setPracticeRecords(normalized, { source: 'hp-core' }));
+    } else {
+      try { window.practiceRecords = synced.slice(); } catch (_) {}
+    }
+    hpCore.practiceRecords = synced;
+    return synced;
+  }
+
+  function subscribeAdapterUpdates() {
+    if (!stateAdapter || typeof stateAdapter.subscribe !== 'function') {
+      return;
+    }
+
+    stateAdapter.subscribe('examIndex', function (value) {
+      hpCore.examIndex = cloneArray(value);
+    });
+
+    stateAdapter.subscribe('practiceRecords', function (value) {
+      hpCore.practiceRecords = cloneArray(value);
+    });
+  }
+
+  subscribeAdapterUpdates();
+
+  if (stateAdapter) {
+    hpCore.examIndex = readExamIndexSnapshot();
+    hpCore.practiceRecords = readPracticeRecordsSnapshot();
+  }
+
   window.hpCore = hpCore;
   hpCore._installListeners();
   try { hpCore._loadExamIndex(); hpCore._loadRecords(); hpCore._markReady(); } catch (_) {}
@@ -186,7 +306,7 @@
       try { if (typeof window.openExam==='function') return window.openExam(examId); } catch(_){}
       try { if (window.app && typeof window.app.openExam==='function') return window.app.openExam(examId); } catch(_){}
       try {
-        var list = (Array.isArray(window.examIndex)? window.examIndex : (this.examIndex||[])) || [];
+        var list = readExamIndexSnapshot();
         var ex = list.find(function(x){ return x && x.id===examId; });
         if (!ex) return this.showMessage('未找到题目', 'error');
         if (!ex.hasHtml) return this.viewExamPDF(examId);
@@ -215,7 +335,7 @@
     hpCore.viewExamPDF = function(examId){
       try { if (typeof window.viewPDF==='function') return window.viewPDF(examId); } catch(_){}
       try {
-        var list = (Array.isArray(window.examIndex)? window.examIndex : (this.examIndex||[])) || [];
+        var list = readExamIndexSnapshot();
         var ex = list.find(function(x){ return x && x.id===examId; });
         if (!ex || !ex.pdfFilename) return this.showMessage('未找到PDF文件', 'error');
         var pdfPath;

@@ -175,18 +175,47 @@
 
         notifyFromApp(path, value) {
             if (this.isSyncing) {
+                switch (path) {
+                    case 'exam.index':
+                        this.state.examIndex = Array.isArray(value) ? value.slice() : [];
+                        this.emit('examIndex', this.state.examIndex);
+                        break;
+                    case 'practice.records':
+                        this.state.practiceRecords = Array.isArray(value) ? value.slice() : [];
+                        this.emit('practiceRecords', this.state.practiceRecords);
+                        break;
+                    case 'ui.browseFilter':
+                        this.state.browseFilter = {
+                            category: value && typeof value.category === 'string' ? value.category : 'all',
+                            type: value && typeof value.type === 'string' ? value.type : 'all'
+                        };
+                        this.emit('browseFilter', this.state.browseFilter);
+                        break;
+                    default:
+                        break;
+                }
                 return;
             }
 
             switch (path) {
                 case 'exam.index':
                     this.state.examIndex = Array.isArray(value) ? value.slice() : [];
-                    try { this.global.examIndex = this.state.examIndex; } catch (_) {}
+                    {
+                        const descriptor = Object.getOwnPropertyDescriptor(this.global, 'examIndex');
+                        if (!descriptor || typeof descriptor.set !== 'function') {
+                            try { this.global.examIndex = this.state.examIndex; } catch (_) {}
+                        }
+                    }
                     this.emit('examIndex', this.state.examIndex);
                     break;
                 case 'practice.records':
                     this.state.practiceRecords = Array.isArray(value) ? value.slice() : [];
-                    try { this.global.practiceRecords = this.state.practiceRecords; } catch (_) {}
+                    {
+                        const descriptor = Object.getOwnPropertyDescriptor(this.global, 'practiceRecords');
+                        if (!descriptor || typeof descriptor.set !== 'function') {
+                            try { this.global.practiceRecords = this.state.practiceRecords; } catch (_) {}
+                        }
+                    }
                     this.emit('practiceRecords', this.state.practiceRecords);
                     break;
                 case 'ui.browseFilter':
@@ -194,7 +223,12 @@
                         category: value && typeof value.category === 'string' ? value.category : 'all',
                         type: value && typeof value.type === 'string' ? value.type : 'all'
                     };
-                    try { this.global.__browseFilter = this.state.browseFilter; } catch (_) {}
+                    {
+                        const descriptor = Object.getOwnPropertyDescriptor(this.global, '__browseFilter');
+                        if (!descriptor || typeof descriptor.set !== 'function') {
+                            try { this.global.__browseFilter = this.state.browseFilter; } catch (_) {}
+                        }
+                    }
                     this.emit('browseFilter', this.state.browseFilter);
                     break;
                 default:

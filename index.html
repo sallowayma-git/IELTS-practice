@@ -19,11 +19,11 @@
             <p>IELTS练习管理平台 - <a href="#" onclick="showDeveloperTeam(); return false;" style="color: rgba(102, 126, 234, 0.8); text-decoration: none; font-weight: 600; transition: color 0.3s ease;">睡着过呈现</a></p>
         </div>
 
-        <nav class="main-nav">
-            <button class="nav-btn active" data-view="overview" onclick="window.showView && window.showView('overview')">📊 总览</button>
-            <button class="nav-btn" data-view="browse" onclick="window.showView && window.showView('browse')">📚 题库浏览</button>
-            <button class="nav-btn" data-view="practice" onclick="window.showView && window.showView('practice')">📝 练习记录</button>
-            <button class="nav-btn" data-view="settings" onclick="window.showView && window.showView('settings')">⚙️ 设置</button>
+        <nav class="main-nav" data-nav-controller="legacy">
+            <button class="nav-btn active" type="button" data-view="overview">📊 总览</button>
+            <button class="nav-btn" type="button" data-view="browse">📚 题库浏览</button>
+            <button class="nav-btn" type="button" data-view="practice">📝 练习记录</button>
+            <button class="nav-btn" type="button" data-view="settings">⚙️ 设置</button>
         </nav>
 
         <!-- 总览页面 -->
@@ -334,6 +334,7 @@
     <script src="js/core/scoreStorage.js"></script>
     <script src="js/core/practiceRecorder.js"></script>
     <script src="js/core/legacyStateBridge.js"></script>
+    <script src="js/utils/legacyStateAdapter.js"></script>
     <script src="js/components/PDFHandler.js"></script>
 
     <!-- 系统诊断组件 (已合并) -->
