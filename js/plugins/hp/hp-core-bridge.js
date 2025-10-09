@@ -281,11 +281,23 @@
     }
 
     stateAdapter.subscribe('examIndex', function (value) {
-      hpCore.examIndex = cloneArray(value);
+      const next = cloneArray(value);
+      hpCore.examIndex = next;
+      hpCore.emit('dataUpdated', {
+        examIndex: next,
+        practiceRecords: hpCore.practiceRecords,
+        __source: 'hp-core'
+      });
     });
 
     stateAdapter.subscribe('practiceRecords', function (value) {
-      hpCore.practiceRecords = cloneArray(value);
+      const next = cloneArray(value);
+      hpCore.practiceRecords = next;
+      hpCore.emit('dataUpdated', {
+        examIndex: hpCore.examIndex,
+        practiceRecords: next,
+        __source: 'hp-core'
+      });
     });
   }
 
