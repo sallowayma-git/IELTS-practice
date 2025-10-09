@@ -55,7 +55,7 @@ class SettingsPanel {
     createSettingsButton() {
         const settingsButton = document.createElement('button');
         settingsButton.className = 'settings-button';
-        settingsButton.innerHTML = '⚙️';
+        settingsButton.textContent = '⚙️';
         settingsButton.title = '系统设置 (Ctrl+Shift+S)';
         settingsButton.setAttribute('aria-label', '打开系统设置');
         
@@ -282,202 +282,316 @@ class SettingsPanel {
             this.show();
         }
     }
+
+    getDomBuilder() {
+        if (!this.domBuilder) {
+            if (window.DOMBuilder && typeof window.DOMBuilder.create === 'function') {
+                this.domBuilder = window.DOMBuilder;
+            } else if (window.DOM && window.DOM.builder) {
+                this.domBuilder = window.DOM.builder;
+            } else {
+                this.domBuilder = {
+                    create: (tag, attributes = {}, children = []) => {
+                        const element = document.createElement(tag);
+                        Object.entries(attributes).forEach(([key, value]) => {
+                            if (key === 'className') {
+                                element.className = value;
+                            } else if (key === 'dataset') {
+                                Object.assign(element.dataset, value);
+                            } else if (key === 'text') {
+                                element.textContent = value;
+                            } else {
+                                element.setAttribute(key, value);
+                            }
+                        });
+                        const childArray = Array.isArray(children) ? children : [children];
+                        childArray.forEach(child => {
+                            if (child == null) return;
+                            if (typeof child === 'string') {
+                                element.appendChild(document.createTextNode(child));
+                            } else {
+                                element.appendChild(child);
+                            }
+                        });
+                        return element;
+                    }
+                };
+            }
+        }
+        return this.domBuilder;
+    }
+
+    createSection(builder, title, items) {
+        return builder.create('div', { className: 'settings-section' }, [
+            builder.create('h4', {}, title),
+            ...items
+        ]);
+    }
+
+    createCheckboxItem(builder, { id, label, checked, description }) {
+        const inputAttributes = { type: 'checkbox', id };
+        if (checked) {
+            inputAttributes.checked = 'checked';
+        }
+        const contents = [
+            builder.create('label', { className: 'settings-checkbox' }, [
+                builder.create('input', inputAttributes),
+                builder.create('span', {}, label)
+            ])
+        ];
+        if (description) {
+            contents.push(builder.create('p', { className: 'settings-description' }, description));
+        }
+        return builder.create('div', { className: 'settings-item' }, contents);
+    }
+
+    createSelectItem(builder, { id, label, options, selected }) {
+        const optionNodes = options.map(option => {
+            const attrs = { value: option.value };
+            if (option.value === selected) {
+                attrs.selected = 'selected';
+            }
+            return builder.create('option', attrs, option.label);
+        });
+        return builder.create('div', { className: 'settings-item' }, [
+            builder.create('label', {}, label),
+            builder.create('select', { id, className: 'settings-select' }, optionNodes)
+        ]);
+    }
+
+    createButtonItem(builder, { id, text, className, description }) {
+        const button = builder.create('button', { id, className }, text);
+        const contents = [button];
+        if (description) {
+            contents.push(builder.create('p', { className: 'settings-description' }, description));
+        }
+        return builder.create('div', { className: 'settings-item' }, contents);
+    }
+
+    buildTabs(builder) {
+        const tabs = [
+            { key: 'appearance', label: '外观设置', active: true },
+            { key: 'accessibility', label: '无障碍' },
+            { key: 'interaction', label: '交互设置' },
+            { key: 'advanced', label: '高级设置' }
+        ];
+        const tabButtons = tabs.map(tab => builder.create('button', {
+            className: `settings-tab${tab.active ? ' active' : ''}`,
+            dataset: { tab: tab.key }
+        }, tab.label));
+        return builder.create('div', { className: 'settings-tabs' }, tabButtons);
+    }
+
+    buildAppearanceTab(builder) {
+        const themeOptions = [
+            { value: 'light', label: '浅色主题' },
+            { value: 'dark', label: '深色主题' },
+            { value: 'highContrast', label: '高对比度' }
+        ];
+        const fontOptions = [
+            { value: 'small', label: '小' },
+            { value: 'normal', label: '正常' },
+            { value: 'large', label: '大' },
+            { value: 'extra-large', label: '特大' }
+        ];
+
+        return builder.create('div', { className: 'settings-tab-content active', id: 'appearance-settings' }, [
+            this.createSection(builder, '主题设置', [
+                this.createSelectItem(builder, {
+                    id: 'theme-select',
+                    label: '主题选择',
+                    options: themeOptions,
+                    selected: this.settings.theme
+                }),
+                this.createCheckboxItem(builder, {
+                    id: 'auto-theme-toggle',
+                    label: '自动跟随系统主题',
+                    checked: this.settings.autoTheme
+                })
+            ]),
+            this.createSection(builder, '字体设置', [
+                this.createSelectItem(builder, {
+                    id: 'font-size-select',
+                    label: '字体大小',
+                    options: fontOptions,
+                    selected: this.settings.fontSize
+                })
+            ])
+        ]);
+    }
+
+    buildAccessibilityTab(builder) {
+        return builder.create('div', { className: 'settings-tab-content', id: 'accessibility-settings' }, [
+            this.createSection(builder, '视觉辅助', [
+                this.createCheckboxItem(builder, {
+                    id: 'high-contrast-toggle',
+                    label: '高对比度模式',
+                    checked: this.settings.highContrast,
+                    description: '提供更清晰的视觉对比，适合视力较弱的用户'
+                }),
+                this.createCheckboxItem(builder, {
+                    id: 'reduce-motion-toggle',
+                    label: '减少动画效果',
+                    checked: this.settings.reduceMotion,
+                    description: '减少页面动画，适合对动画敏感的用户'
+                })
+            ]),
+            this.createSection(builder, '键盘导航', [
+                this.createCheckboxItem(builder, {
+                    id: 'keyboard-navigation-toggle',
+                    label: '启用键盘导航增强',
+                    checked: true,
+                    description: '增强焦点指示器和键盘导航体验'
+                })
+            ])
+        ]);
+    }
+
+    buildInteractionTab(builder) {
+        return builder.create('div', { className: 'settings-tab-content', id: 'interaction-settings' }, [
+            this.createSection(builder, '快捷键设置', [
+                this.createCheckboxItem(builder, {
+                    id: 'keyboard-shortcuts-toggle',
+                    label: '启用键盘快捷键',
+                    checked: this.settings.keyboardShortcuts,
+                    description: '使用 Ctrl+H 查看所有可用快捷键'
+                }),
+                this.createButtonItem(builder, {
+                    id: 'view-shortcuts-btn',
+                    text: '查看快捷键列表',
+                    className: 'btn btn-outline'
+                })
+            ]),
+            this.createSection(builder, '反馈设置', [
+                this.createCheckboxItem(builder, {
+                    id: 'sound-effects-toggle',
+                    label: '启用音效反馈',
+                    checked: this.settings.soundEffects
+                }),
+                this.createCheckboxItem(builder, {
+                    id: 'notifications-toggle',
+                    label: '启用通知提醒',
+                    checked: this.settings.notifications
+                })
+            ])
+        ]);
+    }
+
+    buildAdvancedTab(builder) {
+        const systemInfo = builder.create('div', { className: 'system-info' }, [
+            builder.create('p', {}, [
+                builder.create('strong', {}, '浏览器：'),
+                ` ${navigator.userAgent.split(' ')[0]}`
+            ]),
+            builder.create('p', {}, [
+                builder.create('strong', {}, '版本：'),
+                ' 1.0.0'
+            ]),
+            builder.create('p', {}, [
+                builder.create('strong', {}, '存储使用：'),
+                builder.create('span', { id: 'storage-usage' }, '计算中...')
+            ])
+        ]);
+
+        return builder.create('div', { className: 'settings-tab-content', id: 'advanced-settings' }, [
+            this.createSection(builder, '数据设置', [
+                this.createCheckboxItem(builder, {
+                    id: 'auto-save-toggle',
+                    label: '自动保存进度',
+                    checked: this.settings.autoSave
+                }),
+                this.createButtonItem(builder, {
+                    id: 'data-management-btn',
+                    text: '数据管理',
+                    className: 'btn btn-primary',
+                    description: '导入导出、备份恢复练习数据'
+                }),
+                this.createButtonItem(builder, {
+                    id: 'library-loader-btn',
+                    text: '加载题库',
+                    className: 'btn',
+                    description: '阅读/听力题库全量重载与增量更新'
+                }),
+                this.createButtonItem(builder, {
+                    id: 'system-maintenance-btn',
+                    text: '系统维护',
+                    className: 'btn btn-secondary',
+                    description: '系统诊断、性能监控和维护工具'
+                }),
+                this.createButtonItem(builder, {
+                    id: 'clear-data-btn',
+                    text: '清除所有数据',
+                    className: 'btn btn-outline',
+                    description: '这将删除所有练习记录和设置'
+                })
+            ]),
+            this.createSection(builder, '教程设置', [
+                this.createButtonItem(builder, {
+                    id: 'reset-tutorials-btn',
+                    text: '重置教程进度',
+                    className: 'btn btn-outline',
+                    description: '重新显示所有教程'
+                }),
+                this.createButtonItem(builder, {
+                    id: 'show-tutorials-btn',
+                    text: '选择教程',
+                    className: 'btn btn-outline'
+                })
+            ]),
+            this.createSection(builder, '系统信息', [
+                builder.create('div', { className: 'settings-item' }, [systemInfo])
+            ])
+        ]);
+    }
     
     /**
      * 创建设置模态框
      */
     createSettingsModal() {
-        const overlay = document.createElement('div');
-        overlay.className = 'settings-overlay modal-overlay show';
-        
-        const modal = document.createElement('div');
-        modal.className = 'settings-modal modal';
-        modal.setAttribute('tabindex', '-1');
-        modal.setAttribute('role', 'dialog');
-        modal.setAttribute('aria-labelledby', 'settings-title');
-        
-        modal.innerHTML = `
-            <div class="modal-header">
-                <h2 id="settings-title">系统设置</h2>
-                <button class="modal-close" aria-label="关闭设置">×</button>
-            </div>
-            <div class="modal-body">
-                ${this.createSettingsContent()}
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-outline reset-settings">重置为默认</button>
-                <button class="btn btn-secondary export-settings">导出设置</button>
-                <button class="btn btn-primary save-settings">保存设置</button>
-            </div>
-        `;
-        
+        const builder = this.getDomBuilder();
+        const overlay = builder.create('div', { className: 'settings-overlay modal-overlay show' });
+        const modal = builder.create('div', {
+            className: 'settings-modal modal',
+            tabindex: '-1',
+            role: 'dialog',
+            'aria-labelledby': 'settings-title'
+        });
+
+        const header = builder.create('div', { className: 'modal-header' }, [
+            builder.create('h2', { id: 'settings-title' }, '系统设置'),
+            builder.create('button', { className: 'modal-close', 'aria-label': '关闭设置' }, '×')
+        ]);
+
+        const body = builder.create('div', { className: 'modal-body' }, this.createSettingsContent(builder));
+
+        const footer = builder.create('div', { className: 'modal-footer' }, [
+            builder.create('button', { className: 'btn btn-outline', id: 'reset-settings-btn' }, '重置为默认'),
+            builder.create('button', { className: 'btn btn-secondary', id: 'export-settings-btn' }, '导出设置'),
+            builder.create('button', { className: 'btn btn-primary', id: 'save-settings-btn' }, '保存设置')
+        ]);
+
+        modal.appendChild(header);
+        modal.appendChild(body);
+        modal.appendChild(footer);
+
         overlay.appendChild(modal);
         document.body.appendChild(overlay);
-        
-        // 设置事件监听器
+
         this.setupModalEvents(overlay, modal);
     }
-    
+
     /**
      * 创建设置内容
      */
-    createSettingsContent() {
-        return `
-            <div class="settings-tabs">
-                <button class="settings-tab active" data-tab="appearance">外观设置</button>
-                <button class="settings-tab" data-tab="accessibility">无障碍</button>
-                <button class="settings-tab" data-tab="interaction">交互设置</button>
-                <button class="settings-tab" data-tab="advanced">高级设置</button>
-            </div>
-            
-            <div class="settings-content">
-                <div class="settings-tab-content active" id="appearance-settings">
-                    <div class="settings-section">
-                        <h4>主题设置</h4>
-                        <div class="settings-item">
-                            <label>主题选择</label>
-                            <select id="theme-select" class="settings-select">
-                                <option value="light" ${this.settings.theme === 'light' ? 'selected' : ''}>浅色主题</option>
-                                <option value="dark" ${this.settings.theme === 'dark' ? 'selected' : ''}>深色主题</option>
-                                <option value="highContrast" ${this.settings.theme === 'highContrast' ? 'selected' : ''}>高对比度</option>
-                            </select>
-                        </div>
-                        <div class="settings-item">
-                            <label class="settings-checkbox">
-                                <input type="checkbox" id="auto-theme" ${this.settings.autoTheme ? 'checked' : ''}>
-                                <span>自动跟随系统主题</span>
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <div class="settings-section">
-                        <h4>字体设置</h4>
-                        <div class="settings-item">
-                            <label>字体大小</label>
-                            <select id="font-size-select" class="settings-select">
-                                <option value="small" ${this.settings.fontSize === 'small' ? 'selected' : ''}>小</option>
-                                <option value="normal" ${this.settings.fontSize === 'normal' ? 'selected' : ''}>正常</option>
-                                <option value="large" ${this.settings.fontSize === 'large' ? 'selected' : ''}>大</option>
-                                <option value="extra-large" ${this.settings.fontSize === 'extra-large' ? 'selected' : ''}>特大</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="settings-tab-content" id="accessibility-settings">
-                    <div class="settings-section">
-                        <h4>视觉辅助</h4>
-                        <div class="settings-item">
-                            <label class="settings-checkbox">
-                                <input type="checkbox" id="high-contrast" ${this.settings.highContrast ? 'checked' : ''}>
-                                <span>高对比度模式</span>
-                            </label>
-                            <p class="settings-description">提供更清晰的视觉对比，适合视力较弱的用户</p>
-                        </div>
-                        <div class="settings-item">
-                            <label class="settings-checkbox">
-                                <input type="checkbox" id="reduce-motion" ${this.settings.reduceMotion ? 'checked' : ''}>
-                                <span>减少动画效果</span>
-                            </label>
-                            <p class="settings-description">减少页面动画，适合对动画敏感的用户</p>
-                        </div>
-                    </div>
-                    
-                    <div class="settings-section">
-                        <h4>键盘导航</h4>
-                        <div class="settings-item">
-                            <label class="settings-checkbox">
-                                <input type="checkbox" id="keyboard-navigation" checked>
-                                <span>启用键盘导航增强</span>
-                            </label>
-                            <p class="settings-description">增强焦点指示器和键盘导航体验</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="settings-tab-content" id="interaction-settings">
-                    <div class="settings-section">
-                        <h4>快捷键设置</h4>
-                        <div class="settings-item">
-                            <label class="settings-checkbox">
-                                <input type="checkbox" id="keyboard-shortcuts" ${this.settings.keyboardShortcuts ? 'checked' : ''}>
-                                <span>启用键盘快捷键</span>
-                            </label>
-                            <p class="settings-description">使用 Ctrl+H 查看所有可用快捷键</p>
-                        </div>
-                        <div class="settings-item">
-                            <button class="btn btn-outline" id="view-shortcuts">查看快捷键列表</button>
-                        </div>
-                    </div>
-                    
-                    <div class="settings-section">
-                        <h4>反馈设置</h4>
-                        <div class="settings-item">
-                            <label class="settings-checkbox">
-                                <input type="checkbox" id="sound-effects" ${this.settings.soundEffects ? 'checked' : ''}>
-                                <span>启用音效反馈</span>
-                            </label>
-                        </div>
-                        <div class="settings-item">
-                            <label class="settings-checkbox">
-                                <input type="checkbox" id="notifications" ${this.settings.notifications ? 'checked' : ''}>
-                                <span>启用通知提醒</span>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="settings-tab-content" id="advanced-settings">
-                    <div class="settings-section">
-                        <h4>数据设置</h4>
-                        <div class="settings-item">
-                            <label class="settings-checkbox">
-                                <input type="checkbox" id="auto-save" ${this.settings.autoSave ? 'checked' : ''}>
-                                <span>自动保存进度</span>
-                            </label>
-                        </div>
-                        <div class="settings-item">
-                            <button class="btn btn-primary" id="data-management">数据管理</button>
-                            <p class="settings-description">导入导出、备份恢复练习数据</p>
-                        </div>
-                        <div class="settings-item">
-                            <button class="btn" id="library-loader">加载题库</button>
-                            <p class="settings-description">阅读/听力题库全量重载与增量更新</p>
-                        </div>
-                        <div class="settings-item">
-                            <button class="btn btn-secondary" id="system-maintenance">系统维护</button>
-                            <p class="settings-description">系统诊断、性能监控和维护工具</p>
-                        </div>
-                        <div class="settings-item">
-                            <button class="btn btn-outline" id="clear-data">清除所有数据</button>
-                            <p class="settings-description">这将删除所有练习记录和设置</p>
-                        </div>
-                    </div>
-                    
-                    <div class="settings-section">
-                        <h4>教程设置</h4>
-                        <div class="settings-item">
-                            <button class="btn btn-outline" id="reset-tutorials">重置教程进度</button>
-                            <p class="settings-description">重新显示所有教程</p>
-                        </div>
-                        <div class="settings-item">
-                            <button class="btn btn-outline" id="show-tutorials">选择教程</button>
-                        </div>
-                    </div>
-                    
-                    <div class="settings-section">
-                        <h4>系统信息</h4>
-                        <div class="settings-item">
-                            <div class="system-info">
-                                <p><strong>浏览器：</strong> ${navigator.userAgent.split(' ')[0]}</p>
-                                <p><strong>版本：</strong> 1.0.0</p>
-                                <p><strong>存储使用：</strong> <span id="storage-usage">计算中...</span></p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
+    createSettingsContent(builder) {
+        const tabs = this.buildTabs(builder);
+        const content = builder.create('div', { className: 'settings-content' }, [
+            this.buildAppearanceTab(builder),
+            this.buildAccessibilityTab(builder),
+            this.buildInteractionTab(builder),
+            this.buildAdvancedTab(builder)
+        ]);
+        return [tabs, content];
     }
     
     /**
@@ -528,31 +642,31 @@ class SettingsPanel {
                 case 'theme-select':
                     themeManager?.setTheme(target.value);
                     break;
-                case 'auto-theme':
+                case 'auto-theme-toggle':
                     themeManager?.toggleAutoTheme();
                     break;
                 case 'font-size-select':
                     themeManager?.setFontSize(target.value);
                     break;
-                case 'high-contrast':
+                case 'high-contrast-toggle':
                     themeManager?.toggleHighContrast();
                     break;
-                case 'reduce-motion':
+                case 'reduce-motion-toggle':
                     themeManager?.toggleReduceMotion();
                     break;
-                case 'keyboard-shortcuts':
+                case 'keyboard-shortcuts-toggle':
                     this.settings.keyboardShortcuts = target.checked;
                     if (keyboardShortcuts) {
                         target.checked ? keyboardShortcuts.enable() : keyboardShortcuts.disable();
                     }
                     break;
-                case 'sound-effects':
+                case 'sound-effects-toggle':
                     this.settings.soundEffects = target.checked;
                     break;
-                case 'notifications':
+                case 'notifications-toggle':
                     this.settings.notifications = target.checked;
                     break;
-                case 'auto-save':
+                case 'auto-save-toggle':
                     this.settings.autoSave = target.checked;
                     break;
             }
@@ -565,16 +679,16 @@ class SettingsPanel {
             const id = target.id;
 
             switch (id) {
-                case 'view-shortcuts':
+                case 'view-shortcuts-btn':
                     window.app?.keyboardShortcuts?.showShortcutsModal();
                     break;
-                case 'data-management':
+                case 'data-management-btn':
                     this.hide();
                     if (window.dataManagementPanel) {
                         window.dataManagementPanel.show();
                     }
                     break;
-                case 'library-loader':
+                case 'library-loader-btn':
                     this.hide();
                     if (window.showLibraryLoaderModal) {
                         window.showLibraryLoaderModal();
@@ -582,33 +696,33 @@ class SettingsPanel {
                         window.showMessage('加载题库功能尚未初始化', 'warning');
                     }
                     break;
-                case 'system-maintenance':
+                case 'system-maintenance-btn':
                     this.hide();
                     if (window.systemMaintenancePanel) {
                         window.systemMaintenancePanel.show();
                     }
                     break;
-                case 'clear-data':
+                case 'clear-data-btn':
                     this.confirmClearData();
                     break;
-                case 'reset-tutorials':
+                case 'reset-tutorials-btn':
                     if (window.app?.tutorialSystem) {
                         window.app.tutorialSystem.resetTutorialProgress();
                     }
                     break;
-                case 'show-tutorials':
+                case 'show-tutorials-btn':
                     if (window.app?.tutorialSystem) {
                         this.hide();
                         window.app.tutorialSystem.showTutorialSelector();
                     }
                     break;
-                case 'reset-settings':
+                case 'reset-settings-btn':
                     this.resetToDefaults();
                     break;
-                case 'export-settings':
+                case 'export-settings-btn':
                     this.exportSettings();
                     break;
-                case 'save-settings':
+                case 'save-settings-btn':
                     (async () => {
                         await this.saveSettings();
                         this.hide();

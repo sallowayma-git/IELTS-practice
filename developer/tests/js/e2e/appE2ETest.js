@@ -1,3 +1,83 @@
+const DEFAULT_INTERACTION_TARGETS = Object.freeze({
+    mainNavigationViews: ['overview', 'browse', 'practice', 'settings'],
+    settingsButtonIds: [
+        'clear-cache-btn',
+        'load-library-btn',
+        'library-config-btn',
+        'force-refresh-btn',
+        'create-backup-btn',
+        'backup-list-btn',
+        'export-data-btn',
+        'import-data-btn'
+    ]
+});
+
+function resolveInteractionTargets() {
+    const globalTargets = typeof window !== 'undefined' ? window.__E2E_INTERACTION_TARGETS__ : null;
+    if (!globalTargets || typeof globalTargets !== 'object') {
+        return DEFAULT_INTERACTION_TARGETS;
+    }
+    const views = Array.isArray(globalTargets.mainNavigationViews) && globalTargets.mainNavigationViews.length
+        ? globalTargets.mainNavigationViews.slice()
+        : DEFAULT_INTERACTION_TARGETS.mainNavigationViews.slice();
+    const settingsButtons = Array.isArray(globalTargets.settingsButtonIds) && globalTargets.settingsButtonIds.length
+        ? globalTargets.settingsButtonIds.slice()
+        : DEFAULT_INTERACTION_TARGETS.settingsButtonIds.slice();
+    return Object.freeze({
+        mainNavigationViews: views,
+        settingsButtonIds: settingsButtons
+    });
+}
+
+const INTERACTION_TARGETS = resolveInteractionTargets();
+
+const SETTINGS_BUTTON_TESTS = {
+    'clear-cache-btn': {
+        name: '设置 - 清除缓存按钮',
+        stubbed: ['clearCache'],
+        stubImplementation: () => Promise.resolve('cleared')
+    },
+    'load-library-btn': {
+        name: '设置 - 加载题库按钮',
+        stubbed: ['showLibraryLoaderModal', 'loadLibrary'],
+        stubImplementation: () => Promise.resolve('loaded')
+    },
+    'library-config-btn': {
+        name: '设置 - 题库配置列表按钮',
+        expectInvocation: false,
+        waitForSelector: '.library-config-list',
+        waitDescription: '题库配置列表渲染',
+        cleanupSelector: '.library-config-list'
+    },
+    'force-refresh-btn': {
+        name: '设置 - 强制刷新题库按钮',
+        stubbed: ['loadLibrary'],
+        stubImplementation: () => Promise.resolve('refreshed')
+    },
+    'create-backup-btn': {
+        name: '设置 - 创建手动备份按钮',
+        stubbed: ['createManualBackup'],
+        stubImplementation: () => Promise.resolve({ id: 'stub-backup' })
+    },
+    'backup-list-btn': {
+        name: '设置 - 查看备份列表按钮',
+        expectInvocation: false,
+        waitForSelector: '.backup-list-container',
+        waitDescription: '备份列表渲染',
+        cleanupSelector: '.backup-list-container'
+    },
+    'export-data-btn': {
+        name: '设置 - 导出数据按钮',
+        stubbed: ['exportAllData'],
+        stubImplementation: () => ({ downloaded: true })
+    },
+    'import-data-btn': {
+        name: '设置 - 导入数据按钮',
+        stubbed: ['importData'],
+        stubImplementation: () => Promise.resolve('import-started')
+    }
+};
+
 class AppE2ETestSuite {
     constructor(frame, { statusEl, statusTextEl, resultsTable }) {
         this.frame = frame;
@@ -127,9 +207,12 @@ class AppE2ETestSuite {
 
             await this.testInitialization();
             await this.testOverviewRendering();
+            await this.testMainNavigationButtons();
             await this.testBrowseNavigation();
             await this.testExamFiltering();
             await this.testSearchFunction();
+            await this.testExamActionButtons();
+            await this.testExamEmptyStateAction();
             await this.testLegacyBridgeSynchronization();
             await this.testPracticeRecordsFlow();
             await this.testSettingsControlButtons();
@@ -220,6 +303,46 @@ class AppE2ETestSuite {
             this.recordResult(name, hasDelegatedAttributes && hasReadingEntry && hasRandomEntry, details);
         } catch (error) {
             this.recordResult(name, false, error.message || String(error));
+        }
+    }
+
+    async testMainNavigationButtons() {
+        const name = '主导航按钮交互';
+        try {
+            const expectedViews = (Array.isArray(INTERACTION_TARGETS.mainNavigationViews) && INTERACTION_TARGETS.mainNavigationViews.length)
+                ? INTERACTION_TARGETS.mainNavigationViews
+                : DEFAULT_INTERACTION_TARGETS.mainNavigationViews;
+            const flows = [];
+
+            for (const view of expectedViews) {
+                const button = this.doc.querySelector(`.main-nav .nav-btn[data-view="${view}"]`);
+                if (!button) {
+                    flows.push({ view, missing: true });
+                    continue;
+                }
+
+                button.click();
+                await this.waitFor(() => this.doc.getElementById(`${view}-view`)?.classList.contains('active'), {
+                    timeout: 6000,
+                    description: `切换到 ${view} 视图`
+                });
+
+                const viewElement = this.doc.getElementById(`${view}-view`);
+                const navActive = button.classList.contains('active');
+                const viewActive = !!(viewElement && viewElement.classList.contains('active'));
+                flows.push({ view, navActive, viewActive });
+            }
+
+            if (typeof this.win.showView === 'function') {
+                try { this.win.showView('overview'); } catch (_) {}
+            }
+
+            const expectedCount = expectedViews.length;
+            const validFlows = flows.filter(flow => !flow.missing);
+            const passed = validFlows.length === expectedCount && validFlows.every(flow => flow.viewActive && flow.navActive);
+            this.recordResult(name, passed, { flows, expectedCount });
+        } catch (error) {
+            this.recordResult(name, false, error?.message || String(error));
         }
     }
 
@@ -412,62 +535,25 @@ class AppE2ETestSuite {
     async testSettingsControlButtons() {
         await this.ensureSettingsView();
 
-        const actions = [
-            {
-                id: 'clear-cache-btn',
-                name: '设置 - 清除缓存按钮',
-                stubbed: ['clearCache'],
-                stubImplementation: () => Promise.resolve('cleared')
-            },
-            {
-                id: 'load-library-btn',
-                name: '设置 - 加载题库按钮',
-                stubbed: ['showLibraryLoaderModal', 'loadLibrary'],
-                stubImplementation: () => Promise.resolve('loaded')
-            },
-            {
-                id: 'library-config-btn',
-                name: '设置 - 题库配置列表按钮',
-                expectInvocation: false,
-                waitForSelector: '.library-config-list',
-                waitDescription: '题库配置列表渲染',
-                cleanupSelector: '.library-config-list'
-            },
-            {
-                id: 'force-refresh-btn',
-                name: '设置 - 强制刷新题库按钮',
-                stubbed: ['loadLibrary'],
-                stubImplementation: () => Promise.resolve('refreshed')
-            },
-            {
-                id: 'create-backup-btn',
-                name: '设置 - 创建手动备份按钮',
-                stubbed: ['createManualBackup'],
-                stubImplementation: () => Promise.resolve({ id: 'stub-backup' })
-            },
-            {
-                id: 'backup-list-btn',
-                name: '设置 - 查看备份列表按钮',
-                expectInvocation: false,
-                waitForSelector: '.backup-list-container',
-                waitDescription: '备份列表渲染',
-                cleanupSelector: '.backup-list-container'
-            },
-            {
-                id: 'export-data-btn',
-                name: '设置 - 导出数据按钮',
-                stubbed: ['exportAllData'],
-                stubImplementation: () => ({ downloaded: true })
-            },
-            {
-                id: 'import-data-btn',
-                name: '设置 - 导入数据按钮',
-                stubbed: ['importData'],
-                stubImplementation: () => Promise.resolve('import-started')
-            }
-        ];
+        const requiredIds = (Array.isArray(INTERACTION_TARGETS.settingsButtonIds) && INTERACTION_TARGETS.settingsButtonIds.length)
+            ? INTERACTION_TARGETS.settingsButtonIds
+            : DEFAULT_INTERACTION_TARGETS.settingsButtonIds;
 
-        for (const action of actions) {
+        for (const buttonId of requiredIds) {
+            const plan = SETTINGS_BUTTON_TESTS[buttonId];
+            if (!plan) {
+                this.recordResult(`设置按钮测试缺失: ${buttonId}`, false, {
+                    reason: '未在测试计划中定义',
+                    buttonId
+                });
+                continue;
+            }
+
+            const action = Object.assign({ id: buttonId }, plan);
+            if (!action.name) {
+                action.name = `设置 - ${buttonId}`;
+            }
+
             await this.runSettingsButtonAssertion(action);
         }
     }
@@ -679,6 +765,164 @@ class AppE2ETestSuite {
             }
         } catch (error) {
             this.recordResult(name, false, error.message || String(error));
+        }
+    }
+
+    async testExamActionButtons() {
+        const name = '题库操作按钮事件';
+        const originalOpenExam = this.win.openExam;
+        const originalViewPDF = this.win.viewPDF;
+        const originalGenerateHTML = this.win.generateHTML;
+
+        const restore = () => {
+            this.win.openExam = originalOpenExam;
+            this.win.viewPDF = originalViewPDF;
+            this.win.generateHTML = originalGenerateHTML;
+        };
+
+        try {
+            await this.ensureBrowseView();
+            await this.waitForExamIndex();
+            await this.waitFor(() => this.doc.querySelectorAll('#exam-list-container .exam-item button[data-action]').length > 0, {
+                timeout: 8000,
+                description: '题库操作按钮渲染完成'
+            });
+
+            const buttons = Array.from(this.doc.querySelectorAll('#exam-list-container .exam-item button[data-action]'));
+            const actions = Array.from(new Set(buttons.map((btn) => btn.dataset.action))).filter(Boolean);
+
+            if (!actions.length) {
+                this.recordResult(name, false, { reason: '未找到任何操作按钮' });
+                return;
+            }
+
+            const invoked = {};
+
+            if (actions.includes('start')) {
+                this.win.openExam = (examId) => {
+                    invoked.start = (invoked.start || 0) + 1;
+                    invoked.lastStart = examId;
+                    return null;
+                };
+            }
+
+            if (actions.includes('pdf')) {
+                this.win.viewPDF = (examId) => {
+                    invoked.pdf = (invoked.pdf || 0) + 1;
+                    invoked.lastPdf = examId;
+                    return null;
+                };
+            }
+
+            if (actions.includes('generate') && typeof this.win.generateHTML === 'function') {
+                this.win.generateHTML = (examId) => {
+                    invoked.generate = (invoked.generate || 0) + 1;
+                    invoked.lastGenerate = examId;
+                    return null;
+                };
+            }
+
+            for (const action of actions) {
+                const button = this.doc.querySelector(`#exam-list-container button[data-action="${action}"]`);
+                if (!button) {
+                    continue;
+                }
+                button.click();
+                await new Promise((resolve) => setTimeout(resolve, 40));
+            }
+
+            const expected = actions.filter((action) => action === 'start' || action === 'pdf' || action === 'generate');
+            const passed = expected.every((action) => (invoked[action] || 0) > 0);
+            this.recordResult(name, passed, { actions, invoked });
+        } catch (error) {
+            this.recordResult(name, false, error.message || String(error));
+        } finally {
+            restore();
+        }
+    }
+
+    async testExamEmptyStateAction() {
+        const name = '题库空态加载按钮';
+        const originalLoadLibrary = this.win.loadLibrary;
+
+        try {
+            await this.ensureBrowseView();
+            await this.waitForExamIndex();
+
+            const container = this.doc.getElementById('exam-list-container');
+            if (!container) {
+                this.recordResult(name, false, '未找到题库容器');
+                return;
+            }
+
+            while (container.firstChild) {
+                container.removeChild(container.firstChild);
+            }
+
+            const ViewCtor = this.win.LegacyExamListView;
+            if (typeof ViewCtor !== 'function') {
+                this.recordResult(name, false, 'LegacyExamListView 未加载');
+                return;
+            }
+
+            const view = new ViewCtor({ domAdapter: this.win.DOMAdapter, containerId: 'exam-list-container' });
+            let invoked = 0;
+
+            this.win.loadLibrary = () => {
+                invoked += 1;
+                return Promise.resolve();
+            };
+
+            const baseConfig = this.win.__legacyExamEmptyStateConfig;
+            let emptyConfig = null;
+            if (baseConfig) {
+                try {
+                    emptyConfig = JSON.parse(JSON.stringify(baseConfig));
+                } catch (error) {
+                    emptyConfig = {
+                        icon: baseConfig.icon,
+                        title: baseConfig.title,
+                        description: baseConfig.description,
+                        actionGroupLabel: baseConfig.actionGroupLabel,
+                        actions: Array.isArray(baseConfig.actions)
+                            ? baseConfig.actions.map((action) => ({
+                                action: action.action,
+                                label: action.label,
+                                variant: action.variant,
+                                ariaLabel: action.ariaLabel
+                            }))
+                            : []
+                    };
+                }
+            }
+
+            view.render([], { emptyState: emptyConfig || { actions: [] } });
+
+            const button = container.querySelector('button[data-action="load-library"]');
+            if (!button) {
+                this.recordResult(name, false, { reason: '未渲染加载按钮' });
+                return;
+            }
+
+            button.click();
+            await this.delay(60);
+
+            const passed = invoked === 1;
+            this.recordResult(name, passed, { invoked, hasButton: !!button });
+        } catch (error) {
+            this.recordResult(name, false, error.message || String(error));
+        } finally {
+            this.win.loadLibrary = originalLoadLibrary;
+            if (typeof this.win.displayExams === 'function') {
+                try {
+                    const exams = Array.isArray(this.win.filteredExams) && this.win.filteredExams.length
+                        ? this.win.filteredExams
+                        : (Array.isArray(this.win.examIndex) ? this.win.examIndex : []);
+                    this.win.displayExams(exams);
+                } catch (restoreError) {
+                    console.warn('[E2E] 无法恢复题库列表', restoreError);
+                }
+            }
         }
     }
 
