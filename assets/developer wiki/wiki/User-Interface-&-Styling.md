@@ -424,6 +424,19 @@ Sources: [js/components/practiceHistory.js L717-L832](https://github.com/sallowa
 - `showLibraryLoaderModal` has been rebuilt on top of the shared DOM builder and event delegation utilities. Buttons, file inputs, and teardown logic are now data-attribute driven, removing the legacy `innerHTML` template and eight direct `addEventListener` bindings while keeping legacy fallbacks for environments without the helper library.【F:js/main.js†L1369-L1569】
 - Dedicated styling rules in `css/main.css` provide the gradient header, two-column card layout, and responsive behavior for the loader modal, replacing 40+ inline declarations and aligning the component with the global theming system.【F:css/main.css†L1559-L1772】
 
+### Library Configuration Panel Refresh (2025-10-19)
+
+- `LibraryConfigView` consolidates the settings panel rendering, using DOM Builder and delegated actions to remove duplicated HTML strings and inline handlers across both the modern and legacy entry points.【F:js/views/legacyViewBundle.js†L705-L843】【F:js/main.js†L1583-L1753】
+- The fallback runtime and legacy script now defer to the shared renderer, guaranteeing identical markup and behaviors even when the primary bundle is unavailable.【F:js/boot-fallbacks.js†L170-L255】【F:js/script.js†L760-L777】
+- New CSS tokens and component classes drive the card layout, badges, and theme-aware states for the configuration list, eliminating the previous inline styling in favor of reusable design primitives.【F:css/main.css†L57-L74】【F:css/main.css†L1166-L1248】【F:css/main.css†L2367-L2377】【F:css/main.css†L2794-L2816】
+
+### Browse Exam Actions Delegation (2025-10-09)
+
+- `LegacyExamListView` now emits semantic `data-action` hooks for start, PDF, and conditional HTML generation buttons, adapting labels to the exam format while avoiding inline handlers entirely.【F:js/views/legacyViewBundle.js†L418-L520】
+- The legacy runtime (`js/script.js`) consumes the shared view, falling back to a minimal DOM-rendered list when necessary but still wiring delegated handlers with dataset attributes instead of embedding string-based callbacks.【F:js/script.js†L360-L520】
+- Navigation/bootstrap scripts unify exam action handling so every button funnels through the same delegated controller, including the HTML generation path when available.【F:js/main.js†L2958-L2985】【F:js/script.js†L332-L358】
+- The static E2E harness now stubs `openExam`/`viewPDF`/`generateHTML` to assert that each rendered action triggers the expected bridge, guaranteeing CI coverage for the regenerated markup.【F:developer/tests/js/e2e/appE2ETest.js†L280-L360】【F:developer/tests/js/e2e/appE2ETest.js†L360-L430】
+
 ### Overview, Browse & Backup UI Modernization (2025-10-13)
 
 - The dashboard fallback renderer now uses `window.DOM.create` to build category cards, exposing `data-overview-action` hooks that reuse the central delegation pipeline and eliminate inline `onclick` strings.【F:js/main.js†L493-L688】

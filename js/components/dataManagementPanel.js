@@ -2,6 +2,27 @@
  * 数据管理面板组件
  * 提供数据导入导出、备份恢复的用户界面
  */
+function createElement(tagName, options = {}) {
+    const el = document.createElement(tagName);
+    if (options.className) {
+        el.className = options.className;
+    }
+    if (typeof options.text === 'string') {
+        el.textContent = options.text;
+    }
+    if (options.attrs) {
+        Object.keys(options.attrs).forEach((key) => {
+            el.setAttribute(key, options.attrs[key]);
+        });
+    }
+    if (options.dataset) {
+        Object.keys(options.dataset).forEach((key) => {
+            el.dataset[key] = options.dataset[key];
+        });
+    }
+    return el;
+}
+
 class DataManagementPanel {
     constructor(container) {
         this.container = container;
@@ -28,178 +49,292 @@ class DataManagementPanel {
      * 创建面板结构
      */
     createPanelStructure() {
-        this.container.innerHTML = `
-            <div class="data-management-panel">
-                <div class="panel-header">
-                    <h3><i class="fas fa-database"></i> 数据管理</h3>
-                    <button class="close-btn" data-action="close">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
+        const panel = createElement('div', { className: 'data-management-panel' });
+        panel.appendChild(this.createHeader());
+        panel.appendChild(this.createContent());
+        panel.appendChild(this.createProgressOverlay());
+        this.container.replaceChildren(panel);
+    }
 
-                <div class="panel-content">
-                    <!-- 数据统计 -->
-                    <div class="stats-section">
-                        <h4>数据统计</h4>
-                        <div class="stats-grid">
-                            <div class="stat-item">
-                                <span class="stat-label">练习记录</span>
-                                <span class="stat-value" id="recordCount">-</span>
-                            </div>
-                            <div class="stat-item">
-                                <span class="stat-label">总练习时间</span>
-                                <span class="stat-value" id="totalTime">-</span>
-                            </div>
-                            <div class="stat-item">
-                                <span class="stat-label">平均分数</span>
-                                <span class="stat-value" id="avgScore">-</span>
-                            </div>
-                            <div class="stat-item">
-                                <span class="stat-label">存储使用</span>
-                                <span class="stat-value" id="storageUsage">-</span>
-                            </div>
-                        </div>
-                    </div>
+    createHeader() {
+        const header = createElement('div', { className: 'panel-header' });
+        const title = createElement('h3');
+        const icon = createElement('i', { className: 'fas fa-database' });
+        title.appendChild(icon);
+        title.appendChild(document.createTextNode(' 数据管理'));
 
-                    <!-- 数据导出 -->
-                    <div class="export-section">
-                        <h4>数据导出</h4>
-                        <div class="export-options">
-                            <div class="option-group">
-                                <label>导出格式:</label>
-                                <select id="exportFormat">
-                                    <option value="json">JSON格式</option>
-                                    <option value="csv">CSV格式</option>
-                                </select>
-                            </div>
-                            
-                            <div class="option-group">
-                                <label>
-                                    <input type="checkbox" id="includeStats" checked>
-                                    包含用户统计
-                                </label>
-                            </div>
-                            
-                            <div class="option-group">
-                                <label>
-                                    <input type="checkbox" id="includeBackups">
-                                    包含备份数据
-                                </label>
-                            </div>
+        const closeBtn = createElement('button', {
+            className: 'close-btn',
+            attrs: { 'data-action': 'close', type: 'button' }
+        });
+        closeBtn.appendChild(createElement('i', { className: 'fas fa-times' }));
 
-                            <div class="date-range-group">
-                                <label>时间范围 (可选):</label>
-                                <div class="date-inputs">
-                                    <input type="date" id="exportStartDate" placeholder="开始日期">
-                                    <input type="date" id="exportEndDate" placeholder="结束日期">
-                                </div>
-                            </div>
+        header.appendChild(title);
+        header.appendChild(closeBtn);
+        return header;
+    }
 
-                            <button class="export-btn" data-action="export">
-                                <i class="fas fa-download"></i> 导出数据
-                            </button>
-                        </div>
-                    </div>
+    createContent() {
+        const content = createElement('div', { className: 'panel-content' });
+        content.append(
+            this.createStatsSection(),
+            this.createExportSection(),
+            this.createImportSection(),
+            this.createCleanupSection(),
+            this.createHistorySection()
+        );
+        return content;
+    }
 
-                    <!-- 数据导入 -->
-                    <div class="import-section">
-                        <h4>数据导入</h4>
-                        <div class="import-options">
-                            <div class="file-input-group">
-                                <input type="file" id="importFile" accept=".json,.csv" style="display: none;">
-                                <button class="file-select-btn" data-action="selectFile">
-                                    <i class="fas fa-file-upload"></i> 选择文件
-                                </button>
-                                <span class="file-name" id="selectedFileName">未选择文件</span>
-                            </div>
+    createStatsSection() {
+        const section = createElement('div', { className: 'stats-section' });
+        section.appendChild(createElement('h4', { text: '数据统计' }));
 
-                            <div class="option-group">
-                                <label>导入模式:</label>
-                                <select id="importMode">
-                                    <option value="merge">合并 (保留现有数据)</option>
-                                    <option value="replace">替换 (清空现有数据)</option>
-                                    <option value="skip">跳过 (仅导入新数据)</option>
-                                </select>
-                            </div>
+        const grid = createElement('div', { className: 'stats-grid' });
+        const stats = [
+            { label: '练习记录', id: 'recordCount' },
+            { label: '总练习时间', id: 'totalTime' },
+            { label: '平均分数', id: 'avgScore' },
+            { label: '存储使用', id: 'storageUsage' }
+        ];
 
-                            <div class="option-group">
-                                <label>
-                                    <input type="checkbox" id="createBackupBeforeImport" checked>
-                                    导入前创建备份
-                                </label>
-                            </div>
+        stats.forEach(({ label, id }) => {
+            const item = createElement('div', { className: 'stat-item' });
+            item.appendChild(createElement('span', { className: 'stat-label', text: label }));
+            const value = createElement('span', { className: 'stat-value', text: '-' });
+            value.id = id;
+            item.appendChild(value);
+            grid.appendChild(item);
+        });
 
-                            <button class="import-btn" data-action="import" disabled>
-                                <i class="fas fa-upload"></i> 导入数据
-                            </button>
-                        </div>
-                    </div>
+        section.appendChild(grid);
+        return section;
+    }
 
-                    <!-- 数据清理 -->
-                    <div class="cleanup-section">
-                        <h4>数据清理</h4>
-                        <div class="cleanup-options">
-                            <div class="warning-box">
-                                <i class="fas fa-exclamation-triangle"></i>
-                                <span>数据清理操作不可逆，请谨慎操作！</span>
-                            </div>
+    createExportSection() {
+        const section = createElement('div', { className: 'export-section' });
+        section.appendChild(createElement('h4', { text: '数据导出' }));
 
-                            <div class="cleanup-checkboxes">
-                                <label>
-                                    <input type="checkbox" id="clearRecords">
-                                    清理练习记录
-                                </label>
-                                <label>
-                                    <input type="checkbox" id="clearStats">
-                                    清理用户统计
-                                </label>
-                                <label>
-                                    <input type="checkbox" id="clearBackups">
-                                    清理备份数据
-                                </label>
-                                <label>
-                                    <input type="checkbox" id="clearSettings">
-                                    清理系统设置
-                                </label>
-                            </div>
+        const options = createElement('div', { className: 'export-options' });
 
-                            <div class="option-group">
-                                <label>
-                                    <input type="checkbox" id="createBackupBeforeClean" checked>
-                                    清理前创建备份
-                                </label>
-                            </div>
+        options.appendChild(this.createSelectGroup('导出格式:', 'exportFormat', [
+            { value: 'json', text: 'JSON格式' },
+            { value: 'csv', text: 'CSV格式' }
+        ]));
 
-                            <button class="cleanup-btn danger" data-action="cleanup">
-                                <i class="fas fa-trash-alt"></i> 执行清理
-                            </button>
-                        </div>
-                    </div>
+        options.appendChild(this.createCheckboxGroup({
+            id: 'includeStats',
+            label: '包含用户统计',
+            checked: true
+        }));
 
-                    <!-- 操作历史 -->
-                    <div class="history-section">
-                        <h4>操作历史</h4>
-                        <div class="history-tabs">
-                            <button class="tab-btn active" data-tab="export">导出历史</button>
-                            <button class="tab-btn" data-tab="import">导入历史</button>
-                        </div>
-                        
-                        <div class="history-content">
-                            <div class="history-list" id="exportHistory"></div>
-                            <div class="history-list" id="importHistory" style="display: none;"></div>
-                        </div>
-                    </div>
-                </div>
+        options.appendChild(this.createCheckboxGroup({
+            id: 'includeBackups',
+            label: '包含备份数据'
+        }));
 
-                <!-- 进度指示器 -->
-                <div class="progress-overlay" id="progressOverlay" style="display: none;">
-                    <div class="progress-content">
-                        <div class="spinner"></div>
-                        <div class="progress-text" id="progressText">处理中...</div>
-                    </div>
-                </div>
-            </div>
-        `;
+        const dateRange = createElement('div', { className: 'date-range-group' });
+        dateRange.appendChild(createElement('label', { text: '时间范围 (可选):' }));
+        const dateInputs = createElement('div', { className: 'date-inputs' });
+        dateInputs.appendChild(createElement('input', {
+            attrs: { type: 'date', id: 'exportStartDate', placeholder: '开始日期' }
+        }));
+        dateInputs.appendChild(createElement('input', {
+            attrs: { type: 'date', id: 'exportEndDate', placeholder: '结束日期' }
+        }));
+        dateRange.appendChild(dateInputs);
+        options.appendChild(dateRange);
+
+        const exportButton = createElement('button', {
+            className: 'export-btn',
+            attrs: { 'data-action': 'export', type: 'button' }
+        });
+        exportButton.appendChild(createElement('i', { className: 'fas fa-download' }));
+        exportButton.appendChild(document.createTextNode(' 导出数据'));
+        options.appendChild(exportButton);
+
+        section.appendChild(options);
+        return section;
+    }
+
+    createImportSection() {
+        const section = createElement('div', { className: 'import-section' });
+        section.appendChild(createElement('h4', { text: '数据导入' }));
+
+        const options = createElement('div', { className: 'import-options' });
+        const fileGroup = createElement('div', { className: 'file-input-group' });
+
+        const fileInput = createElement('input', {
+            attrs: {
+                type: 'file',
+                id: 'importFile',
+                accept: '.json,.csv'
+            }
+        });
+        fileInput.style.display = 'none';
+
+        const fileButton = createElement('button', {
+            className: 'file-select-btn',
+            attrs: { 'data-action': 'selectFile', type: 'button' }
+        });
+        fileButton.appendChild(createElement('i', { className: 'fas fa-file-upload' }));
+        fileButton.appendChild(document.createTextNode(' 选择文件'));
+
+        const fileName = createElement('span', {
+            className: 'file-name',
+            text: '未选择文件'
+        });
+        fileName.id = 'selectedFileName';
+
+        fileGroup.append(fileInput, fileButton, fileName);
+        options.appendChild(fileGroup);
+
+        options.appendChild(this.createSelectGroup('导入模式:', 'importMode', [
+            { value: 'merge', text: '合并 (保留现有数据)' },
+            { value: 'replace', text: '替换 (清空现有数据)' },
+            { value: 'skip', text: '跳过 (仅导入新数据)' }
+        ]));
+
+        options.appendChild(this.createCheckboxGroup({
+            id: 'createBackupBeforeImport',
+            label: '导入前创建备份',
+            checked: true
+        }));
+
+        const importButton = createElement('button', {
+            className: 'import-btn',
+            attrs: { 'data-action': 'import', type: 'button', disabled: 'disabled' }
+        });
+        importButton.appendChild(createElement('i', { className: 'fas fa-upload' }));
+        importButton.appendChild(document.createTextNode(' 导入数据'));
+        options.appendChild(importButton);
+
+        section.appendChild(options);
+        return section;
+    }
+
+    createCleanupSection() {
+        const section = createElement('div', { className: 'cleanup-section' });
+        section.appendChild(createElement('h4', { text: '数据清理' }));
+
+        const options = createElement('div', { className: 'cleanup-options' });
+        const warning = createElement('div', { className: 'warning-box' });
+        warning.appendChild(createElement('i', { className: 'fas fa-exclamation-triangle' }));
+        warning.appendChild(document.createTextNode(' 数据清理操作不可逆，请谨慎操作！'));
+        options.appendChild(warning);
+
+        const checkboxContainer = createElement('div', { className: 'cleanup-checkboxes' });
+        [
+            { id: 'clearRecords', label: '清理练习记录' },
+            { id: 'clearStats', label: '清理用户统计' },
+            { id: 'clearBackups', label: '清理备份数据' },
+            { id: 'clearSettings', label: '清理系统设置' }
+        ].forEach(({ id, label }) => {
+            const wrapper = createElement('label');
+            const checkbox = createElement('input', {
+                attrs: { type: 'checkbox', id },
+                className: 'cleanup-checkbox'
+            });
+            wrapper.appendChild(checkbox);
+            wrapper.appendChild(document.createTextNode(` ${label}`));
+            checkboxContainer.appendChild(wrapper);
+        });
+        options.appendChild(checkboxContainer);
+
+        options.appendChild(this.createCheckboxGroup({
+            id: 'createBackupBeforeClean',
+            label: '清理前创建备份',
+            checked: true
+        }));
+
+        const cleanupButton = createElement('button', {
+            className: 'cleanup-btn danger',
+            attrs: { 'data-action': 'cleanup', type: 'button' }
+        });
+        cleanupButton.appendChild(createElement('i', { className: 'fas fa-trash-alt' }));
+        cleanupButton.appendChild(document.createTextNode(' 执行清理'));
+        options.appendChild(cleanupButton);
+
+        section.appendChild(options);
+        return section;
+    }
+
+    createHistorySection() {
+        const section = createElement('div', { className: 'history-section' });
+        section.appendChild(createElement('h4', { text: '操作历史' }));
+
+        const tabs = createElement('div', { className: 'history-tabs' });
+        const exportTab = createElement('button', {
+            className: 'tab-btn active',
+            dataset: { tab: 'export' },
+            attrs: { type: 'button' }
+        });
+        exportTab.textContent = '导出历史';
+        const importTab = createElement('button', {
+            className: 'tab-btn',
+            dataset: { tab: 'import' },
+            attrs: { type: 'button' }
+        });
+        importTab.textContent = '导入历史';
+        tabs.append(exportTab, importTab);
+
+        const content = createElement('div', { className: 'history-content' });
+        const exportList = createElement('div', { className: 'history-list' });
+        exportList.id = 'exportHistory';
+        const importList = createElement('div', { className: 'history-list' });
+        importList.id = 'importHistory';
+        importList.style.display = 'none';
+        content.append(exportList, importList);
+
+        section.append(tabs, content);
+        return section;
+    }
+
+    createProgressOverlay() {
+        const overlay = createElement('div', {
+            className: 'progress-overlay',
+            attrs: { id: 'progressOverlay' }
+        });
+        overlay.style.display = 'none';
+
+        const wrapper = createElement('div', { className: 'progress-content' });
+        wrapper.appendChild(createElement('div', { className: 'spinner' }));
+        const text = createElement('div', {
+            className: 'progress-text',
+            text: '处理中...'
+        });
+        text.id = 'progressText';
+        wrapper.appendChild(text);
+        overlay.appendChild(wrapper);
+        return overlay;
+    }
+
+    createSelectGroup(labelText, selectId, options) {
+        const group = createElement('div', { className: 'option-group' });
+        const label = createElement('label', { text: labelText });
+        const select = createElement('select', { attrs: { id: selectId } });
+        options.forEach(({ value, text }) => {
+            const option = createElement('option', { text });
+            option.value = value;
+            select.appendChild(option);
+        });
+        group.append(label, select);
+        return group;
+    }
+
+    createCheckboxGroup({ id, label, checked }) {
+        const group = createElement('div', { className: 'option-group' });
+        const wrapper = createElement('label');
+        const input = createElement('input', {
+            attrs: { type: 'checkbox', id }
+        });
+        if (checked) {
+            input.checked = true;
+        }
+        wrapper.appendChild(input);
+        wrapper.appendChild(document.createTextNode(` ${label}`));
+        group.appendChild(wrapper);
+        return group;
     }
 
     /**
@@ -250,10 +385,12 @@ class DataManagementPanel {
 
         // 清理选项变化监听
         panel.addEventListener('change', (e) => {
-            if (e.target.classList.contains('cleanup-checkbox') && e.target.type === 'checkbox') {
+            if (e.target.classList && e.target.classList.contains('cleanup-checkbox') && e.target.type === 'checkbox') {
                 this.updateCleanupButton();
             }
         });
+
+        this.updateCleanupButton();
     }
 
     /**
@@ -551,27 +688,26 @@ class DataManagementPanel {
             const historyItems = Array.isArray(exportHistory) ? exportHistory : [];
 
             if (!historyItems.length) {
-                container.innerHTML = '<div class="no-history">暂无导出记录</div>';
+                this.renderNoHistory(container, '暂无导出记录');
                 return;
             }
 
-            container.innerHTML = historyItems.map((item) => `
-                <div class="history-item">
-                    <div class="history-info">
-                        <div class="history-title">
-                            <i class="fas fa-download"></i>
-                            ${item.format?.toUpperCase() || 'JSON'} 导出
-                        </div>
-                        <div class="history-details">
-                            <span>记录数: ${item.recordCount ?? 0}</span>
-                            <span>时间: ${this.formatDateTime(item.timestamp)}</span>
-                        </div>
-                    </div>
-                </div>
-            `).join('');
+            const fragment = document.createDocumentFragment();
+            historyItems.forEach((item) => {
+                fragment.appendChild(this.createHistoryItem({
+                    icon: 'fas fa-download',
+                    title: `${item.format?.toUpperCase() || 'JSON'} 导出`,
+                    details: [
+                        `记录数: ${item.recordCount ?? 0}`,
+                        `时间: ${this.formatDateTime(item.timestamp)}`
+                    ]
+                }));
+            });
+
+            container.replaceChildren(fragment);
         } catch (error) {
             console.error('[DataManagementPanel] Failed to load export history:', error);
-            container.innerHTML = '<div class="no-history">导出历史加载失败</div>';
+            this.renderNoHistory(container, '导出历史加载失败');
         }
     }
 
@@ -589,29 +725,50 @@ class DataManagementPanel {
             const historyItems = Array.isArray(importHistory) ? importHistory : [];
 
             if (!historyItems.length) {
-                container.innerHTML = '<div class="no-history">暂无导入记录</div>';
+                this.renderNoHistory(container, '暂无导入记录');
                 return;
             }
 
-            container.innerHTML = historyItems.map((item) => `
-                <div class="history-item">
-                    <div class="history-info">
-                        <div class="history-title">
-                            <i class="fas fa-upload"></i>
-                            导入操作
-                        </div>
-                        <div class="history-details">
-                            <span>新增记录: ${item.recordCount ?? item.importedCount ?? 0}</span>
-                            <span>合并模式: ${item.mergeMode || 'merge'}</span>
-                            <span>时间: ${this.formatDateTime(item.timestamp)}</span>
-                        </div>
-                    </div>
-                </div>
-            `).join('');
+            const fragment = document.createDocumentFragment();
+            historyItems.forEach((item) => {
+                fragment.appendChild(this.createHistoryItem({
+                    icon: 'fas fa-upload',
+                    title: '导入操作',
+                    details: [
+                        `新增记录: ${item.recordCount ?? item.importedCount ?? 0}`,
+                        `合并模式: ${item.mergeMode || 'merge'}`,
+                        `时间: ${this.formatDateTime(item.timestamp)}`
+                    ]
+                }));
+            });
+
+            container.replaceChildren(fragment);
         } catch (error) {
             console.error('[DataManagementPanel] Failed to load import history:', error);
-            container.innerHTML = '<div class="no-history">导入历史加载失败</div>';
+            this.renderNoHistory(container, '导入历史加载失败');
         }
+    }
+
+    renderNoHistory(container, message) {
+        const empty = createElement('div', { className: 'no-history', text: message });
+        container.replaceChildren(empty);
+    }
+
+    createHistoryItem({ icon, title, details }) {
+        const item = createElement('div', { className: 'history-item' });
+        const info = createElement('div', { className: 'history-info' });
+        const titleEl = createElement('div', { className: 'history-title' });
+        titleEl.appendChild(createElement('i', { className: icon }));
+        titleEl.appendChild(document.createTextNode(` ${title}`));
+
+        const detailsEl = createElement('div', { className: 'history-details' });
+        details.forEach((detail) => {
+            detailsEl.appendChild(createElement('span', { text: detail }));
+        });
+
+        info.append(titleEl, detailsEl);
+        item.appendChild(info);
+        return item;
     }
 
     /**
@@ -657,12 +814,10 @@ class DataManagementPanel {
      */
     showMessage(message, type = 'info') {
         // 创建消息元素
-        const messageEl = document.createElement('div');
-        messageEl.className = `message-toast ${type}`;
-        messageEl.innerHTML = `
-            <i class="fas fa-${this.getMessageIcon(type)}"></i>
-            <span>${message}</span>
-        `;
+        const messageEl = createElement('div', { className: `message-toast ${type}` });
+        const icon = createElement('i', { className: `fas fa-${this.getMessageIcon(type)}` });
+        const text = createElement('span', { text: message });
+        messageEl.append(icon, text);
 
         // 添加到页面
         document.body.appendChild(messageEl);

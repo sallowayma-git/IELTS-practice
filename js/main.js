@@ -1,12 +1,15 @@
 // Main JavaScript logic for the application
 // This file is the result of refactoring the inline script from improved-working-system.html
 
+const legacyStateAdapter = window.LegacyStateAdapter ? window.LegacyStateAdapter.getInstance() : null;
+const initialBrowseFilter = legacyStateAdapter ? legacyStateAdapter.getBrowseFilter() : { category: 'all', type: 'all' };
+
 // === 关键全局状态变量 (必须保持全局可访问) ===
-let examIndex = [];
-let practiceRecords = [];
+let examIndex = legacyStateAdapter ? legacyStateAdapter.getExamIndex() : [];
+let practiceRecords = legacyStateAdapter ? legacyStateAdapter.getPracticeRecords() : [];
 let filteredExams = [];
-let currentCategory = 'all';
-let currentExamType = 'all';
+let currentCategory = initialBrowseFilter.category || 'all';
+let currentExamType = initialBrowseFilter.type || 'all';
 let bulkDeleteMode = false;
 let selectedRecords = new Set();
 let fallbackExamSessions = new Map();
@@ -18,6 +21,7 @@ let browseStateManager = null;
 
 let examListViewInstance = null;
 let practiceDashboardViewInstance = null;
+let legacyNavigationController = null;
 
 const MESSAGE_CONTAINER_ID = 'message-container';
 const MESSAGE_ICONS = {
@@ -26,6 +30,36 @@ const MESSAGE_ICONS = {
     warning: '⚠️',
     info: 'ℹ️'
 };
+
+function syncGlobalBrowseState(category, type) {
+    const browseDescriptor = Object.getOwnPropertyDescriptor(window, '__browseFilter');
+    if (!browseDescriptor || typeof browseDescriptor.set !== 'function') {
+        try {
+            window.__browseFilter = { category, type };
+        } catch (_) {}
+    }
+
+    const legacyTypeDescriptor = Object.getOwnPropertyDescriptor(window, '__legacyBrowseType');
+    if (!legacyTypeDescriptor || typeof legacyTypeDescriptor.set !== 'function') {
+        try { window.__legacyBrowseType = type; } catch (_) {}
+    }
+}
+
+if (legacyStateAdapter) {
+    legacyStateAdapter.subscribe('examIndex', (value) => {
+        examIndex = Array.isArray(value) ? value : [];
+    });
+    legacyStateAdapter.subscribe('practiceRecords', (value) => {
+        practiceRecords = Array.isArray(value) ? value : [];
+    });
+    legacyStateAdapter.subscribe('browseFilter', (value) => {
+        const normalized = value || { category: 'all', type: 'all' };
+        currentCategory = typeof normalized.category === 'string' ? normalized.category : 'all';
+        currentExamType = typeof normalized.type === 'string' ? normalized.type : 'all';
+
+        syncGlobalBrowseState(currentCategory, currentExamType);
+    });
+}
 
 function ensureMessageContainer() {
     if (typeof document === 'undefined') {
@@ -50,57 +84,28 @@ function createMessageNode(message, type) {
     note.appendChild(document.createTextNode(' ' + String(message || '')));
     return note;
 }
-
-
-const legacyBridge = window.LegacyStateBridge ? window.LegacyStateBridge.getInstance() : null;
-
-if (legacyBridge) {
-    legacyBridge.on('examIndex', (value) => {
-        examIndex = Array.isArray(value) ? value : [];
-    });
-
-    legacyBridge.on('practiceRecords', (value) => {
-        practiceRecords = Array.isArray(value) ? value : [];
-    });
-
-    legacyBridge.on('browseFilter', (value = { category: 'all', type: 'all' }) => {
-        currentCategory = value && value.category ? value.category : 'all';
-        currentExamType = value && value.type ? value.type : 'all';
-    });
-
-    const initialExamIndex = legacyBridge.getExamIndex();
-    if (Array.isArray(initialExamIndex) && initialExamIndex.length) {
-        examIndex = initialExamIndex;
-    }
-
-    const initialPracticeRecords = legacyBridge.getPracticeRecords();
-    if (Array.isArray(initialPracticeRecords) && initialPracticeRecords.length) {
-        practiceRecords = initialPracticeRecords;
-    }
-
-    const initialFilter = legacyBridge.getBrowseFilter();
-    if (initialFilter) {
-        currentCategory = initialFilter.category || currentCategory;
-        currentExamType = initialFilter.type || currentExamType;
-    }
-}
-
 function setExamIndexState(list) {
     const normalized = Array.isArray(list) ? list : [];
-    if (legacyBridge) {
-        return legacyBridge.setExamIndex(normalized);
+    if (legacyStateAdapter) {
+        const updated = legacyStateAdapter.setExamIndex(normalized);
+        examIndex = Array.isArray(updated) ? updated : normalized;
+        return examIndex;
     }
+    examIndex = normalized;
     try { window.examIndex = normalized; } catch (_) {}
-    return normalized;
+    return examIndex;
 }
 
 function setPracticeRecordsState(records) {
     const normalized = Array.isArray(records) ? records : [];
-    if (legacyBridge) {
-        return legacyBridge.setPracticeRecords(normalized);
+    if (legacyStateAdapter) {
+        const updated = legacyStateAdapter.setPracticeRecords(normalized);
+        practiceRecords = Array.isArray(updated) ? updated : normalized;
+        return practiceRecords;
     }
+    practiceRecords = normalized;
     try { window.practiceRecords = normalized; } catch (_) {}
-    return normalized;
+    return practiceRecords;
 }
 
 function setBrowseFilterState(category = 'all', type = 'all') {
@@ -108,13 +113,16 @@ function setBrowseFilterState(category = 'all', type = 'all') {
         category: typeof category === 'string' ? category : 'all',
         type: typeof type === 'string' ? type : 'all'
     };
+    if (legacyStateAdapter) {
+        const updated = legacyStateAdapter.setBrowseFilter(normalized);
+        currentCategory = updated.category || 'all';
+        currentExamType = updated.type || 'all';
+        syncGlobalBrowseState(currentCategory, currentExamType);
+        return updated;
+    }
     currentCategory = normalized.category;
     currentExamType = normalized.type;
-    if (legacyBridge) {
-        legacyBridge.setBrowseFilter(normalized);
-    } else {
-        try { window.__browseFilter = normalized; } catch (_) {}
-    }
+    syncGlobalBrowseState(currentCategory, currentExamType);
     return normalized;
 }
 
@@ -138,20 +146,48 @@ function ensureExamListView() {
     return examListViewInstance;
 }
 
-function ensurePracticeDashboardView() {
-    if (!practiceDashboardViewInstance && window.PracticeDashboardView) {
-        practiceDashboardViewInstance = new window.PracticeDashboardView({
-            domAdapter: window.DOMAdapter
-        });
-    }
-    return practiceDashboardViewInstance;
-}
+  function ensurePracticeDashboardView() {
+      if (!practiceDashboardViewInstance && window.PracticeDashboardView) {
+          practiceDashboardViewInstance = new window.PracticeDashboardView({
+              domAdapter: window.DOMAdapter
+          });
+      }
+      return practiceDashboardViewInstance;
+  }
 
+  function ensureLegacyNavigation(options) {
+      if (typeof window.ensureLegacyNavigationController !== 'function') {
+          return null;
+      }
 
+      var mergedOptions = Object.assign({
+          containerSelector: '.main-nav',
+          activeClass: 'active',
+          syncOnNavigate: true,
+          onNavigate: function onNavigate(viewName) {
+              if (typeof window.showView === 'function') {
+                  window.showView(viewName);
+                  return;
+              }
+              if (window.app && typeof window.app.navigateToView === 'function') {
+                  window.app.navigateToView(viewName);
+              }
+          }
+      }, options || {});
 
-// --- Initialization ---
+      legacyNavigationController = window.ensureLegacyNavigationController(mergedOptions);
+      return legacyNavigationController;
+  }
+
+  // --- Initialization ---
 function initializeLegacyComponents() {
     try { showMessage('系统准备就绪', 'success'); } catch(_) {}
+
+    try {
+        ensureLegacyNavigation({ initialView: 'overview' });
+    } catch (error) {
+        console.warn('[Navigation] 初始化导航控制器失败:', error);
+    }
 
     // Setup UI Listeners
     const folderPicker = document.getElementById('folder-picker');
@@ -498,7 +534,7 @@ async function loadLibrary(forceReload = false) {
 }
 function finishLibraryLoading(startTime) {
     const loadTime = performance.now() - startTime;
-    if (!legacyBridge) {
+    if (!legacyStateAdapter) {
         try { window.examIndex = examIndex; } catch (_) {}
     }
     // 修复题库索引加载链路问题：顺序为设置window.examIndex → updateOverview() → dispatchEvent('examIndexLoaded')
@@ -1123,7 +1159,7 @@ if (typeof window.browseCategory !== 'function') {
 }
 
 function filterRecordsByType(type) {
-    currentExamType = type;
+    setBrowseFilterState(currentCategory, type);
     updatePracticeView();
 }
 
@@ -1193,67 +1229,82 @@ function displayExams(exams) {
         const empty = document.createElement('div');
         empty.className = 'exam-list-empty';
         empty.setAttribute('role', 'status');
-        empty.innerHTML = '<div class="exam-list-empty-icon" aria-hidden="true">🔍</div>' +
-            '<p class="exam-list-empty-text">未找到匹配的题目</p>' +
-            '<p class="exam-list-empty-hint">请调整筛选条件或搜索词后再试</p>';
+
+        const icon = document.createElement('div');
+        icon.className = 'exam-list-empty-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.textContent = '🔍';
+
+        const text = document.createElement('p');
+        text.className = 'exam-list-empty-text';
+        text.textContent = '未找到匹配的题目';
+
+        const hint = document.createElement('p');
+        hint.className = 'exam-list-empty-hint';
+        hint.textContent = '请调整筛选条件或搜索词后再试';
+
+        empty.appendChild(icon);
+        empty.appendChild(text);
+        empty.appendChild(hint);
         container.appendChild(empty);
-    } else {
-        const list = document.createElement('div');
-        list.className = 'exam-list';
-
-        normalizedExams.forEach((exam) => {
-            if (!exam) {
-                return;
-            }
-            const item = document.createElement('div');
-            item.className = 'exam-item';
-            if (exam.id) {
-                item.dataset.examId = exam.id;
-            }
-
-            const info = document.createElement('div');
-            info.className = 'exam-info';
-            const infoContent = document.createElement('div');
-            const title = document.createElement('h4');
-            title.textContent = exam.title || '';
-            const meta = document.createElement('div');
-            meta.className = 'exam-meta';
-            meta.textContent = `${exam.category || ''} | ${exam.type || ''}`;
-            infoContent.appendChild(title);
-            infoContent.appendChild(meta);
-            info.appendChild(infoContent);
-
-            const actions = document.createElement('div');
-            actions.className = 'exam-actions';
-
-            const startBtn = document.createElement('button');
-            startBtn.className = 'btn exam-item-action-btn';
-            startBtn.type = 'button';
-            startBtn.dataset.action = 'start';
-            if (exam.id) {
-                startBtn.dataset.examId = exam.id;
-            }
-            startBtn.textContent = '开始';
-
-            const pdfBtn = document.createElement('button');
-            pdfBtn.className = 'btn btn-secondary exam-item-action-btn';
-            pdfBtn.type = 'button';
-            pdfBtn.dataset.action = 'pdf';
-            if (exam.id) {
-                pdfBtn.dataset.examId = exam.id;
-            }
-            pdfBtn.textContent = 'PDF';
-
-            actions.appendChild(startBtn);
-            actions.appendChild(pdfBtn);
-
-            item.appendChild(info);
-            item.appendChild(actions);
-            list.appendChild(item);
-        });
-
-        container.appendChild(list);
+        return;
     }
+
+    const list = document.createElement('div');
+    list.className = 'exam-list';
+
+    normalizedExams.forEach((exam) => {
+        if (!exam) {
+            return;
+        }
+        const item = document.createElement('div');
+        item.className = 'exam-item';
+        if (exam.id) {
+            item.dataset.examId = exam.id;
+        }
+
+        const info = document.createElement('div');
+        info.className = 'exam-info';
+        const infoContent = document.createElement('div');
+        const title = document.createElement('h4');
+        title.textContent = exam.title || '';
+        const meta = document.createElement('div');
+        meta.className = 'exam-meta';
+        meta.textContent = `${exam.category || ''} | ${exam.type || ''}`;
+        infoContent.appendChild(title);
+        infoContent.appendChild(meta);
+        info.appendChild(infoContent);
+
+        const actions = document.createElement('div');
+        actions.className = 'exam-actions';
+
+        const startBtn = document.createElement('button');
+        startBtn.className = 'btn exam-item-action-btn';
+        startBtn.type = 'button';
+        startBtn.dataset.action = 'start';
+        if (exam.id) {
+            startBtn.dataset.examId = exam.id;
+        }
+        startBtn.textContent = '开始';
+
+        const pdfBtn = document.createElement('button');
+        pdfBtn.className = 'btn btn-secondary exam-item-action-btn';
+        pdfBtn.type = 'button';
+        pdfBtn.dataset.action = 'pdf';
+        if (exam.id) {
+            pdfBtn.dataset.examId = exam.id;
+        }
+        pdfBtn.textContent = 'PDF';
+
+        actions.appendChild(startBtn);
+        actions.appendChild(pdfBtn);
+
+        item.appendChild(info);
+        item.appendChild(actions);
+        list.appendChild(item);
+    });
+
+    container.appendChild(list);
 
     const loadingIndicator = document.querySelector('#browse-view .loading');
     if (loadingIndicator) {
@@ -1528,12 +1579,12 @@ function showMessage(message, type = 'info', duration = 4000) {
 
     const timeout = typeof duration === 'number' && duration > 0 ? duration : 4000;
     window.setTimeout(() => {
-        note.style.animation = 'slideOut 0.3s ease-in forwards';
+        note.classList.add('message-leaving');
         window.setTimeout(() => {
             if (note.parentNode) {
                 note.parentNode.removeChild(note);
             }
-        }, 300);
+        }, 320);
     }, timeout);
 }
 
@@ -2228,61 +2279,221 @@ async function clearCache() {
     }
 }
 
-async function showLibraryConfigList() {
-    const configs = await getLibraryConfigurations();
+let libraryConfigViewInstance = null;
+
+function ensureLibraryConfigView() {
+    if (libraryConfigViewInstance || typeof window === 'undefined') {
+        return libraryConfigViewInstance;
+    }
+    if (typeof window.LibraryConfigView === 'function') {
+        libraryConfigViewInstance = new window.LibraryConfigView();
+    }
+    return libraryConfigViewInstance;
+}
+
+async function resolveLibraryConfigurations() {
+    let configs = await getLibraryConfigurations();
+    if (!Array.isArray(configs)) {
+        configs = [];
+    }
 
     if (configs.length === 0) {
-        showMessage('暂无题库配置记录', 'info');
-        return;
+        try {
+            const count = Array.isArray(window.examIndex) ? window.examIndex.length : 0;
+            configs = [{
+                name: '默认题库',
+                key: 'exam_index',
+                examCount: count,
+                timestamp: Date.now()
+            }];
+            await storage.set('exam_index_configurations', configs);
+            const activeKey = await storage.get('active_exam_index_key');
+            if (!activeKey) {
+                await storage.set('active_exam_index_key', 'exam_index');
+            }
+        } catch (error) {
+            console.warn('[LibraryConfig] 无法初始化默认题库配置', error);
+        }
+    }
+    return configs;
+}
+
+function renderLibraryConfigFallback(container, configs, options) {
+    const hostClass = 'library-config-list';
+    let host = container.querySelector('.' + hostClass);
+    if (!host) {
+        host = document.createElement('div');
+        host.className = hostClass;
+        container.appendChild(host);
     }
 
-    let configHtml = `
-                <div style="background: rgba(255, 255, 255, 0.1); padding: 20px; border-radius: 10px; margin: 20px 0;">
-                    <h3>📚 题库配置列表</h3>
-                    <div style="max-height: 300px; overflow-y: auto; margin: 15px 0;">
-            `;
+    while (host.firstChild) {
+        host.removeChild(host.firstChild);
+    }
 
-    const activeKey = await getActiveLibraryConfigurationKey();
-    configs.forEach(config => {
-        const date = new Date(config.timestamp).toLocaleString();
-        const isActive = activeKey === config.key;
-        const activeIndicator = isActive ? ' (当前)' : '';
+    const panel = document.createElement('div');
+    panel.className = 'library-config-panel';
 
-        configHtml += `
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.1);">
-                        <div>
-                            <strong>${config.name}</strong> ${activeIndicator}<br>
-                            <small>${date} - ${config.examCount} 个题目</small>
-                        </div>
-                        <div>
-                            <button class="btn btn-secondary" onclick="switchLibraryConfig('${config.key}')" style="margin-left: 10px;" ${isActive ? 'disabled' : ''}>切换</button>
-                            <button class="btn btn-warning" onclick="deleteLibraryConfig('${config.key}')" style="margin-left: 10px;" ${isActive ? 'disabled' : ''}>删除</button>
-                        </div>
-                    </div>
-                `;
+    const header = document.createElement('div');
+    header.className = 'library-config-panel__header';
+    const title = document.createElement('h3');
+    title.className = 'library-config-panel__title';
+    title.textContent = '📚 题库配置列表';
+    header.appendChild(title);
+    panel.appendChild(header);
+
+    const list = document.createElement('div');
+    list.className = 'library-config-panel__list';
+    const activeKey = options && options.activeKey;
+
+    configs.forEach((config) => {
+        if (!config) {
+            return;
+        }
+        const item = document.createElement('div');
+        item.className = 'library-config-panel__item' + (activeKey === config.key ? ' library-config-panel__item--active' : '');
+
+        const info = document.createElement('div');
+        info.className = 'library-config-panel__info';
+
+        const titleLine = document.createElement('div');
+        titleLine.textContent = config.name || config.key || '未命名题库';
+        info.appendChild(titleLine);
+
+        const meta = document.createElement('div');
+        meta.className = 'library-config-panel__meta';
+        try {
+            meta.textContent = new Date(config.timestamp).toLocaleString() + ' · ' + (config.examCount || 0) + ' 个题目';
+        } catch (_) {
+            meta.textContent = (config.examCount || 0) + ' 个题目';
+        }
+        info.appendChild(meta);
+
+        const actions = document.createElement('div');
+        actions.className = 'library-config-panel__actions';
+
+        const switchBtn = document.createElement('button');
+        switchBtn.type = 'button';
+        switchBtn.className = 'btn btn-secondary';
+        switchBtn.dataset.configAction = 'switch';
+        switchBtn.dataset.configKey = config.key;
+        if (activeKey === config.key) {
+            switchBtn.disabled = true;
+        }
+        switchBtn.textContent = '切换';
+        actions.appendChild(switchBtn);
+
+        if (config.key !== 'exam_index') {
+            const deleteBtn = document.createElement('button');
+            deleteBtn.type = 'button';
+            deleteBtn.className = 'btn btn-warning';
+            deleteBtn.dataset.configAction = 'delete';
+            deleteBtn.dataset.configKey = config.key;
+            if (activeKey === config.key) {
+                deleteBtn.disabled = true;
+            }
+            deleteBtn.textContent = '删除';
+            actions.appendChild(deleteBtn);
+        }
+
+        item.appendChild(info);
+        item.appendChild(actions);
+        list.appendChild(item);
     });
 
-    configHtml += `
-                    </div>
-                    <button class="btn btn-secondary" onclick="this.parentElement.remove()">关闭</button>
-                </div>
-            `;
-
-    // 显示配置列表
-    const container = document.getElementById('settings-view');
-    const existingList = container.querySelector('.library-config-list');
-    if (existingList) {
-        existingList.remove();
+    if (!list.childElementCount) {
+        const empty = document.createElement('div');
+        empty.className = 'library-config-panel__empty';
+        empty.textContent = options && options.emptyMessage ? options.emptyMessage : '暂无题库配置记录';
+        panel.appendChild(empty);
+    } else {
+        panel.appendChild(list);
     }
 
-    const listDiv = document.createElement('div');
-    listDiv.className = 'library-config-list';
-    listDiv.innerHTML = configHtml;
-    container.appendChild(listDiv);
+    const footer = document.createElement('div');
+    footer.className = 'library-config-panel__footer';
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'btn btn-secondary library-config-panel__close';
+    close.dataset.configAction = 'close';
+    close.textContent = '关闭';
+    footer.appendChild(close);
+    panel.appendChild(footer);
+
+    host.appendChild(panel);
+
+    const handler = (event) => {
+        const target = event.target && event.target.closest('[data-config-action]');
+        if (!target || !host.contains(target)) {
+            return;
+        }
+        const action = target.dataset.configAction;
+        if (action === 'close') {
+            host.remove();
+            return;
+        }
+        if (action === 'switch' && typeof switchLibraryConfig === 'function') {
+            switchLibraryConfig(target.dataset.configKey);
+        }
+        if (action === 'delete' && typeof deleteLibraryConfig === 'function') {
+            deleteLibraryConfig(target.dataset.configKey);
+        }
+    };
+
+    host.onclick = handler;
+    return host;
+}
+
+async function renderLibraryConfigList(options = {}) {
+    const containerId = options.containerId || 'settings-view';
+    const container = document.getElementById(containerId);
+    if (!container) {
+        return null;
+    }
+
+    let configs = Array.isArray(options.configs) ? options.configs : await resolveLibraryConfigurations();
+    if (!configs.length) {
+        if (options.silentEmpty) {
+            const existingHost = container.querySelector('.library-config-list');
+            if (existingHost) {
+                existingHost.remove();
+            }
+        } else if (typeof showMessage === 'function') {
+            showMessage('暂无题库配置记录', 'info');
+        }
+        return null;
+    }
+
+    const activeKey = options.activeKey || await getActiveLibraryConfigurationKey();
+    const view = ensureLibraryConfigView();
+    if (view) {
+        return view.mount(container, configs, {
+            activeKey,
+            allowDelete: options.allowDelete !== false,
+            emptyMessage: options.emptyMessage,
+            handlers: Object.assign({
+                switch: (configKey) => switchLibraryConfig(configKey),
+                delete: (configKey) => deleteLibraryConfig(configKey)
+            }, options.handlers || {})
+        });
+    }
+
+    return renderLibraryConfigFallback(container, configs, { activeKey, emptyMessage: options.emptyMessage });
+}
+
+async function showLibraryConfigList(options) {
+    return renderLibraryConfigList(Object.assign({ allowDelete: true }, options || {}));
+}
+
+async function showLibraryConfigListV2(options) {
+    return renderLibraryConfigList(Object.assign({ allowDelete: true }, options || {}));
 }
 
 // 切换题库配置
 async function switchLibraryConfig(configKey) {
+    if (!configKey) {
+        return;
+    }
     if (confirm('确定要切换到这个题库配置吗？页面将会刷新。')) {
         await setActiveLibraryConfiguration(configKey);
         showMessage('正在切换题库配置，页面将刷新...', 'info');
@@ -2294,18 +2505,25 @@ async function switchLibraryConfig(configKey) {
 
 // 删除题库配置
 async function deleteLibraryConfig(configKey) {
+    if (!configKey) {
+        return;
+    }
     if (configKey === 'exam_index') {
         showMessage('默认题库不可删除', 'warning');
         return;
     }
-    if (confirm("确定要删除这个题库配置吗？此操作不可恢复。")) {
+    if (confirm('确定要删除这个题库配置吗？此操作不可恢复。')) {
         let configs = await getLibraryConfigurations();
-        configs = configs.filter(config => config.key !== configKey);
+        configs = Array.isArray(configs) ? configs.filter(config => config && config.key !== configKey) : [];
         await storage.set('exam_index_configurations', configs);
-        await storage.remove(configKey); // 移除实际的题库数据
+        try {
+            await storage.remove(configKey);
+        } catch (error) {
+            console.warn('[LibraryConfig] 删除题库数据失败', error);
+        }
 
-        
         showMessage('题库配置已删除', 'success');
+        await renderLibraryConfigList({ silentEmpty: true });
     }
 }
 
@@ -2637,60 +2855,6 @@ function startRandomPractice(category, type = 'reading') {
     }, 1000);
 }
 
-// 改进版：题库配置列表（默认题库不可删除，可切换）
-async function showLibraryConfigListV2() {
-    let configs = await getLibraryConfigurations();
-    if (configs.length === 0) {
-        try {
-            const count = Array.isArray(window.examIndex) ? window.examIndex.length : 0;
-            configs = [{ name: '默认题库', key: 'exam_index', examCount: count, timestamp: Date.now() }];
-            await storage.set('exam_index_configurations', configs);
-            const activeKey = await storage.get('active_exam_index_key');
-            if (!activeKey) await storage.set('active_exam_index_key', 'exam_index');
-        } catch (_) {}
-    }
-
-    let html = `
-        <div style="background: #D9CBBA; padding: 20px; border-radius: 10px; margin: 20px 0; border:2px solid #737373; box-shadow: 0 10px 30px rgba(0,0,0,0.35); color:#000000;">
-            <h3 style="margin:0 0 10px; color: #000000;">📚 题库配置列表</h3>
-            <div style="max-height: 320px; overflow-y: auto; margin: 10px 0;">
-        `;
-    const activeKey = await getActiveLibraryConfigurationKey();
-    configs.forEach(cfg => {
-        const date = new Date(cfg.timestamp).toLocaleString();
-        const isActive = activeKey === cfg.key;
-        const isDefault = cfg.key === 'exam_index';
-        const label = isDefault ? '默认题库' : (cfg.name || cfg.key);
-        const activeIndicator = isActive ? '（当前）' : '';
-
-        html += `
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid rgba(0,0,0,0.1); color: #000000; background: linear-gradient(135deg, #BF755A, #a0654a); border-radius: 8px; margin: 5px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                <div style="line-height:1.3;">
-                    <strong style="color: #F2F2F2;">${label}</strong> ${activeIndicator}<br>
-                    <small style="color: #F2F2F2;">${date} - ${cfg.examCount || 0} 个题目</small>
-                </div>
-                <div>
-                    <button class="btn btn-secondary" onclick="switchLibraryConfig('${cfg.key}')" style="margin-left:10px;" ${isActive ? 'disabled' : ''}>切换</button>
-                    ${isDefault ? '' : `<button class="btn btn-warning" onclick="deleteLibraryConfig('${cfg.key}')" style="margin-left:10px;" ${isActive ? 'disabled' : ''}>删除</button>`}
-                </div>
-            </div>
-        `;
-    });
-    html += `
-            </div>
-            <button class="btn btn-secondary" onclick="this.parentElement.remove()">关闭</button>
-        </div>
-    `;
-
-    const container = document.getElementById('settings-view');
-    const existing = container.querySelector('.library-config-list');
-    if (existing) existing.remove();
-    const listDiv = document.createElement('div');
-    listDiv.className = 'library-config-list';
-    listDiv.innerHTML = html;
-    container.appendChild(listDiv);
-}
-
 // Safe exporter (compat with old UI)
 async function exportPracticeData() {
     try {
@@ -2823,6 +2987,11 @@ function setupExamActionHandlers() {
 
         if (action === 'pdf' && typeof viewPDF === 'function') {
             viewPDF(examId);
+            return;
+        }
+
+        if (action === 'generate' && typeof generateHTML === 'function') {
+            generateHTML(examId);
         }
     };
 
@@ -2835,6 +3004,9 @@ function setupExamActionHandlers() {
             invoke(this, event);
         });
         window.DOM.delegate('click', '[data-action="pdf"]', function(event) {
+            invoke(this, event);
+        });
+        window.DOM.delegate('click', '[data-action="generate"]', function(event) {
             invoke(this, event);
         });
     } else {

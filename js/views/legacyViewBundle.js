@@ -383,6 +383,7 @@
             ? options.batchSize
             : DEFAULT_BATCH_SIZE;
         this.domAdapter = options.domAdapter || domAdapter;
+        this.supportsGenerate = options.supportsGenerate !== false;
     }
 
     LegacyExamListView.prototype.render = function render(exams, options) {
@@ -397,18 +398,18 @@
 
         var normalizedExams = ensureArray(exams);
         if (normalizedExams.length === 0) {
-            this._renderEmptyState(container);
+            this._renderEmptyState(container, options.emptyState);
             this._hideLoading(loadingIndicator);
             return;
         }
 
         var examList = this._createExamList();
         if (normalizedExams.length > this.batchSize) {
-            this._renderBatched(normalizedExams, examList);
+            this._renderBatched(normalizedExams, examList, options);
         } else {
             var fragment = document.createDocumentFragment();
             for (var i = 0; i < normalizedExams.length; i += 1) {
-                var element = this._createExamElement(normalizedExams[i], i);
+                var element = this._createExamElement(normalizedExams[i], i, options);
                 if (element) {
                     fragment.appendChild(element);
                 }
@@ -424,7 +425,7 @@
         return this._createElement('div', { className: 'exam-list' });
     };
 
-    LegacyExamListView.prototype._renderBatched = function _renderBatched(exams, listElement) {
+    LegacyExamListView.prototype._renderBatched = function _renderBatched(exams, listElement, options) {
         var view = this;
         var index = 0;
 
@@ -433,7 +434,7 @@
             var fragment = document.createDocumentFragment();
 
             for (var i = index; i < endIndex; i += 1) {
-                var element = view._createExamElement(exams[i], i);
+                var element = view._createExamElement(exams[i], i, options);
                 if (element) {
                     fragment.appendChild(element);
                 }
@@ -450,7 +451,7 @@
         requestAnimationFrame(processBatch);
     };
 
-    LegacyExamListView.prototype._createExamElement = function _createExamElement(exam) {
+    LegacyExamListView.prototype._createExamElement = function _createExamElement(exam, index, options) {
         if (!exam) {
             return null;
         }
@@ -481,24 +482,87 @@
         info.appendChild(infoContent);
 
         var actions = this._createElement('div', { className: 'exam-actions' });
+        var actionConfig = this._resolveActionConfig(exam, options);
+
         var startBtn = this._createElement('button', {
-            className: 'btn exam-item-action-btn',
-            dataset: { action: 'start', examId: exam.id },
+            className: actionConfig.startClass,
+            dataset: { action: actionConfig.startAction, examId: exam.id },
             type: 'button'
-        }, '开始');
-
-        var pdfBtn = this._createElement('button', {
-            className: 'btn btn-secondary exam-item-action-btn',
-            dataset: { action: 'pdf', examId: exam.id },
-            type: 'button'
-        }, 'PDF');
-
+        }, actionConfig.startLabel);
         actions.appendChild(startBtn);
-        actions.appendChild(pdfBtn);
+
+        if (actionConfig.includePdfButton) {
+            var pdfBtn = this._createElement('button', {
+                className: 'btn btn-secondary exam-item-action-btn',
+                dataset: { action: 'pdf', examId: exam.id },
+                type: 'button',
+                title: '查看PDF版本'
+            }, '查看PDF');
+            actions.appendChild(pdfBtn);
+        }
+
+        if (this._shouldShowGenerate(exam, options)) {
+            var generateBtn = this._createElement('button', {
+                className: 'btn btn-info exam-item-action-btn',
+                dataset: { action: 'generate', examId: exam.id },
+                type: 'button',
+                title: '为此题目生成HTML版本'
+            }, '生成HTML');
+            actions.appendChild(generateBtn);
+        }
 
         examItem.appendChild(info);
         examItem.appendChild(actions);
         return examItem;
+    };
+
+    LegacyExamListView.prototype._resolveActionConfig = function _resolveActionConfig(exam, options) {
+        var hasHtml = !!(exam && exam.hasHtml);
+        var config = {
+            startAction: 'start',
+            startLabel: hasHtml ? '开始练习' : '查看PDF',
+            startClass: hasHtml ? 'btn exam-item-action-btn' : 'btn btn-secondary exam-item-action-btn',
+            includePdfButton: true
+        };
+
+        if (options && typeof options.configureStartButton === 'function') {
+            try {
+                var override = options.configureStartButton(exam, config) || {};
+                config = Object.assign({}, config, override);
+            } catch (error) {
+                console.warn('[LegacyExamListView] 自定义开始按钮配置失败', error);
+            }
+        }
+
+        return config;
+    };
+
+    LegacyExamListView.prototype._shouldShowGenerate = function _shouldShowGenerate(exam, options) {
+        if (!this.supportsGenerate) {
+            return false;
+        }
+        if (options && options.supportsGenerate === false) {
+            return false;
+        }
+        if (!exam || exam.hasHtml) {
+            return false;
+        }
+
+        if (options && typeof options.canGenerate === 'function') {
+            try {
+                return !!options.canGenerate(exam);
+            } catch (error) {
+                console.warn('[LegacyExamListView] canGenerate 回调执行失败', error);
+                return false;
+            }
+        }
+
+        if (typeof global.generateHTML === 'function') {
+            return true;
+        }
+
+        var app = global.app || (global.window && global.window.app);
+        return !!(app && typeof app.generateHTMLForPDFExam === 'function');
     };
 
     LegacyExamListView.prototype._createCompletionDot = function _createCompletionDot(percentage) {
@@ -528,15 +592,59 @@
         return 'completion-dot--weak';
     };
 
-    LegacyExamListView.prototype._renderEmptyState = function _renderEmptyState(container) {
+    LegacyExamListView.prototype._renderEmptyState = function _renderEmptyState(container, config) {
+        var safeConfig = config || {};
+        var icon = safeConfig.icon || '🔍';
+        var title = safeConfig.title || '未找到匹配的题目';
+        var description = safeConfig.description || '请调整筛选条件或搜索词后再试';
+        var actions = Array.isArray(safeConfig.actions) ? safeConfig.actions : [];
+
+        var children = [
+            this._createElement('div', { className: 'exam-list-empty-icon', ariaHidden: 'true' }, icon),
+            this._createElement('p', { className: 'exam-list-empty-text' }, title)
+        ];
+
+        if (description) {
+            children.push(this._createElement('p', { className: 'exam-list-empty-hint' }, description));
+        }
+
+        if (actions.length > 0) {
+            var actionContainer = this._createElement('div', {
+                className: 'exam-list-empty-actions',
+                role: 'group',
+                ariaLabel: safeConfig.actionGroupLabel || '题库操作'
+            });
+
+            for (var i = 0; i < actions.length; i += 1) {
+                var action = actions[i];
+                if (!action || !action.action || !action.label) {
+                    continue;
+                }
+
+                var buttonClasses = ['btn', 'exam-list-empty-action'];
+                if (action.variant === 'primary') {
+                    buttonClasses.push('btn-primary');
+                } else if (action.variant === 'secondary') {
+                    buttonClasses.push('btn-secondary');
+                }
+
+                actionContainer.appendChild(this._createElement('button', {
+                    className: buttonClasses.join(' '),
+                    type: 'button',
+                    dataset: { action: action.action },
+                    ariaLabel: action.ariaLabel || action.label
+                }, action.label));
+            }
+
+            if (actionContainer.childNodes.length > 0) {
+                children.push(actionContainer);
+            }
+        }
+
         var emptyState = this._createElement('div', {
             className: 'exam-list-empty',
             role: 'status'
-        }, [
-            this._createElement('div', { className: 'exam-list-empty-icon', ariaHidden: 'true' }, '🔍'),
-            this._createElement('p', { className: 'exam-list-empty-text' }, '未找到匹配的题目'),
-            this._createElement('p', { className: 'exam-list-empty-hint' }, '请调整筛选条件或搜索词后再试')
-        ]);
+        }, children);
 
         this._replaceContent(container, [emptyState]);
     };
@@ -592,6 +700,8 @@
                 });
             } else if (key === 'ariaHidden') {
                 element.setAttribute('aria-hidden', value);
+            } else if (key === 'ariaLabel') {
+                element.setAttribute('aria-label', value);
             } else {
                 element.setAttribute(key, value === true ? '' : value);
             }
@@ -659,8 +769,461 @@
         };
     };
 
+    // --- Legacy navigation controller ---
+    function LegacyNavigationController(options) {
+        options = options || {};
+        this.options = {
+            containerSelector: options.containerSelector || '.main-nav',
+            navButtonSelector: options.navButtonSelector || '.nav-btn[data-view]',
+            activeClass: options.activeClass || 'active',
+            syncOnNavigate: options.syncOnNavigate !== false,
+            onNavigate: typeof options.onNavigate === 'function' ? options.onNavigate : null
+        };
+        this.container = options.container || null;
+        this._boundClickHandler = this._handleClick.bind(this);
+        this._isMounted = false;
+    }
+
+    LegacyNavigationController.prototype.updateOptions = function updateOptions(options) {
+        if (!options) {
+            return;
+        }
+        this.options = Object.assign({}, this.options, {
+            containerSelector: options.containerSelector || this.options.containerSelector,
+            navButtonSelector: options.navButtonSelector || this.options.navButtonSelector,
+            activeClass: options.activeClass || this.options.activeClass,
+            syncOnNavigate: options.syncOnNavigate === undefined ? this.options.syncOnNavigate : options.syncOnNavigate,
+            onNavigate: typeof options.onNavigate === 'function' ? options.onNavigate : this.options.onNavigate
+        });
+        if (options.container) {
+            this.container = options.container;
+        }
+    };
+
+    LegacyNavigationController.prototype.mount = function mount(container) {
+        if (typeof document === 'undefined') {
+            return null;
+        }
+
+        var targetContainer = container;
+        if (!targetContainer) {
+            if (this.container && document.contains(this.container)) {
+                targetContainer = this.container;
+            } else if (this.options.containerSelector) {
+                targetContainer = document.querySelector(this.options.containerSelector);
+            }
+        }
+
+        if (!targetContainer) {
+            this.unmount();
+            return null;
+        }
+
+        if (this.container && this.container !== targetContainer) {
+            this.unmount();
+        }
+
+        this.container = targetContainer;
+        if (!this._isMounted) {
+            this.container.addEventListener('click', this._boundClickHandler);
+        }
+        this._isMounted = true;
+        return this.container;
+    };
+
+    LegacyNavigationController.prototype.unmount = function unmount() {
+        if (!this.container) {
+            return;
+        }
+        try {
+            this.container.removeEventListener('click', this._boundClickHandler);
+        } catch (_) {}
+        this.container = null;
+        this._isMounted = false;
+    };
+
+    LegacyNavigationController.prototype.navigate = function navigate(viewName, event) {
+        var handler = this.options.onNavigate;
+        if (typeof handler === 'function') {
+            handler(viewName, event);
+            return;
+        }
+
+        if (typeof window.showView === 'function') {
+            window.showView(viewName);
+            return;
+        }
+
+        if (window.app && typeof window.app.navigateToView === 'function') {
+            window.app.navigateToView(viewName);
+        }
+    };
+
+    LegacyNavigationController.prototype.syncActive = function syncActive(viewName) {
+        if (typeof document === 'undefined') {
+            return;
+        }
+        var selector = this.options.navButtonSelector || '.nav-btn[data-view]';
+        var activeClass = this.options.activeClass || 'active';
+        var container = this.container || document.querySelector(this.options.containerSelector || '.main-nav');
+        if (!container) {
+            return;
+        }
+
+        var buttons = container.querySelectorAll(selector);
+        for (var i = 0; i < buttons.length; i += 1) {
+            var button = buttons[i];
+            if (!button) {
+                continue;
+            }
+            if (button.classList) {
+                button.classList.toggle(activeClass, button.dataset.view === viewName);
+            } else if (typeof button.className === 'string') {
+                if (button.dataset.view === viewName) {
+                    if ((' ' + button.className + ' ').indexOf(' ' + activeClass + ' ') === -1) {
+                        button.className += ' ' + activeClass;
+                    }
+                } else {
+                    button.className = button.className.replace(new RegExp('(?:^|\\s)' + activeClass + '(?:$|\\s)', 'g'), ' ').trim();
+                }
+            }
+        }
+    };
+
+    LegacyNavigationController.prototype._handleClick = function _handleClick(event) {
+        if (!event) {
+            return;
+        }
+        var selector = this.options.navButtonSelector || '.nav-btn[data-view]';
+        var target = event.target && event.target.closest ? event.target.closest(selector) : null;
+        if (!target || (this.container && !this.container.contains(target))) {
+            return;
+        }
+
+        var viewName = target.dataset ? target.dataset.view : null;
+        if (!viewName) {
+            return;
+        }
+
+        event.preventDefault();
+        this.navigate(viewName, event);
+        if (this.options.syncOnNavigate !== false) {
+            this.syncActive(viewName);
+        }
+    };
+
+    var legacyNavigationControllerInstance = null;
+
+    function ensureLegacyNavigationController(options) {
+        options = options || {};
+        if (!legacyNavigationControllerInstance) {
+            legacyNavigationControllerInstance = new LegacyNavigationController(options);
+        } else {
+            legacyNavigationControllerInstance.updateOptions(options);
+        }
+
+        var container = options.container;
+        if (!container && options.containerSelector && typeof document !== 'undefined') {
+            container = document.querySelector(options.containerSelector);
+        }
+        legacyNavigationControllerInstance.mount(container);
+
+        if (options.initialView) {
+            legacyNavigationControllerInstance.syncActive(options.initialView);
+        }
+
+        global.__legacyNavigationController = legacyNavigationControllerInstance;
+        return legacyNavigationControllerInstance;
+    }
+
+    // --- Library configuration view ---
+    function LibraryConfigView(options) {
+        options = options || {};
+        this.domAdapter = options.domAdapter || domAdapter;
+        this.classNames = Object.assign({
+            host: 'library-config-list',
+            panel: 'library-config-panel',
+            header: 'library-config-panel__header',
+            title: 'library-config-panel__title',
+            badge: 'library-config-panel__badge',
+            list: 'library-config-panel__list',
+            item: 'library-config-panel__item',
+            itemActive: 'library-config-panel__item--active',
+            info: 'library-config-panel__info',
+            meta: 'library-config-panel__meta',
+            actions: 'library-config-panel__actions',
+            footer: 'library-config-panel__footer',
+            closeButton: 'library-config-panel__close',
+            empty: 'library-config-panel__empty',
+            emptyIcon: 'library-config-panel__empty-icon',
+            emptyHint: 'library-config-panel__empty-hint'
+        }, options.classNames || {});
+    }
+
+    LibraryConfigView.prototype.mount = function mount(container, configs, options) {
+        if (!container) {
+            return null;
+        }
+
+        var host = this._ensureHost(container);
+        var panel = this._renderPanel(ensureArray(configs), options || {});
+        this._replaceContent(host, [panel]);
+        this._bindActions(host, options || {});
+        return host;
+    };
+
+    LibraryConfigView.prototype._renderPanel = function _renderPanel(configs, options) {
+        var panel = this._createElement('div', {
+            className: this.classNames.panel,
+            role: 'dialog',
+            ariaLabel: '题库配置列表'
+        });
+
+        panel.appendChild(this._renderHeader());
+
+        if (!configs.length) {
+            panel.appendChild(this._renderEmptyState(options && options.emptyMessage));
+        } else {
+            panel.appendChild(this._renderList(configs, options));
+        }
+
+        panel.appendChild(this._renderFooter());
+        return panel;
+    };
+
+    LibraryConfigView.prototype._renderHeader = function _renderHeader() {
+        var header = this._createElement('div', { className: this.classNames.header });
+        header.appendChild(this._createElement('h3', {
+            className: this.classNames.title
+        }, ['📚', this._createElement('span', null, ' 题库配置列表')]));
+        return header;
+    };
+
+    LibraryConfigView.prototype._renderEmptyState = function _renderEmptyState(customMessage) {
+        var message = typeof customMessage === 'string' && customMessage.trim().length
+            ? customMessage
+            : '暂无题库配置记录';
+
+        return this._createElement('div', { className: this.classNames.empty }, [
+            this._createElement('span', { className: this.classNames.emptyIcon, ariaHidden: 'true' }, '🗂️'),
+            this._createElement('p', { className: this.classNames.emptyHint }, message)
+        ]);
+    };
+
+    LibraryConfigView.prototype._renderList = function _renderList(configs, options) {
+        var list = this._createElement('div', {
+            className: this.classNames.list,
+            role: 'list'
+        });
+
+        var activeKey = options && options.activeKey;
+        var allowDelete = options && options.allowDelete !== false;
+
+        for (var i = 0; i < configs.length; i += 1) {
+            var config = configs[i];
+            if (!config) {
+                continue;
+            }
+            list.appendChild(this._renderItem(config, activeKey, allowDelete));
+        }
+        return list;
+    };
+
+    LibraryConfigView.prototype._renderItem = function _renderItem(config, activeKey, allowDelete) {
+        var isActive = activeKey === config.key;
+        var isDefault = config.key === 'exam_index';
+        var className = this.classNames.item + (isActive ? ' ' + this.classNames.itemActive : '');
+
+        var item = this._createElement('div', {
+            className: className,
+            role: 'listitem'
+        });
+
+        var info = this._createElement('div', { className: this.classNames.info });
+        var titleChildren = [config.name || config.key || '未命名题库'];
+        if (isDefault) {
+            titleChildren.push(this._createElement('span', { className: this.classNames.badge }, '默认'));
+        }
+        if (isActive) {
+            titleChildren.push(this._createElement('span', { className: this.classNames.badge }, '当前'));
+        }
+
+        info.appendChild(this._createElement('div', null, titleChildren));
+
+        var metaText = this._formatTimestamp(config.timestamp) + ' · ' + (config.examCount || 0) + ' 个题目';
+        info.appendChild(this._createElement('div', { className: this.classNames.meta }, metaText));
+
+        var actions = this._createElement('div', { className: this.classNames.actions });
+        actions.appendChild(this._createElement('button', {
+            className: 'btn btn-secondary',
+            type: 'button',
+            dataset: {
+                configAction: 'switch',
+                configKey: config.key
+            },
+            disabled: !!isActive
+        }, '切换'));
+
+        if (!isDefault && allowDelete !== false) {
+            actions.appendChild(this._createElement('button', {
+                className: 'btn btn-warning',
+                type: 'button',
+                dataset: {
+                    configAction: 'delete',
+                    configKey: config.key
+                },
+                disabled: !!isActive
+            }, '删除'));
+        }
+
+        item.appendChild(info);
+        item.appendChild(actions);
+        return item;
+    };
+
+    LibraryConfigView.prototype._renderFooter = function _renderFooter() {
+        var footer = this._createElement('div', { className: this.classNames.footer });
+        footer.appendChild(this._createElement('button', {
+            className: 'btn btn-secondary ' + this.classNames.closeButton,
+            type: 'button',
+            dataset: { configAction: 'close' }
+        }, '关闭'));
+        return footer;
+    };
+
+    LibraryConfigView.prototype._ensureHost = function _ensureHost(container) {
+        var host = container.querySelector('.' + this.classNames.host);
+        if (!host) {
+            host = this._createElement('div', { className: this.classNames.host });
+            container.appendChild(host);
+        }
+        return host;
+    };
+
+    LibraryConfigView.prototype._replaceContent = function _replaceContent(container, nodes) {
+        if (this.domAdapter && typeof this.domAdapter.replaceContent === 'function') {
+            this.domAdapter.replaceContent(container, nodes);
+            return;
+        }
+
+        while (container.firstChild) {
+            container.removeChild(container.firstChild);
+        }
+
+        var elements = Array.isArray(nodes) ? nodes : [nodes];
+        for (var i = 0; i < elements.length; i += 1) {
+            var node = elements[i];
+            if (node instanceof Node) {
+                container.appendChild(node);
+            }
+        }
+    };
+
+    LibraryConfigView.prototype._bindActions = function _bindActions(host, options) {
+        if (!host) {
+            return;
+        }
+
+        if (host._libraryConfigHandler) {
+            host.removeEventListener('click', host._libraryConfigHandler);
+        }
+
+        var handlers = options && options.handlers ? options.handlers : {};
+        var listener = function (event) {
+            var target = event.target && event.target.closest('[data-config-action]');
+            if (!target || !host.contains(target)) {
+                return;
+            }
+
+            var action = target.dataset.configAction;
+            if (action === 'close') {
+                event.preventDefault();
+                host.remove();
+                return;
+            }
+
+            var handler = handlers[action];
+            if (typeof handler === 'function') {
+                handler(target.dataset.configKey, event);
+            }
+        };
+
+        host._libraryConfigHandler = listener;
+        host.addEventListener('click', listener);
+    };
+
+    LibraryConfigView.prototype._createElement = function _createElement(tag, attributes, children) {
+        if (this.domAdapter && typeof this.domAdapter.create === 'function') {
+            return this.domAdapter.create(tag, attributes, children);
+        }
+
+        var element = document.createElement(tag);
+        if (attributes) {
+            Object.keys(attributes).forEach(function (key) {
+                var value = attributes[key];
+                if (value == null || value === false) {
+                    return;
+                }
+                if (key === 'className') {
+                    element.className = value;
+                    return;
+                }
+                if (key === 'dataset' && typeof value === 'object') {
+                    Object.keys(value).forEach(function (dataKey) {
+                        var dataValue = value[dataKey];
+                        if (dataValue != null) {
+                            element.dataset[dataKey] = String(dataValue);
+                        }
+                    });
+                    return;
+                }
+                if (key === 'ariaLabel') {
+                    element.setAttribute('aria-label', value);
+                    return;
+                }
+                if (key === 'ariaHidden') {
+                    element.setAttribute('aria-hidden', value);
+                    return;
+                }
+                if (key === 'disabled') {
+                    element.disabled = !!value;
+                    return;
+                }
+                element.setAttribute(key, value === true ? '' : value);
+            });
+        }
+
+        var nodes = Array.isArray(children) ? children : (children != null ? [children] : []);
+        for (var i = 0; i < nodes.length; i += 1) {
+            var child = nodes[i];
+            if (child == null) {
+                continue;
+            }
+            if (typeof child === 'string') {
+                element.appendChild(document.createTextNode(child));
+            } else if (child instanceof Node) {
+                element.appendChild(child);
+            }
+        }
+        return element;
+    };
+
+    LibraryConfigView.prototype._formatTimestamp = function _formatTimestamp(timestamp) {
+        if (!timestamp) {
+            return '未知时间';
+        }
+        try {
+            return new Date(timestamp).toLocaleString();
+        } catch (error) {
+            return '未知时间';
+        }
+    };
+
     global.PracticeStats = PracticeStats;
     global.PracticeDashboardView = PracticeDashboardView;
     global.PracticeHistoryRenderer = historyRenderer;
     global.LegacyExamListView = LegacyExamListView;
+    global.LibraryConfigView = LibraryConfigView;
+    global.LegacyNavigationController = LegacyNavigationController;
+    global.ensureLegacyNavigationController = ensureLegacyNavigationController;
 })(window);

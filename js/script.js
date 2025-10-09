@@ -313,18 +313,108 @@ window.errorHandler = {
 
 // 工具函数已在 helpers.js 中定义，无需重复定义
 
+const legacyStateAdapter = window.LegacyStateAdapter ? window.LegacyStateAdapter.getInstance() : null;
+const initialLegacyFilter = legacyStateAdapter ? legacyStateAdapter.getBrowseFilter() : (window.__browseFilter || { category: 'all', type: 'all' });
+const initialLegacyType = typeof window.__legacyBrowseType === 'string' ? window.__legacyBrowseType : (initialLegacyFilter.type || 'all');
+
 // 题库数据和状态
-let examIndex = [];
-let currentCategory = 'all';
+let examIndex = legacyStateAdapter ? legacyStateAdapter.getExamIndex() : [];
+let currentCategory = initialLegacyFilter.category || 'all';
+let currentExamType = initialLegacyFilter.type || initialLegacyType || 'all';
 let filteredExams = [];
+let practiceRecords = legacyStateAdapter ? legacyStateAdapter.getPracticeRecords() : [];
 let app = null; // 主应用实例
 let pdfHandler = null; // PDF处理器实例
 let browseStateManager = null; // 浏览状态管理器实例
-window.__legacyBrowseType = window.__legacyBrowseType || 'all';
-window.__browseFilter = window.__browseFilter || { category: 'all', type: 'all' };
+function updateGlobalLegacyBrowseState(category, type) {
+    const browseDescriptor = Object.getOwnPropertyDescriptor(window, '__browseFilter');
+    if (!browseDescriptor || typeof browseDescriptor.set !== 'function') {
+        try { window.__browseFilter = { category, type }; } catch (_) {}
+    }
+
+    const legacyTypeDescriptor = Object.getOwnPropertyDescriptor(window, '__legacyBrowseType');
+    if (!legacyTypeDescriptor || typeof legacyTypeDescriptor.set !== 'function') {
+        try { window.__legacyBrowseType = type; } catch (_) {}
+    }
+}
+
+updateGlobalLegacyBrowseState(currentCategory, currentExamType);
+let legacyExamListViewInstance = null;
+let legacyExamActionsConfigured = false;
+let legacyBackupDelegatesConfigured = false;
+
+const LEGACY_EXAM_EMPTY_STATE = Object.freeze({
+    icon: '📝',
+    title: '暂无题目',
+    description: '请先扫描题库来加载题目列表',
+    actionGroupLabel: '题库操作',
+    actions: [
+        { action: 'load-library', label: '加载题库', variant: 'primary' }
+    ]
+});
+
+if (typeof window !== 'undefined') {
+    window.__legacyExamEmptyStateConfig = LEGACY_EXAM_EMPTY_STATE;
+}
+
+if (legacyStateAdapter) {
+    legacyStateAdapter.subscribe('examIndex', (value) => {
+        examIndex = Array.isArray(value) ? value : [];
+    });
+    legacyStateAdapter.subscribe('practiceRecords', (value) => {
+        practiceRecords = Array.isArray(value) ? value : [];
+    });
+    legacyStateAdapter.subscribe('browseFilter', (value) => {
+        const normalized = value && typeof value === 'object' ? value : { category: 'all', type: 'all' };
+        currentCategory = typeof normalized.category === 'string' ? normalized.category : 'all';
+        currentExamType = typeof normalized.type === 'string' ? normalized.type : 'all';
+        updateGlobalLegacyBrowseState(currentCategory, currentExamType);
+    });
+}
+
+function setExamIndexState(list) {
+    const normalized = Array.isArray(list) ? list : [];
+    if (legacyStateAdapter) {
+        const updated = legacyStateAdapter.setExamIndex(normalized);
+        examIndex = Array.isArray(updated) ? updated : normalized;
+        return examIndex;
+    }
+    examIndex = normalized;
+    try { window.examIndex = normalized; } catch (_) {}
+    return examIndex;
+}
+
+function setPracticeRecordsState(records) {
+    const normalized = Array.isArray(records) ? records : [];
+    if (legacyStateAdapter) {
+        const updated = legacyStateAdapter.setPracticeRecords(normalized);
+        practiceRecords = Array.isArray(updated) ? updated : normalized;
+        return practiceRecords;
+    }
+    practiceRecords = normalized;
+    try { window.practiceRecords = normalized; } catch (_) {}
+    return practiceRecords;
+}
+
+function setBrowseFilterState(category = 'all', type = 'all') {
+    const normalized = {
+        category: typeof category === 'string' ? category : 'all',
+        type: typeof type === 'string' ? type : 'all'
+    };
+    if (legacyStateAdapter) {
+        const updated = legacyStateAdapter.setBrowseFilter(normalized);
+        currentCategory = updated.category || 'all';
+        currentExamType = updated.type || 'all';
+        updateGlobalLegacyBrowseState(currentCategory, currentExamType);
+    } else {
+        currentCategory = normalized.category;
+        currentExamType = normalized.type;
+        updateGlobalLegacyBrowseState(currentCategory, currentExamType);
+    }
+    return { category: currentCategory, type: currentExamType };
+}
 
 // 练习记录数据（使用统一的键名）
-let practiceRecords = [];
 let practiceRecordsInitialized = false;
 let practiceStats = {
     totalPracticed: 0,
@@ -334,12 +424,110 @@ let practiceStats = {
     lastPracticeDate: null
 };
 
+let practiceDashboardViewInstance = null;
+let practiceHistoryScrollerInstance = null;
+let practiceHistoryDelegatesBound = false;
+
 const LEGACY_MESSAGE_ICONS = {
     error: '❌',
     success: '✅',
     warning: '⚠️',
     info: 'ℹ️'
 };
+
+function resolveDomAdapter() {
+    if (typeof window === 'undefined') {
+        return null;
+    }
+    const dom = window.DOM;
+    if (dom && typeof dom.create === 'function' && typeof dom.replaceContent === 'function') {
+        return dom;
+    }
+    return null;
+}
+
+function legacyAppendChildren(element, children) {
+    const list = Array.isArray(children) ? children : [children];
+    for (let i = 0; i < list.length; i += 1) {
+        const child = list[i];
+        if (child == null) continue;
+        if (typeof child === 'string') {
+            element.appendChild(document.createTextNode(child));
+        } else if (child instanceof Node) {
+            element.appendChild(child);
+        }
+    }
+}
+
+function legacyCreateElement(tag, attributes = {}, children = []) {
+    const adapter = resolveDomAdapter();
+    if (adapter) {
+        return adapter.create(tag, attributes, children);
+    }
+
+    const element = document.createElement(tag);
+    const entries = Object.entries(attributes);
+    for (let i = 0; i < entries.length; i += 1) {
+        const [key, value] = entries[i];
+        if (value == null) continue;
+
+        if (key === 'className') {
+            element.className = value;
+            continue;
+        }
+        if (key === 'dataset' && typeof value === 'object') {
+            Object.keys(value).forEach((dataKey) => {
+                const dataValue = value[dataKey];
+                if (dataValue != null) {
+                    element.dataset[dataKey] = String(dataValue);
+                }
+            });
+            continue;
+        }
+        if (key === 'style' && typeof value === 'object') {
+            Object.assign(element.style, value);
+            continue;
+        }
+        element.setAttribute(key, value === true ? '' : value);
+    }
+
+    legacyAppendChildren(element, children);
+    return element;
+}
+
+function legacyReplaceContent(container, content) {
+    const adapter = resolveDomAdapter();
+    if (adapter) {
+        adapter.replaceContent(container, content);
+        return;
+    }
+
+    if (!container) return;
+    while (container.firstChild) {
+        container.removeChild(container.firstChild);
+    }
+    legacyAppendChildren(container, content);
+}
+
+function toggleVisibility(element, shouldShow) {
+    if (!element) return;
+    if (element.classList && typeof element.classList.toggle === 'function') {
+        element.classList.toggle('is-hidden', shouldShow === false);
+        return;
+    }
+    element.style.display = shouldShow === false ? 'none' : '';
+}
+
+function lockBodyScroll(locked) {
+    if (typeof document === 'undefined' || !document.body) {
+        return;
+    }
+    if (document.body.classList && typeof document.body.classList.toggle === 'function') {
+        document.body.classList.toggle('no-scroll', Boolean(locked));
+        return;
+    }
+    document.body.style.overflow = locked ? 'hidden' : '';
+}
 
 function ensureLegacyMessageContainer() {
     if (typeof document === 'undefined') {
@@ -412,42 +600,223 @@ function showMessage(message, type = 'info', duration = 4000) {
 
     const timeout = typeof duration === 'number' && duration > 0 ? duration : 4000;
     window.setTimeout(() => {
-        note.style.animation = 'slideOut 0.3s ease-in forwards';
+        note.classList.add('message-leaving');
         window.setTimeout(() => {
             if (note.parentNode) {
                 note.parentNode.removeChild(note);
             }
-        }, 300);
+        }, 320);
     }, timeout);
+}
+
+function ensureLegacyDataIntegrityManager() {
+    if (typeof window === 'undefined') {
+        return null;
+    }
+
+    if (!window.dataIntegrityManager && window.DataIntegrityManager) {
+        try {
+            window.dataIntegrityManager = new window.DataIntegrityManager();
+        } catch (error) {
+            console.warn('[LegacyBackup] 初始化 DataIntegrityManager 失败:', error);
+        }
+    }
+
+    return window.dataIntegrityManager || null;
+}
+
+function legacyCreateElement(tag, attributes, children) {
+    if (typeof document === 'undefined') {
+        return null;
+    }
+
+    const element = document.createElement(tag);
+    const attrs = attributes || {};
+
+    Object.keys(attrs).forEach((key) => {
+        const value = attrs[key];
+        if (value == null || value === false) {
+            return;
+        }
+
+        if (key === 'className') {
+            element.className = value;
+            return;
+        }
+
+        if (key === 'dataset' && typeof value === 'object') {
+            Object.keys(value).forEach((dataKey) => {
+                const dataValue = value[dataKey];
+                if (dataValue == null) {
+                    return;
+                }
+                element.dataset[dataKey] = String(dataValue);
+            });
+            return;
+        }
+
+        if (key === 'ariaHidden') {
+            element.setAttribute('aria-hidden', value === true ? 'true' : String(value));
+            return;
+        }
+
+        if (key === 'ariaLabel') {
+            element.setAttribute('aria-label', String(value));
+            return;
+        }
+
+        if (key === 'text') {
+            element.textContent = String(value);
+            return;
+        }
+
+        element.setAttribute(key, value === true ? '' : String(value));
+    });
+
+    const normalizedChildren = Array.isArray(children) ? children : [children];
+    normalizedChildren.forEach((child) => {
+        if (child == null) {
+            return;
+        }
+
+        if (typeof child === 'string') {
+            element.appendChild(document.createTextNode(child));
+        } else if (child instanceof Node) {
+            element.appendChild(child);
+        }
+    });
+
+    return element;
+}
+
+function ensureLegacyBackupDelegates() {
+    if (legacyBackupDelegatesConfigured || typeof document === 'undefined') {
+        return;
+    }
+
+    const handler = (event) => {
+        const target = event.target && event.target.closest
+            ? event.target.closest('[data-backup-action]')
+            : null;
+        if (!target) {
+            return;
+        }
+
+        const action = target.dataset.backupAction;
+        if (action === 'restore') {
+            event.preventDefault();
+            const backupId = target.dataset.backupId;
+            if (backupId) {
+                legacyRestoreBackupById(backupId);
+            }
+            return;
+        }
+
+        if (action === 'close-modal') {
+            event.preventDefault();
+            const overlay = document.querySelector('.backup-modal-overlay');
+            if (overlay) {
+                overlay.remove();
+            }
+        }
+    };
+
+    document.addEventListener('click', handler);
+    legacyBackupDelegatesConfigured = true;
+}
+
+async function legacyRestoreBackupById(backupId) {
+    if (!backupId) {
+        showMessage('无效的备份ID', 'error');
+        return;
+    }
+
+    const manager = ensureLegacyDataIntegrityManager();
+    if (!manager) {
+        showMessage('数据完整性管理器未初始化', 'error');
+        return;
+    }
+
+    if (!confirm(`确定要恢复备份 ${backupId} 吗？当前数据将被覆盖。`)) {
+        return;
+    }
+
+    try {
+        showMessage('正在恢复备份...', 'info');
+        await manager.restoreBackup(backupId);
+        showMessage('备份恢复成功', 'success');
+        setTimeout(() => {
+            try {
+                showBackupList();
+            } catch (error) {
+                console.warn('[LegacyBackup] 刷新备份列表失败:', error);
+            }
+        }, 1000);
+    } catch (error) {
+        console.error('[LegacyBackup] 恢复备份失败:', error);
+        const detail = error && error.message ? error.message : error;
+        showMessage('备份恢复失败: ' + detail, 'error');
+    }
 }
 
 // 视图切换
 function showView(viewName, resetCategory = true) {
-    document.querySelectorAll('.view').forEach(view => {
-        view.classList.remove('active');
-    });
-
-    document.getElementById(viewName + '-view').classList.add('active');
-
-    document.querySelectorAll('.nav-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
-
-    const activeBtn = Array.from(document.querySelectorAll('.nav-btn')).find(btn =>
-        btn.textContent.includes(getViewName(viewName))
-    );
-    if (activeBtn) {
-        activeBtn.classList.add('active');
+    if (typeof document === 'undefined') {
+        return;
     }
 
-    if (viewName === 'browse') {
+    const normalizedView = typeof viewName === 'string' && viewName ? viewName : 'overview';
+    const targetId = normalizedView + '-view';
+    const targetView = document.getElementById(targetId);
+
+    if (!targetView) {
+        console.warn('[Navigation] 未找到视图节点:', targetId);
+        return;
+    }
+
+    document.querySelectorAll('.view.active').forEach(view => {
+        view.classList.remove('active');
+    });
+    targetView.classList.add('active');
+
+    let navSynced = false;
+    if (typeof window.ensureLegacyNavigationController === 'function') {
+        try {
+            const controller = window.ensureLegacyNavigationController({
+                containerSelector: '.main-nav',
+                syncOnNavigate: false
+            });
+            if (controller && typeof controller.syncActive === 'function') {
+                controller.syncActive(normalizedView);
+                navSynced = true;
+            }
+        } catch (error) {
+            console.warn('[Navigation] 同步导航状态失败:', error);
+        }
+    }
+
+    if (!navSynced) {
+        const navContainer = document.querySelector('.main-nav');
+        if (navContainer) {
+            const buttons = navContainer.querySelectorAll('.nav-btn');
+            buttons.forEach(btn => {
+                btn.classList.remove('active');
+            });
+            const navButton = navContainer.querySelector(`.nav-btn[data-view="${normalizedView}"]`);
+            if (navButton) {
+                navButton.classList.add('active');
+            }
+        }
+    }
+
+    if (normalizedView === 'browse') {
         // 只有在resetCategory为true时才重置分类
         if (resetCategory) {
-            currentCategory = 'all';
+            setBrowseFilterState('all', currentExamType);
             document.getElementById('browse-title').textContent = '📚 题库浏览';
         }
         loadExamList();
-    } else if (viewName === 'practice') {
+    } else if (normalizedView === 'practice') {
         updatePracticeView();
     }
 }
@@ -471,7 +840,7 @@ async function loadLibrary() {
     const cachedData = await storage.get(activeConfigKey);
     if (cachedData) {
         console.log(`[System] 使用localStorage中key为'${activeConfigKey}'的题库数据`);
-        examIndex = normalizeExamIndex(cachedData);
+        examIndex = setExamIndexState(normalizeExamIndex(cachedData));
         storage.set(activeConfigKey, examIndex);
 
         let configName = '默认题库';
@@ -485,8 +854,6 @@ async function loadLibrary() {
         }
         // 确保当前加载的配置存在于配置列表中
         saveLibraryConfiguration(configName, activeConfigKey, examIndex.length);
-
-        try { window.examIndex = examIndex; } catch (_) {}
 
         updateOverview();
         updateSystemInfo();
@@ -514,14 +881,14 @@ async function loadLibrary() {
             }))
             : [];
 
-        examIndex = [...readingIndex, ...listeningIndex];
+        const combinedIndex = [...readingIndex, ...listeningIndex];
 
-        if (examIndex.length === 0) {
+        if (combinedIndex.length === 0) {
             throw new Error('默认题库数据为空');
         }
 
         // 将默认题库保存为 'exam_index' 配置，并设置为活动
-        examIndex = normalizeExamIndex(examIndex);
+        examIndex = setExamIndexState(normalizeExamIndex(combinedIndex));
         storage.set('exam_index', examIndex);
         saveLibraryConfiguration('默认题库', 'exam_index', examIndex.length);
         setActiveLibraryConfiguration('exam_index');
@@ -574,7 +941,7 @@ function finishLibraryLoading(startTime) {
         window.performanceOptimizer.recordLoadTime(loadTime);
     }
 
-    try { window.examIndex = examIndex; } catch (_) {}
+    setExamIndexState(examIndex);
 
     const htmlCount = examIndex.filter(exam => exam.hasHtml).length;
     const pdfCount = examIndex.filter(exam => !exam.hasHtml).length;
@@ -595,7 +962,7 @@ function finishLibraryLoading(startTime) {
 function loadLibraryFallback() {
     try {
         // 创建基本的题库结构
-        examIndex = normalizeExamIndex([
+        examIndex = setExamIndexState(normalizeExamIndex([
             {
                 id: 'fallback-notice',
                 title: '题库加载异常，请刷新页面重试',
@@ -607,7 +974,7 @@ function loadLibraryFallback() {
                 hasPdf: false,
                 type: 'reading'
             }
-        ]);
+        ]));
 
         showMessage('已启用备用模式，功能可能受限', 'warning');
         updateOverview();
@@ -740,7 +1107,7 @@ async function handleFolderSelection(event) {
             saveLibraryConfiguration(configName, configKey, newExamIndex.length);
             setActiveLibraryConfiguration(configKey);
 
-            examIndex = newExamIndex;
+            examIndex = setExamIndexState(newExamIndex);
 
             updateOverview();
             updateSystemInfo();
@@ -762,56 +1129,19 @@ async function handleFolderSelection(event) {
 }
 
 // 显示题库配置列表
-function showLibraryConfigList() {
-    const configs = getLibraryConfigurations();
-
-    if (configs.length === 0) {
-        showMessage('暂无题库配置记录', 'info');
+async function showLibraryConfigList(options) {
+    if (typeof showLibraryConfigListV2 === 'function') {
+        await showLibraryConfigListV2(Object.assign({ allowDelete: true }, options || {}));
         return;
     }
 
-    let configHtml = `
-                <div style="background: rgba(255, 255, 255, 0.1); padding: 20px; border-radius: 10px; margin: 20px 0;">
-                    <h3>📚 题库配置列表</h3>
-                    <div style="max-height: 300px; overflow-y: auto; margin: 15px 0;">
-            `;
-
-    configs.forEach(config => {
-        const date = new Date(config.timestamp).toLocaleString();
-        const isActive = getActiveLibraryConfigurationKey() === config.key;
-        const activeIndicator = isActive ? '✅ (当前)' : '';
-
-        configHtml += `
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.1);">
-                        <div>
-                            <strong>${config.name}</strong> ${activeIndicator}<br>
-                            <small>${date} • ${config.examCount} 个题目</small>
-                        </div>
-                        <div>
-                            <button class="btn btn-secondary" onclick="switchLibraryConfig('${config.key}')" style="margin-left: 10px;" ${isActive ? 'disabled' : ''}>切换</button>
-                            <button class="btn btn-warning" onclick="deleteLibraryConfig('${config.key}')" style="margin-left: 10px;" ${isActive ? 'disabled' : ''}>删除</button>
-                        </div>
-                    </div>
-                `;
-    });
-
-    configHtml += `
-                    </div>
-                    <button class="btn btn-secondary" onclick="this.parentElement.remove()">关闭</button>
-                </div>
-            `;
-
-    // 显示配置列表
     const container = document.getElementById('settings-view');
-    const existingList = container.querySelector('.library-config-list');
-    if (existingList) {
-        existingList.remove();
+    if (container && container.querySelector('.library-config-list')) {
+        container.querySelector('.library-config-list').remove();
     }
-
-    const listDiv = document.createElement('div');
-    listDiv.className = 'library-config-list';
-    listDiv.innerHTML = configHtml;
-    container.appendChild(listDiv);
+    if (typeof showMessage === 'function') {
+        showMessage('题库配置模块尚未准备就绪', 'warning');
+    }
 }
 
 // 切换题库配置
@@ -896,29 +1226,33 @@ function filterExams(filterType) {
     event.target.classList.add('active');
 
     let filtered = [];
+    let nextCategory = currentCategory;
+    let nextType = currentExamType;
 
     switch (filterType) {
         case 'all':
             filtered = examIndex;
-            currentCategory = 'all';
+            nextCategory = 'all';
             break;
         case 'P1':
         case 'P2':
         case 'P3':
             filtered = examIndex.filter(exam => exam.category === filterType);
-            currentCategory = filterType;
+            nextCategory = filterType;
             break;
         case 'high':
             filtered = examIndex.filter(exam => exam.frequency === 'high');
-            currentCategory = 'all';
+            nextCategory = 'all';
             break;
         case 'low':
             filtered = examIndex.filter(exam => exam.frequency === 'low');
-            currentCategory = 'all';
+            nextCategory = 'all';
             break;
         default:
             filtered = examIndex;
     }
+
+    setBrowseFilterState(nextCategory, nextType);
 
     filteredExams = filtered;
     displayExams(filteredExams);
@@ -996,7 +1330,6 @@ function performSearch(query) {
 function browseCategory(category, type) {
     try {
         window.__pendingBrowseFilter = { category, type };
-        window.__browseFilter = { category, type };
     } catch (_) {}
 
     // 优先使用 App 的统一处理
@@ -1010,10 +1343,8 @@ function browseCategory(category, type) {
     if (typeof window.applyBrowseFilter === 'function') {
         window.applyBrowseFilter(category, type);
     } else {
-        currentCategory = category || 'all';
-        if (typeof type === 'string') {
-            window.__legacyBrowseType = type;
-        }
+        const normalizedType = typeof type === 'string' ? type : currentExamType;
+        setBrowseFilterState(category || 'all', normalizedType);
         document.getElementById('browse-title').textContent = `📚 ${category} 题库浏览`;
         loadExamList();
     }
@@ -1026,7 +1357,7 @@ function loadExamList() {
 
     // 显示loading状态
     if (loadingElement) {
-        loadingElement.style.display = 'block';
+        toggleVisibility(loadingElement, true);
     }
 
     setTimeout(() => {
@@ -1035,24 +1366,23 @@ function loadExamList() {
         const desiredType = (pendingFilter.type || window.__legacyBrowseType || 'all') || 'all';
 
         const sourceIndex = Array.isArray(window.examIndex) ? window.examIndex : examIndex;
-        examIndex = sourceIndex;
+        if (Array.isArray(sourceIndex) && sourceIndex !== examIndex) {
+            examIndex = setExamIndexState(sourceIndex);
+        }
+
+        const normalizedCategory = desiredCategory ? desiredCategory.toUpperCase() : 'all';
+        const normalizedType = desiredType || 'all';
+        const activeFilter = setBrowseFilterState(normalizedCategory, normalizedType);
 
         let examsToShow = examIndex;
 
-        if (desiredType && desiredType !== 'all') {
-            examsToShow = examsToShow.filter(exam => (exam.type || 'reading') === desiredType);
+        if (activeFilter.type !== 'all') {
+            examsToShow = examsToShow.filter(exam => (exam.type || 'reading') === activeFilter.type);
         }
 
-        if (desiredCategory && desiredCategory !== 'all') {
-            const normalizedCategory = desiredCategory.toUpperCase();
-            examsToShow = examsToShow.filter(exam => exam.category === normalizedCategory);
-            currentCategory = normalizedCategory;
-        } else {
-            currentCategory = 'all';
+        if (activeFilter.category !== 'all') {
+            examsToShow = examsToShow.filter(exam => exam.category === activeFilter.category);
         }
-
-        window.__legacyBrowseType = desiredType;
-        window.__browseFilter = { category: currentCategory, type: desiredType };
 
         if (window.__pendingBrowseFilter) {
             delete window.__pendingBrowseFilter;
@@ -1070,24 +1400,13 @@ function loadExamList() {
         }
 
         if (loadingElement) {
-            loadingElement.style.display = 'none';
-        }
-
-        if (examsToShow.length === 0) {
-            container.innerHTML = `
-                <div style="text-align: center; padding: 40px; background: rgba(255, 255, 255, 0.1); border-radius: 10px;">
-                    <h3>📝 暂无题目</h3>
-                    <p style="margin: 15px 0; opacity: 0.8;">请先扫描题库来加载题目列表</p>
-                    <button class="btn" onclick="loadLibrary()">加载题库</button>
-                </div>
-            `;
-            return;
+            toggleVisibility(loadingElement, false);
         }
 
         const sortedExams = sortExamsForDisplay(examsToShow);
         filteredExams = sortedExams;
-        window.currentCategory = currentCategory;
-        window.currentExamType = desiredType;
+        window.currentCategory = activeFilter.category;
+        window.currentExamType = activeFilter.type;
         displayExams(sortedExams);
     }, 500);
 }
@@ -1123,179 +1442,283 @@ function normalizeExamIndex(list) {
     });
 }
 
-// 优化的题目列表显示函数
-function displayExams(exams) {
-    const startTime = performance.now();
-    const container = document.getElementById('exam-list-container');
+function cloneLegacyExamEmptyState() {
+    const base = LEGACY_EXAM_EMPTY_STATE || {};
+    const clonedActions = Array.isArray(base.actions)
+        ? base.actions.map(action => ({
+            action: action.action,
+            label: action.label,
+            variant: action.variant,
+            ariaLabel: action.ariaLabel
+        }))
+        : [];
 
-    if (exams.length === 0) {
-        container.innerHTML = `
-            <div style="text-align: center; padding: 40px; background: rgba(255, 255, 255, 0.1); border-radius: 10px;">
-                <h3>🔍 未找到匹配的题目</h3>
-                <p style="opacity: 0.8;">请尝试其他搜索关键词</p>
-            </div>
-        `;
+    return {
+        icon: base.icon,
+        title: base.title,
+        description: base.description,
+        actionGroupLabel: base.actionGroupLabel,
+        actions: clonedActions
+    };
+}
+
+function ensureLegacyExamListView() {
+    if (!legacyExamListViewInstance && window.LegacyExamListView) {
+        legacyExamListViewInstance = new window.LegacyExamListView({
+            domAdapter: window.DOMAdapter,
+            containerId: 'exam-list-container'
+        });
+    }
+    return legacyExamListViewInstance;
+}
+
+function configureLegacyExamActionDelegation() {
+    if (legacyExamActionsConfigured) {
         return;
     }
 
-    // 清理之前的虚拟滚动器
-    if (window.currentVirtualScroller) {
-        window.currentVirtualScroller.destroy();
-        window.currentVirtualScroller = null;
+    const container = document.getElementById('exam-list-container');
+    if (!container) {
+        return;
     }
 
-    // 对于大量数据使用虚拟滚动
-    if (exams.length > 50 && window.performanceOptimizer) {
-        console.log(`[Display] 使用虚拟滚动显示 ${exams.length} 个题目`);
-        setupVirtualScrolling(container, exams);
-    } else {
-        // 对于少量数据使用传统渲染
-        renderExamList(container, exams);
+    container.addEventListener('click', (event) => {
+        const target = event.target.closest('[data-action]');
+        if (!target || !container.contains(target)) {
+            return;
+        }
+
+        const action = target.dataset.action;
+        const examId = target.dataset.examId;
+        if (!action || !examId) {
+            return;
+        }
+
+        event.preventDefault();
+
+        if (action === 'start' && typeof openExam === 'function') {
+            openExam(examId);
+            return;
+        }
+
+        if (action === 'pdf' && typeof viewPDF === 'function') {
+            viewPDF(examId);
+            return;
+        }
+
+        if (action === 'generate' && typeof generateHTML === 'function') {
+            generateHTML(examId);
+            return;
+        }
+
+        if (action === 'load-library') {
+            if (typeof loadLibrary === 'function') {
+                loadLibrary();
+            } else if (typeof window.loadLibrary === 'function') {
+                window.loadLibrary();
+            }
+        }
+    });
+
+    legacyExamActionsConfigured = true;
+}
+
+// 优化的题目列表显示函数
+function displayExams(exams) {
+    const startTime = typeof performance !== 'undefined' && typeof performance.now === 'function'
+        ? performance.now()
+        : Date.now();
+    const normalizedExams = Array.isArray(exams) ? exams : [];
+    const emptyStateConfig = cloneLegacyExamEmptyState();
+    const view = ensureLegacyExamListView();
+
+    if (view && typeof view.render === 'function') {
+        view.render(normalizedExams, {
+            loadingSelector: '#browse-view .loading',
+            supportsGenerate: true,
+            emptyState: emptyStateConfig
+        });
+        configureLegacyExamActionDelegation();
+        finalizeExamRenderMetrics(startTime, normalizedExams.length);
+        return;
     }
 
-    const renderTime = performance.now() - startTime;
-    if (window.performanceOptimizer) {
+    renderLegacyExamListFallback(normalizedExams, emptyStateConfig);
+    configureLegacyExamActionDelegation();
+    finalizeExamRenderMetrics(startTime, normalizedExams.length);
+}
+
+function renderLegacyExamListFallback(exams, emptyStateConfig) {
+    const container = document.getElementById('exam-list-container');
+    if (!container) {
+        return;
+    }
+
+    while (container.firstChild) {
+        container.removeChild(container.firstChild);
+    }
+
+    if (!exams.length) {
+        const emptyNode = createLegacyExamEmptyStateNode(emptyStateConfig);
+        if (emptyNode) {
+            container.appendChild(emptyNode);
+        }
+        configureLegacyExamActionDelegation();
+        hideLegacyLoadingIndicator('#browse-view .loading');
+        return;
+    }
+
+    const list = document.createElement('div');
+    list.className = 'exam-list';
+
+    exams.forEach((exam) => {
+        if (!exam) {
+            return;
+        }
+
+        const item = document.createElement('div');
+        item.className = 'exam-item';
+        if (exam.id) {
+            item.dataset.examId = exam.id;
+        }
+
+        const info = document.createElement('div');
+        info.className = 'exam-info';
+        const infoContent = document.createElement('div');
+
+        const title = document.createElement('h4');
+        title.textContent = exam.title || '';
+        const meta = document.createElement('div');
+        meta.className = 'exam-meta';
+        meta.textContent = `${exam.category || ''} | ${exam.type || ''}`;
+
+        infoContent.appendChild(title);
+        infoContent.appendChild(meta);
+        info.appendChild(infoContent);
+        item.appendChild(info);
+
+        const actions = document.createElement('div');
+        actions.className = 'exam-actions';
+
+        const hasHtml = !!exam.hasHtml;
+        const startButton = document.createElement('button');
+        startButton.className = hasHtml ? 'btn exam-item-action-btn' : 'btn btn-secondary exam-item-action-btn';
+        startButton.type = 'button';
+        startButton.dataset.action = 'start';
+        if (exam.id) {
+            startButton.dataset.examId = exam.id;
+        }
+        startButton.textContent = hasHtml ? '开始练习' : '查看PDF';
+        actions.appendChild(startButton);
+
+        const pdfButton = document.createElement('button');
+        pdfButton.className = 'btn btn-secondary exam-item-action-btn';
+        pdfButton.type = 'button';
+        pdfButton.dataset.action = 'pdf';
+        if (exam.id) {
+            pdfButton.dataset.examId = exam.id;
+        }
+        pdfButton.textContent = '查看PDF';
+        actions.appendChild(pdfButton);
+
+        if (!hasHtml && typeof generateHTML === 'function') {
+            const generateButton = document.createElement('button');
+            generateButton.className = 'btn btn-info exam-item-action-btn';
+            generateButton.type = 'button';
+            generateButton.dataset.action = 'generate';
+            if (exam.id) {
+                generateButton.dataset.examId = exam.id;
+            }
+            generateButton.textContent = '生成HTML';
+            actions.appendChild(generateButton);
+        }
+
+        item.appendChild(actions);
+        list.appendChild(item);
+    });
+
+    container.appendChild(list);
+    configureLegacyExamActionDelegation();
+    hideLegacyLoadingIndicator('#browse-view .loading');
+}
+
+function createLegacyExamEmptyStateNode(emptyStateConfig) {
+    const config = emptyStateConfig || cloneLegacyExamEmptyState();
+    const wrapper = document.createElement('div');
+    wrapper.className = 'exam-list-empty';
+    wrapper.setAttribute('role', 'status');
+
+    if (config.icon) {
+        const icon = document.createElement('div');
+        icon.className = 'exam-list-empty-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.textContent = config.icon;
+        wrapper.appendChild(icon);
+    }
+
+    if (config.title) {
+        const title = document.createElement('p');
+        title.className = 'exam-list-empty-text';
+        title.textContent = config.title;
+        wrapper.appendChild(title);
+    }
+
+    if (config.description) {
+        const description = document.createElement('p');
+        description.className = 'exam-list-empty-hint';
+        description.textContent = config.description;
+        wrapper.appendChild(description);
+    }
+
+    if (Array.isArray(config.actions) && config.actions.length > 0) {
+        const actionsGroup = document.createElement('div');
+        actionsGroup.className = 'exam-list-empty-actions';
+        actionsGroup.setAttribute('role', 'group');
+        if (config.actionGroupLabel) {
+            actionsGroup.setAttribute('aria-label', config.actionGroupLabel);
+        }
+
+        config.actions.forEach((action) => {
+            if (!action || !action.action || !action.label) {
+                return;
+            }
+
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.dataset.action = action.action;
+            button.className = 'btn exam-list-empty-action ' + (action.variant === 'secondary' ? 'btn-secondary' : 'btn-primary');
+            button.textContent = action.label;
+            if (action.ariaLabel) {
+                button.setAttribute('aria-label', action.ariaLabel);
+            }
+            actionsGroup.appendChild(button);
+        });
+
+        if (actionsGroup.childNodes.length > 0) {
+            wrapper.appendChild(actionsGroup);
+        }
+    }
+
+    return wrapper;
+}
+
+function finalizeExamRenderMetrics(startTime, count) {
+    const endTime = typeof performance !== 'undefined' && typeof performance.now === 'function'
+        ? performance.now()
+        : Date.now();
+    const renderTime = Math.max(0, endTime - startTime);
+
+    if (window.performanceOptimizer && typeof window.performanceOptimizer.recordRenderTime === 'function') {
         window.performanceOptimizer.recordRenderTime(renderTime);
     }
 
-    console.log(`[Display] 渲染完成: ${exams.length} 个题目 (${Math.round(renderTime)}ms)`);
+    console.log(`[Display] 渲染完成: ${count} 个题目 (${Math.round(renderTime)}ms)`);
 }
 
-// 设置虚拟滚动
-function setupVirtualScrolling(container, exams) {
-    // 创建滚动容器
-    container.innerHTML = '<div id="virtual-scroll-container" style="height: 600px; overflow-y: auto;"></div>';
-    const scrollContainer = document.getElementById('virtual-scroll-container');
-
-    // 创建虚拟滚动器
-    window.currentVirtualScroller = window.performanceOptimizer.createVirtualScroller(
-        scrollContainer,
-        exams,
-        renderExamItem,
-        {
-            itemHeight: 120, // 每个题目项的高度
-            bufferSize: 5   // 缓冲区大小
-        }
-    );
-}
-
-// 渲染单个题目项
-function renderExamItem(exam, index) {
-    const itemDiv = document.createElement('div');
-    itemDiv.className = 'exam-item';
-    itemDiv.dataset.examId = exam.id;
-
-    const practiceColor = getPracticeRecordColor(exam.id);
-    const dotHtml = practiceColor ? `<span class="practice-dot" style="background-color: ${practiceColor};" title="已练习"></span>` : '';
-
-    itemDiv.innerHTML = `
-                <div class="exam-info">
-                    ${dotHtml}
-                    <div>
-                        <h4>${exam.title}</h4>
-                        <div class="exam-meta">
-                            ${exam.category} • ${exam.frequency === 'high' ? '高频' : '次高频'} • 
-                            ${exam.hasHtml ? '🌐 HTML' : '📄 PDF'}
-                            ${exam.note ? ` • ${exam.note}` : ''}
-                        </div>
-                    </div>
-                </div>
-                <div class="exam-actions">
-                    <button class="btn ${exam.hasHtml ? '' : 'btn-secondary'}" 
-                            onclick="openExam('${exam.id}')" 
-                            ${exam.hasHtml ? '' : 'title="PDF文件，将在新标签页中打开"'}>
-                        ${exam.hasHtml ? '开始练习' : '查看PDF'}
-                    </button>
-                    <button class="btn btn-secondary" onclick="viewPDF('${exam.id}')">
-                        查看PDF
-                    </button>
-                    ${!exam.hasHtml ? `<button class="btn btn-info" onclick="generateHTML('${exam.id}')" title="为此PDF考试生成HTML练习版本">生成HTML</button>` : ''}
-                </div>
-            `;
-    return itemDiv;
-}
-
-// 获取练习记录的颜色（根据最高分）
-function getPracticeRecordColor(examId) {
-    // 从当前题库中找到题目信息
-    const exam = examIndex.find(e => e.id === examId);
-    if (!exam) return null;
-
-    // 使用题目ID和标题进行双重匹配，确保能关联到记录
-    const recordsForExam = practiceRecords.filter(r => r.examId === examId || r.title === exam.title);
-    if (recordsForExam.length === 0) return null;
-
-    // 找到最高分记录
-    const bestRecord = recordsForExam.reduce((best, current) => {
-        const bestAccuracy = best.percentage !== undefined ? best.percentage : -1;
-        const currentAccuracy = current.percentage !== undefined ? current.percentage : -1;
-        return currentAccuracy > bestAccuracy ? current : best;
-    });
-
-    const accuracy = bestRecord.percentage;
-
-    if (accuracy === undefined || accuracy === null) return null;
-
-    // 根据正确率返回颜色
-    if (accuracy >= 80) return '#4ade80'; // 绿色
-    if (accuracy >= 60) return '#fbbf24'; // 黄色
-    return '#ff6b6b'; // 红色
-}
-
-// 传统列表渲染（用于少量数据）
-function renderExamList(container, exams) {
-    const getDotHtml = (examId) => {
-        const color = getPracticeRecordColor(examId);
-        return color ? `<span class="practice-dot" style="background-color: ${color};" title="已练习"></span>` : '';
-    };
-
-    // 使用批量处理避免阻塞UI
-    if (window.performanceOptimizer && exams.length > 20) {
-        container.innerHTML = '<div class="exam-list" id="exam-list-content"></div>';
-        const listContainer = document.getElementById('exam-list-content');
-
-        window.performanceOptimizer.batchProcess(
-            exams,
-            (exam, index) => {
-                const itemElement = renderExamItem(exam, index);
-                listContainer.appendChild(itemElement);
-                return itemElement;
-            },
-            10, // 每批10个
-            5   // 5ms延迟
-        );
-    } else {
-        // 直接渲染小数据集
-        container.innerHTML = `
-            <div class="exam-list">
-                ${exams.map(exam => `
-                    <div class="exam-item" data-exam-id="${exam.id}">
-                        <div class="exam-info">
-                            ${getDotHtml(exam.id)}
-                            <div>
-                                <h4>${exam.title}</h4>
-                                <div class="exam-meta">
-                                    ${exam.category} • ${exam.frequency === 'high' ? '高频' : '次高频'} • 
-                                    ${exam.hasHtml ? '🌐 HTML' : '📄 PDF'}
-                                    ${exam.note ? ` • ${exam.note}` : ''}
-                                </div>
-                            </div>
-                        </div>
-                        <div class="exam-actions">
-                            <button class="btn ${exam.hasHtml ? '' : 'btn-secondary'}" 
-                                    onclick="openExam('${exam.id}')" 
-                                    ${exam.hasHtml ? '' : 'title="PDF文件，将在新标签页中打开"'}>
-                                ${exam.hasHtml ? '开始练习' : '查看PDF'}
-                            </button>
-                            <button class="btn btn-secondary" onclick="viewPDF('${exam.id}')">
-                                查看PDF
-                            </button>
-                            ${!exam.hasHtml ? `<button class="btn btn-info" onclick="generateHTML('${exam.id}')" title="为此PDF考试生成HTML练习版本">生成HTML</button>` : ''}
-                        </div>
-                    </div>
-                `).join('')}
-            </div>
-        `;
+function hideLegacyLoadingIndicator(selector) {
+    const loading = document.querySelector(selector);
+    if (loading) {
+        toggleVisibility(loading, false);
     }
 }
 
@@ -1611,6 +2034,38 @@ async function clearCache() {
     }
 }
 
+function createPerformanceMetric(label, value) {
+    return legacyCreateElement('div', { className: 'performance-report__metric' }, [
+        legacyCreateElement('span', { className: 'performance-report__metric-label' }, label),
+        legacyCreateElement('span', { className: 'performance-report__metric-value' }, value)
+    ]);
+}
+
+function buildPerformanceSection(title, metrics) {
+    return legacyCreateElement('section', { className: 'performance-report__section' }, [
+        legacyCreateElement('h4', { className: 'performance-report__section-title' }, title),
+        legacyCreateElement('div', { className: 'performance-report__metrics' }, metrics)
+    ]);
+}
+
+function bindPerformanceReportActions(element) {
+    if (!element) {
+        return;
+    }
+
+    element.addEventListener('click', (event) => {
+        const target = event.target.closest('[data-performance-action]');
+        if (!target || !element.contains(target)) {
+            return;
+        }
+
+        if (target.dataset.performanceAction === 'dismiss') {
+            event.preventDefault();
+            element.remove();
+        }
+    });
+}
+
 // 显示性能报告
 function showPerformanceReport() {
     if (!window.performanceOptimizer) {
@@ -1618,59 +2073,71 @@ function showPerformanceReport() {
         return;
     }
 
-    const report = window.performanceOptimizer.getPerformanceReport();
-
-    let reportHtml = `
-                <div style="background: rgba(255, 255, 255, 0.1); padding: 20px; border-radius: 10px; margin: 20px 0;">
-                    <h3>📊 系统性能报告</h3>
-                    
-                    <div style="margin: 15px 0;">
-                        <h4>🗄️ 缓存统计</h4>
-                        <p>缓存项数: ${report.cache.itemCount}</p>
-                        <p>缓存大小: ${Math.round(report.cache.totalSize / 1024)} KB</p>
-                        <p>命中率: ${Math.round(report.cache.hitRate)}%</p>
-                    </div>
-
-                    <div style="margin: 15px 0;">
-                        <h4>⚡ 性能指标</h4>
-                        <p>平均加载时间: ${report.performance.averageLoadTime} ms</p>
-                        <p>平均渲染时间: ${report.performance.averageRenderTime} ms</p>
-                        <p>加载样本数: ${report.performance.totalLoadSamples}</p>
-                        <p>渲染样本数: ${report.performance.totalRenderSamples}</p>
-                    </div>
-            `;
-
-    if (report.memory) {
-        const usagePercent = Math.round((report.memory.used / report.memory.limit) * 100);
-        reportHtml += `
-                    <div style="margin: 15px 0;">
-                        <h4>💾 内存使用</h4>
-                        <p>已使用: ${report.memory.used} MB</p>
-                        <p>总计: ${report.memory.total} MB</p>
-                        <p>限制: ${report.memory.limit} MB</p>
-                        <p>使用率: ${usagePercent}%</p>
-                    </div>
-                `;
+    const report = window.performanceOptimizer.getPerformanceReport() || {};
+    const container = document.getElementById('settings-view');
+    if (!container) {
+        showMessage('设置视图未找到，无法显示性能报告', 'error');
+        return;
     }
 
-    reportHtml += `
-                    <div style="margin-top: 20px;">
-                        <button class="btn btn-secondary" onclick="this.parentElement.parentElement.remove()">关闭</button>
-                    </div>
-                </div>
-            `;
-
-    // 显示报告
-    const container = document.getElementById('settings-view');
     const existingReport = container.querySelector('.performance-report');
     if (existingReport) {
         existingReport.remove();
     }
 
-    const reportDiv = document.createElement('div');
-    reportDiv.className = 'performance-report';
-    reportDiv.innerHTML = reportHtml;
-    container.appendChild(reportDiv);
+    const sections = [];
+
+    if (report.cache) {
+        sections.push(buildPerformanceSection('🗄️ 缓存统计', [
+            createPerformanceMetric('缓存项数', String(report.cache.itemCount ?? 0)),
+            createPerformanceMetric('缓存大小', `${Math.round((report.cache.totalSize || 0) / 1024)} KB`),
+            createPerformanceMetric('命中率', `${Math.round(report.cache.hitRate || 0)}%`)
+        ]));
+    }
+
+    if (report.performance) {
+        sections.push(buildPerformanceSection('⚡ 性能指标', [
+            createPerformanceMetric('平均加载时间', `${report.performance.averageLoadTime ?? 0} ms`),
+            createPerformanceMetric('平均渲染时间', `${report.performance.averageRenderTime ?? 0} ms`),
+            createPerformanceMetric('加载样本数', String(report.performance.totalLoadSamples ?? 0)),
+            createPerformanceMetric('渲染样本数', String(report.performance.totalRenderSamples ?? 0))
+        ]));
+    }
+
+    if (report.memory) {
+        const usagePercent = report.memory.limit
+            ? Math.round((report.memory.used / report.memory.limit) * 100)
+            : 0;
+        sections.push(buildPerformanceSection('💾 内存使用', [
+            createPerformanceMetric('已使用', `${report.memory.used ?? 0} MB`),
+            createPerformanceMetric('总计', `${report.memory.total ?? 0} MB`),
+            createPerformanceMetric('限制', `${report.memory.limit ?? 0} MB`),
+            createPerformanceMetric('使用率', `${usagePercent}%`)
+        ]));
+    }
+
+    if (!sections.length) {
+        sections.push(legacyCreateElement('p', { className: 'performance-report__empty' }, '暂无性能统计数据。'));
+    }
+
+    const card = legacyCreateElement('div', { className: 'performance-report__card' }, [
+        legacyCreateElement('h3', { className: 'performance-report__title' }, [
+            legacyCreateElement('span', { ariaHidden: 'true' }, '📊'),
+            ' 系统性能报告'
+        ]),
+        ...sections,
+        legacyCreateElement('div', { className: 'performance-report__actions' }, [
+            legacyCreateElement('button', {
+                type: 'button',
+                className: 'btn btn-secondary',
+                dataset: { performanceAction: 'dismiss' }
+            }, '关闭')
+        ])
+    ]);
+
+    const reportWrapper = legacyCreateElement('div', { className: 'performance-report' }, card);
+    container.appendChild(reportWrapper);
+    bindPerformanceReportActions(reportWrapper);
 
     showMessage('性能报告已生成', 'success');
 }
@@ -1695,82 +2162,161 @@ async function createManualBackup() {
 }
 
 async function showBackupList() {
-    if (!window.dataIntegrityManager) {
+    const manager = ensureLegacyDataIntegrityManager();
+    if (!manager) {
         showMessage('数据完整性管理器未初始化', 'error');
         return;
     }
 
-    const backups = await window.dataIntegrityManager.getBackupList();
+    ensureLegacyBackupDelegates();
 
-    if (backups.length === 0) {
-        showMessage('暂无备份记录', 'info');
+    let backups = [];
+    try {
+        const list = await manager.getBackupList();
+        backups = Array.isArray(list) ? list : [];
+    } catch (error) {
+        console.error('[LegacyBackup] 获取备份列表失败:', error);
+        const detail = error && error.message ? error.message : error;
+        showMessage('获取备份列表失败: ' + detail, 'error');
         return;
     }
 
-    let backupHtml = `
-                <div style="background: rgba(255, 255, 255, 0.1); padding: 20px; border-radius: 10px; margin: 20px 0;">
-                    <h3>📋 备份列表</h3>
-                    <div style="max-height: 300px; overflow-y: auto; margin: 15px 0;">
-            `;
+    const domApi = (typeof window !== 'undefined' && window.DOM && typeof window.DOM.create === 'function')
+        ? window.DOM
+        : null;
+    const create = domApi ? domApi.create.bind(window.DOM) : legacyCreateElement;
 
-    backups.forEach(backup => {
-        const date = new Date(backup.timestamp).toLocaleString();
-        const sizeKB = Math.round(backup.size / 1024);
-        const typeIcon = backup.type === 'auto' ? '🔄' : backup.type === 'manual' ? '👤' : '⚠️';
+    const buildEntries = () => {
+        if (!backups.length) {
+            return [
+                create('div', { className: 'backup-list-empty' }, [
+                    create('div', { className: 'backup-list-empty-icon', ariaHidden: 'true' }, '📂'),
+                    create('p', { className: 'backup-list-empty-text' }, '暂无备份记录。'),
+                    create('p', { className: 'backup-list-empty-hint' }, '创建手动备份后将显示在此列表中。')
+                ])
+            ];
+        }
 
-        backupHtml += `
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.1);">
-                        <div>
-                            <strong>${typeIcon} ${backup.id}</strong><br>
-                            <small>${date} - ${sizeKB} KB - v${backup.version}</small>
-                        </div>
-                        <button class="btn btn-secondary" onclick="restoreBackup('${backup.id}')" style="margin-left: 10px;">恢复</button>
-                    </div>
-                `;
-    });
+        const nodes = backups.map((backup) => {
+            if (!backup || !backup.id) {
+                return null;
+            }
 
-    backupHtml += `
-                    </div>
-                    <button class="btn btn-secondary" onclick="this.parentElement.remove()">关闭</button>
-                </div>
-            `;
+            const timestamp = backup.timestamp ? new Date(backup.timestamp).toLocaleString() : '未知时间';
+            const type = backup.type || 'unknown';
+            const version = backup.version || '—';
 
-    // 显示备份列表
-    const container = document.getElementById('settings-view');
-    const existingList = container.querySelector('.backup-list');
-    if (existingList) {
-        existingList.remove();
+            return create('div', {
+                className: 'backup-entry',
+                dataset: { backupId: backup.id }
+            }, [
+                create('div', { className: 'backup-entry-info' }, [
+                    create('strong', { className: 'backup-entry-id' }, backup.id),
+                    create('div', { className: 'backup-entry-meta' }, timestamp),
+                    create('div', { className: 'backup-entry-meta' }, `类型: ${type} | 版本: ${version}`)
+                ]),
+                create('div', { className: 'backup-entry-actions' }, [
+                    create('button', {
+                        type: 'button',
+                        className: 'btn btn-success backup-entry-restore',
+                        dataset: {
+                            backupAction: 'restore',
+                            backupId: backup.id
+                        }
+                    }, '恢复')
+                ])
+            ]);
+        }).filter(Boolean);
+
+        if (!nodes.length) {
+            return [
+                create('div', { className: 'backup-list-empty' }, [
+                    create('div', { className: 'backup-list-empty-icon', ariaHidden: 'true' }, '📂'),
+                    create('p', { className: 'backup-list-empty-text' }, '暂无可恢复的备份记录。'),
+                    create('p', { className: 'backup-list-empty-hint' }, '创建手动备份后将显示在此列表中。')
+                ])
+            ];
+        }
+
+        return nodes;
+    };
+
+    const settingsView = document.getElementById('settings-view');
+    if (settingsView) {
+        const legacyList = settingsView.querySelector('.backup-list');
+        if (legacyList) {
+            legacyList.remove();
+        }
+        const existingContainer = settingsView.querySelector('.backup-list-container');
+        if (existingContainer) {
+            existingContainer.remove();
+        }
     }
 
-    const listDiv = document.createElement('div');
-    listDiv.className = 'backup-list';
-    listDiv.innerHTML = backupHtml;
-    container.appendChild(listDiv);
+    const existingOverlay = document.querySelector('.backup-modal-overlay');
+    if (existingOverlay) {
+        existingOverlay.remove();
+    }
+
+    const card = create('div', { className: 'backup-list-card' }, [
+        create('div', { className: 'backup-list-header' }, [
+            create('h3', { className: 'backup-list-title' }, [
+                create('span', { className: 'backup-list-title-icon', ariaHidden: 'true' }, '📋'),
+                create('span', { className: 'backup-list-title-text' }, '备份列表')
+            ])
+        ]),
+        create('div', { className: 'backup-list-scroll' }, buildEntries())
+    ]);
+
+    if (settingsView) {
+        const container = create('div', { className: 'backup-list-container' }, card);
+        const mainCard = settingsView.querySelector(':scope > div');
+        if (mainCard) {
+            mainCard.appendChild(container);
+        } else {
+            settingsView.appendChild(container);
+        }
+
+        if (!backups.length) {
+            showMessage('暂无备份记录', 'info');
+        }
+        return;
+    }
+
+    const overlay = create('div', { className: 'backup-modal-overlay' }, [
+        create('div', { className: 'backup-modal' }, [
+            create('div', { className: 'backup-modal-header' }, [
+                create('h3', { className: 'backup-modal-title' }, [
+                    create('span', { className: 'backup-list-title-icon', ariaHidden: 'true' }, '📋'),
+                    create('span', { className: 'backup-list-title-text' }, '备份列表')
+                ]),
+                create('button', {
+                    type: 'button',
+                    className: 'btn btn-secondary backup-modal-close',
+                    dataset: { backupAction: 'close-modal' },
+                    ariaLabel: '关闭备份列表'
+                }, '关闭')
+            ]),
+            create('div', { className: 'backup-modal-body' }, buildEntries()),
+            create('div', { className: 'backup-modal-footer' }, [
+                create('button', {
+                    type: 'button',
+                    className: 'btn btn-secondary backup-modal-close',
+                    dataset: { backupAction: 'close-modal' }
+                }, '关闭')
+            ])
+        ])
+    ]);
+
+    document.body.appendChild(overlay);
+
+    if (!backups.length) {
+        showMessage('暂无备份记录', 'info');
+    }
 }
 
-// 恢复备份
 async function restoreBackup(backupId) {
-    if (!window.dataIntegrityManager) {
-        showMessage('数据完整性管理器未初始化', 'error');
-        return;
-    }
-
-    if (!confirm(`确定要恢复备份 ${backupId} 吗？当前数据将被覆盖。`)) {
-        return;
-    }
-
-    try {
-        showMessage('正在恢复备份...', 'info');
-        await window.dataIntegrityManager.restoreBackup(backupId);
-        showMessage('备份恢复成功，页面将刷新', 'success');
-
-        setTimeout(() => {
-            location.reload();
-        }, 2000);
-    } catch (error) {
-        console.error('[DataManagement] 恢复备份失败:', error);
-        showMessage('备份恢复失败: ' + error.message, 'error');
-    }
+    await legacyRestoreBackupById(backupId);
 }
 
 // 导出所有数据
@@ -1826,6 +2372,117 @@ function importData() {
     input.click();
 }
 
+function buildValidationEntry(name, validation) {
+    const normalized = validation || {};
+    const errors = Array.isArray(normalized.errors) ? normalized.errors : [];
+    const valid = normalized.valid !== false;
+    const entry = legacyCreateElement('div', {
+        className: 'validation-report__entry',
+        dataset: { validationStatus: valid ? 'valid' : 'error' }
+    }, [
+        legacyCreateElement('div', { className: 'validation-report__entry-header' }, [
+            legacyCreateElement('span', { ariaHidden: 'true' }, valid ? '✅' : '❌'),
+            legacyCreateElement('span', null, `${name}: ${valid ? '正常' : `${errors.length} 个错误`}`)
+        ]),
+        !valid && errors.length
+            ? legacyCreateElement('ul', { className: 'validation-report__errors' },
+                errors.map((error) => legacyCreateElement('li', null, error)))
+            : null
+    ]);
+
+    return { entry, errorCount: valid ? 0 : errors.length };
+}
+
+function createValidationReportElement(report) {
+    const normalized = report || {};
+    const timestamp = normalized.timestamp ? new Date(normalized.timestamp).toLocaleString() : '未知时间';
+    const dataVersion = normalized.dataVersion || '未知';
+    const backupCount = Array.isArray(normalized.backups) ? normalized.backups.length : 0;
+
+    const validationEntries = normalized.validation && typeof normalized.validation === 'object'
+        ? Object.entries(normalized.validation)
+        : [];
+
+    const listItems = [];
+    let totalErrors = 0;
+
+    for (let i = 0; i < validationEntries.length; i += 1) {
+        const [name, validation] = validationEntries[i];
+        const { entry, errorCount } = buildValidationEntry(name, validation);
+        listItems.push(entry);
+        totalErrors += errorCount;
+    }
+
+    if (!listItems.length) {
+        listItems.push(legacyCreateElement('div', {
+            className: 'validation-report__entry',
+            dataset: { validationStatus: 'valid' }
+        }, [
+            legacyCreateElement('div', { className: 'validation-report__entry-header' }, [
+                legacyCreateElement('span', { ariaHidden: 'true' }, 'ℹ️'),
+                legacyCreateElement('span', null, '没有可用的验证条目')
+            ])
+        ]));
+    }
+
+    const statusText = totalErrors === 0
+        ? '总体状态: ✅ 数据完整'
+        : `总体状态: ⚠️ 发现 ${totalErrors} 个问题`;
+
+    const element = legacyCreateElement('div', { className: 'validation-report' }, [
+        legacyCreateElement('div', { className: 'validation-report__card' }, [
+            legacyCreateElement('h3', { className: 'validation-report__title' }, [
+                legacyCreateElement('span', { ariaHidden: 'true' }, '🔍'),
+                ' 数据完整性报告'
+            ]),
+            legacyCreateElement('div', { className: 'validation-report__meta' }, [
+                legacyCreateElement('div', { className: 'validation-report__meta-item' }, [
+                    legacyCreateElement('strong', null, '检查时间'),
+                    timestamp
+                ]),
+                legacyCreateElement('div', { className: 'validation-report__meta-item' }, [
+                    legacyCreateElement('strong', null, '数据版本'),
+                    dataVersion
+                ]),
+                legacyCreateElement('div', { className: 'validation-report__meta-item' }, [
+                    legacyCreateElement('strong', null, '备份数量'),
+                    String(backupCount)
+                ])
+            ]),
+            legacyCreateElement('div', { className: 'validation-report__list' }, listItems),
+            legacyCreateElement('div', { className: 'validation-report__status' }, statusText),
+            legacyCreateElement('div', { className: 'validation-report__actions' }, [
+                legacyCreateElement('button', {
+                    type: 'button',
+                    className: 'btn btn-secondary',
+                    dataset: { validationAction: 'dismiss' }
+                }, '关闭')
+            ])
+        ])
+    ]);
+
+    return { element, totalErrors };
+}
+
+function bindValidationReportActions(element) {
+    if (!element) {
+        return;
+    }
+
+    element.addEventListener('click', (event) => {
+        const target = event.target.closest('[data-validation-action]');
+        if (!target || !element.contains(target)) {
+            return;
+        }
+
+        const action = target.dataset.validationAction;
+        if (action === 'dismiss') {
+            event.preventDefault();
+            element.remove();
+        }
+    });
+}
+
 // 验证所有数据
 function validateAllData() {
     if (!window.dataIntegrityManager) {
@@ -1836,57 +2493,21 @@ function validateAllData() {
     try {
         showMessage('正在检查数据完整性...', 'info');
         const report = window.dataIntegrityManager.getIntegrityReport();
-
-        let validationHtml = `
-                    <div style="background: rgba(255, 255, 255, 0.1); padding: 20px; border-radius: 10px; margin: 20px 0;">
-                        <h3>🔍 数据完整性报告</h3>
-                        <p><strong>检查时间:</strong> ${new Date(report.timestamp).toLocaleString()}</p>
-                        <p><strong>数据版本:</strong> ${report.dataVersion}</p>
-                        <p><strong>备份数量:</strong> ${report.backups.length}</p>
-                        
-                        <div style="margin: 15px 0;">
-                            <h4>验证结果:</h4>
-                `;
-
-        let totalErrors = 0;
-        Object.entries(report.validation).forEach(([key, validation]) => {
-            const status = validation.valid ? '✅' : '❌';
-            const errorCount = validation.errors.length;
-            totalErrors += errorCount;
-
-            validationHtml += `
-                        <div style="margin: 5px 0;">
-                            ${status} <strong>${key}:</strong> ${validation.valid ? '正常' : `${errorCount} 个错误`}
-                        </div>
-                    `;
-
-            if (!validation.valid) {
-                validation.errors.forEach(error => {
-                    validationHtml += `<div style="margin-left: 20px; font-size: 0.9em; opacity: 0.8;">• ${error}</div>`;
-                });
-            }
-        });
-
-        validationHtml += `
-                        </div>
-                        <div style="margin-top: 20px;">
-                            <strong>总体状态:</strong> ${totalErrors === 0 ? '✅ 数据完整' : `⚠️ 发现 ${totalErrors} 个问题`}
-                        </div>
-                        <button class="btn btn-secondary" onclick="this.parentElement.parentElement.remove()">关闭</button>
-                    </div>
-                `;
-
-        // 显示报告
         const container = document.getElementById('settings-view');
+
+        if (!container) {
+            console.warn('[DataManagement] settings-view 容器不存在，无法渲染数据完整性报告');
+            return;
+        }
+
         const existingReport = container.querySelector('.validation-report');
         if (existingReport) {
             existingReport.remove();
         }
 
-        const reportDiv = document.createElement('div');
-        reportDiv.className = 'validation-report';
-        reportDiv.innerHTML = validationHtml;
-        container.appendChild(reportDiv);
+        const { element: reportElement, totalErrors } = createValidationReportElement(report);
+        container.appendChild(reportElement);
+        bindValidationReportActions(reportElement);
 
         const messageType = totalErrors === 0 ? 'success' : 'warning';
         showMessage(`数据检查完成，${totalErrors === 0 ? '数据完整' : `发现 ${totalErrors} 个问题`}`, messageType);
@@ -1963,7 +2584,7 @@ function showDeveloperTeam() {
     modal.classList.add('show');
 
     // 阻止背景滚动
-    document.body.style.overflow = 'hidden';
+    lockBodyScroll(true);
 
     // 点击背景关闭弹窗
     modal.onclick = function (e) {
@@ -1988,7 +2609,7 @@ function hideDeveloperTeam() {
     modal.classList.remove('show');
 
     // 恢复背景滚动
-    document.body.style.overflow = '';
+    lockBodyScroll(false);
 
     // 移除点击事件
     modal.onclick = null;
@@ -2073,7 +2694,7 @@ async function fixIncompleteTitles() {
 
     if (fixedCount > 0) {
         await storage.set('practice_records', records);
-        practiceRecords = records;
+        practiceRecords = setPracticeRecordsState(records);
         showMessage(`已修复 ${fixedCount} 个不完整的标题`, 'success');
         updatePracticeView();
     } else {
@@ -2088,198 +2709,516 @@ function recordPractice(exam, startTime) {
     // 不再生成模拟数据，所有数据都通过跨窗口通信获取
 }
 
-// 计算练习统计（只统计真实数据）
-function calculatePracticeStats() {
-    // 只统计真实数据记录
-    const realDataRecords = practiceRecords.filter(record =>
-        record.dataSource === 'real' && record.realData
-    );
+// 计算练习统计与渲染辅助
+function getPracticeRecordList() {
+    return Array.isArray(practiceRecords) ? practiceRecords : [];
+}
 
-    if (realDataRecords.length === 0) {
-        practiceStats = {
-            totalPracticed: 0,
-            avgScore: 0,
-            totalTime: 0,
-            streakDays: 0
-        };
-        return;
+function filterRealPracticeRecords(records) {
+    return records.filter((record) => record && record.dataSource === 'real' && record.realData);
+}
+
+function normalizePracticeRecord(record, index) {
+    if (!record) {
+        return null;
     }
 
-    practiceStats.totalPracticed = realDataRecords.length;
+    const payload = record.realData || {};
+    const id = record.id || payload.id || `record-${index}`;
+    const timestamp = record.date || payload.date || payload.completedAt || new Date().toISOString();
+    const rawDuration = typeof payload.duration === 'number' ? payload.duration : (typeof record.duration === 'number' ? record.duration : 0);
+    const accuracy = typeof payload.accuracy === 'number' ? payload.accuracy : record.accuracy;
+    let percentage = 0;
 
-    // 只计算真实数据的统计
-    let totalScore = 0;
-    let totalTime = 0;
+    if (typeof payload.percentage === 'number') {
+        percentage = payload.percentage;
+    } else if (typeof record.percentage === 'number') {
+        percentage = record.percentage;
+    } else if (typeof accuracy === 'number') {
+        percentage = accuracy <= 1 ? Math.round(accuracy * 100) : Math.round(accuracy);
+    }
 
-    realDataRecords.forEach(record => {
-        const score = record.realData.percentage || record.percentage || Math.round((record.realData.accuracy || 0) * 100);
-        const duration = Math.round((record.realData.duration || record.duration || 0) / 60); // 转换为分钟
-        totalScore += score;
-        totalTime += duration;
-    });
-
-    practiceStats.avgScore = Math.round(totalScore / realDataRecords.length);
-    practiceStats.totalTime = totalTime;
-
-    // 计算分类统计
-    practiceStats.categoryStats = {
-        P1: { count: 0, avgScore: 0, totalTime: 0 },
-        P2: { count: 0, avgScore: 0, totalTime: 0 },
-        P3: { count: 0, avgScore: 0, totalTime: 0 }
+    return {
+        id,
+        title: record.title || payload.title || '未命名练习',
+        date: timestamp,
+        percentage,
+        accuracy,
+        duration: Number(rawDuration) || 0,
+        category: (record.category || payload.category || '').toUpperCase(),
+        examId: record.examId || payload.examId || null
     };
+}
 
-    ['P1', 'P2', 'P3'].forEach(category => {
-        const categoryRecords = realDataRecords.filter(record => record.category === category);
-        if (categoryRecords.length > 0) {
-            const categoryTotalScore = categoryRecords.reduce((sum, record) => {
-                const score = record.realData.percentage || record.percentage || Math.round((record.realData.accuracy || 0) * 100);
-                return sum + score;
-            }, 0);
-            const categoryTotalTime = categoryRecords.reduce((sum, record) => {
-                const duration = Math.round((record.realData.duration || record.duration || 0) / 60);
-                return sum + duration;
-            }, 0);
+function calculateFallbackStreak(dateKeys) {
+    if (!dateKeys.length) {
+        return 0;
+    }
 
-            practiceStats.categoryStats[category] = {
-                count: categoryRecords.length,
-                avgScore: Math.round(categoryTotalScore / categoryRecords.length),
-                totalTime: categoryTotalTime
-            };
-        }
-    });
+    const sorted = dateKeys.map((key) => {
+        const date = new Date(key);
+        return isNaN(date.getTime()) ? null : date;
+    }).filter(Boolean).sort((a, b) => b - a);
 
-    // 计算连续学习天数
-    const today = new Date();
-    const dates = [...new Set(realDataRecords.map(record => new Date(record.date).toDateString()))];
-    dates.sort((a, b) => new Date(b) - new Date(a));
+    if (!sorted.length) {
+        return 0;
+    }
 
     let streak = 0;
-    let currentDate = new Date(today);
+    let previous = new Date();
 
-    for (let dateStr of dates) {
-        const recordDate = new Date(dateStr);
-        const diffDays = Math.floor((currentDate - recordDate) / (1000 * 60 * 60 * 24));
-
-        if (diffDays === streak) {
-            streak++;
-            currentDate = recordDate;
-        } else if (diffDays === streak + 1) {
-            streak++;
-            currentDate = recordDate;
+    for (let i = 0; i < sorted.length; i += 1) {
+        const current = sorted[i];
+        const diff = Math.floor((previous - current) / (24 * 60 * 60 * 1000));
+        if (diff <= 1) {
+            streak += 1;
+            previous = current;
         } else {
             break;
         }
     }
 
-    practiceStats.streakDays = streak;
+    return streak;
 }
 
-// 更新练习视图
-function updatePracticeView() {
-    calculatePracticeStats();
+function fallbackCalculateSummary(records) {
+    if (!records.length) {
+        return {
+            totalPracticed: 0,
+            averageScore: 0,
+            totalStudyMinutes: 0,
+            streak: 0
+        };
+    }
 
-    // 更新统计卡片 - 添加安全检查
+    let totalScore = 0;
+    let totalMinutes = 0;
+    const dateKeys = new Set();
+
+    for (let i = 0; i < records.length; i += 1) {
+        const record = records[i];
+        totalScore += Number(record.percentage) || 0;
+        totalMinutes += (Number(record.duration) || 0) / 60;
+
+        if (record.date) {
+            const date = new Date(record.date);
+            if (!isNaN(date.getTime())) {
+                dateKeys.add(date.toISOString().slice(0, 10));
+            }
+        }
+    }
+
+    const averageScore = totalScore / records.length;
+    const streak = calculateFallbackStreak(Array.from(dateKeys));
+
+    return {
+        totalPracticed: records.length,
+        averageScore,
+        totalStudyMinutes: totalMinutes,
+        streak
+    };
+}
+
+function computeCategoryStats(records) {
+    const stats = {
+        P1: { count: 0, avgScore: 0, totalTime: 0 },
+        P2: { count: 0, avgScore: 0, totalTime: 0 },
+        P3: { count: 0, avgScore: 0, totalTime: 0 }
+    };
+
+    ['P1', 'P2', 'P3'].forEach((category) => {
+        const items = records.filter((record) => record.category === category);
+        if (!items.length) {
+            return;
+        }
+
+        const totalScore = items.reduce((sum, item) => sum + (Number(item.percentage) || 0), 0);
+        const totalMinutes = items.reduce((sum, item) => sum + ((Number(item.duration) || 0) / 60), 0);
+
+        stats[category] = {
+            count: items.length,
+            avgScore: Math.round(totalScore / items.length),
+            totalTime: Math.round(totalMinutes)
+        };
+    });
+
+    return stats;
+}
+
+function calculatePracticeStats() {
+    const rawRecords = getPracticeRecordList();
+    const realRecords = filterRealPracticeRecords(rawRecords);
+    const normalizedRecords = realRecords.map(normalizePracticeRecord).filter(Boolean);
+
+    const statsApi = window.PracticeStats;
+    const summary = statsApi && typeof statsApi.calculateSummary === 'function'
+        ? statsApi.calculateSummary(normalizedRecords)
+        : fallbackCalculateSummary(normalizedRecords);
+
+    practiceStats.totalPracticed = summary.totalPracticed || 0;
+    practiceStats.avgScore = Math.round(summary.averageScore || 0);
+    practiceStats.totalTime = Math.round(summary.totalStudyMinutes || 0);
+    practiceStats.streakDays = summary.streak || 0;
+    practiceStats.categoryStats = computeCategoryStats(normalizedRecords);
+
+    return { normalizedRecords, summary };
+}
+
+function ensurePracticeDashboardView() {
+    if (practiceDashboardViewInstance) {
+        return practiceDashboardViewInstance;
+    }
+    if (!window.PracticeDashboardView) {
+        return null;
+    }
+    practiceDashboardViewInstance = new window.PracticeDashboardView({
+        totalId: 'total-practiced',
+        averageId: 'avg-score',
+        durationId: 'study-time',
+        streakId: 'streak-days'
+    });
+    return practiceDashboardViewInstance;
+}
+
+function updatePracticeSummaryFallback(summary) {
+    const safeSummary = summary || {};
     const totalPracticedEl = document.getElementById('total-practiced');
     const avgScoreEl = document.getElementById('avg-score');
     const studyTimeEl = document.getElementById('study-time');
     const streakDaysEl = document.getElementById('streak-days');
 
-    if (totalPracticedEl) totalPracticedEl.textContent = practiceStats.totalPracticed;
-    if (avgScoreEl) avgScoreEl.textContent = practiceStats.avgScore + '%';
-    if (studyTimeEl) studyTimeEl.textContent = practiceStats.totalTime;
-    if (streakDaysEl) streakDaysEl.textContent = practiceStats.streakDays;
-
-    // 更新练习历史
-    const historyContainer = document.getElementById('practice-history-list');
-
-    if (!historyContainer) {
-        console.warn('practice-history-list element not found');
-        return;
+    if (totalPracticedEl) {
+        totalPracticedEl.textContent = safeSummary.totalPracticed || 0;
     }
-
-    if (practiceRecords.length === 0) {
-        historyContainer.innerHTML = `
-            <div style="text-align: center; padding: 40px; opacity: 0.7;">
-                <div style="font-size: 3em; margin-bottom: 15px;">📋</div>
-                <p>暂无练习记录</p>
-                <p style="font-size: 0.9em; margin-top: 10px;">开始练习后，记录将自动保存在这里</p>
-            </div>
-        `;
-        return;
+    if (avgScoreEl) {
+        const avgScore = Math.round(safeSummary.averageScore || 0);
+        avgScoreEl.textContent = `${avgScore}%`;
     }
-
-    // 只显示真实数据记录
-    const realDataRecords = practiceRecords.filter(record =>
-        record.dataSource === 'real' && record.realData
-    );
-
-    if (realDataRecords.length === 0) {
-        historyContainer.innerHTML = `
-            <div style="text-align: center; padding: 40px; opacity: 0.7;">
-                <div style="font-size: 3em; margin-bottom: 15px;">📋</div>
-                <p>暂无练习记录</p>
-                <p style="font-size: 0.9em; margin-top: 10px;">完成练习后，数据将自动保存在这里</p>
-            </div>
-        `;
-        return;
+    if (studyTimeEl) {
+        studyTimeEl.textContent = Math.round(safeSummary.totalStudyMinutes || 0);
     }
+    if (streakDaysEl) {
+        streakDaysEl.textContent = Math.round(safeSummary.streak || 0);
+    }
+}
 
-    historyContainer.innerHTML = realDataRecords.slice(0, 20).map(record => {
-        const date = new Date(record.date);
-
-        // 处理数据格式
-        const score = record.realData.score || record.score || 0;
-        const totalQuestions = record.realData.totalQuestions || record.totalQuestions || 0;
-        const duration = Math.round((record.realData.duration || record.duration || 0) / 60); // 转换为分钟
-        const accuracy = record.realData.percentage || record.percentage || Math.round((record.realData.accuracy || 0) * 100);
-
-        const scoreColor = accuracy >= 80 ? '#4ade80' : accuracy >= 60 ? '#fbbf24' : '#ff6b6b';
-
-        // 详细信息提示
-        let detailsTooltip = '';
-        if (record.realData) {
-            const details = [];
-            if (score !== undefined && totalQuestions !== undefined) {
-                details.push(`得分: ${score}/${totalQuestions}`);
+function getBulkDeleteModeState() {
+    if (typeof window.bulkDeleteMode === 'boolean') {
+        return window.bulkDeleteMode;
+    }
+    if (window.app && typeof window.app.getState === 'function') {
+        try {
+            const stateValue = window.app.getState('practice.bulkDeleteMode');
+            if (typeof stateValue === 'boolean') {
+                return stateValue;
             }
-            if (record.realData.source) {
-                const sourceText = record.realData.source === 'page_extraction' ? '页面提取' :
-                    record.realData.source === 'calculation' ? '自动计算' :
-                        record.realData.source === 'manual_input' ? '手动输入' : record.realData.source;
-                details.push(`来源: ${sourceText}`);
+        } catch (_) {}
+    }
+    if (typeof window.__legacyBulkDeleteMode === 'boolean') {
+        return window.__legacyBulkDeleteMode;
+    }
+    return false;
+}
+
+function getSelectedRecordsSet() {
+    if (window.selectedRecords instanceof Set) {
+        return window.selectedRecords;
+    }
+    if (!window.__legacySelectedRecords) {
+        window.__legacySelectedRecords = new Set();
+    }
+    return window.__legacySelectedRecords;
+}
+
+function ensurePracticeHistoryDelegates(container) {
+    if (practiceHistoryDelegatesBound || !container) {
+        return;
+    }
+
+    const dom = resolveDomAdapter();
+
+    const bindSelection = (event, element) => {
+        if (!element) {
+            return;
+        }
+        handlePracticeHistoryItemSelection(element.dataset.recordId, event);
+    };
+
+    const bindAction = (event, element) => {
+        if (!element) {
+            return;
+        }
+        handlePracticeHistoryAction(element.dataset.recordAction, element.dataset.recordId, event);
+    };
+
+    if (dom && typeof dom.delegate === 'function') {
+        dom.delegate('click', '#practice-history-list [data-record-action]', function(event) {
+            bindAction(event, this);
+        });
+        dom.delegate('click', '#practice-history-list .history-item', function(event) {
+            const actionTarget = event.target.closest('[data-record-action]');
+            if (actionTarget) {
+                return;
             }
-            detailsTooltip = details.length > 0 ? `title="${details.join(' | ')}"` : '';
+            bindSelection(event, this);
+        });
+    } else {
+        container.addEventListener('click', (event) => {
+            const actionTarget = event.target.closest('[data-record-action]');
+            if (actionTarget && container.contains(actionTarget)) {
+                bindAction(event, actionTarget);
+                return;
+            }
+
+            const item = event.target.closest('.history-item');
+            if (item && container.contains(item)) {
+                const nestedAction = event.target.closest('[data-record-action]');
+                if (nestedAction) {
+                    return;
+                }
+                bindSelection(event, item);
+            }
+        });
+    }
+
+    practiceHistoryDelegatesBound = true;
+}
+
+function handlePracticeHistoryAction(action, recordId, event) {
+    if (!action || !recordId) {
+        return;
+    }
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+
+    if (action === 'details') {
+        if (typeof showRecordDetails === 'function') {
+            showRecordDetails(recordId);
+        }
+        return;
+    }
+
+    if (action === 'delete') {
+        if (typeof window.deleteRecord === 'function') {
+            window.deleteRecord(recordId);
+        } else {
+            fallbackDeletePracticeRecord(recordId);
+        }
+    }
+}
+
+function handlePracticeHistoryItemSelection(recordId, event) {
+    if (!getBulkDeleteModeState() || !recordId) {
+        return;
+    }
+    if (event) {
+        event.preventDefault();
+    }
+
+    if (typeof window.toggleRecordSelection === 'function') {
+        window.toggleRecordSelection(recordId);
+        return;
+    }
+
+    fallbackToggleRecordSelection(recordId);
+}
+
+function fallbackToggleRecordSelection(recordId) {
+    const selectedSet = getSelectedRecordsSet();
+    if (selectedSet.has(recordId)) {
+        selectedSet.delete(recordId);
+    } else {
+        selectedSet.add(recordId);
+    }
+    window.__legacyBulkDeleteMode = true;
+    requestAnimationFrame(updatePracticeView);
+}
+
+function fallbackDeletePracticeRecord(recordId) {
+    const index = practiceRecords.findIndex((record) => record && record.id === recordId);
+    if (index === -1) {
+        showMessage('记录不存在', 'error');
+        return;
+    }
+
+    practiceRecords.splice(index, 1);
+    storage.set('practice_records', practiceRecords);
+    showMessage('练习记录已删除', 'success');
+    requestAnimationFrame(updatePracticeView);
+}
+
+function formatDurationShort(seconds) {
+    if (window.PracticeHistoryRenderer && window.PracticeHistoryRenderer.helpers && typeof window.PracticeHistoryRenderer.helpers.formatDurationShort === 'function') {
+        return window.PracticeHistoryRenderer.helpers.formatDurationShort(seconds);
+    }
+
+    const totalSeconds = Math.max(0, Math.floor(Number(seconds) || 0));
+    if (totalSeconds < 60) {
+        return `${totalSeconds}秒`;
+    }
+    const minutes = Math.floor(totalSeconds / 60);
+    if (minutes < 60) {
+        return `${minutes}分钟`;
+    }
+    const hours = Math.floor(minutes / 60);
+    const remain = minutes % 60;
+    return `${hours}小时${remain}分钟`;
+}
+
+function renderPracticeHistoryFallback(container, records, options) {
+    if (!container) {
+        return;
+    }
+
+    const opts = Object.assign({
+        bulkDeleteMode: false,
+        selectedRecords: new Set()
+    }, options || {});
+
+    if (!records.length) {
+        legacyReplaceContent(container, legacyCreateElement('div', { className: 'practice-history-empty' }, [
+            legacyCreateElement('div', { className: 'practice-history-empty-icon' }, '📂'),
+            legacyCreateElement('p', { className: 'practice-history-empty-text' }, '暂无任何练习记录')
+        ]));
+        return;
+    }
+
+    const fragment = [];
+    const limit = Math.min(records.length, 50);
+
+    for (let i = 0; i < limit; i += 1) {
+        const record = records[i];
+        if (!record) {
+            continue;
         }
 
-        const isSelected = selectedRecords.has(record.id);
-        const selectionStyle = bulkDeleteMode ?
-            (isSelected ? 'background: rgba(255, 0, 0, 0.1); border: 2px solid #ff6b6b;' : 'border: 2px solid transparent;') : '';
-        const clickHandler = bulkDeleteMode ? `toggleRecordSelection('${record.id}')` : '';
+        const item = legacyCreateElement('div', {
+            className: 'history-item',
+            dataset: { recordId: record.id }
+        });
 
-        return `
-            <div class="history-item" ${detailsTooltip} 
-                 data-record-id="${record.id}"
-                 style="cursor: ${bulkDeleteMode ? 'pointer' : 'help'}; position: relative; ${selectionStyle}"
-                 ${bulkDeleteMode ? `onclick="${clickHandler}"` : ''}> 
-                <div>
-                    <strong class="practice-record-title" onclick="event.stopPropagation(); showRecordDetails('${record.id}')" title="点击查看详情">${record.title}</strong><br>
-                    <small>${record.category} • ${date.toLocaleDateString()} ${date.toLocaleTimeString()}</small>
-                </div>
-                <div style="text-align: right;">
-                    <div style="color: ${scoreColor}; font-weight: bold;">${accuracy}%</div>
-                    <small>${duration}分钟</small>
-                </div>
-                ${bulkDeleteMode ?
-                `<div style="position: absolute; top: 10px; right: 10px; font-size: 18px;">
-                        ${isSelected ? '✅' : '⭕'}
-                    </div>` :
-                `<button class="delete-record-btn" onclick="deleteRecord('${record.id}')" title="删除此记录">
-                        ❌
-                    </button>`
+        if (opts.bulkDeleteMode && item.classList) {
+            item.classList.add('history-item-selectable');
+            if (opts.selectedRecords && opts.selectedRecords.has(record.id)) {
+                item.classList.add('history-item-selected');
             }
-            </div>
-        `;
-    }).join('');
+        }
+
+        const info = legacyCreateElement('div', {
+            className: 'record-info' + (opts.bulkDeleteMode ? ' record-info-selectable' : '')
+        }, [
+            legacyCreateElement('a', {
+                href: '#',
+                className: 'practice-record-title',
+                dataset: { recordAction: 'details', recordId: record.id }
+            }, legacyCreateElement('strong', null, record.title || '未命名练习')),
+            legacyCreateElement('div', { className: 'record-meta-line' }, [
+                legacyCreateElement('small', { className: 'record-date' }, record.date ? new Date(record.date).toLocaleString() : '未知时间'),
+                legacyCreateElement('small', { className: 'record-duration-value' }, [
+                    legacyCreateElement('strong', null, '用时'),
+                    legacyCreateElement('strong', { className: 'duration-time' }, formatDurationShort(record.duration))
+                ])
+            ])
+        ]);
+
+        item.appendChild(info);
+
+        item.appendChild(legacyCreateElement('div', { className: 'record-percentage-container' }, [
+            legacyCreateElement('div', { className: 'record-percentage' }, `${Math.round(Number(record.percentage) || 0)}%`)
+        ]));
+
+        if (!opts.bulkDeleteMode) {
+            item.appendChild(legacyCreateElement('div', { className: 'record-actions-container' }, [
+                legacyCreateElement('button', {
+                    type: 'button',
+                    className: 'delete-record-btn',
+                    title: '删除此记录',
+                    dataset: { recordAction: 'delete', recordId: record.id }
+                }, '🗑️')
+            ]));
+        }
+
+        fragment.push(item);
+    }
+
+    legacyReplaceContent(container, fragment);
+}
+
+function filterRecordsByExamTypeFallback(records, exams, type) {
+    if (!type || type === 'all') {
+        return records;
+    }
+
+    const index = Array.isArray(exams) ? exams : [];
+    return records.filter((record) => {
+        const exam = index.find((item) => item && (item.id === record.examId || item.title === record.title));
+        return exam ? exam.type === type : false;
+    });
+}
+
+// 更新练习视图
+function updatePracticeView() {
+    const { normalizedRecords, summary } = calculatePracticeStats();
+
+    const dashboard = ensurePracticeDashboardView();
+    if (dashboard) {
+        dashboard.updateSummary({
+            totalPracticed: summary.totalPracticed || 0,
+            averageScore: summary.averageScore || 0,
+            totalStudyMinutes: summary.totalStudyMinutes || 0,
+            streak: summary.streak || 0
+        });
+    } else {
+        updatePracticeSummaryFallback(summary);
+    }
+
+    const historyContainer = document.getElementById('practice-history-list');
+    if (!historyContainer) {
+        return;
+    }
+
+    ensurePracticeHistoryDelegates(historyContainer);
+
+    const renderer = window.PracticeHistoryRenderer;
+    const examType = typeof window.currentExamType === 'string' ? window.currentExamType : 'all';
+    const index = Array.isArray(window.examIndex) ? window.examIndex : examIndex;
+
+    let recordsToRender = normalizedRecords;
+    if (examType && examType !== 'all') {
+        const statsApi = window.PracticeStats;
+        if (statsApi && typeof statsApi.filterByExamType === 'function') {
+            recordsToRender = statsApi.filterByExamType(recordsToRender, index, examType);
+        } else {
+            recordsToRender = filterRecordsByExamTypeFallback(recordsToRender, index, examType);
+        }
+    }
+
+    const bulkDeleteMode = getBulkDeleteModeState();
+    const selectedSet = getSelectedRecordsSet();
+
+    if (!renderer) {
+        renderPracticeHistoryFallback(historyContainer, recordsToRender, {
+            bulkDeleteMode,
+            selectedRecords: selectedSet
+        });
+        return;
+    }
+
+    renderer.destroyScroller(practiceHistoryScrollerInstance);
+    practiceHistoryScrollerInstance = null;
+
+    if (!recordsToRender.length) {
+        renderer.renderEmptyState(historyContainer);
+        return;
+    }
+
+    practiceHistoryScrollerInstance = renderer.renderList(historyContainer, recordsToRender, {
+        bulkDeleteMode,
+        selectedRecords: selectedSet,
+        scrollerOptions: { itemHeight: 100, containerHeight: 650 }
+    });
 }
 
 // 导出练习数据 - 使用异步导出处理器
@@ -2362,12 +3301,12 @@ async function initializePracticeRecords() {
     if (practiceRecordsInitialized) return;
 
     try {
-        practiceRecords = await storage.get('practice_records', []);
+        practiceRecords = setPracticeRecordsState(await storage.get('practice_records', []));
         practiceRecordsInitialized = true;
         console.log('[Script] 练习记录数据初始化完成，共', practiceRecords.length, '条记录');
     } catch (error) {
         console.error('[Script] 练习记录初始化失败:', error);
-        practiceRecords = [];
+        practiceRecords = setPracticeRecordsState([]);
         practiceRecordsInitialized = true;
     }
 }
