@@ -18,3 +18,4 @@ Thumbs.db
 # 使用通配符忽略特殊命名的目录
 *9.4*
 *睡着过项目组*
+developer/tests/e2e/reports/static-ci-report.json

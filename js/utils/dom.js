@@ -320,3 +320,118 @@ window.DOMEvents = DOM.events;
 window.DOMStyles = DOM.styles;
 
 console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样式管理');
+
+// 聚合 DOMAdapter 回退实现，避免额外脚本文件
+(function(global) {
+    if (global.DOMAdapter || typeof document === 'undefined') {
+        return;
+    }
+
+    function toArray(children) {
+        if (Array.isArray(children)) {
+            return children.filter(function(child) { return child != null; });
+        }
+        if (children == null) {
+            return [];
+        }
+        return [children];
+    }
+
+    function applyAttributes(element, attributes) {
+        if (!attributes) return;
+        Object.keys(attributes).forEach(function(key) {
+            var value = attributes[key];
+            if (value == null || value === false) return;
+            if (key === 'className') {
+                element.className = value;
+                return;
+            }
+            if (key === 'dataset' && typeof value === 'object') {
+                Object.keys(value).forEach(function(dataKey) {
+                    var dataValue = value[dataKey];
+                    if (dataValue != null) {
+                        element.dataset[dataKey] = String(dataValue);
+                    }
+                });
+                return;
+            }
+            if (key === 'style' && typeof value === 'object') {
+                Object.assign(element.style, value);
+                return;
+            }
+            element.setAttribute(key, value === true ? '' : value);
+        });
+    }
+
+    function appendChildren(element, children) {
+        toArray(children).forEach(function(child) {
+            if (child == null) return;
+            if (typeof child === 'string') {
+                element.appendChild(document.createTextNode(child));
+                return;
+            }
+            if (child instanceof Node) {
+                element.appendChild(child);
+            }
+        });
+    }
+
+    function fallbackCreate(tag, attributes, children) {
+        var element = document.createElement(tag);
+        applyAttributes(element, attributes);
+        appendChildren(element, children);
+        return element;
+    }
+
+    function fallbackReplaceContent(container, content) {
+        if (!container) return;
+        while (container.firstChild) {
+            container.removeChild(container.firstChild);
+        }
+        var nodes = toArray(typeof content === 'function' ? content() : content);
+        nodes.forEach(function(node) {
+            if (!node) return;
+            if (typeof node === 'string') {
+                container.appendChild(document.createTextNode(node));
+            } else if (node instanceof Node) {
+                container.appendChild(node);
+            }
+        });
+    }
+
+    function fallbackFragment(items, factory) {
+        var fragment = document.createDocumentFragment();
+        (Array.isArray(items) ? items : []).forEach(function(item) {
+            var node = factory(item);
+            if (node instanceof Node) {
+                fragment.appendChild(node);
+            }
+        });
+        return fragment;
+    }
+
+    global.DOMAdapter = {
+        create: function(tag, attributes, children) {
+            if (global.DOM && typeof global.DOM.create === 'function') {
+                return global.DOM.create(tag, attributes, children);
+            }
+            return fallbackCreate(tag, attributes, children);
+        },
+        replaceContent: function(container, content) {
+            if (global.DOM && typeof global.DOM.replaceContent === 'function') {
+                global.DOM.replaceContent(container, content);
+                return;
+            }
+            fallbackReplaceContent(container, content);
+        },
+        fragment: function(items, factory) {
+            if (global.DOM && global.DOM.builder && typeof global.DOM.builder.createFragment === 'function') {
+                return global.DOM.builder.createFragment(items, factory);
+            }
+            return fallbackFragment(items, factory);
+        },
+        text: function(value) {
+            return document.createTextNode(value == null ? '' : String(value));
+        }
+    };
+})(window);
