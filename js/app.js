@@ -1130,7 +1130,10 @@ class ExamSystemApp {
         try {
             // 记录待应用筛选（可显式传入类型，如 'reading' 或 'listening'）
             window.__pendingBrowseFilter = { category, type };
-            window.__browseFilter = { category, type };
+            const descriptor = Object.getOwnPropertyDescriptor(window, '__browseFilter');
+            if (!descriptor || typeof descriptor.set !== 'function') {
+                window.__browseFilter = { category, type };
+            }
         } catch (_) {}
 
         // 无论是否存在旧的 ExamBrowser，都统一走新浏览视图
@@ -2015,7 +2018,7 @@ class ExamSystemApp {
                     window.syncPracticeRecords();
                 } else if (window.storage) {
                     const latest = await window.storage.get('practice_records', []);
-                    window.practiceRecords = latest;
+                    this.setState('practice.records', Array.isArray(latest) ? latest : []);
                 }
             } catch (syncErr) {
                 console.warn('[DataCollection] 刷新练习记录失败（UI可能需要手动刷新）:', syncErr);
@@ -2311,13 +2314,19 @@ class ExamSystemApp {
         examCards.forEach(card => {
             let progressBar = card.querySelector('.exam-progress-bar');
             if (!progressBar) {
-                // 创建进度条
                 progressBar = document.createElement('div');
                 progressBar.className = 'exam-progress-bar';
-                progressBar.innerHTML = `
-                    <div class="progress-fill" style="width: 0%"></div>
-                    <span class="progress-text">0%</span>
-                `;
+
+                const progressFillNode = document.createElement('div');
+                progressFillNode.className = 'progress-fill';
+                progressFillNode.style.width = '0%';
+
+                const progressTextNode = document.createElement('span');
+                progressTextNode.className = 'progress-text';
+                progressTextNode.textContent = '0%';
+
+                progressBar.appendChild(progressFillNode);
+                progressBar.appendChild(progressTextNode);
                 card.appendChild(progressBar);
             }
 
@@ -2819,59 +2828,143 @@ class ExamSystemApp {
      * 显示降级UI
      */
     showFallbackUI(canRecover = false) {
-        const app = document.getElementById('app');
-        if (app) {
-            const recoveryOptions = canRecover ? `
-                <div class="recovery-options">
-                    <h3>恢复选项</h3>
-                    <button onclick="window.app.attemptRecovery()" class="btn btn-secondary">
-                        尝试恢复
-                    </button>
-                    <button onclick="window.app.enterSafeMode()" class="btn btn-outline">
-                        安全模式
-                    </button>
-                </div>
-            ` : '';
-
-            app.innerHTML = `
-                <div class="fallback-ui">
-                    <div class="container">
-                        <div class="fallback-header">
-                            <h1>⚠️ 系统初始化失败</h1>
-                            <p class="fallback-description">
-                                抱歉，IELTS考试系统无法正常启动。这可能是由于网络问题、浏览器兼容性或系统资源不足导致的。
-                            </p>
-                        </div>
-                        
-                        <div class="fallback-solutions">
-                            <h3>建议解决方案</h3>
-                            <ul class="solution-list">
-                                <li>🔄 刷新页面重新加载系统</li>
-                                <li>🧹 清除浏览器缓存和Cookie</li>
-                                <li>🌐 检查网络连接是否正常</li>
-                                <li>🔧 使用Chrome、Firefox或Edge等现代浏览器</li>
-                                <li>💾 确保有足够的系统内存</li>
-                            </ul>
-                        </div>
-                        
-                        ${recoveryOptions}
-                        
-                        <div class="fallback-actions">
-                            <button onclick="window.location.reload()" class="btn btn-primary">
-                                🔄 刷新页面
-                            </button>
-                            <button onclick="alert('系统信息功能已移除')" class="btn btn-outline">
-                                📊 系统信息
-                            </button>
-                        </div>
-                        
-                        <div class="fallback-footer">
-                            <p>如果问题持续存在，请联系技术支持并提供系统信息。</p>
-                        </div>
-                    </div>
-                </div>
-            `;
+        const appContainer = document.getElementById('app');
+        if (!appContainer) {
+            return;
         }
+
+        const adapter = window.DOMAdapter;
+
+        const createNode = (tag, attrs, children) => {
+            if (adapter && typeof adapter.create === 'function') {
+                return adapter.create(tag, attrs, children);
+            }
+            const element = document.createElement(tag);
+            if (attrs && typeof attrs === 'object') {
+                Object.keys(attrs).forEach((key) => {
+                    const value = attrs[key];
+                    if (value == null) {
+                        return;
+                    }
+                    if (key === 'className') {
+                        element.className = value;
+                        return;
+                    }
+                    if (key === 'dataset' && typeof value === 'object') {
+                        Object.keys(value).forEach((dataKey) => {
+                            element.dataset[dataKey] = String(value[dataKey]);
+                        });
+                        return;
+                    }
+                    if (key === 'type') {
+                        element.setAttribute('type', value);
+                        return;
+                    }
+                    element.setAttribute(key, value);
+                });
+            }
+
+            const nodes = Array.isArray(children) ? children : [children];
+            nodes.forEach((child) => {
+                if (child == null) {
+                    return;
+                }
+                if (child instanceof Node) {
+                    element.appendChild(child);
+                } else if (typeof child === 'string') {
+                    element.appendChild(document.createTextNode(child));
+                }
+            });
+            return element;
+        };
+
+        const replaceContent = (container, content) => {
+            while (container.firstChild) {
+                container.removeChild(container.firstChild);
+            }
+            const nodes = Array.isArray(content) ? content : [content];
+            nodes.forEach((node) => {
+                if (!node) {
+                    return;
+                }
+                container.appendChild(node);
+            });
+        };
+
+        const solutionList = createNode('ul', { className: 'solution-list' }, [
+            createNode('li', null, '🔄 刷新页面重新加载系统'),
+            createNode('li', null, '🧹 清除浏览器缓存和Cookie'),
+            createNode('li', null, '🌐 检查网络连接是否正常'),
+            createNode('li', null, '🔧 使用Chrome、Firefox或Edge等现代浏览器'),
+            createNode('li', null, '💾 确保有足够的系统内存')
+        ]);
+
+        const recoverySection = canRecover
+            ? createNode('div', { className: 'recovery-options' }, [
+                createNode('h3', null, '恢复选项'),
+                createNode('div', { className: 'recovery-buttons' }, [
+                    createNode('button', {
+                        type: 'button',
+                        className: 'btn btn-secondary',
+                        dataset: { fallbackAction: 'attempt-recovery' }
+                    }, '尝试恢复'),
+                    createNode('button', {
+                        type: 'button',
+                        className: 'btn btn-outline',
+                        dataset: { fallbackAction: 'safe-mode' }
+                    }, '安全模式')
+                ])
+            ])
+            : null;
+
+        const fallbackRoot = createNode('div', { className: 'fallback-ui' }, [
+            createNode('div', { className: 'container' }, [
+                createNode('div', { className: 'fallback-header' }, [
+                    createNode('h1', null, '⚠️ 系统初始化失败'),
+                    createNode('p', { className: 'fallback-description' },
+                        '抱歉，IELTS考试系统无法正常启动。这可能是由于网络问题、浏览器兼容性或系统资源不足导致的。'
+                    )
+                ]),
+                createNode('div', { className: 'fallback-solutions' }, [
+                    createNode('h3', null, '建议解决方案'),
+                    solutionList
+                ]),
+                recoverySection,
+                createNode('div', { className: 'fallback-actions' }, [
+                    createNode('button', {
+                        type: 'button',
+                        className: 'btn btn-primary',
+                        dataset: { fallbackAction: 'reload' }
+                    }, '🔄 刷新页面'),
+                    createNode('button', {
+                        type: 'button',
+                        className: 'btn btn-outline',
+                        dataset: { fallbackAction: 'show-info' }
+                    }, '📊 系统信息')
+                ]),
+                createNode('div', { className: 'fallback-footer' }, [
+                    createNode('p', null, '如果问题持续存在，请联系技术支持并提供系统信息。')
+                ])
+            ])
+        ]);
+
+        replaceContent(appContainer, fallbackRoot);
+
+        const bindAction = (selector, handler) => {
+            const node = appContainer.querySelector(selector);
+            if (!node) {
+                return;
+            }
+            node.addEventListener('click', (event) => {
+                event.preventDefault();
+                handler();
+            });
+        };
+
+        bindAction('[data-fallback-action="reload"]', () => window.location.reload());
+        bindAction('[data-fallback-action="show-info"]', () => alert('系统信息功能已移除'));
+        bindAction('[data-fallback-action="attempt-recovery"]', () => this.attemptRecovery());
+        bindAction('[data-fallback-action="safe-mode"]', () => this.enterSafeMode());
     }
 
     /**
@@ -2901,35 +2994,112 @@ class ExamSystemApp {
     enterSafeMode() {
         this.showUserMessage('正在启动安全模式...', 'info');
 
-        const app = document.getElementById('app');
-        if (app) {
-            app.innerHTML = `
-                <div class="safe-mode-ui">
-                    <div class="container">
-                        <h1>🛡️ 安全模式</h1>
-                        <p>系统正在安全模式下运行，部分功能可能不可用。</p>
-                        
-                        <div class="safe-mode-features">
-                            <h3>可用功能</h3>
-                            <ul>
-                                <li>基本题库浏览</li>
-                                <li>简单练习记录</li>
-                                <li>系统诊断</li>
-                            </ul>
-                        </div>
-                        
-                        <div class="safe-mode-actions">
-                            <button onclick="window.app.initialize()" class="btn btn-primary">
-                                尝试完整启动
-                            </button>
-                            <button onclick="window.location.reload()" class="btn btn-secondary">
-                                重新加载
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `;
+        const appContainer = document.getElementById('app');
+        if (!appContainer) {
+            return;
         }
+
+        const adapter = window.DOMAdapter;
+        const createNode = (tag, attrs, children) => {
+            if (adapter && typeof adapter.create === 'function') {
+                return adapter.create(tag, attrs, children);
+            }
+            const element = document.createElement(tag);
+            if (attrs && typeof attrs === 'object') {
+                Object.keys(attrs).forEach((key) => {
+                    const value = attrs[key];
+                    if (value == null) {
+                        return;
+                    }
+                    if (key === 'className') {
+                        element.className = value;
+                        return;
+                    }
+                    if (key === 'dataset' && typeof value === 'object') {
+                        Object.keys(value).forEach((dataKey) => {
+                            element.dataset[dataKey] = String(value[dataKey]);
+                        });
+                        return;
+                    }
+                    if (key === 'type') {
+                        element.setAttribute('type', value);
+                        return;
+                    }
+                    element.setAttribute(key, value);
+                });
+            }
+
+            const nodes = Array.isArray(children) ? children : [children];
+            nodes.forEach((child) => {
+                if (child == null) {
+                    return;
+                }
+                if (child instanceof Node) {
+                    element.appendChild(child);
+                } else if (typeof child === 'string') {
+                    element.appendChild(document.createTextNode(child));
+                }
+            });
+            return element;
+        };
+
+        const replaceContent = (container, content) => {
+            while (container.firstChild) {
+                container.removeChild(container.firstChild);
+            }
+            const nodes = Array.isArray(content) ? content : [content];
+            nodes.forEach((node) => {
+                if (!node) {
+                    return;
+                }
+                container.appendChild(node);
+            });
+        };
+
+        const featuresList = createNode('ul', null, [
+            createNode('li', null, '基本题库浏览'),
+            createNode('li', null, '简单练习记录'),
+            createNode('li', null, '系统诊断')
+        ]);
+
+        const safeModeRoot = createNode('div', { className: 'safe-mode-ui' }, [
+            createNode('div', { className: 'container' }, [
+                createNode('h1', null, '🛡️ 安全模式'),
+                createNode('p', null, '系统正在安全模式下运行，部分功能可能不可用。'),
+                createNode('div', { className: 'safe-mode-features' }, [
+                    createNode('h3', null, '可用功能'),
+                    featuresList
+                ]),
+                createNode('div', { className: 'safe-mode-actions' }, [
+                    createNode('button', {
+                        type: 'button',
+                        className: 'btn btn-primary',
+                        dataset: { safeModeAction: 'initialize' }
+                    }, '尝试完整启动'),
+                    createNode('button', {
+                        type: 'button',
+                        className: 'btn btn-secondary',
+                        dataset: { safeModeAction: 'reload' }
+                    }, '重新加载')
+                ])
+            ])
+        ]);
+
+        replaceContent(appContainer, safeModeRoot);
+
+        const bindAction = (selector, handler) => {
+            const node = appContainer.querySelector(selector);
+            if (!node) {
+                return;
+            }
+            node.addEventListener('click', (event) => {
+                event.preventDefault();
+                handler();
+            });
+        };
+
+        bindAction('[data-safe-mode-action="initialize"]', () => this.initialize());
+        bindAction('[data-safe-mode-action="reload"]', () => window.location.reload());
     }
 
     
