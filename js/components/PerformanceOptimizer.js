@@ -10,13 +10,18 @@ class VirtualScroller {
         this.itemHeight = options.itemHeight || 120;
         this.bufferSize = options.bufferSize || 5;
         this.containerHeight = options.containerHeight || this.getContainerHeight();
-        
+        this.layoutCalculator = typeof options.layoutCalculator === 'function' ? options.layoutCalculator : null;
+
         this.visibleStart = 0;
         this.visibleEnd = 0;
         this.renderedItems = new Map();
         this.scrollTop = 0;
         this.totalHeight = 0;
-        
+        this.itemsPerRow = 1;
+        this.layoutMetrics = null;
+
+        this.handleResize = this.recalculateLayout.bind(this);
+
         this.initialize();
     }
     
@@ -40,20 +45,23 @@ class VirtualScroller {
      * 设置滚动容器
      */
     setupScrollContainer() {
+        this.updateLayoutMetrics();
+
         // 计算总高度
-        this.totalHeight = this.items.length * this.itemHeight;
-        
+        this.totalHeight = this.getTotalHeight();
+
         // 设置容器样式
         this.container.style.position = 'relative';
-        this.container.style.overflow = 'auto';
+        this.container.style.overflowY = 'auto';
+        this.container.style.overflowX = 'hidden';
         this.container.style.height = `${this.containerHeight}px`;
-        
+
         // 创建虚拟内容区域
         this.viewport = document.createElement('div');
         this.viewport.style.position = 'relative';
         this.viewport.style.height = `${this.totalHeight}px`;
         this.viewport.style.width = '100%';
-        
+
         // 清空容器并添加视窗
         this.container.innerHTML = '';
         this.container.appendChild(this.viewport);
@@ -64,15 +72,19 @@ class VirtualScroller {
      */
     calculateVisibleRange() {
         const scrollTop = this.container.scrollTop;
-        const visibleItems = Math.ceil(this.containerHeight / this.itemHeight);
-        
-        this.visibleStart = Math.max(0, 
-            Math.floor(scrollTop / this.itemHeight) - this.bufferSize
-        );
-        this.visibleEnd = Math.min(this.items.length - 1,
-            this.visibleStart + visibleItems + (this.bufferSize * 2)
-        );
-        
+        const metrics = this.layoutMetrics;
+        const rowHeight = metrics && metrics.rowHeight ? metrics.rowHeight : this.itemHeight;
+        const itemsPerRow = metrics && metrics.itemsPerRow ? metrics.itemsPerRow : 1;
+        const totalRows = metrics && metrics.totalRows ? metrics.totalRows : Math.ceil(this.items.length / itemsPerRow);
+        const visibleRows = Math.ceil(this.containerHeight / rowHeight);
+        const bufferRows = this.bufferSize;
+
+        const startRow = Math.max(0, Math.floor(scrollTop / rowHeight) - bufferRows);
+        const endRow = Math.min(totalRows - 1, startRow + visibleRows + bufferRows * 2);
+
+        this.visibleStart = Math.max(0, startRow * itemsPerRow);
+        this.visibleEnd = Math.min(this.items.length - 1, ((endRow + 1) * itemsPerRow) - 1);
+
         this.scrollTop = scrollTop;
     }
     
@@ -92,11 +104,16 @@ class VirtualScroller {
         for (let i = this.visibleStart; i <= this.visibleEnd; i++) {
             if (!this.renderedItems.has(i)) {
                 const element = this.renderer(this.items[i], i);
+                const position = this.getItemPosition(i);
                 element.style.position = 'absolute';
-                element.style.top = `${i * this.itemHeight}px`;
-                element.style.width = '100%';
+                element.style.top = `${position.top}px`;
+                element.style.left = `${position.left}px`;
+                element.style.width = typeof position.width === 'number' ? `${position.width}px` : position.width;
+                if (position.height) {
+                    element.style.height = typeof position.height === 'number' ? `${position.height}px` : position.height;
+                }
                 element.style.boxSizing = 'border-box';
-                
+
                 this.viewport.appendChild(element);
                 this.renderedItems.set(i, element);
             }
@@ -108,35 +125,61 @@ class VirtualScroller {
      */
     setupScrollListener() {
         let scrollTimer = null;
-        
-        this.container.addEventListener('scroll', () => {
+
+        const onScroll = () => {
             // 使用防抖优化滚动性能
             if (scrollTimer) {
                 clearTimeout(scrollTimer);
             }
-            
+
             scrollTimer = setTimeout(() => {
                 this.calculateVisibleRange();
                 this.renderVisible();
             }, 10);
-        }, { passive: true });
+        };
+
+        this.handleScroll = onScroll;
+        this.container.addEventListener('scroll', onScroll, { passive: true });
+
+        window.addEventListener('resize', this.handleResize, { passive: true });
     }
-    
+
     /**
      * 更新数据
      */
     updateItems(newItems) {
         this.items = newItems;
-        this.totalHeight = this.items.length * this.itemHeight;
+        this.updateLayoutMetrics();
+        this.totalHeight = this.getTotalHeight();
         this.viewport.style.height = `${this.totalHeight}px`;
-        
+
         // 清除所有渲染的元素
         this.renderedItems.forEach(element => element.remove());
         this.renderedItems.clear();
-        
+
         // 重新计算并渲染
         this.calculateVisibleRange();
         this.renderVisible();
+    }
+
+    /**
+     * 重新计算布局
+     */
+    recalculateLayout() {
+        this.updateLayoutMetrics();
+        this.totalHeight = this.getTotalHeight();
+        if (this.viewport) {
+            this.viewport.style.height = `${this.totalHeight}px`;
+        }
+        this.calculateVisibleRange();
+        this.renderVisible();
+    }
+
+    /**
+     * 对外暴露的重新计算方法
+     */
+    recalculate() {
+        this.recalculateLayout();
     }
     
     /**
@@ -161,16 +204,77 @@ class VirtualScroller {
      */
     destroy() {
         console.log('[VirtualScroller] 销毁虚拟滚动器');
-        
+
         // 清除所有渲染的元素
         this.renderedItems.forEach(element => element.remove());
         this.renderedItems.clear();
-        
+
         // 移除滚动监听器
         this.container.removeEventListener('scroll', this.handleScroll);
-        
+        window.removeEventListener('resize', this.handleResize);
+
         // 清空容器
         this.container.innerHTML = '';
+    }
+
+    /**
+     * 计算元素位置
+     */
+    getItemPosition(index) {
+        if (this.layoutMetrics && typeof this.layoutMetrics.positionFor === 'function') {
+            const position = this.layoutMetrics.positionFor(index) || {};
+            return {
+                top: Number(position.top) || 0,
+                left: Number(position.left) || 0,
+                width: position.width !== undefined ? position.width : '100%',
+                height: position.height !== undefined ? position.height : null
+            };
+        }
+        return {
+            top: index * this.itemHeight,
+            left: 0,
+            width: '100%',
+            height: null
+        };
+    }
+
+    updateLayoutMetrics() {
+        if (!this.layoutCalculator) {
+            this.layoutMetrics = null;
+            this.itemsPerRow = 1;
+            return;
+        }
+
+        try {
+            const metrics = this.layoutCalculator({
+                container: this.container,
+                items: this.items.slice()
+            }) || {};
+            if (metrics && typeof metrics === 'object') {
+                if (typeof metrics.rowHeight === 'number' && metrics.rowHeight > 0) {
+                    this.itemHeight = metrics.rowHeight;
+                }
+                this.itemsPerRow = Math.max(1, Number(metrics.itemsPerRow) || 1);
+                this.layoutMetrics = Object.assign({}, metrics, {
+                    itemsPerRow: this.itemsPerRow,
+                    rowHeight: metrics.rowHeight || this.itemHeight,
+                    totalRows: metrics.totalRows || Math.ceil(this.items.length / this.itemsPerRow)
+                });
+                return;
+            }
+        } catch (error) {
+            console.warn('[VirtualScroller] layoutCalculator 计算失败，回退至单列布局', error);
+        }
+
+        this.layoutMetrics = null;
+        this.itemsPerRow = 1;
+    }
+
+    getTotalHeight() {
+        if (this.layoutMetrics && typeof this.layoutMetrics.totalHeight === 'number') {
+            return this.layoutMetrics.totalHeight;
+        }
+        return this.items.length * this.itemHeight;
     }
 }
 
