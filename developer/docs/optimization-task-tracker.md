@@ -297,15 +297,15 @@
 ## 阶段5: 代码质量提升 (P2 - 开发效率)
 
 ### 任务5.1: 消除重复代码
-**状态**: 🟡 进行中（≈25% 完成，2025-10-12 更新）
+**状态**: 🟡 进行中（≈54% 完成，2025-10-18 更新）
 **优先级**: 🟡 中
 **估时**: 5天
 **负责人**: 待指派
 
 **审计数据**:
-- 当前仓库存在 341 处 `addEventListener` 调用，较 2025-10-07 审计下降 2 处，但核心路径仍大量逐个绑定。【efb5c3†L1-L1】
-- `.style.` 直接操作降至 154 处，首个主视图模块实现完全移除内联样式，样式封装基础初见成效。【7084b7†L1-L1】
-- `innerHTML` 仍有 162 次使用，整体降幅有限，渲染层抽象仍需系统治理。【43081e†L1-L1】
+- 当前仓库存在 258 处 `addEventListener` 调用，仍需梳理委托化策略以覆盖剩余场景。【bdda15†L1-L1】
+- `.style.` 直接操作降至 104 处，大头集中在 legacy 主题与诊断工具，需继续封装。【c1bf4c†L1-L1】
+- `innerHTML` 仍有 115 次使用，主要位于遗留弹窗与初始化流程，后续批次需逐步替换。【780827†L1-L1】
 
 **已有资产**:
 - `js/utils/dom.js`、`js/utils/performance.js`、`js/utils/typeChecker.js`、`js/utils/codeStandards.js` 已存在，可作为后续重构基础。【F:js/utils/dom.js†L1-L120】【F:js/utils/performance.js†L1-L120】
@@ -317,8 +317,37 @@
 - [x] `.style` 直接操作从 170→154，`innerHTML` 162 处保留在遗留路径，数据已纳入任务看板用于后续批次推进。【7084b7†L1-L1】【43081e†L1-L1】
 - [x] 练习记录视图改用 DOM Builder + 事件委托渲染，提供统一空态与消息退场动画，删除 2 处 `innerHTML` 拼接并消除内联 `onclick`。【F:js/main.js†L540-L753】【F:css/main.css†L133-L205】【F:css/main.css†L811-L858】
 
+**2025-10-13 进展记录**:
+- [x] 在 `main.js` 与 `script.js` 内实现统一的消息容器与退场动画，保证 legacy 入口也能重用同一批图标与上限控制，为后续脚本收敛打下基础。【F:js/main.js†L1-L125】【F:js/main.js†L1508-L1541】【F:js/script.js†L320-L365】【F:js/script.js†L386-L422】
+- [x] 抽象练习历史渲染与虚拟滚动器，替换原先散落的节点构造逻辑，并将渲染入口集中到模块化管线中，显著减少 `innerHTML` 回退与重复 DOM 拼接。【F:js/views/legacyViewBundle.js†L164-L361】【F:js/main.js†L700-L770】
+- [x] 概览视图改写为依赖 `DOMAdapter` 的结构化渲染，移除重复的 fallback create/replace 逻辑，并保持按钮事件委托不变，简化 70 行重复 DOM 操作。【F:js/main.js†L560-L623】
+
+**2025-10-14 进展记录**:
+- [x] 新建 `LegacyExamListView`，接管题库列表渲染与空态处理，`js/main.js` 中 200+ 行 DOM 拼装逻辑下沉为模块化方法，并继续复用统一按钮委托。【F:js/views/legacyViewBundle.js†L374-L666】【F:js/main.js†L131-L149】
+- [x] 引入 `PracticeStats` 服务抽离练习统计计算，搭配 `PracticeDashboardView` 将卡片更新与格式化集中管理，避免重复的数值处理与 `textContent` 分散写入。【F:js/views/legacyViewBundle.js†L1-L162】【F:js/main.js†L841-L852】
+- [x] 统一主题与设计稿脚本加载顺序，确保新视图模块在 legacy 页面下可用，防止跨主题加载缺失导致的功能回退。【F:index.html†L340-L363】【F:.superdesign/design_iterations/HP/practice.html†L129-L149】
+
+**2025-10-15 进展记录**:
+- [x] 收敛通知与视图模块：将 `DOMAdapter` 合入 `dom.js` 提供内置 fallback，新建 `legacyViewBundle` 聚合考试列表、练习统计与历史渲染，同时在 `main.js`/`script.js` 内联消息通道，移除 5 个分散脚本并保持同样的 UI 行为。【F:js/utils/dom.js†L331-L408】【F:js/views/legacyViewBundle.js†L1-L345】【F:js/main.js†L1-L120】【F:js/main.js†L1470-L1506】【F:js/script.js†L1-L120】【F:js/script.js†L320-L360】【F:index.html†L351-L355】
+
+**2025-10-16 进展记录**:
+- [x] 重写 HP 主题设计稿为单页入口，`Welcome.html` 承载四大视图并提供导航/主题切换，彻底解决跨页面通信与状态保持问题。【F:.superdesign/design_iterations/HP/Welcome.html†L1-L210】
+- [x] 删除 19 个散落的 HP 插件脚本，使用全新 `hp-portal.js` 聚合练习列表、历史记录与设置桥接逻辑，实现唯一脚本入口并保留 `hp-core-bridge` 兼容层。【F:js/plugins/hp/hp-portal.js†L1-L292】
+
+**2025-10-17 进展记录**:
+- [x] 引入基于 `PerformanceOptimizer` 的题库虚拟滚动布局，`hp-portal.js` 自动在数据量大时切换虚拟列表并在视图激活时重算布局，避免巨量 DOM 的性能雪崩。【F:js/plugins/hp/hp-portal.js†L208-L314】
+- [x] 新增 HP 历史曲线画布渲染与日均聚合逻辑，趋势图直接读取用户数据并暴露渲染指标供 E2E 校验。【F:js/plugins/hp/hp-portal.js†L316-L420】【F:.superdesign/design_iterations/HP/Welcome.html†L137-L154】
+- [x] 移除 HP 旧版 `practice.html` / `Practice History.html` / `setting.html` 文件，彻底消除多页面分叉路径。【F:js/plugins/hp/hp-portal.js†L208-L314】
+- [x] 扩展静态 E2E 套件，加载 HP Portal、Marauder Map 与 My Melody 三个主题并验证核心结构，确保设计稿跟随主系统演进。【F:developer/tests/js/e2e/appE2ETest.js†L400-L566】
+
+**2025-10-18 回归记录**:
+- [x] 还原 HP 主题单页为原始视觉规范，同时保留四视图聚合结构与导航切换，移除丑化布局争议。【F:.superdesign/design_iterations/HP/Welcome.html†L1-L260】
+- [x] 重写 `hp-portal.js` 渲染层，输出与原设计一致的卡片/按钮样式并补充历史等级进度、空态提示等细节。【F:js/plugins/hp/hp-portal.js†L120-L520】
+- [x] 重新测算阶段5.1 指标，确认 `addEventListener`/`.style`/`innerHTML` 剩余数量，进度修正为≈54%，待处理列表同步至任务说明。【F:developer/docs/optimization-task-tracker.md†L304-L316】
+
 **下一步重点**:
 - 制定明确的事件委托与样式封装基准线，从导航、题库、练习三大主视图开始逐步替换。
+- 为 HP 虚拟滚动与趋势图补充降级策略，确认在无 `PerformanceOptimizer` 环境下仍可回退至静态渲染。
 - 引入静态检查脚本（基于 `rg`/ESLint 规则）持续跟踪 `addEventListener`、`.style`、`innerHTML` 数量，纳入 CI 阶段。
 - 结合阶段6新增的 E2E 测试，在每次替换后运行回归，确保行为一致。
 
@@ -479,7 +508,7 @@
 - **阶段2 (架构重构)**: 1/3 任务完成，2 项回归需重新规划 ⚠️
 - **阶段3 (数据层优化)**: 0/2 任务完成，整体尚未启动 ❌
 - **阶段4 (性能灾难修复)**: 1/2 任务完成，innerHTML 优化未落地 ⚠️
-- **阶段5 (代码质量)**: 2/3 任务完成，重复代码治理持续中 🟡
+- **阶段5 (代码质量)**: 2/3 任务完成，核心 5.1 约 54% 仍在压缩重复逻辑 🟡
 - **阶段6 (测试文档)**: 1/3 任务完成，E2E 基线已建立 🟡
 
 **总体进度**: 8/16 任务完成 (50%)

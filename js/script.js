@@ -334,6 +334,37 @@ let practiceStats = {
     lastPracticeDate: null
 };
 
+const LEGACY_MESSAGE_ICONS = {
+    error: '❌',
+    success: '✅',
+    warning: '⚠️',
+    info: 'ℹ️'
+};
+
+function ensureLegacyMessageContainer() {
+    if (typeof document === 'undefined') {
+        return null;
+    }
+    let container = document.getElementById('message-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'message-container';
+        container.className = 'message-container';
+        document.body.appendChild(container);
+    }
+    return container;
+}
+
+function createLegacyMessageNode(message, type) {
+    const node = document.createElement('div');
+    node.className = 'message ' + (type || 'info');
+    const icon = document.createElement('strong');
+    icon.textContent = LEGACY_MESSAGE_ICONS[type] || LEGACY_MESSAGE_ICONS.info;
+    node.appendChild(icon);
+    node.appendChild(document.createTextNode(' ' + String(message || '')));
+    return node;
+}
+
 // PDF处理辅助函数
 function openPDFSafely(pdfPath, examTitle) {
     if (!pdfHandler) {
@@ -354,32 +385,40 @@ function openPDFSafely(pdfPath, examTitle) {
 
 // 消息系统 - 改进版
 function showMessage(message, type = 'info', duration = 4000) {
-    const messageContainer = document.getElementById('message-container');
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${type}`;
-
-    const icon = type === 'error' ? '❌' : type === 'success' ? '✅' : 'ℹ️';
-    messageDiv.innerHTML = `<strong>${icon}</strong> ${message}`;
-
-    messageContainer.appendChild(messageDiv);
-
-    // 自动移除消息
-    setTimeout(() => {
-        if (messageDiv.parentNode) {
-            messageDiv.style.animation = 'slideOut 0.3s ease-in forwards';
-            setTimeout(() => {
-                if (messageDiv.parentNode) {
-                    messageDiv.parentNode.removeChild(messageDiv);
-                }
-            }, 300);
-        }
-    }, duration);
-
-    // 限制消息数量
-    const messages = messageContainer.children;
-    if (messages.length > 3) {
-        messageContainer.removeChild(messages[0]);
+    if (typeof window !== 'undefined' && window.showMessage && window.showMessage !== showMessage) {
+        window.showMessage(message, type, duration);
+        return;
     }
+
+    if (typeof document === 'undefined') {
+        if (typeof console !== 'undefined') {
+            const logMethod = type === 'error' ? 'error' : 'log';
+            console[logMethod](`[LegacyMessage:${type}]`, message);
+        }
+        return;
+    }
+
+    const container = ensureLegacyMessageContainer();
+    if (!container) {
+        return;
+    }
+
+    const note = createLegacyMessageNode(message, type);
+    container.appendChild(note);
+
+    while (container.children.length > 3) {
+        container.removeChild(container.firstChild);
+    }
+
+    const timeout = typeof duration === 'number' && duration > 0 ? duration : 4000;
+    window.setTimeout(() => {
+        note.style.animation = 'slideOut 0.3s ease-in forwards';
+        window.setTimeout(() => {
+            if (note.parentNode) {
+                note.parentNode.removeChild(note);
+            }
+        }, 300);
+    }, timeout);
 }
 
 // 视图切换

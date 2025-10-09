@@ -16,6 +16,41 @@ let app = null;
 let pdfHandler = null;
 let browseStateManager = null;
 
+let examListViewInstance = null;
+let practiceDashboardViewInstance = null;
+
+const MESSAGE_CONTAINER_ID = 'message-container';
+const MESSAGE_ICONS = {
+    error: '❌',
+    success: '✅',
+    warning: '⚠️',
+    info: 'ℹ️'
+};
+
+function ensureMessageContainer() {
+    if (typeof document === 'undefined') {
+        return null;
+    }
+    let container = document.getElementById(MESSAGE_CONTAINER_ID);
+    if (!container) {
+        container = document.createElement('div');
+        container.id = MESSAGE_CONTAINER_ID;
+        container.className = 'message-container';
+        document.body.appendChild(container);
+    }
+    return container;
+}
+
+function createMessageNode(message, type) {
+    const note = document.createElement('div');
+    note.className = 'message ' + (type || 'info');
+    const icon = document.createElement('strong');
+    icon.textContent = MESSAGE_ICONS[type] || MESSAGE_ICONS.info;
+    note.appendChild(icon);
+    note.appendChild(document.createTextNode(' ' + String(message || '')));
+    return note;
+}
+
 
 const legacyBridge = window.LegacyStateBridge ? window.LegacyStateBridge.getInstance() : null;
 
@@ -91,6 +126,26 @@ const preferredFirstExamByCategory = {
   'P1_listening': { id: 'listening-p3-01', title: 'Julia and Bob’s science project is due' },
   'P3_listening': { id: 'listening-p3-02', title: 'Climate change and allergies' }
 };
+
+
+function ensureExamListView() {
+    if (!examListViewInstance && window.LegacyExamListView) {
+        examListViewInstance = new window.LegacyExamListView({
+            domAdapter: window.DOMAdapter,
+            containerId: 'exam-list-container'
+        });
+    }
+    return examListViewInstance;
+}
+
+function ensurePracticeDashboardView() {
+    if (!practiceDashboardViewInstance && window.PracticeDashboardView) {
+        practiceDashboardViewInstance = new window.PracticeDashboardView({
+            domAdapter: window.DOMAdapter
+        });
+    }
+    return practiceDashboardViewInstance;
+}
 
 
 
@@ -523,95 +578,51 @@ function updateOverview() {
 function renderOverviewLegacy(container, stats) {
     if (!container) return;
 
-    const domApi = (typeof window !== 'undefined' && window.DOM) ? window.DOM : null;
-
-    const fallbackCreate = (tag, attributes = {}, children = []) => {
-        const element = document.createElement(tag);
-
-        Object.entries(attributes || {}).forEach(([key, value]) => {
-            if (value == null || value === false) return;
-            if (key === 'className') {
-                element.className = value;
-            } else if (key === 'dataset' && typeof value === 'object') {
-                Object.entries(value).forEach(([dataKey, dataValue]) => {
-                    if (dataValue != null) element.dataset[dataKey] = String(dataValue);
-                });
-            } else if (key === 'style' && typeof value === 'object') {
-                Object.assign(element.style, value);
-            } else {
-                element.setAttribute(key, value === true ? '' : value);
-            }
-        });
-
-        const normalizedChildren = Array.isArray(children) ? children : [children];
-        normalizedChildren.forEach((child) => {
-            if (child == null) return;
-            if (typeof child === 'string') {
-                element.appendChild(document.createTextNode(child));
-            } else if (child instanceof Node) {
-                element.appendChild(child);
-            }
-        });
-
-        return element;
-    };
-
-    const create = domApi && typeof domApi.create === 'function'
-        ? (...args) => domApi.create(...args)
-        : fallbackCreate;
-
-    const replaceContent = domApi && typeof domApi.replaceContent === 'function'
-        ? (content) => domApi.replaceContent(container, content)
-        : (content) => {
-            while (container.firstChild) {
-                container.removeChild(container.firstChild);
-            }
-            const normalized = Array.isArray(content) ? content : [content];
-            normalized.forEach((child) => {
-                if (!child) return;
-                container.appendChild(child);
-            });
-        };
+    const adapter = window.DOMAdapter;
+    if (!adapter) {
+        console.warn('[Overview] DOMAdapter 未加载，跳过渲染');
+        return;
+    }
 
     const sections = [];
 
-    const createSection = (title, entries, typeIcon) => {
+    const appendSection = (title, entries, icon) => {
         if (!entries || entries.length === 0) {
             return;
         }
 
-        sections.push(create('h3', {
+        sections.push(adapter.create('h3', {
             className: 'overview-section-title',
             dataset: { overviewSection: title }
         }, [
-            create('span', { className: 'overview-section-icon', ariaHidden: 'true' }, typeIcon),
-            create('span', { className: 'overview-section-label' }, title)
+            adapter.create('span', { className: 'overview-section-icon', ariaHidden: 'true' }, icon),
+            adapter.create('span', { className: 'overview-section-label' }, title)
         ]));
 
         entries.forEach((entry) => {
-            sections.push(create('div', {
+            sections.push(adapter.create('div', {
                 className: 'category-card',
                 dataset: {
                     category: entry.category,
                     examType: entry.type
                 }
             }, [
-                create('div', { className: 'category-header' }, [
-                    create('div', {
+                adapter.create('div', { className: 'category-header' }, [
+                    adapter.create('div', {
                         className: 'category-icon',
                         ariaHidden: 'true'
                     }, entry.type === 'reading' ? '📖' : '🎧'),
-                    create('div', { className: 'category-details' }, [
-                        create('div', { className: 'category-title' }, [
+                    adapter.create('div', { className: 'category-details' }, [
+                        adapter.create('div', { className: 'category-title' }, [
                             entry.category,
                             ' ',
                             entry.type === 'reading' ? '阅读' : '听力'
                         ]),
-                        create('div', { className: 'category-meta' }, `${entry.total} 篇`)
+                        adapter.create('div', { className: 'category-meta' }, `${entry.total} 篇`)
                     ])
                 ]),
-                create('div', { className: 'category-card-actions' }, [
-                    create('button', {
+                adapter.create('div', { className: 'category-card-actions' }, [
+                    adapter.create('button', {
                         type: 'button',
                         className: 'btn category-action-button',
                         dataset: {
@@ -620,10 +631,10 @@ function renderOverviewLegacy(container, stats) {
                             examType: entry.type
                         }
                     }, [
-                        create('span', { className: 'category-action-icon', ariaHidden: 'true' }, '📚'),
-                        create('span', { className: 'category-action-label' }, '浏览题库')
+                        adapter.create('span', { className: 'category-action-icon', ariaHidden: 'true' }, '📚'),
+                        adapter.create('span', { className: 'category-action-label' }, '浏览题库')
                     ]),
-                    create('button', {
+                    adapter.create('button', {
                         type: 'button',
                         className: 'btn btn-secondary category-action-button',
                         dataset: {
@@ -632,22 +643,25 @@ function renderOverviewLegacy(container, stats) {
                             examType: entry.type
                         }
                     }, [
-                        create('span', { className: 'category-action-icon', ariaHidden: 'true' }, '🎲'),
-                        create('span', { className: 'category-action-label' }, '随机练习')
+                        adapter.create('span', { className: 'category-action-icon', ariaHidden: 'true' }, '🎲'),
+                        adapter.create('span', { className: 'category-action-label' }, '随机练习')
                     ])
                 ])
             ]));
         });
     };
 
-    createSection('阅读', stats.reading || [], '📖');
-    createSection('听力', (stats.listening || []).filter((entry) => entry.total > 0), '🎧');
+    const readingEntries = (stats && stats.reading) || [];
+    const listeningEntries = (stats && stats.listening ? stats.listening.filter((entry) => entry.total > 0) : []);
+
+    appendSection('阅读', readingEntries, '📖');
+    appendSection('听力', listeningEntries, '🎧');
 
     if (sections.length === 0) {
-        sections.push(create('p', { className: 'overview-empty' }, '暂无题库数据'));
+        sections.push(adapter.create('p', { className: 'overview-empty' }, '暂无题库数据'));
     }
 
-    replaceContent(sections);
+    adapter.replaceContent(container, sections);
 }
 
 let overviewDelegatesConfigured = false;
@@ -709,155 +723,41 @@ function setupOverviewInteractions() {
 }
 
 function getScoreColor(percentage) {
-    if (percentage >= 90) return '#10b981';
-    if (percentage >= 75) return '#f59e0b';
-    if (percentage >= 60) return '#f97316';
+    if (window.PracticeHistoryRenderer && window.PracticeHistoryRenderer.helpers && typeof window.PracticeHistoryRenderer.helpers.getScoreColor === 'function') {
+        return window.PracticeHistoryRenderer.helpers.getScoreColor(percentage);
+    }
+    const pct = Number(percentage) || 0;
+    if (pct >= 90) return '#10b981';
+    if (pct >= 75) return '#f59e0b';
+    if (pct >= 60) return '#f97316';
     return '#ef4444';
 }
 
-function formatDurationShort(seconds) {
-    const s = Math.max(0, Math.floor(seconds || 0));
-    if (s < 60) return `${s}秒`;
-    const m = Math.floor(s / 60);
-    if (m < 60) return `${m}分钟`;
-    const h = Math.floor(m / 60);
-    const mm = m % 60;
-    return `${h}小时${mm}分钟`;
-}
-
-function getDurationColor(seconds) {
-    const minutes = (seconds || 0) / 60;
-    if (minutes < 20) return '#10b981'; // green-500
-    if (minutes < 23) return '#f59e0b'; // yellow-500
-    if (minutes < 26) return '#f97316'; // orange-500
-    if (minutes < 30) return '#ef4444'; // red-500
-    return '#dc2626'; // red-600
-}
-
 function renderPracticeRecordItem(record) {
-    const domApi = (typeof window !== 'undefined' && window.DOM && typeof window.DOM.create === 'function') ? window.DOM : null;
-    const fallbackCreate = (tag, attributes = {}, children = []) => {
-        const element = document.createElement(tag);
-        Object.entries(attributes || {}).forEach(([key, value]) => {
-            if (value == null || value === false) return;
-            if (key === 'className') {
-                element.className = value;
-            } else if (key === 'dataset' && typeof value === 'object') {
-                Object.entries(value).forEach(([dataKey, dataValue]) => {
-                    if (dataValue != null) element.dataset[dataKey] = String(dataValue);
-                });
-            } else if (key === 'style' && typeof value === 'object') {
-                Object.assign(element.style, value);
-            } else {
-                element.setAttribute(key, value === true ? '' : value);
-            }
-        });
-
-        const normalizedChildren = Array.isArray(children) ? children : [children];
-        normalizedChildren.forEach((child) => {
-            if (child == null) return;
-            if (typeof child === 'string') {
-                element.appendChild(document.createTextNode(child));
-            } else if (child instanceof Node) {
-                element.appendChild(child);
-            }
-        });
-        return element;
-    };
-
-    const create = domApi ? domApi.create.bind(domApi) : fallbackCreate;
-
-    const item = create('div', {
-        className: 'history-item',
-        dataset: { recordId: record.id }
-    });
-
-    const durationInSeconds = Number(record.duration || 0);
-    const durationStr = formatDurationShort(durationInSeconds);
-    const durationColor = getDurationColor(durationInSeconds);
-
-    const title = record.title || '无标题';
-    const dateText = new Date(record.date).toLocaleString();
-    const percentage = (typeof record.percentage === 'number') ? record.percentage : Math.round(((record.accuracy || 0) * 100));
-
-    const info = create('div', {
-        className: 'record-info' + (bulkDeleteMode ? ' record-info-selectable' : '')
-    }, [
-        create('a', {
-            href: '#',
-            className: 'practice-record-title',
-            dataset: { recordAction: 'details', recordId: record.id }
-        }, [
-            create('strong', undefined, title)
-        ]),
-        create('div', { className: 'record-meta-line' }, [
-            create('small', { className: 'record-date' }, dateText),
-            create('small', { className: 'record-duration-value' }, [
-                create('strong', undefined, '用时'),
-                create('strong', {
-                    className: 'duration-time',
-                    style: { color: durationColor }
-                }, durationStr)
-            ])
-        ])
-    ]);
-
-    const percentageContainer = create('div', { className: 'record-percentage-container' }, [
-        create('div', {
-            className: 'record-percentage',
-            style: { color: getScoreColor(percentage) }
-        }, `${percentage}%`)
-    ]);
-
-    const actions = !bulkDeleteMode ? create('div', { className: 'record-actions-container' }, [
-        create('button', {
-            type: 'button',
-            className: 'delete-record-btn',
-            title: '删除此记录',
-            dataset: { recordAction: 'delete', recordId: record.id }
-        }, '🗑️')
-    ]) : null;
-
-    if (bulkDeleteMode && selectedRecords.has(record.id)) {
-        item.classList.add('history-item-selected');
+    if (!window.PracticeHistoryRenderer) {
+        console.warn('[PracticeHistory] Renderer 未就绪，返回空节点');
+        return null;
     }
 
-    if (bulkDeleteMode) {
-        item.classList.add('history-item-selectable');
-    }
-
-    [info, percentageContainer, actions].forEach((child) => {
-        if (child) item.appendChild(child);
+    return window.PracticeHistoryRenderer.createRecordNode(record, {
+        bulkDeleteMode,
+        selectedRecords
     });
-
-    return item;
 }
 
-function clearPracticeHistoryContainer(container) {
+function renderPracticeHistoryEmptyState(container) {
+    if (window.PracticeHistoryRenderer) {
+        window.PracticeHistoryRenderer.renderEmptyState(container);
+        return;
+    }
+
     if (!container) return;
     while (container.firstChild) {
         container.removeChild(container.firstChild);
     }
-}
-
-function renderPracticeHistoryEmptyState(container) {
-    if (!container) return;
-    clearPracticeHistoryContainer(container);
-
-    const wrapper = document.createElement('div');
-    wrapper.className = 'practice-history-empty';
-
-    const icon = document.createElement('div');
-    icon.className = 'practice-history-empty-icon';
-    icon.textContent = '📂';
-
-    const text = document.createElement('p');
-    text.className = 'practice-history-empty-text';
-    text.textContent = '暂无任何练习记录';
-
-    wrapper.appendChild(icon);
-    wrapper.appendChild(text);
-    container.appendChild(wrapper);
+    const placeholder = document.createElement('div');
+    placeholder.textContent = '暂无任何练习记录';
+    container.appendChild(placeholder);
 }
 
 let practiceHistoryDelegatesConfigured = false;
@@ -939,43 +839,20 @@ function setupPracticeHistoryInteractions() {
 }
 
 function updatePracticeView() {
-    const records = (window.practiceRecords || []).filter(r => r.dataSource === 'real' || r.dataSource === undefined);
+    const rawRecords = Array.isArray(window.practiceRecords) ? window.practiceRecords : [];
+    const records = rawRecords.filter((record) => record && (record.dataSource === 'real' || record.dataSource === undefined));
 
-    // --- 1. Calculate Statistics ---
-    const totalPracticed = records.length;
-    const totalScore = records.reduce((sum, r) => sum + (r.percentage || 0), 0);
-    const avgScore = totalPracticed > 0 ? (totalScore / totalPracticed) : 0;
-    const totalStudyTime = records.reduce((sum, r) => sum + (r.duration || 0), 0) / 60; // in minutes
+    const stats = window.PracticeStats;
+    const summary = stats && typeof stats.calculateSummary === 'function'
+        ? stats.calculateSummary(records)
+        : computePracticeSummaryFallback(records);
 
-    // Streak calculation
-    const practiceDates = [...new Set(records.map(r => new Date(r.date).toDateString()))].sort((a, b) => new Date(b) - new Date(a));
-    let streak = 0;
-    if (practiceDates.length > 0) {
-        const today = new Date();
-        const yesterday = new Date();
-        yesterday.setDate(today.getDate() - 1);
-
-        if (new Date(practiceDates[0]).toDateString() === today.toDateString() || new Date(practiceDates[0]).toDateString() === yesterday.toDateString()) {
-            streak = 1;
-            for (let i = 0; i < practiceDates.length - 1; i++) {
-                const currentDay = new Date(practiceDates[i]);
-                const nextDay = new Date(practiceDates[i+1]);
-                const diffTime = currentDay - nextDay;
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                if (diffDays === 1) {
-                    streak++;
-                } else {
-                    break;
-                }
-            }
-        }
+    const dashboard = ensurePracticeDashboardView();
+    if (dashboard) {
+        dashboard.updateSummary(summary);
+    } else {
+        applyPracticeSummaryFallback(summary);
     }
-
-    // --- 2. Update Stat Cards ---
-    document.getElementById('total-practiced').textContent = totalPracticed;
-    document.getElementById('avg-score').textContent = `${avgScore.toFixed(1)}%`;
-    document.getElementById('study-time').textContent = totalStudyTime.toFixed(0);
-    document.getElementById('streak-days').textContent = streak;
 
     // --- 3. Filter and Render History List ---
     const historyContainer = document.getElementById('practice-history-list');
@@ -985,39 +862,127 @@ function updatePracticeView() {
 
     setupPracticeHistoryInteractions();
 
-    let recordsToShow = records.sort((a,b) => new Date(b.date) - new Date(a.date));
+    let recordsToShow = stats && typeof stats.sortByDateDesc === 'function'
+        ? stats.sortByDateDesc(records)
+        : records.slice().sort((a, b) => new Date(b.date) - new Date(a.date));
 
     if (currentExamType !== 'all') {
-        recordsToShow = recordsToShow.filter(record => {
-            // 增加数组化防御
-            const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
-            const exam = list.find(e => e.id === record.examId || e.title === record.title);
-            return exam && exam.type === currentExamType;
-        });
+        if (stats && typeof stats.filterByExamType === 'function') {
+            recordsToShow = stats.filterByExamType(recordsToShow, examIndex, currentExamType);
+        } else {
+            recordsToShow = recordsToShow.filter((record) => {
+                const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
+                const exam = list.find((e) => e.id === record.examId || e.title === record.title);
+                return exam && exam.type === currentExamType;
+            });
+        }
     }
 
-    // --- 4. Use Virtual Scroller ---
-    if (practiceListScroller) {
-        practiceListScroller.destroy();
-        practiceListScroller = null;
+    // --- 4. Render history list ---
+    const renderer = window.PracticeHistoryRenderer;
+    if (!renderer) {
+        console.warn('[PracticeHistory] Renderer 未加载，渲染空状态');
+        renderPracticeHistoryEmptyState(historyContainer);
+        return;
     }
+
+    renderer.destroyScroller(practiceListScroller);
+    practiceListScroller = null;
 
     if (recordsToShow.length === 0) {
         renderPracticeHistoryEmptyState(historyContainer);
         return;
     }
 
-    clearPracticeHistoryContainer(historyContainer);
+    practiceListScroller = renderer.renderList(historyContainer, recordsToShow, {
+        bulkDeleteMode,
+        selectedRecords,
+        scrollerOptions: { itemHeight: 100, containerHeight: 650 },
+        itemFactory: renderPracticeRecordItem
+    });
+}
 
-    if (window.VirtualScroller) {
-        practiceListScroller = new VirtualScroller(historyContainer, recordsToShow, renderPracticeRecordItem, { itemHeight: 100, containerHeight: 650 }); // 增加itemHeight以匹配新的gap和padding
-    } else {
-        const fragment = document.createDocumentFragment();
-        recordsToShow.forEach((record) => {
-            const node = renderPracticeRecordItem(record);
-            if (node) fragment.appendChild(node);
-        });
-        historyContainer.appendChild(fragment);
+function computePracticeSummaryFallback(records) {
+    const normalized = Array.isArray(records) ? records : [];
+    const totalPracticed = normalized.length;
+    let totalScore = 0;
+    let totalDuration = 0;
+    const dateStrings = [];
+
+    normalized.forEach((record) => {
+        if (!record) {
+            return;
+        }
+        const percentage = typeof record.percentage === 'number' ? record.percentage : 0;
+        const duration = typeof record.duration === 'number' ? record.duration : 0;
+        totalScore += percentage;
+        totalDuration += duration;
+
+        if (record.date) {
+            const time = new Date(record.date);
+            if (!Number.isNaN(time.getTime())) {
+                dateStrings.push(time.toDateString());
+            }
+        }
+    });
+
+    const uniqueDates = Array.from(new Set(dateStrings)).sort((a, b) => new Date(b) - new Date(a));
+    let streak = 0;
+    if (uniqueDates.length > 0) {
+        const today = new Date();
+        const yesterday = new Date();
+        yesterday.setDate(today.getDate() - 1);
+
+        const firstDate = new Date(uniqueDates[0]);
+        if (firstDate.toDateString() === today.toDateString() || firstDate.toDateString() === yesterday.toDateString()) {
+            streak = 1;
+            for (let i = 0; i < uniqueDates.length - 1; i += 1) {
+                const currentDay = new Date(uniqueDates[i]);
+                const nextDay = new Date(uniqueDates[i + 1]);
+                const diffTime = currentDay - nextDay;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                if (diffDays === 1) {
+                    streak += 1;
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+
+    return {
+        totalPracticed,
+        averageScore: totalPracticed > 0 ? totalScore / totalPracticed : 0,
+        totalStudyMinutes: totalDuration / 60,
+        streak
+    };
+}
+
+function applyPracticeSummaryFallback(summary) {
+    if (!summary || typeof document === 'undefined') {
+        return;
+    }
+
+    const totalEl = document.getElementById('total-practiced');
+    if (totalEl) {
+        totalEl.textContent = typeof summary.totalPracticed === 'number' ? summary.totalPracticed : 0;
+    }
+
+    const avgEl = document.getElementById('avg-score');
+    if (avgEl) {
+        const avg = typeof summary.averageScore === 'number' ? summary.averageScore : 0;
+        avgEl.textContent = `${avg.toFixed(1)}%`;
+    }
+
+    const timeEl = document.getElementById('study-time');
+    if (timeEl) {
+        const minutes = typeof summary.totalStudyMinutes === 'number' ? summary.totalStudyMinutes : 0;
+        timeEl.textContent = Math.round(minutes).toString();
+    }
+
+    const streakEl = document.getElementById('streak-days');
+    if (streakEl) {
+        streakEl.textContent = typeof summary.streak === 'number' ? summary.streak : 0;
     }
 }
 
@@ -1164,7 +1129,6 @@ function filterRecordsByType(type) {
 
 
 function loadExamList() {
-    const container = document.getElementById('exam-list-container');
     // 使用 Array.from() 创建副本，避免污染全局 examIndex
     let examsToShow = Array.from(examIndex);
 
@@ -1208,289 +1172,95 @@ function loadExamList() {
 }
 
 function displayExams(exams) {
-    const container = document.getElementById('exam-list-container');
-    const loadingIndicator = document.querySelector('#browse-view .loading');
+    const view = ensureExamListView();
+    if (view) {
+        view.render(exams, { loadingSelector: '#browse-view .loading' });
+        setupExamActionHandlers();
+        return;
+    }
 
+    const container = document.getElementById('exam-list-container');
     if (!container) {
         return;
     }
 
-    const domApi = (typeof window !== 'undefined' && window.DOM) ? window.DOM : null;
-
-    if (!Array.isArray(exams) || exams.length === 0) {
-        renderExamEmptyState(container);
-        if (loadingIndicator) {
-            if (domApi && typeof domApi.hide === 'function') {
-                domApi.hide(loadingIndicator);
-            } else {
-                loadingIndicator.style.display = 'none';
-            }
-        }
-        return;
+    while (container.firstChild) {
+        container.removeChild(container.firstChild);
     }
 
-    const fallbackCreate = (tag, attributes = {}, children = []) => {
-        const element = document.createElement(tag);
-        Object.entries(attributes || {}).forEach(([key, value]) => {
-            if (value == null || value === false) return;
-            if (key === 'className') {
-                element.className = value;
-            } else if (key === 'dataset' && typeof value === 'object') {
-                Object.entries(value).forEach(([dataKey, dataValue]) => {
-                    if (dataValue != null) element.dataset[dataKey] = String(dataValue);
-                });
-            } else {
-                element.setAttribute(key, value === true ? '' : value);
-            }
-        });
-
-        const normalizedChildren = Array.isArray(children) ? children : [children];
-        normalizedChildren.forEach((child) => {
-            if (child == null) return;
-            if (typeof child === 'string') {
-                element.appendChild(document.createTextNode(child));
-            } else if (child instanceof Node) {
-                element.appendChild(child);
-            }
-        });
-        return element;
-    };
-
-    const create = domApi && typeof domApi.create === 'function'
-        ? (...args) => domApi.create(...args)
-        : fallbackCreate;
-
-    const examList = create('div', { className: 'exam-list' });
-
-    if (window.performanceOptimizer && exams.length > 50) {
-        renderExamListBatched(exams, examList, createExamElement);
+    const normalizedExams = Array.isArray(exams) ? exams : [];
+    if (normalizedExams.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'exam-list-empty';
+        empty.setAttribute('role', 'status');
+        empty.innerHTML = '<div class="exam-list-empty-icon" aria-hidden="true">🔍</div>' +
+            '<p class="exam-list-empty-text">未找到匹配的题目</p>' +
+            '<p class="exam-list-empty-hint">请调整筛选条件或搜索词后再试</p>';
+        container.appendChild(empty);
     } else {
-        const fragment = document.createDocumentFragment();
-        exams.forEach((exam) => {
-            const element = createExamElement(exam);
-            if (element) {
-                fragment.appendChild(element);
+        const list = document.createElement('div');
+        list.className = 'exam-list';
+
+        normalizedExams.forEach((exam) => {
+            if (!exam) {
+                return;
             }
+            const item = document.createElement('div');
+            item.className = 'exam-item';
+            if (exam.id) {
+                item.dataset.examId = exam.id;
+            }
+
+            const info = document.createElement('div');
+            info.className = 'exam-info';
+            const infoContent = document.createElement('div');
+            const title = document.createElement('h4');
+            title.textContent = exam.title || '';
+            const meta = document.createElement('div');
+            meta.className = 'exam-meta';
+            meta.textContent = `${exam.category || ''} | ${exam.type || ''}`;
+            infoContent.appendChild(title);
+            infoContent.appendChild(meta);
+            info.appendChild(infoContent);
+
+            const actions = document.createElement('div');
+            actions.className = 'exam-actions';
+
+            const startBtn = document.createElement('button');
+            startBtn.className = 'btn exam-item-action-btn';
+            startBtn.type = 'button';
+            startBtn.dataset.action = 'start';
+            if (exam.id) {
+                startBtn.dataset.examId = exam.id;
+            }
+            startBtn.textContent = '开始';
+
+            const pdfBtn = document.createElement('button');
+            pdfBtn.className = 'btn btn-secondary exam-item-action-btn';
+            pdfBtn.type = 'button';
+            pdfBtn.dataset.action = 'pdf';
+            if (exam.id) {
+                pdfBtn.dataset.examId = exam.id;
+            }
+            pdfBtn.textContent = 'PDF';
+
+            actions.appendChild(startBtn);
+            actions.appendChild(pdfBtn);
+
+            item.appendChild(info);
+            item.appendChild(actions);
+            list.appendChild(item);
         });
-        examList.appendChild(fragment);
+
+        container.appendChild(list);
     }
 
-    if (domApi && typeof domApi.replaceContent === 'function') {
-        domApi.replaceContent(container, [examList]);
-    } else {
-        container.innerHTML = '';
-        container.appendChild(examList);
-    }
-
+    const loadingIndicator = document.querySelector('#browse-view .loading');
     if (loadingIndicator) {
-        if (domApi && typeof domApi.hide === 'function') {
-            domApi.hide(loadingIndicator);
-        } else {
-            loadingIndicator.style.display = 'none';
-        }
+        loadingIndicator.style.display = 'none';
     }
 
     setupExamActionHandlers();
-}
-
-function renderExamEmptyState(container) {
-    if (!container) return;
-
-    const domApi = (typeof window !== 'undefined' && window.DOM) ? window.DOM : null;
-
-    const fallbackCreate = (tag, attributes = {}, children = []) => {
-        const element = document.createElement(tag);
-        Object.entries(attributes || {}).forEach(([key, value]) => {
-            if (value == null || value === false) return;
-            if (key === 'className') {
-                element.className = value;
-            } else if (key === 'dataset' && typeof value === 'object') {
-                Object.entries(value).forEach(([dataKey, dataValue]) => {
-                    if (dataValue != null) element.dataset[dataKey] = String(dataValue);
-                });
-            } else {
-                element.setAttribute(key, value === true ? '' : value);
-            }
-        });
-
-        const normalizedChildren = Array.isArray(children) ? children : [children];
-        normalizedChildren.forEach((child) => {
-            if (child == null) return;
-            if (typeof child === 'string') {
-                element.appendChild(document.createTextNode(child));
-            } else if (child instanceof Node) {
-                element.appendChild(child);
-            }
-        });
-        return element;
-    };
-
-    const create = domApi && typeof domApi.create === 'function'
-        ? (...args) => domApi.create(...args)
-        : fallbackCreate;
-
-    const emptyState = create('div', { className: 'exam-list-empty', role: 'status' }, [
-        create('div', { className: 'exam-list-empty-icon', ariaHidden: 'true' }, '🔍'),
-        create('p', { className: 'exam-list-empty-text' }, '未找到匹配的题目'),
-        create('p', { className: 'exam-list-empty-hint' }, '请调整筛选条件或搜索词后再试')
-    ]);
-
-    if (domApi && typeof domApi.replaceContent === 'function') {
-        domApi.replaceContent(container, [emptyState]);
-    } else {
-        container.innerHTML = '';
-        container.appendChild(emptyState);
-    }
-}
-
-/**
- * 分批渲染考试列表 - Grid布局友好优化
- */
-function renderExamListBatched(exams, container, createElementFn) {
-    const batchSize = 20;
-    let currentIndex = 0;
-
-    const processBatch = () => {
-        const endIndex = Math.min(currentIndex + batchSize, exams.length);
-        const fragment = document.createDocumentFragment();
-
-        for (let i = currentIndex; i < endIndex; i++) {
-            const element = createElementFn(exams[i]);
-            fragment.appendChild(element);
-        }
-
-        container.appendChild(fragment);
-        currentIndex = endIndex;
-
-        if (currentIndex < exams.length) {
-            // 继续处理下一批，使用requestAnimationFrame避免阻塞UI
-            if (window.performanceOptimizer && window.performanceOptimizer.throttle) {
-                const throttledProcess = window.performanceOptimizer.throttle(processBatch, 16);
-                requestAnimationFrame(throttledProcess);
-            } else {
-                requestAnimationFrame(processBatch);
-            }
-        }
-    };
-
-    // 开始分批处理
-    requestAnimationFrame(processBatch);
-}
-
-function getExamCompletionStatus(exam) {
-    // Determine if the exam has been completed and its last accuracy
-    const records = (window.practiceRecords || []).filter(r => (r.examId === exam.id || r.title === exam.title));
-    if (records.length === 0) return null;
-    const latest = records.sort((a,b) => new Date(b.date) - new Date(a.date))[0];
-    return {
-        percentage: latest.percentage || 0,
-        date: latest.date
-    };
-}
-
-function renderExamItem(exam) {
-    const status = getExamCompletionStatus(exam);
-    const dot = status ? `<span class="completion-dot" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${getScoreColor(status.percentage)};margin-right:8px;vertical-align:middle;"></span>` : '';
-    return `
-        <style>
-            .completion-dot { box-shadow: 0 0 0 2px rgba(0,0,0,0.1); }
-        </style>
-        <div class="exam-item" data-exam-id="${exam.id}">
-            <div class="exam-info">
-                <div>
-                    <h4>${dot}${exam.title}</h4>
-                    <div class="exam-meta">${exam.category} | ${exam.type}</div>
-                </div>
-            </div>
-            <div class="exam-actions">
-                <button class="btn exam-item-action-btn" onclick="openExam('${exam.id}')">开始</button>
-                <button class="btn btn-secondary exam-item-action-btn" onclick="viewPDF('${exam.id}')">PDF</button>
-            </div>
-        </div>
-    `;
-}
-
-/**
- * 创建考试项DOM元素 - Performance optimized DOM element creation
- */
-function createExamElement(exam, index = null) {
-    const status = getExamCompletionStatus(exam);
-    const dot = status ? createCompletionDot(status.percentage) : null;
-
-    // 主容器
-    const examItem = document.createElement('div');
-    examItem.className = 'exam-item';
-    examItem.dataset.examId = exam.id;
-
-    // 考试信息区域
-    const examInfo = document.createElement('div');
-    examInfo.className = 'exam-info';
-
-    const infoContent = document.createElement('div');
-
-    const title = document.createElement('h4');
-    if (dot) {
-        title.appendChild(dot);
-    }
-    title.appendChild(document.createTextNode(exam.title));
-
-    const meta = document.createElement('div');
-    meta.className = 'exam-meta';
-    meta.textContent = `${exam.category} | ${exam.type}`;
-
-    infoContent.appendChild(title);
-    infoContent.appendChild(meta);
-    examInfo.appendChild(infoContent);
-
-    // 操作按钮区域
-    const examActions = document.createElement('div');
-    examActions.className = 'exam-actions';
-
-    const startBtn = document.createElement('button');
-    startBtn.className = 'btn exam-item-action-btn';
-    startBtn.textContent = '开始';
-    startBtn.dataset.examId = exam.id;
-    startBtn.dataset.action = 'start';
-
-    const pdfBtn = document.createElement('button');
-    pdfBtn.className = 'btn btn-secondary exam-item-action-btn';
-    pdfBtn.textContent = 'PDF';
-    pdfBtn.dataset.examId = exam.id;
-    pdfBtn.dataset.action = 'pdf';
-
-    examActions.appendChild(startBtn);
-    examActions.appendChild(pdfBtn);
-
-    // 组装元素
-    examItem.appendChild(examInfo);
-    examItem.appendChild(examActions);
-
-    return examItem;
-}
-
-/**
- * 创建完成状态指示点 - Performance optimized completion indicator creation
- */
-function createCompletionDot(percentage) {
-    const dot = document.createElement('span');
-    const levelClass = getCompletionDotClass(percentage);
-    dot.className = `completion-dot${levelClass ? ' ' + levelClass : ''}`;
-    dot.setAttribute('aria-hidden', 'true');
-    if (typeof percentage === 'number') {
-        dot.title = `最近正确率 ${Math.round(percentage)}%`;
-    }
-    return dot;
-}
-
-function getCompletionDotClass(percentage) {
-    if (typeof percentage !== 'number') {
-        return '';
-    }
-
-    if (percentage >= 90) return 'completion-dot--excellent';
-    if (percentage >= 75) return 'completion-dot--strong';
-    if (percentage >= 60) return 'completion-dot--average';
-    return 'completion-dot--weak';
 }
 
 function resolveExamBasePath(exam) {
@@ -1736,30 +1506,39 @@ function updateSystemInfo() {
 }
 
 function showMessage(message, type = 'info', duration = 4000) {
-    const container = document.getElementById('message-container');
-    if (!container) return;
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${type}`;
-    messageDiv.setAttribute('role', 'alert');
-
-    const label = document.createElement('strong');
-    label.className = 'message-label';
-    label.textContent = type === 'error' ? '错误' : '成功';
-    messageDiv.appendChild(label);
-
-    if (message) {
-        messageDiv.appendChild(document.createTextNode(' '));
-        const body = document.createElement('span');
-        body.className = 'message-text';
-        body.textContent = message;
-        messageDiv.appendChild(body);
+    if (typeof document === 'undefined') {
+        if (typeof console !== 'undefined') {
+            const logMethod = type === 'error' ? 'error' : 'log';
+            console[logMethod](`[Message:${type}]`, message);
+        }
+        return;
     }
 
-    container.appendChild(messageDiv);
-    setTimeout(() => {
-        messageDiv.classList.add('message-leaving');
-        setTimeout(() => messageDiv.remove(), 320);
-    }, duration);
+    const container = ensureMessageContainer();
+    if (!container) {
+        return;
+    }
+
+    const note = createMessageNode(message, type);
+    container.appendChild(note);
+
+    while (container.children.length > 3) {
+        container.removeChild(container.firstChild);
+    }
+
+    const timeout = typeof duration === 'number' && duration > 0 ? duration : 4000;
+    window.setTimeout(() => {
+        note.style.animation = 'slideOut 0.3s ease-in forwards';
+        window.setTimeout(() => {
+            if (note.parentNode) {
+                note.parentNode.removeChild(note);
+            }
+        }, 300);
+    }, timeout);
+}
+
+if (typeof window !== 'undefined' && typeof window.showMessage !== 'function') {
+    window.showMessage = showMessage;
 }
 
 // Other functions from the original file (simplified or kept as is)
