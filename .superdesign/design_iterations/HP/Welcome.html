@@ -1,179 +1,408 @@
-﻿<!DOCTYPE html>
-<html lang="en"><head>
-<meta charset="utf-8"/>
-<base href="./" />
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>IELTS Prep - Potter Style</title>
-<script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&amp;family=Lora:ital,wght@0,400;0,700;1,400&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
-<script>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IELTS Prep - Potter Style</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Lora:wght@400;600;700&family=Newsreader:wght@500;700;800&family=Noto+Sans:wght@400;500;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
+    <script>
         tailwind.config = {
-            darkMode: "class",
+            darkMode: 'class',
             theme: {
                 extend: {
                     colors: {
-                        primary: "#7F0909",
-                        "background-light": "#F3E9E0",
-                        "background-dark": "#1A1A1A",
-                        "text-light": "#3C3636",
-                        "text-dark": "#EAEAEA",
-                        "card-light": "#FFFFFF",
-                        "card-dark": "#2D2D2D",
-                        "border-light": "#D1C4B7",
-                        "border-dark": "#4A4A4A",
+                        primary: '#7F0909',
+                        'hp-burgundy': '#39282b',
+                        'hp-gold': '#ecb22e',
+                        'hp-ink': '#181112'
                     },
                     fontFamily: {
-                        display: ["Cinzel", "serif"],
-                        body: ["Lora", "serif"],
-                    },
-                    borderRadius: {
-                        DEFAULT: "8px",
-                    },
-                    keyframes: {
-                        fadeIn: {
-                            '0%': { opacity: '0' },
-                            '100%': { opacity: '1' },
-                        },
-                        mistReveal: {
-                             '0%': { 'clip-path': 'inset(45% 45% 45% 45%)', opacity: '0'},
-                             '100%': { 'clip-path': 'inset(0% 0% 0% 0%)', opacity: '1'},
-                        }
+                        display: ['Cinzel', 'serif'],
+                        hp: ['Newsreader', 'Noto Sans', 'serif']
                     },
                     animation: {
-                        fadeIn: 'fadeIn 1.5s ease-out',
-                        mistReveal: 'mistReveal 1.5s ease-out forwards',
+                        mistReveal: 'mistReveal 1.4s ease-out forwards',
+                        fadeInSlow: 'fadeInSlow 1.2s ease-out forwards'
+                    },
+                    keyframes: {
+                        mistReveal: {
+                            '0%': { opacity: 0, clipPath: 'inset(45% 45% 45% 45%)' },
+                            '100%': { opacity: 1, clipPath: 'inset(0% 0% 0% 0%)' }
+                        },
+                        fadeInSlow: {
+                            '0%': { opacity: 0, transform: 'translateY(12px)' },
+                            '100%': { opacity: 1, transform: 'translateY(0)' }
+                        }
                     }
-                },
-            },
+                }
+            }
         };
     </script>
-<style>
+    <style>
         body {
-            font-family: 'Lora', serif;
+            font-family: 'Newsreader', 'Noto Sans', serif;
+            background: #181112;
         }
-        .font-display {
-            font-family: 'Cinzel', serif;
-        }
-        .mist-container {
+        .font-display { font-family: 'Cinzel', serif; }
+        .hp-nav-link {
             position: relative;
-            overflow: hidden;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 1.25rem;
+            color: rgba(255,255,255,0.68);
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            transition: color 0.2s ease;
         }
-        .mist-content {
-           animation: mistReveal 1.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+        .hp-nav-link::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: -0.35rem;
+            height: 3px;
+            border-radius: 999px;
+            background: transparent;
+            transition: background 0.25s ease;
+        }
+        .hp-nav-link:hover {
+            color: #fff;
+        }
+        .hp-nav-link.hp-nav-active {
+            color: #fff;
+        }
+        .hp-nav-link.hp-nav-active::after {
+            background: linear-gradient(90deg, #ec1337 0%, #f6d365 100%);
+        }
+        .hp-section-card {
+            border: 1px solid rgba(255,255,255,0.12);
+            background: rgba(57,40,43,0.56);
+            border-radius: 18px;
+            box-shadow: 0 18px 48px rgba(0,0,0,0.35);
+        }
+        .hp-card-grid {
+            display: grid;
+            gap: 1.25rem;
+        }
+        #hp-quick-cards article {
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.16);
+            background: linear-gradient(140deg, rgba(122,86,92,0.65), rgba(24,17,18,0.9));
+            padding: 22px;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            min-height: 180px;
+        }
+        #hp-quick-cards h3 {
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+        #hp-quick-cards .hp-card-meta {
+            opacity: 0.8;
+            font-size: 0.9rem;
+        }
+        #hp-quick-cards .hp-card-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+        #hp-quick-cards .hp-card-actions button {
+            padding: 0.55rem 1.25rem;
+            border-radius: 999px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            background: rgba(236,19,55,0.85);
+            color: #fff;
+            box-shadow: 0 10px 20px rgba(236,19,55,0.35);
+        }
+        #hp-quick-cards .hp-card-actions button[data-action="pdf"] {
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.25);
+            box-shadow: none;
+        }
+        #hp-practice-shell {
+            border-radius: 24px;
+            background: rgba(24,17,18,0.85);
+            border: 1px solid rgba(255,255,255,0.08);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 30px 80px rgba(0,0,0,0.45);
+        }
+        #hp-practice-list[data-mode="static"],
+        #hp-practice-list[data-mode="virtual"],
+        #hp-practice-list[data-mode="empty"] {
+            position: relative;
+            min-height: 420px;
+        }
+        .hp-practice-card {
+            border-radius: 18px;
+            border: 1px solid rgba(255,255,255,0.16);
+            background: linear-gradient(135deg, rgba(57,40,43,0.85) 0%, rgba(24,17,18,0.92) 100%);
+            padding: 18px;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 14px;
+            box-shadow: 0 14px 34px rgba(0,0,0,0.35);
+        }
+        .hp-practice-card h4 {
+            font-size: 1.05rem;
+            font-weight: 700;
+        }
+        .hp-practice-card footer {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .hp-practice-card button {
+            padding: 0.55rem 1.35rem;
+            border-radius: 999px;
+            background: rgba(236,19,55,0.85);
+            border: none;
+            color: #fff;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .hp-practice-card button[data-action="pdf"] {
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.25);
+        }
+        .hp-empty-state {
+            text-align: center;
+            padding: 48px 16px;
+            color: rgba(255,255,255,0.75);
+            font-size: 1.05rem;
+        }
+        #hp-history-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        #hp-history-table thead {
+            background: rgba(57,40,43,0.68);
+        }
+        #hp-history-table th,
+        #hp-history-table td {
+            padding: 14px 18px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            color: rgba(255,255,255,0.86);
+        }
+        #hp-history-table tbody tr:hover {
+            background: rgba(236,19,55,0.12);
+        }
+        #hp-history-chart {
+            width: 100%;
+            height: 320px;
+        }
+        #hp-settings-status {
+            font-weight: 600;
+            color: rgba(255,255,255,0.85);
+        }
+        .hp-settings-button {
+            background: rgba(57,40,43,0.9);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 12px;
+            padding: 0.75rem 1.5rem;
+            color: #fff;
+            font-weight: 600;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .hp-settings-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 18px 40px rgba(236,19,55,0.22);
         }
     </style>
 </head>
-<body class="bg-background-light dark:bg-background-dark text-text-light dark:text-text-dark">
-<div id="root">
-<header class="bg-card-light dark:bg-card-dark shadow-md sticky top-0 z-50">
-<div class="container mx-auto px-6 py-3 flex justify-between items-center">
-<div class="flex items-center">
-<span class="font-display text-2xl font-bold text-primary">Wizarding World IELTS Prep</span>
-<span class="material-icons text-primary ml-2">auto_stories</span>
-</div>
-<nav class="hidden md:flex items-center space-x-8">
-<a class="font-display text-sm tracking-wider uppercase text-text-light dark:text-text-dark hover:text-primary dark:hover:text-primary transition-colors" href="Welcome.html">Overview</a>
-<a class="font-display text-sm tracking-wider uppercase text-text-light dark:text-text-dark hover:text-primary dark:hover:text-primary transition-colors" href="Practice History.html">Practice History</a>
-<a class="font-display text-sm tracking-wider uppercase text-text-light dark:text-text-dark hover:text-primary dark:hover:text-primary transition-colors" href="practice.html">Question Bank</a>
-<a class="font-display text-sm tracking-wider uppercase text-text-light dark:text-text-dark hover:text-primary dark:hover:text-primary transition-colors" href="setting.html">Settings</a>
-</nav>
-<div class="flex items-center">
-<button class="p-2 rounded-full text-text-light dark:text-text-dark hover:bg-gray-200 dark:hover:bg-gray-700" id="theme-toggle">
-<span class="material-icons">brightness_6</span>
-</button>
-<button class="md:hidden ml-4">
-<span class="material-icons text-text-light dark:text-text-dark">menu</span>
-</button>
-</div>
-</div>
-</header>
-<main class="container mx-auto px-6 py-12 mist-container">
-<div class="mist-content">
-<section class="text-center">
-<h1 class="font-display text-4xl md:text-6xl font-bold text-primary mb-4">Welcome, Aspiring Scholar!</h1>
-<p class="text-lg md:text-xl text-text-light dark:text-text-dark max-w-3xl mx-auto">
-                        Embark on your magical journey to IELTS success. Sharpen your skills in the arts of Reading and Listening, and may your results be as dazzling as a Patronus charm.
+<body class="bg-hp-ink text-white">
+<div class="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-[#181112]">
+    <div class="layout-container flex h-full flex-col">
+        <header class="border-b border-[#39282b] bg-[#1d1415]/90 backdrop-blur sticky top-0 z-50">
+            <div class="flex items-center justify-between px-10 py-3">
+                <div class="flex items-center gap-4">
+                    <span class="font-display text-2xl font-bold text-primary">Wizarding World IELTS Prep</span>
+                    <span class="material-icons text-primary">auto_stories</span>
+                </div>
+                <nav class="hidden items-center gap-8 md:flex">
+                    <a class="hp-nav-link" href="#overview" data-hp-view="overview">Overview</a>
+                    <a class="hp-nav-link" href="#practice" data-hp-view="practice">Question Bank</a>
+                    <a class="hp-nav-link" href="#history" data-hp-view="history">Practice History</a>
+                    <a class="hp-nav-link" href="#settings" data-hp-view="settings">Settings</a>
+                </nav>
+                <div class="flex items-center gap-4">
+                    <button id="hp-theme-toggle" class="rounded-full p-2 text-white/80 transition hover:bg-white/10" title="Toggle theme">
+                        <span class="material-icons">brightness_6</span>
+                    </button>
+                    <button class="rounded-full bg-[#39282b] p-2 text-white/80">
+                        <span class="material-icons">menu</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main id="hp-portal-root" class="flex-1 px-6 pb-16 pt-10">
+            <section data-view-section="overview" class="container mx-auto animate-mistReveal space-y-14">
+                <div class="mist-content space-y-10 text-center">
+                    <h1 class="font-display text-4xl font-bold text-primary md:text-6xl">Welcome, Aspiring Scholar!</h1>
+                    <p class="mx-auto max-w-3xl text-lg text-white/80 md:text-xl">
+                        Embark on your magical journey to IELTS success. Sharpen your skills in the arts of Reading and Listening, and keep every achievement shimmering like a Patronus charm.
                     </p>
-</section>
-<!-- 练习类型卡片区域 - 由插件动态渲染 -->
-<div id="practice-cards-container" class="mt-16 grid grid-cols-1 md:grid-cols-2 gap-8">
-<!-- 插件将在这里渲染练习类型卡片 -->
+                </div>
+                <div class="mx-auto grid max-w-5xl grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
+                    <div class="hp-section-card px-8 py-6 text-center">
+                        <p class="text-sm uppercase tracking-[0.35em] text-white/60">题库总量</p>
+                        <p id="hp-stat-total-exams" class="mt-4 text-4xl font-bold">0</p>
+                    </div>
+                    <div class="hp-section-card px-8 py-6 text-center">
+                        <p class="text-sm uppercase tracking-[0.35em] text-white/60">完成练习</p>
+                        <p id="hp-stat-completed" class="mt-4 text-4xl font-bold">0</p>
+                    </div>
+                    <div class="hp-section-card px-8 py-6 text-center">
+                        <p class="text-sm uppercase tracking-[0.35em] text-white/60">平均正确率</p>
+                        <p id="hp-stat-average" class="mt-4 text-4xl font-bold">0%</p>
+                    </div>
+                    <div class="hp-section-card px-8 py-6 text-center">
+                        <p class="text-sm uppercase tracking-[0.35em] text-white/60">坚持天数</p>
+                        <p id="hp-stat-days" class="mt-4 text-4xl font-bold">0</p>
+                    </div>
+                </div>
+                <p class="text-center text-sm text-white/60">数据更新时间：<span id="hp-stat-updated">暂无记录</span></p>
+                <div class="mx-auto max-w-5xl space-y-6">
+                    <div class="flex items-center justify-between px-1">
+                        <h2 class="font-display text-2xl text-white">Quick Actions</h2>
+                        <button data-nav="practice" class="text-sm uppercase tracking-[0.25em] text-white/70 hover:text-white">前往题库 →</button>
+                    </div>
+                    <div id="hp-quick-cards" class="grid gap-6 md:grid-cols-2 xl:grid-cols-4"></div>
+                </div>
+            </section>
+
+            <section data-view-section="practice" class="container mx-auto hidden space-y-10">
+                <div class="space-y-4 text-center">
+                    <h2 class="font-display text-4xl font-bold text-white">Question Bank</h2>
+                    <p class="text-white/70">探索霍格沃兹图书馆的练习卷，筛选、搜索并立即开始你的训练。</p>
+                </div>
+                <div id="hp-practice-shell" class="px-8 pb-10 pt-8">
+                    <div class="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+                        <div class="flex gap-6 border-b border-white/10 pb-4 text-sm font-semibold uppercase tracking-[0.3em] text-white/60">
+                            <button data-practice-type="all" class="pb-2 text-white">全部</button>
+                            <button data-practice-type="reading" class="pb-2">阅读</button>
+                            <button data-practice-type="listening" class="pb-2">听力</button>
+                        </div>
+                        <label class="relative block w-full max-w-sm">
+                            <span class="material-icons pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40">search</span>
+                            <input id="hp-practice-search" class="w-full rounded-full border border-white/10 bg-white/5 py-2 pl-11 pr-4 text-white placeholder:text-white/40 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/60" placeholder="搜索题目或分类" />
+                        </label>
+                    </div>
+                    <div class="mt-8">
+                        <div id="hp-practice-list" class="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3" data-mode="static"></div>
+                        <div id="hp-practice-empty" class="hp-empty-state hidden">暂无匹配的题目，请调整筛选条件。</div>
+                    </div>
+                </div>
+            </section>
+
+            <section data-view-section="history" class="container mx-auto hidden space-y-12">
+                <div class="flex flex-wrap items-end justify-between gap-6">
+                    <div>
+                        <h2 class="font-display text-4xl font-bold text-white">Practice History & Achievements</h2>
+                        <p class="mt-2 text-white/70">记录每一次咒语练习，复盘每一次进步。</p>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <span class="text-sm text-white/70">Level: <span id="hp-history-level">-</span></span>
+                        <div class="h-2 w-32 overflow-hidden rounded-full bg-white/10">
+                            <div id="hp-history-progress" class="h-full rounded-full bg-gradient-to-r from-purple-500 to-pink-500" style="width: 0%;"></div>
+                        </div>
+                        <span id="hp-history-progress-text" class="text-xs font-bold text-pink-400">0%</span>
+                    </div>
+                </div>
+                <div class="hp-section-card overflow-hidden px-6 py-6">
+                    <h3 class="font-display text-2xl text-white">练习记录</h3>
+                    <div id="hp-history-empty" class="hp-empty-state hidden">暂无练习记录，去题库开启第一场练习吧！</div>
+                    <div class="mt-4 overflow-x-auto">
+                        <table id="hp-history-table" class="hidden min-w-full">
+                            <thead>
+                                <tr>
+                                    <th>试卷</th>
+                                    <th>类型</th>
+                                    <th>得分</th>
+                                    <th>耗时</th>
+                                    <th>完成时间</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="hp-section-card px-6 py-6">
+                    <div class="flex items-center justify-between">
+                        <h3 class="font-display text-2xl text-white">得分趋势</h3>
+                        <span class="text-sm text-white/50">基于真实练习记录绘制</span>
+                    </div>
+                    <div class="relative mt-6">
+                        <canvas id="hp-history-chart"></canvas>
+                        <div id="hp-history-chart-empty" class="hp-empty-state hidden">暂无趋势数据，完成练习后再回来查看。</div>
+                    </div>
+                </div>
+            </section>
+
+            <section data-view-section="settings" class="container mx-auto hidden space-y-10">
+                <div class="text-center">
+                    <h2 class="font-display text-4xl font-bold text-white">系统设置</h2>
+                    <p class="mt-2 text-white/70">管理题库、备份与系统外观，保持魔法井然有序。</p>
+                </div>
+                <div class="hp-section-card px-8 py-8">
+                    <div class="flex flex-wrap items-center justify-between gap-4">
+                        <h3 class="font-display text-2xl text-white">状态</h3>
+                        <span id="hp-settings-status" class="text-sm uppercase tracking-[0.35em] text-white/70">加载中…</span>
+                    </div>
+                    <div class="mt-6 grid gap-6 md:grid-cols-2">
+                        <div class="space-y-3">
+                            <button class="hp-settings-button w-full" data-settings-action="clear-cache">🧹 清理缓存</button>
+                            <button class="hp-settings-button w-full" data-settings-action="load-library">📦 加载题库</button>
+                            <button class="hp-settings-button w-full" data-settings-action="config-list">🗂 题库配置</button>
+                            <button class="hp-settings-button w-full" data-settings-action="force-refresh">🔄 强制刷新</button>
+                        </div>
+                        <div class="space-y-3">
+                            <button class="hp-settings-button w-full" data-settings-action="backup-create">💾 创建备份</button>
+                            <button class="hp-settings-button w-full" data-settings-action="backup-list">📚 备份列表</button>
+                            <button class="hp-settings-button w-full" data-settings-action="export">📤 导出数据</button>
+                            <button class="hp-settings-button w-full" data-settings-action="import">📥 导入数据</button>
+                        </div>
+                    </div>
+                    <div class="mt-8 flex justify-start">
+                        <button class="hp-settings-button" data-settings-action="theme-modal">✨ 主题切换</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="border-t border-[#39282b] bg-[#1d1415]/90 px-10 py-6 text-center text-sm text-white/60">
+            © 2025 IELTS Prep - Potter Style. Designed for the most dedicated witches and wizards.
+        </footer>
+    </div>
 </div>
-<!-- 进度统计区域 - 由插件动态渲染 -->
-<div id="progress-stats-container" class="mt-16 bg-card-light dark:bg-card-dark rounded-lg shadow-lg p-8 border border-border-light dark:border-border-dark">
-<h2 class="font-display text-2xl font-bold text-center mb-6">Your Progress at a Glance</h2>
-<div id="progress-stats-grid" class="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
-<!-- 插件将在这里渲染进度统计 -->
-</div>
-</div>
-</div>
-</main>
-<footer class="bg-card-light dark:bg-card-dark mt-16 border-t border-border-light dark:border-border-dark">
-<div class="container mx-auto px-6 py-6 text-center text-text-light dark:text-text-dark text-sm">
-<p>© 2025 IELTS Prep - Potter Style. All rights reserved.</p>
-<p class="mt-2">Designed for the most dedicated witches and wizards.</p>
-</div>
-</footer>
-</div>
+
 <script>
-        const themeToggle = document.getElementById('theme-toggle');
-        // On page load or when changing themes, best to add inline in `head` to avoid FOUC
-        if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-            document.documentElement.classList.add('dark');
-        } else {
-            document.documentElement.classList.remove('dark')
-        }
-        themeToggle.addEventListener('click', function() {
-            // if set via local storage previously
-            if (localStorage.getItem('color-theme')) {
-                if (localStorage.getItem('color-theme') === 'light') {
-                    document.documentElement.classList.add('dark');
-                    localStorage.setItem('color-theme', 'dark');
-                } else {
-                    document.documentElement.classList.remove('dark');
-                    localStorage.setItem('color-theme', 'light');
-                }
-                // if NOT set via local storage previously
-            } else {
-                if (document.documentElement.classList.contains('dark')) {
-                    document.documentElement.classList.remove('dark');
-                    localStorage.setItem('color-theme', 'light');
-                } else {
-                    document.documentElement.classList.add('dark');
-                    localStorage.setItem('color-theme', 'dark');
-                }
-            }
-        });
-    </script>
-
-<!-- updated -->
-
-<!-- updated -->
-
-<!-- updated -->
-
-<!-- updated -->
-
-<!-- updated -->
-<script src="../../../assets/scripts/complete-exam-data.js"></script>
-<script src="../../../assets/scripts/listening-exam-data.js"></script>
-<script src="../../../js/utils/helpers.js"></script>
-<script src="../../../js/utils/storage.js"></script>
-<script src="../../../js/utils/asyncExportHandler.js"></script>
-<script src="../../../js/core/scoreStorage.js"></script>
-<script src="../../../js/core/practiceRecorder.js"></script>
-<script src="../../../js/components/PDFHandler.js"></script>
-<script src="../../../js/components/IndexValidator.js"></script>
-<script src="../../../js/components/CommunicationTester.js"></script>
-<script src="../../../js/components/ErrorFixer.js"></script>
-<script src="../../../js/components/CommunicationRecovery.js"></script>
-<script src="../../../js/components/PerformanceOptimizer.js"></script>
-<script src="../../../js/components/DataIntegrityManager.js"></script>
-<script src="../../../js/components/BrowseStateManager.js"></script>
-<script src="../../../js/utils/dataConsistencyManager.js"></script>
-<script src="../../../js/utils/markdownExporter.js"></script>
-<script src="../../../js/components/practiceRecordModal.js"></script>
+    const storedTheme = localStorage.getItem('hp.theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (storedTheme === 'dark' || (!storedTheme && prefersDark)) {
+        document.documentElement.classList.add('dark');
+    }
+</script>
+<script src="../../../assets/scripts/complete-exam-data.js"></script>
+<script src="../../../assets/scripts/listening-exam-data.js"></script>
+<script src="../../../js/components/PerformanceOptimizer.js"></script>
+<script>
+    window.performanceOptimizer = window.performanceOptimizer || new PerformanceOptimizer();
+</script>
+<script src="../../../js/plugins/hp/hp-core-bridge.js"></script>
+<script src="../../../js/plugins/hp/hp-portal.js"></script>
+</body>
+</html>
 <script src="../../../js/components/practiceHistoryEnhancer.js"></script>
 <script src="../../../js/utils/componentChecker.js"></script>
 <script src="../../../js/theme-switcher.js"></script>

@@ -133,6 +133,7 @@ class AppE2ETestSuite {
             await this.testLegacyBridgeSynchronization();
             await this.testPracticeRecordsFlow();
             await this.testSettingsControlButtons();
+            await this.testThemePortals();
 
             this.setStatus('全部测试执行完毕');
         } catch (error) {
@@ -468,6 +469,96 @@ class AppE2ETestSuite {
 
         for (const action of actions) {
             await this.runSettingsButtonAssertion(action);
+        }
+    }
+
+    async testThemePortals() {
+        const repoRoot = new URL('../../../', window.location.href);
+        const themes = [
+            {
+                name: 'HP Portal',
+                path: '.superdesign/design_iterations/HP/Welcome.html',
+                validator: async function hpPortalValidator(win, doc) {
+                    await this.waitFor(() => win.hpPortal && win.hpPortal.state, {
+                        timeout: 9000,
+                        description: 'HP Portal 初始化'
+                    });
+                    const practiceList = doc.getElementById('hp-practice-list');
+                    await this.waitFor(() => practiceList && practiceList.dataset.mode, {
+                        timeout: 7000,
+                        description: 'HP 练习列表模式就绪'
+                    }).catch(() => {});
+                    const navCount = doc.querySelectorAll('[data-hp-view]').length;
+                    const chart = doc.getElementById('hp-history-chart');
+                    const chartPoints = chart && chart.dataset.pointCount ? Number(chart.dataset.pointCount) : 0;
+                    const practiceMode = practiceList ? (practiceList.dataset.mode || 'unknown') : 'missing';
+                    const virtualized = !!(win.hpPortal && win.hpPortal.practiceVirtualizer);
+                    const details = { navCount, practiceMode, virtualized, chartPoints };
+                    const passed = navCount >= 4 && !!practiceList && !!chart;
+                    return { passed, details };
+                }
+            },
+            {
+                name: 'Marauder Map',
+                path: '.superdesign/design_iterations/HarryPoter.html',
+                validator: async function marauderValidator(_win, doc) {
+                    const viewport = doc.querySelector('.map-viewport');
+                    const stage = doc.querySelector('.stage');
+                    const details = { hasViewport: !!viewport, hasStage: !!stage };
+                    return { passed: !!viewport && !!stage, details };
+                }
+            },
+            {
+                name: 'My Melody Prototype',
+                path: '.superdesign/design_iterations/my_melody_ielts_1.html',
+                validator: async function melodyValidator(win, doc) {
+                    await this.waitFor(() => doc.querySelector('.container'), {
+                        timeout: 8000,
+                        description: 'My Melody 主容器加载'
+                    });
+                    const shell = doc.querySelector('.container');
+                    const optimizerReady = !!win.performanceOptimizer;
+                    const navIslands = doc.querySelectorAll('.nav-islands .island').length;
+                    const details = { hasShell: !!shell, optimizerReady, navIslands };
+                    return { passed: !!shell && navIslands >= 3, details };
+                }
+            }
+        ];
+
+        for (const theme of themes) {
+            try {
+                const url = new URL(theme.path, repoRoot).href;
+                const result = await this.withThemePage(url, theme.validator.bind(this));
+                const passed = typeof result?.passed === 'boolean' ? result.passed : !!result;
+                const details = result && result.details !== undefined ? result.details : (result || {});
+                this.recordResult(`主题：${theme.name}`, passed, details);
+            } catch (error) {
+                this.recordResult(`主题：${theme.name}`, false, error?.message || String(error));
+            }
+        }
+    }
+
+    async withThemePage(url, validator) {
+        const frame = document.createElement('iframe');
+        frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms');
+        frame.style.position = 'absolute';
+        frame.style.width = '0';
+        frame.style.height = '0';
+        frame.style.opacity = '0';
+        document.body.appendChild(frame);
+
+        await new Promise((resolve, reject) => {
+            frame.onload = () => resolve();
+            frame.onerror = (event) => reject(event?.error || new Error('主题页面加载失败'));
+            frame.src = url;
+        });
+
+        try {
+            const win = frame.contentWindow;
+            const doc = frame.contentDocument || win.document;
+            return await validator(win, doc);
+        } finally {
+            frame.remove();
         }
     }
 
