@@ -11,6 +11,12 @@ class PracticeRecorder {
 
         // 初始化存储系统
         this.scoreStorage = new ScoreStorage();
+        this.repositories = window.dataRepositories;
+        if (!this.repositories) {
+            throw new Error('数据仓库未初始化，PracticeRecorder 无法构建');
+        }
+        this.practiceRepo = this.repositories.practice;
+        this.metaRepo = this.repositories.meta;
 
         // 异步初始化
         this.initialize().catch(error => {
@@ -48,7 +54,7 @@ class PracticeRecorder {
      * 恢复活动会话
      */
     async restoreActiveSessions() {
-        const raw = await storage.get('active_sessions', []);
+        const raw = await this.metaRepo.get('active_sessions', []);
         const storedSessions = Array.isArray(raw) ? raw : [];
 
         storedSessions.forEach(sessionData => {
@@ -447,7 +453,7 @@ class PracticeRecorder {
      */
     async saveActiveSessions() {
         const sessionsArray = Array.from(this.activeSessions.values());
-        await storage.set('active_sessions', sessionsArray);
+        await this.metaRepo.set('active_sessions', sessionsArray);
     }
 
     /**
@@ -500,7 +506,7 @@ class PracticeRecorder {
 
             const standardizedRecord = this.standardizeRecordForFallback(record);
 
-            const existing = await storage.get('practice_records', []);
+            const existing = await this.practiceRepo.list();
             let records = Array.isArray(existing) ? [...existing] : [];
             console.log('[PracticeRecorder] 当前记录数量:', records.length);
 
@@ -516,7 +522,7 @@ class PracticeRecorder {
                 records = records.slice(0, 1000);
             }
 
-            const saveSuccess = await storage.set('practice_records', records);
+            const saveSuccess = await this.practiceRepo.overwrite();
             if (!saveSuccess) {
                 throw new Error('Storage.set returned false');
             }
@@ -589,7 +595,7 @@ class PracticeRecorder {
      */
     async verifyRecordSaved(recordId) {
         try {
-            const records = await storage.get('practice_records', []);
+            const records = await this.practiceRepo.list();
             const list = Array.isArray(records) ? records : [];
             return list.some(r => r && r.id === recordId);
         } catch (error) {
@@ -622,7 +628,7 @@ class PracticeRecorder {
      */
     async updateUserStatsManually(practiceRecord) {
         try {
-            const stats = await storage.get('user_stats', {
+            const stats = await this.metaRepo.get('user_stats', {
                 totalPractices: 0,
                 totalTimeSpent: 0,
                 averageScore: 0,
@@ -644,7 +650,7 @@ class PracticeRecorder {
             // 更新时间戳
             stats.updatedAt = new Date().toISOString();
 
-            await storage.set('user_stats', stats);
+            await this.metaRepo.set('user_stats', stats);
             console.log('[PracticeRecorder] 用户统计手动更新完成');
 
         } catch (error) {
@@ -657,7 +663,7 @@ class PracticeRecorder {
      */
     async saveToTemporaryStorage(record) {
         try {
-            const existing = await storage.get('temp_practice_records', []);
+            const existing = await this.metaRepo.get('temp_practice_records', []);
             const tempRecords = Array.isArray(existing) ? [...existing] : [];
             tempRecords.push({
                 ...record,
@@ -668,7 +674,7 @@ class PracticeRecorder {
             // 限制临时记录数量
             const finalTempRecords = tempRecords.length > 50 ? tempRecords.slice(-50) : tempRecords;
 
-            await storage.set('temp_practice_records', finalTempRecords);
+            await this.metaRepo.set('temp_practice_records', finalTempRecords);
             console.log('[PracticeRecorder] 记录已保存到临时存储:', record.id);
 
         } catch (error) {
@@ -680,13 +686,13 @@ class PracticeRecorder {
      * 保存中断记录
      */
     async saveInterruptedRecord(record) {
-        const existing = await storage.get('interrupted_records', []);
+        const existing = await this.metaRepo.get('interrupted_records', []);
         const records = Array.isArray(existing) ? [...existing] : [];
         records.push(record);
 
         const finalRecords = records.length > 100 ? records.slice(-100) : records;
 
-        await storage.set('interrupted_records', finalRecords);
+        await this.metaRepo.set('interrupted_records', finalRecords);
         console.log(`Interrupted record saved: ${record.id}`);
     }
 
@@ -694,7 +700,7 @@ class PracticeRecorder {
      * 更新用户统计
      */
     async updateUserStats(practiceRecord) {
-        const stats = await storage.get('user_stats', {
+        const stats = await this.metaRepo.get('user_stats', {
             totalPractices: 0,
             totalTimeSpent: 0,
             averageScore: 0,
@@ -774,7 +780,7 @@ class PracticeRecorder {
             stats.lastPracticeDate = today;
         }
         
-        await storage.set('user_stats', stats);
+        await this.metaRepo.set('user_stats', stats);
         console.log('User stats updated');
     }
 
@@ -795,7 +801,7 @@ class PracticeRecorder {
             console.error('Failed to get practice records from ScoreStorage:', error);
 
             // 降级处理
-            const records = await storage.get('practice_records', []);
+            const records = await this.practiceRepo.list();
             const list = Array.isArray(records) ? records : [];
 
             if (Object.keys(filters).length === 0) {
@@ -825,7 +831,7 @@ class PracticeRecorder {
             console.error('Failed to get user stats from ScoreStorage:', error);
 
             // 降级处理
-            return await storage.get('user_stats', {
+            return await this.metaRepo.get('user_stats', {
                 totalPractices: 0,
                 totalTimeSpent: 0,
                 averageScore: 0,
@@ -943,7 +949,7 @@ class PracticeRecorder {
             }
 
             // 获取题目信息
-            const examIndex = await storage.get('exam_index', []);
+            const examIndex = await this.metaRepo.get('exam_index', []);
             const examList = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
             const exam = examList.find(e => e.id === examId);
 
@@ -1284,7 +1290,7 @@ class PracticeRecorder {
      */
     async recoverTemporaryRecords() {
         try {
-            const tempRecords = await storage.get('temp_practice_records', []);
+            const tempRecords = await this.metaRepo.get('temp_practice_records', []);
             const list = Array.isArray(tempRecords) ? tempRecords : [];
 
             if (list.length === 0) {
@@ -1316,10 +1322,10 @@ class PracticeRecorder {
 
             // 清理已恢复的临时记录
             if (failedRecords.length === 0) {
-                await storage.remove('temp_practice_records');
+                await this.metaRepo.remove('temp_practice_records');
                 console.log(`[PracticeRecorder] 所有${recoveredCount} 条临时记录恢复成功`);
             } else {
-                await storage.set('temp_practice_records', failedRecords);
+                await this.metaRepo.set('temp_practice_records', failedRecords);
                 console.log(`[PracticeRecorder] 恢复了${recoveredCount} 条记录，${failedRecords.length} 条失败`);
             }
 
@@ -1356,7 +1362,7 @@ class PracticeRecorder {
             };
             
             // 检查练习记录
-            const records = await storage.get('practice_records', []);
+            const records = await this.practiceRepo.list();
             const recordList = Array.isArray(records) ? records : [];
             report.practiceRecords.total = recordList.length;
 
@@ -1369,7 +1375,7 @@ class PracticeRecorder {
             });
 
             // 检查临时记录
-            const tempRecords = await storage.get('temp_practice_records', []);
+            const tempRecords = await this.metaRepo.get('temp_practice_records', []);
             const tempList = Array.isArray(tempRecords) ? tempRecords : [];
             report.temporaryRecords.total = tempList.length;
             report.temporaryRecords.needsRecovery = tempList.filter(r => r && r.needsRecovery).length;
@@ -1389,7 +1395,9 @@ class PracticeRecorder {
             
             // 检查存储状态
             try {
-                const storageInfo = await storage.getStorageInfo();
+                const storageInfo = window.storage && typeof window.storage.getStorageInfo === 'function'
+                    ? await window.storage.getStorageInfo()
+                    : null;
                 report.storage.quota = storageInfo;
             } catch (error) {
                 report.storage.available = false;
