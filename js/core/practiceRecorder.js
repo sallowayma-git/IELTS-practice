@@ -522,7 +522,7 @@ class PracticeRecorder {
                 records = records.slice(0, 1000);
             }
 
-            const saveSuccess = await this.practiceRepo.overwrite();
+            const saveSuccess = await this.practiceRepo.overwrite(records);
             if (!saveSuccess) {
                 throw new Error('Storage.set returned false');
             }
