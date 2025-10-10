@@ -63,10 +63,13 @@ class DataBackupManager {
 
         let practiceRecords = [];
         if (window.practiceRecorder && typeof window.practiceRecorder.getPracticeRecords === 'function') {
-            practiceRecords = window.practiceRecorder.getPracticeRecords();
+            const maybe = window.practiceRecorder.getPracticeRecords();
+            practiceRecords = typeof maybe?.then === 'function' ? await maybe : maybe;
         } else {
             practiceRecords = await storage.get('practice_records', []);
         }
+
+        practiceRecords = Array.isArray(practiceRecords) ? practiceRecords : [];
 
         if (dateRange) {
             practiceRecords = this.filterByDateRange(practiceRecords, dateRange);

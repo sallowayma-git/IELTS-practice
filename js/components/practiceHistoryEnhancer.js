@@ -214,19 +214,18 @@ class PracticeHistoryEnhancer {
     /**
      * 执行导出
      */
-    performExport() {
+    async performExport() {
         try {
             const selectedFormat = document.querySelector('input[name="export-format"]:checked')?.value;
-            
+
             if (selectedFormat === 'markdown') {
                 this.exportAsMarkdown();
             } else {
-                this.exportAsJSON();
+                await this.exportAsJSON();
             }
-            
-            // 关闭对话框
+
             document.getElementById('export-dialog')?.remove();
-            
+
         } catch (error) {
             console.error('导出失败:', error);
             window.showMessage('导出失败: ' + error.message, 'error');
@@ -250,13 +249,13 @@ class PracticeHistoryEnhancer {
     /**
      * 导出为 JSON 格式
      */
-    exportAsJSON() {
+    async exportAsJSON() {
         try {
             // 尝试使用标准的PracticeRecorder
             const practiceRecorder = window.app?.components?.practiceRecorder;
             if (practiceRecorder) {
-                const exportData = practiceRecorder.exportData('json');
-                
+                const exportData = await practiceRecorder.exportData('json');
+
                 const blob = new Blob([exportData], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -276,13 +275,14 @@ class PracticeHistoryEnhancer {
             // 降级到直接从全局变量导出
             let practiceRecords = [];
             let practiceStats = {};
-            
-            if (window.practiceRecords) {
+
+            if (Array.isArray(window.practiceRecords)) {
                 practiceRecords = window.practiceRecords;
-            } else if (window.storage) {
-                practiceRecords = window.storage.get('practice_records', []);
+            } else if (window.storage && typeof window.storage.get === 'function') {
+                const storedRecords = await window.storage.get('practice_records', []);
+                practiceRecords = Array.isArray(storedRecords) ? storedRecords : [];
             }
-            
+
             if (window.practiceStats) {
                 practiceStats = window.practiceStats;
             }
@@ -296,7 +296,7 @@ class PracticeHistoryEnhancer {
                 stats: practiceStats,
                 records: practiceRecords
             };
-            
+
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');

@@ -393,13 +393,14 @@ class PracticeHistory {
             // 检查getPracticeRecords方法是否存在
             if (typeof practiceRecorder.getPracticeRecords !== 'function') {
                 console.error('getPracticeRecords method not found on practiceRecorder');
-                // 使用降级方法直接从storage获取
-                this.currentRecords = storage.get('practice_records', []);
+                const fallback = await storage.get('practice_records', []);
+                this.currentRecords = Array.isArray(fallback) ? fallback : [];
             } else {
-                // 获取所有记录
-                this.currentRecords = practiceRecorder.getPracticeRecords();
+                const maybe = practiceRecorder.getPracticeRecords();
+                const resolved = typeof maybe?.then === 'function' ? await maybe : maybe;
+                this.currentRecords = Array.isArray(resolved) ? resolved : [];
             }
-            
+
             // 应用筛选和排序
             this.applyFilters();
             this.selectedSet.clear();
@@ -1364,22 +1365,23 @@ class PracticeHistory {
         
         return answerStr || '-';
     }
-    deleteRecord(recordId) {
+    async deleteRecord(recordId) {
         if (!confirm('确定要删除这条练习记录吗？此操作不可撤销。')) {
             return;
         }
-        
+
         try {
             // 从存储中删除记录
-            const allRecords = storage.get('practice_records', []);
-            const updatedRecords = allRecords.filter(r => r.id !== recordId);
-            storage.set('practice_records', updatedRecords);
-            
+            const allRecords = await storage.get('practice_records', []);
+            const list = Array.isArray(allRecords) ? allRecords : [];
+            const updatedRecords = list.filter(r => r.id !== recordId);
+            await storage.set('practice_records', updatedRecords);
+
             // 刷新显示
             this.refreshHistory();
-            
+
             window.showMessage('记录已删除', 'success');
-            
+
         } catch (error) {
             console.error('Failed to delete record:', error);
             window.showMessage('删除记录失败', 'error');
