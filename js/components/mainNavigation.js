@@ -11,16 +11,16 @@ class MainNavigation {
         // 全局引用，供事件委托使用
         window.mainNavigation = this;
 
-        this.initialize();
+        this.ready = this.initialize();
     }
 
     /**
      * 初始化导航组件
      */
-    initialize() {
+    async initialize() {
         console.log('MainNavigation component initialized');
         this.setupEventListeners();
-        this.loadCategoryStats();
+        await this.loadCategoryStats();
         this.renderCategoryCards();
     }
 
@@ -109,9 +109,11 @@ class MainNavigation {
     /**
      * 加载分类统计数据
      */
-    loadCategoryStats() {
-        const examIndex = storage.get('exam_index', []);
-        const practiceRecords = storage.get('practice_records', []);
+    async loadCategoryStats() {
+        const [examIndex = [], practiceRecords = []] = await Promise.all([
+            storage.get('exam_index', []),
+            storage.get('practice_records', [])
+        ]);
         
         // 计算每个分类的统计信息
         const categories = ['P1', 'P2', 'P3'];
@@ -364,9 +366,9 @@ class MainNavigation {
     /**
      * 开始分类练习
      */
-    startCategoryPractice(category) {
+    async startCategoryPractice(category) {
         // 获取该分类的题目
-        const examIndex = storage.get('exam_index', []);
+        const examIndex = await storage.get('exam_index', []);
         const categoryExams = examIndex.filter(exam => exam.category === category);
         
         if (categoryExams.length === 0) {
@@ -447,8 +449,8 @@ class MainNavigation {
     /**
      * 刷新组件数据
      */
-    refresh() {
-        this.loadCategoryStats();
+    async refresh() {
+        await this.loadCategoryStats();
         this.updateCategoryProgress();
     }
 
