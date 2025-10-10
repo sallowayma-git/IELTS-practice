@@ -1,7 +1,7 @@
 /**
- * 数据完整性管理器 (优化版)
+ * 数据完整性管理器 (仓库驱动版)
  * 负责数据备份、验证、修复和导入导出功能
- * 集成了新的数据访问层和缓存策略
+ * 基于统一的数据仓库接口执行原子操作
  */
 class DataIntegrityManager {
     constructor() {
@@ -10,82 +10,68 @@ class DataIntegrityManager {
         this.dataVersion = '1.0.0';
         this.backupTimer = null;
         this.validationRules = new Map();
-        this.simpleStorage = null;
+        this.repositories = null;
+        this.consistencyReport = null;
         this.isInitialized = false;
 
-        // 注册默认验证规则
         this.registerDefaultValidationRules();
-
-        // 延迟初始化，等待数据访问层就绪
         this.initializeWhenReady();
 
         console.log('[DataIntegrityManager] 数据完整性管理器已创建');
     }
 
-    /**
-     * 当数据访问层就绪时初始化
-     */
     async initializeWhenReady() {
         try {
-            // 使用简单存储包装器替代复杂的数据访问层
-            if (window.simpleStorageWrapper) {
-                this.simpleStorage = window.simpleStorageWrapper;
-                console.log('[DataIntegrityManager] 使用简单存储包装器');
+            if (window.dataRepositories) {
+                this.repositories = window.dataRepositories;
+                console.log('[DataIntegrityManager] 已绑定数据仓库接口');
 
-                // 启动自动备份
+                try {
+                    this.consistencyReport = await this.repositories.runConsistencyChecks();
+                    console.log('[DataIntegrityManager] 初始一致性检查完成', this.consistencyReport);
+                } catch (reportError) {
+                    console.warn('[DataIntegrityManager] 初始一致性检查失败:', reportError);
+                }
+
                 this.startAutoBackup();
-
-                // 尝试立即清理旧备份，防止一启动就触发配额
                 try { await this.cleanupOldBackups(); } catch (_) {}
 
                 this.isInitialized = true;
                 console.log('[DataIntegrityManager] 数据完整性管理器已初始化');
             } else {
-                // 如果数据访问层尚未就绪，延迟重试
-                setTimeout(() => this.initializeWhenReady(), 1000);
+                setTimeout(() => this.initializeWhenReady(), 500);
             }
         } catch (error) {
             console.error('[DataIntegrityManager] 初始化失败:', error);
-            // 降级使用传统方式
             this.startAutoBackup();
             this.isInitialized = true;
         }
     }
 
-    /**
-     * 确保已初始化
-     */
     _ensureInitialized() {
         if (!this.isInitialized) {
             console.warn('[DataIntegrityManager] 尚未完全初始化，使用降级模式');
         }
     }
 
-    /**
-     * 清理旧备份
-     */
     async cleanupOldBackups() {
         try {
-            const backups = await this.simpleStorage.getBackups();
-            if (backups.length <= this.maxBackups) return; // 无需清理
-            // 按时间排序，删除最早的
-            const sorted = backups.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-            const toDelete = sorted.slice(0, sorted.length - this.maxBackups);
-            for (const backup of toDelete) {
-                await this.simpleStorage.deleteBackup(backup.id);
-            }
-            console.log(`[DataIntegrityManager] 已清理 ${toDelete.length} 个旧备份`);
+            if (!this.repositories) return;
+            const backups = await this.repositories.backups.list();
+            if (backups.length <= this.maxBackups) return;
+            await this.repositories.backups.prune(this.maxBackups);
+            console.log('[DataIntegrityManager] 已执行备份裁剪');
         } catch (error) {
             console.error('[DataIntegrityManager] 清理旧备份失败:', error);
         }
     }
 
-    /**
-     * 创建备份
-     */
     async createBackup(providedData, type = 'manual') {
         let data = null;
         try {
+            if (!this.repositories) {
+                throw new Error('数据仓库不可用');
+            }
             data = providedData || await this.getCriticalData();
             if (Object.keys(data).length === 0) {
                 throw new Error('无数据可备份');
@@ -100,7 +86,7 @@ class DataIntegrityManager {
                 type,
                 size: JSON.stringify(data).length
             };
-            await this.simpleStorage.addBackup(backupObj);
+            await this.repositories.backups.add(backupObj);
             console.log(`[DataIntegrityManager] ${type} 备份创建成功: ${id}`);
             return backupObj;
         } catch (error) {
@@ -112,9 +98,6 @@ class DataIntegrityManager {
         }
     }
 
-    /**
-     * 配额溢出时导出数据
-     */
     exportDataAsFallback(exportData) {
         try {
             const exportObj = {
@@ -138,18 +121,14 @@ class DataIntegrityManager {
         }
     }
 
-    /**
-     * 注册默认验证规则
-     */
     registerDefaultValidationRules() {
-        // 练习记录验证规则
         this.validationRules.set('practice_records', {
             required: ['id', 'startTime'],
             types: {
                 id: 'string',
                 startTime: 'string',
                 endTime: 'string',
-                date: 'string', // Allow 'date' as well
+                date: 'string',
                 duration: 'number',
                 examId: 'string',
                 examTitle: 'string',
@@ -164,7 +143,6 @@ class DataIntegrityManager {
             }
         });
 
-        // 系统设置验证规则
         this.validationRules.set('system_settings', {
             types: {
                 theme: 'string',
@@ -175,24 +153,16 @@ class DataIntegrityManager {
         });
     }
 
-    /**
-     * 启动自动备份
-     */
     startAutoBackup() {
         if (this.backupTimer) {
             clearInterval(this.backupTimer);
         }
-
         this.backupTimer = setInterval(() => {
             this.performAutoBackup();
         }, this.backupInterval);
-
         console.log(`[DataIntegrityManager] 自动备份已启动 (${this.backupInterval / 1000}秒间隔)`);
     }
 
-    /**
-     * 停止自动备份
-     */
     stopAutoBackup() {
         if (this.backupTimer) {
             clearInterval(this.backupTimer);
@@ -201,9 +171,6 @@ class DataIntegrityManager {
         }
     }
 
-    /**
-     * 执行自动备份 (优化版)
-     */
     async performAutoBackup() {
         try {
             const criticalData = await this.getCriticalData();
@@ -218,12 +185,10 @@ class DataIntegrityManager {
         }
     }
 
-    /**
-     * 获取备份列表
-     */
     async getBackupList() {
         try {
-            const backups = await this.simpleStorage.getBackups();
+            if (!this.repositories) return [];
+            const backups = await this.repositories.backups.list();
             return backups.map(b => ({
                 id: b.id,
                 timestamp: b.timestamp,
@@ -237,23 +202,22 @@ class DataIntegrityManager {
         }
     }
 
-    /**
-     * 恢复备份
-     */
     async restoreBackup(backupId) {
         try {
-            const backups = await this.simpleStorage.getBackups();
-            const backup = backups.find(b => b.id === backupId);
+            if (!this.repositories) {
+                throw new Error('数据仓库不可用');
+            }
+            const backup = await this.repositories.backups.getById(backupId);
             if (!backup) {
                 throw new Error('备份不存在');
             }
-            const data = backup.data;
-            // 恢复 practice_records
-            await this.simpleStorage.savePracticeRecords(data.practice_records || []);
-            // 恢复 system_settings（合并到 user_settings）
-            const currentSettings = await this.simpleStorage.getUserSettings();
-            const restoredSettings = { ...currentSettings, ...data.system_settings };
-            await this.simpleStorage.saveUserSettings(restoredSettings);
+            const data = backup.data || {};
+            await this.repositories.transaction(['practice', 'settings'], async (repos, tx) => {
+                await repos.practice.overwrite(data.practice_records || [], { transaction: tx });
+                const currentSettings = await repos.settings.getAll({ transaction: tx });
+                const restoredSettings = { ...currentSettings, ...(data.system_settings || {}) };
+                await repos.settings.saveAll(restoredSettings, { transaction: tx });
+            });
             console.log(`[DataIntegrityManager] 备份 ${backupId} 恢复成功`);
         } catch (error) {
             console.error('[DataIntegrityManager] 恢复备份失败:', error);
@@ -261,9 +225,6 @@ class DataIntegrityManager {
         }
     }
 
-    /**
-     * 导出数据
-     */
     async exportData() {
         try {
             const data = await this.getCriticalData();
@@ -288,36 +249,33 @@ class DataIntegrityManager {
         }
     }
 
-    /**
-     * 获取关键数据 (优化版)
-     */
     async getCriticalData() {
         this._ensureInitialized();
-
         try {
+            if (!this.repositories) {
+                return {};
+            }
             const data = {};
+            try {
+                const practiceRecords = await this.repositories.practice.list();
+                data.practice_records = practiceRecords || [];
+            } catch (recordsError) {
+                console.warn('[DataIntegrityManager] 获取练习记录失败:', recordsError);
+                data.practice_records = [];
+            }
 
-            // 使用简单存储包装器获取数据
-            if (this.simpleStorage) {
-                try {
-                    // 获取练习记录 (异步操作)
-                    const practiceRecords = await this.simpleStorage.getPracticeRecords();
-                    data.practice_records = practiceRecords || [];
-
-                    // 获取系统设置
-                    const allSettings = await this.simpleStorage.getUserSettings();
-                    const systemSettings = {
-                        theme: allSettings.theme,
-                        language: allSettings.language,
-                        autoSave: allSettings.autoSave,
-                        notifications: allSettings.notifications
-                    };
-                    data.system_settings = systemSettings;
-                } catch (storageError) {
-                    console.warn('[DataIntegrityManager] 存储访问错误:', storageError);
-                    data.practice_records = [];
-                    data.system_settings = {};
-                }
+            try {
+                const allSettings = await this.repositories.settings.getAll();
+                const systemSettings = {
+                    theme: allSettings.theme,
+                    language: allSettings.language,
+                    autoSave: allSettings.autoSave,
+                    notifications: allSettings.notifications
+                };
+                data.system_settings = systemSettings;
+            } catch (settingsError) {
+                console.warn('[DataIntegrityManager] 获取系统设置失败:', settingsError);
+                data.system_settings = {};
             }
 
             return data;
@@ -330,9 +288,6 @@ class DataIntegrityManager {
 
 let dataIntegrityManagerInstance = null;
 
-/**
- * 获取或创建数据完整性管理器单例
- */
 function getDataIntegrityManager() {
     if (!dataIntegrityManagerInstance) {
         dataIntegrityManagerInstance = new DataIntegrityManager();
@@ -340,11 +295,9 @@ function getDataIntegrityManager() {
     return dataIntegrityManagerInstance;
 }
 
-// 导出（如果使用模块）
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = { DataIntegrityManager, getDataIntegrityManager };
 } else {
-    // 全局暴露
     window.DataIntegrityManager = DataIntegrityManager;
     window.getDataIntegrityManager = getDataIntegrityManager;
 }
