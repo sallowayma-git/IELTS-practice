@@ -2,16 +2,6 @@
 // This file is the result of refactoring the inline script from improved-working-system.html
 
 const legacyStateAdapter = window.LegacyStateAdapter ? window.LegacyStateAdapter.getInstance() : null;
-const initialBrowseFilter = legacyStateAdapter ? legacyStateAdapter.getBrowseFilter() : { category: 'all', type: 'all' };
-
-// === 关键全局状态变量 (必须保持全局可访问) ===
-let examIndex = legacyStateAdapter ? legacyStateAdapter.getExamIndex() : [];
-let practiceRecords = legacyStateAdapter ? legacyStateAdapter.getPracticeRecords() : [];
-let filteredExams = [];
-let currentCategory = initialBrowseFilter.category || 'all';
-let currentExamType = initialBrowseFilter.type || 'all';
-let bulkDeleteMode = false;
-let selectedRecords = new Set();
 
 function normalizeRecordId(id) {
     if (id == null) {
@@ -23,6 +13,7 @@ function normalizeRecordId(id) {
 if (typeof window !== 'undefined') {
     window.normalizeRecordId = normalizeRecordId;
 }
+
 let fallbackExamSessions = new Map();
 let processedSessions = new Set();
 let practiceListScroller = null;
@@ -33,14 +24,6 @@ let browseStateManager = null;
 let examListViewInstance = null;
 let practiceDashboardViewInstance = null;
 let legacyNavigationController = null;
-
-const MESSAGE_CONTAINER_ID = 'message-container';
-const MESSAGE_ICONS = {
-    error: '❌',
-    success: '✅',
-    warning: '⚠️',
-    info: 'ℹ️'
-};
 
 function syncGlobalBrowseState(category, type) {
     const browseDescriptor = Object.getOwnPropertyDescriptor(window, '__browseFilter');
@@ -56,67 +39,83 @@ function syncGlobalBrowseState(category, type) {
     }
 }
 
-if (legacyStateAdapter) {
-    legacyStateAdapter.subscribe('examIndex', (value) => {
-        examIndex = Array.isArray(value) ? value : [];
-    });
-    legacyStateAdapter.subscribe('practiceRecords', (value) => {
-        practiceRecords = Array.isArray(value) ? value : [];
-    });
-    legacyStateAdapter.subscribe('browseFilter', (value) => {
-        const normalized = value || { category: 'all', type: 'all' };
-        currentCategory = typeof normalized.category === 'string' ? normalized.category : 'all';
-        currentExamType = typeof normalized.type === 'string' ? normalized.type : 'all';
+const localFallbackState = {
+    filteredExams: [],
+    selectedRecords: new Set(),
+    bulkDeleteMode: false
+};
 
-        syncGlobalBrowseState(currentCategory, currentExamType);
-    });
-}
-
-function ensureMessageContainer() {
-    if (typeof document === 'undefined') {
-        return null;
+const stateService = (function resolveStateService() {
+    if (window.appStateService && typeof window.appStateService.getExamIndex === 'function') {
+        return window.appStateService;
     }
-    let container = document.getElementById(MESSAGE_CONTAINER_ID);
-    if (!container) {
-        container = document.createElement('div');
-        container.id = MESSAGE_CONTAINER_ID;
-        container.className = 'message-container';
-        document.body.appendChild(container);
+    if (window.AppStateService && typeof window.AppStateService.getInstance === 'function') {
+        return window.AppStateService.getInstance({
+            legacyAdapter: legacyStateAdapter,
+            onBrowseFilterChange: syncGlobalBrowseState
+        });
     }
-    return container;
+    return null;
+})();
+
+const initialBrowseFilter = stateService
+    ? stateService.getBrowseFilter()
+    : (legacyStateAdapter ? legacyStateAdapter.getBrowseFilter() : { category: 'all', type: 'all' });
+
+function getExamIndexState() {
+    if (stateService) {
+        return stateService.getExamIndex();
+    }
+    return Array.isArray(window.examIndex) ? window.examIndex : [];
 }
 
-function createMessageNode(message, type) {
-    const note = document.createElement('div');
-    note.className = 'message ' + (type || 'info');
-    const icon = document.createElement('strong');
-    icon.textContent = MESSAGE_ICONS[type] || MESSAGE_ICONS.info;
-    note.appendChild(icon);
-    note.appendChild(document.createTextNode(' ' + String(message || '')));
-    return note;
-}
 function setExamIndexState(list) {
-    const normalized = Array.isArray(list) ? list : [];
-    if (legacyStateAdapter) {
-        const updated = legacyStateAdapter.setExamIndex(normalized);
-        examIndex = Array.isArray(updated) ? updated : normalized;
-        return examIndex;
+    if (stateService) {
+        return stateService.setExamIndex(list);
     }
-    examIndex = normalized;
+    const normalized = Array.isArray(list) ? list : [];
     try { window.examIndex = normalized; } catch (_) {}
-    return examIndex;
+    return normalized;
+}
+
+function getPracticeRecordsState() {
+    if (stateService) {
+        return stateService.getPracticeRecords();
+    }
+    return Array.isArray(window.practiceRecords) ? window.practiceRecords : [];
 }
 
 function setPracticeRecordsState(records) {
-    const normalized = Array.isArray(records) ? records : [];
-    if (legacyStateAdapter) {
-        const updated = legacyStateAdapter.setPracticeRecords(normalized);
-        practiceRecords = Array.isArray(updated) ? updated : normalized;
-        return practiceRecords;
+    if (stateService) {
+        return stateService.setPracticeRecords(records);
     }
-    practiceRecords = normalized;
+    const normalized = Array.isArray(records) ? records : [];
     try { window.practiceRecords = normalized; } catch (_) {}
-    return practiceRecords;
+    return normalized;
+}
+
+function getFilteredExamsState() {
+    if (stateService) {
+        return stateService.getFilteredExams();
+    }
+    return localFallbackState.filteredExams.slice();
+}
+
+function setFilteredExamsState(exams) {
+    if (stateService) {
+        return stateService.setFilteredExams(exams);
+    }
+    localFallbackState.filteredExams = Array.isArray(exams) ? exams.slice() : [];
+    return localFallbackState.filteredExams.slice();
+}
+
+function getBrowseFilterState() {
+    if (stateService) {
+        return stateService.getBrowseFilter();
+    }
+    const category = typeof window.__browseFilter?.category === 'string' ? window.__browseFilter.category : 'all';
+    const type = typeof window.__browseFilter?.type === 'string' ? window.__browseFilter.type : 'all';
+    return { category, type };
 }
 
 function setBrowseFilterState(category = 'all', type = 'all') {
@@ -124,18 +123,75 @@ function setBrowseFilterState(category = 'all', type = 'all') {
         category: typeof category === 'string' ? category : 'all',
         type: typeof type === 'string' ? type : 'all'
     };
-    if (legacyStateAdapter) {
-        const updated = legacyStateAdapter.setBrowseFilter(normalized);
-        currentCategory = updated.category || 'all';
-        currentExamType = updated.type || 'all';
-        syncGlobalBrowseState(currentCategory, currentExamType);
-        return updated;
+    if (stateService) {
+        return stateService.setBrowseFilter(normalized);
     }
-    currentCategory = normalized.category;
-    currentExamType = normalized.type;
-    syncGlobalBrowseState(currentCategory, currentExamType);
+    syncGlobalBrowseState(normalized.category, normalized.type);
     return normalized;
 }
+
+function getCurrentCategory() {
+    return getBrowseFilterState().category || 'all';
+}
+
+function getCurrentExamType() {
+    return getBrowseFilterState().type || 'all';
+}
+
+function getBulkDeleteModeState() {
+    if (stateService) {
+        return stateService.getBulkDeleteMode();
+    }
+    return !!localFallbackState.bulkDeleteMode;
+}
+
+function setBulkDeleteModeState(value) {
+    if (stateService) {
+        return stateService.setBulkDeleteMode(value);
+    }
+    localFallbackState.bulkDeleteMode = !!value;
+    return localFallbackState.bulkDeleteMode;
+}
+
+function clearBulkDeleteModeState() {
+    return setBulkDeleteModeState(false);
+}
+
+function getSelectedRecordsState() {
+    if (stateService) {
+        return stateService.getSelectedRecords();
+    }
+    return new Set(localFallbackState.selectedRecords);
+}
+
+function addSelectedRecordState(id) {
+    if (stateService) {
+        return stateService.addSelectedRecord(id);
+    }
+    if (id != null) {
+        localFallbackState.selectedRecords.add(String(id));
+    }
+    return getSelectedRecordsState();
+}
+
+function removeSelectedRecordState(id) {
+    if (stateService) {
+        return stateService.removeSelectedRecord(id);
+    }
+    if (id != null) {
+        localFallbackState.selectedRecords.delete(String(id));
+    }
+    return getSelectedRecordsState();
+}
+
+function clearSelectedRecordsState() {
+    if (stateService) {
+        return stateService.clearSelectedRecords();
+    }
+    localFallbackState.selectedRecords.clear();
+    return getSelectedRecordsState();
+}
+
 
 
 const preferredFirstExamByCategory = {
@@ -167,10 +223,6 @@ function ensureExamListView() {
   }
 
   function ensureLegacyNavigation(options) {
-      if (typeof window.ensureLegacyNavigationController !== 'function') {
-          return null;
-      }
-
       var mergedOptions = Object.assign({
           containerSelector: '.main-nav',
           activeClass: 'active',
@@ -186,8 +238,17 @@ function ensureExamListView() {
           }
       }, options || {});
 
-      legacyNavigationController = window.ensureLegacyNavigationController(mergedOptions);
-      return legacyNavigationController;
+      if (window.NavigationController && typeof window.NavigationController.ensure === 'function') {
+          legacyNavigationController = window.NavigationController.ensure(mergedOptions);
+          return legacyNavigationController;
+      }
+
+      if (typeof window.ensureLegacyNavigationController === 'function') {
+          legacyNavigationController = window.ensureLegacyNavigationController(mergedOptions);
+          return legacyNavigationController;
+      }
+
+      return null;
   }
 
   // --- Initialization ---
@@ -375,7 +436,7 @@ async function syncPracticeRecords() {
     } catch (e) { console.warn('[System] normalize durations failed:', e); }
 
     // 新增修复3D：确保全局变量是UI的单一数据源
-    practiceRecords = setPracticeRecordsState(records);
+    setPracticeRecordsState(records);
 
     console.log(`[System] ${records.length} 条练习记录已加载到内存。`);
     updatePracticeView();
@@ -436,7 +497,7 @@ function setupStorageSyncListener() {
 // 降级保存：将 PRACTICE_COMPLETE 的真实数据写入 practice_records（与旧视图字段兼容）
 async function savePracticeRecordFallback(examId, realData) {
   try {
-    const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
+    const list = getExamIndexState();
     const exam = list.find(e => e.id === examId) || {};
 
     const sInfo = realData && realData.scoreInfo ? realData.scoreInfo : {};
@@ -495,11 +556,11 @@ async function loadLibrary(forceReload = false) {
 
     // 仅当缓存为非空数组时使用缓存
     if (!forceReload && Array.isArray(cachedData) && cachedData.length > 0) {
-        examIndex = setExamIndexState(cachedData);
+        const updatedIndex = setExamIndexState(cachedData);
         try {
             const configs = await storage.get('exam_index_configurations', []);
             if (!configs.some(c => c.key === 'exam_index')) {
-                configs.push({ name: '默认题库', key: 'exam_index', examCount: examIndex.length || 0, timestamp: Date.now() });
+                configs.push({ name: '默认题库', key: 'exam_index', examCount: updatedIndex.length || 0, timestamp: Date.now() });
                 await storage.set('exam_index_configurations', configs);
             }
             const activeKey = await storage.get('active_exam_index_key');
@@ -522,14 +583,14 @@ async function loadLibrary(forceReload = false) {
         }
 
         if (readingExams.length === 0 && listeningExams.length === 0) {
-            examIndex = setExamIndexState([]);
+            setExamIndexState([]);
             finishLibraryLoading(startTime); // 不写入空索引，避免污染缓存
             return;
         }
 
-        examIndex = setExamIndexState([...readingExams, ...listeningExams]);
-        await storage.set(activeConfigKey, examIndex);
-        await saveLibraryConfiguration('默认题库', activeConfigKey, examIndex.length);
+        const updatedIndex = setExamIndexState([...readingExams, ...listeningExams]);
+        await storage.set(activeConfigKey, updatedIndex);
+        await saveLibraryConfiguration('默认题库', activeConfigKey, updatedIndex.length);
         await setActiveLibraryConfiguration(activeConfigKey);
 
         finishLibraryLoading(startTime);
@@ -539,15 +600,12 @@ async function loadLibrary(forceReload = false) {
             showMessage('题库刷新失败: ' + (error?.message || error), 'error');
         }
         window.__forceLibraryRefreshInProgress = false;
-        examIndex = setExamIndexState([]);
+        setExamIndexState([]);
         finishLibraryLoading(startTime);
     }
 }
 function finishLibraryLoading(startTime) {
     const loadTime = performance.now() - startTime;
-    if (!legacyStateAdapter) {
-        try { window.examIndex = examIndex; } catch (_) {}
-    }
     // 修复题库索引加载链路问题：顺序为设置window.examIndex → updateOverview() → dispatchEvent('examIndexLoaded')
     updateOverview();
     window.dispatchEvent(new CustomEvent('examIndexLoaded'));
@@ -576,16 +634,17 @@ function updateOverview() {
         return;
     }
 
+    const currentExamIndex = getExamIndexState();
     const statsService = window.AppServices && window.AppServices.overviewStats;
     const stats = statsService ?
-        statsService.calculate(window.examIndex || []) :
+        statsService.calculate(currentExamIndex) :
         {
             reading: [],
             listening: [],
             meta: {
                 readingUnknown: 0,
                 listeningUnknown: 0,
-                total: Array.isArray(window.examIndex) ? window.examIndex.length : 0,
+                total: currentExamIndex.length,
                 readingUnknownEntries: [],
                 listeningUnknownEntries: []
             }
@@ -787,8 +846,8 @@ function renderPracticeRecordItem(record) {
     }
 
     return window.PracticeHistoryRenderer.createRecordNode(record, {
-        bulkDeleteMode,
-        selectedRecords
+        bulkDeleteMode: getBulkDeleteModeState(),
+        selectedRecords: getSelectedRecordsState()
     });
 }
 
@@ -836,7 +895,7 @@ function setupPracticeHistoryInteractions() {
     };
 
     const handleSelection = (recordId, event) => {
-        if (!bulkDeleteMode || !recordId) return;
+        if (!getBulkDeleteModeState() || !recordId) return;
         if (event) event.preventDefault();
         toggleRecordSelection(recordId);
     };
@@ -886,7 +945,7 @@ function setupPracticeHistoryInteractions() {
 }
 
 function updatePracticeView() {
-    const rawRecords = Array.isArray(window.practiceRecords) ? window.practiceRecords : [];
+    const rawRecords = getPracticeRecordsState();
     const records = rawRecords.filter((record) => record && (record.dataSource === 'real' || record.dataSource === undefined));
 
     const stats = window.PracticeStats;
@@ -913,14 +972,15 @@ function updatePracticeView() {
         ? stats.sortByDateDesc(records)
         : records.slice().sort((a, b) => new Date(b.date) - new Date(a.date));
 
-    if (currentExamType !== 'all') {
+    const examType = getCurrentExamType();
+    if (examType !== 'all') {
         if (stats && typeof stats.filterByExamType === 'function') {
-            recordsToShow = stats.filterByExamType(recordsToShow, examIndex, currentExamType);
+            recordsToShow = stats.filterByExamType(recordsToShow, getExamIndexState(), examType);
         } else {
             recordsToShow = recordsToShow.filter((record) => {
-                const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
+                const list = getExamIndexState();
                 const exam = list.find((e) => e.id === record.examId || e.title === record.title);
-                return exam && exam.type === currentExamType;
+                return exam && exam.type === examType;
             });
         }
     }
@@ -942,8 +1002,8 @@ function updatePracticeView() {
     }
 
     practiceListScroller = renderer.renderList(historyContainer, recordsToShow, {
-        bulkDeleteMode,
-        selectedRecords,
+        bulkDeleteMode: getBulkDeleteModeState(),
+        selectedRecords: getSelectedRecordsState(),
         scrollerOptions: { itemHeight: 100, containerHeight: 650 },
         itemFactory: renderPracticeRecordItem
     });
@@ -1120,8 +1180,9 @@ function applyBrowseFilter(category = 'all', type = null) {
         // 若未显式给出类型，则根据当前题库推断（同时存在时不限定类型）
         if (!type || type === 'all') {
             try {
-                const hasReading = (examIndex || []).some(e => e.category === normalizedCategory && e.type === 'reading');
-                const hasListening = (examIndex || []).some(e => e.category === normalizedCategory && e.type === 'listening');
+                const indexSnapshot = getExamIndexState();
+                const hasReading = indexSnapshot.some(e => e.category === normalizedCategory && e.type === 'reading');
+                const hasListening = indexSnapshot.some(e => e.category === normalizedCategory && e.type === 'listening');
                 if (hasReading && !hasListening) type = 'reading';
                 else if (!hasReading && hasListening) type = 'listening';
                 else type = 'all';
@@ -1170,26 +1231,30 @@ if (typeof window.browseCategory !== 'function') {
 }
 
 function filterRecordsByType(type) {
-    setBrowseFilterState(currentCategory, type);
+    setBrowseFilterState(getCurrentCategory(), type);
     updatePracticeView();
 }
 
 
 function loadExamList() {
     // 使用 Array.from() 创建副本，避免污染全局 examIndex
-    let examsToShow = Array.from(examIndex);
+    const examIndexSnapshot = getExamIndexState();
+    let examsToShow = Array.from(examIndexSnapshot);
 
     // 先过滤
-    if (currentExamType !== 'all') {
-        examsToShow = examsToShow.filter(exam => exam.type === currentExamType);
+    const activeExamType = getCurrentExamType();
+    const activeCategory = getCurrentCategory();
+
+    if (activeExamType !== 'all') {
+        examsToShow = examsToShow.filter(exam => exam.type === activeExamType);
     }
-    if (currentCategory !== 'all') {
-        examsToShow = examsToShow.filter(exam => exam.category === currentCategory);
+    if (activeCategory !== 'all') {
+        examsToShow = examsToShow.filter(exam => exam.category === activeCategory);
     }
 
     // 然后置顶过滤后的数组
-    if (currentCategory !== 'all' && currentExamType !== 'all') {
-        const key = `${currentCategory}_${currentExamType}`;
+    if (activeCategory !== 'all' && activeExamType !== 'all') {
+        const key = `${activeCategory}_${activeExamType}`;
         const preferred = preferredFirstExamByCategory[key];
 
         if (preferred) {
@@ -1200,8 +1265,8 @@ function loadExamList() {
             if (preferredIndex === -1) {
                 preferredIndex = examsToShow.findIndex(exam =>
                     exam.title === preferred.title &&
-                    exam.category === currentCategory &&
-                    exam.type === currentExamType
+                    exam.category === activeCategory &&
+                    exam.type === activeExamType
                 );
             }
 
@@ -1214,8 +1279,8 @@ function loadExamList() {
         }
     }
 
-    filteredExams = examsToShow;
-    displayExams(filteredExams);
+    const activeList = setFilteredExamsState(examsToShow);
+    displayExams(activeList);
 }
 
 function displayExams(exams) {
@@ -1408,7 +1473,7 @@ function openExam(examId) {
   }
 
   // 降级：本地完成打开 + 握手重试，确保 sessionId 下发
-  const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
+  const list = getExamIndexState();
   const exam = list.find(e => e.id === examId);
   if (!exam) return showMessage('未找到题目', 'error');
   if (!exam.hasHtml) return viewPDF(examId);
@@ -1461,7 +1526,7 @@ function startHandshakeFallback(examWindow, examId) {
 
 function viewPDF(examId) {
     // 增加数组化防御
-    const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
+    const list = getExamIndexState();
     const exam = list.find(e => e.id === examId);
     if (!exam || !exam.pdfFilename) return showMessage('未找到PDF文件', 'error');
     
@@ -1552,54 +1617,38 @@ function getViewName(viewName) {
 }
 
 function updateSystemInfo() {
-    if (!examIndex) return;
-    const readingExams = examIndex.filter(e => e.type === 'reading');
-    const listeningExams = examIndex.filter(e => e.type === 'listening');
+    const examIndexSnapshot = getExamIndexState();
+    if (!examIndexSnapshot || examIndexSnapshot.length === 0) return;
+    const readingExams = examIndexSnapshot.filter(e => e.type === 'reading');
+    const listeningExams = examIndexSnapshot.filter(e => e.type === 'listening');
 
-    document.getElementById('total-exams').textContent = examIndex.length;
+    const totalEl = document.getElementById('total-exams');
+    if (totalEl) totalEl.textContent = examIndexSnapshot.length;
     // These IDs might not exist anymore, but we'll add them for robustness
     const htmlExamsEl = document.getElementById('html-exams');
     const pdfExamsEl = document.getElementById('pdf-exams');
     const lastUpdateEl = document.getElementById('last-update');
 
     if (htmlExamsEl) htmlExamsEl.textContent = readingExams.length + listeningExams.length; // Simplified
-    if (pdfExamsEl) pdfExamsEl.textContent = examIndex.filter(e => e.pdfFilename).length;
+    if (pdfExamsEl) pdfExamsEl.textContent = examIndexSnapshot.filter(e => e.pdfFilename).length;
     if (lastUpdateEl) lastUpdateEl.textContent = new Date().toLocaleString();
 }
 
 function showMessage(message, type = 'info', duration = 4000) {
-    if (typeof document === 'undefined') {
-        if (typeof console !== 'undefined') {
-            const logMethod = type === 'error' ? 'error' : 'log';
-            console[logMethod](`[Message:${type}]`, message);
-        }
-        return;
+    if (typeof window !== 'undefined' && window.getMessageCenter) {
+        return window.getMessageCenter().show(message, type, duration);
     }
-
-    const container = ensureMessageContainer();
-    if (!container) {
-        return;
+    if (typeof window !== 'undefined' && window.MessageCenter && typeof window.MessageCenter.getInstance === 'function') {
+        return window.MessageCenter.getInstance().show(message, type, duration);
     }
-
-    const note = createMessageNode(message, type);
-    container.appendChild(note);
-
-    while (container.children.length > 3) {
-        container.removeChild(container.firstChild);
+    if (typeof console !== 'undefined') {
+        const logMethod = type === 'error' ? 'error' : 'log';
+        console[logMethod](`[Message:${type}]`, message);
     }
-
-    const timeout = typeof duration === 'number' && duration > 0 ? duration : 4000;
-    window.setTimeout(() => {
-        note.classList.add('message-leaving');
-        window.setTimeout(() => {
-            if (note.parentNode) {
-                note.parentNode.removeChild(note);
-            }
-        }, 320);
-    }, timeout);
+    return null;
 }
 
-if (typeof window !== 'undefined' && typeof window.showMessage !== 'function') {
+if (typeof window !== 'undefined') {
     window.showMessage = showMessage;
 }
 
@@ -1866,7 +1915,7 @@ async function handleLibraryUpload(options, files) {
         }
 
         const activeKey = await getActiveLibraryConfigurationKey();
-        const currentIndex = await storage.get(activeKey, examIndex) || [];
+        const currentIndex = await storage.get(activeKey, getExamIndexState()) || [];
 
         let newIndex;
         if (mode === 'full') {
@@ -1923,7 +1972,7 @@ async function handleLibraryUpload(options, files) {
         const incName = `${type === 'reading' ? '阅读' : '听力'}增量-${new Date().toLocaleString()}`;
         await saveLibraryConfiguration(incName, targetKey, newIndex.length);
         showMessage('索引已更新；正在刷新界面...', 'success');
-        examIndex = setExamIndexState(newIndex);
+        setExamIndexState(newIndex);
         // 也导出一次，便于归档
         try { exportExamIndexToScriptFile(newIndex, incName); } catch(_) {}
         updateOverview();
@@ -2100,15 +2149,19 @@ function searchExams(query) {
 function performSearch(query) {
     const normalizedQuery = query.toLowerCase().trim();
     if (!normalizedQuery) {
-        displayExams(filteredExams || examIndex);
+        const currentFiltered = getFilteredExamsState();
+        const baseList = currentFiltered.length ? currentFiltered : getExamIndexState();
+        displayExams(baseList);
         return;
     }
-    
+
     // 调试日志
     console.log('[Search] 执行搜索，查询词:', normalizedQuery);
-    console.log('[Search] 当前 filteredExams 数量:', (filteredExams || []).length);
-    
-    const searchResults = (filteredExams || examIndex).filter(exam => {
+    const activeList = getFilteredExamsState();
+    console.log('[Search] 当前 filteredExams 数量:', activeList.length);
+
+    const searchBase = activeList.length ? activeList : getExamIndexState();
+    const searchResults = searchBase.filter(exam => {
         if (exam.searchText) {
             return exam.searchText.includes(normalizedQuery);
         }
@@ -2124,7 +2177,7 @@ function performSearch(query) {
 /* Replaced by robust exporter below */
 async function exportPracticeData() {
     try {
-        const records = window.storage ? (await window.storage.get('practice_records', [])) : (window.practiceRecords || []);
+        const records = window.storage ? (await window.storage.get('practice_records', [])) : getPracticeRecordsState();
         const stats = window.app && window.app.userStats ? window.app.userStats : (window.practiceStats || {});
 
         if (!records || records.length === 0) {
@@ -2163,27 +2216,34 @@ async function exportPracticeData() {
     }
 }
 function toggleBulkDelete() {
-    bulkDeleteMode = !bulkDeleteMode;
+    const nextMode = !getBulkDeleteModeState();
+    setBulkDeleteModeState(nextMode);
     const btn = document.getElementById('bulk-delete-btn');
 
-    if (bulkDeleteMode) {
+    if (!btn) {
+        updatePracticeView();
+        return;
+    }
+
+    if (nextMode) {
         btn.textContent = '✓ 完成选择';
         btn.classList.remove('btn-info');
         btn.classList.add('btn-success');
-        selectedRecords.clear();
+        clearSelectedRecordsState();
         showMessage('批量管理模式已开启，点击记录进行选择', 'info');
     } else {
         btn.textContent = '📝 批量删除';
         btn.classList.remove('btn-success');
         btn.classList.add('btn-info');
 
-        if (selectedRecords.size > 0) {
-            const confirmMessage = `确定要删除选中的 ${selectedRecords.size} 条记录吗？此操作不可恢复。`;
+        const selected = getSelectedRecordsState();
+        if (selected.size > 0) {
+            const confirmMessage = `确定要删除选中的 ${selected.size} 条记录吗？此操作不可恢复。`;
             if (confirm(confirmMessage)) {
                 bulkDeleteRecords();
             }
         }
-        selectedRecords.clear();
+        clearSelectedRecordsState();
     }
 
     updatePracticeView();
@@ -2191,12 +2251,13 @@ function toggleBulkDelete() {
 
 async function bulkDeleteRecords() {
     const records = await storage.get('practice_records', []);
-    const recordsToKeep = records.filter(record => !selectedRecords.has(normalizeRecordId(record && record.id)));
+    const selected = getSelectedRecordsState();
+    const recordsToKeep = records.filter(record => !selected.has(normalizeRecordId(record && record.id)));
 
     const deletedCount = records.length - recordsToKeep.length;
 
     await storage.set('practice_records', recordsToKeep);
-    practiceRecords = setPracticeRecordsState(recordsToKeep);
+    setPracticeRecordsState(recordsToKeep);
 
     syncPracticeRecords(); // Re-sync and update UI
 
@@ -2205,17 +2266,18 @@ async function bulkDeleteRecords() {
 }
 
 function toggleRecordSelection(recordId) {
-    if (!bulkDeleteMode) return;
+    if (!getBulkDeleteModeState()) return;
 
     const normalizedId = normalizeRecordId(recordId);
     if (!normalizedId) {
         return;
     }
 
-    if (selectedRecords.has(normalizedId)) {
-        selectedRecords.delete(normalizedId);
+    const selected = getSelectedRecordsState();
+    if (selected.has(normalizedId)) {
+        removeSelectedRecordState(normalizedId);
     } else {
-        selectedRecords.add(normalizedId);
+        addSelectedRecordState(normalizedId);
     }
     updatePracticeView(); // Re-render to show selection state
 }
@@ -2263,7 +2325,7 @@ async function deleteRecord(recordId) {
 
 async function clearPracticeData() {
     if (confirm('确定要清除所有练习记录吗？此操作不可恢复。')) {
-        practiceRecords = setPracticeRecordsState([]);
+        setPracticeRecordsState([]);
         await storage.set('practice_records', []); // Use storage helper
         processedSessions.clear();
         updatePracticeView();
@@ -2315,7 +2377,7 @@ async function resolveLibraryConfigurations() {
 
     if (configs.length === 0) {
         try {
-            const count = Array.isArray(window.examIndex) ? window.examIndex.length : 0;
+            const count = getExamIndexState().length;
             configs = [{
                 name: '默认题库',
                 key: 'exam_index',
@@ -2844,7 +2906,7 @@ function hideDeveloperTeam() {
 
 function startRandomPractice(category, type = 'reading') {
     // 增加数组化防御
-    const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
+    const list = getExamIndexState();
     const categoryExams = list.filter(exam => exam.category === category && exam.type === type);
     if (categoryExams.length === 0) {
         showMessage(`${category} ${type === 'reading' ? '阅读' : '听力'} 分类暂无可用题目`, 'error');
@@ -2881,7 +2943,7 @@ async function exportPracticeData() {
         }
     } catch(_) {}
     try {
-        var records = (window.storage && storage.get) ? (await storage.get('practice_records', [])) : (window.practiceRecords || []);
+        var records = (window.storage && storage.get) ? (await storage.get('practice_records', [])) : getPracticeRecordsState();
         var blob = new Blob([JSON.stringify(records, null, 2)], { type: 'application/json; charset=utf-8' });
         var url = URL.createObjectURL(blob);
         var a = document.createElement('a'); a.href = url; a.download = 'practice-records.json';
