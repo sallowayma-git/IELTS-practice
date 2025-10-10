@@ -3027,10 +3027,18 @@ function handlePracticeHistoryItemSelection(recordId, event) {
 
 function fallbackToggleRecordSelection(recordId) {
     const selectedSet = getSelectedRecordsSet();
-    if (selectedSet.has(recordId)) {
-        selectedSet.delete(recordId);
+    const normalizer = (typeof window !== 'undefined' && typeof window.normalizeRecordId === 'function')
+        ? window.normalizeRecordId
+        : (id) => (id == null ? '' : String(id));
+    const normalizedId = normalizer(recordId);
+    if (!normalizedId) {
+        return;
+    }
+
+    if (selectedSet.has(normalizedId)) {
+        selectedSet.delete(normalizedId);
     } else {
-        selectedSet.add(recordId);
+        selectedSet.add(normalizedId);
     }
     window.__legacyBulkDeleteMode = true;
     requestAnimationFrame(updatePracticeView);
@@ -3094,14 +3102,15 @@ function renderPracticeHistoryFallback(container, records, options) {
             continue;
         }
 
+        const recordId = record && record.id != null ? String(record.id) : '';
         const item = legacyCreateElement('div', {
             className: 'history-item',
-            dataset: { recordId: record.id }
+            dataset: { recordId }
         });
 
         if (opts.bulkDeleteMode && item.classList) {
             item.classList.add('history-item-selectable');
-            if (opts.selectedRecords && opts.selectedRecords.has(record.id)) {
+            if (opts.selectedRecords && opts.selectedRecords.has(recordId)) {
                 item.classList.add('history-item-selected');
             }
         }
@@ -3112,7 +3121,7 @@ function renderPracticeHistoryFallback(container, records, options) {
             legacyCreateElement('a', {
                 href: '#',
                 className: 'practice-record-title',
-                dataset: { recordAction: 'details', recordId: record.id }
+                dataset: { recordAction: 'details', recordId }
             }, legacyCreateElement('strong', null, record.title || '未命名练习')),
             legacyCreateElement('div', { className: 'record-meta-line' }, [
                 legacyCreateElement('small', { className: 'record-date' }, record.date ? new Date(record.date).toLocaleString() : '未知时间'),
@@ -3135,7 +3144,7 @@ function renderPracticeHistoryFallback(container, records, options) {
                     type: 'button',
                     className: 'delete-record-btn',
                     title: '删除此记录',
-                    dataset: { recordAction: 'delete', recordId: record.id }
+                    dataset: { recordAction: 'delete', recordId }
                 }, '🗑️')
             ]));
         }
