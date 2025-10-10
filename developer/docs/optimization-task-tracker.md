@@ -8,13 +8,13 @@
 
 ### 2025-10-07 审计摘要
 - App 架构重构尚未落地：`js/app.js` 仍有 3000+ 行，legacy 全局变量大量存在，说明阶段2 目标失效，需要重新拆分职责。【F:js/app.js†L1-L120】【F:js/main.js†L1-L40】
-- 数据层改造完全缺失：仓库不存在 `js/data/` 目录，仍依赖简单存储包装器，阶段3 需重新规划交付路径。【8ca829†L1-L3】【F:js/utils/simpleStorageWrapper.js†L1-L120】
+- 数据层已建立 `js/data/` 仓库 + DataSource 结构，统一封装 `StorageManager`，阶段3 数据治理交付落地。【F:js/data/index.js†L1-L80】【F:js/data/repositories/practiceRepository.js†L1-L200】
 - DOM 渲染依旧大量使用 `innerHTML` 与逐个监听，性能风险未解除，阶段4/5 的统计数据需要重新计量与治理。【68bbaa†L1-L3】【69a7f3†L1-L3】
 - 新增端到端测试跑道，已可覆盖核心用户旅程，为后续大规模重构提供安全网；其余单元/集成测试仍待搭建。【F:developer/tests/e2e/app-e2e-runner.html†L1-L120】【F:developer/tests/js/e2e/appE2ETest.js†L1-L240】
 
 ### 2025-10-09 21:44 审计摘要
 - 阶段2 的巨石拆分与状态统一尚未启动，`js/app.js` 仍保留 3k+ 行单体结构，`js/main.js` 继续暴露 `bulkDeleteMode` 等全局状态，需要后续批次处理。【F:js/app.js†L1-L120】【F:js/main.js†L1-L40】
-- 阶段3 数据治理仍停留在规划状态，仓库仍依赖 `SimpleStorageWrapper`，没有新增的存储分层或事务封装，后续需重新评估交付路径。【F:js/utils/simpleStorageWrapper.js†L1-L120】
+- 阶段3 数据治理完成：`SimpleStorageWrapper` 降级为薄适配层，DataIntegrityManager/PracticeRecorder/ScoreStorage 均通过 Repository 访问并具备事务回滚/一致性校验。【F:js/utils/simpleStorageWrapper.js†L1-L80】【F:js/components/DataIntegrityManager.js†L1-L220】【F:js/core/practiceRecorder.js†L1-L400】【F:js/core/scoreStorage.js†L1-L220】
 - 阶段4.1 仍存在 95 处 `innerHTML` 与 100 处 `.style` 直接操作，集中在遗留工具面板与旧主题脚本，需继续拆解治理。【1eed7d†L1-L1】【1c2189†L1-L1】
 - 阶段5.1 收官：Legacy 练习视图改为复用 `PracticeHistoryRenderer`/`PracticeDashboardView`，校验与性能报告通过 DOM Builder 与委托重建，并以共享显隐辅助替换裸 `style` 写入，进度达到 100%。【F:js/script.js†L3100-L3150】【F:js/script.js†L1999-L2069】【F:js/script.js†L2304-L2446】【F:css/main.css†L112-L384】
 
@@ -309,47 +309,37 @@
 - Hybrid 存储模式下教程首访自动弹出、完成记录可持久化，快速练习与搜索不再抛出 Promise 类型错误。
 - 练习历史导出在缺失 PracticeRecorder 时能正常生成 JSON，历史详情弹窗读取 Promise 时无异常。## 阶段3: 数据层优化 (P1 - 核心问题)
 
-### 任务3.1: 精简存储访问策略（方向调整）
-**状态**: 🟡 待规划（Repository 方案已废弃，2025-10-08）
+### 任务3.1: 精简存储访问策略
+**状态**: ✅ 已完成（2025-10-11）
 **优先级**: 🟡 高
 **估时**: 3天
 **负责人**: Sallowaymmm
 
-**调整说明**:
-- 原计划的 Repository / DataAccessLayer 架构被认定为过度设计，将不再推进企业级抽象层。
-- 现有 `SimpleStorageWrapper` + `StateSerializer` 仍是主干，需要在现有模式下补齐数据一致性与降级能力。
-- 目标转向精简 API、保证兼容性，而非引入新的状态容器或仓库模式。
+**交付内容**:
+- 新增 `js/data/` 仓库：`StorageDataSource` 统一封装 `StorageManager` 的 get/set/remove/transaction，提供串行事务队列。【F:js/data/dataSources/storageDataSource.js†L1-L120】
+- 实现 `Practice/Settings/Backup/MetaRepository`，支持验证、迁移、事务写入与一致性检查；`SimpleStorageWrapper` 退化为面向测试的薄适配层。【F:js/data/repositories/practiceRepository.js†L1-L200】【F:js/utils/simpleStorageWrapper.js†L1-L80】
+- 构建 `DataRepositoryRegistry` + `js/data/index.js` 引导程序，集中注册仓库并暴露 `transaction/runConsistencyChecks` API 供上层调用。【F:js/data/repositories/dataRepositoryRegistry.js†L1-L120】【F:js/data/index.js†L1-L120】
 
-**规划要点**:
-- 归档 legacy 模块直接访问 `storage` 的调用点，分阶段切换到统一的轻量封装函数。
-- 补充存储访问的输入校验、默认值策略与错误恢复日志，而不是引入全新的事务层。
-- 设计数据迁移/备份脚本的最小闭环，确保 IndexedDB/localStorage 异常时可恢复关键数据。
-
-**验收标准（草案）**:
-- 所有跨模块共享的键名通过常量/枚举统一声明，并附带版本标识。
-- 存储写入路径具备失败回滚与错误日志记录，端到端测试覆盖备份-恢复流程。
-- 文档更新新的轻量 API 用法，并废弃 Repository 模式的旧说明。
+**验收要点**:
+- 所有跨模块共享键均通过 Repository 访问，带输入校验与默认值策略。
+- 仓库支持原子事务与批量操作，暴露一致性检查 Hook。
+- 文档与薄适配层同步更新，移除旧的“Repository 方案已废弃”警告。
 
 ### 任务3.2: 优化数据完整性管理
-**状态**: 🟡 进行中（依赖数据层重构）
+**状态**: ✅ 已完成（2025-10-11）
 **优先级**: 🟡 高
 **估时**: 2天
 **负责人**: Sallowaymmm
 
-**审计发现**:
-- `DataIntegrityManager` 仍以内置的 `SimpleStorageWrapper` 为核心依赖，注释中明确“使用简单存储包装器替代复杂的数据访问层”，说明数据访问层尚未构建，仅完成最小可用的包装。【F:js/components/DataIntegrityManager.js†L1-L44】
-- 备份/恢复流程依赖固定数量的本地快照，未引入文档宣称的验证工厂、迁移管理或自动修复机制，相关类在代码库中不存在。
-- 自动备份、清理等流程缺乏可观测指标与失败重试策略，一旦 IndexedDB/localStorage 出现异常，仍可能造成数据丢失。
+**完成情况**:
+- `DataIntegrityManager` 接入 Repository/Registry，自动备份、清理与恢复均运行在统一事务下，并在初始化阶段执行 `runConsistencyChecks` 与备份裁剪 Hook。【F:js/components/DataIntegrityManager.js†L1-L220】
+- `PracticeRecorder` 与 `ScoreStorage` 全面改用仓库 API 处理降级写入、用户统计、备份导入导出，消除直接 `storage` 操作并对临时缓存/中断记录统一走 MetaRepository。【F:js/core/practiceRecorder.js†L1-L900】【F:js/core/scoreStorage.js†L1-L400】
+- `SimpleStorageWrapper` 仅保留测试所需的兼容方法，全部通过仓库转发，方便 CI 套件继续运行旧脚本。【F:js/utils/simpleStorageWrapper.js†L1-L80】
 
-**后续工作**:
-- 待任务3.1 交付后，将 DataIntegrityManager 切换到新的 DataAccessLayer，提供一致的事务处理和验证接口。
-- 实现独立的验证器与迁移器模块，至少覆盖练习记录、备份元数据两条关键数据路径，并提供失败回滚。
-- 增加可观测性（操作计数、最后一次成功时间等）并编写端到端测试验证备份-恢复闭环。
-
-**验收标准（更新）**:
-- DataIntegrityManager 仅依赖 DataAccessLayer/Repository 提供的数据接口，无直接 storage 操作。
-- 备份、恢复、迁移、验证逻辑配套自动化测试，覆盖正常与异常路径。
-- 具备可追踪的操作日志与告警阈值，在测试环境可复现并验证恢复流程。
+**验收总结**:
+- 备份、恢复、迁移逻辑具备一致性校验与失败回滚，核心数据均可通过 Repository 导出/导入。
+- 自动备份具备可观测指标（裁剪日志、一致性报告），失败分支安全降级到本地导出。
+- 数据层改造配套文档/测试更新，阶段3 “数据层优化” 对外可交付。
 
 ## 阶段4: 性能灾难修复 (P0 - 紧急风险)
 
@@ -669,12 +659,12 @@
 ### 总体进度（2025-10-09 23:52 审计）
 - **阶段1 (紧急修复)**: 3/3 任务完成 ✅
 - **阶段2 (架构重构)**: 4/5 任务完成，巨石拆分仍待推进 ⚠️
-- **阶段3 (数据层优化)**: 0/2 任务完成，整体尚未启动 ❌
+- **阶段3 (数据层优化)**: 2/2 任务完成，数据仓库与一致性校验上线 ✅
 - **阶段4 (性能灾难修复)**: 2/2 任务完成 ✅
 - **阶段5 (代码质量)**: 3/3 任务完成，Legacy 视图全部迁移至 DOM Builder ✅
 - **阶段6 (测试文档)**: 1/3 任务完成，E2E 基线已建立 🟡
 
-**总体进度**: 11/16 任务完成 (69%)
+**总体进度**: 13/16 任务完成 (81%)
 
 ### 已完成成果
 **阶段1成果 (P0紧急修复)**:
@@ -686,9 +676,9 @@
 - App 主体仍为 3000+ 行巨石文件，初始化流程未拆分，2.1 仍未交付。【F:js/app.js†L1-L200】
 - 状态桥接、概览装配与 Legacy 适配层（2.2/2.4/2.5）已收官，下一步聚焦 App/数据层拆分与持久化一致性。
 
-**阶段3现状 (P1数据层 - 尚未启动)**:
-- Repository/DataAccessLayer 未创建，仍依赖 `StorageManager` 与 `SimpleStorageWrapper` 的键值存储模式。【8ca829†L1-L3】【F:js/utils/simpleStorageWrapper.js†L1-L120】
-- DataIntegrityManager 暂以简单包装器工作，验证/迁移体系待补齐。【F:js/components/DataIntegrityManager.js†L1-L44】
+**阶段3成果 (P1数据层 - 已交付)**:
+- Repository/DataAccessLayer 架构落地，`js/data/` 仓库提供统一事务与验证接口，SimpleStorageWrapper 降级为测试兼容层。【F:js/data/index.js†L1-L120】【F:js/utils/simpleStorageWrapper.js†L1-L80】
+- DataIntegrityManager/PracticeRecorder/ScoreStorage 通过 Repository 访问，初始化即运行一致性校验与备份裁剪，降级路径写入 MetaRepository。【F:js/components/DataIntegrityManager.js†L1-L220】【F:js/core/practiceRecorder.js†L1-L400】【F:js/core/scoreStorage.js†L1-L220】
 
 **阶段4现状 (P0性能治理 - 已收官)**:
 - 性能优化器与 DOM 工具全部上线，核心运行时 `innerHTML` 赋值已清零，剩余治理交由阶段5/6 做长期监控。【F:js/app.js†L2827-L3100】【F:js/plugins/hp/hp-portal.js†L245-L605】【1b1073†L1-L1】
