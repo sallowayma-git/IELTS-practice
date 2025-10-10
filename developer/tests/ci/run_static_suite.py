@@ -211,6 +211,25 @@ def run_checks() -> Tuple[List[dict], bool]:
             results.append(_format_result("设置按钮覆盖", settings_passed, settings_detail))
             all_passed &= settings_passed
 
+    practice_fixture = REPO_ROOT / "templates" / "ci-practice-fixtures" / "analysis-of-fear.html"
+    fixture_exists, fixture_detail = _ensure_exists(practice_fixture)
+    results.append(_format_result("练习页面测试模板存在性", fixture_exists, fixture_detail))
+    all_passed &= fixture_exists
+
+    if fixture_exists:
+        fixture_doctype, doctype_detail = _check_html_doctype(practice_fixture)
+        results.append(_format_result("练习模板 Doctype", fixture_doctype, doctype_detail))
+        all_passed &= fixture_doctype
+
+        fixture_checks = {
+            "包含 PRACTICE_COMPLETE 消息": "PRACTICE_COMPLETE",
+            "包含 practicePageEnhancer 钩子": "practicePageEnhancer"
+        }
+        for label, snippet in fixture_checks.items():
+            check_passed, check_detail = _check_contains(practice_fixture, snippet)
+            results.append(_format_result(f"练习模板: {label}", check_passed, check_detail))
+            all_passed &= check_passed
+
     return results, all_passed
 
 

@@ -9,13 +9,19 @@ class TutorialSystem {
         this.currentTutorial = null;
         this.overlay = null;
         this.tutorials = this.initializeTutorials();
-        
+        this._hasVisitedFallback = false;
+        this.completedTutorials = [];
+        this._completedTutorialsLoaded = false;
+
         this.init();
     }
-    
+
     init() {
         this.setupEventListeners();
         this.checkFirstVisit();
+        this.refreshCompletedTutorials().catch(error => {
+            console.error('[TutorialSystem] 加载教程进度失败:', error);
+        });
     }
     
     /**
@@ -182,17 +188,51 @@ class TutorialSystem {
      * 检查是否首次访问
      */
     checkFirstVisit() {
-        const hasVisited = window.storage?.get('has_visited', false);
-        if (!hasVisited) {
-            // 延迟显示首次访问教程
+        if (window.storage && typeof window.storage.get === 'function') {
+            window.storage.get('has_visited', false)
+                .then(hasVisited => {
+                    if (!hasVisited) {
+                        setTimeout(() => {
+                            this.start('firstVisit');
+                        }, 2000);
+
+                        window.storage.set('has_visited', true).catch(error => {
+                            console.error('[TutorialSystem] 标记首次访问失败:', error);
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('[TutorialSystem] 读取首次访问状态失败:', error);
+                });
+            return;
+        }
+
+        if (!this._hasVisitedFallback) {
             setTimeout(() => {
                 this.start('firstVisit');
             }, 2000);
-            
-            window.storage?.set('has_visited', true);
+            this._hasVisitedFallback = true;
         }
     }
-    
+
+    async refreshCompletedTutorials() {
+        if (window.storage && typeof window.storage.get === 'function') {
+            try {
+                const stored = await window.storage.get('completed_tutorials', []);
+                this.completedTutorials = Array.isArray(stored) ? stored : [];
+            } catch (error) {
+                console.error('[TutorialSystem] 获取已完成教程列表失败:', error);
+                this.completedTutorials = [];
+            } finally {
+                this._completedTutorialsLoaded = true;
+            }
+            return;
+        }
+
+        this.completedTutorials = Array.isArray(this.completedTutorials) ? this.completedTutorials : [];
+        this._completedTutorialsLoaded = true;
+    }
+
     /**
      * 开始教程
      */
@@ -501,18 +541,35 @@ class TutorialSystem {
     /**
      * 完成教程
      */
-    completeTutorial() {
+    async completeTutorial() {
         if (window.showMessage) {
             window.showMessage('教程完成！您现在可以开始使用系统了。', 'success');
         }
-        
+
         // 记录教程完成状态
-        const completedTutorials = window.storage?.get('completed_tutorials', []);
-        if (this.currentTutorial && !completedTutorials.includes(this.currentTutorial.name)) {
-            completedTutorials.push(this.currentTutorial.name);
-            window.storage?.set('completed_tutorials', completedTutorials);
+        if (this.currentTutorial) {
+            const tutorialName = this.currentTutorial.name;
+            if (window.storage && typeof window.storage.get === 'function') {
+                try {
+                    const existing = await window.storage.get('completed_tutorials', []);
+                    const list = Array.isArray(existing) ? existing : [];
+                    if (!list.includes(tutorialName)) {
+                        list.push(tutorialName);
+                        await window.storage.set('completed_tutorials', list);
+                    }
+                    this.completedTutorials = list;
+                    this._completedTutorialsLoaded = true;
+                } catch (error) {
+                    console.error('[TutorialSystem] 保存教程完成状态失败:', error);
+                }
+            } else {
+                if (!this.completedTutorials.includes(tutorialName)) {
+                    this.completedTutorials.push(tutorialName);
+                }
+                this._completedTutorialsLoaded = true;
+            }
         }
-        
+
         this.stop();
     }
     
@@ -532,18 +589,37 @@ class TutorialSystem {
      * 检查教程是否已完成
      */
     isTutorialCompleted(tutorialKey) {
-        const completedTutorials = window.storage?.get('completed_tutorials', []);
         const tutorial = this.tutorials[tutorialKey];
-        return tutorial && completedTutorials.includes(tutorial.name);
+        if (!tutorial) {
+            return false;
+        }
+
+        if (!this._completedTutorialsLoaded) {
+            this.refreshCompletedTutorials().catch(error => {
+                console.error('[TutorialSystem] 异步刷新教程状态失败:', error);
+            });
+        }
+
+        return this.completedTutorials.includes(tutorial.name);
     }
-    
+
     /**
      * 重置教程状态
      */
-    resetTutorialProgress() {
-        window.storage?.set('completed_tutorials', []);
-        window.storage?.set('has_visited', false);
-        
+    async resetTutorialProgress() {
+        if (window.storage && typeof window.storage.set === 'function') {
+            try {
+                await window.storage.set('completed_tutorials', []);
+                await window.storage.set('has_visited', false);
+            } catch (error) {
+                console.error('[TutorialSystem] 重置教程状态失败:', error);
+            }
+        }
+
+        this.completedTutorials = [];
+        this._completedTutorialsLoaded = true;
+        this._hasVisitedFallback = false;
+
         if (window.showMessage) {
             window.showMessage('教程进度已重置', 'info');
         }

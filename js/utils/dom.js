@@ -98,8 +98,19 @@ class DOMBuilder {
     create(tag, attributes = {}, children = []) {
         const element = document.createElement(tag);
 
+        // 兼容旧调用：传入 null/undefined/非对象属性时直接跳过属性设置
+        const hasDOMNode = typeof Node !== 'undefined' && attributes instanceof Node;
+        const isPlainObject = attributes && typeof attributes === 'object' && !Array.isArray(attributes) && !hasDOMNode;
+        const normalizedAttributes = isPlainObject ? attributes : {};
+
+        // 如果第二个参数实际是子节点，进行回退处理
+        const providedChildren = arguments.length >= 3;
+        if (!isPlainObject && attributes != null && !providedChildren) {
+            children = attributes;
+        }
+
         // 设置属性
-        for (const [key, value] of Object.entries(attributes)) {
+        for (const [key, value] of Object.entries(normalizedAttributes)) {
             if (key === 'className') {
                 element.className = value;
             } else if (key === 'dataset') {

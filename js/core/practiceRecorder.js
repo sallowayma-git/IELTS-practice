@@ -38,7 +38,9 @@ class PracticeRecorder {
 
         // 页面卸载时保存数据 - 全局事件必须使用原生 addEventListener
         window.addEventListener('beforeunload', () => {
-            this.saveAllSessions();
+            this.saveAllSessions().catch(error => {
+                console.error('[PracticeRecorder] 页面关闭时保存会话失败:', error);
+            });
         });
     }
 
@@ -93,7 +95,9 @@ class PracticeRecorder {
                 this.handleSessionProgress(data);
                 break;
             case 'session_completed':
-                this.handleSessionCompleted(data);
+                this.handleSessionCompleted(data).catch(error => {
+                    console.error('[PracticeRecorder] 会话完成处理失败:', error);
+                });
                 break;
             case 'session_paused':
                 this.handleSessionPaused(data);
@@ -139,7 +143,9 @@ class PracticeRecorder {
         
         // 存储会话
         this.activeSessions.set(examId, sessionData);
-        this.saveActiveSessions();
+        this.saveActiveSessions().catch(error => {
+            console.error('[PracticeRecorder] 保存活动会话失败:', error);
+        });
         
         // 设置会话监听器
         this.setupSessionListener(examId);
@@ -169,7 +175,9 @@ class PracticeRecorder {
             }
             
             this.activeSessions.set(examId, session);
-            this.saveActiveSessions();
+            this.saveActiveSessions().catch(error => {
+                console.error('[PracticeRecorder] 保存活动会话失败:', error);
+            });
             
             console.log(`Session confirmed started: ${examId}`);
         }
@@ -192,7 +200,7 @@ class PracticeRecorder {
         }
         
         this.activeSessions.set(examId, session);
-        
+
         // 触发进度事件
         this.dispatchSessionEvent('sessionProgress', { examId, progress });
     }
@@ -200,11 +208,11 @@ class PracticeRecorder {
     /**
      * 处理会话完成
      */
-    handleSessionCompleted(data) {
+    async handleSessionCompleted(data) {
         const { examId, results } = data;
-        
+
         if (!this.activeSessions.has(examId)) return;
-        
+
         let session = this.activeSessions.get(examId);
         const endTime = new Date().toISOString();
         
@@ -230,21 +238,22 @@ class PracticeRecorder {
             createdAt: endTime
         };
         
-        // 保存练习记录
-        this.savePracticeRecord(practiceRecord);
-        
-        // 更新用户统计
-        this.updateUserStats(practiceRecord);
-        
-        // 清理活动会话
-        this.endPracticeSession(examId);
-        
-        console.log(`Practice session completed: ${examId}`);
-        
-        // 触发完成事件
-        this.dispatchSessionEvent('sessionCompleted', { examId, practiceRecord });
-        
-        return practiceRecord;
+        try {
+            const savedRecord = await this.savePracticeRecord(practiceRecord) || practiceRecord;
+            await this.updateUserStats(practiceRecord);
+
+            this.endPracticeSession(examId);
+
+            console.log(`Practice session completed: ${examId}`);
+
+            this.dispatchSessionEvent('sessionCompleted', { examId, practiceRecord: savedRecord });
+
+            return savedRecord;
+        } catch (error) {
+            console.error(`[PracticeRecorder] 处理完成会话时出错:`, error);
+            await this.saveToTemporaryStorage(practiceRecord);
+            return practiceRecord;
+        }
     }
 
     /**
@@ -260,7 +269,9 @@ class PracticeRecorder {
         session.lastActivity = new Date().toISOString();
         
         this.activeSessions.set(examId, session);
-        this.saveActiveSessions();
+        this.saveActiveSessions().catch(error => {
+            console.error('[PracticeRecorder] 保存活动会话失败:', error);
+        });
         
         console.log(`Session paused: ${examId}`);
     }
@@ -278,7 +289,9 @@ class PracticeRecorder {
         session.lastActivity = new Date().toISOString();
         
         this.activeSessions.set(examId, session);
-        this.saveActiveSessions();
+        this.saveActiveSessions().catch(error => {
+            console.error('[PracticeRecorder] 保存活动会话失败:', error);
+        });
         
         console.log(`Session resumed: ${examId}`);
     }
@@ -297,7 +310,9 @@ class PracticeRecorder {
         session.lastActivity = new Date().toISOString();
         
         this.activeSessions.set(examId, session);
-        this.saveActiveSessions();
+        this.saveActiveSessions().catch(error => {
+            console.error('[PracticeRecorder] 保存活动会话失败:', error);
+        });
         
         console.error(`Session error for ${examId}:`, error);
         
@@ -333,13 +348,17 @@ class PracticeRecorder {
                 createdAt: endTime
             };
             
-            this.saveInterruptedRecord(interruptedRecord);
+            this.saveInterruptedRecord(interruptedRecord).catch(error => {
+                console.error('[PracticeRecorder] 保存中断记录失败:', error);
+            });
         }
         
         // 清理会话
         this.activeSessions.delete(examId);
         this.cleanupSessionListener(examId);
-        this.saveActiveSessions();
+        this.saveActiveSessions().catch(error => {
+            console.error('[PracticeRecorder] 保存活动会话失败:', error);
+        });
         
         console.log(`Practice session ended: ${examId} (${reason})`);
         
@@ -403,137 +422,117 @@ class PracticeRecorder {
         if (this.autoSaveTimer) {
             clearInterval(this.autoSaveTimer);
         }
-        
+
         this.autoSaveTimer = setInterval(() => {
-            this.saveAllSessions();
+            this.saveAllSessions().catch(error => {
+                console.error('[PracticeRecorder] 自动保存失败:', error);
+            });
         }, this.autoSaveInterval);
     }
 
     /**
      * 保存所有会话
      */
-    saveAllSessions() {
-        this.saveActiveSessions();
-        console.log('Auto-saved all active sessions');
+    async saveAllSessions() {
+        try {
+            await this.saveActiveSessions();
+            console.log('Auto-saved all active sessions');
+        } catch (error) {
+            console.error('[PracticeRecorder] 保存活动会话失败:', error);
+        }
     }
 
     /**
      * 保存活动会话到存储
      */
-    saveActiveSessions() {
+    async saveActiveSessions() {
         const sessionsArray = Array.from(this.activeSessions.values());
-        storage.set('active_sessions', sessionsArray);
+        await storage.set('active_sessions', sessionsArray);
     }
 
     /**
      * 保存练习记录
      */
-    savePracticeRecord(record) {
+    async savePracticeRecord(record) {
         const maxRetries = 3;
-        let attempt = 0;
-        
-        while (attempt < maxRetries) {
-            attempt++;
-            
+
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
                 console.log(`[PracticeRecorder] 开始保存练习记录(尝试 ${attempt}/${maxRetries}):`, record.id);
-                
-                // 首先尝试使用ScoreStorage保存记录
+
                 if (this.scoreStorage && typeof this.scoreStorage.savePracticeRecord === 'function') {
-                    const savedRecord = this.scoreStorage.savePracticeRecord(record);
+                    const savedRecord = await this.scoreStorage.savePracticeRecord(record);
                     console.log(`[PracticeRecorder] ScoreStorage保存成功: ${savedRecord.id}`);
-                    
-                    // 验证保存是否真的成功
-                    if (this.verifyRecordSaved(savedRecord.id)) {
+
+                    if (await this.verifyRecordSaved(savedRecord.id)) {
                         console.log('[PracticeRecorder] 记录保存验证成功');
                         return savedRecord;
-                    } else {
-                        console.warn('[PracticeRecorder] ScoreStorage保存验证失败，尝试降级保存');
-                        throw new Error('ScoreStorage save verification failed');
                     }
-                } else {
-                    console.warn('[PracticeRecorder] ScoreStorage不可用，使用降级保存');
-                    throw new Error('ScoreStorage not available');
+
+                    console.warn('[PracticeRecorder] ScoreStorage保存验证失败，尝试降级保存');
+                    throw new Error('ScoreStorage save verification failed');
                 }
+
+                console.warn('[PracticeRecorder] ScoreStorage不可用，使用降级保存');
+                throw new Error('ScoreStorage not available');
             } catch (error) {
                 console.error(`[PracticeRecorder] ScoreStorage保存失败 (尝试 ${attempt}):`, error);
-                
-                // 如果是最后一次尝试或者是严重错误，使用降级保存
+
                 if (attempt === maxRetries || this.isCriticalError(error)) {
-                    return this.fallbackSavePracticeRecord(record);
+                    return await this.fallbackSavePracticeRecord(record);
                 }
-                
-                // 等待一段时间后重试
-                if (attempt < maxRetries) {
-                    console.log(`[PracticeRecorder] 等待 ${attempt * 100}ms 后重试...`);
-                    // 同步等待（在实际应用中可能需要异步处理）
-                    const start = Date.now();
-                    while (Date.now() - start < attempt * 100) {
-                        // 简单的同步等待
-                    }
-                }
+
+                const delay = attempt * 100;
+                console.log(`[PracticeRecorder] 等待 ${delay}ms 后重试...`);
+                await this.wait(delay);
             }
         }
-        
-        // 如果所有尝试都失败，使用降级保存
-        return this.fallbackSavePracticeRecord(record);
+
+        return await this.fallbackSavePracticeRecord(record);
     }
 
     /**
      * 降级保存练习记录
      */
-    fallbackSavePracticeRecord(record) {
+    async fallbackSavePracticeRecord(record) {
         try {
             console.log('[PracticeRecorder] 使用降级保存方法');
-            
-            // 标准化记录格式，确保与ScoreStorage兼容
+
             const standardizedRecord = this.standardizeRecordForFallback(record);
-            
-            let records = [...storage.get('practice_records', [])];
+
+            const existing = await storage.get('practice_records', []);
+            let records = Array.isArray(existing) ? [...existing] : [];
             console.log('[PracticeRecorder] 当前记录数量:', records.length);
 
-            // 检查是否已存在相同ID的记录
-            const existingIndex = records.findIndex(r => r.id === standardizedRecord.id);
+            const existingIndex = records.findIndex(r => r && r.id === standardizedRecord.id);
             if (existingIndex !== -1) {
                 console.log('[PracticeRecorder] 发现重复记录，更新现有记录');
                 records[existingIndex] = standardizedRecord;
             } else {
-                // 新记录添加到开头（保持时间顺序）
                 records.unshift(standardizedRecord);
             }
 
-            // 限制记录数量
             if (records.length > 1000) {
                 records = records.slice(0, 1000);
             }
 
-            // 保存记录
-            const saveSuccess = storage.set('practice_records', records);
+            const saveSuccess = await storage.set('practice_records', records);
             if (!saveSuccess) {
                 throw new Error('Storage.set returned false');
             }
-            
+
             console.log(`[PracticeRecorder] 降级保存成功: ${standardizedRecord.id}`);
-            
-            // 验证保存是否成功
-            if (this.verifyRecordSaved(standardizedRecord.id)) {
+
+            if (await this.verifyRecordSaved(standardizedRecord.id)) {
                 console.log('[PracticeRecorder] 降级保存验证成功');
-                
-                // 手动更新用户统计（因为ScoreStorage不可用）
-                this.updateUserStatsManually(standardizedRecord);
-                
+                await this.updateUserStatsManually(standardizedRecord);
                 return standardizedRecord;
-            } else {
-                throw new Error('Fallback save verification failed');
             }
-            
+
+            throw new Error('Fallback save verification failed');
         } catch (error) {
             console.error('[PracticeRecorder] 降级保存失败:', error);
-            
-            // 最后的备用方案：保存到临时存储
-            this.saveToTemporaryStorage(record);
-            
-            // 抛出错误，但不阻止用户继续使用
+            await this.saveToTemporaryStorage(record);
             throw new Error(`All save methods failed: ${error.message}`);
         }
     }
@@ -588,11 +587,11 @@ class PracticeRecorder {
     /**
      * 验证记录是否已保存
      */
-    verifyRecordSaved(recordId) {
+    async verifyRecordSaved(recordId) {
         try {
-            const records = storage.get('practice_records', []);
-            const found = records.find(r => r.id === recordId);
-            return !!found;
+            const records = await storage.get('practice_records', []);
+            const list = Array.isArray(records) ? records : [];
+            return list.some(r => r && r.id === recordId);
         } catch (error) {
             console.error('[PracticeRecorder] 验证记录保存时出错', error);
             return false;
@@ -608,18 +607,22 @@ class PracticeRecorder {
             'localStorage not available',
             'Storage quota exceeded'
         ];
-        
-        return criticalMessages.some(msg => 
+
+        return criticalMessages.some(msg =>
             error.message && error.message.includes(msg)
         );
+    }
+
+    wait(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 
     /**
      * 手动更新用户统计
      */
-    updateUserStatsManually(practiceRecord) {
+    async updateUserStatsManually(practiceRecord) {
         try {
-            const stats = storage.get('user_stats', {
+            const stats = await storage.get('user_stats', {
                 totalPractices: 0,
                 totalTimeSpent: 0,
                 averageScore: 0,
@@ -629,21 +632,21 @@ class PracticeRecorder {
                 lastPracticeDate: null,
                 achievements: []
             });
-            
+
             // 更新基础统计
             stats.totalPractices += 1;
             stats.totalTimeSpent += practiceRecord.duration;
-            
+
             // 计算平均分数
             const totalScore = (stats.averageScore * (stats.totalPractices - 1)) + practiceRecord.accuracy;
             stats.averageScore = totalScore / stats.totalPractices;
-            
+
             // 更新时间戳
             stats.updatedAt = new Date().toISOString();
-            
-            storage.set('user_stats', stats);
+
+            await storage.set('user_stats', stats);
             console.log('[PracticeRecorder] 用户统计手动更新完成');
-            
+
         } catch (error) {
             console.error('[PracticeRecorder] 手动更新用户统计失败:', error);
         }
@@ -652,21 +655,22 @@ class PracticeRecorder {
     /**
      * 保存到临时存储
      */
-    saveToTemporaryStorage(record) {
+    async saveToTemporaryStorage(record) {
         try {
-            const tempRecords = [...storage.get('temp_practice_records', [])];
+            const existing = await storage.get('temp_practice_records', []);
+            const tempRecords = Array.isArray(existing) ? [...existing] : [];
             tempRecords.push({
                 ...record,
                 tempSavedAt: new Date().toISOString(),
                 needsRecovery: true
             });
-            
+
             // 限制临时记录数量
             const finalTempRecords = tempRecords.length > 50 ? tempRecords.slice(-50) : tempRecords;
 
-            storage.set('temp_practice_records', finalTempRecords);
+            await storage.set('temp_practice_records', finalTempRecords);
             console.log('[PracticeRecorder] 记录已保存到临时存储:', record.id);
-            
+
         } catch (error) {
             console.error('[PracticeRecorder] 临时存储也失败', error);
         }
@@ -675,22 +679,22 @@ class PracticeRecorder {
     /**
      * 保存中断记录
      */
-    saveInterruptedRecord(record) {
-        const records = [...storage.get('interrupted_records', [])];
+    async saveInterruptedRecord(record) {
+        const existing = await storage.get('interrupted_records', []);
+        const records = Array.isArray(existing) ? [...existing] : [];
         records.push(record);
-        
-        // 保持最多100条中断记录
+
         const finalRecords = records.length > 100 ? records.slice(-100) : records;
 
-        storage.set('interrupted_records', finalRecords);
+        await storage.set('interrupted_records', finalRecords);
         console.log(`Interrupted record saved: ${record.id}`);
     }
 
     /**
      * 更新用户统计
      */
-    updateUserStats(practiceRecord) {
-        const stats = storage.get('user_stats', {
+    async updateUserStats(practiceRecord) {
+        const stats = await storage.get('user_stats', {
             totalPractices: 0,
             totalTimeSpent: 0,
             averageScore: 0,
@@ -770,7 +774,7 @@ class PracticeRecorder {
             stats.lastPracticeDate = today;
         }
         
-        storage.set('user_stats', stats);
+        await storage.set('user_stats', stats);
         console.log('User stats updated');
     }
 
@@ -784,20 +788,21 @@ class PracticeRecorder {
     /**
      * 获取练习记录
      */
-    getPracticeRecords(filters = {}) {
+    async getPracticeRecords(filters = {}) {
         try {
-            return this.scoreStorage.getPracticeRecords(filters);
+            return await this.scoreStorage.getPracticeRecords(filters);
         } catch (error) {
             console.error('Failed to get practice records from ScoreStorage:', error);
-            
+
             // 降级处理
-            const records = storage.get('practice_records', []);
-            
+            const records = await storage.get('practice_records', []);
+            const list = Array.isArray(records) ? records : [];
+
             if (Object.keys(filters).length === 0) {
-                return records;
+                return list;
             }
-            
-            return records.filter(record => {
+
+            return list.filter(record => {
                 if (filters.examId && record.examId !== filters.examId) return false;
                 if (filters.category && record.metadata.category !== filters.category) return false;
                 if (filters.startDate && new Date(record.startTime) < new Date(filters.startDate)) return false;
@@ -813,14 +818,14 @@ class PracticeRecorder {
     /**
      * 获取用户统计
      */
-    getUserStats() {
+    async getUserStats() {
         try {
-            return this.scoreStorage.getUserStats();
+            return await this.scoreStorage.getUserStats();
         } catch (error) {
             console.error('Failed to get user stats from ScoreStorage:', error);
-            
+
             // 降级处理
-            return storage.get('user_stats', {
+            return await storage.get('user_stats', {
                 totalPractices: 0,
                 totalTimeSpent: 0,
                 averageScore: 0,
@@ -925,50 +930,51 @@ class PracticeRecorder {
     /**
      * 处理真实练习数据（新增方法）
      */
-    handleRealPracticeData(examId, realData) {
+    async handleRealPracticeData(examId, realData) {
         console.log('[PracticeRecorder] 处理真实练习数据:', examId, realData);
-        
+
         try {
             // 验证数据完整性
             const validatedData = this.validateRealData(realData);
-            
+
             if (!validatedData) {
                 console.warn('[PracticeRecorder] 数据验证失败，使用模拟数据');
-                return this.handleFallbackData(examId);
+                return await this.handleFallbackData(examId);
             }
-            
+
             // 获取题目信息
-            const examIndex = storage.get('exam_index', []);
-            const exam = examIndex.find(e => e.id === examId);
-            
+            const examIndex = await storage.get('exam_index', []);
+            const examList = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
+            const exam = examList.find(e => e.id === examId);
+
             if (!exam) {
                 console.error('[PracticeRecorder] 无法找到题目信息:', examId);
                 return;
             }
-            
+
             // 构造增强的练习记录
             const practiceRecord = this.createRealPracticeRecord(exam, validatedData);
-            
+
             // 保存记录 - 这里ScoreStorage会自动更新用户统计
-            this.savePracticeRecord(practiceRecord);
-            
+            const savedRecord = await this.savePracticeRecord(practiceRecord) || practiceRecord;
+
             // 清理活动会话
             this.activeSessions.delete(examId);
-            this.saveActiveSessions();
-            
+            await this.saveActiveSessions();
+
             // 触发完成事件
-            this.dispatchSessionEvent('realDataProcessed', { 
-                examId, 
-                practiceRecord,
+            this.dispatchSessionEvent('realDataProcessed', {
+                examId,
+                practiceRecord: savedRecord,
                 dataSource: 'real'
             });
-            
-            console.log('[PracticeRecorder] 真实数据处理完成:', practiceRecord.id);
-            return practiceRecord;
-            
+
+            console.log('[PracticeRecorder] 真实数据处理完成:', savedRecord.id);
+            return savedRecord;
+
         } catch (error) {
             console.error('[PracticeRecorder] 真实数据处理失败:', error);
-            return this.handleFallbackData(examId);
+            return await this.handleFallbackData(examId);
         }
     }
 
@@ -1207,9 +1213,9 @@ class PracticeRecorder {
     /**
      * 处理降级数据（当真实数据不可用时）
      */
-    handleFallbackData(examId) {
+    async handleFallbackData(examId) {
         console.log('[PracticeRecorder] 使用降级数据处理');
-        
+
         // 检查是否有活动会话
         if (this.activeSessions.has(examId)) {
             let session = this.activeSessions.get(examId);
@@ -1218,7 +1224,7 @@ class PracticeRecorder {
             const simulatedResults = this.generateSimulatedResults(session);
             
             // 使用现有的完成处理逻辑
-            return this.handleSessionCompleted({
+            return await this.handleSessionCompleted({
                 examId: examId,
                 results: simulatedResults
             });
@@ -1278,44 +1284,45 @@ class PracticeRecorder {
      */
     async recoverTemporaryRecords() {
         try {
-            const tempRecords = storage.get('temp_practice_records', []);
-            
-            if (tempRecords.length === 0) {
+            const tempRecords = await storage.get('temp_practice_records', []);
+            const list = Array.isArray(tempRecords) ? tempRecords : [];
+
+            if (list.length === 0) {
                 console.log('[PracticeRecorder] 没有需要恢复的临时记录');
                 return;
             }
-            
-            console.log(`[PracticeRecorder] 发现 ${tempRecords.length} 条临时记录，开始恢复`);
-            
+
+            console.log(`[PracticeRecorder] 发现 ${list.length} 条临时记录，开始恢复`);
+
             let recoveredCount = 0;
             const failedRecords = [];
-            
-            tempRecords.forEach(tempRecord => {
+
+            for (const tempRecord of list) {
                 try {
                     // 移除临时标识
                     const { tempSavedAt, needsRecovery, ...cleanRecord } = tempRecord;
-                    
+
                     // 尝试正常保存
-                    this.savePracticeRecord(cleanRecord);
+                    await this.savePracticeRecord(cleanRecord);
                     recoveredCount++;
-                    
+
                     console.log(`[PracticeRecorder] 恢复记录成功: ${cleanRecord.id}`);
-                    
+
                 } catch (error) {
                     console.error(`[PracticeRecorder] 恢复记录失败: ${tempRecord.id}`, error);
                     failedRecords.push(tempRecord);
                 }
-            });
-            
+            }
+
             // 清理已恢复的临时记录
             if (failedRecords.length === 0) {
-                storage.remove('temp_practice_records');
+                await storage.remove('temp_practice_records');
                 console.log(`[PracticeRecorder] 所有${recoveredCount} 条临时记录恢复成功`);
             } else {
-                storage.set('temp_practice_records', failedRecords);
+                await storage.set('temp_practice_records', failedRecords);
                 console.log(`[PracticeRecorder] 恢复了${recoveredCount} 条记录，${failedRecords.length} 条失败`);
             }
-            
+
         } catch (error) {
             console.error('[PracticeRecorder] 恢复临时记录时出错', error);
         }
@@ -1324,7 +1331,7 @@ class PracticeRecorder {
     /**
      * 获取数据完整性报告
      */
-    getDataIntegrityReport() {
+    async getDataIntegrityReport() {
         try {
             const report = {
                 timestamp: new Date().toISOString(),
@@ -1349,21 +1356,23 @@ class PracticeRecorder {
             };
             
             // 检查练习记录
-            const records = storage.get('practice_records', []);
-            report.practiceRecords.total = records.length;
-            
-            records.forEach(record => {
+            const records = await storage.get('practice_records', []);
+            const recordList = Array.isArray(records) ? records : [];
+            report.practiceRecords.total = recordList.length;
+
+            recordList.forEach(record => {
                 if (this.validateRecordIntegrity(record)) {
                     report.practiceRecords.valid++;
                 } else {
                     report.practiceRecords.corrupted++;
                 }
             });
-            
+
             // 检查临时记录
-            const tempRecords = storage.get('temp_practice_records', []);
-            report.temporaryRecords.total = tempRecords.length;
-            report.temporaryRecords.needsRecovery = tempRecords.filter(r => r.needsRecovery).length;
+            const tempRecords = await storage.get('temp_practice_records', []);
+            const tempList = Array.isArray(tempRecords) ? tempRecords : [];
+            report.temporaryRecords.total = tempList.length;
+            report.temporaryRecords.needsRecovery = tempList.filter(r => r && r.needsRecovery).length;
             
             // 检查活动会话
             const now = Date.now();
@@ -1380,14 +1389,14 @@ class PracticeRecorder {
             
             // 检查存储状态
             try {
-                const storageInfo = storage.getStorageInfo();
+                const storageInfo = await storage.getStorageInfo();
                 report.storage.quota = storageInfo;
             } catch (error) {
                 report.storage.available = false;
             }
-            
+
             return report;
-            
+
         } catch (error) {
             console.error('[PracticeRecorder] 生成完整性报告失败', error);
             return null;
@@ -1442,8 +1451,10 @@ class PracticeRecorder {
         this.sessionListeners.clear();
         
         // 保存所有数据
-        this.saveAllSessions();
-        
+        this.saveAllSessions().catch(error => {
+            console.error('[PracticeRecorder] 销毁时保存会话失败:', error);
+        });
+
         console.log('PracticeRecorder destroyed');
     }
 }

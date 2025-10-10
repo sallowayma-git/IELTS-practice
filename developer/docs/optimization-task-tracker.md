@@ -36,6 +36,15 @@
 - 概览视图依旧通过 `OverviewView`/`DOMAdapter` 输出卡片与入口按钮，未检测到回退到字符串模板的路径，阶段 2.4 验收通过。【F:js/main.js†L560-L760】
 - `LegacyStateBridge` 保持 `notifyFromApp` 去重与属性描述符写入防护，legacy 入口通过桥接层推送状态，阶段 2.5 目标持续生效。【F:js/core/legacyStateBridge.js†L132-L240】
 
+### 2025-10-10 11:30 审计摘要
+- `PracticeRecorder.savePracticeRecord`
+### 2025-10-10 15:40 修复记录（异步持久化回归）
+- `PracticeRecorder` 主链路改为全异步：`savePracticeRecord`、降级写入与验证全部 `await` ScoreStorage/StorageManager，重试节奏通过 Promise 延迟实现，完成事件在广播前等待持久化结束并在失败时写入临时存储。【F:js/core/practiceRecorder.js†L416-L540】【F:js/core/practiceRecorder.js†L560-L705】【F:js/core/practiceRecorder.js†L928-L1004】
+- UI 层同步存储依赖清零：练习历史导出/导入兜底、教程首访与完成记录、键盘快捷键的快速练习与搜索均改为异步读取 `window.storage` 并在降级时回退本地缓存，防止 Promise 被当成数组或布尔值使用。【F:js/components/practiceHistoryEnhancer.js†L224-L304】【F:js/components/practiceHistory.js†L388-L412】【F:js/utils/tutorialSystem.js†L185-L614】【F:js/utils/keyboardShortcuts.js†L531-L634】
+- 备份/导出流程同步适配：`DataBackupManager` 检查 `PracticeRecorder.getPracticeRecords()` Promise，确保导出脚本在混合存储模式下依旧输出结构化记录；静态 CI 全量通过验证练习提交流程与导出流程。【F:js/utils/dataBackupManager.js†L62-L92】【developer/tests/ci/run_static_suite.py†L1-L200】
+ 仍把 `ScoreStorage.savePracticeRecord` 当同步函数调用，未等待 Promise 结果；后续的 `verifyRecordSaved` 与降级路径继续同步读取 `storage.get`，实测得到的是 Promise 对象，`find`/扩展符直接抛错，导致验证失败并落入临时存储降级流程，真实保存完全依赖 ScoreStorage 自身异步成功，存在记录重复写入/误报失败风险。【F:js/core/practiceRecorder.js†L431-L520】【F:js/core/practiceRecorder.js†L591-L667】【F:js/core/scoreStorage.js†L149-L177】
+- 多个 UI 模块仍以同步方式访问 `window.storage`：练习历史导出分支直接把 Promise 当数组操作、教程系统把 Promise 当布尔值判断首访与完成状态、键盘快捷键在快速练习/搜索时同步读取题库，全部会在 Hybrid 存储生效时静默失败，现网功能隐藏退化严重。【F:js/components/practiceHistoryEnhancer.js†L276-L305】【F:js/utils/tutorialSystem.js†L184-L195】【F:js/utils/tutorialSystem.js†L504-L536】【F:js/utils/keyboardShortcuts.js†L531-L619】
+
 ## 阶段1: 紧急修复 (P0 - 生产风险)
 
 ### 任务1.1: 清理调试代码
@@ -88,6 +97,50 @@
 - ✅ 错误处理逻辑统一
 - ✅ 保持系统稳定性
 
+### 任务1.4: 修复练习记录渲染异常
+**状态**: ✅ 已完成（2025-10-10 11:03 回归）
+**优先级**: 🔴 紧急
+**估时**: 1天
+**负责人**: Sallowaymmm
+
+**问题背景**:
+- 现象：练习完成后 `DOMBuilder.create` 在处理 `null` 属性时抛出 `TypeError: Cannot convert undefined or null to object`，导致练习历史渲染被中断，最新记录无法出现在列表里。
+- 根因：legacy 视图在渲染历史项目时传入 `null` 作为属性占位符，`Object.entries` 未做空值防护即遍历，触发异常并阻断渲染。【F:js/utils/dom.js†L98-L110】
+
+**修复计划（2025-10-10 09:00）**:
+- 放宽 DOM 构建器的第二参数校验，忽略 `null`/`undefined`/`Node` 类型并在未显式传入第三参时退化为子节点集合，保证 legacy 渲染路径不再抛错。【F:js/utils/dom.js†L98-L110】
+- 回归练习流程，确认历史记录节点成功渲染、存储同步事件无异常，并补充静态 QA 检查覆盖其它 `DOMBuilder.create` 调用。【F:js/utils/dom.js†L112-L138】
+
+**回归记录（2025-10-10 11:03）**:
+- 手动执行练习流程：练习结束后历史列表正确渲染，`total-practiced` 统计及时更新，无 `TypeError` 抛出，IndexedDB 同步日志保持正常。
+- 静态 CI 回归：`python developer/tests/ci/run_static_suite.py` 通过，确认 DOM Builder 变更未破坏既有构建或测试脚本。
+
+**新增验证资产（2025-10-10 11:03）**:
+- 从历史提交提取「The Analysis of Fear」练习页，落地为 CI 专用模板 `templates/ci-practice-fixtures/analysis-of-fear.html`，保留 `practicePageEnhancer` 与 `PRACTICE_COMPLETE` 通道供握手与结果上报回归使用。【F:templates/ci-practice-fixtures/analysis-of-fear.html†L1-L30】【F:templates/ci-practice-fixtures/analysis-of-fear.html†L1574-L1580】
+- 在 E2E 套件中新增 `testPracticeSubmissionMessageFlow`，通过拦截 `window.open` 挂载隐藏 iframe，驱动模板提交并校验练习记录状态、历史列表与统计指标同步刷新，为后续重构提供可回归的消息链路保障。【F:developer/tests/js/e2e/appE2ETest.js†L1120-L1245】
+
+**验收标准**:
+- 练习页面提交后，系统能消费 `PRACTICE_COMPLETE` 消息并写入 `practice.records`，历史列表与统计区域即时刷新。
+- 新增模板与 E2E 用例纳入静态 CI 审核，自动发现练习消息链路回归。
+
+### 任务1.5: PracticeRecorder 异步存储兼容修复（新增）
+**状态**: ✅ 已完成（2025-10-10 15:40 回归）
+**优先级**: 🔴 紧急
+**估时**: 1天
+**负责人**: Sallowaymmm
+
+**问题背景**:
+- ScoreStorage 的写入接口已经全面异步化，但 `PracticeRecorder.savePracticeRecord` 仍把 `savePracticeRecord` 当同步方法使用，拿到的是 Promise，再对 `savedRecord.id`、`verifyRecordSaved` 做同步访问，直接触发 `Promise` 上的 `find`/扩展符异常并误判失败。【F:js/core/practiceRecorder.js†L431-L520】【F:js/core/scoreStorage.js†L149-L177】
+- 降级写入与验证同样同步调用 `storage.get`，返回 Promise 后继续当数组/对象处理，最终抛错并落到临时存储，真实数据能否保存完全取决于 ScoreStorage 是否成功，存在重复写入与降级日志刷屏风险。【F:js/core/practiceRecorder.js†L591-L667】
+
+**整改记录（2025-10-10 15:40）**:
+- `PracticeRecorder` 的保存/降级/验证链路改写为 `async/await`，增加指数延迟重试与 `wait()` Promise，确保完成事件广播前真正落盘。【F:js/core/practiceRecorder.js†L416-L540】【F:js/core/practiceRecorder.js†L560-L705】【F:js/core/practiceRecorder.js†L928-L1004】
+- 临时记录恢复、手动统计与活动会话缓存全部异步化，`beforeunload`/自动保存/销毁流程捕获失败写入日志，避免 Promise 泄漏。【F:js/core/practiceRecorder.js†L41-L75】【F:js/core/practiceRecorder.js†L635-L705】【F:js/core/practiceRecorder.js†L1279-L1369】【F:js/core/practiceRecorder.js†L1427-L1456】
+- `DataBackupManager`、练习历史加载与导出流程同步兼容 Promise，CI 静态套件通过确认真实写入、降级与导出链路稳定。【F:js/utils/dataBackupManager.js†L62-L92】【F:js/components/practiceHistory.js†L388-L412】【F:developer/tests/ci/run_static_suite.py†L1-L200】
+
+**验收结果**:
+- ScoreStorage 成功/失败分支均只写入一次，日志不再出现 Promise 对象或降级刷屏，临时记录恢复流程自动清空。
+- 练习完成后历史视图、统计及导出接口均能读取结构化 JSON 数据，E2E 与静态 CI 均保持绿灯。
 ## 阶段2: 架构重构 (P1 - 核心问题)
 
 ### 任务2.1: 简化巨石文件
@@ -105,6 +158,10 @@
 - 划清 App 与 legacy 层的边界，逐步迁移 `js/main.js` 中的全局状态和渲染职责。
 - 将初始化流程拆分为可单测的子模块（状态加载、组件初始化、UI 注入等），并提供清晰的依赖契约。
 - 在拆分过程中保持行为回归测试覆盖（参考阶段6新增的 E2E 测试），防止再度回归为巨石结构。
+
+**推进记录（2025-10-10 11:03）**:
+- 补充练习提交流程的端到端校验，使用隐藏 iframe 复刻真实练习页并验证 `PRACTICE_COMPLETE`→`practice.records`→历史视图的同步链路，确保拆分 `app.js` 时有安全网覆盖跨窗口通信与存储写入。【F:developer/tests/js/e2e/appE2ETest.js†L1120-L1245】
+- 将练习模板固化到 `templates/ci-practice-fixtures/analysis-of-fear.html`，后续重构可直接调用现成资源验证双向通信与数据持久化，不再依赖外部路径配置。【F:templates/ci-practice-fixtures/analysis-of-fear.html†L1-L30】【F:templates/ci-practice-fixtures/analysis-of-fear.html†L1574-L1580】
 
 **验证标准（更新）**:
 - App 主文件行数与职责数量显著下降，关键流程通过模块化单元覆盖。
@@ -233,7 +290,24 @@
 - ✅ 代码复用率提升
 - ✅ 维护复杂度降低
 
-## 阶段3: 数据层优化 (P1 - 核心问题)
+### 任务2.6: 清理 UI 层同步存储依赖（新增）
+**状态**: ✅ 已完成（2025-10-10 15:40 回归）
+**优先级**: 🟡 高
+**估时**: 2天
+**负责人**: Sallowaymmm
+
+**问题背景**:
+- `PracticeHistoryEnhancer` 在导出兜底分支直接把 `window.storage.get` 返回的 Promise 当数组使用，`length`/`JSON.stringify` 均失效，导致无 PracticeRecorder 全局变量时导出必挂。【F:js/components/practiceHistoryEnhancer.js†L276-L305】
+- `TutorialSystem` 与 `KeyboardShortcuts` 延续旧版同步 API，首次访问判定、教程完成记录、快速练习/搜索都在 Promise 上做布尔判断或数组切片，Hybrid 存储启用后功能全部静默失效。【F:js/utils/tutorialSystem.js†L184-L195】【F:js/utils/tutorialSystem.js†L504-L536】【F:js/utils/keyboardShortcuts.js†L531-L619】
+
+**整改记录（2025-10-10 15:40）**:
+- 练习历史导出/详情弹窗改为异步 `await` 存储，并在降级时使用内存缓存，导出前验证结果数组，避免 Promise 直接写入 Blob。【F:js/components/practiceHistoryEnhancer.js†L224-L304】【F:js/components/practiceHistory.js†L388-L412】
+- 教程系统构造函数加载完成教程缓存，首次访问与完成状态通过 Promise 链路写入，新增 `refreshCompletedTutorials` 缓存机制并在 UI 渲染前预热；重置操作、完成回调全部 `await` 存储。【F:js/utils/tutorialSystem.js†L5-L220】【F:js/utils/tutorialSystem.js†L510-L614】
+- 键盘快捷键快速练习/搜索使用异步读取题库并在防抖回调中捕获错误，降级时回退 `window.examIndex` 缓存，搜索结果空态与错误反馈统一处理。【F:js/utils/keyboardShortcuts.js†L531-L634】
+
+**验收结果**:
+- Hybrid 存储模式下教程首访自动弹出、完成记录可持久化，快速练习与搜索不再抛出 Promise 类型错误。
+- 练习历史导出在缺失 PracticeRecorder 时能正常生成 JSON，历史详情弹窗读取 Promise 时无异常。## 阶段3: 数据层优化 (P1 - 核心问题)
 
 ### 任务3.1: 精简存储访问策略（方向调整）
 **状态**: 🟡 待规划（Repository 方案已废弃，2025-10-08）
