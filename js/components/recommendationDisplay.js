@@ -11,25 +11,25 @@ class RecommendationDisplay {
         // 全局引用，供事件委托使用
         window.recommendationDisplay = this;
 
-        this.initialize();
+        this.ready = this.initialize();
     }
 
     /**
      * 初始化推荐显示组件
      */
-    initialize() {
+    async initialize() {
         console.log('RecommendationDisplay component initialized');
-        
+
         // 初始化推荐引擎
         if (window.RecommendationEngine) {
             this.recommendationEngine = new RecommendationEngine();
         }
-        
+
         this.setupEventListeners();
-        this.loadRecommendations();
-        
+        await this.loadRecommendations();
+
         // 定期刷新推荐
-        this.startAutoRefresh();
+        await this.startAutoRefresh();
     }
 
     /**
@@ -47,7 +47,8 @@ class RecommendationDisplay {
             // 刷新推荐按钮
             window.DOM.delegate('click', '.refresh-recommendations', function(e) {
                 e.preventDefault();
-                window.recommendationDisplay.refreshRecommendations();
+                window.recommendationDisplay.refreshRecommendations()
+                    .catch(error => console.error('[RecommendationDisplay] 刷新推荐失败', error));
             });
 
             // 推荐设置按钮
@@ -69,7 +70,8 @@ class RecommendationDisplay {
                 const refreshBtn = e.target.closest('.refresh-recommendations');
                 if (refreshBtn) {
                     e.preventDefault();
-                    this.refreshRecommendations();
+                    this.refreshRecommendations()
+                        .catch(error => console.error('[RecommendationDisplay] 刷新推荐失败', error));
                 }
 
                 const settingsBtn = e.target.closest('.recommendation-settings');
@@ -89,12 +91,23 @@ class RecommendationDisplay {
     }
 
     /**
+     * 并行加载题库与练习记录
+     */
+    async fetchExamData() {
+        const [examIndex = [], practiceRecords = []] = await Promise.all([
+            storage.get('exam_index', []),
+            storage.get('practice_records', [])
+        ]);
+        return { examIndex, practiceRecords };
+    }
+
+    /**
      * 加载个性化推荐
      */
     async loadRecommendations() {
         if (!this.recommendationEngine) {
             console.warn('RecommendationEngine not available');
-            this.showFallbackRecommendations();
+            await this.showFallbackRecommendations();
             return;
         }
 
@@ -341,7 +354,8 @@ class RecommendationDisplay {
         if (!target) return;
 
         if (target.classList.contains('start-practice')) {
-            this.startRecommendedPractice(recommendation);
+            this.startRecommendedPractice(recommendation)
+                .catch(error => console.error('[RecommendationDisplay] 启动推荐练习失败', error));
         } else if (target.classList.contains('view-details')) {
             this.showRecommendationDetails(recommendation);
         }
@@ -350,60 +364,62 @@ class RecommendationDisplay {
     /**
      * 开始推荐的练习
      */
-    startRecommendedPractice(recommendation) {
-        // 根据推荐类型选择合适的题目
-        const examIndex = storage.get('exam_index', []);
-        let targetExams = [];
+    async startRecommendedPractice(recommendation) {
+        try {
+            const { examIndex, practiceRecords } = await this.fetchExamData();
+            let targetExams = [];
 
-        // 根据推荐的分类和题型筛选题目
-        if (recommendation.category === 'mixed') {
-            targetExams = examIndex;
-        } else {
-            targetExams = examIndex.filter(exam => exam.category === recommendation.category);
-        }
+            // 根据推荐的分类和题型筛选题目
+            if (recommendation.category === 'mixed') {
+                targetExams = examIndex;
+            } else {
+                targetExams = examIndex.filter(exam => exam.category === recommendation.category);
+            }
 
-        // 根据题型进一步筛选
-        if (recommendation.questionTypes && recommendation.questionTypes.length > 0) {
-            targetExams = targetExams.filter(exam => {
-                return recommendation.questionTypes.some(type => 
-                    exam.questionTypes && exam.questionTypes.includes(type)
-                );
-            });
-        }
+            // 根据题型进一步筛选
+            if (recommendation.questionTypes && recommendation.questionTypes.length > 0) {
+                targetExams = targetExams.filter(exam => {
+                    return recommendation.questionTypes.some(type =>
+                        exam.questionTypes && exam.questionTypes.includes(type)
+                    );
+                });
+            }
 
-        // 根据难度筛选
-        if (recommendation.difficulty !== 'medium') {
-            targetExams = targetExams.filter(exam => {
-                const examDifficulty = this.getExamDifficulty(exam);
-                return examDifficulty === recommendation.difficulty;
-            });
-        }
+            // 根据难度筛选
+            if (recommendation.difficulty !== 'medium') {
+                targetExams = targetExams.filter(exam => {
+                    const examDifficulty = this.getExamDifficulty(exam);
+                    return examDifficulty === recommendation.difficulty;
+                });
+            }
 
-        if (targetExams.length === 0) {
-            window.showMessage('暂无符合推荐条件的题目', 'warning');
-            return;
-        }
+            if (targetExams.length === 0) {
+                window.showMessage('暂无符合推荐条件的题目', 'warning');
+                return;
+            }
 
-        // 选择最合适的题目
-        const selectedExam = this.selectBestMatchingExam(targetExams, recommendation);
-        
-        // 记录推荐使用
-        this.recordRecommendationUsage(recommendation.id, selectedExam.id);
-        
-        // 开始练习
-        if (window.app && typeof window.app.openExam === 'function') {
-            window.app.openExam(selectedExam.id);
+            // 选择最合适的题目
+            const selectedExam = this.selectBestMatchingExam(targetExams, recommendation, practiceRecords);
+
+            // 记录推荐使用
+            await this.recordRecommendationUsage(recommendation.id, selectedExam.id);
+
+            // 开始练习
+            if (window.app && typeof window.app.openExam === 'function') {
+                window.app.openExam(selectedExam.id);
+            }
+
+            window.showMessage(`开始推荐练习: ${selectedExam.title}`, 'info');
+        } catch (error) {
+            console.error('[RecommendationDisplay] 启动推荐练习失败', error);
+            window.showMessage('无法开始推荐练习，请稍后重试', 'error');
         }
-        
-        window.showMessage(`开始推荐练习: ${selectedExam.title}`, 'info');
     }
 
     /**
      * 选择最匹配的题目
      */
-    selectBestMatchingExam(exams, recommendation) {
-        // 获取用户练习记录
-        const practiceRecords = storage.get('practice_records', []);
+    selectBestMatchingExam(exams, recommendation, practiceRecords) {
         const practiceHistory = new Set(practiceRecords.map(r => r.examId));
 
         // 优先选择未练习过的题目
@@ -512,7 +528,7 @@ class RecommendationDisplay {
     /**
      * 记录推荐使用情况
      */
-    recordRecommendationUsage(recommendationId, examId) {
+    async recordRecommendationUsage(recommendationId, examId) {
         const usageData = {
             recommendationId,
             examId,
@@ -520,23 +536,28 @@ class RecommendationDisplay {
             userId: 'default-user'
         };
 
-        const usageHistory = storage.get('recommendation_usage', []);
+        const usageHistory = await storage.get('recommendation_usage', []);
         usageHistory.push(usageData);
-        
+
         // 只保留最近100条记录
         if (usageHistory.length > 100) {
             usageHistory.splice(0, usageHistory.length - 100);
         }
-        
-        storage.set('recommendation_usage', usageHistory);
+
+        await storage.set('recommendation_usage', usageHistory);
     }
 
     /**
      * 刷新推荐
      */
-    refreshRecommendations() {
-        this.loadRecommendations();
-        window.showMessage('推荐已刷新', 'info');
+    async refreshRecommendations() {
+        try {
+            await this.loadRecommendations();
+            window.showMessage('推荐已刷新', 'info');
+        } catch (error) {
+            console.error('[RecommendationDisplay] 刷新推荐失败', error);
+            window.showMessage('刷新推荐时出错，请稍后重试', 'error');
+        }
     }
 
     /**
@@ -605,27 +626,36 @@ class RecommendationDisplay {
     /**
      * 保存设置
      */
-    saveSettings() {
-        const recCount = document.getElementById('rec-count')?.value || '8';
-        const autoRefresh = document.getElementById('auto-refresh')?.checked || true;
-        const preference = document.querySelector('input[name="preference"]:checked')?.value || 'balanced';
+    async saveSettings() {
+        try {
+            const recCount = document.getElementById('rec-count')?.value || '8';
+            const autoRefreshCheckbox = document.getElementById('auto-refresh');
+            const autoRefresh = autoRefreshCheckbox ? autoRefreshCheckbox.checked : true;
+            const preference = document.querySelector('input[name="preference"]:checked')?.value || 'balanced';
 
-        const settings = {
-            maxRecommendations: parseInt(recCount),
-            autoRefresh,
-            preference,
-            lastUpdated: new Date().toISOString()
-        };
+            const settings = {
+                maxRecommendations: parseInt(recCount, 10),
+                autoRefresh,
+                preference,
+                lastUpdated: new Date().toISOString()
+            };
 
-        storage.set('recommendation_settings', settings);
-        
-        // 关闭模态框
-        document.querySelector('.modal-overlay')?.remove();
-        
-        // 重新加载推荐
-        this.loadRecommendations();
-        
-        window.showMessage('设置已保存', 'success');
+            await storage.set('recommendation_settings', settings);
+
+            // 关闭模态框
+            document.querySelector('.modal-overlay')?.remove();
+
+            // 重新加载推荐
+            await this.loadRecommendations();
+
+            // 更新自动刷新设置
+            await this.startAutoRefresh();
+
+            window.showMessage('设置已保存', 'success');
+        } catch (error) {
+            console.error('[RecommendationDisplay] 保存设置失败', error);
+            window.showMessage('保存设置时出错，请稍后重试', 'error');
+        }
     }
 
     /**
@@ -664,12 +694,11 @@ class RecommendationDisplay {
     /**
      * 显示降级推荐
      */
-    showFallbackRecommendations() {
+    async showFallbackRecommendations() {
         const container = this.getRecommendationContainer();
         if (!container) return;
 
-        const examIndex = storage.get('exam_index', []);
-        const practiceRecords = storage.get('practice_records', []);
+        const { examIndex, practiceRecords } = await this.fetchExamData();
         
         // 简单的降级推荐逻辑
         const unpracticedExams = examIndex.filter(exam => 
@@ -704,13 +733,15 @@ class RecommendationDisplay {
     /**
      * 开始自动刷新
      */
-    startAutoRefresh() {
-        const settings = storage.get('recommendation_settings', { autoRefresh: true });
-        
-        if (settings.autoRefresh) {
+    async startAutoRefresh() {
+        this.stopAutoRefresh();
+
+        const settings = await storage.get('recommendation_settings', { autoRefresh: true });
+
+        if (settings?.autoRefresh) {
             // 每30分钟自动刷新一次
             this.refreshInterval = setInterval(() => {
-                this.loadRecommendations();
+                this.loadRecommendations().catch(error => console.error('[RecommendationDisplay] 自动刷新失败', error));
             }, 30 * 60 * 1000);
         }
     }

@@ -12,33 +12,44 @@ class QuestionTypePractice {
         // 全局引用，供事件委托使用
         window.questionTypePractice = this;
 
-        this.initialize();
+        this.ready = this.initialize();
     }
 
     /**
      * 初始化题型练习组件
      */
-    initialize() {
+    async initialize() {
         console.log('QuestionTypePractice component initialized');
-        this.loadQuestionTypeStats();
+        await this.loadQuestionTypeStats();
         this.setupEventListeners();
-        this.createQuestionTypePracticeUI();
+        await this.createQuestionTypePracticeUI();
     }
 
     /**
      * 加载题型统计数据
      */
-    loadQuestionTypeStats() {
-        const savedStats = storage.get('question_type_stats', {});
-        this.questionTypeStats = new Map(Object.entries(savedStats));
+    async loadQuestionTypeStats() {
+        const savedStats = await storage.get('question_type_stats', {});
+        this.questionTypeStats = new Map(Object.entries(savedStats || {}));
     }
 
     /**
      * 保存题型统计数据
      */
-    saveQuestionTypeStats() {
+    async saveQuestionTypeStats() {
         const statsObj = Object.fromEntries(this.questionTypeStats);
-        storage.set('question_type_stats', statsObj);
+        await storage.set('question_type_stats', statsObj);
+    }
+
+    /**
+     * 并行加载题库与练习记录
+     */
+    async fetchExamData() {
+        const [examIndex = [], practiceRecords = []] = await Promise.all([
+            storage.get('exam_index', []),
+            storage.get('practice_records', [])
+        ]);
+        return { examIndex, practiceRecords };
     }
 
     /**
@@ -50,12 +61,16 @@ class QuestionTypePractice {
             // 题型练习模式选择
             window.DOM.delegate('click', '[data-question-type]', function(e) {
                 const questionType = this.dataset.questionType;
-                window.questionTypePractice.startQuestionTypePractice(questionType);
+                window.questionTypePractice
+                    .startQuestionTypePractice(questionType)
+                    .catch(error => console.error('[QuestionTypePractice] 启动题型练习失败', error));
             });
 
             // 混合练习模式
             window.DOM.delegate('click', '.start-mixed-practice', function(e) {
-                window.questionTypePractice.startMixedPractice();
+                window.questionTypePractice
+                    .startMixedPractice()
+                    .catch(error => console.error('[QuestionTypePractice] 启动混合练习失败', error));
             });
 
             // 题型选择（混合模式）
@@ -75,7 +90,9 @@ class QuestionTypePractice {
             // 题型详情查看
             window.DOM.delegate('click', '.view-question-type-details', function(e) {
                 const questionType = this.dataset.questionType;
-                window.questionTypePractice.showQuestionTypeDetails(questionType);
+                window.questionTypePractice
+                    .showQuestionTypeDetails(questionType)
+                    .catch(error => console.error('[QuestionTypePractice] 显示题型详情失败', error));
             });
 
             // 返回按钮
@@ -122,8 +139,9 @@ class QuestionTypePractice {
             });
 
             window.DOM.delegate('click', '.select-weak-types', function(e) {
-                window.questionTypePractice.selectWeakQuestionTypes();
-                window.questionTypePractice.updateMixedPracticeButton();
+                window.questionTypePractice
+                    .selectWeakQuestionTypes()
+                    .catch(error => console.error('[QuestionTypePractice] 选择薄弱题型失败', error));
             });
 
             // 模态框背景点击关闭
@@ -136,7 +154,9 @@ class QuestionTypePractice {
             // 自定义事件监听（这些事件不能用DOM.delegate处理）
             document.addEventListener('practiceSessionCompleted', (event) => {
                 const { examId, practiceRecord } = event.detail;
-                window.questionTypePractice.updateQuestionTypeStats(examId, practiceRecord);
+                window.questionTypePractice
+                    .updateQuestionTypeStats(examId, practiceRecord)
+                    .catch(error => console.error('[QuestionTypePractice] 更新题型统计失败', error));
             });
 
             console.log('[QuestionTypePractice] 使用事件委托设置监听器');
@@ -146,12 +166,14 @@ class QuestionTypePractice {
                 const questionTypeBtn = e.target.closest('[data-question-type]');
                 if (questionTypeBtn) {
                     const questionType = questionTypeBtn.dataset.questionType;
-                    this.startQuestionTypePractice(questionType);
+                    this.startQuestionTypePractice(questionType)
+                        .catch(error => console.error('[QuestionTypePractice] 启动题型练习失败', error));
                 }
 
                 const mixedPracticeBtn = e.target.closest('.start-mixed-practice');
                 if (mixedPracticeBtn) {
-                    this.startMixedPractice();
+                    this.startMixedPractice()
+                        .catch(error => console.error('[QuestionTypePractice] 启动混合练习失败', error));
                 }
 
                 const typeCheckbox = e.target.closest('.question-type-checkbox');
@@ -171,13 +193,15 @@ class QuestionTypePractice {
                 const detailsBtn = e.target.closest('.view-question-type-details');
                 if (detailsBtn) {
                     const questionType = detailsBtn.dataset.questionType;
-                    this.showQuestionTypeDetails(questionType);
+                    this.showQuestionTypeDetails(questionType)
+                        .catch(error => console.error('[QuestionTypePractice] 显示题型详情失败', error));
                 }
             });
 
             document.addEventListener('practiceSessionCompleted', (event) => {
                 const { examId, practiceRecord } = event.detail;
-                this.updateQuestionTypeStats(examId, practiceRecord);
+                this.updateQuestionTypeStats(examId, practiceRecord)
+                    .catch(error => console.error('[QuestionTypePractice] 更新题型统计失败', error));
             });
         }
     }
@@ -185,10 +209,10 @@ class QuestionTypePractice {
     /**
      * 创建题型练习UI
      */
-    createQuestionTypePracticeUI() {
+    async createQuestionTypePracticeUI() {
         // 在专项练习页面添加题型练习区域
-        this.addQuestionTypePracticeSection();
-        
+        await this.addQuestionTypePracticeSection();
+
         // 创建题型练习页面
         this.createQuestionTypePracticePage();
     }
@@ -196,7 +220,7 @@ class QuestionTypePractice {
     /**
      * 在专项练习页面添加题型练习区域
      */
-    addQuestionTypePracticeSection() {
+    async addQuestionTypePracticeSection() {
         const specializedView = document.getElementById('specialized-practice-view');
         if (!specializedView) return;
 
@@ -234,7 +258,7 @@ class QuestionTypePractice {
         }
 
         // 更新题型数据
-        this.updateQuestionTypesDisplay();
+        await this.updateQuestionTypesDisplay();
     }
 
     /**
@@ -304,16 +328,15 @@ class QuestionTypePractice {
     /**
      * 更新题型显示
      */
-    updateQuestionTypesDisplay() {
-        const examIndex = storage.get('exam_index', []);
-        const practiceRecords = storage.get('practice_records', []);
-        
+    async updateQuestionTypesDisplay() {
+        const { examIndex, practiceRecords } = await this.fetchExamData();
+
         // 收集所有题型
         const questionTypes = this.collectQuestionTypes(examIndex);
-        
+
         // 更新题型网格
         this.updateQuestionTypesGrid(questionTypes, examIndex, practiceRecords);
-        
+
         // 更新题型选择器
         this.updateQuestionTypeSelector(questionTypes);
     }
@@ -529,9 +552,8 @@ class QuestionTypePractice {
     /**
      * 选择薄弱题型
      */
-    selectWeakQuestionTypes() {
-        const examIndex = storage.get('exam_index', []);
-        const practiceRecords = storage.get('practice_records', []);
+    async selectWeakQuestionTypes() {
+        const { examIndex, practiceRecords } = await this.fetchExamData();
         const questionTypes = this.collectQuestionTypes(examIndex);
         
         // 清空当前选择
@@ -577,43 +599,53 @@ class QuestionTypePractice {
     /**
      * 开始题型练习
      */
-    startQuestionTypePractice(questionType) {
-        this.currentQuestionType = questionType;
-        this.mixedModeEnabled = false;
-        
-        // 导航到题型练习页面
-        if (window.app && typeof window.app.navigateToView === 'function') {
-            window.app.navigateToView('question-type-practice');
+    async startQuestionTypePractice(questionType) {
+        try {
+            this.currentQuestionType = questionType;
+            this.mixedModeEnabled = false;
+
+            // 导航到题型练习页面
+            if (window.app && typeof window.app.navigateToView === 'function') {
+                window.app.navigateToView('question-type-practice');
+            }
+
+            // 更新页面内容
+            await this.updateQuestionTypePracticeView();
+        } catch (error) {
+            console.error('[QuestionTypePractice] 启动题型练习失败', error);
+            window.showMessage('无法加载题型练习，请稍后重试', 'error');
         }
-        
-        // 更新页面内容
-        this.updateQuestionTypePracticeView();
     }
 
     /**
      * 开始混合练习
      */
-    startMixedPractice() {
-        if (this.selectedQuestionTypes.size === 0) {
-            window.showMessage('请至少选择一个题型', 'warning');
-            return;
+    async startMixedPractice() {
+        try {
+            if (this.selectedQuestionTypes.size === 0) {
+                window.showMessage('请至少选择一个题型', 'warning');
+                return;
+            }
+
+            this.mixedModeEnabled = true;
+
+            // 导航到题型练习页面
+            if (window.app && typeof window.app.navigateToView === 'function') {
+                window.app.navigateToView('question-type-practice');
+            }
+
+            // 更新页面内容
+            await this.updateQuestionTypePracticeView();
+        } catch (error) {
+            console.error('[QuestionTypePractice] 启动混合练习失败', error);
+            window.showMessage('无法加载混合练习，请稍后重试', 'error');
         }
-        
-        this.mixedModeEnabled = true;
-        
-        // 导航到题型练习页面
-        if (window.app && typeof window.app.navigateToView === 'function') {
-            window.app.navigateToView('question-type-practice');
-        }
-        
-        // 更新页面内容
-        this.updateQuestionTypePracticeView();
     }
 
     /**
      * 更新题型练习视图
      */
-    updateQuestionTypePracticeView() {
+    async updateQuestionTypePracticeView() {
         const titleElement = document.getElementById('question-type-practice-title');
         if (titleElement) {
             if (this.mixedModeEnabled) {
@@ -623,18 +655,20 @@ class QuestionTypePractice {
                 titleElement.textContent = `${typeName} 专项练习`;
             }
         }
-        
+
         // 更新当前题型信息
         this.updateCurrentTypeInfo();
-        
+
         // 更新统计数据
-        this.updateTypePracticeStats();
-        
-        // 更新题目列表
-        this.updateTypePracticeExams();
-        
-        // 更新练习建议
-        this.updateTypePracticeRecommendations();
+        const data = await this.fetchExamData();
+
+        await Promise.all([
+            this.updateTypePracticeStats(data),
+            this.updateTypePracticeExams(data),
+            this.updateTypePracticeRecommendations(data)
+        ]);
+
+        // 更新题目列表和练习建议已在Promise.all中处理
     }
 
     /**
@@ -735,10 +769,9 @@ class QuestionTypePractice {
     /**
      * 更新题型练习统计
      */
-    updateTypePracticeStats() {
-        const examIndex = storage.get('exam_index', []);
-        const practiceRecords = storage.get('practice_records', []);
-        
+    async updateTypePracticeStats(data = null) {
+        const { examIndex, practiceRecords } = data || await this.fetchExamData();
+
         let relevantRecords = [];
         
         if (this.mixedModeEnabled) {
@@ -779,12 +812,11 @@ class QuestionTypePractice {
     /**
      * 更新题型练习题目列表
      */
-    updateTypePracticeExams() {
+    async updateTypePracticeExams(data = null) {
         const examListContainer = document.getElementById('type-practice-exams');
         if (!examListContainer) return;
 
-        const examIndex = storage.get('exam_index', []);
-        const practiceRecords = storage.get('practice_records', []);
+        const { examIndex, practiceRecords } = data || await this.fetchExamData();
         
         let relevantExams = [];
         
@@ -889,15 +921,14 @@ class QuestionTypePractice {
     /**
      * 更新练习建议
      */
-    updateTypePracticeRecommendations() {
+    async updateTypePracticeRecommendations(data = null) {
         const recommendationsContainer = document.getElementById('type-practice-recommendations');
         if (!recommendationsContainer) return;
 
-        const examIndex = storage.get('exam_index', []);
-        const practiceRecords = storage.get('practice_records', []);
-        
+        const { examIndex, practiceRecords } = data || await this.fetchExamData();
+
         let recommendations = [];
-        
+
         if (this.mixedModeEnabled) {
             recommendations = this.generateMixedPracticeRecommendations();
         } else {
@@ -998,8 +1029,8 @@ class QuestionTypePractice {
     /**
      * 更新题型统计数据
      */
-    updateQuestionTypeStats(examId, practiceRecord) {
-        const examIndex = storage.get('exam_index', []);
+    async updateQuestionTypeStats(examId, practiceRecord) {
+        const { examIndex } = await this.fetchExamData();
         const exam = examIndex.find(e => e.id === examId);
         
         if (!exam || !exam.questionTypes) return;
@@ -1024,18 +1055,17 @@ class QuestionTypePractice {
             this.questionTypeStats.set(questionType, stats);
         });
         
-        this.saveQuestionTypeStats();
-        
+        await this.saveQuestionTypeStats();
+
         // 更新UI显示
-        this.updateQuestionTypesDisplay();
+        await this.updateQuestionTypesDisplay();
     }
 
     /**
      * 显示题型详情
      */
-    showQuestionTypeDetails(questionType) {
-        const examIndex = storage.get('exam_index', []);
-        const practiceRecords = storage.get('practice_records', []);
+    async showQuestionTypeDetails(questionType) {
+        const { examIndex, practiceRecords } = await this.fetchExamData();
         const stats = this.calculateQuestionTypeStats(questionType, examIndex, practiceRecords);
         const typeName = this.formatQuestionTypeName(questionType);
         

@@ -12,33 +12,44 @@ class SpecializedPractice {
         // 全局引用，供事件委托使用
         window.specializedPractice = this;
 
-        this.initialize();
+        this.ready = this.initialize();
     }
 
     /**
      * 初始化专项练习组件
      */
-    initialize() {
+    async initialize() {
         console.log('SpecializedPractice component initialized');
-        this.loadAchievements();
+        await this.loadAchievements();
         this.setupEventListeners();
-        this.createSpecializedPracticeUI();
+        await this.createSpecializedPracticeUI();
     }
 
     /**
      * 加载成就数据
      */
-    loadAchievements() {
-        const savedAchievements = storage.get('practice_achievements', {});
-        this.achievements = new Map(Object.entries(savedAchievements));
+    async loadAchievements() {
+        const savedAchievements = await storage.get('practice_achievements', {});
+        this.achievements = new Map(Object.entries(savedAchievements || {}));
     }
 
     /**
      * 保存成就数据
      */
-    saveAchievements() {
+    async saveAchievements() {
         const achievementsObj = Object.fromEntries(this.achievements);
-        storage.set('practice_achievements', achievementsObj);
+        await storage.set('practice_achievements', achievementsObj);
+    }
+
+    /**
+     * 并行加载题库与练习记录
+     */
+    async fetchExamData() {
+        const [examIndex = [], practiceRecords = []] = await Promise.all([
+            storage.get('exam_index', []),
+            storage.get('practice_records', [])
+        ]);
+        return { examIndex, practiceRecords };
     }
 
     /**
@@ -51,7 +62,9 @@ class SpecializedPractice {
             window.DOM.delegate('click', '[data-practice-mode]', function(e) {
                 const mode = this.dataset.practiceMode;
                 const category = this.dataset.category;
-                window.specializedPractice.startSpecializedPractice(mode, category);
+                window.specializedPractice
+                    .startSpecializedPractice(mode, category)
+                    .catch(error => console.error('[SpecializedPractice] 启动专项练习失败', error));
             });
 
             window.DOM.delegate('click', '.achievement-item', function(e) {
@@ -68,11 +81,15 @@ class SpecializedPractice {
 
             // 筛选器变化事件
             window.DOM.delegate('change', '#category-selector', function(e) {
-                window.specializedPractice.updateSpecializedExamList();
+                window.specializedPractice
+                    .updateSpecializedExamList()
+                    .catch(error => console.error('[SpecializedPractice] 更新专项题目列表失败', error));
             });
 
             window.DOM.delegate('change', '#difficulty-selector', function(e) {
-                window.specializedPractice.updateSpecializedExamList();
+                window.specializedPractice
+                    .updateSpecializedExamList()
+                    .catch(error => console.error('[SpecializedPractice] 更新专项题目列表失败', error));
             });
 
             // 模态框背景点击关闭
@@ -91,7 +108,8 @@ class SpecializedPractice {
                 if (modeBtn) {
                     const mode = modeBtn.dataset.practiceMode;
                     const category = modeBtn.dataset.category;
-                    this.startSpecializedPractice(mode, category);
+                    this.startSpecializedPractice(mode, category)
+                        .catch(error => console.error('[SpecializedPractice] 启动专项练习失败', error));
                 }
 
                 // 成就查看
@@ -105,7 +123,8 @@ class SpecializedPractice {
             // 监听练习完成事件
             document.addEventListener('practiceSessionCompleted', (event) => {
                 const { examId, practiceRecord } = event.detail;
-                this.handlePracticeCompletion(examId, practiceRecord);
+                this.handlePracticeCompletion(examId, practiceRecord)
+                    .catch(error => console.error('[SpecializedPractice] 处理练习完成失败', error));
             });
         }
     }
@@ -113,10 +132,10 @@ class SpecializedPractice {
     /**
      * 创建专项练习UI
      */
-    createSpecializedPracticeUI() {
+    async createSpecializedPracticeUI() {
         // 在总览页面添加专项练习入口
-        this.addSpecializedPracticeSection();
-        
+        await this.addSpecializedPracticeSection();
+
         // 创建专项练习页面
         this.createSpecializedPracticePage();
     }
@@ -124,7 +143,7 @@ class SpecializedPractice {
     /**
      * 在总览页面添加专项练习区域
      */
-    addSpecializedPracticeSection() {
+    async addSpecializedPracticeSection() {
         const overviewView = document.getElementById('overview-view');
         if (!overviewView) return;
 
@@ -191,7 +210,7 @@ class SpecializedPractice {
         }
 
         // 更新进度统计
-        this.updateSpecializedProgress();
+        await this.updateSpecializedProgress();
         this.updateRecentAchievements();
     }
 
@@ -280,23 +299,28 @@ class SpecializedPractice {
     /**
      * 开始专项练习
      */
-    startSpecializedPractice(mode, category = null) {
-        this.currentMode = mode;
-        this.currentCategory = category;
+    async startSpecializedPractice(mode, category = null) {
+        try {
+            this.currentMode = mode;
+            this.currentCategory = category;
 
-        // 导航到专项练习页面
-        if (window.app && typeof window.app.navigateToView === 'function') {
-            window.app.navigateToView('specialized-practice');
+            // 导航到专项练习页面
+            if (window.app && typeof window.app.navigateToView === 'function') {
+                window.app.navigateToView('specialized-practice');
+            }
+
+            // 更新页面标题和内容
+            await this.updateSpecializedPracticeView();
+        } catch (error) {
+            console.error('[SpecializedPractice] 启动专项练习失败', error);
+            window.showMessage('无法加载专项练习，请稍后重试', 'error');
         }
-
-        // 更新页面标题和内容
-        this.updateSpecializedPracticeView();
     }
 
     /**
      * 更新专项练习视图
      */
-    updateSpecializedPracticeView() {
+    async updateSpecializedPracticeView() {
         const titleElement = document.getElementById('specialized-practice-title');
         if (titleElement) {
             const modeNames = {
@@ -308,25 +332,24 @@ class SpecializedPractice {
         }
 
         // 更新进度显示
-        this.updateCurrentModeProgress();
-        
-        // 更新题目列表
-        this.updateSpecializedExamList();
-        
+        const data = await this.fetchExamData();
+
+        await Promise.all([
+            this.updateCurrentModeProgress(data),
+            this.updateSpecializedExamList(data),
+            this.updateStreakCounter(data.practiceRecords)
+        ]);
+
         // 更新成就显示
         this.updateSpecializedAchievements();
-        
-        // 更新连续练习统计
-        this.updateStreakCounter();
     }
 
     /**
      * 更新当前模式进度
      */
-    updateCurrentModeProgress() {
-        const examIndex = storage.get('exam_index', []);
-        const practiceRecords = storage.get('practice_records', []);
-        
+    async updateCurrentModeProgress(data = null) {
+        const { examIndex, practiceRecords } = data || await this.fetchExamData();
+
         let filteredExams = this.getFilteredExams(examIndex);
         const completedExamIds = new Set(practiceRecords.map(r => r.examId));
         const completedCount = filteredExams.filter(exam => completedExamIds.has(exam.id)).length;
@@ -390,12 +413,11 @@ class SpecializedPractice {
     /**
      * 更新专项练习题目列表
      */
-    updateSpecializedExamList() {
+    async updateSpecializedExamList(data = null) {
         const examListContainer = document.getElementById('specialized-exam-list');
         if (!examListContainer) return;
 
-        const examIndex = storage.get('exam_index', []);
-        const practiceRecords = storage.get('practice_records', []);
+        const { examIndex, practiceRecords } = data || await this.fetchExamData();
         const filteredExams = this.getFilteredExams(examIndex);
 
         if (filteredExams.length === 0) {
@@ -508,9 +530,8 @@ class SpecializedPractice {
     /**
      * 更新专项练习进度统计
      */
-    updateSpecializedProgress() {
-        const examIndex = storage.get('exam_index', []);
-        const practiceRecords = storage.get('practice_records', []);
+    async updateSpecializedProgress(data = null) {
+        const { examIndex, practiceRecords } = data || await this.fetchExamData();
         const completedExamIds = new Set(practiceRecords.map(r => r.examId));
 
         // 高频进度
@@ -541,8 +562,8 @@ class SpecializedPractice {
     /**
      * 更新连续练习统计
      */
-    updateStreakCounter() {
-        const practiceRecords = storage.get('practice_records', []);
+    async updateStreakCounter(practiceRecordsParam = null) {
+        const practiceRecords = practiceRecordsParam || await storage.get('practice_records', []);
         const streak = this.calculatePracticeStreak(practiceRecords);
 
         const streakElement = document.getElementById('current-streak');
@@ -599,25 +620,27 @@ class SpecializedPractice {
     /**
      * 处理练习完成
      */
-    handlePracticeCompletion(examId, practiceRecord) {
+    async handlePracticeCompletion(examId, practiceRecord) {
         // 检查并解锁成就
-        this.checkAndUnlockAchievements(examId, practiceRecord);
-        
+        await this.checkAndUnlockAchievements(examId, practiceRecord);
+
         // 更新进度显示
-        this.updateSpecializedProgress();
-        this.updateCurrentModeProgress();
-        this.updateStreakCounter();
+        const data = await this.fetchExamData();
+        await Promise.all([
+            this.updateSpecializedProgress(data),
+            this.updateCurrentModeProgress(data),
+            this.updateStreakCounter(data.practiceRecords)
+        ]);
     }
 
     /**
      * 检查并解锁成就
      */
-    checkAndUnlockAchievements(examId, practiceRecord) {
-        const examIndex = storage.get('exam_index', []);
+    async checkAndUnlockAchievements(examId, practiceRecord) {
+        const { examIndex, practiceRecords } = await this.fetchExamData();
         const exam = examIndex.find(e => e.id === examId);
         if (!exam) return;
 
-        const practiceRecords = storage.get('practice_records', []);
         const allUserRecords = practiceRecords.filter(r => r.examId === examId);
         
         // 定义成就规则
@@ -667,29 +690,29 @@ class SpecializedPractice {
         ];
 
         // 检查每个成就
-        achievementRules.forEach(rule => {
+        for (const rule of achievementRules) {
             if (!this.achievements.has(rule.id) && rule.condition()) {
-                this.unlockAchievement(rule);
+                await this.unlockAchievement(rule);
             }
-        });
+        }
     }
 
     /**
      * 解锁成就
      */
-    unlockAchievement(achievement) {
+    async unlockAchievement(achievement) {
         const achievementData = {
             ...achievement,
             unlockedAt: new Date().toISOString(),
             isNew: true
         };
-        
+
         this.achievements.set(achievement.id, achievementData);
-        this.saveAchievements();
-        
+        await this.saveAchievements();
+
         // 显示成就通知
         this.showAchievementNotification(achievementData);
-        
+
         // 更新UI
         this.updateRecentAchievements();
         this.updateSpecializedAchievements();
