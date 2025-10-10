@@ -89,14 +89,14 @@
     --transition-slow: 300ms ease-out;
 
     /* Library configuration panel */
-    --library-config-bg: rgba(15, 23, 42, 0.7);
-    --library-config-border: rgba(148, 163, 184, 0.35);
-    --library-config-text: #e2e8f0;
-    --library-config-meta: rgba(226, 232, 240, 0.75);
-    --library-config-item-bg: rgba(148, 163, 184, 0.12);
-    --library-config-item-border: rgba(148, 163, 184, 0.2);
-    --library-config-item-active-bg: rgba(59, 130, 246, 0.12);
-    --library-config-item-active-border: rgba(59, 130, 246, 0.35);
+    --library-config-bg: rgba(255, 255, 255, 0.9);
+    --library-config-border: rgba(115, 115, 115, 0.25);
+    --library-config-text: var(--color-gray-700);
+    --library-config-meta: rgba(51, 65, 85, 0.65);
+    --library-config-item-bg: rgba(217, 203, 186, 0.35);
+    --library-config-item-border: rgba(115, 115, 115, 0.25);
+    --library-config-item-active-bg: rgba(102, 126, 234, 0.18);
+    --library-config-item-active-border: rgba(102, 126, 234, 0.35);
 }
 
 body {
@@ -1307,12 +1307,13 @@ body.no-scroll {
 }
 
 .backup-list-card {
-    background: rgba(15, 23, 42, 0.6);
-    border: 1px solid rgba(148, 163, 184, 0.3);
+    background: rgba(255, 255, 255, 0.88);
+    border: 1px solid rgba(115, 115, 115, 0.25);
     border-radius: var(--border-radius-xl);
-    padding: var(--space-xl);
-    backdrop-filter: blur(12px);
-    box-shadow: var(--shadow-lg);
+    padding: var(--space-lg);
+    backdrop-filter: blur(6px);
+    box-shadow: var(--shadow-md);
+    color: var(--color-gray-700);
 }
 
 .backup-list-header {
@@ -1328,11 +1329,12 @@ body.no-scroll {
     gap: var(--space-sm);
     font-size: var(--font-size-lg);
     font-weight: var(--font-weight-semibold);
-    color: #e2e8f0;
+    color: var(--color-gray-700);
 }
 
 .backup-list-title-icon {
     font-size: 1.5rem;
+    color: #bf755a;
 }
 
 .backup-list-scroll {
@@ -1340,47 +1342,60 @@ body.no-scroll {
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: var(--space-md);
+    gap: var(--space-sm);
 }
 
 .backup-entry {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: var(--space-md);
+    padding: var(--space-sm) var(--space-md);
     border-radius: var(--border-radius-lg);
-    background: rgba(148, 163, 184, 0.08);
-    border: 1px solid rgba(148, 163, 184, 0.2);
+    background: rgba(217, 203, 186, 0.4);
+    border: 1px solid rgba(115, 115, 115, 0.2);
+    transition: background var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.backup-entry:hover {
+    background: rgba(217, 203, 186, 0.55);
+    box-shadow: var(--shadow-sm);
 }
 
 .backup-entry-info {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    color: #e2e8f0;
+    color: var(--color-gray-700);
 }
 
 .backup-entry-meta {
     font-size: var(--font-size-xs);
-    color: rgba(226, 232, 240, 0.75);
+    color: rgba(51, 65, 85, 0.55);
 }
 
 .backup-entry-actions {
     display: flex;
-    gap: var(--space-sm);
+    gap: var(--space-xs);
+}
+
+.backup-entry-actions .btn {
+    padding: var(--space-xs) var(--space-sm);
+    border-radius: var(--border-radius-md);
+    font-size: var(--font-size-xs);
+    box-shadow: none;
 }
 
 .backup-entry-restore {
-    min-width: 90px;
+    min-width: 80px;
 }
 
 .backup-list-empty {
     text-align: center;
-    padding: var(--space-xl);
+    padding: var(--space-lg);
     border-radius: var(--border-radius-lg);
-    background: rgba(15, 23, 42, 0.5);
-    color: rgba(226, 232, 240, 0.8);
-    border: 1px dashed rgba(148, 163, 184, 0.3);
+    background: rgba(255, 255, 255, 0.75);
+    color: rgba(51, 65, 85, 0.7);
+    border: 1px dashed rgba(115, 115, 115, 0.25);
 }
 
 .backup-list-empty-icon {
@@ -1404,10 +1419,10 @@ body.no-scroll {
     background: var(--library-config-bg);
     border: 1px solid var(--library-config-border);
     border-radius: var(--border-radius-xl);
-    padding: var(--space-xl);
+    padding: var(--space-lg);
     color: var(--library-config-text);
-    box-shadow: var(--shadow-lg);
-    backdrop-filter: blur(12px);
+    box-shadow: var(--shadow-md);
+    backdrop-filter: blur(6px);
 }
 
 .library-config-panel__header {
@@ -1432,7 +1447,7 @@ body.no-scroll {
     justify-content: center;
     padding: 0 var(--space-xs);
     border-radius: var(--border-radius-full);
-    background: rgba(59, 130, 246, 0.25);
+    background: rgba(102, 126, 234, 0.15);
     color: var(--library-config-text);
     font-size: var(--font-size-xs);
     line-height: 1.2;
@@ -1443,7 +1458,7 @@ body.no-scroll {
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: var(--space-md);
+    gap: var(--space-sm);
     margin: var(--space-md) 0 var(--space-lg);
 }
 
@@ -1456,12 +1471,13 @@ body.no-scroll {
     border-radius: var(--border-radius-lg);
     background: var(--library-config-item-bg);
     border: 1px solid var(--library-config-item-border);
-    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
 }
 
 .library-config-panel__item:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+    background: rgba(217, 203, 186, 0.55);
 }
 
 .library-config-panel__item--active {
@@ -1484,7 +1500,14 @@ body.no-scroll {
 .library-config-panel__actions {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-sm);
+    gap: var(--space-xs);
+}
+
+.library-config-panel__actions .btn {
+    padding: var(--space-xs) var(--space-sm);
+    border-radius: var(--border-radius-md);
+    font-size: var(--font-size-xs);
+    box-shadow: none;
 }
 
 .library-config-panel__footer {
@@ -1518,7 +1541,7 @@ body.no-scroll {
 .backup-modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(15, 23, 42, 0.85);
+    background: rgba(15, 23, 42, 0.45);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -1529,12 +1552,13 @@ body.no-scroll {
 .backup-modal {
     width: min(640px, 92vw);
     max-height: 80vh;
-    background: rgba(30, 41, 59, 0.95);
+    background: rgba(255, 255, 255, 0.96);
     border-radius: var(--border-radius-xl);
-    border: 1px solid rgba(148, 163, 184, 0.35);
+    border: 1px solid rgba(115, 115, 115, 0.25);
     box-shadow: var(--shadow-xl);
     display: flex;
     flex-direction: column;
+    color: var(--color-gray-700);
 }
 
 .backup-modal-header {
@@ -1542,14 +1566,14 @@ body.no-scroll {
     justify-content: space-between;
     align-items: center;
     padding: var(--space-lg) var(--space-xl);
-    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    border-bottom: 1px solid rgba(115, 115, 115, 0.2);
 }
 
 .backup-modal-title {
     display: flex;
     align-items: center;
     gap: var(--space-sm);
-    color: #e2e8f0;
+    color: var(--color-gray-700);
 }
 
 .backup-modal-body {
@@ -1563,10 +1587,10 @@ body.no-scroll {
 
 .backup-modal-footer {
     padding: var(--space-lg) var(--space-xl);
-    border-top: 1px solid rgba(148, 163, 184, 0.2);
+    border-top: 1px solid rgba(115, 115, 115, 0.2);
     display: flex;
     justify-content: flex-end;
-    gap: var(--space-sm);
+    gap: var(--space-xs);
 }
 
 .developer-modal-content {

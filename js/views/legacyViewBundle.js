@@ -262,14 +262,16 @@
             ? record.percentage
             : Math.round((record.accuracy || 0) * 100);
 
+        var recordId = record && record.id != null ? String(record.id) : '';
+
         var item = createNode('div', {
             className: 'history-item',
-            dataset: { recordId: record && record.id ? record.id : '' }
+            dataset: { recordId: recordId }
         });
 
         if (bulkDeleteMode) {
             item.classList.add('history-item-selectable');
-            if (record && record.id && selectedRecords.has(record.id)) {
+            if (recordId && selectedRecords.has(recordId)) {
                 item.classList.add('history-item-selected');
             }
         }
@@ -279,7 +281,7 @@
             createNode('a', {
                 href: '#',
                 className: 'practice-record-title',
-                dataset: { recordAction: 'details', recordId: record && record.id ? record.id : '' }
+                dataset: { recordAction: 'details', recordId: recordId }
             }, [
                 createNode('strong', null, record && record.title ? record.title : '无标题')
             ]),
@@ -309,7 +311,7 @@
                     type: 'button',
                     className: 'delete-record-btn',
                     title: '删除此记录',
-                    dataset: { recordAction: 'delete', recordId: record && record.id ? record.id : '' }
+                    dataset: { recordAction: 'delete', recordId: recordId }
                 }, '🗑️')
             ]);
         }
