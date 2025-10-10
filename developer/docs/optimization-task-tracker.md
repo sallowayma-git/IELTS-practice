@@ -212,6 +212,10 @@
 - App 状态变更可触发统一的 UI 更新，legacy 层仅保留最薄的适配壳。
 - 状态持久化具备失败回滚与版本迁移策略，测试覆盖核心行为。
 
+**维护记录（2025-10-10 18:20）**:
+- `AppStateService` 增加 `configure` 接口，允许现有实例在接受新的 `legacyAdapter`/`onBrowseFilterChange` 时自动合并配置并重挂订阅，避免初始化顺序导致的桥接回调失效。【F:js/app/state-service.js†L82-L106】
+- 初始化时为共享实例注入默认 `LegacyStateAdapter`，即便旧脚本先调用 `getInstance` 也能保持统一状态入口供主导航与降级运行时复用。【F:js/app/state-service.js†L309-L314】
+
 ### 任务2.4: 概览视图装配层重建（新增）
 **状态**: ✅ 已完成（2025-10-09 23:52 审计）
 **优先级**: 🔴 紧急
