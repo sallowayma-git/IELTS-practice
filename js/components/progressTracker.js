@@ -522,17 +522,17 @@ class ProgressTracker {
     startReminderSystem() {
         // 每小时检查一次是否需要发送提醒
         this.reminderInterval = setInterval(() => {
-            this.checkReminders();
+            this.checkReminders().catch(error => console.error('[ProgressTracker] 检查提醒失败', error));
         }, 60 * 60 * 1000); // 1小时
-        
+
         // 立即检查一次
-        this.checkReminders();
+        this.checkReminders().catch(error => console.error('[ProgressTracker] 检查提醒失败', error));
     }
 
     /**
      * 检查提醒
      */
-    checkReminders() {
+    async checkReminders() {
         const currentGoal = this.goalManager.getCurrentGoal();
         if (!currentGoal || !currentGoal.notifications.enabled) return;
         
@@ -546,7 +546,7 @@ class ProgressTracker {
         }
         
         // 检查是否长时间未练习
-        this.checkInactivityReminder(currentGoal);
+        await this.checkInactivityReminder(currentGoal);
     }
 
     /**
@@ -618,11 +618,12 @@ class ProgressTracker {
     /**
      * 检查不活跃提醒
      */
-    checkInactivityReminder(goal) {
-        const lastPracticeDate = storage.get('goal_progress', {})[goal.id]?.lastPracticeDate;
-        
+    async checkInactivityReminder(goal) {
+        const goalProgress = await storage.get('goal_progress', {});
+        const lastPracticeDate = goalProgress?.[goal.id]?.lastPracticeDate;
+
         if (!lastPracticeDate) return;
-        
+
         const today = new Date().toISOString().split('T')[0];
         const daysSinceLastPractice = this.calculateDaysDifference(lastPracticeDate, today);
         
