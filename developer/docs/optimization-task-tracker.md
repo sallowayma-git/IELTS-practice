@@ -42,8 +42,27 @@
 - `PracticeRecorder` 主链路改为全异步：`savePracticeRecord`、降级写入与验证全部 `await` ScoreStorage/StorageManager，重试节奏通过 Promise 延迟实现，完成事件在广播前等待持久化结束并在失败时写入临时存储。【F:js/core/practiceRecorder.js†L416-L540】【F:js/core/practiceRecorder.js†L560-L705】【F:js/core/practiceRecorder.js†L928-L1004】
 - UI 层同步存储依赖清零：练习历史导出/导入兜底、教程首访与完成记录、键盘快捷键的快速练习与搜索均改为异步读取 `window.storage` 并在降级时回退本地缓存，防止 Promise 被当成数组或布尔值使用。【F:js/components/practiceHistoryEnhancer.js†L224-L304】【F:js/components/practiceHistory.js†L388-L412】【F:js/utils/tutorialSystem.js†L185-L614】【F:js/utils/keyboardShortcuts.js†L531-L634】
 - 备份/导出流程同步适配：`DataBackupManager` 检查 `PracticeRecorder.getPracticeRecords()` Promise，确保导出脚本在混合存储模式下依旧输出结构化记录；静态 CI 全量通过验证练习提交流程与导出流程。【F:js/utils/dataBackupManager.js†L62-L92】【developer/tests/ci/run_static_suite.py†L1-L200】
- 仍把 `ScoreStorage.savePracticeRecord` 当同步函数调用，未等待 Promise 结果；后续的 `verifyRecordSaved` 与降级路径继续同步读取 `storage.get`，实测得到的是 Promise 对象，`find`/扩展符直接抛错，导致验证失败并落入临时存储降级流程，真实保存完全依赖 ScoreStorage 自身异步成功，存在记录重复写入/误报失败风险。【F:js/core/practiceRecorder.js†L431-L520】【F:js/core/practiceRecorder.js†L591-L667】【F:js/core/scoreStorage.js†L149-L177】
+- 仍把 `ScoreStorage.savePracticeRecord` 当同步函数调用，未等待 Promise 结果；后续的 `verifyRecordSaved` 与降级路径继续同步读取 `storage.get`，实测得到的是 Promise 对象，`find`/扩展符直接抛错，导致验证失败并落入临时存储降级流程，真实保存完全依赖 ScoreStorage 自身异步成功，存在记录重复写入/误报失败风险。【F:js/core/practiceRecorder.js†L456-L489】【F:js/core/practiceRecorder.js†L497-L521】【F:js/core/scoreStorage.js†L149-L185】
 - 多个 UI 模块仍以同步方式访问 `window.storage`：练习历史导出分支直接把 Promise 当数组操作、教程系统把 Promise 当布尔值判断首访与完成状态、键盘快捷键在快速练习/搜索时同步读取题库，全部会在 Hybrid 存储生效时静默失败，现网功能隐藏退化严重。【F:js/components/practiceHistoryEnhancer.js†L276-L305】【F:js/utils/tutorialSystem.js†L184-L195】【F:js/utils/tutorialSystem.js†L504-L536】【F:js/utils/keyboardShortcuts.js†L531-L619】
+- 二次审计结论：仓库依旧没有真正的数据访问层，`SimpleStorageWrapper` 只是对 `window.storage` 的薄封装，所有调用都直接依赖全局 StorageManager 实例，无法隔离命名空间或提供事务控制。【F:js/utils/simpleStorageWrapper.js†L8-L120】【F:js/utils/storage.js†L1295-L1298】
+- `DataIntegrityManager` 被迫直接绑定 `window.simpleStorageWrapper`，一旦该全局未初始化就只能降级轮询，说明缺少稳定的 Repository 注册点也阻塞了备份/校验流程的可靠性。【F:js/components/DataIntegrityManager.js†L14-L44】
+- `ScoreStorage` 仍手动拼装记录并与 `window.storage` 交互，没有统一的数据契约或乐观锁，重试/迁移逻辑分散在业务类中，后续要扩展 Hybrid/IndexedDB 仍缺少抽象层可复用。【F:js/core/scoreStorage.js†L1-L120】【F:js/core/scoreStorage.js†L150-L214】
+
+### 2025-10-10 17:20 并行整改规划
+- **任务A｜修复 PracticeRecorder ↔ ScoreStorage 异步握手**
+  - **现状**：`PracticeRecorder.savePracticeRecord` 虽已改成 `async`，但验证环节仍同步调用 `verifyRecordSaved` 与降级分支，写入链路依赖 Promise 恰好 resolve；一旦换用真正异步存储，当前逻辑必炸。【F:js/core/practiceRecorder.js†L456-L521】
+  - **目标**：统一 `verifyRecordSaved`、降级恢复与统计更新为 `async/await`，补齐 `ScoreStorage.savePracticeRecord` 的结果契约，并在失败时输出结构化错误码供上层判定。【F:js/core/scoreStorage.js†L149-L185】
+  - **交付**：完成握手改造、补充最小化静态回归脚本，复核练习提交流程。
+
+- **任务B｜清理 UI 模块中的同步存储误用**
+  - **现状**：练习历史导出、教程系统、快捷键搜索等模块仍存在直接读取 `window.storage` 结果后立即当作数组/布尔值使用的垃圾写法，Hybrid 存储开启即失败。【F:js/components/practiceHistoryEnhancer.js†L275-L305】【F:js/utils/tutorialSystem.js†L184-L195】【F:js/utils/tutorialSystem.js†L504-L536】【F:js/utils/keyboardShortcuts.js†L531-L651】
+  - **目标**：将所有读取入口改为 `await window.storage.get(...)` 并在 fallback 分支显式校验类型，统一返回空数组/对象；对 UI 更新逻辑新增“加载中/无数据”状态，防止 Promise 冒泡进模板。
+  - **交付**：提交组件改造与自测记录，更新 `optimization-task-tracker` 对应任务条目。
+
+- **任务C｜给 DataIntegrityManager 提供稳定的初始化注入点**
+  - **现状**：完整性管理器通过轮询等待 `window.simpleStorageWrapper`，初始化时序全靠运气，备份/校验容易错过主存初始化窗口，属于垃圾架构。【F:js/components/DataIntegrityManager.js†L6-L46】
+  - **目标**：在应用启动阶段暴露 `registerStorageProviders()` 之类的同步入口，由启动脚本负责注入 `StorageManager`/`SimpleStorageWrapper`，移除轮询与 `setTimeout` 重试；同时补充失败降级日志以便监控。
+  - **交付**：完成初始化路径改造并回归备份、导入、自动清理流程。
 
 ## 阶段1: 紧急修复 (P0 - 生产风险)
 
