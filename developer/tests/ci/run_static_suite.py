@@ -211,6 +211,31 @@ def run_checks() -> Tuple[List[dict], bool]:
             results.append(_format_result("设置按钮覆盖", settings_passed, settings_detail))
             all_passed &= settings_passed
 
+    data_layer_files = [
+        REPO_ROOT / "js" / "data" / "dataSources" / "storageDataSource.js",
+    ]
+    data_layer_files.extend(
+        REPO_ROOT / "js" / "data" / "repositories" / name
+        for name in (
+            "baseRepository.js",
+            "dataRepositoryRegistry.js",
+            "practiceRepository.js",
+            "settingsRepository.js",
+            "backupRepository.js",
+            "metaRepository.js",
+        )
+    )
+    data_layer_files.append(REPO_ROOT / "js" / "data" / "index.js")
+    for path in data_layer_files:
+        file_passed, file_detail = _ensure_exists(path)
+        results.append(_format_result(f"数据层资产 {path.name}", file_passed, file_detail))
+        all_passed &= file_passed
+
+    simple_wrapper = REPO_ROOT / "js" / "utils" / "simpleStorageWrapper.js"
+    wrapper_passed, wrapper_detail = _check_contains(simple_wrapper, "dataRepositories")
+    results.append(_format_result("simpleStorageWrapper 适配数据仓库", wrapper_passed, wrapper_detail))
+    all_passed &= wrapper_passed
+
     practice_fixture = REPO_ROOT / "templates" / "ci-practice-fixtures" / "analysis-of-fear.html"
     fixture_exists, fixture_detail = _ensure_exists(practice_fixture)
     results.append(_format_result("练习页面测试模板存在性", fixture_exists, fixture_detail))

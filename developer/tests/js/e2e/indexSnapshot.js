@@ -296,6 +296,14 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!DOCTYPE html>
     <!-- 加载工具函数 -->
     
     <script src="js/utils/storage.js"></script>
+    <script src="js/data/dataSources/storageDataSource.js"></script>
+    <script src="js/data/repositories/baseRepository.js"></script>
+    <script src="js/data/repositories/dataRepositoryRegistry.js"></script>
+    <script src="js/data/repositories/practiceRepository.js"></script>
+    <script src="js/data/repositories/settingsRepository.js"></script>
+    <script src="js/data/repositories/backupRepository.js"></script>
+    <script src="js/data/repositories/metaRepository.js"></script>
+    <script src="js/data/index.js"></script>
     <script src="js/utils/stateSerializer.js"></script>
     <script src="js/utils/simpleStorageWrapper.js"></script>
     <script src="js/utils/dataBackupManager.js"></script>
