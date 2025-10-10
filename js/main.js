@@ -12,6 +12,17 @@ let currentCategory = initialBrowseFilter.category || 'all';
 let currentExamType = initialBrowseFilter.type || 'all';
 let bulkDeleteMode = false;
 let selectedRecords = new Set();
+
+function normalizeRecordId(id) {
+    if (id == null) {
+        return '';
+    }
+    return String(id);
+}
+
+if (typeof window !== 'undefined') {
+    window.normalizeRecordId = normalizeRecordId;
+}
 let fallbackExamSessions = new Map();
 let processedSessions = new Set();
 let practiceListScroller = null;
@@ -2162,7 +2173,7 @@ function toggleBulkDelete() {
         selectedRecords.clear();
         showMessage('批量管理模式已开启，点击记录进行选择', 'info');
     } else {
-        btn.textContent = '📝 批量管理';
+        btn.textContent = '📝 批量删除';
         btn.classList.remove('btn-success');
         btn.classList.add('btn-info');
 
@@ -2180,7 +2191,7 @@ function toggleBulkDelete() {
 
 async function bulkDeleteRecords() {
     const records = await storage.get('practice_records', []);
-    const recordsToKeep = records.filter(record => !selectedRecords.has(record.id));
+    const recordsToKeep = records.filter(record => !selectedRecords.has(normalizeRecordId(record && record.id)));
 
     const deletedCount = records.length - recordsToKeep.length;
 
@@ -2196,10 +2207,15 @@ async function bulkDeleteRecords() {
 function toggleRecordSelection(recordId) {
     if (!bulkDeleteMode) return;
 
-    if (selectedRecords.has(recordId)) {
-        selectedRecords.delete(recordId);
+    const normalizedId = normalizeRecordId(recordId);
+    if (!normalizedId) {
+        return;
+    }
+
+    if (selectedRecords.has(normalizedId)) {
+        selectedRecords.delete(normalizedId);
     } else {
-        selectedRecords.add(recordId);
+        selectedRecords.add(normalizedId);
     }
     updatePracticeView(); // Re-render to show selection state
 }
