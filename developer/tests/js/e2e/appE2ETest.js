@@ -215,6 +215,7 @@ class AppE2ETestSuite {
             await this.testExamEmptyStateAction();
             await this.testLegacyBridgeSynchronization();
             await this.testPracticeRecordsFlow();
+            await this.testPracticeSubmissionMessageFlow();
             await this.testSettingsControlButtons();
             await this.testThemePortals();
 
@@ -1063,6 +1064,205 @@ class AppE2ETestSuite {
             this.recordResult(name, passed, stats);
         } catch (error) {
             this.recordResult(name, false, error.message || String(error));
+        }
+    }
+
+    async testPracticeSubmissionMessageFlow() {
+        const name = '练习页面提交回传';
+        const fixtureRelativePath = 'templates/ci-practice-fixtures/analysis-of-fear.html';
+        const fixtureUrl = './' + fixtureRelativePath;
+        const originalOpen = this.win.open;
+        const originalBuildResourcePath = this.win.buildResourcePath;
+        const fixtureFrames = [];
+        let handledOpen = false;
+
+        try {
+            if (!this.win.app || typeof this.win.app.openExam !== 'function') {
+                this.recordResult(name, false, 'app.openExam 不可用');
+                return;
+            }
+            if (!this.win.simpleStorageWrapper || typeof this.win.simpleStorageWrapper.savePracticeRecords !== 'function') {
+                this.recordResult(name, false, 'simpleStorageWrapper 不可用');
+                return;
+            }
+
+            await this.waitFor(() => {
+                const index = this.win.app?.getState?.('exam.index');
+                return Array.isArray(index) && index.length > 0;
+            }, { timeout: 8000, description: '加载题库索引' });
+
+            const examIndex = this.win.app?.getState?.('exam.index') || this.win.examIndex || [];
+            const targetExam = examIndex.find((exam) => exam && typeof exam.title === 'string' && exam.title.includes('Analysis of Fear'));
+            if (!targetExam) {
+                this.recordResult(name, false, '未找到目标练习题');
+                return;
+            }
+
+            await this.win.simpleStorageWrapper.savePracticeRecords([]);
+            if (typeof this.win.syncPracticeRecords === 'function') {
+                await this.win.syncPracticeRecords();
+            }
+
+            if (typeof this.win.showView === 'function') {
+                this.win.showView('practice');
+            }
+
+            await this.waitFor(() => this.doc.getElementById('practice-view')?.classList.contains('active'), {
+                timeout: 4000,
+                description: '切换到练习记录视图'
+            });
+
+            await this.waitFor(() => this.doc.getElementById('total-practiced')?.textContent === '0', {
+                timeout: 4000,
+                description: '清空练习记录统计'
+            });
+
+            if (typeof originalBuildResourcePath === 'function') {
+                this.win.buildResourcePath = (exam, kind = 'html') => {
+                    if (exam && exam.id === targetExam.id && kind === 'html') {
+                        return fixtureUrl;
+                    }
+                    return originalBuildResourcePath.call(this.win, exam, kind);
+                };
+            } else {
+                this.win.buildResourcePath = (exam, kind = 'html') => {
+                    if (exam && exam.id === targetExam.id && kind === 'html') {
+                        return fixtureUrl;
+                    }
+                    return fixtureUrl;
+                };
+            }
+
+            this.win.open = (requestedUrl, target, features) => {
+                if (handledOpen) {
+                    return typeof originalOpen === 'function' ? originalOpen(requestedUrl, target, features) : null;
+                }
+                handledOpen = true;
+
+                const frame = this.doc.createElement('iframe');
+                frame.style.position = 'absolute';
+                frame.style.left = '-9999px';
+                frame.style.top = '-9999px';
+                frame.style.width = '0';
+                frame.style.height = '0';
+                frame.style.border = '0';
+                frame.style.visibility = 'hidden';
+                frame.setAttribute('data-e2e-practice-fixture', 'analysis-of-fear');
+                this.doc.body.appendChild(frame);
+                frame.src = fixtureUrl;
+                fixtureFrames.push(frame);
+
+                const targetWindow = frame.contentWindow;
+                return new Proxy(targetWindow, {
+                    get: (t, prop) => {
+                        if (prop === 'closed') {
+                            return !frame.isConnected;
+                        }
+                        if (prop === 'close') {
+                            return () => {
+                                if (frame.isConnected) {
+                                    frame.remove();
+                                }
+                            };
+                        }
+                        if (prop === 'addEventListener') {
+                            return (type, listener, options) => {
+                                if (type === 'load') {
+                                    frame.addEventListener('load', listener, options);
+                                    return undefined;
+                                }
+                                return t.addEventListener(type, listener, options);
+                            };
+                        }
+                        if (prop === 'removeEventListener') {
+                            return (type, listener, options) => {
+                                if (type === 'load') {
+                                    frame.removeEventListener('load', listener, options);
+                                    return undefined;
+                                }
+                                return t.removeEventListener(type, listener, options);
+                            };
+                        }
+                        return Reflect.get(t, prop);
+                    },
+                    set: (t, prop, value) => Reflect.set(t, prop, value)
+                });
+            };
+
+            await this.win.app.openExam(targetExam.id);
+
+            await this.waitFor(() => {
+                const frame = fixtureFrames[0];
+                return frame && frame.contentDocument && frame.contentDocument.readyState === 'complete';
+            }, { timeout: 10000, description: '练习模板加载' });
+
+            const fixtureFrame = fixtureFrames[0];
+            const fixtureWin = fixtureFrame.contentWindow;
+            const fixtureDoc = fixtureWin.document;
+
+            await this.waitFor(() => fixtureWin.practicePageEnhancer && fixtureWin.practicePageEnhancer.sessionId, {
+                timeout: 12000,
+                description: '练习页面会话握手'
+            });
+
+            const submitBtn = fixtureDoc.getElementById('submit-btn');
+            if (!submitBtn) {
+                this.recordResult(name, false, '练习页面缺少提交按钮');
+                return;
+            }
+
+            submitBtn.click();
+
+            await this.waitFor(() => {
+                const records = this.win.app?.getState?.('practice.records');
+                if (!Array.isArray(records) || records.length === 0) {
+                    return false;
+                }
+                const record = records[0];
+                return record && record.dataSource === 'real' && typeof record.title === 'string' && record.title.includes('Fear');
+            }, { timeout: 12000, description: '等待练习记录写入' });
+
+            const records = this.win.app.getState('practice.records') || [];
+            const latest = records[0] || null;
+
+            await this.waitFor(() => {
+                const item = this.doc.querySelector('#practice-history-list .history-item');
+                return !!item;
+            }, { timeout: 6000, description: '练习记录列表渲染' });
+
+            const historyItem = this.doc.querySelector('#practice-history-list .history-item');
+            const totalCount = this.doc.getElementById('total-practiced')?.textContent || '';
+
+            const passed = !!latest && latest.dataSource === 'real' && latest.realData?.isRealData === true && totalCount === '1';
+            const details = {
+                recordTitle: latest?.title || null,
+                percentage: latest?.percentage,
+                totalCount,
+                historyItem: historyItem?.textContent?.trim().slice(0, 120) || '',
+                hasAnswerComparison: !!(latest && typeof latest.answerComparison === 'object')
+            };
+
+            this.recordResult(name, passed, details);
+        } catch (error) {
+            this.recordResult(name, false, error.message || String(error));
+        } finally {
+            if (typeof originalOpen === 'function') {
+                this.win.open = originalOpen;
+            } else if (originalOpen === null) {
+                this.win.open = null;
+            } else {
+                delete this.win.open;
+            }
+
+            if (originalBuildResourcePath) {
+                this.win.buildResourcePath = originalBuildResourcePath;
+            }
+
+            fixtureFrames.forEach((frame) => {
+                try {
+                    frame.remove();
+                } catch (_) {}
+            });
         }
     }
 }
