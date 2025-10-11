@@ -116,10 +116,10 @@ class RecommendationDisplay {
             
             // 生成个性化推荐
             const userId = 'default-user'; // 可以从用户设置中获取
-            const recommendations = this.recommendationEngine.generateRecommendations(userId, {
+            const recommendations = await this.recommendationEngine.generateRecommendations(userId, {
                 maxRecommendations: 8
             });
-            
+
             this.currentRecommendations = recommendations;
             this.renderRecommendations(recommendations);
             
@@ -536,7 +536,13 @@ class RecommendationDisplay {
             userId: 'default-user'
         };
 
-        const usageHistory = await storage.get('recommendation_usage', []);
+        const store = window.storage;
+        if (!store || typeof store.get !== 'function' || typeof store.set !== 'function') {
+            console.warn('[RecommendationDisplay] 存储管理器不可用，跳过推荐使用记录');
+            return;
+        }
+
+        const usageHistory = await store.get('recommendation_usage', []);
         usageHistory.push(usageData);
 
         // 只保留最近100条记录
@@ -544,7 +550,7 @@ class RecommendationDisplay {
             usageHistory.splice(0, usageHistory.length - 100);
         }
 
-        await storage.set('recommendation_usage', usageHistory);
+        await store.set('recommendation_usage', usageHistory);
     }
 
     /**

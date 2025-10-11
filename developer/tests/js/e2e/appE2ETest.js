@@ -215,6 +215,7 @@ class AppE2ETestSuite {
             await this.testExamEmptyStateAction();
             await this.testLegacyBridgeSynchronization();
             await this.testPracticeRecordsFlow();
+            await this.testPracticeHistoryBulkDelete();
             await this.testPracticeSubmissionMessageFlow();
             await this.testSettingsControlButtons();
             await this.testThemePortals();
@@ -1064,6 +1065,113 @@ class AppE2ETestSuite {
             this.recordResult(name, passed, stats);
         } catch (error) {
             this.recordResult(name, false, error.message || String(error));
+        }
+    }
+
+    async testPracticeHistoryBulkDelete() {
+        const name = '练习历史批量删除';
+        const sampleRecords = [
+            {
+                id: 'bulk-a',
+                metadata: { examTitle: 'Bulk Delete A', category: 'P1', frequency: 'high' },
+                status: 'completed',
+                accuracy: 0.85,
+                duration: 900,
+                correctAnswers: 34,
+                totalQuestions: 40,
+                startTime: new Date(Date.now() - 3600000).toISOString(),
+                endTime: new Date().toISOString()
+            },
+            {
+                id: 'bulk-b',
+                metadata: { examTitle: 'Bulk Delete B', category: 'P2', frequency: 'high' },
+                status: 'completed',
+                accuracy: 0.72,
+                duration: 1100,
+                correctAnswers: 29,
+                totalQuestions: 40,
+                startTime: new Date(Date.now() - 5400000).toISOString(),
+                endTime: new Date(Date.now() - 4500000).toISOString()
+            },
+            {
+                id: 'bulk-c',
+                metadata: { examTitle: 'Bulk Delete C', category: 'P3', frequency: 'low' },
+                status: 'completed',
+                accuracy: 0.95,
+                duration: 1200,
+                correctAnswers: 38,
+                totalQuestions: 40,
+                startTime: new Date(Date.now() - 7200000).toISOString(),
+                endTime: new Date(Date.now() - 6300000).toISOString()
+            }
+        ];
+
+        let originalConfirm = null;
+
+        try {
+            if (!this.win.simpleStorageWrapper || typeof this.win.simpleStorageWrapper.savePracticeRecords !== 'function') {
+                this.recordResult(name, false, 'simpleStorageWrapper 不可用');
+                return;
+            }
+
+            if (typeof this.win.showView === 'function') {
+                this.win.showView('practice');
+            }
+
+            await this.waitFor(() => this.doc.getElementById('practice-view')?.classList.contains('active'), {
+                timeout: 5000,
+                description: '切换到练习视图'
+            });
+
+            await this.win.simpleStorageWrapper.savePracticeRecords(sampleRecords);
+            if (typeof this.win.syncPracticeRecords === 'function') {
+                await this.win.syncPracticeRecords();
+            }
+
+            await this.waitFor(() => this.doc.querySelectorAll('#history-list .history-record-item').length >= sampleRecords.length, {
+                timeout: 6000,
+                description: '渲染批量删除测试数据'
+            });
+
+            originalConfirm = this.win.confirm;
+            this.win.confirm = () => true;
+
+            const selectIds = ['bulk-a', 'bulk-b'];
+            for (const recordId of selectIds) {
+                const checkbox = this.doc.querySelector(`#history-list input[data-record-id="${recordId}"]`);
+                if (!checkbox) {
+                    throw new Error(`未找到记录复选框: ${recordId}`);
+                }
+                checkbox.click();
+            }
+
+            await this.waitFor(() => {
+                const btn = this.doc.getElementById('bulk-delete-btn');
+                return btn && btn.style.display !== 'none' && /\(2\)/.test(btn.textContent);
+            }, { timeout: 4000, description: '批量删除按钮显示选择数量' });
+
+            const deleteBtn = this.doc.getElementById('bulk-delete-btn');
+            if (!deleteBtn) {
+                throw new Error('批量删除按钮缺失');
+            }
+            deleteBtn.click();
+
+            await this.waitFor(() => this.doc.querySelectorAll('#history-list .history-record-item').length === 1, {
+                timeout: 6000,
+                description: '等待列表刷新到剩余记录'
+            });
+
+            const remaining = await this.win.simpleStorageWrapper.getPracticeRecords();
+            const remainingIds = Array.isArray(remaining) ? remaining.map(record => record.id) : [];
+            const passed = remainingIds.length === 1 && remainingIds[0] === 'bulk-c';
+
+            this.recordResult(name, passed, { remainingIds });
+        } catch (error) {
+            this.recordResult(name, false, error.message || String(error));
+        } finally {
+            if (originalConfirm) {
+                this.win.confirm = originalConfirm;
+            }
         }
     }
 

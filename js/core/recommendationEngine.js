@@ -89,11 +89,11 @@ class RecommendationEngine {
     /**
      * 生成个性化推荐
      */
-    generateRecommendations(userId, options = {}) {
+    async generateRecommendations(userId, options = {}) {
         try {
             // 获取用户历史数据
-            const practiceRecords = this.getUserPracticeRecords(userId);
-            
+            const practiceRecords = await this.getUserPracticeRecords(userId);
+
             if (practiceRecords.length === 0) {
                 return this.generateInitialRecommendations();
             }
@@ -133,10 +133,16 @@ class RecommendationEngine {
     /**
      * 获取用户练习记录
      */
-    getUserPracticeRecords(userId) {
+    async getUserPracticeRecords(userId) {
         // 从存储中获取用户记录
-        const allRecords = storage.get('practice_records', []);
-        return allRecords.filter(record => record.status === 'completed');
+        const store = typeof window !== 'undefined' ? window.storage : null;
+        if (!store || typeof store.get !== 'function') {
+            console.warn('[RecommendationEngine] storage 管理器不可用');
+            return [];
+        }
+        const rawRecords = await store.get('practice_records', []);
+        const allRecords = Array.isArray(rawRecords) ? rawRecords : [];
+        return allRecords.filter(record => record && record.status === 'completed');
     }
 
     /**
