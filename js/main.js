@@ -565,6 +565,7 @@ async function loadLibrary(forceReload = false) {
             }
             const activeKey = await storage.get('active_exam_index_key');
             if (!activeKey) await storage.set('active_exam_index_key', 'exam_index');
+            await savePathMapForConfiguration(activeConfigKey, updatedIndex, { setActive: true });
         } catch (_) {}
         finishLibraryLoading(startTime);
         return;
@@ -592,6 +593,7 @@ async function loadLibrary(forceReload = false) {
         await storage.set(activeConfigKey, updatedIndex);
         await saveLibraryConfiguration('默认题库', activeConfigKey, updatedIndex.length);
         await setActiveLibraryConfiguration(activeConfigKey);
+        await savePathMapForConfiguration(activeConfigKey, updatedIndex, { setActive: true });
 
         finishLibraryLoading(startTime);
     } catch (error) {
@@ -1474,29 +1476,185 @@ function resolveExamBasePath(exam) {
   return basePath;
 }
 
+const DEFAULT_PATH_MAP = {
+  reading: {
+    root: '睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/',
+    exceptions: {}
+  },
+  listening: {
+    root: 'ListeningPractice/',
+    exceptions: {}
+  }
+};
+
+const PATH_MAP_STORAGE_PREFIX = 'exam_path_map__';
+
+function clonePathMap(map) {
+  const source = map && typeof map === 'object' ? map : {};
+  const cloneCategory = (category) => {
+    const segment = source[category] && typeof source[category] === 'object' ? source[category] : {};
+    return {
+      root: typeof segment.root === 'string' ? segment.root : '',
+      exceptions: segment.exceptions && typeof segment.exceptions === 'object'
+        ? Object.assign({}, segment.exceptions)
+        : {}
+    };
+  };
+  return {
+    reading: cloneCategory('reading'),
+    listening: cloneCategory('listening')
+  };
+}
+
+function normalizePathRoot(value) {
+  if (!value) {
+    return '';
+  }
+  let root = String(value).replace(/\\/g, '/');
+  root = root.replace(/\/+$/, '') + '/';
+  if (root.startsWith('./')) {
+    root = root.slice(2);
+  }
+  return root;
+}
+
+function normalizePathMap(map, fallback = DEFAULT_PATH_MAP) {
+  const base = clonePathMap(fallback);
+  const incoming = clonePathMap(map);
+  if (incoming.reading.root) {
+    base.reading.root = normalizePathRoot(incoming.reading.root);
+  }
+  if (incoming.listening.root) {
+    base.listening.root = normalizePathRoot(incoming.listening.root);
+  }
+  if (Object.keys(incoming.reading.exceptions).length) {
+    base.reading.exceptions = incoming.reading.exceptions;
+  }
+  if (Object.keys(incoming.listening.exceptions).length) {
+    base.listening.exceptions = incoming.listening.exceptions;
+  }
+  return base;
+}
+
+function getPathMapStorageKey(key) {
+  return PATH_MAP_STORAGE_PREFIX + key;
+}
+
+function computeCommonRoot(paths) {
+  if (!paths || !paths.length) {
+    return '';
+  }
+  const segmentsList = paths.map((rawPath) => {
+    if (typeof rawPath !== 'string') {
+      return [];
+    }
+    const normalized = rawPath.replace(/\\/g, '/').replace(/\/+$/g, '');
+    return normalized ? normalized.split('/') : [];
+  }).filter((segments) => segments.length);
+
+  if (!segmentsList.length) {
+    return '';
+  }
+
+  let prefix = segmentsList[0].slice();
+  for (let i = 1; i < segmentsList.length; i += 1) {
+    const segments = segmentsList[i];
+    let j = 0;
+    while (j < prefix.length && j < segments.length && prefix[j] === segments[j]) {
+      j += 1;
+    }
+    if (j === 0) {
+      return '';
+    }
+    prefix = prefix.slice(0, j);
+  }
+
+  return prefix.length ? prefix.join('/') + '/' : '';
+}
+
+function derivePathMapFromIndex(exams, fallbackMap = DEFAULT_PATH_MAP) {
+  const fallback = normalizePathMap(fallbackMap);
+  const result = clonePathMap(fallback);
+
+  if (!Array.isArray(exams)) {
+    return result;
+  }
+
+  const pathsByType = { reading: [], listening: [] };
+
+  exams.forEach((exam) => {
+    if (!exam || typeof exam.path !== 'string' || !exam.type) {
+      return;
+    }
+    const normalized = exam.path.replace(/\\/g, '/');
+    if (exam.type === 'reading') {
+      pathsByType.reading.push(normalized);
+    } else if (exam.type === 'listening') {
+      pathsByType.listening.push(normalized);
+    }
+  });
+
+  const readingRoot = computeCommonRoot(pathsByType.reading);
+  if (pathsByType.reading.length && readingRoot) {
+    result.reading.root = normalizePathRoot(readingRoot);
+  }
+
+  const listeningRoot = computeCommonRoot(pathsByType.listening);
+  if (pathsByType.listening.length && listeningRoot) {
+    result.listening.root = normalizePathRoot(listeningRoot);
+  }
+
+  return result;
+}
+
+async function loadPathMapForConfiguration(key) {
+  if (!key) {
+    return clonePathMap(DEFAULT_PATH_MAP);
+  }
+  try {
+    const stored = await storage.get(getPathMapStorageKey(key));
+    if (stored && typeof stored === 'object') {
+      return normalizePathMap(stored);
+    }
+  } catch (error) {
+    console.warn('[LibraryConfig] 读取路径映射失败:', error);
+  }
+  return clonePathMap(DEFAULT_PATH_MAP);
+}
+
+function setActivePathMap(map) {
+  const normalized = normalizePathMap(map);
+  window.__activeLibraryPathMap = normalized;
+  window.pathMap = normalized;
+}
+
+async function savePathMapForConfiguration(key, examIndex, options = {}) {
+  if (!key || !Array.isArray(examIndex)) {
+    return null;
+  }
+  const fallback = options.fallbackMap || DEFAULT_PATH_MAP;
+  const overrideMap = options.overrideMap;
+  const derived = overrideMap ? normalizePathMap(overrideMap, fallback) : derivePathMapFromIndex(examIndex, fallback);
+  try {
+    await storage.set(getPathMapStorageKey(key), derived);
+  } catch (error) {
+    console.warn('[LibraryConfig] 写入路径映射失败:', error);
+  }
+  if (options.setActive) {
+    setActivePathMap(derived);
+  }
+  return derived;
+}
+
 function getPathMap() {
   try {
-    // Try to load from JSON file first
+    if (window.__activeLibraryPathMap) {
+      return window.__activeLibraryPathMap;
+    }
     if (window.pathMap) {
       return window.pathMap;
     }
-
-    // 新增修复3F：路径映射修复 - 将reading.root置为''
-    // Fallback to embedded path map
-    return {
-      reading: {
-        // 将阅读题目根路径指向实际数据所在目录
-        // 说明：数据脚本中的 exam.path 仅为子目录名（如 "1. P1 - A Brief History.../"），
-        // 需要在运行时拼接到真实根目录下
-        root: '睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/',
-        exceptions: {}
-      },
-      listening: {
-        // 如本地不存在 ListeningPractice 目录，则 PDF/HTML 将无法打开（请确认资源已就位）
-        root: 'ListeningPractice/',
-        exceptions: {}
-      }
-    };
+    return DEFAULT_PATH_MAP;
   } catch (error) {
     console.warn('[PathNormalization] Failed to load path map:', error);
     return {};
@@ -2007,6 +2165,9 @@ async function handleLibraryUpload(options, files) {
                 newIndex = [...newIndex, ...fallback];
             }
             await storage.set(targetKey, newIndex);
+            const fallbackPathMap = await loadPathMapForConfiguration(targetKey);
+            const derivedPathMap = derivePathMapFromIndex(newIndex, fallbackPathMap);
+            await savePathMapForConfiguration(targetKey, newIndex, { overrideMap: derivedPathMap, setActive: true });
             await saveLibraryConfiguration(configName, targetKey, newIndex.length);
             await setActiveLibraryConfiguration(targetKey);
             // 导出为时间命名脚本，便于统一管理
@@ -2024,6 +2185,9 @@ async function handleLibraryUpload(options, files) {
             targetKey = `exam_index_${Date.now()}`;
             configName = `${type === 'reading' ? '阅读' : '听力'}增量-${new Date().toLocaleString()}`;
             await storage.set(targetKey, newIndex);
+            const fallbackPathMap = await loadPathMapForConfiguration(targetKey);
+            const derivedPathMap = derivePathMapFromIndex(newIndex, fallbackPathMap);
+            await savePathMapForConfiguration(targetKey, newIndex, { overrideMap: derivedPathMap, setActive: true });
             await saveLibraryConfiguration(configName, targetKey, newIndex.length);
             await setActiveLibraryConfiguration(targetKey);
             showMessage('新的题库配置已创建并激活；正在重新加载...', 'success');
@@ -2033,6 +2197,9 @@ async function handleLibraryUpload(options, files) {
 
         // Save to the current active key（非默认配置下的增量更新）
         await storage.set(targetKey, newIndex);
+        const targetPathFallback = await loadPathMapForConfiguration(targetKey);
+        const incrementalPathMap = derivePathMapFromIndex(newIndex, targetPathFallback);
+        await savePathMapForConfiguration(targetKey, newIndex, { overrideMap: incrementalPathMap, setActive: true });
         const incName = `${type === 'reading' ? '阅读' : '听力'}增量-${new Date().toLocaleString()}`;
         await saveLibraryConfiguration(incName, targetKey, newIndex.length);
         showMessage('索引已更新；正在刷新界面...', 'success');
@@ -2446,11 +2613,152 @@ function ensureLibraryConfigView() {
     return libraryConfigViewInstance;
 }
 
-async function resolveLibraryConfigurations() {
-    let configs = await getLibraryConfigurations();
-    if (!Array.isArray(configs)) {
-        configs = [];
+function normalizeLibraryConfigurationRecords(rawConfigs) {
+    const configs = Array.isArray(rawConfigs) ? rawConfigs : [];
+    const normalized = [];
+    const seenKeys = new Set();
+    let mutated = false;
+    const now = Date.now();
+
+    const normalizeKey = (value) => {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        return value.trim();
+    };
+
+    for (const config of configs) {
+        if (!config) {
+            mutated = true;
+            continue;
+        }
+
+        if (typeof config === 'string') {
+            const key = normalizeKey(config);
+            if (!key) {
+                mutated = true;
+                continue;
+            }
+            if (seenKeys.has(key)) {
+                mutated = true;
+                continue;
+            }
+            seenKeys.add(key);
+            normalized.push({
+                name: key === 'exam_index' ? '默认题库' : key,
+                key,
+                examCount: 0,
+                timestamp: now
+            });
+            mutated = true;
+            continue;
+        }
+
+        if (typeof config !== 'object') {
+            mutated = true;
+            continue;
+        }
+
+        const record = Object.assign({}, config);
+
+        let key = normalizeKey(record.key);
+        if (!key) {
+            const fallbackFields = ['storageKey', 'storage_key', 'id'];
+            for (const field of fallbackFields) {
+                key = normalizeKey(record[field]);
+                if (key) {
+                    record.key = key;
+                    mutated = true;
+                    break;
+                }
+            }
+        }
+
+        if (!key && typeof record.name === 'string') {
+            const nameKey = normalizeKey(record.name);
+            if (/^exam_index(_\d+)?$/.test(nameKey)) {
+                key = nameKey;
+                record.key = key;
+                mutated = true;
+            }
+        }
+
+        if (!key) {
+            mutated = true;
+            continue;
+        }
+
+        if (seenKeys.has(key)) {
+            const existingIndex = normalized.findIndex(item => item.key === key);
+            if (existingIndex !== -1) {
+                const existing = normalized[existingIndex];
+                const merged = Object.assign({}, existing);
+                if ((!existing.name || existing.name === existing.key) && typeof record.name === 'string' && record.name.trim()) {
+                    merged.name = record.name.trim();
+                }
+                if (!Number.isFinite(existing.examCount) || existing.examCount === 0) {
+                    const fallbackCount = Number(record.examCount);
+                    if (Number.isFinite(fallbackCount) && fallbackCount >= 0) {
+                        merged.examCount = fallbackCount;
+                    } else if (Array.isArray(record.exams)) {
+                        merged.examCount = record.exams.length;
+                    }
+                }
+                const mergedTimestamp = Number(record.timestamp || record.updatedAt || record.createdAt);
+                if (Number.isFinite(mergedTimestamp) && mergedTimestamp > 0 && (!Number.isFinite(existing.timestamp) || mergedTimestamp > existing.timestamp)) {
+                    merged.timestamp = mergedTimestamp;
+                }
+                normalized[existingIndex] = merged;
+            }
+            mutated = true;
+            continue;
+        }
+
+        seenKeys.add(key);
+
+        if (typeof record.name !== 'string' || !record.name.trim()) {
+            record.name = key === 'exam_index' ? '默认题库' : key;
+            mutated = true;
+        } else {
+            record.name = record.name.trim();
+        }
+
+        const count = Number(record.examCount);
+        if (!Number.isFinite(count) || count < 0) {
+            if (Array.isArray(record.exams)) {
+                record.examCount = record.exams.length;
+            } else if (Number.isFinite(Number(record.count)) && Number(record.count) >= 0) {
+                record.examCount = Number(record.count);
+            } else {
+                record.examCount = 0;
+            }
+            mutated = true;
+        } else {
+            record.examCount = count;
+        }
+
+        const ts = Number(record.timestamp || record.updatedAt || record.createdAt);
+        if (!Number.isFinite(ts) || ts <= 0) {
+            record.timestamp = now;
+            mutated = true;
+        } else {
+            record.timestamp = ts;
+        }
+
+        normalized.push(record);
     }
+
+    return { normalized, mutated };
+}
+
+async function resolveLibraryConfigurations() {
+    const rawConfigs = await getLibraryConfigurations();
+    let configs = Array.isArray(rawConfigs) ? rawConfigs : [];
+    let mutated = false;
+
+    const normalizedResult = normalizeLibraryConfigurationRecords(configs);
+    configs = normalizedResult.normalized;
+    mutated = normalizedResult.mutated;
 
     if (configs.length === 0) {
         try {
@@ -2461,7 +2769,7 @@ async function resolveLibraryConfigurations() {
                 examCount: count,
                 timestamp: Date.now()
             }];
-            await storage.set('exam_index_configurations', configs);
+            mutated = true;
             const activeKey = await storage.get('active_exam_index_key');
             if (!activeKey) {
                 await storage.set('active_exam_index_key', 'exam_index');
@@ -2470,7 +2778,146 @@ async function resolveLibraryConfigurations() {
             console.warn('[LibraryConfig] 无法初始化默认题库配置', error);
         }
     }
+
+    if (mutated) {
+        try {
+            await storage.set('exam_index_configurations', configs);
+        } catch (error) {
+            console.warn('[LibraryConfig] 无法同步题库配置记录', error);
+        }
+    }
+
     return configs;
+}
+
+async function fetchLibraryDataset(key) {
+    if (!key) {
+        return [];
+    }
+    try {
+        const dataset = await storage.get(key);
+        return Array.isArray(dataset) ? dataset : [];
+    } catch (error) {
+        console.warn('[LibraryConfig] 无法读取题库数据:', key, error);
+        return [];
+    }
+}
+
+async function updateLibraryConfigurationMetadata(key, examCount) {
+    if (!key) {
+        return;
+    }
+    try {
+        let configs = await getLibraryConfigurations();
+        if (!Array.isArray(configs)) {
+            configs = [];
+        }
+        const now = Date.now();
+        let mutated = false;
+
+        const updatedConfigs = configs.map((entry) => {
+            if (!entry) {
+                return entry;
+            }
+            if (typeof entry === 'string') {
+                const trimmed = entry.trim();
+                if (trimmed === key) {
+                    mutated = true;
+                    return {
+                        name: key === 'exam_index' ? '默认题库' : key,
+                        key,
+                        examCount,
+                        timestamp: now
+                    };
+                }
+                return entry;
+            }
+            if (entry && entry.key === key) {
+                const next = Object.assign({}, entry);
+                if (Number(next.examCount) !== examCount) {
+                    next.examCount = examCount;
+                }
+                next.timestamp = now;
+                mutated = true;
+                return next;
+            }
+            return entry;
+        });
+
+        if (mutated) {
+            const normalized = normalizeLibraryConfigurationRecords(updatedConfigs);
+            await storage.set('exam_index_configurations', normalized.normalized);
+        }
+    } catch (error) {
+        console.warn('[LibraryConfig] 无法刷新题库配置元数据', error);
+    }
+}
+
+function resetBrowseStateAfterLibrarySwitch() {
+    try {
+        if (window.browseStateManager && typeof window.browseStateManager.resetToAllExams === 'function') {
+            window.browseStateManager.resetToAllExams();
+            return;
+        }
+    } catch (error) {
+        console.warn('[LibraryConfig] 重置 BrowseStateManager 失败:', error);
+    }
+    setBrowseFilterState('all', 'all');
+    setFilteredExamsState([]);
+}
+
+async function applyLibraryConfiguration(key, dataset, options = {}) {
+    const exams = Array.isArray(dataset) ? dataset.slice() : await fetchLibraryDataset(key);
+    if (!Array.isArray(exams) || exams.length === 0) {
+        showMessage('目标题库没有题目，请先加载数据', 'warning');
+        return false;
+    }
+
+    let pathMap = await loadPathMapForConfiguration(key);
+    pathMap = derivePathMapFromIndex(exams, pathMap);
+    setActivePathMap(pathMap);
+
+    setExamIndexState(exams);
+    resetBrowseStateAfterLibrarySwitch();
+
+    try {
+        await setActiveLibraryConfiguration(key);
+    } catch (error) {
+        console.warn('[LibraryConfig] 无法写入当前题库配置:', error);
+    }
+
+    await updateLibraryConfigurationMetadata(key, exams.length);
+    await savePathMapForConfiguration(key, exams, {
+        overrideMap: pathMap,
+        setActive: true
+    });
+
+    try { updateSystemInfo(); } catch (error) { console.warn('[LibraryConfig] 更新系统信息失败', error); }
+    try { updateOverview(); } catch (error) { console.warn('[LibraryConfig] 更新概览失败', error); }
+    try { loadExamList(); } catch (error) { console.warn('[LibraryConfig] 刷新题库列表失败', error); }
+
+    try {
+        window.dispatchEvent(new CustomEvent('examIndexLoaded', {
+            detail: { key }
+        }));
+    } catch (error) {
+        console.warn('[LibraryConfig] 题库切换事件派发失败', error);
+    }
+
+    if (!options.skipConfigRefresh) {
+        setTimeout(() => {
+            try {
+                renderLibraryConfigList({
+                    allowDelete: true,
+                    activeKey: key
+                });
+            } catch (error) {
+                console.warn('[LibraryConfig] 重渲染题库配置列表失败', error);
+            }
+        }, 0);
+    }
+
+    return true;
 }
 
 function renderLibraryConfigFallback(container, configs, options) {
@@ -2505,6 +2952,9 @@ function renderLibraryConfigFallback(container, configs, options) {
         if (!config) {
             return;
         }
+        const isActive = activeKey === config.key;
+        const isDefault = config.key === 'exam_index';
+
         const item = document.createElement('div');
         item.className = 'library-config-panel__item' + (activeKey === config.key ? ' library-config-panel__item--active' : '');
 
@@ -2532,28 +2982,56 @@ function renderLibraryConfigFallback(container, configs, options) {
         switchBtn.className = 'btn btn-secondary';
         switchBtn.dataset.configAction = 'switch';
         switchBtn.dataset.configKey = config.key;
-        if (activeKey === config.key) {
-            switchBtn.disabled = true;
+        if (isActive) {
+            switchBtn.dataset.configActive = '1';
         }
         switchBtn.textContent = '切换';
         actions.appendChild(switchBtn);
 
-        if (config.key !== 'exam_index') {
+        if (!isDefault) {
             const deleteBtn = document.createElement('button');
             deleteBtn.type = 'button';
             deleteBtn.className = 'btn btn-warning';
             deleteBtn.dataset.configAction = 'delete';
             deleteBtn.dataset.configKey = config.key;
-            if (activeKey === config.key) {
-                deleteBtn.disabled = true;
+            if (isActive) {
+                deleteBtn.dataset.configActive = '1';
             }
             deleteBtn.textContent = '删除';
             actions.appendChild(deleteBtn);
+
+            if (typeof deleteBtn.addEventListener === 'function') {
+                deleteBtn.addEventListener('click', (event) => {
+                    if (event && typeof event.preventDefault === 'function') {
+                        event.preventDefault();
+                    }
+                    if (event && typeof event.stopPropagation === 'function') {
+                        event.stopPropagation();
+                    }
+                    if (typeof deleteLibraryConfig === 'function') {
+                        deleteLibraryConfig(config.key);
+                    }
+                });
+            }
         }
 
         item.appendChild(info);
         item.appendChild(actions);
         list.appendChild(item);
+
+        if (typeof switchBtn.addEventListener === 'function') {
+            switchBtn.addEventListener('click', (event) => {
+                if (event && typeof event.preventDefault === 'function') {
+                    event.preventDefault();
+                }
+                if (event && typeof event.stopPropagation === 'function') {
+                    event.stopPropagation();
+                }
+                if (typeof switchLibraryConfig === 'function') {
+                    switchLibraryConfig(config.key);
+                }
+            });
+        }
     });
 
     if (!list.childElementCount) {
@@ -2577,9 +3055,20 @@ function renderLibraryConfigFallback(container, configs, options) {
 
     host.appendChild(panel);
 
+    const findActionTarget = (node) => {
+        let current = node;
+        while (current && current !== host) {
+            if (current.dataset && current.dataset.configAction) {
+                return current;
+            }
+            current = current.parentNode || (current.host && current.host instanceof Node ? current.host : null);
+        }
+        return null;
+    };
+
     const handler = (event) => {
-        const target = event.target && event.target.closest('[data-config-action]');
-        if (!target || !host.contains(target)) {
+        const target = findActionTarget(event.target);
+        if (!target) {
             return;
         }
         const action = target.dataset.configAction;
@@ -2646,33 +3135,69 @@ async function showLibraryConfigListV2(options) {
 
 // 切换题库配置
 async function switchLibraryConfig(configKey) {
-    if (!configKey) {
+    const key = typeof configKey === 'string' ? configKey.trim() : '';
+    if (!key) {
         return;
     }
-    if (confirm('确定要切换到这个题库配置吗？页面将会刷新。')) {
-        await setActiveLibraryConfiguration(configKey);
-        showMessage('正在切换题库配置，页面将刷新...', 'info');
-        setTimeout(() => {
-            location.reload();
-        }, 1000);
+    try {
+        const activeKey = await getActiveLibraryConfigurationKey();
+        if (activeKey === key) {
+            showMessage('当前题库已激活', 'info');
+            return;
+        }
+    } catch (error) {
+        console.warn('[LibraryConfig] 无法读取当前题库配置', error);
+    }
+    const dataset = await fetchLibraryDataset(key);
+    if (!Array.isArray(dataset) || dataset.length === 0) {
+        showMessage('目标题库没有题目，请先加载该题库数据', 'warning');
+        return;
+    }
+    if (!confirm('确定要切换到这个题库配置吗？')) {
+        return;
+    }
+    const applied = await applyLibraryConfiguration(key, dataset, { skipConfigRefresh: false });
+    if (applied) {
+        showMessage('题库配置已切换', 'success');
     }
 }
 
 // 删除题库配置
 async function deleteLibraryConfig(configKey) {
-    if (!configKey) {
+    const key = typeof configKey === 'string' ? configKey.trim() : '';
+    if (!key) {
         return;
     }
-    if (configKey === 'exam_index') {
+    if (key === 'exam_index') {
         showMessage('默认题库不可删除', 'warning');
         return;
     }
+    try {
+        const activeKey = await getActiveLibraryConfigurationKey();
+        if (activeKey === key) {
+            showMessage('当前正在使用此题库，请先切换到其他配置', 'warning');
+            return;
+        }
+    } catch (error) {
+        console.warn('[LibraryConfig] 无法读取当前题库配置', error);
+    }
     if (confirm('确定要删除这个题库配置吗？此操作不可恢复。')) {
         let configs = await getLibraryConfigurations();
-        configs = Array.isArray(configs) ? configs.filter(config => config && config.key !== configKey) : [];
+        configs = Array.isArray(configs)
+            ? configs.filter((config) => {
+                if (!config) {
+                    return false;
+                }
+                if (typeof config === 'string') {
+                    return config.trim() !== key;
+                }
+                const cfgKey = typeof config.key === 'string' ? config.key.trim() : '';
+                return cfgKey && cfgKey !== key;
+            })
+            : [];
         await storage.set('exam_index_configurations', configs);
         try {
-            await storage.remove(configKey);
+            await storage.remove(key);
         } catch (error) {
             console.warn('[LibraryConfig] 删除题库数据失败', error);
         }
