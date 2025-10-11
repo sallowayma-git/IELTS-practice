@@ -866,6 +866,41 @@ function renderPracticeHistoryEmptyState(container) {
     container.appendChild(placeholder);
 }
 
+function refreshBulkDeleteButton() {
+    const btn = document.getElementById('bulk-delete-btn');
+    if (!btn) {
+        return;
+    }
+
+    const mode = getBulkDeleteModeState();
+    const selected = getSelectedRecordsState();
+    const count = selected.size;
+
+    if (mode) {
+        btn.classList.remove('btn-info');
+        btn.classList.add('btn-success');
+        btn.textContent = count > 0 ? `✓ 完成选择 (${count})` : '✓ 完成选择';
+    } else {
+        btn.classList.remove('btn-success');
+        btn.classList.add('btn-info');
+        btn.textContent = count > 0 ? `📝 批量删除 (${count})` : '📝 批量删除';
+    }
+}
+
+function ensureBulkDeleteMode(options = {}) {
+    const { silent = false } = options || {};
+    if (getBulkDeleteModeState()) {
+        return false;
+    }
+
+    setBulkDeleteModeState(true);
+    if (!silent && typeof showMessage === 'function') {
+        showMessage('批量管理模式已开启，点击记录进行选择', 'info');
+    }
+    refreshBulkDeleteButton();
+    return true;
+}
+
 let practiceHistoryDelegatesConfigured = false;
 
 function setupPracticeHistoryInteractions() {
@@ -873,7 +908,7 @@ function setupPracticeHistoryInteractions() {
         return;
     }
 
-    const container = document.getElementById('practice-history-list');
+    const container = document.getElementById('practice-history-list') || document.getElementById('history-list');
     if (!container) {
         return;
     }
@@ -900,21 +935,39 @@ function setupPracticeHistoryInteractions() {
         toggleRecordSelection(recordId);
     };
 
+    const handleCheckbox = (recordId, event) => {
+        if (!recordId) {
+            return;
+        }
+        ensureBulkDeleteMode({ silent: true });
+        if (event && typeof event.stopPropagation === 'function') {
+            event.stopPropagation();
+        }
+        toggleRecordSelection(recordId);
+    };
+
     const hasDomDelegate = typeof window !== 'undefined' && window.DOM && typeof window.DOM.delegate === 'function';
 
     if (hasDomDelegate) {
-        window.DOM.delegate('click', '#practice-history-list [data-record-action="details"]', function(event) {
+        window.DOM.delegate('click', '.practice-history-list [data-record-action="details"], #history-list [data-record-action="details"]', function(event) {
             handleDetails(this.dataset.recordId, event);
         });
 
-        window.DOM.delegate('click', '#practice-history-list [data-record-action="delete"]', function(event) {
+        window.DOM.delegate('click', '.practice-history-list [data-record-action="delete"], #history-list [data-record-action="delete"]', function(event) {
             handleDelete(this.dataset.recordId, event);
         });
 
-        window.DOM.delegate('click', '#practice-history-list .history-item', function(event) {
+        window.DOM.delegate('click', '.practice-history-list .history-item, #history-list .history-item', function(event) {
             const actionTarget = event.target.closest('[data-record-action]');
             if (actionTarget) return;
+            if (event.target && event.target.matches('input[data-record-id]')) {
+                return;
+            }
             handleSelection(this.dataset.recordId, event);
+        });
+
+        window.DOM.delegate('change', '.practice-history-list input[data-record-id], #history-list input[data-record-id]', function(event) {
+            handleCheckbox(this.dataset.recordId, event);
         });
     } else {
         container.addEventListener('click', (event) => {
@@ -933,11 +986,19 @@ function setupPracticeHistoryInteractions() {
             const item = event.target.closest('.history-item');
             if (item && container.contains(item)) {
                 const actionTarget = event.target.closest('[data-record-action]');
-                if (actionTarget) {
+                if (actionTarget || (event.target && event.target.matches('input[data-record-id]'))) {
                     return;
                 }
                 handleSelection(item.dataset.recordId, event);
             }
+        });
+
+        container.addEventListener('change', (event) => {
+            const checkbox = event.target.closest('input[data-record-id]');
+            if (!checkbox || !container.contains(checkbox)) {
+                return;
+            }
+            handleCheckbox(checkbox.dataset.recordId, event);
         });
     }
 
@@ -961,7 +1022,7 @@ function updatePracticeView() {
     }
 
     // --- 3. Filter and Render History List ---
-    const historyContainer = document.getElementById('practice-history-list');
+    const historyContainer = document.getElementById('practice-history-list') || document.getElementById('history-list');
     if (!historyContainer) {
         return;
     }
@@ -990,6 +1051,7 @@ function updatePracticeView() {
     if (!renderer) {
         console.warn('[PracticeHistory] Renderer 未加载，渲染空状态');
         renderPracticeHistoryEmptyState(historyContainer);
+        refreshBulkDeleteButton();
         return;
     }
 
@@ -998,6 +1060,7 @@ function updatePracticeView() {
 
     if (recordsToShow.length === 0) {
         renderPracticeHistoryEmptyState(historyContainer);
+        refreshBulkDeleteButton();
         return;
     }
 
@@ -1007,6 +1070,7 @@ function updatePracticeView() {
         scrollerOptions: { itemHeight: 100, containerHeight: 650 },
         itemFactory: renderPracticeRecordItem
     });
+    refreshBulkDeleteButton();
 }
 
 function computePracticeSummaryFallback(records) {
@@ -2218,39 +2282,32 @@ async function exportPracticeData() {
 async function toggleBulkDelete() {
     const nextMode = !getBulkDeleteModeState();
     setBulkDeleteModeState(nextMode);
-    const btn = document.getElementById('bulk-delete-btn');
-
-    if (!btn) {
+    if (nextMode) {
+        clearSelectedRecordsState();
+        refreshBulkDeleteButton();
+        if (typeof showMessage === 'function') {
+            showMessage('批量管理模式已开启，点击记录进行选择', 'info');
+        }
         updatePracticeView();
         return;
     }
 
-    if (nextMode) {
-        btn.textContent = '✓ 完成选择';
-        btn.classList.remove('btn-info');
-        btn.classList.add('btn-success');
-        clearSelectedRecordsState();
-        showMessage('批量管理模式已开启，点击记录进行选择', 'info');
-    } else {
-        btn.textContent = '📝 批量删除';
-        btn.classList.remove('btn-success');
-        btn.classList.add('btn-info');
-
-        const selected = getSelectedRecordsState();
-        if (selected.size > 0) {
-            const confirmMessage = `确定要删除选中的 ${selected.size} 条记录吗？此操作不可恢复。`;
-            if (confirm(confirmMessage)) {
-                try {
-                    await bulkDeleteRecords(selected);
-                } catch (error) {
-                    console.error('[System] 批量删除失败:', error);
-                    showMessage('批量删除失败：' + (error && error.message ? error.message : '未知错误'), 'error');
-                }
+    refreshBulkDeleteButton();
+    const selected = getSelectedRecordsState();
+    if (selected.size > 0) {
+        const confirmMessage = `确定要删除选中的 ${selected.size} 条记录吗？此操作不可恢复。`;
+        if (confirm(confirmMessage)) {
+            try {
+                await bulkDeleteRecords(selected);
+            } catch (error) {
+                console.error('[System] 批量删除失败:', error);
+                showMessage('批量删除失败：' + (error && error.message ? error.message : '未知错误'), 'error');
             }
         }
-        clearSelectedRecordsState();
     }
 
+    clearSelectedRecordsState();
+    refreshBulkDeleteButton();
     updatePracticeView();
 }
 

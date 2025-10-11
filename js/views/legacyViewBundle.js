@@ -265,9 +265,21 @@
         var recordId = record && record.id != null ? String(record.id) : '';
 
         var item = createNode('div', {
-            className: 'history-item',
+            className: 'history-item history-record-item',
             dataset: { recordId: recordId }
         });
+
+        var selection = createNode('div', {
+            className: 'record-selection' + (bulkDeleteMode ? '' : ' record-selection-hidden')
+        }, [
+            createNode('input', {
+                type: 'checkbox',
+                checked: selectedRecords.has(recordId) ? '' : null,
+                dataset: { recordId: recordId },
+                tabindex: bulkDeleteMode ? '0' : '-1',
+                'aria-label': '选择练习记录'
+            })
+        ]);
 
         if (bulkDeleteMode) {
             item.classList.add('history-item-selectable');
@@ -276,6 +288,7 @@
             }
         }
 
+        item.appendChild(selection);
         var infoClass = 'record-info' + (bulkDeleteMode ? ' record-info-selectable' : '');
         var info = createNode('div', { className: infoClass }, [
             createNode('a', {
@@ -599,7 +612,16 @@
         var icon = safeConfig.icon || '🔍';
         var title = safeConfig.title || '未找到匹配的题目';
         var description = safeConfig.description || '请调整筛选条件或搜索词后再试';
-        var actions = Array.isArray(safeConfig.actions) ? safeConfig.actions : [];
+        var actions = Array.isArray(safeConfig.actions) ? safeConfig.actions.slice() : [];
+
+        if (!actions.length && safeConfig.disableDefaultActions !== true) {
+            actions.push({
+                action: 'load-library',
+                label: safeConfig.defaultActionLabel || '📂 加载题库',
+                variant: 'primary',
+                ariaLabel: safeConfig.defaultActionAriaLabel || '加载题库'
+            });
+        }
 
         var children = [
             this._createElement('div', { className: 'exam-list-empty-icon', ariaHidden: 'true' }, icon),
@@ -630,12 +652,29 @@
                     buttonClasses.push('btn-secondary');
                 }
 
-                actionContainer.appendChild(this._createElement('button', {
+                var button = this._createElement('button', {
                     className: buttonClasses.join(' '),
                     type: 'button',
                     dataset: { action: action.action },
                     ariaLabel: action.ariaLabel || action.label
-                }, action.label));
+                }, action.label);
+
+                if (button && action.action === 'load-library') {
+                    try {
+                        button.addEventListener('click', function handleLoadLibraryClick(event) {
+                            if (event && typeof event.preventDefault === 'function') {
+                                event.preventDefault();
+                            }
+                            if (typeof global.loadLibrary === 'function') {
+                                try { global.loadLibrary(false); } catch (_) {}
+                            } else if (typeof global.showLibraryLoaderModal === 'function') {
+                                global.showLibraryLoaderModal();
+                            }
+                        });
+                    } catch (_) {}
+                }
+
+                actionContainer.appendChild(button);
             }
 
             if (actionContainer.childNodes.length > 0) {

@@ -1003,6 +1003,7 @@ body.no-scroll {
     margin-left: auto;
 }
 
+.practice-history-list,
 #practice-history-list {
     /* Height is now controlled by the VirtualScroller in JavaScript */
     overflow-y: auto;
@@ -1012,9 +1013,29 @@ body.no-scroll {
     gap: var(--space-md); /* 稍微收缩间距 */
 }
 
+.practice-history-list .record-selection,
+#practice-history-list .record-selection {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    margin-right: var(--space-sm);
+}
+
+.practice-history-list .history-item-selectable .record-selection,
+#practice-history-list .history-item-selectable .record-selection {
+    display: flex;
+}
+
+.practice-history-list .record-selection input[type="checkbox"],
+#practice-history-list .record-selection input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
 .history-item {
     display: grid;
-    grid-template-columns: 1fr auto auto;
+    grid-template-columns: auto 1fr auto auto;
     gap: var(--space-lg);
     align-items: center;
     padding: var(--space-md) var(--space-lg);
