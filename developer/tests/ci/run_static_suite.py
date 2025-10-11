@@ -120,6 +120,25 @@ def _check_contains(path: Path, snippet: str) -> Tuple[bool, str]:
     return present, ("已包含片段" if present else f"缺少片段：{snippet}")
 
 
+def _collect_mixin_methods(app_dir: Path) -> List[str]:
+    pattern = re.compile(r"^\s{8}(?:async\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\(", re.MULTILINE)
+    reserved = {"if", "for", "while", "switch", "catch", "function", "return"}
+    methods = set()
+
+    for mixin_path in sorted(app_dir.glob("*Mixin.js")):
+        try:
+            content = mixin_path.read_text(encoding="utf-8")
+        except Exception:  # pragma: no cover - defensive guard
+            continue
+
+        for name in pattern.findall(content):
+            if name in reserved:
+                continue
+            methods.add(name)
+
+    return sorted(methods)
+
+
 def _format_result(name: str, passed: bool, detail: str) -> dict:
     return {
         "name": name,
@@ -264,6 +283,35 @@ def run_checks() -> Tuple[List[dict], bool]:
     bulk_test_passed, bulk_test_detail = _check_contains(e2e_suite, "练习历史批量删除")
     results.append(_format_result("E2E 批量删除测试覆盖", bulk_test_passed, bulk_test_detail))
     all_passed &= bulk_test_passed
+
+    contract_path = REPO_ROOT / "developer" / "tests" / "fixtures" / "exam_app_method_contract.json"
+    contract_exists, contract_detail = _ensure_exists(contract_path)
+    results.append(_format_result("Mixin 方法契约文件", contract_exists, contract_detail))
+    all_passed &= contract_exists
+
+    if contract_exists:
+        try:
+            raw_contract = contract_path.read_text(encoding="utf-8")
+            expected_methods = json.loads(raw_contract)
+            if not isinstance(expected_methods, list):
+                raise ValueError("契约数据不是列表")
+            expected_set = set(expected_methods)
+        except Exception as exc:  # pragma: no cover - defensive guard
+            results.append(_format_result("Mixin 方法契约覆盖", False, f"无法解析契约：{exc}"))
+            all_passed = False
+        else:
+            actual_methods = set(_collect_mixin_methods(REPO_ROOT / "js" / "app"))
+            missing = sorted(expected_set - actual_methods)
+            extras = sorted(actual_methods - expected_set)
+            coverage_passed = len(missing) == 0
+            coverage_detail = {
+                "expectedCount": len(expected_set),
+                "actualCount": len(actual_methods),
+                "missing": missing,
+                "extras": extras,
+            }
+            results.append(_format_result("Mixin 方法契约覆盖", coverage_passed, coverage_detail))
+            all_passed &= coverage_passed
 
     return results, all_passed
 
