@@ -1566,6 +1566,16 @@
                 console.warn('[StorageBridge] Failed to persist', key, 'to localStorage:', e);
             }
 
+            updateBridgeMeta(key, (prev) => {
+                const next = { ...prev, lastLocalWrite: now };
+                if (supportsShared) {
+                    next.sharedDirty = true;
+                } else {
+                    next.sharedDirty = false;
+                }
+                return next;
+            });
+
             if (supportsShared) {
                 try {
                     await window.storage.set(key, normalized);
@@ -1576,7 +1586,10 @@
             }
 
             updateBridgeMeta(key, (prev) => {
-                const next = { ...prev, lastLocalWrite: now };
+                const next = { ...prev };
+                if (!next.lastLocalWrite) {
+                    next.lastLocalWrite = now;
+                }
                 if (supportsShared) {
                     if (sharedSucceeded) {
                         next.lastSharedWrite = now;
