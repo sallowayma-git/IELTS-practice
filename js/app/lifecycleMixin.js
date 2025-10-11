@@ -124,16 +124,20 @@
         handleGlobalError(error, context) {
             // 避免错误处理本身引起的循环错误
             try {
+                const normalizedError = error && typeof error === 'object'
+                    ? error
+                    : { message: String(error || 'Unknown error'), stack: undefined };
+
                 // 记录错误
                 if (!this.globalErrors) {
                     this.globalErrors = [];
                 }
 
                 this.globalErrors.push({
-                    error: error.message || error,
+                    error: normalizedError.message || String(error),
                     context: context,
                     timestamp: Date.now(),
-                    stack: error.stack
+                    stack: normalizedError.stack
                 });
 
                 // 限制错误记录数量
@@ -148,7 +152,7 @@
 
                 if (recentErrors.length > 5) {
                     this.showUserMessage('系统遇到多个错误，建议刷新页面', 'warning');
-                } else if (!error.message || !error.message.includes('Script error')) {
+                } else if (!normalizedError.message || !normalizedError.message.includes('Script error')) {
                     // 只对有意义的错误显示提示（排除跨域脚本错误）
                     this.showUserMessage('系统遇到错误，但仍可继续使用', 'warning');
                 }

@@ -380,6 +380,12 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!DOCTYPE html>
     
     
     <!-- 加载主应用（最后加载） -->
+    <script src="js/app/stateMixin.js"></script>
+    <script src="js/app/bootstrapMixin.js"></script>
+    <script src="js/app/lifecycleMixin.js"></script>
+    <script src="js/app/navigationMixin.js"></script>
+    <script src="js/app/examSessionMixin.js"></script>
+    <script src="js/app/fallbackMixin.js"></script>
     <script src="js/app.js"></script>
 </body>
 
