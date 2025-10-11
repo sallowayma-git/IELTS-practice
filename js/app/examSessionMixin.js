@@ -363,7 +363,9 @@
             this.examWindows.set(examId, {
                 window: examWindow,
                 startTime: Date.now(),
-                status: 'active'
+                status: 'active',
+                expectedSessionId: null,
+                origin: (typeof window !== 'undefined' && window.location) ? window.location.origin : ''
             });
 
             // 监听窗口关闭事件
@@ -405,7 +407,9 @@
                 return value && typeof value === 'object' && !Array.isArray(value);
             };
 
-            const normalizeMessage = (rawEnvelope) => {
+            const normalizeMessage = (rawEnvelope, depth = 0) => {
+                if (depth > 2) return null;
+
                 const typeAliases = {
                     'practice_complete': 'PRACTICE_COMPLETE',
                     'practice_completed': 'PRACTICE_COMPLETE',
@@ -489,7 +493,15 @@
                 if (!isPlainObject(envelope)) return null;
 
                 const type = pickType(envelope);
-                if (!type || !allowedTypes.has(type)) {
+                if (!type) {
+                    const nested = coerceObject(envelope.message) || coerceObject(envelope.messageData);
+                    if (nested) {
+                        return normalizeMessage(nested, depth + 1);
+                    }
+                    return null;
+                }
+
+                if (!allowedTypes.has(type)) {
                     return null;
                 }
 
@@ -507,8 +519,8 @@
 
             const messageHandler = async (event) => {
                 // 取得当前题目窗口引用（可能在 handshake 期间被更新）
-                const windowInfo = (this.examWindows && this.examWindows.get(examId)) || {};
-                const expectedWindow = windowInfo.window || examWindow;
+                const storedInfo = (this.examWindows && this.examWindows.get(examId)) || {};
+                const expectedWindow = storedInfo.window || examWindow;
 
                 // 窗口来源不匹配直接拒绝，阻止其它 tab 注入消息
                 if (!event.source || !expectedWindow || event.source !== expectedWindow) {
@@ -528,6 +540,9 @@
                     return;
                 }
 
+                const windowInfo = this.ensureExamWindowSession(examId, expectedWindow);
+                const expectedSessionId = windowInfo.expectedSessionId || '';
+
                 // 放宽消息源过滤，兼容 inline_collector 与 practice_page
                 const src = normalized.sourceTag || '';
                 if (src && src !== 'practice_page' && src !== 'inline_collector') {
@@ -535,27 +550,44 @@
                 }
 
                 const { type, data } = normalized;
+                const payloadSessionId = data && typeof data.sessionId === 'string'
+                    ? data.sessionId.trim()
+                    : '';
 
-                // legacy 页面未带 examId 时补齐，若带了不匹配则拒绝
-                if (data && data.examId) {
-                    if (String(data.examId) !== String(examId)) {
+                if (payloadSessionId) {
+                    if (expectedSessionId && payloadSessionId !== expectedSessionId) {
                         return;
                     }
-                } else {
-                    data.examId = examId;
+                    windowInfo.sessionId = payloadSessionId;
+                    if (!windowInfo.expectedSessionId) {
+                        windowInfo.expectedSessionId = payloadSessionId;
+                    }
+                } else if (type === 'PRACTICE_COMPLETE') {
+                    if (!expectedSessionId) {
+                        return;
+                    }
+                    data.sessionId = expectedSessionId;
                 }
 
-                // 如果消息带有 sessionId，则要求与当前窗口记录一致
-                if (data && data.sessionId && windowInfo.sessionId && data.sessionId !== windowInfo.sessionId) {
-                    return;
-                }
-
-                if (data && data.sessionId && !windowInfo.sessionId) {
-                    windowInfo.sessionId = data.sessionId;
-                    if (this.examWindows && this.examWindows.has(examId)) {
-                        this.examWindows.set(examId, windowInfo);
+                const expectedExamId = String(examId);
+                const payloadExamId = data && data.examId != null ? String(data.examId) : '';
+                if (payloadExamId && payloadExamId !== expectedExamId) {
+                    const derivedExamId = (payloadSessionId || expectedSessionId || '').split('_')[0];
+                    const allowedLegacy = payloadExamId === 'session';
+                    if (derivedExamId !== expectedExamId && !allowedLegacy) {
+                        return;
                     }
                 }
+
+                data.examId = examId;
+                if (!data.sessionId && expectedSessionId) {
+                    data.sessionId = expectedSessionId;
+                }
+
+                windowInfo.origin = event.origin;
+                windowInfo.lastMessageAt = Date.now();
+                windowInfo.lastMessageType = type;
+                this.examWindows.set(examId, windowInfo);
 
                 switch (type) {
                     case 'exam_completed':
@@ -594,10 +626,11 @@
 
             // 向题目窗口发送初始化消息（兼容 0.2 增强器监听的 INIT_SESSION）
             examWindow.addEventListener('load', () => {
+                const windowInfo = this.ensureExamWindowSession(examId, examWindow);
                 const initPayload = {
                     examId: examId,
                     parentOrigin: window.location.origin,
-                    sessionId: this.generateSessionId()
+                    sessionId: windowInfo.expectedSessionId
                 };
                 try {
                     // 首选 0.2 的大写事件名，保证 practicePageEnhancer 能收到并设置 sessionId
@@ -619,10 +652,11 @@
             // 避免重复握手
             if (this._handshakeTimers.has(examId)) return;
 
+            const windowInfo = this.ensureExamWindowSession(examId, examWindow);
             const initPayload = {
                 examId,
                 parentOrigin: window.location.origin,
-                sessionId: this.generateSessionId()
+                sessionId: windowInfo.expectedSessionId
             };
 
             let attempts = 0;
@@ -691,7 +725,7 @@
                     return {
                         examId: examId,
                         startTime: new Date().toISOString(),
-                        sessionId: this.generateSessionId(),
+                        sessionId: this.generateSessionId(examId),
                         status: 'started'
                     };
                 },
@@ -812,8 +846,46 @@
         /**
          * 生成会话ID
          */
-        generateSessionId() {
-            return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        generateSessionId(examId) {
+            const suffix = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const normalizedExamId = typeof examId === 'string'
+                ? examId.trim().replace(/\s+/g, '-')
+                : (examId != null ? String(examId).trim().replace(/\s+/g, '-') : '');
+
+            if (normalizedExamId) {
+                return `${normalizedExamId}_${suffix}`;
+            }
+
+            return `session_${suffix}`;
+        },
+
+        ensureExamWindowSession(examId, examWindow = null) {
+            if (!this.examWindows) {
+                this.examWindows = new Map();
+            }
+
+            if (!this.examWindows.has(examId)) {
+                this.examWindows.set(examId, {
+                    window: examWindow || null,
+                    startTime: Date.now(),
+                    status: 'active',
+                    expectedSessionId: this.generateSessionId(examId),
+                    origin: (typeof window !== 'undefined' && window.location) ? window.location.origin : ''
+                });
+            }
+
+            const windowInfo = this.examWindows.get(examId);
+
+            if (examWindow && (!windowInfo.window || windowInfo.window.closed || windowInfo.window !== examWindow)) {
+                windowInfo.window = examWindow;
+            }
+
+            if (!windowInfo.expectedSessionId) {
+                windowInfo.expectedSessionId = this.generateSessionId(examId);
+            }
+
+            this.examWindows.set(examId, windowInfo);
+            return windowInfo;
         },
 
         /**
@@ -859,7 +931,7 @@
                         examId: examId,
                         startTime: new Date().toISOString(),
                         status: 'started',
-                        sessionId: this.generateSessionId()
+                        sessionId: this.generateSessionId(examId)
                     };
 
                     const activeSessions = await storage.get('active_sessions', []);
@@ -887,7 +959,7 @@
                 examId: examId,
                 startTime: new Date().toISOString(),
                 status: 'started',
-                sessionId: this.generateSessionId()
+                sessionId: this.generateSessionId(examId)
             };
 
             const activeSessions = await storage.get('active_sessions', []);
