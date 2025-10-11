@@ -2682,6 +2682,11 @@ async function deleteLibraryConfig(configKey) {
     }
 }
 
+if (typeof window !== 'undefined') {
+    window.switchLibraryConfig = switchLibraryConfig;
+    window.deleteLibraryConfig = deleteLibraryConfig;
+}
+
 function createManualBackup() {
     if (!window.dataIntegrityManager) {
         showMessage('数据管理模块未初始化', 'error');
