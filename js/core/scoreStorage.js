@@ -23,6 +23,75 @@ class ScoreStorage {
         this.initialize();
     }
 
+    normalizePracticeType(rawType) {
+        if (!rawType) return null;
+        const normalized = String(rawType).toLowerCase();
+        if (normalized.includes('listen')) return 'listening';
+        if (normalized.includes('read')) return 'reading';
+        return null;
+    }
+
+    inferPracticeType(recordData = {}) {
+        const metadata = recordData.metadata || {};
+        const normalized = this.normalizePracticeType(
+            recordData.type
+            || metadata.type
+            || metadata.examType
+            || (recordData.examId && String(recordData.examId).toLowerCase().includes('listening') ? 'listening' : null)
+        );
+        return normalized || 'reading';
+    }
+
+    resolveRecordDate(recordData = {}, now = new Date().toISOString()) {
+        const candidates = [
+            recordData.metadata?.date,
+            recordData.date,
+            recordData.endTime,
+            recordData.completedAt,
+            recordData.startTime,
+            recordData.timestamp,
+            now
+        ];
+        for (const value of candidates) {
+            if (!value) continue;
+            const parsed = new Date(value);
+            if (!Number.isNaN(parsed.getTime())) {
+                return parsed.toISOString();
+            }
+        }
+        return now;
+    }
+
+    buildMetadata(recordData = {}, type) {
+        const metadata = { ...(recordData.metadata || {}) };
+        const examId = recordData.examId;
+        const fallbackTitle = recordData.title || recordData.examTitle || examId || 'Unknown Exam';
+        const fallbackCategory = recordData.category || 'Unknown';
+        const fallbackFrequency = recordData.frequency || 'unknown';
+
+        metadata.examTitle = metadata.examTitle || metadata.title || fallbackTitle;
+        metadata.category = metadata.category || fallbackCategory;
+        metadata.frequency = metadata.frequency || fallbackFrequency;
+        metadata.type = type;
+        metadata.examType = metadata.examType || type;
+
+        return metadata;
+    }
+
+    ensureNumber(value, fallback = 0) {
+        const num = Number(value);
+        return Number.isFinite(num) ? num : fallback;
+    }
+
+    getDateOnlyIso(value) {
+        if (!value) return null;
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) {
+            return null;
+        }
+        return parsed.toISOString().split('T')[0];
+    }
+
     createStorageAdapter() {
         const practiceRepo = this.repositories.practice;
         const metaRepo = this.repositories.meta;
@@ -275,37 +344,44 @@ class ScoreStorage {
      */
     standardizeRecord(recordData) {
         const now = new Date().toISOString();
-        
+        const type = this.inferPracticeType(recordData);
+        const recordDate = this.resolveRecordDate(recordData, now);
+        const metadata = this.buildMetadata(recordData, type);
+
+        const startTime = recordData.startTime && !Number.isNaN(new Date(recordData.startTime).getTime())
+            ? new Date(recordData.startTime).toISOString()
+            : recordDate;
+        const endTime = recordData.endTime && !Number.isNaN(new Date(recordData.endTime).getTime())
+            ? new Date(recordData.endTime).toISOString()
+            : recordDate;
+
         return {
             // 基础信息
             id: recordData.id || this.generateRecordId(),
             examId: recordData.examId,
             sessionId: recordData.sessionId,
-            
+            type,
+
             // 时间信息
-            startTime: recordData.startTime,
-            endTime: recordData.endTime,
-            duration: recordData.duration || 0,
-            
+            startTime,
+            endTime,
+            duration: this.ensureNumber(recordData.duration, 0),
+            date: recordDate,
+
             // 成绩信息
             status: recordData.status || 'completed',
-            score: recordData.score || 0,
-            totalQuestions: recordData.totalQuestions || 0,
-            correctAnswers: recordData.correctAnswers || 0,
-            accuracy: recordData.accuracy || 0,
-            
+            score: this.ensureNumber(recordData.score, 0),
+            totalQuestions: this.ensureNumber(recordData.totalQuestions, 0),
+            correctAnswers: this.ensureNumber(recordData.correctAnswers, 0),
+            accuracy: this.ensureNumber(recordData.accuracy, 0),
+
             // 答题详情
             answers: this.standardizeAnswers(recordData.answers || []),
             questionTypePerformance: recordData.questionTypePerformance || {},
-            
+
             // 元数据
-            metadata: {
-                examTitle: '',
-                category: '',
-                frequency: '',
-                ...recordData.metadata
-            },
-            
+            metadata,
+
             // 系统信息
             version: this.currentVersion,
             createdAt: recordData.createdAt || now,
@@ -366,26 +442,30 @@ class ScoreStorage {
      */
     async updateUserStats(practiceRecord) {
         const stats = await this.storage.get(this.storageKeys.userStats, this.getDefaultUserStats());
-        
+
+        const duration = Number(practiceRecord.duration) || 0;
+        const accuracy = Number(practiceRecord.accuracy) || 0;
+        const normalizedRecord = { ...practiceRecord, duration, accuracy };
+
         // 更新基础统计
         stats.totalPractices += 1;
-        stats.totalTimeSpent += practiceRecord.duration;
-        
+        stats.totalTimeSpent += duration;
+
         // 计算平均分数
-        const totalScore = (stats.averageScore * (stats.totalPractices - 1)) + practiceRecord.accuracy;
+        const totalScore = (stats.averageScore * (stats.totalPractices - 1)) + accuracy;
         stats.averageScore = totalScore / stats.totalPractices;
-        
+
         // 更新分类统计
-        this.updateCategoryStats(stats, practiceRecord);
-        
+        this.updateCategoryStats(stats, normalizedRecord);
+
         // 更新题型统计
-        this.updateQuestionTypeStats(stats, practiceRecord);
-        
+        this.updateQuestionTypeStats(stats, normalizedRecord);
+
         // 更新连续学习天数
-        this.updateStreakDays(stats, practiceRecord);
-        
+        this.updateStreakDays(stats, normalizedRecord);
+
         // 检查成就
-        this.checkAchievements(stats, practiceRecord);
+        this.checkAchievements(stats, normalizedRecord);
         
         // 更新时间戳
         stats.updatedAt = new Date().toISOString();
@@ -465,21 +545,26 @@ class ScoreStorage {
      * 更新连续学习天数
      */
     updateStreakDays(stats, practiceRecord) {
-        const today = new Date(practiceRecord.startTime).toDateString();
-        const lastDate = stats.lastPracticeDate ? new Date(stats.lastPracticeDate).toDateString() : null;
-        
-        if (lastDate !== today) {
-            if (lastDate) {
-                const daysDiff = (new Date(today) - new Date(lastDate)) / (1000 * 60 * 60 * 24);
-                if (daysDiff === 1) {
+        const recordDay = this.getDateOnlyIso(practiceRecord.date || practiceRecord.endTime || practiceRecord.startTime);
+        if (!recordDay) return;
+
+        const lastDay = this.getDateOnlyIso(stats.lastPracticeDate);
+
+        if (lastDay !== recordDay) {
+            if (lastDay) {
+                const currentDate = new Date(`${recordDay}T00:00:00Z`);
+                const previousDate = new Date(`${lastDay}T00:00:00Z`);
+                const diff = Math.round((currentDate - previousDate) / (1000 * 60 * 60 * 24));
+
+                if (diff === 1) {
                     stats.streakDays += 1;
-                } else if (daysDiff > 1) {
+                } else if (diff > 1 || diff < 0) {
                     stats.streakDays = 1;
                 }
             } else {
                 stats.streakDays = 1;
             }
-            stats.lastPracticeDate = today;
+            stats.lastPracticeDate = recordDay;
         }
     }
 
