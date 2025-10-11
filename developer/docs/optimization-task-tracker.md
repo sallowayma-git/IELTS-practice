@@ -187,6 +187,12 @@
 - `GoalManager` 与 `RecommendationEngine` 的存储访问统一异步化，所有 `save`/`getPracticeRecords` 流程 `await` 存储结果并在降级路径提供日志，推荐展示层同步等待推荐结果渲染。【F:js/core/goalManager.js†L1-L260】【F:js/core/recommendationEngine.js†L90-L152】【F:js/components/recommendationDisplay.js†L112-L210】
 - 修复练习历史批量删除 race condition，确保确认对话后等待存储写回；批量选择按钮与组件共享同一删除逻辑，并在 CI/E2E 套件中新增覆盖用例。【F:js/main.js†L2218-L2272】【F:js/components/practiceHistory.js†L1087-L1113】【F:developer/tests/js/e2e/appE2ETest.js†L1009-L1116】【F:developer/tests/ci/run_static_suite.py†L224-L244】
 
+### 2025-10-11 23:05 回归记录
+- 内嵌练习模板改为包装标准化消息信封：监听 `INIT_SESSION`/`init_exam_session` 更新会话 ID，并以 `{ type, data, source }` 结构回传 `SESSION_READY`/`PRACTICE_COMPLETE`，确保 E2E 与真实页面一致握手语义。【F:developer/tests/js/e2e/appE2ETest.js†L1166-L1209】
+- 练习窗口代理现在显式绑定 `postMessage` 到真实 `contentWindow`，避免 `Illegal invocation`，并保留 load 事件代理，srcdoc 场景下的握手不再超时。【F:developer/tests/js/e2e/appE2ETest.js†L1225-L1260】
+- `examSessionMixin.handleSessionReady` 对缺失 payload 做容错，只在存在 `pageType` 时写入窗口信息，消除 E2E fixture 初始握手产生的空对象异常日志。【F:js/app/examSessionMixin.js†L804-L815】
+- Playwright 烟测脚本订阅 runner 页的 console/pageerror 事件，把内嵌 E2E 套件的进度与异常抛回 CLI，便于 CI 诊断并锁定挂起原因。【F:developer/tests/e2e/playwright_index_clickthrough.py†L212-L221】
+
 ## 阶段2: 架构重构 (P1 - 核心问题)
 
 ### 任务2.1: 简化巨石文件
