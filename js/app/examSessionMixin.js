@@ -397,10 +397,21 @@
                 // 验证消息数据格式
                 if (!event.data || typeof event.data !== 'object') return;
 
-                // 兼容处理：允许缺失来源标记的消息（旧页面可能未填充 source）
+                // 取得当前题目窗口引用（可能在 handshake 期间被更新）
+                const windowInfo = (this.examWindows && this.examWindows.get(examId)) || {};
+                const expectedWindow = windowInfo.window || examWindow;
 
-                // 验证窗口来源（如果可能的话）- 放宽验证条件
-                if (event.source && examWindow && event.source !== examWindow) {
+                // 窗口来源不匹配直接拒绝，阻止其它 tab 注入消息
+                if (!event.source || !expectedWindow || event.source !== expectedWindow) {
+                    return;
+                }
+
+                // 校验来源域，允许 file:// (origin 为 null) 与同源页面
+                if (event.origin && event.origin !== 'null') {
+                    const allowedOrigin = window.location && window.location.origin;
+                    if (allowedOrigin && event.origin !== allowedOrigin) {
+                        return;
+                    }
                 }
 
                 // 放宽消息源过滤，兼容 inline_collector 与 practice_page
@@ -410,6 +421,11 @@
                 }
 
                 const { type, data } = event.data || {};
+
+                // 如果消息带有 sessionId，则要求与当前窗口记录一致
+                if (data && data.sessionId && windowInfo.sessionId && data.sessionId !== windowInfo.sessionId) {
+                    return;
+                }
 
                 switch (type) {
                     case 'exam_completed':
