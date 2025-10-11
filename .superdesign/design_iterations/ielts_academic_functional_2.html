@@ -1491,14 +1491,7 @@
 
         async function writeSharedArray(key, value) {
             const normalized = Array.isArray(value) ? value : [];
-
-            if (hasSharedStorage()) {
-                try {
-                    await window.storage.set(key, normalized);
-                } catch (e) {
-                    console.warn('[StorageBridge] Failed to write', key, 'to shared storage:', e);
-                }
-            }
+            const supportsShared = hasSharedStorage();
 
             try {
                 localStorage.setItem(key, JSON.stringify(normalized));
@@ -1506,7 +1499,15 @@
                 console.warn('[StorageBridge] Failed to persist', key, 'to localStorage:', e);
             }
 
-            if (!hasSharedStorage()) {
+            if (supportsShared) {
+                try {
+                    await window.storage.set(key, normalized);
+                } catch (e) {
+                    console.warn('[StorageBridge] Failed to write', key, 'to shared storage:', e);
+                }
+            }
+
+            if (!supportsShared) {
                 try {
                     window.dispatchEvent(new CustomEvent('storage-sync', { detail: { key } }));
                 } catch (e) {
