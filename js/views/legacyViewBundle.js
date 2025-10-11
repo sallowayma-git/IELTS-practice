@@ -1095,26 +1095,58 @@
         info.appendChild(this._createElement('div', { className: this.classNames.meta }, metaText));
 
         var actions = this._createElement('div', { className: this.classNames.actions });
-        actions.appendChild(this._createElement('button', {
+        var switchButton = this._createElement('button', {
             className: 'btn btn-secondary',
             type: 'button',
             dataset: {
                 configAction: 'switch',
-                configKey: config.key
-            },
-            disabled: !!isActive
-        }, '切换'));
+                configKey: config.key,
+                configActive: isActive ? '1' : '0'
+            }
+        }, '切换');
+        if (typeof switchButton.addEventListener === 'function') {
+            (function(button, key) {
+                button.addEventListener('click', function(event) {
+                    if (event && typeof event.preventDefault === 'function') {
+                        event.preventDefault();
+                    }
+                    if (event && typeof event.stopPropagation === 'function') {
+                        event.stopPropagation();
+                    }
+                    if (typeof window.switchLibraryConfig === 'function') {
+                        window.switchLibraryConfig(key);
+                    }
+                });
+            })(switchButton, config.key);
+        }
+        actions.appendChild(switchButton);
 
         if (!isDefault && allowDelete !== false) {
-            actions.appendChild(this._createElement('button', {
+            var deleteButton = this._createElement('button', {
                 className: 'btn btn-warning',
                 type: 'button',
                 dataset: {
                     configAction: 'delete',
-                    configKey: config.key
-                },
-                disabled: !!isActive
-            }, '删除'));
+                    configKey: config.key,
+                    configActive: isActive ? '1' : '0'
+                }
+            }, '删除');
+            if (typeof deleteButton.addEventListener === 'function') {
+                (function(button, key) {
+                    button.addEventListener('click', function(event) {
+                        if (event && typeof event.preventDefault === 'function') {
+                            event.preventDefault();
+                        }
+                        if (event && typeof event.stopPropagation === 'function') {
+                            event.stopPropagation();
+                        }
+                        if (typeof window.deleteLibraryConfig === 'function') {
+                            window.deleteLibraryConfig(key);
+                        }
+                    });
+                })(deleteButton, config.key);
+            }
+            actions.appendChild(deleteButton);
         }
 
         item.appendChild(info);
@@ -1170,9 +1202,20 @@
         }
 
         var handlers = options && options.handlers ? options.handlers : {};
+        var findActionTarget = function(node) {
+            var current = node;
+            while (current && current !== host) {
+                if (current.dataset && current.dataset.configAction) {
+                    return current;
+                }
+                current = current.parentNode;
+            }
+            return null;
+        };
+
         var listener = function (event) {
-            var target = event.target && event.target.closest('[data-config-action]');
-            if (!target || !host.contains(target)) {
+            var target = findActionTarget(event.target);
+            if (!target) {
                 return;
             }
 
