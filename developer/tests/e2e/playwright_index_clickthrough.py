@@ -242,6 +242,8 @@ async def exercise_index_interactions(page: Page) -> None:
 
 
 async def run_e2e_suite(page: Page) -> None:
+    page.on("console", lambda msg: print(f"[E2E runner console] {msg.type.upper()}: {msg.text}"))
+    page.on("pageerror", lambda exc: print(f"[E2E runner error] {exc}"))
     await page.goto(E2E_RUNNER_PATH.resolve().as_uri())
     await page.wait_for_load_state("load")
     await page.wait_for_selector("#suite-status", timeout=60000)
