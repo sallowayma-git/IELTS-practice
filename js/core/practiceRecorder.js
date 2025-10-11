@@ -149,6 +149,7 @@ class PracticeRecorder {
 
             if (previousDayStart !== null && currentDayStart !== null) {
                 if (currentDayStart < previousDayStart) {
+                    // 旧记录只跳过连击更新，不影响上层的记录恢复流程
                     return;
                 }
 
