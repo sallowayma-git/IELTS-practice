@@ -18,10 +18,103 @@ class PracticeRecorder {
         this.practiceRepo = this.repositories.practice;
         this.metaRepo = this.repositories.meta;
 
+        this.practiceTypeCache = new Map();
+
         // 异步初始化
         this.initialize().catch(error => {
             console.error('[PracticeRecorder] 初始化失败', error);
         });
+    }
+
+    normalizePracticeType(rawType) {
+        if (!rawType) return null;
+        const normalized = String(rawType).toLowerCase();
+        if (normalized.includes('listen')) return 'listening';
+        if (normalized.includes('read')) return 'reading';
+        return null;
+    }
+
+    lookupExamIndexEntry(examId) {
+        if (!examId) return null;
+
+        if (this.practiceTypeCache.has(examId)) {
+            return this.practiceTypeCache.get(examId);
+        }
+
+        const sources = [
+            () => Array.isArray(window.examIndex) ? window.examIndex : null,
+            () => Array.isArray(window.completeExamIndex)
+                ? window.completeExamIndex.map(exam => ({ ...exam, type: exam.type || 'reading' }))
+                : null,
+            () => Array.isArray(window.listeningExamIndex) ? window.listeningExamIndex : null
+        ];
+
+        for (const getSource of sources) {
+            const list = getSource();
+            if (Array.isArray(list)) {
+                const entry = list.find(item => item && item.id === examId);
+                if (entry) {
+                    this.practiceTypeCache.set(examId, entry);
+                    return entry;
+                }
+            }
+        }
+
+        this.practiceTypeCache.set(examId, null);
+        return null;
+    }
+
+    resolvePracticeType(session = {}, examEntry = null) {
+        const examId = session.examId;
+        const metadata = session.metadata || {};
+        const cachedEntry = this.practiceTypeCache.get(examId);
+        const entry = examEntry || cachedEntry || this.lookupExamIndexEntry(examId);
+
+        const normalized = this.normalizePracticeType(
+            metadata.type
+            || metadata.examType
+            || entry?.type
+        );
+        if (normalized) return normalized;
+
+        if (entry) {
+            const entryType = this.normalizePracticeType(entry.type);
+            if (entryType) return entryType;
+        }
+
+        if (examId && String(examId).toLowerCase().includes('listening')) {
+            return 'listening';
+        }
+
+        return 'reading';
+    }
+
+    resolveRecordDate(session = {}, fallbackEndTime) {
+        const metadataDate = session.metadata?.date;
+        const sourceDate = metadataDate
+            || session.date
+            || fallbackEndTime
+            || session.endTime
+            || session.startTime;
+        const date = sourceDate ? new Date(sourceDate) : new Date();
+        return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+    }
+
+    buildRecordMetadata(session = {}, examEntry, type) {
+        const metadata = { ...(session.metadata || {}) };
+        const examId = session.examId;
+
+        const derivedTitle = metadata.examTitle || metadata.title || examEntry?.title || examId || 'Unknown Exam';
+        const derivedCategory = metadata.category || examEntry?.category || 'Unknown';
+        const derivedFrequency = metadata.frequency || examEntry?.frequency || 'unknown';
+
+        metadata.examTitle = derivedTitle;
+        metadata.category = derivedCategory;
+        metadata.frequency = derivedFrequency;
+        metadata.type = type;
+        metadata.examType = metadata.examType || type;
+
+        return metadata;
     }
 
     /**
@@ -220,8 +313,15 @@ class PracticeRecorder {
         if (!this.activeSessions.has(examId)) return;
 
         let session = this.activeSessions.get(examId);
-        const endTime = new Date().toISOString();
-        
+        const endTime = data.endTime && !Number.isNaN(new Date(data.endTime).getTime())
+            ? new Date(data.endTime).toISOString()
+            : new Date().toISOString();
+
+        const examEntry = this.lookupExamIndexEntry(examId);
+        const type = this.resolvePracticeType({ ...session, examId }, examEntry);
+        const recordDate = this.resolveRecordDate({ ...session, endTime }, endTime);
+        const metadata = this.buildRecordMetadata({ ...session, examId }, examEntry, type);
+
         // 计算总用时
         const duration = new Date(endTime) - new Date(session.startTime);
         
@@ -234,13 +334,15 @@ class PracticeRecorder {
             endTime,
             duration: Math.floor(duration / 1000), // 秒
             status: 'completed',
+            type,
+            date: recordDate,
             score: results.score || 0,
             totalQuestions: results.totalQuestions || session.progress.totalQuestions,
             correctAnswers: results.correctAnswers || 0,
             accuracy: results.accuracy || 0,
             answers: results.answers || session.answers,
             questionTypePerformance: results.questionTypePerformance || {},
-            metadata: session.metadata,
+            metadata,
             createdAt: endTime
         };
         
@@ -548,37 +650,65 @@ class PracticeRecorder {
      */
     standardizeRecordForFallback(recordData) {
         const now = new Date().toISOString();
-        
+        const endTime = recordData.endTime && !Number.isNaN(new Date(recordData.endTime).getTime())
+            ? new Date(recordData.endTime).toISOString()
+            : now;
+        const examEntry = this.lookupExamIndexEntry(recordData.examId);
+        const inferredType = this.normalizePracticeType(
+            recordData.type
+            || recordData.metadata?.type
+            || examEntry?.type
+            || (recordData.examId && String(recordData.examId).toLowerCase().includes('listening') ? 'listening' : null)
+        ) || 'reading';
+        const metadata = this.buildRecordMetadata(
+            {
+                examId: recordData.examId,
+                metadata: recordData.metadata
+            },
+            examEntry,
+            inferredType
+        );
+        const recordDate = recordData.date
+            || this.resolveRecordDate(
+                {
+                    examId: recordData.examId,
+                    startTime: recordData.startTime,
+                    endTime,
+                    metadata: recordData.metadata
+                },
+                endTime
+            );
+        const startTime = recordData.startTime && !Number.isNaN(new Date(recordData.startTime).getTime())
+            ? new Date(recordData.startTime).toISOString()
+            : recordDate;
+
         return {
             // 基础信息
             id: recordData.id || this.generateRecordId(),
             examId: recordData.examId,
             sessionId: recordData.sessionId,
-            
+
             // 时间信息
-            startTime: recordData.startTime,
-            endTime: recordData.endTime,
-            duration: recordData.duration || 0,
-            
+            startTime,
+            endTime,
+            duration: Number(recordData.duration) || 0,
+            date: recordDate,
+
             // 成绩信息
             status: recordData.status || 'completed',
-            score: recordData.score || 0,
-            totalQuestions: recordData.totalQuestions || 0,
-            correctAnswers: recordData.correctAnswers || 0,
-            accuracy: recordData.accuracy || 0,
-            
+            type: inferredType,
+            score: Number(recordData.score) || 0,
+            totalQuestions: Number(recordData.totalQuestions) || 0,
+            correctAnswers: Number(recordData.correctAnswers) || 0,
+            accuracy: Number(recordData.accuracy) || 0,
+
             // 答题详情
             answers: recordData.answers || [],
             questionTypePerformance: recordData.questionTypePerformance || {},
-            
+
             // 元数据
-            metadata: {
-                examTitle: '',
-                category: '',
-                frequency: '',
-                ...recordData.metadata
-            },
-            
+            metadata,
+
             // 系统信息
             version: '1.0.0',
             createdAt: recordData.createdAt || now,
@@ -640,12 +770,19 @@ class PracticeRecorder {
             });
 
             // 更新基础统计
+            const duration = Number(practiceRecord.duration) || 0;
+            const accuracy = Number(practiceRecord.accuracy) || 0;
+            const normalizedRecord = { ...practiceRecord, duration, accuracy };
+
             stats.totalPractices += 1;
-            stats.totalTimeSpent += practiceRecord.duration;
+            stats.totalTimeSpent += duration;
 
             // 计算平均分数
-            const totalScore = (stats.averageScore * (stats.totalPractices - 1)) + practiceRecord.accuracy;
+            const totalScore = (stats.averageScore * (stats.totalPractices - 1)) + accuracy;
             stats.averageScore = totalScore / stats.totalPractices;
+
+            // 更新连续学习天数
+            this.updateStreakDays(stats, normalizedRecord);
 
             // 更新时间戳
             stats.updatedAt = new Date().toISOString();
@@ -712,15 +849,19 @@ class PracticeRecorder {
         });
         
         // 更新基础统计
+        const duration = Number(practiceRecord.duration) || 0;
+        const accuracy = Number(practiceRecord.accuracy) || 0;
+        const normalizedRecord = { ...practiceRecord, duration, accuracy };
+
         stats.totalPractices += 1;
-        stats.totalTimeSpent += practiceRecord.duration;
-        
+        stats.totalTimeSpent += duration;
+
         // 计算平均分数
-        const totalScore = (stats.averageScore * (stats.totalPractices - 1)) + practiceRecord.accuracy;
+        const totalScore = (stats.averageScore * (stats.totalPractices - 1)) + accuracy;
         stats.averageScore = totalScore / stats.totalPractices;
-        
+
         // 更新分类统计
-        const category = practiceRecord.metadata.category;
+        const category = normalizedRecord.metadata.category;
         if (category) {
             if (!stats.categoryStats[category]) {
                 stats.categoryStats[category] = {
@@ -730,19 +871,19 @@ class PracticeRecorder {
                     bestScore: 0
                 };
             }
-            
+
             const catStats = stats.categoryStats[category];
             catStats.practices += 1;
-            catStats.timeSpent += practiceRecord.duration;
-            catStats.bestScore = Math.max(catStats.bestScore, practiceRecord.accuracy);
-            
-            const catTotalScore = (catStats.avgScore * (catStats.practices - 1)) + practiceRecord.accuracy;
+            catStats.timeSpent += duration;
+            catStats.bestScore = Math.max(catStats.bestScore, accuracy);
+
+            const catTotalScore = (catStats.avgScore * (catStats.practices - 1)) + accuracy;
             catStats.avgScore = catTotalScore / catStats.practices;
         }
-        
+
         // 更新题型统计
-        if (practiceRecord.questionTypePerformance) {
-            Object.entries(practiceRecord.questionTypePerformance).forEach(([type, performance]) => {
+        if (normalizedRecord.questionTypePerformance) {
+            Object.entries(normalizedRecord.questionTypePerformance).forEach(([type, performance]) => {
                 if (!stats.questionTypeStats[type]) {
                     stats.questionTypeStats[type] = {
                         practices: 0,
@@ -756,28 +897,34 @@ class PracticeRecorder {
                 typeStats.practices += 1;
                 typeStats.totalQuestions += performance.total || 0;
                 typeStats.correctAnswers += performance.correct || 0;
-                typeStats.accuracy = typeStats.totalQuestions > 0 
-                    ? typeStats.correctAnswers / typeStats.totalQuestions 
+                typeStats.accuracy = typeStats.totalQuestions > 0
+                    ? typeStats.correctAnswers / typeStats.totalQuestions
                     : 0;
             });
         }
-        
+
         // 更新连续学习天数
-        const today = new Date().toDateString();
-        const lastDate = stats.lastPracticeDate ? new Date(stats.lastPracticeDate).toDateString() : null;
-        
-        if (lastDate !== today) {
-            if (lastDate) {
-                const daysDiff = (new Date(today) - new Date(lastDate)) / (1000 * 60 * 60 * 24);
-                if (daysDiff === 1) {
+        const recordDateIso = this.resolveRecordDate(normalizedRecord);
+        const recordDay = recordDateIso.split('T')[0];
+        const lastDay = stats.lastPracticeDate
+            ? new Date(stats.lastPracticeDate).toISOString().split('T')[0]
+            : null;
+
+        if (lastDay !== recordDay) {
+            if (lastDay) {
+                const currentDate = new Date(`${recordDay}T00:00:00Z`);
+                const previousDate = new Date(`${lastDay}T00:00:00Z`);
+                const diff = Math.round((currentDate - previousDate) / (1000 * 60 * 60 * 24));
+
+                if (diff === 1) {
                     stats.streakDays += 1;
-                } else if (daysDiff > 1) {
+                } else if (diff > 1 || diff < 0) {
                     stats.streakDays = 1;
                 }
             } else {
                 stats.streakDays = 1;
             }
-            stats.lastPracticeDate = today;
+            stats.lastPracticeDate = recordDay;
         }
         
         await this.metaRepo.set('user_stats', stats);
