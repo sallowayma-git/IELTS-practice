@@ -102,11 +102,33 @@ class PracticeRecorder {
 
     getDateOnlyIso(value) {
         if (!value) return null;
+        if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+            return value;
+        }
         const parsed = new Date(value);
         if (Number.isNaN(parsed.getTime())) {
             return null;
         }
-        return parsed.toISOString().split('T')[0];
+        const year = parsed.getFullYear();
+        const month = String(parsed.getMonth() + 1).padStart(2, '0');
+        const day = String(parsed.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    getLocalDayStart(value) {
+        if (!value) return null;
+        if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+            const [year, month, day] = value.split('-').map(part => Number(part));
+            if ([year, month, day].some(num => Number.isNaN(num))) {
+                return null;
+            }
+            return new Date(year, month - 1, day).getTime();
+        }
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) {
+            return null;
+        }
+        return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()).getTime();
     }
 
     updateStreakDays(stats, practiceRecord) {
@@ -122,10 +144,11 @@ class PracticeRecorder {
         const lastDay = this.getDateOnlyIso(stats.lastPracticeDate);
 
         if (lastDay !== recordDay) {
-            if (lastDay) {
-                const currentDate = new Date(`${recordDay}T00:00:00Z`);
-                const previousDate = new Date(`${lastDay}T00:00:00Z`);
-                const diff = Math.round((currentDate - previousDate) / (1000 * 60 * 60 * 24));
+            const currentDayStart = this.getLocalDayStart(resolvedDate);
+            const previousDayStart = this.getLocalDayStart(stats.lastPracticeDate);
+
+            if (previousDayStart !== null && currentDayStart !== null) {
+                const diff = Math.round((currentDayStart - previousDayStart) / (1000 * 60 * 60 * 24));
 
                 if (diff === 1) {
                     stats.streakDays = (stats.streakDays || 0) + 1;
