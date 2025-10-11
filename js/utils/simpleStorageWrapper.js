@@ -36,14 +36,29 @@
         async remove(key) { await this.metaRepo.remove(key); return true; }
     }
 
-    function initializeWrapper() {
-        if (!window.dataRepositories) {
-            setTimeout(initializeWrapper, 50);
+    function connectWrapper(repositories) {
+        if (!repositories) {
             return;
         }
-        window.simpleStorageWrapper = new SimpleStorageWrapper(window.dataRepositories);
+        if (window.simpleStorageWrapper && window.simpleStorageWrapper.repos === repositories) {
+            return;
+        }
+        window.simpleStorageWrapper = new SimpleStorageWrapper(repositories);
         console.log('[SimpleStorageWrapper] 已连接新的数据仓库接口');
     }
 
-    initializeWrapper();
+    const registry = window.StorageProviderRegistry;
+    if (registry && typeof registry.onProvidersReady === 'function') {
+        registry.onProvidersReady(({ repositories }) => connectWrapper(repositories));
+        const current = registry.getCurrentProviders && registry.getCurrentProviders();
+        if (current && current.repositories) {
+            connectWrapper(current.repositories);
+        }
+    } else if (window.dataRepositories) {
+        connectWrapper(window.dataRepositories);
+    } else {
+        console.warn('[SimpleStorageWrapper] 数据仓库尚未可用，等待外部注入');
+    }
+
+    window.SimpleStorageWrapper = SimpleStorageWrapper;
 })(window);

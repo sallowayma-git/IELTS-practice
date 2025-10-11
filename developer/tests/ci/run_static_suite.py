@@ -231,6 +231,11 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result(f"数据层资产 {path.name}", file_passed, file_detail))
         all_passed &= file_passed
 
+    registry_path = REPO_ROOT / "js" / "core" / "storageProviderRegistry.js"
+    registry_exists, registry_detail = _ensure_exists(registry_path)
+    results.append(_format_result("StorageProviderRegistry 存在性", registry_exists, registry_detail))
+    all_passed &= registry_exists
+
     simple_wrapper = REPO_ROOT / "js" / "utils" / "simpleStorageWrapper.js"
     wrapper_passed, wrapper_detail = _check_contains(simple_wrapper, "dataRepositories")
     results.append(_format_result("simpleStorageWrapper 适配数据仓库", wrapper_passed, wrapper_detail))
@@ -254,6 +259,11 @@ def run_checks() -> Tuple[List[dict], bool]:
             check_passed, check_detail = _check_contains(practice_fixture, snippet)
             results.append(_format_result(f"练习模板: {label}", check_passed, check_detail))
             all_passed &= check_passed
+
+    e2e_suite = REPO_ROOT / "developer" / "tests" / "js" / "e2e" / "appE2ETest.js"
+    bulk_test_passed, bulk_test_detail = _check_contains(e2e_suite, "练习历史批量删除")
+    results.append(_format_result("E2E 批量删除测试覆盖", bulk_test_passed, bulk_test_detail))
+    all_passed &= bulk_test_passed
 
     return results, all_passed
 
