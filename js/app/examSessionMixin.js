@@ -797,12 +797,15 @@
          * 处理数据采集器会话就绪
          */
         handleSessionReady(examId, data) {
+            const payload = data && typeof data === 'object' ? data : {};
 
             // 更新会话状态
             if (this.examWindows && this.examWindows.has(examId)) {
                 const windowInfo = this.examWindows.get(examId);
                 windowInfo.dataCollectorReady = true;
-                windowInfo.pageType = data.pageType;
+                if (payload.pageType) {
+                    windowInfo.pageType = payload.pageType;
+                }
                 this.examWindows.set(examId, windowInfo);
             }
 
