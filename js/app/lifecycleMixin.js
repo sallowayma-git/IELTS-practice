@@ -556,6 +556,11 @@
                 clearInterval(this.sessionMonitorInterval);
             }
 
+            if (this._practiceRecorderUpgradeTimer) {
+                clearInterval(this._practiceRecorderUpgradeTimer);
+                this._practiceRecorderUpgradeTimer = null;
+            }
+
             // 关闭所有题目窗口
             if (this.examWindows) {
                 this.examWindows.forEach((windowData, examId) => {
