@@ -62,14 +62,21 @@ class ExamSystemApp {
 }
 
 (function(global) {
-    const mixins = global.ExamSystemAppMixins || {};
-    Object.assign(ExamSystemApp.prototype,
-        mixins.state,
-        mixins.bootstrap,
-        mixins.lifecycle,
-        mixins.navigation,
-        mixins.examSession,
-        mixins.fallback);
+    function applyMixins() {
+        const mixins = global.ExamSystemAppMixins || {};
+        Object.assign(ExamSystemApp.prototype,
+            mixins.state || {},
+            mixins.bootstrap || {},
+            mixins.lifecycle || {},
+            mixins.navigation || {},
+            mixins.examSession || {},
+            mixins.fallback || {});
+    }
+
+    applyMixins();
+
+    global.ExamSystemAppMixins = global.ExamSystemAppMixins || {};
+    global.ExamSystemAppMixins.__applyToApp = applyMixins;
 })(typeof window !== "undefined" ? window : globalThis);
 
 
@@ -77,6 +84,10 @@ class ExamSystemApp {
 // 应用启动
 document.addEventListener('DOMContentLoaded', () => {
     try {
+        const mixinGlue = window.ExamSystemAppMixins && window.ExamSystemAppMixins.__applyToApp;
+        if (typeof mixinGlue === 'function') {
+            mixinGlue();
+        }
         (function(){ try { window.app = new ExamSystemApp(); window.app.initialize(); } catch(e) { console.error('[App] 初始化失败:', e); } })();
     } catch (error) {
         console.error('Failed to start application:', error);
