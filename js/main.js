@@ -2215,7 +2215,7 @@ async function exportPracticeData() {
         showMessage('导出失败: ' + e.message, 'error');
     }
 }
-function toggleBulkDelete() {
+async function toggleBulkDelete() {
     const nextMode = !getBulkDeleteModeState();
     setBulkDeleteModeState(nextMode);
     const btn = document.getElementById('bulk-delete-btn');
@@ -2240,7 +2240,12 @@ function toggleBulkDelete() {
         if (selected.size > 0) {
             const confirmMessage = `确定要删除选中的 ${selected.size} 条记录吗？此操作不可恢复。`;
             if (confirm(confirmMessage)) {
-                bulkDeleteRecords();
+                try {
+                    await bulkDeleteRecords(selected);
+                } catch (error) {
+                    console.error('[System] 批量删除失败:', error);
+                    showMessage('批量删除失败：' + (error && error.message ? error.message : '未知错误'), 'error');
+                }
             }
         }
         clearSelectedRecordsState();
@@ -2249,17 +2254,32 @@ function toggleBulkDelete() {
     updatePracticeView();
 }
 
-async function bulkDeleteRecords() {
-    const records = await storage.get('practice_records', []);
-    const selected = getSelectedRecordsState();
-    const recordsToKeep = records.filter(record => !selected.has(normalizeRecordId(record && record.id)));
+async function bulkDeleteRecords(selectedSnapshot = getSelectedRecordsState()) {
+    const store = window.storage;
+    if (!store || typeof store.get !== 'function' || typeof store.set !== 'function') {
+        console.error('[System] storage 管理器不可用，无法执行批量删除');
+        showMessage('存储未就绪，暂时无法删除记录', 'error');
+        return;
+    }
 
-    const deletedCount = records.length - recordsToKeep.length;
+    const normalizedIds = Array.from(selectedSnapshot, (id) => normalizeRecordId(id)).filter(Boolean);
+    if (normalizedIds.length === 0) {
+        showMessage('请选择要删除的记录', 'warning');
+        return;
+    }
 
-    await storage.set('practice_records', recordsToKeep);
+    const records = await store.get('practice_records', []);
+    const baseList = Array.isArray(records) ? records : [];
+    const recordsToKeep = baseList.filter(record => !normalizedIds.includes(normalizeRecordId(record && record.id)));
+
+    const deletedCount = baseList.length - recordsToKeep.length;
+
+    await store.set('practice_records', recordsToKeep);
     setPracticeRecordsState(recordsToKeep);
 
-    syncPracticeRecords(); // Re-sync and update UI
+    if (typeof syncPracticeRecords === 'function') {
+        await syncPracticeRecords();
+    }
 
     showMessage(`已删除 ${deletedCount} 条记录`, 'success');
     console.log(`[System] 批量删除了 ${deletedCount} 条练习记录`);

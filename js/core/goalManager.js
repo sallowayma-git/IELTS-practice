@@ -3,11 +3,13 @@
  * 负责学习目标的设置、跟踪和管理
  */
 class GoalManager {
-    constructor() {
+    constructor(options = {}) {
         this.goals = [];
         this.currentGoal = null;
         this.progressData = {};
-        
+        this.storage = options.storage || (typeof window !== 'undefined' ? window.storage : null);
+        this.ready = Promise.resolve();
+
         this.loadGoals();
         this.initializeProgressTracking();
     }
@@ -16,23 +18,64 @@ class GoalManager {
      * 加载已保存的目标
      */
     loadGoals() {
-        this.goals = storage.get('learning_goals', []);
+        this.ready = this.loadGoalsAsync();
+        this.ready.catch((error) => {
+            console.error('[GoalManager] 加载目标失败:', error);
+        });
+    }
+
+    async loadGoalsAsync() {
+        const store = this.getStorage();
+        if (!store || typeof store.get !== 'function') {
+            console.warn('[GoalManager] storage 管理器不可用，使用默认目标数据');
+            this.goals = [];
+            this.progressData = {};
+            this.currentGoal = null;
+            return;
+        }
+
+        const [savedGoals, savedProgress] = await Promise.all([
+            store.get('learning_goals', []),
+            store.get('goal_progress', {})
+        ]);
+
+        this.goals = Array.isArray(savedGoals) ? savedGoals : [];
+        this.progressData = (savedProgress && typeof savedProgress === 'object' && !Array.isArray(savedProgress))
+            ? savedProgress
+            : {};
         this.currentGoal = this.goals.find(goal => goal.isActive) || null;
-        this.progressData = storage.get('goal_progress', {});
     }
 
     /**
      * 保存目标到存储
      */
-    saveGoals() {
-        storage.set('learning_goals', this.goals);
-        storage.set('goal_progress', this.progressData);
+    async saveGoals() {
+        const store = this.getStorage();
+        if (!store || typeof store.set !== 'function') {
+            console.warn('[GoalManager] 无法访问存储，跳过持久化');
+            return;
+        }
+        await Promise.all([
+            store.set('learning_goals', this.goals),
+            store.set('goal_progress', this.progressData)
+        ]);
+    }
+
+    getStorage() {
+        if (this.storage) {
+            return this.storage;
+        }
+        if (typeof window !== 'undefined' && window.storage) {
+            this.storage = window.storage;
+            return this.storage;
+        }
+        return null;
     }
 
     /**
      * 创建新的学习目标
      */
-    createGoal(goalData) {
+    async createGoal(goalData) {
         const goal = {
             id: this.generateGoalId(),
             type: goalData.type, // 'daily', 'weekly', 'monthly'
@@ -60,7 +103,7 @@ class GoalManager {
         // 初始化进度数据
         this.initializeGoalProgress(goal);
         
-        this.saveGoals();
+        await this.saveGoals();
         
         // 触发目标创建事件
         this.dispatchGoalEvent('goalCreated', { goal });
@@ -71,7 +114,7 @@ class GoalManager {
     /**
      * 更新目标
      */
-    updateGoal(goalId, updates) {
+    async updateGoal(goalId, updates) {
         const goalIndex = this.goals.findIndex(g => g.id === goalId);
         if (goalIndex === -1) {
             throw new Error('Goal not found');
@@ -90,18 +133,18 @@ class GoalManager {
             this.currentGoal = goal;
         }
 
-        this.saveGoals();
-        
+        await this.saveGoals();
+
         // 触发目标更新事件
         this.dispatchGoalEvent('goalUpdated', { goal });
-        
+
         return goal;
     }
 
     /**
      * 删除目标
      */
-    deleteGoal(goalId) {
+    async deleteGoal(goalId) {
         const goalIndex = this.goals.findIndex(g => g.id === goalId);
         if (goalIndex === -1) {
             throw new Error('Goal not found');
@@ -118,11 +161,11 @@ class GoalManager {
         // 删除相关进度数据
         delete this.progressData[goalId];
         
-        this.saveGoals();
-        
+        await this.saveGoals();
+
         // 触发目标删除事件
         this.dispatchGoalEvent('goalDeleted', { goalId, goal });
-        
+
         return true;
     }
 
@@ -164,7 +207,7 @@ class GoalManager {
     /**
      * 更新目标进度
      */
-    updateProgress(practiceData) {
+    async updateProgress(practiceData) {
         if (!this.currentGoal) return;
 
         const goal = this.currentGoal;
@@ -192,15 +235,15 @@ class GoalManager {
         this.updateStreak(goal, goalProgress);
 
         this.progressData[goal.id] = goalProgress;
-        this.saveGoals();
+        await this.saveGoals();
 
         // 检查目标完成
         const progress = this.getGoalProgress(goal.id);
         if (progress.isCompleted && !goalProgress.completedNotified) {
             goalProgress.completedNotified = true;
             this.progressData[goal.id] = goalProgress;
-            this.saveGoals();
-            
+            await this.saveGoals();
+
             // 触发目标完成事件
             this.dispatchGoalEvent('goalCompleted', { goal, progress });
         }
@@ -215,8 +258,10 @@ class GoalManager {
     initializeProgressTracking() {
         // 监听练习完成事件 - 自定义事件必须使用原生 addEventListener
         document.addEventListener('practiceSessionCompleted', (event) => {
-            const { practiceRecord } = event.detail;
-            this.updateProgress(practiceRecord);
+            const detail = event.detail || {};
+            const practiceRecord = detail.practiceRecord;
+            this.updateProgress(practiceRecord)
+                .catch(error => console.error('[GoalManager] 更新进度失败:', error));
         });
     }
 

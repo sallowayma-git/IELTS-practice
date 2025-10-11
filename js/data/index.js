@@ -99,7 +99,16 @@
             }
         };
 
-        window.dataRepositories = api;
+        const registryApi = window.StorageProviderRegistry;
+        if (registryApi && typeof registryApi.registerStorageProviders === 'function') {
+            registryApi.registerStorageProviders({
+                repositories: api,
+                storageManager: window.storage || null
+            });
+        } else {
+            window.dataRepositories = api;
+        }
+
         ExamData.registry = registry;
         ExamData.createDefaultUserStats = createDefaultUserStats;
         console.log('[data/index] 数据仓库初始化完成');

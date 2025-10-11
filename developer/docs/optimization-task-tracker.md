@@ -48,21 +48,29 @@
 - `DataIntegrityManager` 被迫直接绑定 `window.simpleStorageWrapper`，一旦该全局未初始化就只能降级轮询，说明缺少稳定的 Repository 注册点也阻塞了备份/校验流程的可靠性。【F:js/components/DataIntegrityManager.js†L14-L44】
 - `ScoreStorage` 仍手动拼装记录并与 `window.storage` 交互，没有统一的数据契约或乐观锁，重试/迁移逻辑分散在业务类中，后续要扩展 Hybrid/IndexedDB 仍缺少抽象层可复用。【F:js/core/scoreStorage.js†L1-L120】【F:js/core/scoreStorage.js†L150-L214】
 
+### 2025-10-10 21:41 审计摘要
+- 阶段2.1 巨石拆分告一段落：`ExamSystemApp` 仅保留构造与启动流程，核心职责拆解到 6 个 mixin，脚本加载顺序在 `index.html` 中显式标明，legacy 环境无需打包即可复用模块化入口。【F:js/app.js†L1-L60】【F:js/app/navigationMixin.js†L1-L220】【F:index.html†L381-L389】
+- 阶段7 DOM Builder 改造启动：`PracticeHistory` 增补统一的 `createNode`/`replaceContent` 工具与 HTML 解析回退，为后续迁移去除 `innerHTML` 奠定脚手架，计划逐批替换列表、分页与模态渲染路径。【F:js/components/practiceHistory.js†L1-L120】
+
 ### 2025-10-10 17:20 并行整改规划
 - **任务A｜修复 PracticeRecorder ↔ ScoreStorage 异步握手**
   - **现状**：`PracticeRecorder.savePracticeRecord` 虽已改成 `async`，但验证环节仍同步调用 `verifyRecordSaved` 与降级分支，写入链路依赖 Promise 恰好 resolve；一旦换用真正异步存储，当前逻辑必炸。【F:js/core/practiceRecorder.js†L456-L521】
   - **目标**：统一 `verifyRecordSaved`、降级恢复与统计更新为 `async/await`，补齐 `ScoreStorage.savePracticeRecord` 的结果契约，并在失败时输出结构化错误码供上层判定。【F:js/core/scoreStorage.js†L149-L185】
   - **交付**：完成握手改造、补充最小化静态回归脚本，复核练习提交流程。
+  - **2025-10-10 20:16 审计**：✅ 保存链路现已在成功/降级路径统一 `await` 验证并返回结构化记录，仓库写入完成后再广播事件。【F:js/core/practiceRecorder.js†L462-L499】【F:js/core/scoreStorage.js†L260-L307】
 
 - **任务B｜清理 UI 模块中的同步存储误用**
   - **现状**：练习历史导出、教程系统、快捷键搜索等模块仍存在直接读取 `window.storage` 结果后立即当作数组/布尔值使用的垃圾写法，Hybrid 存储开启即失败。【F:js/components/practiceHistoryEnhancer.js†L275-L305】【F:js/utils/tutorialSystem.js†L184-L195】【F:js/utils/tutorialSystem.js†L504-L536】【F:js/utils/keyboardShortcuts.js†L531-L651】
   - **目标**：将所有读取入口改为 `await window.storage.get(...)` 并在 fallback 分支显式校验类型，统一返回空数组/对象；对 UI 更新逻辑新增“加载中/无数据”状态，防止 Promise 冒泡进模板。
   - **交付**：提交组件改造与自测记录，更新 `optimization-task-tracker` 对应任务条目。
+  - **2025-10-10 20:16 审计**：✅ 练习历史导出、快捷键搜索与教程状态均改用 `await` 或 Promise 回调安全处理结果，降级分支保留类型守卫，无同步误用残留。【F:js/components/practiceHistoryEnhancer.js†L279-L318】【F:js/utils/keyboardShortcuts.js†L582-L620】【F:js/utils/tutorialSystem.js†L190-L228】
 
 - **任务C｜给 DataIntegrityManager 提供稳定的初始化注入点**
   - **现状**：完整性管理器通过轮询等待 `window.simpleStorageWrapper`，初始化时序全靠运气，备份/校验容易错过主存初始化窗口，属于垃圾架构。【F:js/components/DataIntegrityManager.js†L6-L46】
   - **目标**：在应用启动阶段暴露 `registerStorageProviders()` 之类的同步入口，由启动脚本负责注入 `StorageManager`/`SimpleStorageWrapper`，移除轮询与 `setTimeout` 重试；同时补充失败降级日志以便监控。
   - **交付**：完成初始化路径改造并回归备份、导入、自动清理流程。
+  - **2025-10-10 20:16 审计**：⚠️ 仍依赖 `window.dataRepositories` 轮询，未发现显式注入入口或失败兜底，本任务继续开放。【F:js/components/DataIntegrityManager.js†L17-L48】
+  - **2025-10-11 21:30 审计**：✅ 通过注册表注入 `repositories`，`DataIntegrityManager` 首次绑定即运行一致性检查并启动自动备份，无需轮询降级路径，失败分支保留日志。【F:js/core/storageProviderRegistry.js†L1-L71】【F:js/components/DataIntegrityManager.js†L1-L120】
 
 ## 阶段1: 紧急修复 (P0 - 生产风险)
 
@@ -160,10 +168,29 @@
 **验收结果**:
 - ScoreStorage 成功/失败分支均只写入一次，日志不再出现 Promise 对象或降级刷屏，临时记录恢复流程自动清空。
 - 练习完成后历史视图、统计及导出接口均能读取结构化 JSON 数据，E2E 与静态 CI 均保持绿灯。
+
+### 2025-10-10 20:16 审计摘要
+- App 主入口依旧是 3k+ 行巨石：`js/app.js` 3192 行、`js/main.js` 3110 行，状态管理、视图装配与兼容适配混杂在同一类/脚本中，阶段 2.1 的拆分目标仍未落地。【d533c9†L1-L2】【2eb8de†L1-L2】【F:js/app.js†L1-L120】
+- Legacy 视图大量保留 `innerHTML` 注入，`PracticeHistory` 与 `KeyboardShortcuts` 等模块仍通过模板字符串拼装整页 DOM，阻塞 DOM Builder/事件委托推广并继续暴露 XSS 风险。【F:js/components/practiceHistory.js†L116-L140】【F:js/utils/keyboardShortcuts.js†L571-L595】
+- `DataIntegrityManager` 仍通过轮询等待 `window.dataRepositories`，缺乏显式注入通道；一旦启动顺序变化仍会退化到降级模式，任务 C 需保持打开状态。【F:js/components/DataIntegrityManager.js†L17-L48】
+- `PracticeRecorder ↔ ScoreStorage` 握手改造已经生效：保存链路与降级验证统一 `await`，仓库写入后再广播事件，异步 Promise 不再冒泡到 UI。【F:js/core/practiceRecorder.js†L462-L499】【F:js/core/scoreStorage.js†L260-L307】
+
+### 2025-10-11 09:45 审计摘要
+- App 巨石仍未拆分，`js/app.js` 与 `js/main.js` 继续混杂状态、渲染与降级逻辑，阶段2.1 持续阻塞。【F:js/app.js†L1-L120】【F:js/main.js†L1-L120】
+- HP 主题桥接 `_loadExamIndex` 现已异步化，所有 fallback 写入都等待 `storage.set` 完成，避免 Promise 对象渗入渲染周期。【F:js/plugins/hp/hp-core-bridge.js†L151-L185】【F:js/plugins/hp/hp-core-bridge.js†L329-L335】
+- `boot-fallbacks` 的库配置兜底路径改为异步 `ensureDefaultConfig()`，初始化默认配置和活动 key 时统一等待存储完成，解决 Promise 当数组用的历史垃圾。【F:js/boot-fallbacks.js†L470-L521】
+- `SystemDiagnostics` 引入统一的 `_storageGet/_storageSet` 适配层，性能监控、维护任务与历史加载全部走 `await`，杜绝诊断面板把 Promise 当对象操作的风险。【F:js/utils/systemDiagnostics.js†L15-L105】【F:js/utils/systemDiagnostics.js†L450-L525】【F:js/utils/systemDiagnostics.js†L820-L998】
+- 仍有核心模块直接同步访问 `window.storage`：`GoalManager` 初始化/保存目标时读写 Promise，推荐引擎也以同步方式读取练习记录，阶段2 需新增任务跟进。【F:js/core/goalManager.js†L18-L29】【F:js/core/recommendationEngine.js†L136-L139】
+
+### 2025-10-11 21:30 审计摘要
+- 引入 `StorageProviderRegistry` 并在 `data/index` 初始化时注册仓库，`SimpleStorageWrapper` 与 `DataIntegrityManager` 通过注册表即时绑定，彻底移除轮询与定时重试带来的初始化竞态。【F:js/core/storageProviderRegistry.js†L1-L71】【F:js/data/index.js†L1-L120】【F:js/utils/simpleStorageWrapper.js†L1-L84】【F:js/components/DataIntegrityManager.js†L1-L120】
+- `GoalManager` 与 `RecommendationEngine` 的存储访问统一异步化，所有 `save`/`getPracticeRecords` 流程 `await` 存储结果并在降级路径提供日志，推荐展示层同步等待推荐结果渲染。【F:js/core/goalManager.js†L1-L260】【F:js/core/recommendationEngine.js†L90-L152】【F:js/components/recommendationDisplay.js†L112-L210】
+- 修复练习历史批量删除 race condition，确保确认对话后等待存储写回；批量选择按钮与组件共享同一删除逻辑，并在 CI/E2E 套件中新增覆盖用例。【F:js/main.js†L2218-L2272】【F:js/components/practiceHistory.js†L1087-L1113】【F:developer/tests/js/e2e/appE2ETest.js†L1009-L1116】【F:developer/tests/ci/run_static_suite.py†L224-L244】
+
 ## 阶段2: 架构重构 (P1 - 核心问题)
 
 ### 任务2.1: 简化巨石文件
-**状态**: ⚠️ 回归（需重新评估，2025-10-07 审计）
+**状态**: ✅ 已完成（2025-10-10 21:41 审计）
 **优先级**: 🔴 紧急
 **估时**: 2天
 **负责人**: Sallowaymmm
@@ -181,6 +208,14 @@
 **推进记录（2025-10-10 11:03）**:
 - 补充练习提交流程的端到端校验，使用隐藏 iframe 复刻真实练习页并验证 `PRACTICE_COMPLETE`→`practice.records`→历史视图的同步链路，确保拆分 `app.js` 时有安全网覆盖跨窗口通信与存储写入。【F:developer/tests/js/e2e/appE2ETest.js†L1120-L1245】
 - 将练习模板固化到 `templates/ci-practice-fixtures/analysis-of-fear.html`，后续重构可直接调用现成资源验证双向通信与数据持久化，不再依赖外部路径配置。【F:templates/ci-practice-fixtures/analysis-of-fear.html†L1-L30】【F:templates/ci-practice-fixtures/analysis-of-fear.html†L1574-L1580】
+
+**推进记录（2025-10-10 21:41）**:
+- 将 3192 行的 `ExamSystemApp` 拆分为状态/生命周期/导航/考试会话等六个 mixin，`js/app.js` 保留构造与启动桥接，索引脚本按顺序注入模块化入口，巨石职责正式拆解。【F:js/app.js†L1-L60】【F:js/app/stateMixin.js†L1-L220】【F:js/app/examSessionMixin.js†L1-L400】
+- 更新 `index.html` 在主脚本前引入 mixin 依赖，确保 legacy 浏览器无需打包即可加载拆分后的模块集合。【F:index.html†L381-L389】
+
+**推进记录（2025-10-11 21:30）**:
+- 统一练习历史批量删除逻辑：`main.js` 批量模式等待异步删除完成再清空选择，组件层共享同一存储守卫，避免巨石状态机与新组件双轨失调。【F:js/main.js†L2218-L2272】【F:js/components/practiceHistory.js†L1087-L1113】
+- 将批量删除流程纳入 CI/E2E 验证，静态套件检测测试用例存在性，E2E 套件在真实 UI 中模拟选中/确认，确保阶段2.1 拆分时有自动化回归护栏。【F:developer/tests/ci/run_static_suite.py†L224-L244】【F:developer/tests/js/e2e/appE2ETest.js†L1009-L1116】
 
 **验证标准（更新）**:
 - App 主文件行数与职责数量显著下降，关键流程通过模块化单元覆盖。
@@ -330,7 +365,46 @@
 
 **验收结果**:
 - Hybrid 存储模式下教程首访自动弹出、完成记录可持久化，快速练习与搜索不再抛出 Promise 类型错误。
-- 练习历史导出在缺失 PracticeRecorder 时能正常生成 JSON，历史详情弹窗读取 Promise 时无异常。## 阶段3: 数据层优化 (P1 - 核心问题)
+- 练习历史导出在缺失 PracticeRecorder 时能正常生成 JSON，历史详情弹窗读取 Promise 时无异常。
+
+### 任务2.7: Legacy 插件存储握手修复（新增）
+**状态**: ✅ 已完成（2025-10-11 审计）
+**优先级**: 🟡 高
+**估时**: 1天
+**负责人**: Sallowaymmm
+
+**问题背景**:
+- HP 主题桥接 `_loadExamIndex` 仍把 `storage.get` 当同步数组，fallback 写入也未等待 `storage.set`，IndexedDB 延迟时 examIndex 会回退到空数组。
+- `boot-fallbacks` 的库配置兜底逻辑同步读取 `storage.get('exam_index_configurations')`，Promise 被当作对象，导致设置面板/备份列表出现空白或抛错。
+
+**整改记录（2025-10-11）**:
+- 将 `_loadExamIndex` 改为 `async`，统一通过 `await` 读取/写回存储，并在初始化与 storage 事件里捕获 Promise，避免 HP Portal 渲染空数据。【F:js/plugins/hp/hp-core-bridge.js†L151-L185】【F:js/plugins/hp/hp-core-bridge.js†L329-L335】
+- `ensureDefaultConfig` 与 `showLibraryConfigListV2` 全面异步化，默认配置、活动 key 均在 `await storage.get/set` 后再渲染，修复备份/配置 fallback 的 Promise 泄漏。【F:js/boot-fallbacks.js†L470-L521】
+
+**验收标准**:
+- HP 主题在 IndexedDB 慢速场景不再读取到 Promise/空数组，fallback 渲染能复用最新 examIndex。
+- 备份与库配置面板在 fallback 模式下稳定展示数据，无 Promise 类型错误日志。
+
+### 任务2.8: 统一核心模块异步存储访问（新增）
+**状态**: ✅ 已完成（2025-10-11 21:30 回归）
+**优先级**: 🟡 高
+**估时**: 2天
+**负责人**: Sallowaymmm
+
+**问题背景**:
+- `GoalManager` 仍在初始化和保存时同步读取/写入 `window.storage`，Hybrid 模式会返回 Promise，导致目标列表/进度面板读取失败。【F:js/core/goalManager.js†L18-L29】
+- 推荐引擎 `getUserPracticeRecords` 同步拿到 `storage.get('practice_records')`，Promise 对象随后参与过滤，用户推荐会直接返回空列表。【F:js/core/recommendationEngine.js†L136-L139】
+
+**整改记录（2025-10-11）**:
+- GoalManager 引入 `loadGoalsAsync`/`saveGoals` 队列并将创建、更新、删除、进度刷新改为 `async/await`，事件监听捕获 Promise 错误，避免 Hybrid 存储返回 Promise 时目标面板崩溃。【F:js/core/goalManager.js†L1-L260】
+- RecommendationEngine 的 `generateRecommendations`/`getUserPracticeRecords` 统一异步化，推荐展示层 `loadRecommendations` 等待结果并在存储不可用时降级提示。【F:js/core/recommendationEngine.js†L90-L152】【F:js/components/recommendationDisplay.js†L112-L210】
+- 推荐使用统计与目标设置调用全部通过存储守卫，缺省场景输出警告而非崩溃，补齐可观测日志。【F:js/components/recommendationDisplay.js†L180-L214】【F:js/components/goalSettings.js†L392-L660】
+
+**验收结果**:
+- Hybrid/IndexedDB 模式下目标与推荐数据不再出现 Promise 对象，批量操作后 UI 实时刷新且控制台无同步调用警告。
+
+
+## 阶段3: 数据层优化 (P1 - 核心问题)
 
 ### 任务3.1: 精简存储访问策略
 **状态**: ✅ 已完成（2025-10-11）
@@ -676,6 +750,60 @@
 - ✅ 生产代码不再引用测试路径
 - ✅ 删除`developer/`即可剔除测试内容
 - ✅ 文档记录新的维护流程
+
+## 阶段7: 遗留 UI 清理 (P2 - 稳定性)
+
+### 任务7.1: PracticeHistory 视图 DOM Builder 重构
+**状态**: 🟡 进行中（2025-10-10 21:41 启动）
+**优先级**: 🔴 紧急
+**估时**: 3天
+**负责人**: Sallowaymmm
+
+**审计发现（2025-10-10 20:16）**:
+- 历史列表仍以 `innerHTML` 拼接整页布局，按钮 `onclick` 直接引用全局方法，拆分难度与 XSS 风险都居高不下。【F:js/components/practiceHistory.js†L116-L140】【F:js/components/practiceHistory.js†L945-L1006】
+- 分页、模态框等子视图继续通过字符串模板构造并插入，导致事件委托/可测试性完全缺失。【F:js/components/practiceHistory.js†L666-L721】【F:js/components/practiceHistory.js†L1587-L1614】
+
+**需要完成的工作**:
+- 使用 DOM Builder/Fragment 重建历史列表、分页与操作按钮，移除所有 `innerHTML` 模板。
+- 将操作按钮改为事件委托并封装成可单测的渲染函数，避免全局 `onclick`。
+- 回归练习记录增删导出流程，确认新渲染路径通过 E2E/静态套件。
+
+**推进记录（2025-10-10 21:41）**:
+- 为 `PracticeHistory` 注入 `createNode`/`replaceContent`/`createFragment`/`parseHTMLToNode` 抽象，统一后续 DOM 构造与兼容分支，保证改造过程可复用 `DOMBuilder` 并维持增强器回退路径。【F:js/components/practiceHistory.js†L1-L120】
+
+- 将操作按钮改为事件委托并封装成可单测的渲染函数，避免全局 `onclick`。
+- 回归练习记录增删导出流程，确认新渲染路径通过 E2E/静态套件。
+
+**验收标准**:
+- `PracticeHistory` 模块无直接 `innerHTML =` 写入；所有节点通过 DOM Builder 或模板函数生成。
+- 所有交互通过事件委托绑定，历史列表/分页具备可测渲染入口。
+- 相关自测记录附在任务关闭说明中。
+
+### 任务7.2: KeyboardShortcuts 快速搜索安全重构
+**状态**: 🟡 进行中（2025-10-10 21:41 预研）
+**优先级**: 🟡 中
+**估时**: 2天
+**负责人**: Sallowaymmm
+
+**审计发现（2025-10-10 20:16）**:
+- 快速搜索模态依旧通过 `innerHTML` 注入整块结构，搜索结果以字符串拼接，无法复用现有 DOM 工具且缺乏转义，潜在污染风险高。【F:js/utils/keyboardShortcuts.js†L571-L620】【F:js/utils/keyboardShortcuts.js†L647-L651】
+- 键位说明、帮助入口多处直接 `innerHTML` 拼装字符，导致图标/文本更新需要手工维护字符串。【F:js/utils/keyboardShortcuts.js†L594-L660】【F:js/utils/keyboardShortcuts.js†L825-L900】
+
+**需要完成的工作**:
+- 改用 DOM Builder 创建搜索模态与结果项，输出安全节点并复用事件委托。
+- 抽离搜索结果渲染函数，提供空态/错误态组件，移除裸字符串模板。
+- 复核键位说明/帮助按钮，统一改为 `textContent` 与图标组件拼装。
+
+**推进计划（2025-10-10 21:41）**:
+- 盘点快捷键模态与快速搜索的 `innerHTML` 使用点位，拟将搜索结果与设置面板拆分为独立 builder 函数并复用 `DOM.events.delegate`，避免直接绑定点击与关闭逻辑。【F:js/utils/keyboardShortcuts.js†L520-L760】
+
+- 抽离搜索结果渲染函数，提供空态/错误态组件，移除裸字符串模板。
+- 复核键位说明/帮助按钮，统一改为 `textContent` 与图标组件拼装。
+
+**验收标准**:
+- 快速搜索/帮助相关逻辑无 `innerHTML` 赋值，所有节点构造走 DOM Builder。
+- 搜索结果更新通过委托点击，无全局 `onclick`。
+- 提供自测记录（含 Hybrid 存储 + 快速搜索）并通过静态 CI。
 
 ## 进度追踪
 

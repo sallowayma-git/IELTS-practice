@@ -393,9 +393,9 @@ class GoalSettings {
     /**
      * 处理表单提交
      */
-    handleFormSubmit() {
+    async handleFormSubmit() {
         const formData = this.getFormData();
-        
+
         if (!this.validateFormData(formData)) {
             return;
         }
@@ -403,14 +403,14 @@ class GoalSettings {
         try {
             if (this.currentEditingGoal) {
                 // 更新现有目标
-                this.goalManager.updateGoal(this.currentEditingGoal.id, formData);
+                await this.goalManager.updateGoal(this.currentEditingGoal.id, formData);
                 window.showMessage('目标更新成功！', 'success');
             } else {
                 // 创建新目标
-                this.goalManager.createGoal(formData);
+                await this.goalManager.createGoal(formData);
                 window.showMessage('目标创建成功！', 'success');
             }
-            
+
             this.hideGoalModal();
         } catch (error) {
             console.error('Goal operation failed:', error);
@@ -626,10 +626,10 @@ class GoalSettings {
     /**
      * 删除目标
      */
-    deleteGoal(goalId) {
+    async deleteGoal(goalId) {
         if (confirm('确定要删除这个目标吗？此操作不可撤销。')) {
             try {
-                this.goalManager.deleteGoal(goalId);
+                await this.goalManager.deleteGoal(goalId);
                 window.showMessage('目标删除成功！', 'success');
             } catch (error) {
                 console.error('Delete goal failed:', error);

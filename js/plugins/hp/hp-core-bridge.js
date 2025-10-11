@@ -148,7 +148,7 @@
 
       this.lastUpdateTime = Date.now();
     },
-    _loadExamIndex() {
+    async _loadExamIndex() {
       try {
         const existing = readExamIndexSnapshot();
         if (existing.length) {
@@ -156,7 +156,13 @@
           return;
         }
 
-        const fromStorage = (window.storage && storage.get) ? storage.get('exam_index', null) : null;
+        let fromStorage = null;
+        if (window.storage && storage.get) {
+          const maybePromise = storage.get('exam_index', null);
+          fromStorage = (maybePromise && typeof maybePromise.then === 'function')
+            ? await maybePromise
+            : maybePromise;
+        }
         if (Array.isArray(fromStorage) && fromStorage.length) {
           this._setExamIndex(fromStorage);
           return;
@@ -166,7 +172,16 @@
         const listening = markTypes(window.listeningExamIndex || [], 'listening');
         const merged = reading.concat(listening);
         this._setExamIndex(merged);
-        if (window.storage && storage.set) storage.set('exam_index', merged);
+        if (window.storage && storage.set) {
+          try {
+            const maybeSet = storage.set('exam_index', merged);
+            if (maybeSet && typeof maybeSet.then === 'function') {
+              await maybeSet;
+            }
+          } catch (setError) {
+            console.warn('[hpCore] 写入 exam_index 失败:', setError);
+          }
+        }
       } catch (e) { console.warn('[hpCore] _loadExamIndex failed', e); }
     },
     _setExamIndex(list) {
@@ -208,7 +223,10 @@
     _installListeners() {
       window.addEventListener('storage', (e) => {
         if (e && (e.key === 'practice_records' || e.key === 'exam_index')) {
-          try { this._loadRecords(); this._loadExamIndex(); } catch (_) {}
+          try {
+            this._loadRecords();
+            this._loadExamIndex().catch(() => {});
+          } catch (_) {}
         }
       });
       window.addEventListener('message', (ev) => {
@@ -218,7 +236,7 @@
         }
       });
       document.addEventListener('DOMContentLoaded', () => {
-        this._loadExamIndex();
+        this._loadExamIndex().catch(() => {});
         this._loadRecords();
         this._markReady();
       });
@@ -310,7 +328,11 @@
 
   window.hpCore = hpCore;
   hpCore._installListeners();
-  try { hpCore._loadExamIndex(); hpCore._loadRecords(); hpCore._markReady(); } catch (_) {}
+  try {
+    hpCore._loadExamIndex().catch(() => {});
+    hpCore._loadRecords();
+    hpCore._markReady();
+  } catch (_) {}
   try { console.log('[HP Core] Initialized', hpCore.getStatus()); } catch (_) {}
   // Override actions with safe fallbacks that do not depend on main.js globals being populated
   try {

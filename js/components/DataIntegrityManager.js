@@ -4,7 +4,7 @@
  * 基于统一的数据仓库接口执行原子操作
  */
 class DataIntegrityManager {
-    constructor() {
+    constructor(options = {}) {
         this.backupInterval = 600000; // 10分钟自动备份
         this.maxBackups = 5; // 最多保留5个备份（减少占用）
         this.dataVersion = '1.0.0';
@@ -13,38 +13,76 @@ class DataIntegrityManager {
         this.repositories = null;
         this.consistencyReport = null;
         this.isInitialized = false;
+        this.registry = options.registry || window.StorageProviderRegistry || null;
+        this._unsubscribe = null;
 
         this.registerDefaultValidationRules();
-        this.initializeWhenReady();
+        this.connectToProviders();
 
         console.log('[DataIntegrityManager] 数据完整性管理器已创建');
     }
 
-    async initializeWhenReady() {
-        try {
-            if (window.dataRepositories) {
-                this.repositories = window.dataRepositories;
-                console.log('[DataIntegrityManager] 已绑定数据仓库接口');
-
-                try {
-                    this.consistencyReport = await this.repositories.runConsistencyChecks();
-                    console.log('[DataIntegrityManager] 初始一致性检查完成', this.consistencyReport);
-                } catch (reportError) {
-                    console.warn('[DataIntegrityManager] 初始一致性检查失败:', reportError);
-                }
-
-                this.startAutoBackup();
-                try { await this.cleanupOldBackups(); } catch (_) {}
-
-                this.isInitialized = true;
-                console.log('[DataIntegrityManager] 数据完整性管理器已初始化');
-            } else {
-                setTimeout(() => this.initializeWhenReady(), 500);
+    connectToProviders() {
+        const registry = this.registry;
+        if (registry && typeof registry.onProvidersReady === 'function') {
+            this._unsubscribe = registry.onProvidersReady(({ repositories }) => {
+                this.attachRepositories(repositories);
+            });
+            const current = registry.getCurrentProviders && registry.getCurrentProviders();
+            if (current && current.repositories) {
+                this.attachRepositories(current.repositories);
             }
+            return;
+        }
+
+        if (window.dataRepositories) {
+            this.attachRepositories(window.dataRepositories);
+            return;
+        }
+
+        console.warn('[DataIntegrityManager] 未检测到数据仓库注册表，等待外部注入');
+    }
+
+    async attachRepositories(repositories) {
+        if (!repositories) {
+            return;
+        }
+        if (this.repositories === repositories && this.isInitialized) {
+            return;
+        }
+
+        this.repositories = repositories;
+        console.log('[DataIntegrityManager] 已绑定数据仓库接口');
+
+        try {
+            await this.initializeWithRepositories();
         } catch (error) {
             console.error('[DataIntegrityManager] 初始化失败:', error);
             this.startAutoBackup();
             this.isInitialized = true;
+        }
+    }
+
+    async initializeWithRepositories() {
+        try {
+            if (!this.repositories) {
+                throw new Error('数据仓库不可用');
+            }
+
+            try {
+                this.consistencyReport = await this.repositories.runConsistencyChecks();
+                console.log('[DataIntegrityManager] 初始一致性检查完成', this.consistencyReport);
+            } catch (reportError) {
+                console.warn('[DataIntegrityManager] 初始一致性检查失败:', reportError);
+            }
+
+            this.startAutoBackup();
+            try { await this.cleanupOldBackups(); } catch (_) {}
+
+            this.isInitialized = true;
+            console.log('[DataIntegrityManager] 数据完整性管理器已初始化');
+        } catch (error) {
+            throw error;
         }
     }
 
