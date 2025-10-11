@@ -814,12 +814,16 @@ class SystemMaintenancePanel {
     async startPerformanceTest() {
         try {
             this.showProgress('运行性能测试...');
-            
-            const metrics = this.diagnostics.startPerformanceMonitoring();
-            
+
+            const metrics = await this.diagnostics.startPerformanceMonitoring();
+
             this.hideProgress();
-            this.displayPerformanceMetrics(metrics);
-            
+            if (metrics) {
+                this.displayPerformanceMetrics(metrics);
+            } else {
+                this.showMessage('未获取到性能指标数据', 'warning');
+            }
+
         } catch (error) {
             this.hideProgress();
             this.showMessage(`性能测试失败: ${error.message}`, 'error');

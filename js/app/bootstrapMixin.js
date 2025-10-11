@@ -29,7 +29,6 @@
 
             try {
                 // 首先加载核心组件
-                await this.waitForComponents(coreComponents, 8000);
                 await this.initializeCoreComponents();
 
                 // 然后加载可选组件
@@ -56,6 +55,14 @@
             // ExamBrowser现在是可选组件，不在核心初始化中处理
 
             // 初始化PracticeRecorder（必需，但有降级方案）
+            if (!window.PracticeRecorder && typeof this.waitForComponents === 'function') {
+                try {
+                    await this.waitForComponents(['PracticeRecorder'], 2000);
+                } catch (error) {
+                    // 忽略等待失败，继续使用降级方案
+                }
+            }
+
             if (window.PracticeRecorder) {
                 try {
                     this.components.practiceRecorder = new PracticeRecorder();
