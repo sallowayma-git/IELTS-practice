@@ -9,7 +9,8 @@ from typing import Awaitable, Callable, Optional
 
 from playwright.async_api import Browser, Dialog, Error as PlaywrightError, Page, async_playwright
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+# 该脚本位于 developer/tests/e2e/，因此需要向上三级才能回到仓库根目录
+REPO_ROOT = Path(__file__).resolve().parents[3]
 INDEX_PATH = REPO_ROOT / "index.html"
 E2E_RUNNER_PATH = REPO_ROOT / "developer" / "tests" / "e2e" / "app-e2e-runner.html"
 
@@ -119,6 +120,19 @@ async def _handle_library_panel(page: Page) -> None:
         await asyncio.sleep(0.2)
 
 
+async def _close_library_loader(page: Page) -> None:
+    overlay = page.locator("#library-loader-overlay")
+    if not await overlay.count():
+        return
+
+    await overlay.wait_for(state="visible", timeout=5000)
+    close_button = overlay.locator("[data-library-action='close']")
+    if await close_button.count():
+        await close_button.first.click()
+        await page.wait_for_selector("#library-loader-overlay", state="detached", timeout=5000)
+        await asyncio.sleep(0.2)
+
+
 async def _handle_backup_overlays(page: Page) -> None:
     close_buttons = page.locator(".backup-modal-close")
     if await close_buttons.count():
@@ -142,7 +156,7 @@ async def _exercise_settings(page: Page) -> None:
         if handle:
             await handle(page)
 
-    await click_button("#load-library-btn")
+    await click_button("#load-library-btn", handle=_close_library_loader)
     await click_button("#library-config-btn", handle=_handle_library_panel)
     await click_button("#force-refresh-btn")
     await click_button("#create-backup-btn")
@@ -150,11 +164,11 @@ async def _exercise_settings(page: Page) -> None:
     await click_button("#export-data-btn")
 
     # import triggers file chooser
-    file_task = asyncio.create_task(page.expect_file_chooser())
-    await page.locator("#import-data-btn").click()
     try:
-        chooser = await file_task
-        await chooser.cancel()
+        async with page.expect_file_chooser() as file_info:
+            await page.locator("#import-data-btn").click()
+        chooser = await file_info.value
+        await chooser.set_files([])
     except PlaywrightError:
         pass
     await asyncio.sleep(0.3)
@@ -190,12 +204,19 @@ async def _exercise_settings(page: Page) -> None:
 
 async def _exercise_developer_links(page: Page) -> None:
     for selector in ["a:has-text('睡着过呈现')", "div#settings-view a:has-text('睡着过开发团队')"]:
-        if await page.locator(selector).count():
-            await page.locator(selector).click()
-            await page.wait_for_selector("#developer-modal.show", timeout=5000)
-            await page.locator("#developer-modal .modal-close-btn").click()
-            await page.wait_for_selector("#developer-modal.show", state="detached")
-            await asyncio.sleep(0.2)
+        locator = page.locator(selector)
+        if not await locator.count():
+            continue
+
+        first = locator.first
+        if not await first.is_visible():
+            continue
+
+        await first.click()
+        await page.wait_for_selector("#developer-modal.show", timeout=5000)
+        await page.locator("#developer-modal .modal-close-btn").click()
+        await page.wait_for_selector("#developer-modal.show", state="detached")
+        await asyncio.sleep(0.2)
 
 
 async def exercise_index_interactions(page: Page) -> None:
@@ -216,7 +237,6 @@ async def exercise_index_interactions(page: Page) -> None:
 async def run_e2e_suite(page: Page) -> None:
     await page.goto(E2E_RUNNER_PATH.resolve().as_uri())
     await page.wait_for_load_state("load")
-    await page.wait_for_event("load")
     await page.wait_for_selector("#suite-status", timeout=60000)
     await page.wait_for_function(
         "() => window.__E2E_TEST_RESULTS__ && window.__E2E_TEST_RESULTS__.failed === 0",
