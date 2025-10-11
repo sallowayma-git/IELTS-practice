@@ -21,26 +21,23 @@
          * 初始化组件
          */
         async initializeComponents() {
-            // 定义组件加载优先级 - 只加载实际存在的组件
-            const coreComponents = ['PracticeRecorder']; // 只有PracticeRecorder是必需的
             const optionalComponents = [
                 // ExamBrowser已移除，使用内置的题目列表功能
             ]; // 只加载真正需要且存在的组件
 
             try {
-                // 首先加载核心组件
                 await this.initializeCoreComponents();
 
-                // 然后加载可选组件
-                try {
-                    await this.waitForComponents(optionalComponents, 5000);
+                if (optionalComponents.length > 0) {
+                    try {
+                        await this.waitForComponents(optionalComponents, 5000);
+                        await this.initializeOptionalComponents();
+                    } catch (error) {
+                        await this.initializeAvailableOptionalComponents();
+                    }
+                } else {
                     await this.initializeOptionalComponents();
-                } catch (error) {
-                    // 静默处理可选组件加载失败，直接初始化已加载的组件
-                    await this.initializeAvailableOptionalComponents();
                 }
-
-
             } catch (error) {
                 console.error('[App] 核心组件加载失败:', error);
                 throw error;
@@ -51,30 +48,65 @@
          * 初始化核心组件
          */
         async initializeCoreComponents() {
-
-            // ExamBrowser现在是可选组件，不在核心初始化中处理
-
-            // 初始化PracticeRecorder（必需，但有降级方案）
-            if (!window.PracticeRecorder && typeof this.waitForComponents === 'function') {
-                try {
-                    await this.waitForComponents(['PracticeRecorder'], 2000);
-                } catch (error) {
-                    // 忽略等待失败，继续使用降级方案
-                }
+            if (this.instantiatePracticeRecorder()) {
+                return;
             }
 
-            if (window.PracticeRecorder) {
-                try {
-                    this.components.practiceRecorder = new PracticeRecorder();
-                    this.setupPracticeRecorderEvents();
-                } catch (error) {
-                    console.error('[App] PracticeRecorder初始化失败:', error);
-                    this.components.practiceRecorder = this.createFallbackRecorder();
-                }
-            } else {
-                console.warn('[App] PracticeRecorder类不可用，创建降级记录器');
-                this.components.practiceRecorder = this.createFallbackRecorder();
+            console.warn('[App] PracticeRecorder类不可用，使用降级记录器');
+            this.components.practiceRecorder = this.createFallbackRecorder();
+            this.ensurePracticeRecorderEvents();
+            this.schedulePracticeRecorderUpgrade();
+        },
+
+        instantiatePracticeRecorder() {
+            if (typeof window.PracticeRecorder !== 'function') {
+                return false;
             }
+
+            try {
+                this.components.practiceRecorder = new PracticeRecorder();
+                this.ensurePracticeRecorderEvents();
+                return true;
+            } catch (error) {
+                console.error('[App] PracticeRecorder初始化失败:', error);
+                return false;
+            }
+        },
+
+        ensurePracticeRecorderEvents() {
+            if (this._practiceRecorderEventsBound) {
+                return;
+            }
+
+            if (typeof this.setupPracticeRecorderEvents === 'function') {
+                this.setupPracticeRecorderEvents();
+            }
+        },
+
+        schedulePracticeRecorderUpgrade(maxAttempts = 20, interval = 500) {
+            if (this._practiceRecorderUpgradeTimer || typeof window === 'undefined') {
+                return;
+            }
+
+            let attempts = 0;
+            const tryUpgrade = () => {
+                if (this.instantiatePracticeRecorder()) {
+                    clearInterval(this._practiceRecorderUpgradeTimer);
+                    this._practiceRecorderUpgradeTimer = null;
+                    console.info('[App] PracticeRecorder 脚本加载完成，已升级为完整记录器');
+                    return;
+                }
+
+                attempts += 1;
+                if (attempts >= maxAttempts) {
+                    clearInterval(this._practiceRecorderUpgradeTimer);
+                    this._practiceRecorderUpgradeTimer = null;
+                    console.warn('[App] PracticeRecorder 脚本仍未加载，继续使用降级模式');
+                }
+            };
+
+            this._practiceRecorderUpgradeTimer = setInterval(tryUpgrade, interval);
+            tryUpgrade();
         },
 
         /**

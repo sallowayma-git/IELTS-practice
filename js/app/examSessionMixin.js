@@ -1281,6 +1281,12 @@
          * 设置练习记录器事件监听
          */
         setupPracticeRecorderEvents() {
+            if (this._practiceRecorderEventsBound) {
+                return;
+            }
+
+            this._practiceRecorderEventsBound = true;
+
             // 监听练习完成事件
             document.addEventListener('practiceSessionCompleted', (event) => {
                 const { examId, practiceRecord } = event.detail;
