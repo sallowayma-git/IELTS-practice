@@ -572,10 +572,30 @@ class ScoreStorage {
         const recordDay = this.getDateOnlyIso(recordSource);
         if (!recordDay) return;
 
-        const practiceDays = Array.isArray(stats.practiceDays) ? stats.practiceDays.slice() : [];
-        if (!practiceDays.includes(recordDay)) {
-            practiceDays.push(recordDay);
+        const dayMs = 24 * 60 * 60 * 1000;
+        let practiceDays = Array.isArray(stats.practiceDays) ? stats.practiceDays.slice() : [];
+
+        if (practiceDays.length === 0) {
+            const historicalStreak = Math.max(0, Math.round(this.ensureNumber(stats.streakDays, 0)));
+            const lastPracticeIso = this.getDateOnlyIso(stats.lastPracticeDate);
+            const lastPracticeStart = this.getLocalDayStart(lastPracticeIso);
+
+            if (historicalStreak > 0 && lastPracticeIso && Number.isFinite(lastPracticeStart)) {
+                const migratedDays = [];
+                for (let offset = historicalStreak - 1; offset >= 0; offset -= 1) {
+                    const timestamp = lastPracticeStart - (offset * dayMs);
+                    const dayIso = this.getDateOnlyIso(timestamp);
+                    if (dayIso) {
+                        migratedDays.push(dayIso);
+                    }
+                }
+                practiceDays = migratedDays;
+            }
         }
+
+        const uniqueDays = new Set(practiceDays);
+        uniqueDays.add(recordDay);
+        practiceDays = Array.from(uniqueDays);
 
         const validDays = practiceDays
             .map(day => ({ day, start: this.getLocalDayStart(day) }))
