@@ -392,11 +392,120 @@
          * 设置题目窗口通信
          */
         setupExamWindowCommunication(examWindow, examId) {
-            // 监听来自题目窗口的消息
-            const messageHandler = async (event) => {
-                // 验证消息数据格式
-                if (!event.data || typeof event.data !== 'object') return;
+            const parseJsonSafely = (value) => {
+                if (typeof value !== 'string' || !value.trim()) return null;
+                try {
+                    return JSON.parse(value);
+                } catch (_) {
+                    return null;
+                }
+            };
 
+            const isPlainObject = (value) => {
+                return value && typeof value === 'object' && !Array.isArray(value);
+            };
+
+            const normalizeMessage = (rawEnvelope) => {
+                const typeAliases = {
+                    'practice_complete': 'PRACTICE_COMPLETE',
+                    'practice_completed': 'PRACTICE_COMPLETE',
+                    'PracticeComplete': 'PRACTICE_COMPLETE',
+                    'SESSION_COMPLETE': 'PRACTICE_COMPLETE',
+                    'session_complete': 'PRACTICE_COMPLETE',
+                    'session_completed': 'PRACTICE_COMPLETE',
+                    'SESSION_READY': 'SESSION_READY',
+                    'session_ready': 'SESSION_READY',
+                    'EXAM_COMPLETED': 'exam_completed',
+                    'EXAM_PROGRESS': 'exam_progress',
+                    'EXAM_ERROR': 'exam_error',
+                    'progress_update': 'PROGRESS_UPDATE',
+                    'SESSION_PROGRESS': 'PROGRESS_UPDATE',
+                    'session_progress': 'PROGRESS_UPDATE',
+                    'practice_progress': 'PROGRESS_UPDATE',
+                    'SESSION_ERROR': 'ERROR_OCCURRED',
+                    'session_error': 'ERROR_OCCURRED',
+                    'practice_error': 'ERROR_OCCURRED'
+                };
+
+                const allowedTypes = new Set([
+                    'exam_completed',
+                    'exam_progress',
+                    'exam_error',
+                    'SESSION_READY',
+                    'PROGRESS_UPDATE',
+                    'PRACTICE_COMPLETE',
+                    'ERROR_OCCURRED'
+                ]);
+
+                const baseKeys = new Set(['type', 'messageType', 'action', 'event', 'data', 'payload', 'detail', 'args', 'source', 'message', 'messageData']);
+
+                const coerceObject = (value) => {
+                    if (isPlainObject(value)) return value;
+                    if (typeof value === 'string') {
+                        const parsed = parseJsonSafely(value);
+                        return isPlainObject(parsed) ? parsed : null;
+                    }
+                    return null;
+                };
+
+                const pickType = (envelope) => {
+                    const rawType = envelope.type || envelope.messageType || envelope.action || envelope.event;
+                    if (typeof rawType !== 'string') return '';
+                    const normalized = rawType.trim();
+                    if (!normalized) return '';
+                    return typeAliases[normalized] || normalized;
+                };
+
+                const pickData = (envelope) => {
+                    const candidates = [envelope.data, envelope.payload, envelope.detail];
+                    for (let i = 0; i < candidates.length; i++) {
+                        const coerced = coerceObject(candidates[i]);
+                        if (coerced) return coerced;
+                    }
+
+                    if (Array.isArray(envelope.args)) {
+                        for (let i = 0; i < envelope.args.length; i++) {
+                            const coerced = coerceObject(envelope.args[i]);
+                            if (coerced) return coerced;
+                        }
+                    }
+
+                    const fallback = {};
+                    let hasFallback = false;
+                    Object.keys(envelope || {}).forEach((key) => {
+                        if (!baseKeys.has(key)) {
+                            fallback[key] = envelope[key];
+                            hasFallback = true;
+                        }
+                    });
+
+                    return hasFallback ? fallback : null;
+                };
+
+                let envelope = rawEnvelope;
+                if (typeof envelope === 'string') {
+                    envelope = parseJsonSafely(envelope);
+                }
+                if (!isPlainObject(envelope)) return null;
+
+                const type = pickType(envelope);
+                if (!type || !allowedTypes.has(type)) {
+                    return null;
+                }
+
+                const data = pickData(envelope) || {};
+                if (!isPlainObject(data)) {
+                    return null;
+                }
+
+                const sourceTag = typeof envelope.source === 'string'
+                    ? envelope.source
+                    : (typeof data.source === 'string' ? data.source : '');
+
+                return { type, data, sourceTag };
+            };
+
+            const messageHandler = async (event) => {
                 // 取得当前题目窗口引用（可能在 handshake 期间被更新）
                 const windowInfo = (this.examWindows && this.examWindows.get(examId)) || {};
                 const expectedWindow = windowInfo.window || examWindow;
@@ -414,17 +523,38 @@
                     }
                 }
 
+                const normalized = normalizeMessage(event.data);
+                if (!normalized) {
+                    return;
+                }
+
                 // 放宽消息源过滤，兼容 inline_collector 与 practice_page
-                const src = (event.data && event.data.source) || '';
+                const src = normalized.sourceTag || '';
                 if (src && src !== 'practice_page' && src !== 'inline_collector') {
                     return; // 非预期来源的消息忽略
                 }
 
-                const { type, data } = event.data || {};
+                const { type, data } = normalized;
+
+                // legacy 页面未带 examId 时补齐，若带了不匹配则拒绝
+                if (data && data.examId) {
+                    if (String(data.examId) !== String(examId)) {
+                        return;
+                    }
+                } else {
+                    data.examId = examId;
+                }
 
                 // 如果消息带有 sessionId，则要求与当前窗口记录一致
                 if (data && data.sessionId && windowInfo.sessionId && data.sessionId !== windowInfo.sessionId) {
                     return;
+                }
+
+                if (data && data.sessionId && !windowInfo.sessionId) {
+                    windowInfo.sessionId = data.sessionId;
+                    if (this.examWindows && this.examWindows.has(examId)) {
+                        this.examWindows.set(examId, windowInfo);
+                    }
                 }
 
                 switch (type) {
