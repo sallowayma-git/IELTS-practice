@@ -1,4 +1,5 @@
 (function(){
+  var storage = window.storage;
   // Fallback for navigation
   if (typeof window.showView !== 'function') {
     window.showView = function(viewName, resetCategory){
@@ -467,19 +468,44 @@
       };
     }
   }
-  function ensureDefaultConfig(){
+  async function ensureDefaultConfig(){
     try{
-      var configs = (window.storage && storage.get) ? storage.get('exam_index_configurations', []) : [];
+      var configs = [];
+      if (window.storage && storage.get) {
+        var maybeConfigs = storage.get('exam_index_configurations', []);
+        configs = (maybeConfigs && typeof maybeConfigs.then === 'function') ? await maybeConfigs : maybeConfigs;
+      }
       if (!Array.isArray(configs)) configs = [];
       var hasDefault = configs.some(function(c){ return c && c.key==='exam_index'; });
       if (!hasDefault){
         var count = Array.isArray(window.examIndex)? window.examIndex.length : 0;
         configs.push({ name:'默认题库', key:'exam_index', examCount: count, timestamp: Date.now() });
-        if (window.storage && storage.set) storage.set('exam_index_configurations', configs);
-        if (!storage.get('active_exam_index_key')) storage.set('active_exam_index_key','exam_index');
+        if (window.storage && storage.set) {
+          try {
+            var maybeSetConfigs = storage.set('exam_index_configurations', configs);
+            if (maybeSetConfigs && typeof maybeSetConfigs.then === 'function') await maybeSetConfigs;
+          } catch (err) {
+            console.warn('[Fallback] 无法保存 exam_index_configurations:', err);
+          }
+        }
+        if (window.storage && storage.get) {
+          try {
+            var currentActive = storage.get('active_exam_index_key');
+            currentActive = (currentActive && typeof currentActive.then === 'function') ? await currentActive : currentActive;
+            if (!currentActive && window.storage && storage.set) {
+              var maybeSetActive = storage.set('active_exam_index_key','exam_index');
+              if (maybeSetActive && typeof maybeSetActive.then === 'function') await maybeSetActive;
+            }
+          } catch (activeErr) {
+            console.warn('[Fallback] 无法校正 active_exam_index_key:', activeErr);
+          }
+        }
       }
       return configs;
-    }catch(e){ return []; }
+    }catch(e){
+      console.warn('[Fallback] ensureDefaultConfig 失败:', e);
+      return [];
+    }
   }
 
   // Fallback for library config list
@@ -492,7 +518,7 @@
         configs = [];
       }
       if (!Array.isArray(configs) || configs.length === 0) {
-        configs = ensureDefaultConfig();
+        configs = await ensureDefaultConfig();
       }
       if (!Array.isArray(configs) || configs.length === 0) {
         if (window.showMessage) showMessage('暂无题库配置记录', 'info');

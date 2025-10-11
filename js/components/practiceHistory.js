@@ -27,7 +27,119 @@ class PracticeHistory {
         // 兼容性修复：保存原始方法支持enhancer
         this._originalCreateRecordItem = this.createRecordItem.bind(this);
 
+        this.dom = window.DOM || null;
+        this.domCreate = this.dom && typeof this.dom.create === 'function'
+            ? this.dom.create.bind(this.dom)
+            : null;
+        this.domReplace = this.dom && typeof this.dom.replaceContent === 'function'
+            ? this.dom.replaceContent.bind(this.dom)
+            : null;
+
         this.initialize();
+    }
+
+    createNode(tag, attrs = {}, children = []) {
+        if (this.domCreate) {
+            return this.domCreate(tag, attrs, children);
+        }
+
+        const element = document.createElement(tag);
+        const { dataset, style, ...rest } = attrs || {};
+
+        if (dataset && typeof dataset === 'object') {
+            Object.assign(element.dataset, dataset);
+        }
+
+        if (style && typeof style === 'object') {
+            Object.assign(element.style, style);
+        }
+
+        Object.entries(rest || {}).forEach(([key, value]) => {
+            if (value == null) {
+                return;
+            }
+            if (key === 'className') {
+                element.className = value;
+                return;
+            }
+            if (key === 'textContent') {
+                element.textContent = value;
+                return;
+            }
+            if (key === 'htmlFor') {
+                element.htmlFor = value;
+                return;
+            }
+            element.setAttribute(key, value);
+        });
+
+        this.appendChildren(element, children);
+
+        return element;
+    }
+
+    appendChildren(element, children) {
+        if (children == null) {
+            return;
+        }
+
+        const list = Array.isArray(children) ? children : [children];
+        list.forEach((child) => {
+            if (child == null) {
+                return;
+            }
+            if (typeof child === 'string') {
+                element.appendChild(document.createTextNode(child));
+            } else if (child instanceof Node) {
+                element.appendChild(child);
+            }
+        });
+    }
+
+    replaceContent(container, content) {
+        if (!container) {
+            return;
+        }
+
+        if (this.domReplace) {
+            this.domReplace(container, content);
+            return;
+        }
+
+        while (container.firstChild) {
+            container.removeChild(container.firstChild);
+        }
+
+        if (content == null) {
+            return;
+        }
+
+        if (Array.isArray(content)) {
+            content.forEach(node => {
+                if (node instanceof Node) {
+                    container.appendChild(node);
+                }
+            });
+        } else if (content instanceof Node) {
+            container.appendChild(content);
+        }
+    }
+
+    createFragment(items) {
+        const fragment = document.createDocumentFragment();
+        items.forEach((item) => {
+            if (item instanceof Node) {
+                fragment.appendChild(item);
+            }
+        });
+        return fragment;
+    }
+
+    parseHTMLToNode(html) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(`<div>${html}</div>`, 'text/html');
+        const wrapper = doc.body.firstElementChild;
+        return wrapper ? wrapper.firstElementChild : null;
     }
 
     /**
@@ -1093,11 +1205,16 @@ class PracticeHistory {
         if (!confirm(`确定要删除选中 ${selectedIds.size} 条记录吗？此操作不可撤销。`)) return;
         
         try {
-            const records = await storage.get('practice_records', []);
+            const store = window.storage;
+            if (!store || typeof store.get !== 'function' || typeof store.set !== 'function') {
+                throw new Error('存储管理器未就绪');
+            }
+
+            const records = await store.get('practice_records', []);
             const kept = records.filter(r => !selectedIds.has(String(r?.id)));
             const deletedCount = records.length - kept.length;
-            await storage.set('practice_records', kept);
-            
+            await store.set('practice_records', kept);
+
             this.currentRecords = this.currentRecords.filter(r => !selectedIds.has(String(r.id)));
             this.filteredRecords = this.filteredRecords.filter(r => !selectedIds.has(String(r.id)));
             this.selectedSet.clear();
