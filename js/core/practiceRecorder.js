@@ -148,11 +148,15 @@ class PracticeRecorder {
             const previousDayStart = this.getLocalDayStart(stats.lastPracticeDate);
 
             if (previousDayStart !== null && currentDayStart !== null) {
+                if (currentDayStart < previousDayStart) {
+                    return;
+                }
+
                 const diff = Math.round((currentDayStart - previousDayStart) / (1000 * 60 * 60 * 24));
 
                 if (diff === 1) {
                     stats.streakDays = (stats.streakDays || 0) + 1;
-                } else if (diff > 1 || diff < 0) {
+                } else if (diff > 1) {
                     stats.streakDays = 1;
                 }
             } else {
