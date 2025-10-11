@@ -1568,11 +1568,8 @@
 
             updateBridgeMeta(key, (prev) => {
                 const next = { ...prev, lastLocalWrite: now };
-                if (supportsShared) {
-                    next.sharedDirty = true;
-                } else {
-                    next.sharedDirty = false;
-                }
+                // 离线写入也必须标记为 dirty，避免恢复共享存储后被空数据覆盖
+                next.sharedDirty = true;
                 return next;
             });
 
@@ -1598,7 +1595,7 @@
                         next.sharedDirty = true;
                     }
                 } else {
-                    next.sharedDirty = false;
+                    next.sharedDirty = true;
                 }
                 return next;
             });
