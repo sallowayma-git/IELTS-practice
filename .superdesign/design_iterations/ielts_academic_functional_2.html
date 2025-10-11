@@ -1454,26 +1454,56 @@
             PRACTICE: 'practice_records',
             EXAM: 'exam_index'
         };
+        const STORAGE_META_KEY = '__storage_bridge_meta__';
+
+        function loadBridgeMeta() {
+            try {
+                const raw = localStorage.getItem(STORAGE_META_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (parsed && typeof parsed === 'object') {
+                        return parsed;
+                    }
+                }
+            } catch (e) {
+                console.warn('[StorageBridge] Failed to load bridge meta:', e);
+            }
+            return {};
+        }
+
+        function persistBridgeMeta(meta) {
+            try {
+                localStorage.setItem(STORAGE_META_KEY, JSON.stringify(meta));
+            } catch (e) {
+                console.warn('[StorageBridge] Failed to persist bridge meta:', e);
+            }
+        }
+
+        function readBridgeMeta(key) {
+            const meta = loadBridgeMeta();
+            return meta[key] || {};
+        }
+
+        function updateBridgeMeta(key, updater) {
+            const meta = loadBridgeMeta();
+            const current = meta[key] || {};
+            const next = updater ? updater({ ...current }) : current;
+
+            if (next && Object.keys(next).length > 0) {
+                meta[key] = next;
+            } else {
+                delete meta[key];
+            }
+
+            persistBridgeMeta(meta);
+            return next;
+        }
 
         function hasSharedStorage() {
             return !!(window.storage && typeof window.storage.get === 'function' && typeof window.storage.set === 'function');
         }
 
-        async function readSharedArray(key) {
-            if (hasSharedStorage()) {
-                try {
-                    const data = await window.storage.get(key, []);
-                    if (Array.isArray(data)) {
-                        try { localStorage.setItem(key, JSON.stringify(data)); } catch (e) {
-                            console.warn('[StorageBridge] Failed to mirror', key, 'to localStorage:', e);
-                        }
-                        return data;
-                    }
-                } catch (e) {
-                    console.warn('[StorageBridge] Failed to read', key, 'from shared storage:', e);
-                }
-            }
-
+        function readLocalArray(key) {
             try {
                 const raw = localStorage.getItem(key);
                 if (raw) {
@@ -1489,9 +1519,46 @@
             return [];
         }
 
+        async function readSharedArray(key) {
+            const supportsShared = hasSharedStorage();
+            const meta = readBridgeMeta(key);
+
+            if (supportsShared && meta.sharedDirty !== true) {
+                try {
+                    const data = await window.storage.get(key, []);
+                    if (Array.isArray(data)) {
+                        try { localStorage.setItem(key, JSON.stringify(data)); } catch (e) {
+                            console.warn('[StorageBridge] Failed to mirror', key, 'to localStorage:', e);
+                        }
+                        updateBridgeMeta(key, (prev) => ({
+                            ...prev,
+                            sharedDirty: false,
+                            lastSharedRead: Date.now()
+                        }));
+                        return data;
+                    }
+                    console.warn('[StorageBridge] Shared storage returned non-array data for', key);
+                    updateBridgeMeta(key, (prev) => ({
+                        ...prev,
+                        sharedDirty: true
+                    }));
+                } catch (e) {
+                    console.warn('[StorageBridge] Failed to read', key, 'from shared storage:', e);
+                    updateBridgeMeta(key, (prev) => ({
+                        ...prev,
+                        sharedDirty: true
+                    }));
+                }
+            }
+
+            return readLocalArray(key);
+        }
+
         async function writeSharedArray(key, value) {
             const normalized = Array.isArray(value) ? value : [];
             const supportsShared = hasSharedStorage();
+            const now = Date.now();
+            let sharedSucceeded = false;
 
             try {
                 localStorage.setItem(key, JSON.stringify(normalized));
@@ -1502,10 +1569,26 @@
             if (supportsShared) {
                 try {
                     await window.storage.set(key, normalized);
+                    sharedSucceeded = true;
                 } catch (e) {
                     console.warn('[StorageBridge] Failed to write', key, 'to shared storage:', e);
                 }
             }
+
+            updateBridgeMeta(key, (prev) => {
+                const next = { ...prev, lastLocalWrite: now };
+                if (supportsShared) {
+                    if (sharedSucceeded) {
+                        next.lastSharedWrite = now;
+                        next.sharedDirty = false;
+                    } else {
+                        next.sharedDirty = true;
+                    }
+                } else {
+                    next.sharedDirty = false;
+                }
+                return next;
+            });
 
             if (!supportsShared) {
                 try {
