@@ -174,7 +174,9 @@ async def _exercise_settings(page: Page) -> None:
     await asyncio.sleep(0.3)
 
     # Theme modal interactions
-    await page.locator("button:has-text('🎨 主题切换')").click()
+    theme_modal_trigger = page.locator("button:has-text('🎨 主题切换')")
+    await theme_modal_trigger.scroll_into_view_if_needed()
+    await theme_modal_trigger.click()
     await page.wait_for_selector("#theme-switcher-modal.show", timeout=5000)
 
     await page.locator("#bloom-theme-btn").click()
@@ -183,12 +185,17 @@ async def _exercise_settings(page: Page) -> None:
     await asyncio.sleep(0.2)
 
     async def navigate_theme(button_selector: str) -> None:
-        async with page.expect_navigation(wait_until="load"):
-            await page.locator(button_selector).click()
-        await page.go_back()
+        option = page.locator(button_selector)
+        await option.scroll_into_view_if_needed()
+        async with page.expect_navigation(wait_until="domcontentloaded"):
+            await option.click()
+
+        await page.go_back(wait_until="domcontentloaded")
         await _ensure_app_ready(page)
         await _click_navigation(page, "settings")
-        await page.locator("button:has-text('🎨 主题切换')").click()
+
+        await theme_modal_trigger.scroll_into_view_if_needed()
+        await theme_modal_trigger.click()
         await page.wait_for_selector("#theme-switcher-modal.show", timeout=5000)
 
     await navigate_theme(".theme-option:nth-of-type(1) button")
