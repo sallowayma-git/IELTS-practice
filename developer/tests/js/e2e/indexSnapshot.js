@@ -275,7 +275,7 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!DOCTYPE html>
                             <div class="theme-name" style="color: #ec4899;">🎀 Melody</div>
                             <div class="theme-desc" style="color: #ec4899;">美乐蒂</div>
                         </div>
-                        <button class="btn btn-sm" style="background: #ec4899; border-color: #ec4899;" onclick="navigateToThemePortal('.superdesign/design_iterations/my_melody_ielts_1.html', { label: 'MyMelody' })">切换</button>
+                        <button class="btn btn-sm" style="background: #ec4899; border-color: #ec4899;" onclick="navigateToThemePortal('.superdesign/design_iterations/my_melody_ielts_1.html', { label: 'MyMelody', theme: 'mymelody' })">切换</button>
                     </div>
                     <div class="theme-option">
                         <div class="theme-info">
