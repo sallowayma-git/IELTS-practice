@@ -100,6 +100,45 @@ class PracticeRecorder {
         return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
     }
 
+    getDateOnlyIso(value) {
+        if (!value) return null;
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) {
+            return null;
+        }
+        return parsed.toISOString().split('T')[0];
+    }
+
+    updateStreakDays(stats, practiceRecord) {
+        if (!stats) return;
+
+        const resolvedDate = practiceRecord?.date
+            || practiceRecord?.endTime
+            || practiceRecord?.startTime
+            || this.resolveRecordDate(practiceRecord || {});
+        const recordDay = this.getDateOnlyIso(resolvedDate);
+        if (!recordDay) return;
+
+        const lastDay = this.getDateOnlyIso(stats.lastPracticeDate);
+
+        if (lastDay !== recordDay) {
+            if (lastDay) {
+                const currentDate = new Date(`${recordDay}T00:00:00Z`);
+                const previousDate = new Date(`${lastDay}T00:00:00Z`);
+                const diff = Math.round((currentDate - previousDate) / (1000 * 60 * 60 * 24));
+
+                if (diff === 1) {
+                    stats.streakDays = (stats.streakDays || 0) + 1;
+                } else if (diff > 1 || diff < 0) {
+                    stats.streakDays = 1;
+                }
+            } else {
+                stats.streakDays = 1;
+            }
+            stats.lastPracticeDate = recordDay;
+        }
+    }
+
     buildRecordMetadata(session = {}, examEntry, type) {
         const metadata = { ...(session.metadata || {}) };
         const examId = session.examId;
@@ -904,29 +943,8 @@ class PracticeRecorder {
         }
 
         // 更新连续学习天数
-        const recordDateIso = this.resolveRecordDate(normalizedRecord);
-        const recordDay = recordDateIso.split('T')[0];
-        const lastDay = stats.lastPracticeDate
-            ? new Date(stats.lastPracticeDate).toISOString().split('T')[0]
-            : null;
+        this.updateStreakDays(stats, normalizedRecord);
 
-        if (lastDay !== recordDay) {
-            if (lastDay) {
-                const currentDate = new Date(`${recordDay}T00:00:00Z`);
-                const previousDate = new Date(`${lastDay}T00:00:00Z`);
-                const diff = Math.round((currentDate - previousDate) / (1000 * 60 * 60 * 24));
-
-                if (diff === 1) {
-                    stats.streakDays += 1;
-                } else if (diff > 1 || diff < 0) {
-                    stats.streakDays = 1;
-                }
-            } else {
-                stats.streakDays = 1;
-            }
-            stats.lastPracticeDate = recordDay;
-        }
-        
         await this.metaRepo.set('user_stats', stats);
         console.log('User stats updated');
     }
