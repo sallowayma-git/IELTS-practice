@@ -1662,6 +1662,58 @@
             return await writeSharedArray(STORAGE_KEYS.EXAM, index);
         }
 
+        function normalizePracticeRecord(record) {
+            const source = record || {};
+            const fallbackTimestamp = source.timestamp || source.id || Date.now();
+            const isoDate = source.date
+                || (source.timestamp ? new Date(source.timestamp).toISOString() : new Date().toISOString());
+
+            return {
+                id: source.id || fallbackTimestamp,
+                examId: source.examId || '',
+                title: source.title || source.examName || '未命名练习',
+                type: source.type || 'reading',
+                score: source.score || (source.realData ? source.realData.percentage : 0),
+                duration: source.duration || (source.realData ? source.realData.duration : 0),
+                date: isoDate,
+                timestamp: source.timestamp || fallbackTimestamp,
+                realData: source.realData || null
+            };
+        }
+
+        function mergePracticeRecordLists(remoteList, localList) {
+            const map = new Map();
+            let autoIndex = 0;
+
+            function upsert(record) {
+                if (!record || typeof record !== 'object') {
+                    return;
+                }
+
+                let key = record.id || record.timestamp;
+                if (key === undefined || key === null || key === '') {
+                    key = `auto-${autoIndex++}`;
+                }
+
+                const existing = map.get(key);
+                if (!existing) {
+                    map.set(key, { ...record });
+                    return;
+                }
+
+                const existingTs = existing.timestamp || 0;
+                const nextTs = record.timestamp || 0;
+                if (nextTs >= existingTs) {
+                    map.set(key, { ...existing, ...record });
+                }
+            }
+
+            (Array.isArray(remoteList) ? remoteList : []).forEach(upsert);
+            (Array.isArray(localList) ? localList : []).forEach(upsert);
+
+            return Array.from(map.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        }
+
         // Initialize the application
         document.addEventListener('DOMContentLoaded', async function() {
            // 已在主脚本加载后通过设计页适配修正过 PDF 路径，这里避免重复覆盖
@@ -2759,21 +2811,49 @@ IELTS 学术练习管理系统
             try {
                 const rawRecords = await getPracticeRecordsFromStorage();
                 const records = Array.isArray(rawRecords) ? rawRecords : [];
+                const normalizedLocal = records.map(normalizePracticeRecord);
+                const supportsShared = hasSharedStorage();
+                const bridgeMeta = readBridgeMeta(STORAGE_KEYS.PRACTICE);
+                let allowSharedWrite = true;
+                let normalizedToPersist = normalizedLocal;
 
-                // Ensure records have the required fields
-                practiceRecords = records.map(record => ({
-                    id: record.id || record.timestamp || Date.now(),
-                    examId: record.examId || '',
-                    title: record.title || record.examName || '未命名练习',
-                    type: record.type || 'reading',
-                    score: record.score || (record.realData ? record.realData.percentage : 0),
-                    duration: record.duration || (record.realData ? record.realData.duration : 0),
-                    date: record.date || (record.timestamp ? new Date(record.timestamp).toISOString() : new Date().toISOString()),
-                    timestamp: record.timestamp || record.id || Date.now(),
-                    realData: record.realData || null
-                }));
+                if (supportsShared && bridgeMeta.sharedDirty) {
+                    allowSharedWrite = false;
+                    try {
+                        const sharedRaw = await window.storage.get(STORAGE_KEYS.PRACTICE, []);
+                        if (Array.isArray(sharedRaw)) {
+                            const normalizedShared = sharedRaw.map(normalizePracticeRecord);
+                            normalizedToPersist = mergePracticeRecordLists(normalizedShared, normalizedLocal);
+                            updateBridgeMeta(STORAGE_KEYS.PRACTICE, (prev) => ({
+                                ...prev,
+                                sharedDirty: false,
+                                lastSharedRead: Date.now()
+                            }));
+                            allowSharedWrite = true;
+                        } else {
+                            console.warn('[StorageBridge] Shared practice recovery returned non-array data.');
+                        }
+                    } catch (recoverError) {
+                        console.warn('[StorageBridge] Failed to recover shared practice records before writing:', recoverError);
+                    }
+                }
 
-                await savePracticeRecordsToStorage(practiceRecords);
+                practiceRecords = normalizedToPersist;
+
+                if (allowSharedWrite) {
+                    await savePracticeRecordsToStorage(practiceRecords);
+                } else {
+                    try {
+                        localStorage.setItem(STORAGE_KEYS.PRACTICE, JSON.stringify(practiceRecords));
+                        updateBridgeMeta(STORAGE_KEYS.PRACTICE, (prev) => ({
+                            ...prev,
+                            lastLocalWrite: Date.now(),
+                            sharedDirty: true
+                        }));
+                    } catch (persistError) {
+                        console.warn('[StorageBridge] Failed to persist practice records locally while shared state dirty:', persistError);
+                    }
+                }
 
                 updatePracticeView();
                 updateOverview();
