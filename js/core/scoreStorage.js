@@ -573,23 +573,38 @@ class ScoreStorage {
 
         const lastDay = this.getDateOnlyIso(stats.lastPracticeDate);
 
-        if (lastDay !== recordDay) {
-            const currentDayStart = this.getLocalDayStart(recordSource);
-            const previousDayStart = this.getLocalDayStart(stats.lastPracticeDate);
+        stats.streakDays = this.ensureNumber(stats.streakDays, 0);
 
-            if (previousDayStart !== null && currentDayStart !== null) {
-                const diff = Math.round((currentDayStart - previousDayStart) / (1000 * 60 * 60 * 24));
+        if (!lastDay) {
+            stats.streakDays = Math.max(stats.streakDays, 1);
+            stats.lastPracticeDate = recordDay;
+            return;
+        }
 
-                if (diff === 1) {
-                    stats.streakDays += 1;
-                } else if (diff > 1 || diff < 0) {
-                    stats.streakDays = 1;
-                }
-            } else {
+        if (lastDay === recordDay) {
+            return;
+        }
+
+        const currentDayStart = this.getLocalDayStart(recordSource);
+        const previousDayStart = this.getLocalDayStart(stats.lastPracticeDate);
+
+        if (previousDayStart !== null && currentDayStart !== null) {
+            if (currentDayStart < previousDayStart) {
+                return;
+            }
+
+            const diff = Math.round((currentDayStart - previousDayStart) / (1000 * 60 * 60 * 24));
+
+            if (diff === 1) {
+                stats.streakDays = Math.max(stats.streakDays + 1, 1);
+            } else if (diff > 1) {
                 stats.streakDays = 1;
             }
-            stats.lastPracticeDate = recordDay;
+        } else {
+            stats.streakDays = 1;
         }
+
+        stats.lastPracticeDate = recordDay;
     }
 
     /**
