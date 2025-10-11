@@ -245,16 +245,31 @@ async def run_e2e_suite(page: Page) -> None:
     await page.goto(E2E_RUNNER_PATH.resolve().as_uri())
     await page.wait_for_load_state("load")
     await page.wait_for_selector("#suite-status", timeout=60000)
-    await page.wait_for_function(
-        "() => window.__E2E_TEST_RESULTS__ && window.__E2E_TEST_RESULTS__.failed === 0",
-        timeout=120000,
-    )
+    await page.wait_for_function("() => window.__E2E_TEST_RESULTS__", timeout=120000)
+    results = await page.evaluate("window.__E2E_TEST_RESULTS__")
+    if not results:
+        raise RuntimeError("E2E harness 未返回任何结果")
+
+    failed = int(results.get("failed") or 0)
+    if failed:
+        failing = []
+        for item in results.get("results", []):
+            if item and not item.get("passed"):
+                detail = item.get("details")
+                if isinstance(detail, dict):
+                    detail = str(detail)
+                failing.append(f"{item.get('name')}: {detail}")
+        sample = "\n".join(failing[:5])
+        raise AssertionError(f"E2E harness 失败 {failed} 项\n{sample}")
 
 
 async def main() -> None:
     async with async_playwright() as p:
         browser: Browser = await p.chromium.launch()
         context = await browser.new_context()
+        await context.add_init_script(
+            "(() => { try { localStorage.removeItem('preferred_theme_portal'); sessionStorage.removeItem('preferred_theme_skip_session'); } catch (_) {} })();"
+        )
 
         page = await context.new_page()
         await exercise_index_interactions(page)
