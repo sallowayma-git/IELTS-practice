@@ -100,7 +100,7 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!DOCTYPE html>
                 </div>
             </div>
 
-            <div id="practice-history-list">
+            <div id="history-list" class="practice-history-list">
                 <div style="text-align: center; padding: 40px; opacity: 0.7;">
                     <div style="font-size: 3em; margin-bottom: 15px;">📋</div>
                     <p>暂无练习记录</p>
@@ -254,7 +254,7 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!DOCTYPE html>
                             <div class="theme-name">📚 Academic</div>
                             <div class="theme-desc">专业 高效 可靠</div>
                         </div>
-                        <button class="btn btn-sm" onclick="window.location.href='.superdesign/design_iterations/ielts_academic_functional_2.html'">切换</button>
+                        <button class="btn btn-sm" onclick="navigateToThemePortal('.superdesign/design_iterations/ielts_academic_functional_2.html', { label: 'Academic' })">切换</button>
                     </div>
                     <div class="theme-option">
                         <div class="theme-info">
@@ -275,14 +275,14 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!DOCTYPE html>
                             <div class="theme-name" style="color: #ec4899;">🎀 Melody</div>
                             <div class="theme-desc" style="color: #ec4899;">美乐蒂</div>
                         </div>
-                        <button class="btn btn-sm" style="background: #ec4899; border-color: #ec4899;" onclick="window.location.href='.superdesign/design_iterations/my_melody_ielts_1.html'">切换</button>
+                        <button class="btn btn-sm" style="background: #ec4899; border-color: #ec4899;" onclick="navigateToThemePortal('.superdesign/design_iterations/my_melody_ielts_1.html', { label: 'MyMelody' })">切换</button>
                     </div>
                     <div class="theme-option">
                         <div class="theme-info">
                             <div class="theme-name" style="color: #6a2bbf;">🧙 HarryPotter</div>
                             <div class="theme-desc" style="color: #6a2bbf;">哈利波特</div>
                         </div>
-                        <button class="btn btn-sm" style="background: #6a2bbf; border-color: #6a2bbf;" aria-label="哈利波特主题（冒险）" onclick="(function(){try{document.documentElement.setAttribute('data-theme','harry');localStorage.setItem('theme','harry');}catch(e){} window.location.href='.superdesign/design_iterations/HarryPoter.html';})()">切换</button>
+                        <button class="btn btn-sm" style="background: #6a2bbf; border-color: #6a2bbf;" aria-label="哈利波特主题（冒险）" onclick="navigateToThemePortal('.superdesign/design_iterations/HarryPoter.html', { label: 'HarryPotter', theme: 'harry' })">切换</button>
                     </div>
                 </div>
             </div>
@@ -345,6 +345,7 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!DOCTYPE html>
     <script src="js/core/scoreStorage.js"></script>
     <script src="js/core/practiceRecorder.js"></script>
     <script src="js/core/legacyStateBridge.js"></script>
+    <script src="js/utils/legacyStateAdapter.js"></script>
     <script src="js/components/PDFHandler.js"></script>
 
     <!-- 系统诊断组件 (已合并) -->
@@ -366,11 +367,18 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!DOCTYPE html>
   
     <!-- 加载工具库 -->
     <script src="js/utils/dom.js"></script>
+    <script src="js/views/legacyViewBundle.js"></script>
     <script src="js/utils/performance.js"></script>
     <script src="js/utils/typeChecker.js"></script>
     <script src="js/utils/codeStandards.js"></script>
     <script src="js/services/overviewStats.js"></script>
     <script src="js/views/overviewView.js"></script>
+
+    <!-- 应用核心状态与展示模块 -->
+    <script src="js/app/state-service.js"></script>
+    <script src="js/presentation/message-center.js"></script>
+    <script src="js/presentation/navigation-controller.js"></script>
+    <script src="js/runtime/legacy-state-adapter.js"></script>
 
     <!-- 加载主脚本 -->
     <script src="js/main.js"></script>
