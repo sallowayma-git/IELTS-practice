@@ -1450,8 +1450,126 @@
         // 选择性批量删除所用集合（仅本页使用）
         let selectedRecordIds = new Set();
 
+        const STORAGE_KEYS = {
+            PRACTICE: 'practice_records',
+            EXAM: 'exam_index'
+        };
+
+        function hasSharedStorage() {
+            return !!(window.storage && typeof window.storage.get === 'function' && typeof window.storage.set === 'function');
+        }
+
+        async function readSharedArray(key) {
+            if (hasSharedStorage()) {
+                try {
+                    const data = await window.storage.get(key, []);
+                    if (Array.isArray(data)) {
+                        try { localStorage.setItem(key, JSON.stringify(data)); } catch (e) {
+                            console.warn('[StorageBridge] Failed to mirror', key, 'to localStorage:', e);
+                        }
+                        return data;
+                    }
+                } catch (e) {
+                    console.warn('[StorageBridge] Failed to read', key, 'from shared storage:', e);
+                }
+            }
+
+            try {
+                const raw = localStorage.getItem(key);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed)) {
+                        return parsed;
+                    }
+                }
+            } catch (e) {
+                console.warn('[StorageBridge] Failed to read', key, 'from localStorage:', e);
+            }
+
+            return [];
+        }
+
+        async function writeSharedArray(key, value) {
+            const normalized = Array.isArray(value) ? value : [];
+
+            if (hasSharedStorage()) {
+                try {
+                    await window.storage.set(key, normalized);
+                } catch (e) {
+                    console.warn('[StorageBridge] Failed to write', key, 'to shared storage:', e);
+                }
+            }
+
+            try {
+                localStorage.setItem(key, JSON.stringify(normalized));
+            } catch (e) {
+                console.warn('[StorageBridge] Failed to persist', key, 'to localStorage:', e);
+            }
+
+            if (!hasSharedStorage()) {
+                try {
+                    window.dispatchEvent(new CustomEvent('storage-sync', { detail: { key } }));
+                } catch (e) {
+                    console.warn('[StorageBridge] Failed to dispatch storage-sync for', key, e);
+                }
+            }
+
+            return normalized;
+        }
+
+        async function clearSharedKey(key) {
+            if (hasSharedStorage()) {
+                try {
+                    if (typeof window.storage.remove === 'function') {
+                        await window.storage.remove(key);
+                    } else {
+                        await window.storage.set(key, []);
+                    }
+                } catch (e) {
+                    console.warn('[StorageBridge] Failed to clear', key, 'from shared storage:', e);
+                }
+            }
+
+            try {
+                localStorage.removeItem(key);
+            } catch (e) {
+                console.warn('[StorageBridge] Failed to remove', key, 'from localStorage:', e);
+            }
+        }
+
+        async function clearSharedNamespace() {
+            if (hasSharedStorage() && typeof window.storage.clear === 'function') {
+                try {
+                    await window.storage.clear();
+                } catch (e) {
+                    console.warn('[StorageBridge] Failed to clear shared namespace:', e);
+                }
+            }
+
+            await Promise.all([
+                clearSharedKey(STORAGE_KEYS.PRACTICE),
+                clearSharedKey(STORAGE_KEYS.EXAM)
+            ]);
+        }
+
+        async function getPracticeRecordsFromStorage() {
+            return await readSharedArray(STORAGE_KEYS.PRACTICE);
+        }
+
+        async function savePracticeRecordsToStorage(records) {
+            return await writeSharedArray(STORAGE_KEYS.PRACTICE, records);
+        }
+
+        async function getExamIndexFromStorage() {
+            return await readSharedArray(STORAGE_KEYS.EXAM);
+        }
+
+        async function saveExamIndexToStorage(index) {
+            return await writeSharedArray(STORAGE_KEYS.EXAM, index);
+        }
+
         // Initialize the application
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', async function() {
            // 已在主脚本加载后通过设计页适配修正过 PDF 路径，这里避免重复覆盖
            if (window.PDFHandler && window.PDFHandler.prototype) {
                console.log('[OVERRIDE] PDF 路径已通过设计页适配修正，跳过重复覆盖');
@@ -1476,33 +1594,35 @@
                        console.log('[OVERRIDE] 已注入简化 openExam 备用实现');
                    }
                } catch (e) { console.warn('[OVERRIDE] openExam 处理异常:', e); }
-           })();
+            })();
 
 
-            // First try to load data from localStorage
-            loadFromLocalStorage();
+            // First try to load data from shared storage
+            await loadStoredData();
             initializeApp();
-            loadLibrary();
-            syncPracticeRecords();
+            await loadLibrary();
+            await syncPracticeRecords();
         });
 
-        // Load data from localStorage
-        function loadFromLocalStorage() {
+        // Load data from shared storage/local fallback
+        async function loadStoredData() {
             try {
-                const storedExamIndex = localStorage.getItem('exam_index');
-                const storedPracticeRecords = localStorage.getItem('practice_records');
+                const [storedExamIndex, storedPracticeRecords] = await Promise.all([
+                    getExamIndexFromStorage(),
+                    getPracticeRecordsFromStorage()
+                ]);
 
-                if (storedExamIndex) {
-                    examIndex = JSON.parse(storedExamIndex);
-                    console.log('Loaded exam index from localStorage:', examIndex.length, 'items');
+                if (Array.isArray(storedExamIndex) && storedExamIndex.length > 0) {
+                    examIndex = storedExamIndex;
+                    console.log('[StorageBridge] Loaded exam index:', examIndex.length, 'items');
                 }
 
-                if (storedPracticeRecords) {
-                    practiceRecords = JSON.parse(storedPracticeRecords);
-                    console.log('Loaded practice records from localStorage:', practiceRecords.length, 'items');
+                if (Array.isArray(storedPracticeRecords) && storedPracticeRecords.length > 0) {
+                    practiceRecords = storedPracticeRecords;
+                    console.log('[StorageBridge] Loaded practice records:', practiceRecords.length, 'items');
                 }
             } catch (error) {
-                console.error('Failed to load data from localStorage:', error);
+                console.error('[StorageBridge] Failed to load data from storage:', error);
             }
         }
 
@@ -1936,50 +2056,48 @@
                 const exam = safeExamIndex.find(e => e.id === examId);
                 if (exam) {
                     if (exam.hasHtml) {
-                        // Open HTML practice - use the correct path from the exam data
-                        let fullPath;
-
-                        // Check if exam has path and filename properties
-                        if (exam.path && exam.filename) {
-                            // For files in 睡着过项目组 directory
-                            const basePath = '../../';
-                            fullPath = basePath + exam.path + exam.filename;
-                        } else if (exam.htmlPath) {
-                            // Fallback to htmlPath if available
-                            fullPath = exam.htmlPath;
+                        // Open HTML practice - resolve via shared helpers
+                        let fullPath = '';
+                        if (typeof window.buildResourcePath === 'function') {
+                            fullPath = window.buildResourcePath(exam, 'html');
                         } else {
-                            // Default path structure for reading/listening
-                            const basePath = '../../';
-                            if (exam.type === 'reading' || exam.category === 'P1') {
-                                fullPath = basePath + `睡着过项目组(9.4)[134篇]/2. 高频次高频文章[83篇]/1. P1（高频）[12篇]/${exam.filename || exam.id + '.html'}`;
-                            } else if (exam.type === 'listening' || exam.category === 'P2') {
-                                fullPath = basePath + `ListeningPractice/${exam.category}/${exam.filename || exam.id + '.html'}`;
-                            } else {
-                                fullPath = basePath + `睡着过项目组(9.4)[134篇]/2. 高频次高频文章[83篇]/1. P1（高频）[12篇]/${exam.filename || exam.id + '.html'}`;
-                            }
+                            const resolveBase = (typeof window.resolveExamBasePath === 'function') ? window.resolveExamBasePath : null;
+                            let basePath = resolveBase ? resolveBase(exam) : (exam && exam.path ? String(exam.path) : '');
+                            if (basePath && !basePath.endsWith('/')) basePath += '/';
+                            const fallbackFile = exam && (exam.filename || exam.htmlFilename) ? (exam.filename || exam.htmlFilename) : `${exam.id}.html`;
+                            basePath = basePath.replace(/\\/g, '/').replace(/^\.\//, '');
+                            const needsRepoRoot = basePath && !/^(?:\.\.\/|\.\/|\/|[a-z]+:\/\/|[A-Za-z]:[\\/])/i.test(basePath);
+                            const prefix = needsRepoRoot ? '../../' : '';
+                            fullPath = prefix + basePath + fallbackFile;
                         }
 
                         console.log('Attempting to open:', fullPath);
 
                         const examWindow = window.open(fullPath, `exam_${exam.id}`, 'width=1200,height=800,scrollbars=yes,resizable=yes');
                         if (examWindow) {
-                            showMessage('正在打开: ' + (exam.title || exam.name), 'success');
+                            showMessage('正在打开: ' + (exam.title || exam.name) + '（路径：' + fullPath + '）', 'success');
                         } else {
                             showMessage('无法打开窗口，请检查弹窗设置', 'error');
                         }
                     } else if (exam.pdfFilename) {
                         // Open PDF
-                        let pdfPath;
-                        const basePath = '../../';
-                        if (exam.path && exam.pdfFilename) {
-                            pdfPath = basePath + exam.path + exam.pdfFilename;
+                        let pdfPath = '';
+                        if (typeof window.buildResourcePath === 'function') {
+                            pdfPath = window.buildResourcePath(exam, 'pdf');
                         } else {
-                            pdfPath = basePath + (exam.pdfPath || `睡着过项目组(9.4)[134篇]/2. 高频次高频文章[83篇]/1. P1（高频）[12篇]/${exam.pdfFilename}`);
+                            const resolveBase = (typeof window.resolveExamBasePath === 'function') ? window.resolveExamBasePath : null;
+                            let basePath = resolveBase ? resolveBase(exam) : (exam && exam.path ? String(exam.path) : '');
+                            if (basePath && !basePath.endsWith('/')) basePath += '/';
+                            const fallbackPdf = exam && exam.pdfFilename ? exam.pdfFilename : `${exam.id}.pdf`;
+                            basePath = basePath.replace(/\\/g, '/').replace(/^\.\//, '');
+                            const needsRepoRoot = basePath && !/^(?:\.\.\/|\.\/|\/|[a-z]+:\/\/|[A-Za-z]:[\\/])/i.test(basePath);
+                            const prefix = needsRepoRoot ? '../../' : '';
+                            pdfPath = prefix + basePath + fallbackPdf;
                         }
 
                         const pdfWindow = window.open(pdfPath, `pdf_${exam.id}`, 'width=1000,height=800,scrollbars=yes,resizable=yes');
                         if (pdfWindow) {
-                            showMessage('正在打开PDF: ' + (exam.title || exam.name), 'success');
+                            showMessage('正在打开PDF: ' + (exam.title || exam.name) + '（路径：' + pdfPath + '）', 'success');
                         } else {
                             showMessage('PDF 打开失败，请手动打开: ' + pdfPath, 'error');
                         }
@@ -2121,8 +2239,8 @@
             loading.style.display = 'block';
             examList.style.display = 'none';
 
-            setTimeout(() => {
-                loadLibrary(true);
+            setTimeout(async () => {
+                await loadLibrary(true);
                 loading.style.display = 'none';
                 examList.style.display = 'grid';
                 showMessage('题库已刷新', 'success');
@@ -2139,28 +2257,22 @@
         }
 
         // Settings functions
-        function clearCache() {
+        async function clearCache() {
             if (confirm('确定要清除所有缓存数据吗？此操作不可撤销。')) {
-                localStorage.clear();
-                sessionStorage.clear();
+                try { localStorage.clear(); } catch (e) { console.warn('[StorageBridge] localStorage.clear failed:', e); }
+                try { sessionStorage.clear(); } catch (e) { console.warn('[StorageBridge] sessionStorage.clear failed:', e); }
+                await clearSharedNamespace();
                 showMessage('缓存已清除', 'success');
                 setTimeout(() => location.reload(), 1500);
             }
         }
 
         // Fixed clear cache function that also clears practice records
-        function fixedClearCache() {
+        async function fixedClearCache() {
             if (confirm('确定要清除所有缓存数据和练习记录吗？此操作不可撤销。')) {
-                localStorage.clear();
-                sessionStorage.clear();
-                // Also clear practice records from any other storage
-                try {
-                    if (window.storage && typeof storage.clear === 'function') {
-                        storage.clear();
-                    }
-                } catch (e) {
-                    console.warn('Failed to clear storage:', e);
-                }
+                try { localStorage.clear(); } catch (e) { console.warn('[StorageBridge] localStorage.clear failed:', e); }
+                try { sessionStorage.clear(); } catch (e) { console.warn('[StorageBridge] sessionStorage.clear failed:', e); }
+                await clearSharedNamespace();
                 showMessage('缓存和练习记录已清除', 'success');
                 setTimeout(() => location.reload(), 1500);
             }
@@ -2172,60 +2284,67 @@
 
         // Load library - 添加防重复加载
         window._libraryLoadingInProgress = false;
-        function loadLibrary(forceReload = false) {
+        async function loadLibrary(forceReload = false) {
             // 防止重复加载
             if (window._libraryLoadingInProgress && !forceReload) {
                 console.log('[Library] 题库加载已在进行中，跳过重复调用');
                 return;
             }
+
+            if (forceReload) {
+                window._libraryLoadingInProgress = false;
+            }
+
             window._libraryLoadingInProgress = true;
 
             const startTime = performance.now();
-            
-            // Try to load from localStorage first
+
             if (!forceReload) {
+                if (Array.isArray(examIndex) && examIndex.length > 0) {
+                    finishLibraryLoading(startTime);
+                    return;
+                }
+
                 try {
-                    const storedExamIndex = localStorage.getItem('exam_index');
-                    if (storedExamIndex) {
-                        examIndex = JSON.parse(storedExamIndex);
+                    const stored = await getExamIndexFromStorage();
+                    if (Array.isArray(stored) && stored.length > 0) {
+                        examIndex = stored;
                         finishLibraryLoading(startTime);
                         return;
                     }
                 } catch (error) {
-                    console.warn('Failed to load exam index from localStorage:', error);
+                    console.warn('[Library] Failed to load exam index from shared storage:', error);
                 }
-            } else {
-                // 如果是强制刷新，重置状态
-                window._libraryLoadingInProgress = false;
             }
-        
+
             console.log(`[Library] ${forceReload ? 'Force' : 'Normal'} loading library index...`);
             showMessage('正在加载题库索引...', 'info');
-        
+
             try {
                 let readingExams = [];
                 if (window.completeExamIndex && Array.isArray(window.completeExamIndex)) {
                     readingExams = window.completeExamIndex.map(exam => ({ ...exam, type: 'reading' }));
                     console.log(`[Library] Loaded reading library: ${readingExams.length} items`);
                 }
-        
+
                 let listeningExams = [];
                 if (window.listeningExamIndex && Array.isArray(window.listeningExamIndex)) {
                     listeningExams = window.listeningExamIndex;
                     console.log(`[Library] Loaded listening library: ${listeningExams.length} items`);
                 }
-        
+
                 if (readingExams.length === 0 && listeningExams.length === 0) {
                     console.warn('[Library] No built-in library data detected, continuing with empty index');
                 }
-        
+
                 examIndex = [...readingExams, ...listeningExams];
-                localStorage.setItem('exam_index', JSON.stringify(examIndex));
-        
+                await saveExamIndexToStorage(examIndex);
+
                 finishLibraryLoading(startTime);
             } catch (error) {
                 console.error('[Library] Failed to load library:', error);
                 examIndex = [];
+                await saveExamIndexToStorage(examIndex);
                 finishLibraryLoading(startTime);
             }
         }
@@ -2280,7 +2399,7 @@
                 if (!file) return;
 
                 const reader = new FileReader();
-                reader.onload = function(e) {
+                reader.onload = async function(e) {
                     try {
                         const data = JSON.parse(e.target.result);
                         console.log('Import data structure:', data);
@@ -2314,7 +2433,7 @@
                             });
 
                             practiceRecords = importedRecords;
-                            localStorage.setItem('practice_records', JSON.stringify(practiceRecords));
+                            await savePracticeRecordsToStorage(practiceRecords);
                             importedRecordCount = importedRecords.length;
                         }
                         // Also check for nested practice_records in data.data
@@ -2341,7 +2460,7 @@
                             });
 
                             practiceRecords = importedRecords;
-                            localStorage.setItem('practice_records', JSON.stringify(practiceRecords));
+                            await savePracticeRecordsToStorage(practiceRecords);
                             importedRecordCount = importedRecords.length;
                         }
 
@@ -2363,20 +2482,20 @@
                             }));
 
                             examIndex = importedExams;
-                            localStorage.setItem('exam_index', JSON.stringify(examIndex));
+                            await saveExamIndexToStorage(examIndex);
                             importedExamCount = importedExams.length;
                         }
                         // Fallback to direct format
                         else if (data.examIndex) {
                             examIndex = data.examIndex;
-                            localStorage.setItem('exam_index', JSON.stringify(examIndex));
+                            await saveExamIndexToStorage(examIndex);
                             importedExamCount = examIndex.length;
                         }
 
                         // Fallback to direct practice records format
                         if (data.practiceRecords) {
                             practiceRecords = data.practiceRecords;
-                            localStorage.setItem('practice_records', JSON.stringify(practiceRecords));
+                            await savePracticeRecordsToStorage(practiceRecords);
                             importedRecordCount = practiceRecords.length;
                         }
 
@@ -2452,10 +2571,10 @@
             showMessage(`已导出 ${practiceRecords.length} 条练习记录和 ${examIndex.length} 道题目`, 'success');
         }
 
-        function clearPracticeData() {
+        async function clearPracticeData() {
             if (confirm('确定要清除所有练习记录吗？此操作不可撤销！')) {
                 practiceRecords = [];
-                localStorage.removeItem('practice_records');
+                await clearSharedKey(STORAGE_KEYS.PRACTICE);
                 updatePracticeView();
                 updateOverview();
                 showMessage('记录已清除', 'success');
@@ -2535,7 +2654,7 @@ IELTS 学术练习管理系统
 
         // Sync practice records with storage - 添加防重复调用
         window._syncInProgress = false;
-        function syncPracticeRecords() {
+        async function syncPracticeRecords() {
             // 防止重复同步
             if (window._syncInProgress) {
                 console.log('[Sync] 同步已在进行中，跳过重复调用');
@@ -2544,7 +2663,8 @@ IELTS 学术练习管理系统
             window._syncInProgress = true;
 
             try {
-                const records = JSON.parse(localStorage.getItem('practice_records') || '[]');
+                const rawRecords = await getPracticeRecordsFromStorage();
+                const records = Array.isArray(rawRecords) ? rawRecords : [];
 
                 // Ensure records have the required fields
                 practiceRecords = records.map(record => ({
@@ -2558,6 +2678,8 @@ IELTS 学术练习管理系统
                     timestamp: record.timestamp || record.id || Date.now(),
                     realData: record.realData || null
                 }));
+
+                await savePracticeRecordsToStorage(practiceRecords);
 
                 updatePracticeView();
                 updateOverview();
@@ -2615,14 +2737,14 @@ IELTS 学术练习管理系统
         // Auto-save functionality
         setInterval(() => {
             if (practiceRecords.length > 0) {
-                localStorage.setItem('practice_records', JSON.stringify(practiceRecords));
+                savePracticeRecordsToStorage(practiceRecords).catch(e => console.warn('[StorageBridge] Auto-save failed:', e));
             }
         }, 30000); // Auto-save every 30 seconds
 
         // Handle window unload
         window.addEventListener('beforeunload', function(e) {
             if (practiceRecords.length > 0) {
-                localStorage.setItem('practice_records', JSON.stringify(practiceRecords));
+                savePracticeRecordsToStorage(practiceRecords);
             }
         });
 
@@ -2640,14 +2762,15 @@ IELTS 学术练习管理系统
         if (!window.selectedRecordIds) window.selectedRecordIds = new Set();
 
         // 1) 查看详情：调用现有 PracticeRecordModal 显示弹窗
-        window.viewRecordDetails = function(recordId) {
+        window.viewRecordDetails = async function(recordId) {
             try {
                 if (window.practiceRecordModal && typeof window.practiceRecordModal.showById === 'function') {
                     window.practiceRecordModal.showById(recordId);
                 } else if (window.practiceHistoryEnhancer && typeof window.practiceHistoryEnhancer.showRecordDetails === 'function') {
                     window.practiceHistoryEnhancer.showRecordDetails(recordId);
                 } else {
-                    var recs = JSON.parse(localStorage.getItem('practice_records')||'[]');
+                    var recs = await getPracticeRecordsFromStorage();
+                    if (!Array.isArray(recs)) recs = [];
                     var r = recs.find(function(x){ return String(x.id||x.timestamp) === String(recordId); });
                     alert(r ? ('题目：' + (r.title||'未知') + '\n分数：' + (r.score||0) + '%\n用时：' + (r.duration||0) + '秒') : '记录不存在');
                 }
@@ -2717,15 +2840,16 @@ IELTS 学术练习管理系统
             master.indeterminate = checkedCount > 0 && checkedCount < cbs.length;
         };
 
-        window.batchDeleteSelected = function(){
+        window.batchDeleteSelected = async function(){
             var ids = Array.from(window.selectedRecordIds || []);
             if (ids.length === 0) { try { showMessage('请先选择要删除的记录', 'warning'); } catch(_) {} return; }
             if (!confirm('确定要删除选中的 ' + ids.length + ' 条记录吗？此操作不可撤销。')) return;
             try {
-                var list = JSON.parse(localStorage.getItem('practice_records')||'[]');
+                var list = await getPracticeRecordsFromStorage();
+                if (!Array.isArray(list)) list = [];
                 var idSet = new Set(ids.map(String));
                 list = list.filter(function(r){ return !idSet.has(String(r.id||r.timestamp)); });
-                localStorage.setItem('practice_records', JSON.stringify(list));
+                await savePracticeRecordsToStorage(list);
                 if (window.practiceRecords) window.practiceRecords = list;
             } catch (e) { console.warn('[BatchDelete] 本地存储更新失败:', e); }
             window.selectedRecordIds.clear();
@@ -2744,7 +2868,7 @@ IELTS 学术练习管理系统
                 input.onchange = function(e){
                     var file = e.target.files[0]; if (!file) return;
                     var reader = new FileReader();
-                    reader.onload = function(ev){
+                    reader.onload = async function(ev){
                         try {
                             var data = JSON.parse(ev.target.result);
                             var importedExamCount = 0, importedRecordCount = 0;
@@ -2791,11 +2915,11 @@ IELTS 学术练习管理系统
 
                             // exam index sources
                             if (data && data.data && data.data.exam_system_exam_index && Array.isArray(data.data.exam_system_exam_index.data)) {
-                                try { localStorage.setItem('exam_index', JSON.stringify(data.data.exam_system_exam_index.data)); importedExamCount = data.data.exam_system_exam_index.data.length; } catch(_) {}
+                                try { await saveExamIndexToStorage(data.data.exam_system_exam_index.data); importedExamCount = data.data.exam_system_exam_index.data.length; } catch(_) {}
                             } else if (data && data.exam_system_exam_index && Array.isArray(data.exam_system_exam_index.data)) {
-                                try { localStorage.setItem('exam_index', JSON.stringify(data.exam_system_exam_index.data)); importedExamCount = data.exam_system_exam_index.data.length; } catch(_) {}
+                                try { await saveExamIndexToStorage(data.exam_system_exam_index.data); importedExamCount = data.exam_system_exam_index.data.length; } catch(_) {}
                             } else if (Array.isArray(data.exam_index)) {
-                                try { localStorage.setItem('exam_index', JSON.stringify(data.exam_index)); importedExamCount = data.exam_index.length; } catch(_) {}
+                                try { await saveExamIndexToStorage(data.exam_index); importedExamCount = data.exam_index.length; } catch(_) {}
                             }
 
                             // practice records sources
@@ -2811,7 +2935,7 @@ IELTS 学术练习管理系统
                             }
 
                             if (importedRecords) {
-                                localStorage.setItem('practice_records', JSON.stringify(importedRecords));
+                                await savePracticeRecordsToStorage(importedRecords);
                                 if (window.practiceRecords) window.practiceRecords = importedRecords;
                                 importedRecordCount = importedRecords.length;
                             }
@@ -2972,7 +3096,7 @@ IELTS 学术练习管理系统
         window.decoratePracticeTableForSelection = function(){};
 
         // 切换批量删除模式
-        window.bulkDeleteAction = function(){
+        window.bulkDeleteAction = async function(){
             if (!window.bulkDeleteMode) {
                 setBulkDeleteMode(true);
                 try { showMessage('点击记录行可选择；完成后再次点击完成选择', 'info'); } catch(_) {}
@@ -2981,10 +3105,11 @@ IELTS 学术练习管理系统
                 const ids = Array.from(selectedRecordIds || []);
                 if (ids.length === 0) { setBulkDeleteMode(false); return; }
                 try {
-                    let list = JSON.parse(localStorage.getItem('practice_records')||'[]');
+                    let list = await getPracticeRecordsFromStorage();
+                    if (!Array.isArray(list)) list = [];
                     const setIds = new Set(ids.map(String));
                     list = list.filter(r => !setIds.has(String(r.id||r.timestamp)));
-                    localStorage.setItem('practice_records', JSON.stringify(list));
+                    await savePracticeRecordsToStorage(list);
                     if (window.practiceRecords) window.practiceRecords = list;
                 } catch(e) { console.warn('[BulkDelete] 更新存储失败:', e); }
                 selectedRecordIds.clear();
@@ -3087,12 +3212,16 @@ IELTS 学术练习管理系统
 <script>
 // 修复函数 - 确保在页面加载早期就可用
 function safeGetRecords() {
-    try {
-        if (window.storage && typeof storage.get === 'function') {
-            return storage.get('practice_records', []) || [];
+    if (hasSharedStorage()) {
+        try {
+            window.storage.get('practice_records', []).then(function(list){
+                if (Array.isArray(list)) {
+                    try { localStorage.setItem('practice_records', JSON.stringify(list)); } catch (_) {}
+                }
+            }).catch(function(err){ console.warn('[Fix] storage.get async sync failed:', err); });
+        } catch (e) {
+            console.warn('[Fix] storage.get failed:', e);
         }
-    } catch (e) {
-        console.warn('[Fix] storage.get failed:', e);
     }
     try {
         return JSON.parse(localStorage.getItem('practice_records') || '[]');
@@ -3103,21 +3232,11 @@ function safeGetRecords() {
 }
 
 function safeSetRecords(list) {
-    try {
-        if (window.storage && typeof storage.set === 'function') {
-            storage.set('practice_records', list || []);
-            console.log('[Fix] Records saved via storage.set');
-            return;
-        }
-    } catch (e) {
-        console.warn('[Fix] storage.set failed:', e);
-    }
-    try {
-        localStorage.setItem('practice_records', JSON.stringify(list || []));
-        console.log('[Fix] Records saved via localStorage');
-    } catch(e) {
+    savePracticeRecordsToStorage(list || []).then(() => {
+        console.log('[Fix] Records saved via StorageBridge');
+    }).catch(e => {
         console.error('[Fix] All storage methods failed:', e);
-    }
+    });
 }
 
 function normalizeRecord(r) {
@@ -3141,19 +3260,13 @@ function normalizeRecord(r) {
 }
 
 // 修复清除缓存功能
-window.fixedClearCache = function() {
+window.fixedClearCache = async function() {
     console.log('[Fix] fixedClearCache called');
     if (!confirm('确定要清除所有缓存数据吗？此操作不可撤销！')) return;
 
     try {
-        // 清除所有存储
-        if (window.storage && typeof storage.clear === 'function') {
-            storage.clear();
-            console.log('[Fix] Storage cleared via storage.clear');
-        } else {
-            localStorage.clear();
-            console.log('[Fix] Storage cleared via localStorage.clear');
-        }
+        await clearSharedNamespace();
+        console.log('[Fix] Storage cleared via StorageBridge');
     } catch (e) {
         console.error('[Fix] Error clearing storage:', e);
     }
