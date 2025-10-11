@@ -307,6 +307,7 @@ class ScoreStorage {
             categoryStats: {},
             questionTypeStats: {},
             streakDays: 0,
+            practiceDays: [],
             lastPracticeDate: null,
             achievements: [],
             createdAt: now,
@@ -571,40 +572,40 @@ class ScoreStorage {
         const recordDay = this.getDateOnlyIso(recordSource);
         if (!recordDay) return;
 
-        const lastDay = this.getDateOnlyIso(stats.lastPracticeDate);
+        const practiceDays = Array.isArray(stats.practiceDays) ? stats.practiceDays.slice() : [];
+        if (!practiceDays.includes(recordDay)) {
+            practiceDays.push(recordDay);
+        }
 
-        stats.streakDays = this.ensureNumber(stats.streakDays, 0);
+        const validDays = practiceDays
+            .map(day => ({ day, start: this.getLocalDayStart(day) }))
+            .filter(item => item.start !== null)
+            .sort((a, b) => a.start - b.start);
 
-        if (!lastDay) {
-            stats.streakDays = Math.max(stats.streakDays, 1);
-            stats.lastPracticeDate = recordDay;
+        if (validDays.length === 0) {
+            stats.practiceDays = [];
+            stats.streakDays = 0;
+            stats.lastPracticeDate = null;
             return;
         }
 
-        if (lastDay === recordDay) {
-            return;
-        }
+        let currentStreak = 1;
 
-        const currentDayStart = this.getLocalDayStart(recordSource);
-        const previousDayStart = this.getLocalDayStart(stats.lastPracticeDate);
-
-        if (previousDayStart !== null && currentDayStart !== null) {
-            if (currentDayStart < previousDayStart) {
-                return;
-            }
-
-            const diff = Math.round((currentDayStart - previousDayStart) / (1000 * 60 * 60 * 24));
+        for (let index = 1; index < validDays.length; index += 1) {
+            const previous = validDays[index - 1];
+            const current = validDays[index];
+            const diff = Math.round((current.start - previous.start) / (1000 * 60 * 60 * 24));
 
             if (diff === 1) {
-                stats.streakDays = Math.max(stats.streakDays + 1, 1);
+                currentStreak += 1;
             } else if (diff > 1) {
-                stats.streakDays = 1;
+                currentStreak = 1;
             }
-        } else {
-            stats.streakDays = 1;
         }
 
-        stats.lastPracticeDate = recordDay;
+        stats.practiceDays = validDays.map(item => item.day);
+        stats.streakDays = currentStreak;
+        stats.lastPracticeDate = validDays[validDays.length - 1].day;
     }
 
     /**

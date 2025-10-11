@@ -141,30 +141,40 @@ class PracticeRecorder {
         const recordDay = this.getDateOnlyIso(resolvedDate);
         if (!recordDay) return;
 
-        const lastDay = this.getDateOnlyIso(stats.lastPracticeDate);
-
-        if (lastDay !== recordDay) {
-            const currentDayStart = this.getLocalDayStart(resolvedDate);
-            const previousDayStart = this.getLocalDayStart(stats.lastPracticeDate);
-
-            if (previousDayStart !== null && currentDayStart !== null) {
-                if (currentDayStart < previousDayStart) {
-                    // 旧记录只跳过连击更新，不影响上层的记录恢复流程
-                    return;
-                }
-
-                const diff = Math.round((currentDayStart - previousDayStart) / (1000 * 60 * 60 * 24));
-
-                if (diff === 1) {
-                    stats.streakDays = (stats.streakDays || 0) + 1;
-                } else if (diff > 1) {
-                    stats.streakDays = 1;
-                }
-            } else {
-                stats.streakDays = 1;
-            }
-            stats.lastPracticeDate = recordDay;
+        const practiceDays = Array.isArray(stats.practiceDays) ? stats.practiceDays.slice() : [];
+        if (!practiceDays.includes(recordDay)) {
+            practiceDays.push(recordDay);
         }
+
+        const validDays = practiceDays
+            .map(day => ({ day, start: this.getLocalDayStart(day) }))
+            .filter(item => item.start !== null)
+            .sort((a, b) => a.start - b.start);
+
+        if (validDays.length === 0) {
+            stats.practiceDays = [];
+            stats.streakDays = 0;
+            stats.lastPracticeDate = null;
+            return;
+        }
+
+        let currentStreak = 1;
+
+        for (let index = 1; index < validDays.length; index += 1) {
+            const previous = validDays[index - 1];
+            const current = validDays[index];
+            const diff = Math.round((current.start - previous.start) / (1000 * 60 * 60 * 24));
+
+            if (diff === 1) {
+                currentStreak += 1;
+            } else if (diff > 1) {
+                currentStreak = 1;
+            }
+        }
+
+        stats.practiceDays = validDays.map(item => item.day);
+        stats.streakDays = currentStreak;
+        stats.lastPracticeDate = validDays[validDays.length - 1].day;
     }
 
     buildRecordMetadata(session = {}, examEntry, type) {
@@ -832,6 +842,7 @@ class PracticeRecorder {
                 categoryStats: {},
                 questionTypeStats: {},
                 streakDays: 0,
+                practiceDays: [],
                 lastPracticeDate: null,
                 achievements: []
             });
@@ -911,6 +922,7 @@ class PracticeRecorder {
             categoryStats: {},
             questionTypeStats: {},
             streakDays: 0,
+            practiceDays: [],
             lastPracticeDate: null,
             achievements: []
         });
@@ -1031,6 +1043,7 @@ class PracticeRecorder {
                 categoryStats: {},
                 questionTypeStats: {},
                 streakDays: 0,
+                practiceDays: [],
                 lastPracticeDate: null,
                 achievements: []
             });
