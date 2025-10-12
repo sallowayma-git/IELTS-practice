@@ -19,3 +19,6 @@ Thumbs.db
 *9.4*
 *睡着过项目组*
 developer/tests/e2e/reports/static-ci-report.json
+# 允许路径兼容性测试夹具
+!developer/tests/e2e/fixtures/睡着过项目组(9.4)\[134篇]/
+!developer/tests/e2e/fixtures/睡着过项目组(9.4)\[134篇]/**

@@ -1709,3 +1709,4 @@ window.listeningExamIndex = [
         mp3Filename: 'audio.mp3'
     }
 ];
+window.listeningExamIndex.pathRoot = 'ListeningPractice/';
