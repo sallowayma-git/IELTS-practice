@@ -939,3 +939,7 @@ window.completeExamIndex = [
         pdfFilename: '87. P3 - The Exploration of Mars 火星探索【次】.pdf'
     }
 ];
+window.completeExamIndex.pathRoot = {
+    reading: '睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/',
+    listening: 'ListeningPractice/'
+};
