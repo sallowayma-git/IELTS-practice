@@ -139,6 +139,124 @@ def _collect_mixin_methods(app_dir: Path) -> List[str]:
     return sorted(methods)
 
 
+def _extract_js_function_body(source: str, function_name: str) -> Optional[str]:
+    pattern = re.compile(
+        rf"(?:async\s+)?function\s+{re.escape(function_name)}\s*\([^)]*\)\s*\{{",
+        re.MULTILINE,
+    )
+    match = pattern.search(source)
+    if not match:
+        return None
+
+    index = match.end()
+    depth = 1
+    length = len(source)
+    body_chars: List[str] = []
+    in_single = False
+    in_double = False
+    in_backtick = False
+    escape = False
+
+    while index < length and depth > 0:
+        ch = source[index]
+
+        if escape:
+            body_chars.append(ch)
+            escape = False
+        elif ch == "\\":
+            body_chars.append(ch)
+            if in_single or in_double or in_backtick:
+                escape = True
+        elif in_single:
+            body_chars.append(ch)
+            if ch == "'":
+                in_single = False
+        elif in_double:
+            body_chars.append(ch)
+            if ch == '"':
+                in_double = False
+        elif in_backtick:
+            body_chars.append(ch)
+            if ch == "`":
+                in_backtick = False
+        else:
+            if ch == "'":
+                in_single = True
+                body_chars.append(ch)
+            elif ch == '"':
+                in_double = True
+                body_chars.append(ch)
+            elif ch == "`":
+                in_backtick = True
+                body_chars.append(ch)
+            elif ch == "{":
+                depth += 1
+                body_chars.append(ch)
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    break
+                body_chars.append(ch)
+            else:
+                body_chars.append(ch)
+
+        index += 1
+
+    if depth != 0:
+        return None
+
+    return "".join(body_chars)
+
+
+def _check_js_function_definition(source: str, function_name: str) -> Tuple[bool, str]:
+    pattern = re.compile(
+        rf"(function\s+{re.escape(function_name)}\s*\(|(?:const|let|var)\s+{re.escape(function_name)}\s*=)",
+        re.MULTILINE,
+    )
+    exists = bool(pattern.search(source))
+    detail = "已检测到定义" if exists else "缺少函数定义"
+    return exists, detail
+
+
+def _check_js_body_forbidden(source: str, function_name: str, forbidden: str) -> Tuple[bool, str]:
+    body = _extract_js_function_body(source, function_name)
+    if body is None:
+        return False, "未找到函数定义"
+    if forbidden in body:
+        return False, f"发现禁止片段：{forbidden}"
+    return True, "未发现禁止片段"
+
+
+def _check_resolve_exam_base_path(source: str) -> Tuple[bool, dict]:
+    body = _extract_js_function_body(source, "resolveExamBasePath")
+    if body is None:
+        return False, {"error": "未找到 resolveExamBasePath 定义"}
+
+    required_snippets = {
+        "mergeRootWithFallback": "需要通过 mergeRootWithFallback 合并根路径",
+        "normalizedRelative && normalizedRelative.startsWith(normalizedRoot)": "需要检测重复根前缀",
+        "combined = normalizedRoot + normalizedRelative": "需要组合根目录和相对路径",
+    }
+    missing = [desc for snippet, desc in required_snippets.items() if snippet not in body]
+    passed = not missing
+    detail = {
+        "checked": list(required_snippets.keys()),
+        "missing": missing,
+    }
+    return passed, detail
+
+
+def _check_metadata_field(path: Path, keyword: str = "pathRoot") -> Tuple[bool, str]:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return False, f"读取失败：{exc}"
+
+    if keyword in text:
+        return True, f"检测到 {keyword} 元数据"
+    return False, f"缺少 {keyword} 元数据"
+
+
 def _format_result(name: str, passed: bool, detail: str) -> dict:
     return {
         "name": name,
@@ -259,6 +377,43 @@ def run_checks() -> Tuple[List[dict], bool]:
     wrapper_passed, wrapper_detail = _check_contains(simple_wrapper, "dataRepositories")
     results.append(_format_result("simpleStorageWrapper 适配数据仓库", wrapper_passed, wrapper_detail))
     all_passed &= wrapper_passed
+
+    main_js_path = REPO_ROOT / "js" / "main.js"
+    main_js_exists, main_js_detail = _ensure_exists(main_js_path)
+    results.append(_format_result("main.js 存在性", main_js_exists, main_js_detail))
+    all_passed &= main_js_exists
+
+    main_js_source: Optional[str] = None
+    if main_js_exists:
+        try:
+            main_js_source = main_js_path.read_text(encoding="utf-8")
+        except Exception as exc:  # pragma: no cover - defensive guard
+            read_detail = f"读取失败：{exc}"
+            results.append(_format_result("main.js 读取", False, read_detail))
+            all_passed = False
+
+    if main_js_source is not None:
+        switch_passed, switch_detail = _check_js_body_forbidden(main_js_source, "switchLibraryConfig", "confirm(")
+        results.append(_format_result("switchLibraryConfig 禁止 confirm", switch_passed, switch_detail))
+        all_passed &= switch_passed
+
+        for helper_name in ("buildOverridePathMap", "mergeRootWithFallback"):
+            helper_passed, helper_detail = _check_js_function_definition(main_js_source, helper_name)
+            results.append(_format_result(f"{helper_name} 定义存在性", helper_passed, helper_detail))
+            all_passed &= helper_passed
+
+        resolve_passed, resolve_detail = _check_resolve_exam_base_path(main_js_source)
+        results.append(_format_result("resolveExamBasePath 路径组合逻辑", resolve_passed, resolve_detail))
+        all_passed &= resolve_passed
+
+    metadata_targets = [
+        REPO_ROOT / "assets" / "scripts" / "complete-exam-data.js",
+        REPO_ROOT / "assets" / "scripts" / "listening-exam-data.js",
+    ]
+    for metadata_path in metadata_targets:
+        meta_passed, meta_detail = _check_metadata_field(metadata_path)
+        results.append(_format_result(f"{metadata_path.name} 根目录元数据", meta_passed, meta_detail))
+        all_passed &= meta_passed
 
     practice_fixture = REPO_ROOT / "templates" / "ci-practice-fixtures" / "analysis-of-fear.html"
     fixture_exists, fixture_detail = _ensure_exists(practice_fixture)
