@@ -1476,12 +1476,30 @@ function resolveExamBasePath(exam) {
     } else {
       combined = normalizedRelative;
     }
+
+    const fallbackTopRoot = extractTopLevelRootSegment(fallback.root);
+    if (fallbackTopRoot && !combined.replace(/\\/g, '/').startsWith(fallbackTopRoot)) {
+      const normalizedCombined = combined.replace(/\\/g, '/').replace(/^\/+/, '');
+      combined = fallbackTopRoot + normalizedCombined;
+    }
   } catch (_) {}
   if (!combined.endsWith('/')) {
     combined += '/';
   }
   combined = combined.replace(/\\/g, '/').replace(/\/+\//g, '/');
   return combined;
+}
+
+function extractTopLevelRootSegment(root) {
+  if (!root) {
+    return '';
+  }
+  const normalized = normalizePathRoot(root).replace(/^\/+/, '');
+  const segments = normalized.split('/').filter(Boolean);
+  if (!segments.length) {
+    return '';
+  }
+  return segments[0] + '/';
 }
 
 const RAW_DEFAULT_PATH_MAP = {
