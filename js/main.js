@@ -1457,26 +1457,34 @@ function displayExams(exams) {
 }
 
 function resolveExamBasePath(exam) {
-  let basePath = (exam && exam.path) ? String(exam.path) : "";
+  const relativePath = exam && exam.path ? String(exam.path) : "";
+  let combined = relativePath;
   try {
-    const pathMap = getPathMap();
+    const pathMap = getPathMap() || {};
     const type = exam && exam.type;
-    const root = type && pathMap[type] && pathMap[type].root ? String(pathMap[type].root) : "";
-    if (root) {
-      // 避免重复前缀（如 ListeningPractice/ 已在 path 中）
-      const normalizedBase = basePath.replace(/\\/g, '/');
-      const normalizedRoot = root.replace(/\\/g, '/');
-      if (!normalizedBase.startsWith(normalizedRoot)) {
-        basePath = normalizedRoot + basePath;
+    const mapped = type && pathMap[type] ? pathMap[type] : {};
+    const fallback = type && DEFAULT_PATH_MAP[type] ? DEFAULT_PATH_MAP[type] : {};
+    const root = mergeRootWithFallback(mapped.root, fallback.root);
+    const normalizedRoot = root.replace(/\\/g, '/');
+    const normalizedRelative = relativePath.replace(/\\/g, '/').replace(/^\/+/, '');
+    if (normalizedRoot) {
+      if (normalizedRelative && normalizedRelative.startsWith(normalizedRoot)) {
+        combined = normalizedRelative;
+      } else {
+        combined = normalizedRoot + normalizedRelative;
       }
+    } else {
+      combined = normalizedRelative;
     }
   } catch (_) {}
-  if (!basePath.endsWith('/')) basePath += '/';
-  basePath = basePath.replace(/\\/g, '/').replace(/\/+\//g, '/');
-  return basePath;
+  if (!combined.endsWith('/')) {
+    combined += '/';
+  }
+  combined = combined.replace(/\\/g, '/').replace(/\/+\//g, '/');
+  return combined;
 }
 
-const DEFAULT_PATH_MAP = {
+const RAW_DEFAULT_PATH_MAP = {
   reading: {
     root: '睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/',
     exceptions: {}
@@ -1487,10 +1495,8 @@ const DEFAULT_PATH_MAP = {
   }
 };
 
-const PATH_MAP_STORAGE_PREFIX = 'exam_path_map__';
-
-function clonePathMap(map) {
-  const source = map && typeof map === 'object' ? map : {};
+function clonePathMap(map, fallback = RAW_DEFAULT_PATH_MAP) {
+  const source = map && typeof map === 'object' ? map : fallback;
   const cloneCategory = (category) => {
     const segment = source[category] && typeof source[category] === 'object' ? source[category] : {};
     return {
@@ -1517,6 +1523,40 @@ function normalizePathRoot(value) {
   }
   return root;
 }
+
+function mergeRootWithFallback(root, fallbackRoot) {
+  const normalizedPrimary = normalizePathRoot(root || '');
+  if (normalizedPrimary) {
+    return normalizedPrimary;
+  }
+  return normalizePathRoot(fallbackRoot || '');
+}
+
+function buildOverridePathMap(metadata, fallback = RAW_DEFAULT_PATH_MAP) {
+  const base = clonePathMap(fallback);
+  if (!metadata || typeof metadata !== 'object') {
+    return base;
+  }
+
+  const rootMeta = metadata.pathRoot;
+  if (rootMeta && typeof rootMeta === 'object') {
+    if (rootMeta.reading) {
+      base.reading.root = normalizePathRoot(rootMeta.reading);
+    }
+    if (rootMeta.listening) {
+      base.listening.root = normalizePathRoot(rootMeta.listening);
+    }
+  }
+
+  return base;
+}
+
+const DEFAULT_PATH_MAP = buildOverridePathMap(
+  typeof window !== 'undefined' ? window.examIndexMetadata : null,
+  RAW_DEFAULT_PATH_MAP
+);
+
+const PATH_MAP_STORAGE_PREFIX = 'exam_path_map__';
 
 function normalizePathMap(map, fallback = DEFAULT_PATH_MAP) {
   const base = clonePathMap(fallback);
@@ -3153,9 +3193,7 @@ async function switchLibraryConfig(configKey) {
         showMessage('目标题库没有题目，请先加载该题库数据', 'warning');
         return;
     }
-    if (!confirm('确定要切换到这个题库配置吗？')) {
-        return;
-    }
+    showMessage('正在切换题库配置...', 'info');
     const applied = await applyLibraryConfiguration(key, dataset, { skipConfigRefresh: false });
     if (applied) {
         showMessage('题库配置已切换', 'success');
