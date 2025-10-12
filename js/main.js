@@ -3153,9 +3153,6 @@ async function switchLibraryConfig(configKey) {
         showMessage('目标题库没有题目，请先加载该题库数据', 'warning');
         return;
     }
-    if (!confirm('确定要切换到这个题库配置吗？')) {
-        return;
-    }
     const applied = await applyLibraryConfiguration(key, dataset, { skipConfigRefresh: false });
     if (applied) {
         showMessage('题库配置已切换', 'success');
