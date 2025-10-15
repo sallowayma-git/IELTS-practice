@@ -2911,7 +2911,7 @@
         applyPracticeSummary(practiceSummary);
       });
 
-      ['practicesessionCompleted', 'practicerealDataProcessed'].forEach(function (eventName) {
+      ['practiceSessionCompleted', 'practiceRealDataProcessed'].forEach(function (eventName) {
         document.addEventListener(eventName, function () {
           getPracticeSummary(true).then(function (updatedPracticeSummary) {
             applyPracticeSummary(updatedPracticeSummary);
