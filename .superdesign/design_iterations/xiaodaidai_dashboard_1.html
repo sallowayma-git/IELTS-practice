@@ -1,0 +1,1648 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="xiaodaidai" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>小呆呆主题全景控制台 · Sun Jelly</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root[data-theme="xiaodaidai"] {
+      --bg-base: #f7f9fb;
+      --surface-1: rgba(255, 255, 255, 0.9);
+      --surface-2: rgba(255, 255, 255, 0.75);
+      --surface-3: rgba(255, 255, 255, 0.6);
+      --text-strong: #1f2937;
+      --text-muted: #4b5563;
+      --text-soft: #64748b;
+      --accent: #ffc83d;
+      --accent-secondary: #a1bfff;
+      --accent-tertiary: #ff6b6b;
+      --success: #34d399;
+      --warning: #f59e0b;
+      --shadow-soft: 0 24px 60px rgba(161, 191, 255, 0.3);
+      --shadow-card: 0 16px 40px rgba(255, 200, 61, 0.22);
+      --radius-card: 20px;
+      --radius-chip: 16px;
+    }
+
+    html {
+      background:
+        radial-gradient(circle at 12% 18%, rgba(255, 232, 166, 0.55), transparent 52%),
+        radial-gradient(circle at 82% 10%, rgba(161, 191, 255, 0.45), transparent 54%),
+        radial-gradient(circle at 50% 100%, rgba(255, 107, 107, 0.16), transparent 58%),
+        var(--bg-base);
+    }
+
+    body {
+      font-family: "PingFang SC", "HarmonyOS Sans", "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text-strong);
+    }
+
+    .glass-panel {
+      backdrop-filter: blur(18px);
+      box-shadow: var(--shadow-soft);
+      border: 1px solid rgba(255, 255, 255, 0.6);
+    }
+
+    .sun-jelly-gradient {
+      background: linear-gradient(120deg, #ffe08a 0%, #ffb347 100%);
+    }
+
+    .blueberry-gradient {
+      background: linear-gradient(135deg, #ddeeff 0%, #7aa8ff 100%);
+    }
+
+    .view {
+      display: none !important;
+      width: 100%;
+    }
+
+    .view.active {
+      display: flex !important;
+    }
+
+    .nav-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.75rem 1.25rem;
+      border-radius: 16px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      line-height: 1;
+      transition: transform 0.2s ease-out, color 0.2s ease-out, box-shadow 0.2s ease-out;
+      background: rgba(255, 255, 255, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      box-shadow: 0 6px 18px rgba(122, 168, 255, 0.2);
+      color: var(--text-muted);
+    }
+
+    .nav-btn:hover {
+      transform: translateY(-2px);
+      color: var(--text-strong);
+    }
+
+    .nav-btn.active {
+      background: linear-gradient(120deg, #ffe08a, #ffc83d);
+      color: #3b2400;
+      box-shadow: 0 12px 28px rgba(255, 200, 61, 0.35);
+    }
+
+    .overview-hero {
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(135deg, rgba(255, 232, 166, 0.75), rgba(161, 191, 255, 0.55));
+    }
+
+    .overview-hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(255, 200, 61, 0.25), transparent 55%),
+        radial-gradient(circle at 80% 10%, rgba(161, 191, 255, 0.3), transparent 60%),
+        linear-gradient(160deg, rgba(255, 255, 255, 0.32), transparent 60%);
+      pointer-events: none;
+    }
+
+    .overview-hero-body {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+
+    @media (min-width: 1024px) {
+      .overview-hero-body {
+        flex-direction: row;
+        align-items: stretch;
+        justify-content: space-between;
+      }
+    }
+
+    .overview-hero-main {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      max-width: 36rem;
+      z-index: 1;
+    }
+
+    .overview-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.6);
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #7c5300;
+    }
+
+    .overview-headline {
+      font-size: clamp(2rem, 2.6vw + 1rem, 2.75rem);
+      font-weight: 700;
+      color: #2d2a20;
+    }
+
+    .overview-description {
+      font-size: 0.95rem;
+      line-height: 1.6;
+      color: var(--text-soft);
+    }
+
+    .overview-metric-lane {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+      gap: 1rem;
+    }
+
+    .overview-metric-tile {
+      padding: 1.25rem;
+      border-radius: 1.5rem;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.9);
+      box-shadow: 0 16px 32px rgba(255, 200, 61, 0.18);
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .overview-metric-label {
+      font-size: 0.75rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #7c5300;
+    }
+
+    .overview-metric-value {
+      font-size: 2.25rem;
+      font-weight: 700;
+      color: #1f2937;
+      line-height: 1.1;
+    }
+
+    .overview-metric-meta {
+      font-size: 0.85rem;
+      color: #4b5563;
+    }
+
+    .overview-hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+
+    .overview-hero-visual {
+      position: relative;
+      flex: 1;
+      min-width: 16rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1.5rem;
+      z-index: 1;
+    }
+
+    .overview-orbit {
+      position: relative;
+      width: clamp(16rem, 28vw, 20rem);
+      aspect-ratio: 1 / 1;
+    }
+
+    .overview-orbit-ring {
+      position: absolute;
+      inset: 0;
+      border-radius: 9999px;
+      border: 2px solid rgba(255, 255, 255, 0.4);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+      backdrop-filter: blur(6px);
+    }
+
+    .overview-orbit-ring--primary {
+      background: radial-gradient(circle at 65% 35%, rgba(255, 200, 61, 0.25), transparent 55%);
+    }
+
+    .overview-orbit-ring--secondary {
+      inset: 2rem;
+      background: radial-gradient(circle at 35% 75%, rgba(161, 191, 255, 0.25), transparent 60%);
+    }
+
+    .overview-orbit-core {
+      position: absolute;
+      inset: 4rem;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.82);
+      border: 1px solid rgba(255, 255, 255, 0.9);
+      box-shadow: 0 18px 36px rgba(161, 191, 255, 0.24);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      text-align: center;
+    }
+
+    .overview-orbit-label {
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      color: #1d4ed8;
+      text-transform: uppercase;
+    }
+
+    .overview-orbit-value {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .overview-orbit-meta {
+      font-size: 0.8rem;
+      color: #475569;
+    }
+
+    .overview-accuracy-chip {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      padding: 1rem 1.5rem;
+      border-radius: 1.5rem;
+      background: linear-gradient(135deg, rgba(221, 238, 255, 0.9), rgba(122, 168, 255, 0.75));
+      border: 1px solid rgba(255, 255, 255, 0.85);
+      box-shadow: 0 16px 32px rgba(122, 168, 255, 0.28);
+      text-align: center;
+      color: #1e3a8a;
+    }
+
+    .overview-accuracy-chip .chip-label {
+      font-size: 0.75rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .overview-accuracy-chip .chip-value {
+      font-size: 2rem;
+      font-weight: 700;
+    }
+
+    .overview-accuracy-chip .chip-meta {
+      font-size: 0.8rem;
+    }
+
+    .overview-stream {
+      position: relative;
+      z-index: 1;
+    }
+
+    .overview-category-grid > .legacy-empty-state {
+      border-radius: 1.25rem;
+      background: rgba(255, 255, 255, 0.65);
+      border: 1px dashed rgba(161, 191, 255, 0.6);
+      padding: 1.5rem;
+      text-align: center;
+    }
+
+    .overview-quick-lane {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .overview-quick-lane::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(52, 211, 153, 0.12), rgba(161, 191, 255, 0.08));
+      pointer-events: none;
+    }
+
+    .overview-lane-header {
+      position: relative;
+      z-index: 1;
+    }
+
+    .overview-lane-pulse {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.7);
+    }
+
+    .pulse-dot {
+      width: 0.75rem;
+      height: 0.75rem;
+      border-radius: 9999px;
+      background: #34d399;
+      box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.6);
+      animation: pulse 1.8s infinite;
+    }
+
+    @keyframes pulse {
+      0% {
+        box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.6);
+      }
+      70% {
+        box-shadow: 0 0 0 0.75rem rgba(52, 211, 153, 0);
+      }
+      100% {
+        box-shadow: 0 0 0 0 rgba(52, 211, 153, 0);
+      }
+    }
+
+    .overview-lane-body {
+      position: relative;
+      z-index: 1;
+    }
+
+    .lane-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.5rem;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.9);
+      color: #0f172a;
+      font-weight: 600;
+      box-shadow: 0 12px 28px rgba(52, 211, 153, 0.18);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .lane-chip:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 16px 36px rgba(52, 211, 153, 0.24);
+    }
+
+    .overview-weekly-timeline {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .timeline-item {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.75rem 1rem;
+      border-radius: 1.25rem;
+      background: rgba(255, 255, 255, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.85);
+    }
+
+    .timeline-bullet {
+      width: 3rem;
+      height: 3rem;
+      border-radius: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      background: linear-gradient(135deg, rgba(221, 238, 255, 0.9), rgba(122, 168, 255, 0.65));
+      color: #1d4ed8;
+    }
+
+    .timeline-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .timeline-title {
+      font-weight: 600;
+      color: #1f2937;
+    }
+
+    .timeline-meta {
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .overview-toast {
+      border-radius: 1.25rem;
+      padding: 1rem 1.25rem;
+      font-size: 0.9rem;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    }
+
+    .overview-toast.sun {
+      background: linear-gradient(135deg, rgba(255, 232, 166, 0.9), rgba(255, 179, 71, 0.78));
+      color: #5f3700;
+    }
+
+    .overview-toast.blue {
+      background: linear-gradient(135deg, rgba(221, 238, 255, 0.95), rgba(122, 168, 255, 0.8));
+      color: #1d4ed8;
+    }
+
+    .virtual-scroll-viewport {
+      position: relative;
+      overflow-y: auto;
+      max-height: min(68vh, 720px);
+      border-radius: 1.5rem;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.85);
+      box-shadow: 0 20px 48px rgba(161, 191, 255, 0.26);
+      padding: 1.5rem 1.25rem 1.5rem 1.5rem;
+      scrollbar-gutter: stable;
+    }
+
+    .virtual-scroll-viewport::-webkit-scrollbar {
+      width: 0.75rem;
+    }
+
+    .virtual-scroll-viewport::-webkit-scrollbar-thumb {
+      border-radius: 9999px;
+      background: linear-gradient(180deg, rgba(161, 191, 255, 0.7), rgba(122, 168, 255, 0.8));
+    }
+
+    .virtual-scroll-content {
+      position: absolute;
+      inset: 1.5rem 1.25rem 1.5rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .virtual-exam-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1.25rem;
+    }
+
+    @media (max-width: 1023px) {
+      .virtual-exam-row {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .virtual-scroll-spacer {
+      width: 1px;
+      opacity: 0;
+    }
+
+    .virtual-exam-card {
+      position: relative;
+      padding: 1.25rem;
+      border-radius: 1.75rem;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(221, 238, 255, 0.85));
+      border: 1px solid rgba(255, 255, 255, 0.9);
+      box-shadow: 0 18px 40px rgba(255, 200, 61, 0.22);
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .virtual-exam-card__header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .virtual-exam-seq {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 2.75rem;
+      height: 2.75rem;
+      border-radius: 1.25rem;
+      background: linear-gradient(135deg, rgba(255, 200, 61, 0.9), rgba(255, 179, 71, 0.85));
+      color: #3b2400;
+      font-weight: 700;
+      font-size: 1.1rem;
+    }
+
+    .virtual-exam-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      justify-content: flex-end;
+    }
+
+    .virtual-exam-tag {
+      padding: 0.35rem 0.85rem;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.9);
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #475569;
+    }
+
+    .virtual-exam-tag[data-variant='category'] {
+      background: rgba(255, 200, 61, 0.18);
+      color: #a16207;
+      border-color: rgba(255, 200, 61, 0.4);
+    }
+
+    .virtual-exam-tag[data-variant='type'] {
+      background: rgba(161, 191, 255, 0.22);
+      color: #1d4ed8;
+      border-color: rgba(161, 191, 255, 0.5);
+    }
+
+    .virtual-exam-card__body {
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+    }
+
+    .virtual-exam-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #1f2937;
+    }
+
+    .virtual-exam-submeta {
+      font-size: 0.82rem;
+      color: #475569;
+      line-height: 1.5;
+    }
+
+    .virtual-exam-card__footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+
+    .virtual-exam-actions {
+      display: inline-flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .virtual-exam-actions .btn {
+      border-radius: 1rem;
+      padding-inline: 1.5rem;
+      padding-block: 0.6rem;
+      font-size: 0.9rem;
+      box-shadow: 0 10px 22px rgba(255, 200, 61, 0.18);
+    }
+
+    .virtual-exam-actions .btn.btn-secondary {
+      background: rgba(161, 191, 255, 0.2);
+      color: #1d4ed8;
+      box-shadow: 0 12px 26px rgba(161, 191, 255, 0.2);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.75rem 1.5rem;
+      border-radius: var(--radius-chip);
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      background: rgba(255, 255, 255, 0.82);
+      color: var(--text-strong);
+      font-weight: 600;
+      transition: transform 150ms ease-out, box-shadow 150ms ease-out, background 150ms ease-out;
+      box-shadow: 0 12px 26px rgba(161, 191, 255, 0.22);
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 16px 32px rgba(161, 191, 255, 0.26);
+    }
+
+    .btn:active {
+      transform: scale(0.96);
+    }
+
+    .btn.btn-sm {
+      padding: 0.5rem 1rem;
+      border-radius: 12px;
+      font-size: 0.9rem;
+    }
+
+    .btn.btn-secondary {
+      background: rgba(255, 255, 255, 0.6);
+      color: var(--accent-tertiary);
+      border-color: rgba(255, 255, 255, 0.9);
+    }
+
+    .btn.btn-warning {
+      background: rgba(255, 107, 107, 0.12);
+      color: var(--accent-tertiary);
+      border-color: rgba(255, 255, 255, 0.85);
+    }
+
+    .btn.btn-info {
+      background: rgba(161, 191, 255, 0.24);
+      color: #1d4ed8;
+      border-color: rgba(255, 255, 255, 0.85);
+    }
+
+    .category-card {
+      border-radius: var(--radius-card);
+      background: rgba(255, 255, 255, 0.78);
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      box-shadow: var(--shadow-card);
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      transition: transform 180ms ease, box-shadow 180ms ease;
+    }
+
+    .category-card:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 20px 44px rgba(255, 200, 61, 0.3);
+    }
+
+    .category-header {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    .category-icon {
+      display: grid;
+      place-items: center;
+      width: 3rem;
+      height: 3rem;
+      border-radius: 9999px;
+      background: rgba(255, 200, 61, 0.16);
+      font-size: 1.5rem;
+    }
+
+    .category-title {
+      font-size: 1.125rem;
+      font-weight: 700;
+      color: var(--text-strong);
+    }
+
+    .category-meta {
+      color: var(--text-soft);
+      font-size: 0.95rem;
+    }
+
+    .category-actions {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .overview-section-title {
+      font-size: 1rem;
+      letter-spacing: 0.16em;
+      color: var(--text-soft);
+      text-transform: uppercase;
+      margin-bottom: 0.75rem;
+    }
+
+    .legacy-empty-state {
+      display: grid;
+      place-items: center;
+      padding: 3rem;
+      border-radius: var(--radius-card);
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px dashed rgba(161, 191, 255, 0.6);
+      color: var(--text-soft);
+    }
+
+    .legacy-exam-item {
+      width: 100%;
+      text-align: left;
+      border-radius: var(--radius-card);
+      padding: 1.25rem 1.5rem;
+      background: rgba(255, 255, 255, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.65);
+      box-shadow: 0 14px 32px rgba(161, 191, 255, 0.24);
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text-strong);
+      transition: transform 160ms ease, box-shadow 160ms ease;
+    }
+
+    .legacy-exam-item:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 22px 50px rgba(161, 191, 255, 0.28);
+    }
+
+    .theme-fab {
+      position: absolute;
+      right: 1.75rem;
+      bottom: -2.5rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 64px;
+      height: 64px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.8);
+      background: linear-gradient(140deg, rgba(255, 255, 255, 0.92), rgba(220, 233, 255, 0.75));
+      box-shadow:
+        0 18px 40px rgba(161, 191, 255, 0.32),
+        inset 0 4px 10px rgba(255, 255, 255, 0.9),
+        inset 0 -8px 14px rgba(161, 191, 255, 0.35);
+      color: #1f2937;
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: transform 0.28s ease, box-shadow 0.28s ease;
+    }
+
+    .theme-fab:hover {
+      transform: translateY(-4px);
+      box-shadow:
+        0 22px 46px rgba(161, 191, 255, 0.4),
+        inset 0 6px 12px rgba(255, 255, 255, 0.95),
+        inset 0 -10px 18px rgba(161, 191, 255, 0.45);
+    }
+
+    .theme-fab:focus-visible {
+      outline: 3px solid rgba(161, 191, 255, 0.55);
+      outline-offset: 4px;
+    }
+
+    @media (max-width: 640px) {
+      .theme-fab {
+        right: 1.25rem;
+        bottom: -2rem;
+        width: 56px;
+        height: 56px;
+        font-size: 0.75rem;
+      }
+    }
+
+
+    .bubble-field span {
+      position: absolute;
+      border-radius: 9999px;
+      opacity: 0.24;
+      animation: bubbleFloat 18s linear infinite;
+    }
+
+    .bubble-field span:nth-child(odd) {
+      animation-duration: 22s;
+    }
+
+    @keyframes bubbleFloat {
+      0% {
+        transform: translateY(0) translateX(0);
+      }
+      50% {
+        transform: translateY(-32px) translateX(-12px);
+      }
+      100% {
+        transform: translateY(0) translateX(0);
+      }
+    }
+  </style>
+</head>
+<body class="min-h-full text-slate-900">
+  <div class="relative min-h-screen overflow-hidden">
+    <div class="bubble-field pointer-events-none absolute inset-0">
+      <span class="left-[12%] top-[22%] h-24 w-24 bg-[#ffc83d]"></span>
+      <span class="left-[68%] top-[30%] h-32 w-32 bg-[#a1bfff]"></span>
+      <span class="left-[42%] top-[64%] h-20 w-20 bg-[#ff6b6b]"></span>
+    </div>
+
+    <div class="relative z-10 mx-auto flex max-w-6xl flex-col gap-8 px-6 pb-24 pt-12 lg:gap-12 lg:px-12">
+      <header class="glass-panel relative overflow-hidden rounded-[24px] p-8 md:p-12">
+        <div class="absolute right-6 top-6 h-24 w-24 rounded-full bg-white/40 blur-2xl"></div>
+        <div class="flex flex-col gap-8 md:flex-row md:items-center md:justify-between">
+          <div class="flex flex-col gap-4">
+            <p class="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">IELTS 学习套件</p>
+            <h1 class="text-4xl font-bold text-slate-900 md:text-5xl">IELTS 控制台</h1>
+            <p class="max-w-xl text-lg text-slate-600">统筹听说读写题库、练习进度与系统工具，像猪猪侠守护童话王国那样让备考节奏勇气满格。</p>
+          </div>
+          <div class="flex flex-col items-start gap-4 md:items-end">
+            <div class="flex flex-wrap gap-3">
+              <button class="btn btn-sm" id="import-records-btn">💾 导入记录</button>
+              <button class="btn btn-sm" id="clear-cache-entry">🧼 清理缓存</button>
+              <button class="btn btn-sm btn-info" id="sync-status-btn">🔄 同步状态</button>
+            </div>
+            <div class="relative flex items-center gap-4 rounded-[16px] bg-white/70 px-5 py-4 shadow-inner shadow-white/40">
+              <div class="h-3 w-3 animate-ping rounded-full bg-[#34d399]/80"></div>
+              <p class="text-sm text-slate-600">实时同步：最新学习数据已连接</p>
+            </div>
+          </div>
+        </div>
+        <button class="theme-fab" id="theme-toggle-button" title="切换主题" type="button" aria-label="切换主题">
+          主题
+        </button>
+      </header>
+
+      <nav class="main-nav glass-panel flex flex-wrap gap-3 rounded-[20px] bg-white/60 p-4" data-nav-controller="legacy">
+        <button class="nav-btn active" type="button" data-view="overview">🌈 总览</button>
+        <button class="nav-btn" type="button" data-view="browse">📚 题库浏览</button>
+        <button class="nav-btn" type="button" data-view="practice">📝 练习记录</button>
+        <button class="nav-btn" type="button" data-view="settings">⚙️ 系统设置</button>
+      </nav>
+
+      <main class="flex flex-col gap-10">
+        <section id="overview-view" class="view active flex flex-col gap-10">
+          <div class="overview-hero glass-panel rounded-[28px] p-8 shadow-lg shadow-[#ffc83d45]">
+          <div class="overview-hero-body">
+            <div class="overview-hero-main">
+              <span class="overview-eyebrow">勇气王国指挥席</span>
+              <h1 class="overview-headline">猪猪侠勇气驾驶舱</h1>
+              <p class="overview-description">把听说读写指标装进勇气晶核，猪猪侠战队随时汇报你的 IELTS 任务进展。</p>
+                <div class="overview-metric-lane">
+                  <div class="overview-metric-tile">
+                    <span class="overview-metric-label">活跃学习者</span>
+                    <span class="overview-metric-value" id="overview-active-students">128</span>
+                    <span class="overview-metric-meta">本周较上周 +12%</span>
+                  </div>
+                  <div class="overview-metric-tile">
+                    <span class="overview-metric-label">平均正确率</span>
+                    <span class="overview-metric-value" id="overview-accuracy">87%</span>
+                    <span class="overview-metric-meta">连续提升 4 天</span>
+                  </div>
+                  <div class="overview-metric-tile">
+                    <span class="overview-metric-label">沉浸时长</span>
+                    <span class="overview-metric-value" id="overview-hours">36h</span>
+                    <span class="overview-metric-meta">目标达成率 92%</span>
+                  </div>
+                </div>
+                <div class="overview-hero-actions">
+                  <button class="btn btn-sm" data-action="start-random-practice" data-category="Listening" data-type="listening">🎲 随机听力</button>
+                  <button class="btn btn-sm" data-action="browse-category" data-category="Reading" data-type="reading">📚 阅读题库</button>
+                  <button class="btn btn-sm btn-info" onclick="if (typeof window?.showThemeSwitcherModal === 'function') { showThemeSwitcherModal(); }">🎨 主题切换</button>
+                </div>
+              </div>
+              <div class="overview-hero-visual">
+                <div class="overview-orbit">
+                  <div class="overview-orbit-ring overview-orbit-ring--primary"></div>
+                  <div class="overview-orbit-ring overview-orbit-ring--secondary"></div>
+                  <div class="overview-orbit-core">
+                    <span class="overview-orbit-label">沉浸学习</span>
+                    <span class="overview-orbit-value" id="overview-hours-mirror">36h</span>
+                    <span class="overview-orbit-meta">本周目标 92%</span>
+                  </div>
+                </div>
+                <div class="overview-accuracy-chip">
+                  <span class="chip-label">平均正确率</span>
+                  <span class="chip-value" id="overview-accuracy-chip">87%</span>
+                  <span class="chip-meta">勇气能量持续走高</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="overview-stream grid gap-6 lg:grid-cols-[2fr,1fr]">
+            <section class="glass-panel rounded-[24px] p-6 shadow-lg shadow-[#a1bfff33]">
+              <header class="flex items-center justify-between gap-4">
+                <div>
+                  <h2 class="overview-section-title text-lg font-semibold text-slate-800">能力轨道</h2>
+                  <p class="mt-1 text-sm text-slate-500">自动汇总各类题库表现，实时回写分类仪表。</p>
+                </div>
+                <span class="rounded-full bg-[#ddeeff80] px-3 py-1 text-xs font-semibold text-[#1d4ed8]">智能聚合</span>
+              </header>
+              <div id="category-overview" class="overview-category-grid mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div class="legacy-empty-state">
+                  <div class="text-2xl">🍊</div>
+                  <p class="mt-2 text-sm">正在唤醒分类数据...</p>
+                </div>
+              </div>
+            </section>
+
+            <aside class="glass-panel rounded-[24px] p-6 shadow-lg shadow-[#ff6b6b30]">
+              <h2 class="overview-section-title text-lg font-semibold text-slate-800">即时通知</h2>
+              <p class="mt-1 text-sm text-slate-500">学习节奏提醒、题库更新与激励提示。</p>
+              <div id="message-container" class="mt-4 space-y-3">
+                <div class="overview-toast sun">☀️ 今日早间提醒：完成精读后别忘记记录体会。</div>
+                <div class="overview-toast blue">🔔 新增题库 12 套，已同步至题库浏览页。</div>
+              </div>
+            </aside>
+          </div>
+
+          <div class="overview-quick-lane glass-panel rounded-[24px] p-6 shadow-lg shadow-[#34d39933]">
+            <div class="overview-lane-header flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 class="overview-section-title text-lg font-semibold text-slate-800">节奏跑道</h2>
+                <p class="mt-1 text-sm text-slate-500">按照学习动线排布，高频任务与本周节奏一目了然。</p>
+              </div>
+              <div class="overview-lane-pulse">
+                <span class="pulse-dot"></span>
+                <span class="text-xs font-medium text-slate-600">小呆呆在线陪练</span>
+              </div>
+            </div>
+            <div class="overview-lane-body mt-6 grid gap-6 lg:grid-cols-[1.4fr,1fr]">
+              <div class="overview-quick-actions flex flex-wrap gap-3">
+                <button class="lane-chip" data-action="browse-category" data-category="Reading" data-type="reading">📖 精读工作台</button>
+                <button class="lane-chip" data-action="start-random-practice" data-category="Listening" data-type="listening">🎧 智能听力冲刺</button>
+                <button class="lane-chip" onclick="if (typeof window.openExam === 'function') { openExam('random'); }">🎯 即刻开局</button>
+                <button class="lane-chip" onclick="if (typeof window.loadLibrary === 'function') { loadLibrary(); }">📥 重新同步题库</button>
+              </div>
+              <div class="overview-weekly-timeline space-y-3">
+                <div class="timeline-item">
+                  <div class="timeline-bullet">Mon</div>
+                  <div class="timeline-content">
+                    <p class="timeline-title">阅读真题校准</p>
+                    <p class="timeline-meta text-[#34d399]">已完成</p>
+                  </div>
+                </div>
+                <div class="timeline-item">
+                  <div class="timeline-bullet">Wed</div>
+                  <div class="timeline-content">
+                    <p class="timeline-title">听力集中训练</p>
+                    <p class="timeline-meta text-[#f59e0b]">进行中</p>
+                  </div>
+                </div>
+                <div class="timeline-item">
+                  <div class="timeline-bullet">Fri</div>
+                  <div class="timeline-content">
+                    <p class="timeline-title">写作语料整理</p>
+                    <p class="timeline-meta text-[#64748b]">待开始</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section id="browse-view" class="view flex flex-col gap-8">
+          <div class="glass-panel rounded-[24px] p-6 shadow-lg shadow-[#a1bfff35]">
+            <div class="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 class="text-2xl font-semibold text-slate-800" id="browse-title">📚 题库浏览</h2>
+                <p class="mt-2 text-sm text-slate-600">按类型、难度、时间筛选，勇气雷达台提供轻盈回馈。</p>
+              </div>
+              <div class="flex flex-wrap gap-2" id="type-filter-buttons">
+                <button class="btn btn-sm" onclick="filterByType('all')">全部</button>
+                <button class="btn btn-sm" onclick="filterByType('reading')">阅读</button>
+                <button class="btn btn-sm" onclick="filterByType('listening')">听力</button>
+              </div>
+            </div>
+
+            <div class="mt-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div class="relative flex-1">
+                <div class="pointer-events-none absolute inset-0 rounded-[18px] border border-white/70 bg-gradient-to-r from-transparent via-white/40 to-transparent opacity-0 transition-opacity duration-300" id="search-focus-ring"></div>
+                <input type="text" class="w-full rounded-[18px] border border-white/70 bg-white/80 px-5 py-3 text-base text-slate-700 shadow-inner focus:outline-none" placeholder="搜索题目..." onfocus="document.getElementById('search-focus-ring').style.opacity='1'" onblur="document.getElementById('search-focus-ring').style.opacity='0'" onkeyup="searchExams(this.value)" />
+              </div>
+              <div class="flex gap-2">
+                <button class="btn btn-sm btn-info" onclick="if (typeof window.loadLibrary === 'function') { loadLibrary(); }">📥 重新加载</button>
+                <button class="btn btn-sm" onclick="if (typeof window.openExam === 'function') { openExam('random'); }">🎯 随机进入</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="exam-list-container" class="relative"></div>
+
+          <div class="loading flex flex-col items-center gap-4 rounded-[20px] bg-white/70 p-8 text-slate-600">
+            <div class="h-12 w-12 animate-spin rounded-full border-4 border-[#a1bfff] border-t-transparent"></div>
+            <p>正在加载题目列表...</p>
+          </div>
+        </section>
+
+        <section id="practice-view" class="view flex flex-col gap-8">
+          <div class="glass-panel rounded-[24px] p-6 shadow-lg shadow-[#ffc83d35]">
+            <div class="flex flex-col gap-6">
+              <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <h2 class="text-2xl font-semibold text-slate-800">📝 练习记录</h2>
+                <div class="flex flex-wrap gap-2" id="record-type-filter-buttons">
+                  <button class="btn btn-sm" onclick="filterRecordsByType('all')">全部</button>
+                  <button class="btn btn-sm" onclick="filterRecordsByType('reading')">阅读</button>
+                  <button class="btn btn-sm" onclick="filterRecordsByType('listening')">听力</button>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                <div class="rounded-[20px] bg-white/75 p-4 text-center shadow-lg shadow-[#ffc83d33]">
+                  <p class="text-sm font-semibold text-slate-500">已练习题目</p>
+                  <p class="mt-2 text-3xl font-bold text-slate-900" id="total-practiced">0</p>
+                </div>
+                <div class="rounded-[20px] bg-white/75 p-4 text-center shadow-lg shadow-[#a1bfff33]">
+                  <p class="text-sm font-semibold text-slate-500">平均正确率</p>
+                  <p class="mt-2 text-3xl font-bold text-slate-900" id="avg-score">0%</p>
+                </div>
+                <div class="rounded-[20px] bg-white/75 p-4 text-center shadow-lg shadow-[#34d39933]">
+                  <p class="text-sm font-semibold text-slate-500">学习时长(分钟)</p>
+                  <p class="mt-2 text-3xl font-bold text-slate-900" id="study-time">0</p>
+                </div>
+                <div class="rounded-[20px] bg-white/75 p-4 text-center shadow-lg shadow-[#ff6b6b33]">
+                  <p class="text-sm font-semibold text-slate-500">连续学习天数</p>
+                  <p class="mt-2 text-3xl font-bold text-slate-900" id="streak-days">0</p>
+                </div>
+              </div>
+
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex gap-2">
+                  <button class="btn btn-sm btn-info" onclick="(window.markdownExporter||(window.markdownExporter=new MarkdownExporter())).exportToMarkdown()">📄 导出Markdown</button>
+                  <button class="btn btn-sm" onclick="toggleBulkDelete()" id="bulk-delete-btn">🧹 批量删除</button>
+                  <button class="btn btn-sm btn-warning" onclick="clearPracticeData()">🗑️ 清除记录</button>
+                </div>
+                <div class="flex gap-2">
+                  <button class="btn btn-sm btn-secondary" onclick="if (typeof window.exportData === 'function') { exportData(); }">📤 导出数据</button>
+                  <button class="btn btn-sm" onclick="if (typeof window.importData === 'function') { importData(); }">📥 导入数据</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="history-list" class="practice-history-list grid gap-4">
+            <div class="legacy-empty-state">
+              <div class="text-4xl">📋</div>
+              <p class="mt-3 text-sm">暂无练习记录，开始练习后记录将自动保存在这里。</p>
+            </div>
+          </div>
+        </section>
+
+        <section id="settings-view" class="view flex flex-col gap-8">
+          <div class="glass-panel rounded-[24px] p-6 shadow-lg shadow-[#34d39935]">
+            <h2 class="text-2xl font-semibold text-slate-800">⚙️ 系统设置</h2>
+            <p class="mt-2 text-sm text-slate-600">主题切换、数据管理、版本信息均在此管理，遵循小呆呆主题动效标准。</p>
+
+            <div class="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <section class="rounded-[20px] bg-white/75 p-6 shadow-lg shadow-[#ffc83d33]">
+                <h3 class="text-lg font-semibold text-slate-800">🔧 系统管理</h3>
+                <p class="mt-2 text-sm text-slate-600">系统工具与快捷设置</p>
+                <div class="mt-4 flex flex-wrap gap-2">
+                  <button class="btn btn-sm btn-warning" id="clear-cache-btn">🗑️ 清除缓存</button>
+                  <button class="btn btn-sm" id="load-library-btn">📂 加载题库</button>
+                  <button class="btn btn-sm btn-info" id="library-config-btn">⚙️ 题库配置切换</button>
+                  <button class="btn btn-sm btn-warning" id="force-refresh-btn">🔄 强制刷新题库</button>
+                </div>
+              </section>
+
+              <section class="rounded-[20px] bg-white/75 p-6 shadow-lg shadow-[#a1bfff33]">
+                <h3 class="text-lg font-semibold text-slate-800">💾 数据管理</h3>
+                <p class="mt-2 text-sm text-slate-600">数据备份、导入导出与完整性校验</p>
+                <div class="mt-4 flex flex-wrap gap-2">
+                  <button class="btn btn-sm" id="create-backup-btn">💽 创建备份</button>
+                  <button class="btn btn-sm btn-secondary" id="backup-list-btn">📋 备份列表</button>
+                  <button class="btn btn-sm btn-info" id="export-data-btn">📤 导出数据</button>
+                  <button class="btn btn-sm btn-warning" id="import-data-btn">📥 导入数据</button>
+                </div>
+              </section>
+
+              <section class="rounded-[20px] bg-white/75 p-6 shadow-lg shadow-[#34d39933]">
+                <h3 class="text-lg font-semibold text-slate-800">📊 系统信息</h3>
+                <div class="mt-4 space-y-2 text-sm font-semibold text-slate-600">
+                  <div class="text-[#34d399]">题库状态: <span id="settings-library-status">已加载完整索引</span></div>
+                  <div>题目总数: <span id="total-exams">147</span></div>
+                  <div>HTML题目: <span id="html-exams">147</span></div>
+                  <div>PDF题目: <span id="pdf-exams">147</span></div>
+                  <div>最后更新: <span id="last-update">2025/9/16 14:47:09</span></div>
+                </div>
+                <div class="mt-5">
+                  <button class="btn btn-sm btn-secondary" onclick="showThemeSwitcherModal && showThemeSwitcherModal()">🎨 主题切换</button>
+                </div>
+                <div class="mt-6 rounded-[16px] bg-white/70 p-4 text-center text-sm text-slate-500">
+                  <a href="#" onclick="showDeveloperTeam && showDeveloperTeam(); return false;" class="font-medium text-[#7aa8ff]">睡着过开发团队</a>
+                </div>
+              </section>
+
+              <section class="rounded-[20px] bg-white/75 p-6 shadow-lg shadow-[#ff6b6b33]">
+                <h3 class="text-lg font-semibold text-slate-800">🧃 动效与偏好</h3>
+                <p class="mt-2 text-sm text-slate-600">勇气动效拨杆、减少动态选项一应俱全</p>
+                <div class="mt-4 space-y-3 text-sm text-slate-600">
+                  <label class="flex items-center justify-between rounded-[16px] bg-white/70 px-4 py-3">
+                    <span>启用勇气动效</span>
+                    <input type="checkbox" id="jelly-motion-toggle" class="h-5 w-5 rounded border-white/70 text-[#ffc83d] focus:ring-[#ffc83d]" checked />
+                  </label>
+                  <label class="flex items-center justify-between rounded-[16px] bg-white/70 px-4 py-3">
+                    <span>减少动态模式</span>
+                    <input type="checkbox" id="reduced-motion-toggle" class="h-5 w-5 rounded border-white/70 text-[#a1bfff] focus:ring-[#a1bfff]" />
+                  </label>
+                  <label class="flex items-center justify-between rounded-[16px] bg-white/70 px-4 py-3">
+                    <span>默认字体大小</span>
+                    <select id="font-size-select" class="rounded-[12px] border border-white/70 bg-white/80 px-3 py-2 text-sm text-slate-600">
+                      <option value="normal">标准</option>
+                      <option value="large">大号</option>
+                      <option value="xlarge">特大</option>
+                    </select>
+                  </label>
+                </div>
+              </section>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    function setupMotionPreferences() {
+      var root = document.documentElement;
+      var motionToggle = document.getElementById('jelly-motion-toggle');
+      var reducedToggle = document.getElementById('reduced-motion-toggle');
+
+      function apply() {
+        var motionEnabled = !motionToggle || motionToggle.checked;
+        var reducedEnabled = !!(reducedToggle && reducedToggle.checked);
+
+        root.dataset.jellyMotion = motionEnabled ? 'enabled' : 'disabled';
+        root.dataset.reducedMotion = reducedEnabled ? 'on' : 'off';
+      }
+
+      if (motionToggle) {
+        motionToggle.addEventListener('change', apply);
+      }
+
+      if (reducedToggle) {
+        reducedToggle.addEventListener('change', apply);
+      }
+
+      apply();
+    }
+
+    function syncOverviewMirrors() {
+      var pairs = [
+        { sourceId: 'overview-hours', targetIds: ['overview-hours-mirror'] },
+        { sourceId: 'overview-accuracy', targetIds: ['overview-accuracy-chip'] }
+      ];
+
+      pairs.forEach(function (pair) {
+        var source = document.getElementById(pair.sourceId);
+        if (!source) {
+          return;
+        }
+
+        var targets = pair.targetIds
+          .map(function (id) { return document.getElementById(id); })
+          .filter(Boolean);
+
+        if (!targets.length) {
+          return;
+        }
+
+        var update = function () {
+          var value = source.textContent;
+          targets.forEach(function (target) {
+            target.textContent = value;
+          });
+        };
+
+        update();
+
+        if (typeof MutationObserver !== 'undefined') {
+          var observer = new MutationObserver(update);
+          observer.observe(source, { characterData: true, childList: true, subtree: true });
+        }
+      });
+    }
+
+    function initializeVirtualExamList() {
+      var container = document.getElementById('exam-list-container');
+      if (!container) {
+        return;
+      }
+
+      var state = {
+        container: container,
+        viewport: null,
+        content: null,
+        spacer: null,
+        itemsHTML: [],
+        cache: new Map(),
+        itemHeight: 0,
+        gap: 24,
+        overscan: 4,
+        resizeObserver: null,
+        scheduled: false,
+        listObserver: null,
+        listIdleTimer: null,
+        pendingList: null,
+        totalItems: 0
+      };
+
+      var template = document.createElement('template');
+
+      function htmlToElement(html) {
+        template.innerHTML = html.trim();
+        return template.content.firstElementChild;
+      }
+
+      function augmentExamCard(node, index) {
+        if (!node) {
+          return node;
+        }
+
+        node.classList.add('virtual-exam-card');
+        node.setAttribute('data-virtual-index', String(index));
+
+        var info = node.querySelector('.exam-info');
+        var titleText = '';
+        var metaText = '';
+        if (info) {
+          var title = info.querySelector('h4');
+          if (title) {
+            titleText = title.textContent || '';
+          }
+          var meta = info.querySelector('.exam-meta');
+          if (meta) {
+            metaText = meta.textContent || '';
+          }
+        }
+
+        var actions = node.querySelector('.exam-actions');
+        var buttons = [];
+        if (actions) {
+          buttons = Array.from(actions.querySelectorAll('button'));
+        }
+
+        node.innerHTML = '';
+
+        var header = document.createElement('div');
+        header.className = 'virtual-exam-card__header';
+
+        var seq = document.createElement('span');
+        seq.className = 'virtual-exam-seq';
+        seq.textContent = String(index + 1).padStart(2, '0');
+        header.appendChild(seq);
+
+        var tagsWrap = document.createElement('div');
+        tagsWrap.className = 'virtual-exam-tags';
+        metaText
+          .split('|')
+          .map(function (part) { return part.trim(); })
+          .filter(Boolean)
+          .forEach(function (part, idx) {
+            var tag = document.createElement('span');
+            tag.className = 'virtual-exam-tag';
+            tag.textContent = part;
+            if (idx === 0) {
+              tag.dataset.variant = 'category';
+            }
+            if (idx === 1) {
+              tag.dataset.variant = 'type';
+            }
+            tagsWrap.appendChild(tag);
+          });
+        header.appendChild(tagsWrap);
+
+        node.appendChild(header);
+
+        var body = document.createElement('div');
+        body.className = 'virtual-exam-card__body';
+
+        var titleEl = document.createElement('h3');
+        titleEl.className = 'virtual-exam-title';
+        titleEl.textContent = titleText;
+        body.appendChild(titleEl);
+
+        if (metaText) {
+          var submeta = document.createElement('div');
+          submeta.className = 'virtual-exam-submeta';
+          submeta.textContent = metaText.replace(/\s*\|\s*/g, ' · ');
+          body.appendChild(submeta);
+        }
+
+        node.appendChild(body);
+
+        var footer = document.createElement('div');
+        footer.className = 'virtual-exam-card__footer';
+
+        var actionWrap = document.createElement('div');
+        actionWrap.className = 'virtual-exam-actions';
+        buttons.forEach(function (btn) {
+          btn.classList.add('btn');
+          btn.classList.add('btn-sm');
+          actionWrap.appendChild(btn);
+        });
+        footer.appendChild(actionWrap);
+
+        node.appendChild(footer);
+
+        return node;
+      }
+
+      function scheduleRender() {
+        if (state.scheduled) {
+          return;
+        }
+        state.scheduled = true;
+        window.requestAnimationFrame(function () {
+          state.scheduled = false;
+          render();
+        });
+      }
+
+      function render() {
+        if (!state.viewport) {
+          return;
+        }
+
+        var total = state.itemsHTML.length;
+        if (!total) {
+          state.content.replaceChildren();
+          if (state.spacer) {
+            state.spacer.style.height = '0px';
+          }
+          return;
+        }
+
+        var viewportHeight = state.viewport.clientHeight;
+        var itemHeight = state.itemHeight || 1;
+        var start = Math.max(Math.floor(state.viewport.scrollTop / itemHeight) - state.overscan, 0);
+        var visible = Math.ceil(viewportHeight / itemHeight) + state.overscan * 2;
+        var end = Math.min(start + visible, total);
+
+        var fragment = document.createDocumentFragment();
+        for (var i = start; i < end; i += 1) {
+          var cached = state.cache.get(i);
+          if (!cached) {
+            cached = htmlToElement(state.itemsHTML[i]);
+            state.cache.set(i, cached);
+          }
+          fragment.appendChild(cached);
+        }
+
+        state.content.style.transform = 'translateY(' + (start * itemHeight) + 'px)';
+        state.content.replaceChildren(fragment);
+
+        var first = state.content.firstElementChild;
+        if (first) {
+          var rect = first.getBoundingClientRect();
+          if (rect && rect.height) {
+            var nextHeight = rect.height + state.gap;
+            if (Math.abs(nextHeight - state.itemHeight) > 2) {
+              state.itemHeight = nextHeight;
+              state.spacer.style.height = (total * state.itemHeight) + 'px';
+              scheduleRender();
+            }
+          }
+        }
+      }
+
+      function stopListMonitor() {
+        if (state.listObserver) {
+          state.listObserver.disconnect();
+          state.listObserver = null;
+        }
+        if (state.listIdleTimer) {
+          window.clearTimeout(state.listIdleTimer);
+          state.listIdleTimer = null;
+        }
+        state.pendingList = null;
+      }
+
+      function finalizeFromList(listElement) {
+        if (!listElement) {
+          return;
+        }
+
+        var children = Array.from(listElement.children);
+        if (!children.length) {
+          return;
+        }
+
+        var childHTML = children.map(function (child) { return child.outerHTML; });
+        var rows = [];
+        var measurementRow = null;
+
+        for (var idx = 0; idx < childHTML.length; idx += 2) {
+          var row = document.createElement('div');
+          row.className = 'virtual-exam-row';
+          row.setAttribute('role', 'listitem');
+
+          var primaryCard = augmentExamCard(htmlToElement(childHTML[idx]), idx);
+          if (primaryCard) {
+            row.appendChild(primaryCard);
+          }
+
+          if (childHTML[idx + 1]) {
+            var secondaryCard = augmentExamCard(htmlToElement(childHTML[idx + 1]), idx + 1);
+            if (secondaryCard) {
+              row.appendChild(secondaryCard);
+            }
+          }
+
+          if (!measurementRow) {
+            measurementRow = row.cloneNode(true);
+          }
+
+          rows.push(row.outerHTML);
+        }
+
+        state.itemsHTML = rows;
+        state.totalItems = childHTML.length;
+        state.cache.clear();
+
+        var firstRect = null;
+        if (measurementRow) {
+          listElement.replaceChildren(measurementRow);
+          firstRect = measurementRow.getBoundingClientRect();
+        }
+
+        state.itemHeight = firstRect ? firstRect.height + state.gap : (state.itemHeight || 220);
+
+        state.container.innerHTML = '';
+        state.viewport = document.createElement('div');
+        state.viewport.className = 'virtual-scroll-viewport';
+        state.viewport.setAttribute('role', 'list');
+        state.viewport.setAttribute('aria-label', '题库列表（虚拟滚动）');
+        state.viewport.scrollTop = 0;
+
+        state.content = document.createElement('div');
+        state.content.className = 'virtual-scroll-content';
+
+        state.spacer = document.createElement('div');
+        state.spacer.className = 'virtual-scroll-spacer';
+        state.spacer.style.height = (state.itemHeight * state.itemsHTML.length) + 'px';
+
+        state.viewport.appendChild(state.content);
+        state.viewport.appendChild(state.spacer);
+        state.container.appendChild(state.viewport);
+        state.container.dataset.virtualized = 'true';
+
+        if (listElement && listElement.isConnected) {
+          listElement.innerHTML = '';
+        }
+
+        state.viewport.addEventListener('scroll', scheduleRender, { passive: true });
+
+        if (typeof ResizeObserver !== 'undefined') {
+          if (state.resizeObserver) {
+            state.resizeObserver.disconnect();
+          }
+          state.resizeObserver = new ResizeObserver(function () {
+            scheduleRender();
+          });
+          state.resizeObserver.observe(state.viewport);
+        }
+
+        scheduleRender();
+        render();
+      }
+
+      function monitorList(listElement) {
+        if (!listElement) {
+          return;
+        }
+
+        stopListMonitor();
+        state.pendingList = listElement;
+
+        var triggerFinalize = function () {
+          stopListMonitor();
+          finalizeFromList(listElement);
+        };
+
+        var scheduleFinalize = function () {
+          if (state.listIdleTimer) {
+            window.clearTimeout(state.listIdleTimer);
+          }
+          state.listIdleTimer = window.setTimeout(triggerFinalize, 80);
+        };
+
+        try {
+          state.listObserver = new MutationObserver(function () {
+            if (!listElement.isConnected) {
+              stopListMonitor();
+              return;
+            }
+
+            if (listElement.children && listElement.children.length > 0) {
+              scheduleFinalize();
+            }
+          });
+          state.listObserver.observe(listElement, { childList: true });
+        } catch (error) {
+          stopListMonitor();
+          finalizeFromList(listElement);
+          return;
+        }
+
+        if (listElement.children && listElement.children.length > 0) {
+          scheduleFinalize();
+        }
+      }
+
+      var observer = new MutationObserver(function (mutations) {
+        mutations.forEach(function (mutation) {
+          mutation.addedNodes.forEach(function (node) {
+            if (node.nodeType === 1 && node.classList.contains('exam-list')) {
+              monitorList(node);
+            }
+          });
+        });
+      });
+
+      observer.observe(container, { childList: true });
+
+      var existing = container.querySelector('.exam-list');
+      if (existing) {
+        monitorList(existing);
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      setupMotionPreferences();
+
+      var themeToggle = document.getElementById('theme-toggle-button');
+      if (themeToggle) {
+        themeToggle.addEventListener('click', function () {
+          if (typeof window.showThemeSwitcherModal === 'function') {
+            showThemeSwitcherModal();
+            return;
+          }
+          if (window.parent && typeof window.parent.showThemeSwitcherModal === 'function') {
+            window.parent.showThemeSwitcherModal();
+          }
+        });
+      }
+
+      var navButtons = Array.prototype.slice.call(document.querySelectorAll('.main-nav [data-view]'));
+      var views = Array.prototype.slice.call(document.querySelectorAll('.view'));
+
+      function activateView(viewName) {
+        views.forEach(function (view) {
+          if (!view) return;
+          if (view.id === viewName + '-view' || view.dataset.view === viewName) {
+            view.classList.add('active');
+          } else {
+            view.classList.remove('active');
+          }
+        });
+
+        navButtons.forEach(function (button) {
+          if (!button) return;
+          if (button.dataset.view === viewName) {
+            button.classList.add('active');
+          } else {
+            button.classList.remove('active');
+          }
+        });
+      }
+
+      navButtons.forEach(function (button) {
+        button.addEventListener('click', function () {
+          var targetView = button.dataset.view;
+          if (!targetView) return;
+
+          if (typeof window.showView === 'function') {
+            window.showView(targetView);
+          } else if (window.LegacyFallback && typeof window.LegacyFallback.showView === 'function') {
+            window.LegacyFallback.showView(targetView);
+          }
+
+          activateView(targetView);
+        });
+      });
+
+      activateView('overview');
+      syncOverviewMirrors();
+      initializeVirtualExamList();
+    });
+  </script>
+
+  <script src="../../assets/scripts/complete-exam-data.js"></script>
+  <script src="../../assets/scripts/listening-exam-data.js"></script>
+  <script src="../../js/utils/storage.js"></script>
+  <script src="../../js/core/storageProviderRegistry.js"></script>
+  <script src="../../js/data/dataSources/storageDataSource.js"></script>
+  <script src="../../js/data/repositories/baseRepository.js"></script>
+  <script src="../../js/data/repositories/dataRepositoryRegistry.js"></script>
+  <script src="../../js/data/repositories/practiceRepository.js"></script>
+  <script src="../../js/data/repositories/settingsRepository.js"></script>
+  <script src="../../js/data/repositories/backupRepository.js"></script>
+  <script src="../../js/data/repositories/metaRepository.js"></script>
+  <script src="../../js/data/index.js"></script>
+  <script src="../../js/utils/stateSerializer.js"></script>
+  <script src="../../js/utils/simpleStorageWrapper.js"></script>
+  <script src="../../js/utils/dataBackupManager.js"></script>
+  <script src="../../js/components/dataManagementPanel.js"></script>
+  <script>
+    if (window.storage && typeof window.storage.setNamespace === 'function') {
+      window.storage.setNamespace('exam_system');
+    }
+  </script>
+  <script src="../../js/core/scoreStorage.js"></script>
+  <script src="../../js/core/practiceRecorder.js"></script>
+  <script src="../../js/core/legacyStateBridge.js"></script>
+  <script src="../../js/utils/legacyStateAdapter.js"></script>
+  <script src="../../js/components/PDFHandler.js"></script>
+  <script src="../../js/components/SystemDiagnostics.js"></script>
+  <script src="../../js/components/PerformanceOptimizer.js"></script>
+  <script src="../../js/components/DataIntegrityManager.js"></script>
+  <script src="../../js/components/BrowseStateManager.js"></script>
+  <script src="../../js/utils/dataConsistencyManager.js"></script>
+  <script src="../../js/utils/markdownExporter.js"></script>
+  <script src="../../js/components/practiceRecordModal.js"></script>
+  <script src="../../js/components/practiceHistoryEnhancer.js"></script>
+  <script src="../../js/theme-switcher.js"></script>
+  <script src="../../js/utils/dom.js"></script>
+  <script src="../../js/views/legacyViewBundle.js"></script>
+  <script src="../../js/utils/performance.js"></script>
+  <script src="../../js/utils/typeChecker.js"></script>
+  <script src="../../js/utils/codeStandards.js"></script>
+  <script src="../../js/services/overviewStats.js"></script>
+  <script src="../../js/views/overviewView.js"></script>
+  <script src="../../js/app/state-service.js"></script>
+  <script src="../../js/presentation/message-center.js"></script>
+  <script src="../../js/presentation/navigation-controller.js"></script>
+  <script src="../../js/runtime/legacy-state-adapter.js"></script>
+  <script src="../../js/main.js"></script>
+  <script src="../../js/boot-fallbacks.js"></script>
+  <script src="../../js/patches/runtime-fixes.js"></script>
+  <script src="../../js/app/stateMixin.js"></script>
+  <script src="../../js/app/bootstrapMixin.js"></script>
+  <script src="../../js/app/lifecycleMixin.js"></script>
+  <script src="../../js/app/navigationMixin.js"></script>
+  <script src="../../js/app/examSessionMixin.js"></script>
+  <script src="../../js/app/fallbackMixin.js"></script>
+  <script src="../../js/app.js"></script>
+</body>
+</html>
