@@ -17,8 +17,6 @@
     <script>
     if (window.storage && storage.setNamespace) storage.setNamespace('exam_system');
     </script>
-    <!-- 仅影响后续动态生成链接的相对解析，不影响上文已加载资源 -->
-    <base href="../../">
     <style>
         /* 美乐蒂主题色彩 */
         :root {
@@ -4605,7 +4603,7 @@
                   <button class="modal-close" onclick="document.getElementById('theme-switcher').remove()"><i class="fas fa-times"></i></button>
                 </div>
                 <div class="modal-body">
-                  <div style="display:grid;gap:12px;">
+                  <div style="display:grid;gap:12px;max-height:360px;overflow-y:auto;overscroll-behavior:contain;padding-right:4px;">
                     <div style="border:2px solid var(--border-primary);border-radius:12px;padding:16px;background:var(--bg-primary);display:flex;justify-content:space-between;align-items:center;">
                       <div>
                         <div style="color:var(--my-melody-pink);font-weight:600;font-size:1.1rem;">🎀 My Melody (美乐蒂)</div>
@@ -4625,7 +4623,7 @@
                         <div style="color:#a16207;font-weight:600;font-size:1.1rem;">🍂 Bloom (秋日)</div>
                         <div style="color:var(--text-secondary);font-size:0.9rem;">温暖配色，适合放松阅读</div>
                       </div>
-                      <button class="btn btn-primary" onclick="navigateToThemePortal('index.html', { label: 'Bloom', theme: 'bloom' })">切换</button>
+                      <button class="btn btn-primary" onclick="navigateToThemePortal('../../index.html', { label: 'Bloom', theme: 'bloom' })">切换</button>
                     </div>
                     <div style="border:2px solid var(--border-primary);border-radius:12px;padding:16px;background:var(--bg-primary);display:flex;justify-content:space-between;align-items:center;">
                       <div>

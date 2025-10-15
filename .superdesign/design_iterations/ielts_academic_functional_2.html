@@ -1393,8 +1393,7 @@
 
     <!-- 加载主脚本 -->
     <!-- Path helpers for nested design pages -->
-    <script src="../../js/plugins/hp/hp-path-prefix.js"></script>
-    <script src="../../js/plugins/hp/hp-path-map.js"></script>
+    <script src="../../js/plugins/hp/hp-path.js"></script>
     <script src="../../js/main.js"></script>
     <script src="../../js/boot-fallbacks.js"></script>
     <script>
@@ -3262,6 +3261,7 @@ IELTS 学术练习管理系统
                     <p><i class="fas fa-info-circle" style="color: var(--color-primary); margin-right: var(--space-2);"></i>
                     选择您喜欢的主题风格，不同的主题提供不同的视觉体验和学习氛围。</p>
                   </div>
+                  <div style="display:grid;gap:var(--space-4);max-height:360px;overflow-y:auto;overscroll-behavior:contain;padding-right:var(--space-2);">
                   <div class="theme-card active">
                     <div class="theme-info">
                       <div class="theme-details">
@@ -3307,32 +3307,18 @@ IELTS 学术练习管理系统
                   <div class="theme-card">
                     <div class="theme-info">
                       <div class="theme-details">
-                        <h4><i class="fas fa-home" style="margin-right: var(--space-2); color: #3b82f6;"></i>主页</h4>
-                        <p>主页面 · 综合功能<br>
-                        <span style="color: var(--color-gray-500); font-size: var(--font-size-xs);">返回主页面，包含所有功能</span></p>
+                        <h4><i class="fas fa-hat-wizard" style="margin-right: var(--space-2); color: #7c3aed;"></i>Harry Potter</h4>
+                        <p>魔法主题 · 活点导航<br>
+                        <span style="color: var(--color-gray-500); font-size: var(--font-size-xs);">前往哈利波特活点地图体验</span></p>
                       </div>
                       <div class="theme-actions">
-                        <button class="btn btn-primary" onclick="navigateToThemePortal('../../index.html', { label: 'Bloom', theme: 'bloom' })">
+                        <button class="btn btn-primary" onclick="navigateToThemePortal('../../.superdesign/design_iterations/HarryPoter.html', { label: 'HarryPotter', theme: 'harry' })">
                           <i class="fas fa-exchange-alt" style="margin-right: var(--space-2);"></i>
                           切换主题
                         </button>
                       </div>
                     </div>
                   </div>
-                  <div class="theme-card">
-                    <div class="theme-info">
-                      <div class="theme-details">
-                        <h4>🧙 HarryPotter</h4>
-                        <p>哈利波特<br>
-                        <span style="color: var(--color-gray-500); font-size: var(--font-size-xs);">深紫配色 · 冒险</span></p>
-                      </div>
-                      <div class="theme-actions">
-                        <button class="btn btn-primary" aria-label="哈利波特主题（冒险）" onclick="navigateToThemePortal('../../.superdesign/design_iterations/HarryPoter.html', { label: 'HarryPotter', theme: 'harry' })">
-                          <i class="fas fa-exchange-alt" style="margin-right: var(--space-2);"></i>
-                          切换主题
-                        </button>
-                      </div>
-                    </div>
                   </div>
                 </div>
                 <div class="modal-footer">

@@ -9,6 +9,61 @@
   const STORAGE_KEY = 'hp.portal.state';
   const VIEW_KEYS = ['overview', 'practice', 'history', 'settings'];
   const PRACTICE_VIRTUAL_THRESHOLD = 28;
+  const BACKUP_STORAGE_KEY = 'hp.portal.backups';
+
+  function consumePendingView() {
+    try {
+      const value = sessionStorage.getItem('hp.portal.pendingView');
+      if (!value) return '';
+      sessionStorage.removeItem('hp.portal.pendingView');
+      return value.trim().toLowerCase();
+    } catch (error) {
+      console.warn('[hp-portal] 无法读取待激活视图', error);
+      return '';
+    }
+  }
+
+  function pickRandomItems(list, count) {
+    const source = Array.isArray(list) ? list.filter(Boolean) : [];
+    if (!source.length) return [];
+    if (source.length <= count) return source.slice();
+    const pool = source.slice();
+    const result = [];
+    const target = Math.max(0, Math.min(count, pool.length));
+    for (let i = 0; i < target; i += 1) {
+      const index = Math.floor(Math.random() * pool.length);
+      const [item] = pool.splice(index, 1);
+      result.push(item);
+    }
+    return result;
+  }
+
+  function formatDateTime(timestamp) {
+    if (!timestamp) return '未知时间';
+    try {
+      return new Intl.DateTimeFormat('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      }).format(new Date(timestamp));
+    } catch (_) {
+      return new Date(timestamp).toLocaleString();
+    }
+  }
+
+  function formatFileTimestamp(date) {
+    const pad = (value) => String(value).padStart(2, '0');
+    const now = date instanceof Date ? date : new Date();
+    const year = now.getFullYear();
+    const month = pad(now.getMonth() + 1);
+    const day = pad(now.getDate());
+    const hour = pad(now.getHours());
+    const minute = pad(now.getMinutes());
+    const second = pad(now.getSeconds());
+    return `${year}${month}${day}-${hour}${minute}${second}`;
+  }
 
   function readState() {
     try {
@@ -30,13 +85,21 @@
   }
 
   const Portal = {
-    dom: {},
+    dom: {
+      modal: null,
+      modalTitle: null,
+      modalBody: null,
+      importInput: null
+    },
     state: {
       activeView: 'overview',
       practiceFilter: { type: 'all', query: '' }
     },
     practiceVirtualizer: null,
     historySeries: null,
+    storageKeys: {
+      backups: BACKUP_STORAGE_KEY
+    },
 
     init() {
       this.dom.root = document.getElementById('hp-portal-root');
@@ -67,11 +130,33 @@
       this.dom.quickCards = document.getElementById('hp-quick-cards');
       this.dom.settingsButtons = Array.from(this.dom.root.querySelectorAll('[data-settings-action]'));
       this.dom.themeToggle = document.getElementById('hp-theme-toggle');
+      this.dom.modal = document.getElementById('hp-settings-modal');
+      this.dom.modalTitle = document.getElementById('hp-settings-modal-title');
+      this.dom.modalBody = document.getElementById('hp-settings-modal-body');
+
+      if (this.dom.modal) {
+        this.dom.modal.addEventListener('click', (event) => {
+          const dismissTarget = event.target.closest ? event.target.closest('[data-modal-dismiss]') : null;
+          if (event.target === this.dom.modal || dismissTarget) {
+            this.closeModal();
+          }
+        });
+      }
+
+      if (!this.dom.importInput) {
+        this.dom.importInput = document.createElement('input');
+        this.dom.importInput.type = 'file';
+        this.dom.importInput.accept = 'application/json';
+        this.dom.importInput.className = 'hidden';
+        this.dom.importInput.addEventListener('change', (event) => this.handleImportChange(event));
+        document.body.appendChild(this.dom.importInput);
+      }
 
       this.restoreState();
       this.bindNav();
       this.bindPracticeFilters();
       this.bindSettings();
+      this.bindThemeActions();
       this.bindThemeToggle();
       this.bindHash();
 
@@ -81,6 +166,25 @@
       hpCore.on('dataUpdated', () => this.renderAll());
       window.showView = (viewName) => this.activate(viewName || 'overview');
       window.hpPortal = this;
+
+      if (typeof window.createManualBackup !== 'function') {
+        window.createManualBackup = () => this.createBackup();
+      }
+      if (typeof window.showBackupList !== 'function') {
+        window.showBackupList = () => this.showBackupList();
+      }
+      if (typeof window.exportAllData !== 'function') {
+        window.exportAllData = () => this.exportData();
+      }
+      if (typeof window.importData !== 'function') {
+        window.importData = () => this.promptImport();
+      }
+      if (typeof window.showLibraryConfigListV2 !== 'function') {
+        window.showLibraryConfigListV2 = () => this.showConfigList();
+      }
+      if (typeof window.loadLibrary !== 'function') {
+        window.loadLibrary = (force) => this.reloadLibrary(!!force);
+      }
     },
 
     restoreState() {
@@ -97,6 +201,23 @@
       const hashView = (window.location.hash || '').replace('#', '');
       if (hashView && VIEW_KEYS.includes(hashView)) {
         this.state.activeView = hashView;
+        return;
+      }
+
+      const pendingView = consumePendingView();
+      if (pendingView && VIEW_KEYS.includes(pendingView)) {
+        this.state.activeView = pendingView;
+        return;
+      }
+
+      try {
+        const params = new URLSearchParams(window.location.search || '');
+        const queryView = (params.get('view') || '').trim();
+        if (queryView && VIEW_KEYS.includes(queryView)) {
+          this.state.activeView = queryView;
+        }
+      } catch (error) {
+        console.warn('[hp-portal] 解析视图参数失败', error);
       }
     },
 
@@ -113,6 +234,14 @@
           event.preventDefault();
           const view = btn.getAttribute('data-hp-view');
           this.activate(view || 'overview');
+        });
+      });
+
+      Array.from(document.querySelectorAll('[data-nav]')).forEach((el) => {
+        el.addEventListener('click', (event) => {
+          event.preventDefault();
+          const target = (el.getAttribute('data-nav') || '').trim();
+          this.activate(target || 'overview');
         });
       });
     },
@@ -160,6 +289,55 @@
           const action = btn.getAttribute('data-settings-action');
           this.invokeSetting(action);
         });
+      });
+    },
+
+    bindThemeActions() {
+      if (this._themeDelegated) return;
+      this._themeDelegated = true;
+      document.addEventListener('click', (event) => {
+        const btn = event.target && event.target.closest ? event.target.closest('[data-theme-action]') : null;
+        if (!btn) return;
+        if (!document.body.contains(btn)) return;
+        event.preventDefault();
+        const handler = (btn.getAttribute('data-theme-action') || '').trim();
+        if (!handler) return;
+        switch (handler) {
+          case 'portal': {
+            const target = btn.getAttribute('data-theme-target');
+            const label = btn.getAttribute('data-theme-label') || '';
+            const normalized = (typeof window.normalizeThemePortalTarget === 'function')
+              ? window.normalizeThemePortalTarget(target)
+              : (target || '');
+            if (normalized && typeof window.navigateToThemePortal === 'function') {
+              window.navigateToThemePortal(normalized, { label, theme: label || undefined });
+            } else if (normalized) {
+              window.location.href = normalized;
+            } else {
+              hpCore.showMessage('缺少目标链接', 'warning');
+            }
+            break;
+          }
+          case 'bloom':
+            if (typeof window.toggleBloomDarkMode === 'function') {
+              window.toggleBloomDarkMode();
+            } else {
+              hpCore.showMessage('Bloom 主题切换组件未加载', 'warning');
+            }
+            break;
+          case 'apply': {
+            const themeId = btn.getAttribute('data-theme-arg');
+            if (themeId && typeof window.applyTheme === 'function') {
+              window.applyTheme(themeId);
+              hpCore.showMessage('已切换主题：' + themeId, 'success');
+            } else {
+              hpCore.showMessage('主题切换组件未加载', 'warning');
+            }
+            break;
+          }
+          default:
+            hpCore.showMessage('未识别的主题操作', 'warning');
+        }
       });
     },
 
@@ -256,6 +434,282 @@
       }
     },
 
+    buildThemeModalContent() {
+      const template = document.getElementById('hp-theme-modal-template');
+      if (template && template.content) {
+        return template.content.cloneNode(true);
+      }
+      const fallback = document.createElement('div');
+      fallback.className = 'space-y-4 text-sm text-white/75';
+      const tip = document.createElement('p');
+      tip.textContent = '主题列表未配置，请稍后再试。';
+      fallback.appendChild(tip);
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'hp-settings-button';
+      closeBtn.textContent = '关闭';
+      closeBtn.addEventListener('click', () => this.closeModal());
+      fallback.appendChild(closeBtn);
+      return fallback;
+    },
+
+    openModal(title, content) {
+      if (!this.dom.modal || !this.dom.modalBody || !this.dom.modalTitle) return;
+      this.dom.modalTitle.textContent = title || '设置';
+      this.clearContainer(this.dom.modalBody);
+      if (content) {
+        this.dom.modalBody.appendChild(content);
+      }
+      this.dom.modal.classList.remove('hidden');
+      this.dom.modal.setAttribute('aria-hidden', 'false');
+    },
+
+    closeModal() {
+      if (!this.dom.modal) return;
+      this.dom.modal.classList.add('hidden');
+      this.dom.modal.setAttribute('aria-hidden', 'true');
+    },
+
+    readBackups() {
+      try {
+        const raw = localStorage.getItem(this.storageKeys.backups);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (_) {
+        return [];
+      }
+    },
+
+    writeBackups(list) {
+      try {
+        localStorage.setItem(this.storageKeys.backups, JSON.stringify(list.slice(0, 20)));
+      } catch (error) {
+        console.warn('[hp-portal] write backups failed', error);
+      }
+    },
+
+    createBackup() {
+      const exams = hpCore.getExamIndex() || [];
+      const records = hpCore.getRecords() || [];
+      if (!exams.length && !records.length) {
+        hpCore.showMessage('暂无数据可备份', 'info');
+        return;
+      }
+      const backups = this.readBackups();
+      const payload = {
+        id: 'backup-' + Date.now(),
+        createdAt: Date.now(),
+        exams: JSON.parse(JSON.stringify(exams)),
+        records: JSON.parse(JSON.stringify(records))
+      };
+      backups.unshift(payload);
+      this.writeBackups(backups);
+      hpCore.showMessage('备份已创建', 'success');
+    },
+
+    showBackupList() {
+      const backups = this.readBackups();
+      const wrapper = document.createElement('div');
+      wrapper.className = 'space-y-4';
+      if (!backups.length) {
+        const empty = document.createElement('div');
+        empty.className = 'hp-settings-modal__empty';
+        empty.textContent = '暂无备份，先点击“创建备份”生成一个吧。';
+        wrapper.appendChild(empty);
+      } else {
+        const list = document.createElement('div');
+        list.className = 'hp-settings-modal__list';
+        backups.forEach((backup) => {
+          const item = document.createElement('div');
+          item.className = 'hp-settings-modal__item';
+          const title = document.createElement('h4');
+          title.textContent = '备份 · ' + formatDateTime(backup.createdAt);
+          item.appendChild(title);
+          const meta = document.createElement('p');
+          meta.className = 'text-white/60 text-xs';
+          meta.textContent = '题库 ' + (backup.exams ? backup.exams.length : 0) + ' 条 · 练习记录 ' + (backup.records ? backup.records.length : 0) + ' 条';
+          item.appendChild(meta);
+          const actions = document.createElement('div');
+          actions.className = 'hp-settings-modal__actions';
+          const restoreBtn = document.createElement('button');
+          restoreBtn.textContent = '恢复';
+          restoreBtn.addEventListener('click', () => this.restoreBackup(backup.id));
+          const deleteBtn = document.createElement('button');
+          deleteBtn.textContent = '删除';
+          deleteBtn.setAttribute('data-variant', 'ghost');
+          deleteBtn.addEventListener('click', () => this.deleteBackup(backup.id));
+          actions.appendChild(restoreBtn);
+          actions.appendChild(deleteBtn);
+          item.appendChild(actions);
+          list.appendChild(item);
+        });
+        wrapper.appendChild(list);
+      }
+      this.openModal('备份列表', wrapper);
+    },
+
+    restoreBackup(backupId) {
+      if (!backupId) return;
+      const backups = this.readBackups();
+      const target = backups.find((item) => item && item.id === backupId);
+      if (!target) {
+        hpCore.showMessage('未找到备份', 'warning');
+        return;
+      }
+      hpCore.emit('dataUpdated', {
+        examIndex: Array.isArray(target.exams) ? target.exams : [],
+        practiceRecords: Array.isArray(target.records) ? target.records : [],
+        __source: 'hp-portal-backup'
+      });
+      this.renderAll();
+      this.updateSettingsMeta();
+      hpCore.showMessage('备份已恢复', 'success');
+      this.closeModal();
+    },
+
+    deleteBackup(backupId) {
+      if (!backupId) return;
+      const next = this.readBackups().filter((item) => item && item.id !== backupId);
+      this.writeBackups(next);
+      hpCore.showMessage('备份已删除', 'info');
+      this.showBackupList();
+    },
+
+    showConfigList() {
+      const exams = hpCore.getExamIndex() || [];
+      const total = exams.length;
+      const groups = exams.reduce((map, exam) => {
+        const type = (exam && exam.type ? String(exam.type) : '未分类').toLowerCase();
+        map[type] = (map[type] || 0) + 1;
+        return map;
+      }, {});
+      const wrapper = document.createElement('div');
+      wrapper.className = 'space-y-4 text-sm';
+      const summary = document.createElement('p');
+      summary.className = 'text-white/70';
+      summary.textContent = '当前题库共 ' + total + ' 套，按类型分布如下：';
+      wrapper.appendChild(summary);
+      const list = document.createElement('div');
+      list.className = 'hp-settings-modal__list';
+      Object.keys(groups).sort().forEach((key) => {
+        const item = document.createElement('div');
+        item.className = 'hp-settings-modal__item';
+        const title = document.createElement('h4');
+        title.textContent = key.toUpperCase();
+        item.appendChild(title);
+        const meta = document.createElement('p');
+        meta.className = 'text-white/60 text-xs';
+        meta.textContent = '共 ' + groups[key] + ' 套题';
+        item.appendChild(meta);
+        list.appendChild(item);
+      });
+      if (!list.childNodes.length) {
+        const empty = document.createElement('div');
+        empty.className = 'hp-settings-modal__empty';
+        empty.textContent = '尚未加载任何题库配置。';
+        wrapper.appendChild(empty);
+      } else {
+        wrapper.appendChild(list);
+      }
+      const refresh = document.createElement('button');
+      refresh.className = 'hp-settings-button';
+      refresh.textContent = '重新扫描题库';
+      refresh.addEventListener('click', () => {
+        this.reloadLibrary(true);
+        this.closeModal();
+      });
+      wrapper.appendChild(refresh);
+      this.openModal('题库配置', wrapper);
+    },
+
+    exportData() {
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        exams: hpCore.getExamIndex() || [],
+        records: hpCore.getRecords() || [],
+        state: this.state
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = 'ielts-backup-' + formatFileTimestamp(new Date()) + '.json';
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
+      hpCore.showMessage('备份文件已导出', 'success');
+    },
+
+    promptImport() {
+      if (!this.dom.importInput) return;
+      this.dom.importInput.value = '';
+      this.dom.importInput.click();
+    },
+
+    handleImportChange(event) {
+      const files = event && event.target && event.target.files;
+      if (!files || !files.length) return;
+      const file = files[0];
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parsed = JSON.parse(String(reader.result || '{}'));
+          this.applyImportedData(parsed);
+        } catch (error) {
+          hpCore.showMessage('导入失败：' + error.message, 'error');
+        } finally {
+          this.dom.importInput.value = '';
+        }
+      };
+      reader.onerror = () => {
+        hpCore.showMessage('无法读取文件', 'error');
+        this.dom.importInput.value = '';
+      };
+      reader.readAsText(file, 'utf-8');
+    },
+
+    applyImportedData(payload) {
+      if (!payload || typeof payload !== 'object') {
+        hpCore.showMessage('导入数据无效', 'error');
+        return;
+      }
+      const exams = Array.isArray(payload.exams)
+        ? payload.exams
+        : (Array.isArray(payload.examIndex) ? payload.examIndex : []);
+      const records = Array.isArray(payload.records)
+        ? payload.records
+        : (Array.isArray(payload.practiceRecords) ? payload.practiceRecords : []);
+      hpCore.emit('dataUpdated', {
+        examIndex: exams,
+        practiceRecords: records,
+        __source: 'hp-portal-import'
+      });
+      this.renderAll();
+      this.updateSettingsMeta();
+      hpCore.showMessage('数据已导入', 'success');
+    },
+
+    reloadLibrary(force) {
+      if (!hpCore || typeof hpCore._loadExamIndex !== 'function') {
+        hpCore.showMessage('题库加载器未就绪', 'warning');
+        return;
+      }
+      const message = force ? '正在重新扫描题库…' : '正在加载题库…';
+      hpCore.showMessage(message, 'info');
+      Promise.resolve(hpCore._loadExamIndex()).then(() => {
+        if (typeof hpCore._loadRecords === 'function') {
+          try { hpCore._loadRecords(); } catch (error) { console.warn('[hp-portal] reload records failed', error); }
+        }
+        this.renderAll();
+        this.updateSettingsMeta();
+        hpCore.showMessage('题库索引已刷新', 'success');
+      }).catch((error) => {
+        console.warn('[hp-portal] reload library failed', error);
+        hpCore.showMessage('题库加载失败：' + (error && error.message ? error.message : '未知错误'), 'error');
+      });
+    },
+
     renderOverview() {
       const exams = hpCore.getExamIndex() || [];
       const records = hpCore.getRecords() || [];
@@ -269,7 +723,7 @@
 
       if (!this.dom.quickCards) return;
 
-      const featured = exams.slice(0, 4);
+      const featured = pickRandomItems(exams, 4);
       this.clearContainer(this.dom.quickCards);
 
       if (!featured.length) {
@@ -301,7 +755,7 @@
 
     createQuickCardElement(exam) {
       const article = document.createElement('article');
-      article.className = 'flex flex-col gap-4 rounded-2xl border border-white/15 bg-gradient-to-br from-[#39282b]/75 via-[#24181a]/90 to-[#181112]/95 p-6 shadow-xl backdrop-blur';
+      article.className = 'hp-quick-card rounded-2xl border border-white/15 bg-gradient-to-br from-[#39282b]/75 via-[#24181a]/90 to-[#181112]/95 p-6 shadow-xl backdrop-blur';
 
       const header = document.createElement('div');
       header.className = 'flex items-start justify-between gap-3';
@@ -313,14 +767,13 @@
       article.appendChild(header);
 
       const meta = document.createElement('p');
-      meta.className = 'text-sm text-white/70';
+      meta.className = 'hp-card-meta';
       meta.textContent = exam.category || exam.part || '未分类';
       article.appendChild(meta);
 
       const footer = document.createElement('div');
-      footer.className = 'flex flex-wrap gap-3';
+      footer.className = 'hp-card-actions';
       const startBtn = document.createElement('button');
-      startBtn.className = 'rounded-full bg-[#ec1337]/90 px-4 py-2 font-semibold text-white shadow-lg shadow-[#ec1337]/30';
       startBtn.textContent = '开始练习';
       startBtn.setAttribute('data-action', 'start');
       startBtn.setAttribute('data-id', exam && exam.id ? exam.id : '');
@@ -328,7 +781,6 @@
 
       if (exam && exam.pdfFilename) {
         const pdfBtn = document.createElement('button');
-        pdfBtn.className = 'rounded-full border border-white/30 px-4 py-2 font-semibold text-white/85';
         pdfBtn.textContent = '查看 PDF';
         pdfBtn.setAttribute('data-action', 'pdf');
         pdfBtn.setAttribute('data-id', exam.id || '');
@@ -506,12 +958,13 @@
       const dataset = Array.isArray(items) ? items : [];
       const gap = 24;
       const baseWidth = 320;
+      const padding = 12;
       const measuredWidth = this.measurePracticeWidth(container);
-      const columns = Math.max(1, Math.floor((measuredWidth + gap) / (baseWidth + gap)));
-      const columnWidth = Math.max(260, Math.floor((measuredWidth - gap * (columns - 1)) / columns));
+      const availableWidth = Math.max(260, measuredWidth - padding * 2);
+      const columns = Math.max(1, Math.floor((availableWidth + gap) / (baseWidth + gap)));
+      const columnWidth = Math.max(260, Math.floor((availableWidth - gap * (columns - 1)) / columns));
       const cardHeight = 220;
       const rowHeight = cardHeight + gap;
-      const padding = 12;
       const totalRows = Math.max(1, Math.ceil(dataset.length / columns));
       const totalHeight = Math.max(rowHeight * totalRows + padding * 2, rowHeight);
 
@@ -535,15 +988,18 @@
 
     measurePracticeWidth(container) {
       if (!container) return 960;
-      const candidates = [
-        container.clientWidth,
-        container.offsetWidth,
-        container.parentElement ? container.parentElement.clientWidth : 0,
-        container.parentElement && container.parentElement.parentElement ? container.parentElement.parentElement.clientWidth : 0,
-        window.innerWidth ? window.innerWidth - 120 : 0,
-        960
-      ];
-      return Math.max.apply(null, candidates.filter((value) => Number.isFinite(value) && value > 0));
+
+      const rectWidth = container.getBoundingClientRect ? container.getBoundingClientRect().width : 0;
+      const direct = Math.max(0, container.clientWidth, container.offsetWidth, rectWidth || 0);
+      if (direct > 0) {
+        return direct;
+      }
+
+      if (container.parentElement) {
+        return this.measurePracticeWidth(container.parentElement);
+      }
+
+      return Math.max(480, window.innerWidth ? window.innerWidth - 160 : 960);
     },
 
     renderHistory() {
@@ -814,14 +1270,17 @@
 
     updateSettingsMeta() {
       const statusEl = document.getElementById('hp-settings-status');
-      if (!statusEl) return;
-      try {
-        const status = hpCore.getStatus ? hpCore.getStatus() : null;
-        if (!status) return;
-        statusEl.textContent = '题库 ' + status.examCount + ' 套 · 练习记录 ' + status.recordCount + ' 条 · 最近更新 ' + this.formatRelative(status.lastUpdateTime);
-      } catch (e) {
-        console.warn('[hp-portal] update settings status failed', e);
+      if (statusEl) {
+        try {
+          const status = hpCore.getStatus ? hpCore.getStatus() : null;
+          if (status) {
+            statusEl.textContent = '题库 ' + status.examCount + ' 套 · 练习记录 ' + status.recordCount + ' 条 · 最近更新 ' + this.formatRelative(status.lastUpdateTime);
+          }
+        } catch (e) {
+          console.warn('[hp-portal] update settings status failed', e);
+        }
       }
+
     },
 
     invokeSetting(action) {
@@ -837,70 +1296,47 @@
           }
           break;
         case 'load-library':
-          if (typeof window.showLibraryLoaderModal === 'function') {
-            window.showLibraryLoaderModal();
-          } else if (typeof window.loadLibrary === 'function') {
-            window.loadLibrary(false);
-          } else {
-            hpCore.showMessage('题库加载器未就绪', 'warning');
-          }
+          this.reloadLibrary(false);
           break;
         case 'force-refresh':
-          if (typeof window.loadLibrary === 'function') {
-            hpCore.showMessage('正在刷新题库…', 'info');
-            window.loadLibrary(true);
-          } else {
-            window.location.reload();
-          }
+          this.reloadLibrary(true);
           break;
         case 'config-list':
-          if (typeof window.showLibraryConfigListV2 === 'function') {
-            window.showLibraryConfigListV2();
-          } else {
-            hpCore.showMessage('暂无可用配置列表', 'info');
-          }
+          this.showConfigList();
           break;
         case 'backup-create':
-          if (typeof window.createManualBackup === 'function') {
-            window.createManualBackup();
-          } else {
-            hpCore.showMessage('备份模块不可用', 'warning');
-          }
+          this.createBackup();
           break;
         case 'backup-list':
-          if (typeof window.showBackupList === 'function') {
-            window.showBackupList();
-          } else {
-            hpCore.showMessage('暂无备份列表', 'info');
-          }
+          this.showBackupList();
           break;
         case 'export':
-          if (typeof window.exportAllData === 'function') {
-            window.exportAllData();
-          } else {
-            hpCore.showMessage('导出功能不可用', 'warning');
-          }
+          this.exportData();
           break;
         case 'import':
-          if (typeof window.importData === 'function') {
-            window.importData();
+          this.promptImport();
+          break;
+        case 'set-base-prefix': {
+          const current = window.hpPath && typeof window.hpPath.getBasePrefix === 'function'
+            ? window.hpPath.getBasePrefix()
+            : '';
+          const next = window.prompt('请输入题库根目录（相对于当前页面）', current || '');
+          if (next === null) break;
+          if (window.hpPath && typeof window.hpPath.setBasePrefix === 'function') {
+            const applied = window.hpPath.setBasePrefix(next);
+            if (applied) {
+              hpCore.showMessage('题库路径已更新：' + applied, 'success');
+              this.updateSettingsMeta();
+            } else {
+              hpCore.showMessage('题库路径无效，请检查输入', 'error');
+            }
           } else {
-            hpCore.showMessage('导入功能不可用', 'warning');
+            hpCore.showMessage('路径管理组件未加载', 'error');
           }
           break;
+        }
         case 'theme-modal':
-          if (window.HPTheme && typeof window.HPTheme.open === 'function') {
-            window.HPTheme.open();
-          } else if (typeof window.toggleThemeModal === 'function') {
-            window.toggleThemeModal(true);
-          } else {
-            const modal = document.getElementById('hp-theme-modal');
-            if (modal) {
-              modal.classList.remove('hidden');
-            } else {
-              hpCore.showMessage('主题面板已合并，使用顶部按钮切换主题', 'info');
-            }
-          }
+          this.openModal('主题切换', this.buildThemeModalContent());
           break;
         default:
           hpCore.showMessage('未识别的操作: ' + action, 'warning');

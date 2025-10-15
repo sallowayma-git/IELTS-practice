@@ -1719,11 +1719,35 @@ function getPathMap() {
   }
 }
 
+function normalizeThemeBasePrefix(prefix) {
+    if (prefix == null) {
+        return './';
+    }
+    const normalized = String(prefix)
+        .trim()
+        .replace(/\\/g, '/');
+    if (!normalized || normalized === '.' || normalized === './') {
+        return './';
+    }
+    return normalized.replace(/\/+$/g, '');
+}
+
 function buildResourcePath(exam, kind = 'html') {
     const basePath = resolveExamBasePath(exam);
     const rawName = kind === 'pdf' ? exam.pdfFilename : exam.filename;
     const file = sanitizeFilename(rawName, kind);
-    return './' + encodeURI(basePath + file);
+    const prefix = normalizeThemeBasePrefix(typeof window !== 'undefined' ? window.HP_BASE_PREFIX : null);
+
+    const baseSegment = (basePath || '').replace(/^\.+\//, '').replace(/^\/+/, '');
+    const normalizedBase = baseSegment && !baseSegment.endsWith('/') ? baseSegment + '/' : baseSegment;
+    const relativePath = (normalizedBase || '') + file;
+
+    if (prefix === './') {
+        return './' + encodeURI(relativePath);
+    }
+
+    const joined = prefix ? prefix + '/' + relativePath : relativePath;
+    return encodeURI(joined);
 }
 function sanitizeFilename(name, kind) {
     if (!name) return '';

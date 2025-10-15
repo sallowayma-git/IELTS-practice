@@ -347,9 +347,59 @@ function updateBlueThemeButton() {
     }
 }
 
+function normalizeThemePortalTarget(url) {
+    const raw = typeof url === 'string' ? url.trim() : '';
+    if (!raw) {
+        return '';
+    }
+
+    if (!raw.startsWith('.superdesign/')) {
+        return raw;
+    }
+
+    if (typeof window === 'undefined' || !window.location) {
+        return raw;
+    }
+
+    try {
+        const pathName = String(window.location.pathname || '').replace(/\\/g, '/');
+        const marker = '/.superdesign/design_iterations/';
+        const markerIndex = pathName.indexOf(marker);
+        if (markerIndex === -1) {
+            return raw;
+        }
+
+        const afterMarker = pathName.slice(markerIndex + marker.length);
+        if (!afterMarker) {
+            return raw;
+        }
+
+        const segments = afterMarker.split('/').filter(Boolean);
+        if (!segments.length) {
+            return raw;
+        }
+
+        const trimmed = raw.replace(/^\.superdesign\/design_iterations\//, '');
+        if (!trimmed || trimmed === raw) {
+            return raw;
+        }
+
+        const depth = Math.max(0, segments.length - 2);
+        if (depth === 0) {
+            return trimmed;
+        }
+
+        const prefix = new Array(depth).fill('..').join('/');
+        return prefix ? prefix + '/' + trimmed : trimmed;
+    } catch (_) {
+        return raw;
+    }
+}
+
 function navigateToThemePortal(url, options = {}) {
     const meta = options || {};
-    const preference = themePreferenceController.recordPortalNavigation(url, meta);
+    const target = normalizeThemePortalTarget(url);
+    const preference = themePreferenceController.recordPortalNavigation(target, meta);
     if (meta.theme) {
         try {
             document.documentElement.setAttribute('data-theme', meta.theme);
@@ -366,7 +416,7 @@ function navigateToThemePortal(url, options = {}) {
 
     const targetUrl = preference && preference.url
         ? themePreferenceController.resolveUrl(preference.url)
-        : themePreferenceController.resolveUrl(url);
+        : themePreferenceController.resolveUrl(target);
 
     if (targetUrl) {
         try {
@@ -378,6 +428,7 @@ function navigateToThemePortal(url, options = {}) {
 }
 
 if (typeof window !== 'undefined') {
+    window.normalizeThemePortalTarget = normalizeThemePortalTarget;
     window.navigateToThemePortal = navigateToThemePortal;
 }
 

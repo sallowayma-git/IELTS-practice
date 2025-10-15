@@ -844,24 +844,46 @@
     };
   }
 
-  // DOMContentLoaded handler to ensure showView('overview') is called after DOM is loaded
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() {
-      // Try to call showView('overview') as the default view
-      if (typeof window.showView === 'function') {
-        window.showView('overview');
-      } else if (typeof window.app !== 'undefined' && typeof window.app.navigateToView === 'function') {
-        // Fallback to app.navigateToView if showView is not available
-        window.app.navigateToView('overview');
-      }
-    });
-  } else {
-    // DOM is already loaded, call showView immediately
-    if (typeof window.showView === 'function') {
-      window.showView('overview');
-    } else if (typeof window.app !== 'undefined' && typeof window.app.navigateToView === 'function') {
-      // Fallback to app.navigateToView if showView is not available
-      window.app.navigateToView('overview');
+  const VALID_INITIAL_VIEWS = ['overview', 'browse', 'practice', 'history', 'settings'];
+
+  function readQueryView() {
+    try {
+      const search = window.location && window.location.search ? window.location.search : '';
+      if (!search) return '';
+      const params = new URLSearchParams(search);
+      const value = (params.get('view') || '').trim().toLowerCase();
+      return value;
+    } catch (_) {
+      return '';
     }
+  }
+
+  function resolveInitialView() {
+    const hash = (window.location && window.location.hash) ? window.location.hash.replace(/^#/, '').trim().toLowerCase() : '';
+    if (hash && VALID_INITIAL_VIEWS.indexOf(hash) !== -1) {
+      return hash;
+    }
+    const queryView = readQueryView();
+    if (queryView && VALID_INITIAL_VIEWS.indexOf(queryView) !== -1) {
+      return queryView;
+    }
+    return 'overview';
+  }
+
+  function bootInitialView() {
+    const targetView = resolveInitialView();
+    if (typeof window.showView === 'function') {
+      window.showView(targetView);
+      return;
+    }
+    if (typeof window.app !== 'undefined' && typeof window.app.navigateToView === 'function') {
+      window.app.navigateToView(targetView);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootInitialView);
+  } else {
+    bootInitialView();
   }
 })();

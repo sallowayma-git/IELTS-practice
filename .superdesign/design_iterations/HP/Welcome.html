@@ -88,6 +88,9 @@
             display: grid;
             gap: 1.25rem;
         }
+        #hp-quick-cards {
+            grid-auto-rows: 1fr;
+        }
         #hp-quick-cards article {
             border-radius: 16px;
             border: 1px solid rgba(255,255,255,0.16);
@@ -96,8 +99,8 @@
             color: #fff;
             display: flex;
             flex-direction: column;
-            gap: 18px;
-            min-height: 180px;
+            gap: 16px;
+            min-height: 200px;
         }
         #hp-quick-cards h3 {
             font-size: 1.2rem;
@@ -106,25 +109,36 @@
         #hp-quick-cards .hp-card-meta {
             opacity: 0.8;
             font-size: 0.9rem;
+            color: rgba(255,255,255,0.85);
         }
         #hp-quick-cards .hp-card-actions {
+            margin-top: auto;
             display: flex;
-            flex-wrap: wrap;
-            gap: 0.75rem;
+            align-items: center;
+            flex-wrap: nowrap;
+            gap: 0.6rem;
         }
         #hp-quick-cards .hp-card-actions button {
-            padding: 0.55rem 1.25rem;
+            flex: 1 1 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem 0.75rem;
             border-radius: 999px;
             border: none;
             font-weight: 600;
+            font-size: 0.85rem;
+            letter-spacing: 0.02em;
             cursor: pointer;
             background: rgba(236,19,55,0.85);
             color: #fff;
-            box-shadow: 0 10px 20px rgba(236,19,55,0.35);
+            box-shadow: 0 8px 18px rgba(236,19,55,0.35);
+            white-space: nowrap;
         }
         #hp-quick-cards .hp-card-actions button[data-action="pdf"] {
             background: transparent;
             border: 1px solid rgba(255,255,255,0.25);
+            color: rgba(255,255,255,0.85);
             box-shadow: none;
         }
         #hp-practice-shell {
@@ -132,6 +146,16 @@
             background: rgba(24,17,18,0.85);
             border: 1px solid rgba(255,255,255,0.08);
             box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 30px 80px rgba(0,0,0,0.45);
+            max-width: 1280px;
+            margin: 0 auto;
+        }
+        #hp-practice-list[data-mode="static"] {
+            display: grid;
+            gap: 1.5rem;
+            grid-auto-rows: 1fr;
+        }
+        #hp-practice-list[data-mode="virtual"] {
+            display: block;
         }
         #hp-practice-list[data-mode="static"],
         #hp-practice-list[data-mode="virtual"],
@@ -217,6 +241,148 @@
             transform: translateY(-2px);
             box-shadow: 0 18px 40px rgba(236,19,55,0.22);
         }
+        .hp-theme-switcher {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+        .hp-theme-option {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1.5rem;
+            padding: 1rem 1.5rem;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.14);
+            background: linear-gradient(135deg, rgba(57,40,43,0.65), rgba(24,17,18,0.9));
+            box-shadow: 0 18px 42px rgba(0,0,0,0.28);
+        }
+        .hp-theme-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+        .hp-theme-name {
+            font-family: 'Cinzel', serif;
+            font-size: 1rem;
+            letter-spacing: 0.1em;
+            color: rgba(255,255,255,0.92);
+            text-transform: uppercase;
+        }
+        .hp-theme-desc {
+            font-size: 0.85rem;
+            color: rgba(255,255,255,0.68);
+        }
+        .hp-theme-option button {
+            padding: 0.55rem 1.45rem;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,0.24);
+            background: rgba(236,19,55,0.18);
+            color: #fff;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+        }
+        .hp-theme-option button:hover {
+            transform: translateY(-1px);
+            background: rgba(236,19,55,0.35);
+            box-shadow: 0 12px 30px rgba(236,19,55,0.32);
+        }
+        .hp-settings-modal {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.65);
+            z-index: 1000;
+            padding: 1.5rem;
+        }
+        .hp-settings-modal:not(.hidden) {
+            display: flex;
+        }
+        .hp-settings-modal__panel {
+            position: relative;
+            width: min(520px, 100%);
+            max-height: 80vh;
+            overflow-y: auto;
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.12);
+            background: rgba(36,24,26,0.95);
+            box-shadow: 0 30px 90px rgba(0,0,0,0.55);
+            padding: 1.75rem;
+        }
+        .hp-settings-modal__header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: 1.25rem;
+        }
+        .hp-settings-modal__close {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            color: rgba(255,255,255,0.7);
+            padding: 0.25rem;
+            border-radius: 999px;
+            transition: background 0.2s ease;
+        }
+        .hp-settings-modal__close:hover {
+            background: rgba(255,255,255,0.08);
+            color: #fff;
+        }
+        .hp-settings-modal__body {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .hp-settings-modal__list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        .hp-settings-modal__item {
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 14px;
+            padding: 1rem;
+            background: rgba(57,40,43,0.5);
+        }
+        .hp-settings-modal__item h4 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 0.35rem;
+        }
+        .hp-settings-modal__actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+        .hp-settings-modal__actions button {
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,0.18);
+            background: rgba(236,19,55,0.85);
+            color: #fff;
+            padding: 0.4rem 1rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .hp-settings-modal__actions button[data-variant="ghost"] {
+            background: transparent;
+            border-color: rgba(255,255,255,0.14);
+            color: rgba(255,255,255,0.75);
+        }
+        .hp-settings-modal__empty {
+            text-align: center;
+            padding: 1.5rem;
+            border-radius: 14px;
+            border: 1px dashed rgba(255,255,255,0.18);
+            color: rgba(255,255,255,0.6);
+        }
     </style>
 </head>
 <body class="bg-hp-ink text-white">
@@ -246,7 +412,7 @@
         </header>
 
         <main id="hp-portal-root" class="flex-1 px-6 pb-16 pt-10">
-            <section data-view-section="overview" class="container mx-auto animate-mistReveal space-y-14">
+            <section id="overview" data-view-section="overview" class="container mx-auto animate-mistReveal space-y-14">
                 <div class="mist-content space-y-10 text-center">
                     <h1 class="font-display text-4xl font-bold text-primary md:text-6xl">Welcome, Aspiring Scholar!</h1>
                     <p class="mx-auto max-w-3xl text-lg text-white/80 md:text-xl">
@@ -281,7 +447,7 @@
                 </div>
             </section>
 
-            <section data-view-section="practice" class="container mx-auto hidden space-y-10">
+            <section id="practice" data-view-section="practice" class="container mx-auto hidden space-y-10">
                 <div class="space-y-4 text-center">
                     <h2 class="font-display text-4xl font-bold text-white">Question Bank</h2>
                     <p class="text-white/70">探索霍格沃兹图书馆的练习卷，筛选、搜索并立即开始你的训练。</p>
@@ -305,7 +471,7 @@
                 </div>
             </section>
 
-            <section data-view-section="history" class="container mx-auto hidden space-y-12">
+            <section id="history" data-view-section="history" class="container mx-auto hidden space-y-12">
                 <div class="flex flex-wrap items-end justify-between gap-6">
                     <div>
                         <h2 class="font-display text-4xl font-bold text-white">Practice History & Achievements</h2>
@@ -349,20 +515,22 @@
                 </div>
             </section>
 
-            <section data-view-section="settings" class="container mx-auto hidden space-y-10">
+            <section id="settings" data-view-section="settings" class="container mx-auto hidden space-y-10">
                 <div class="text-center">
                     <h2 class="font-display text-4xl font-bold text-white">系统设置</h2>
                     <p class="mt-2 text-white/70">管理题库、备份与系统外观，保持魔法井然有序。</p>
                 </div>
                 <div class="hp-section-card px-8 py-8">
-                    <div class="flex flex-wrap items-center justify-between gap-4">
-                        <h3 class="font-display text-2xl text-white">状态</h3>
-                        <span id="hp-settings-status" class="text-sm uppercase tracking-[0.35em] text-white/70">加载中…</span>
+                    <div class="flex flex-wrap items-center gap-4">
+                        <div class="space-y-2">
+                            <h3 class="font-display text-2xl text-white">状态</h3>
+                            <span id="hp-settings-status" class="block text-sm uppercase tracking-[0.35em] text-white/70">加载中…</span>
+                        </div>
                     </div>
                     <div class="mt-6 grid gap-6 md:grid-cols-2">
                         <div class="space-y-3">
-                            <button class="hp-settings-button w-full" data-settings-action="clear-cache">🧹 清理缓存</button>
                             <button class="hp-settings-button w-full" data-settings-action="load-library">📦 加载题库</button>
+                            <button class="hp-settings-button w-full" data-settings-action="clear-cache">🧹 清理缓存</button>
                             <button class="hp-settings-button w-full" data-settings-action="config-list">🗂 题库配置</button>
                             <button class="hp-settings-button w-full" data-settings-action="force-refresh">🔄 强制刷新</button>
                         </div>
@@ -378,6 +546,59 @@
                     </div>
                 </div>
             </section>
+            <template id="hp-theme-modal-template">
+                <div class="space-y-6">
+                    <p class="text-sm text-white/70">选择喜欢的主题风格，立即切换体验。</p>
+                    <div class="hp-theme-switcher" role="list">
+                        <div class="hp-theme-option" role="listitem">
+                            <div class="hp-theme-info">
+                                <div class="hp-theme-name">📚 Academic</div>
+                                <div class="hp-theme-desc">专业 · 高效 · 可靠</div>
+                            </div>
+                            <button type="button" data-theme-action="portal" data-theme-target="../ielts_academic_functional_2.html" data-theme-label="Academic">切换</button>
+                        </div>
+                        <div class="hp-theme-option" role="listitem">
+                            <div class="hp-theme-info">
+                                <div class="hp-theme-name">🍂 Bloom</div>
+                                <div class="hp-theme-desc">秋日暖阳 · 温柔沉浸</div>
+                            </div>
+                            <button type="button" data-theme-action="portal" data-theme-target="../../../index.html" data-theme-label="Bloom">切换</button>
+                        </div>
+                        <div class="hp-theme-option" role="listitem">
+                            <div class="hp-theme-info">
+                                <div class="hp-theme-name" style="color:#6ab8ff;">🔵 Blue</div>
+                                <div class="hp-theme-desc" style="color:rgba(219,234,254,0.85);">冷静 · 清爽 · 专注</div>
+                            </div>
+                            <button type="button" data-theme-action="apply" data-theme-arg="blue" style="border-color: rgba(96,165,250,0.45); color:#dbeafe;">应用</button>
+                        </div>
+                        <div class="hp-theme-option" role="listitem">
+                            <div class="hp-theme-info">
+                                <div class="hp-theme-name" style="color:#ec4899;">🎀 Melody</div>
+                                <div class="hp-theme-desc" style="color:rgba(251,207,232,0.85);">美乐蒂的粉色温柔</div>
+                            </div>
+                            <button type="button" data-theme-action="portal" data-theme-target="../my_melody_ielts_1.html" data-theme-label="MyMelody" style="border-color: rgba(236,72,153,0.45); color:#fbcfe8;">切换</button>
+                        </div>
+                        <div class="hp-theme-option" role="listitem">
+                            <div class="hp-theme-info">
+                                <div class="hp-theme-name" style="color:#c084fc;">🧙 Potter</div>
+                                <div class="hp-theme-desc">当前主题 · 重新进入以刷新效果</div>
+                            </div>
+                            <button type="button" data-theme-action="portal" data-theme-target="../HarryPoter.html" data-theme-label="HarryPotter" style="border-color: rgba(192,132,252,0.45); color:#e9d5ff;">重新进入</button>
+                        </div>
+                    </div>
+                </div>
+            </template>
+            <div id="hp-settings-modal" class="hp-settings-modal hidden" aria-hidden="true">
+                <div class="hp-settings-modal__panel" role="dialog" aria-modal="true" aria-labelledby="hp-settings-modal-title">
+                    <div class="hp-settings-modal__header">
+                        <h3 id="hp-settings-modal-title" class="font-display text-xl text-white">设置</h3>
+                        <button type="button" class="hp-settings-modal__close" data-modal-dismiss aria-label="关闭设置弹窗">
+                            <span class="material-icons">close</span>
+                        </button>
+                    </div>
+                    <div id="hp-settings-modal-body" class="hp-settings-modal__body text-white/80 text-sm"></div>
+                </div>
+            </div>
         </main>
 
         <footer class="border-t border-[#39282b] bg-[#1d1415]/90 px-10 py-6 text-center text-sm text-white/60">
@@ -399,28 +620,41 @@
 <script>
     window.performanceOptimizer = window.performanceOptimizer || new PerformanceOptimizer();
 </script>
+<script>
+    window.__HP_DISABLE_PATH_MAP_FETCH__ = true;
+</script>
+<script src="../../../js/plugins/hp/hp-path.js"></script>
+<script>
+    (function enforceHPBase() {
+        var DEFAULT_HP_BASE = '../../..';
+        try {
+            if (window.hpPath && typeof window.hpPath.setBasePrefix === 'function') {
+                var current = (typeof window.hpPath.getBasePrefix === 'function')
+                    ? window.hpPath.getBasePrefix()
+                    : '';
+                if (!current || /developer\/tests\/e2e\/fixtures/i.test(current)) {
+                    window.hpPath.setBasePrefix(DEFAULT_HP_BASE);
+                }
+                return;
+            }
+        } catch (error) {
+            console.warn('[hp-theme] enforceHPBase failed', error);
+        }
+        try {
+            window.HP_BASE_PREFIX = DEFAULT_HP_BASE;
+        } catch (_) {}
+    })();
+</script>
 <script src="../../../js/plugins/hp/hp-core-bridge.js"></script>
 <script src="../../../js/plugins/hp/hp-portal.js"></script>
+<script src="../../../js/components/practiceHistoryEnhancer.js"></script>
+<script src="../../../js/utils/componentChecker.js"></script>
+<script src="../../../js/theme-switcher.js"></script>
+<script src="../../../js/main.js"></script>
+<script src="../../../js/boot-fallbacks.js"></script>
+<script src="../../../js/app.js"></script>
 </body>
 </html>
-<script src="../../../js/components/practiceHistoryEnhancer.js"></script>
-<script src="../../../js/utils/componentChecker.js"></script>
-<script src="../../../js/theme-switcher.js"></script>
-<script src="../../../js/main.js"></script>
-<script src="../../../js/boot-fallbacks.js"></script>
-<script src="../../../js/app.js"></script>
-
-<!-- updated -->
-<script src="../../../js/plugins/hp/hp-path-prefix.js"></script>
-<script src="../../../js/plugins/hp/hp-path-map.js"></script>
-
-<!-- updated -->
-<script src="../../../js/plugins/hp/hp-core-bridge.js"></script>
-<script src="../../../js/plugins/hp/hp-welcome-cta.js"></script>
-<script src="../../../js/plugins/hp/hp-welcome-adapter.js"></script>
-<script src="../../../js/plugins/hp/hp-welcome-ui.js"></script>
-
-</body></html>
 
 
 
