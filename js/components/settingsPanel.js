@@ -384,6 +384,7 @@ class SettingsPanel {
 
     buildAppearanceTab(builder) {
         const themeOptions = [
+            { value: 'xiaodaidai', label: '小呆呆主题' },
             { value: 'light', label: '浅色主题' },
             { value: 'dark', label: '深色主题' },
             { value: 'highContrast', label: '高对比度' }

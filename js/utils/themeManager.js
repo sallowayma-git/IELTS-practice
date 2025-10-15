@@ -5,6 +5,34 @@
 class ThemeManager {
     constructor() {
         this.themes = {
+            xiaodaidai: {
+                name: '小呆呆主题',
+                variables: {
+                    '--primary-color': '#ffc83d',
+                    '--primary-color-light': 'rgba(255, 200, 61, 0.18)',
+                    '--primary-hover': '#f59e0b',
+                    '--secondary-color': '#64748b',
+                    '--success-color': '#34d399',
+                    '--success-color-light': 'rgba(52, 211, 153, 0.14)',
+                    '--warning-color': '#f59e0b',
+                    '--error-color': '#ef4444',
+                    '--accent-color': '#a1bfff',
+
+                    '--bg-primary': '#f7f9fb',
+                    '--bg-secondary': '#fff8e1',
+                    '--bg-tertiary': '#ffe4b5',
+
+                    '--text-primary': '#1f2937',
+                    '--text-secondary': '#4b5563',
+                    '--text-tertiary': '#64748b',
+                    '--text-muted': '#94a3b8',
+
+                    '--border-color': 'rgba(255, 200, 61, 0.35)',
+                    '--shadow-sm': '0 6px 16px rgba(161, 191, 255, 0.25)',
+                    '--shadow-md': '0 12px 28px rgba(255, 200, 61, 0.22)',
+                    '--shadow-lg': '0 24px 60px rgba(161, 191, 255, 0.3)'
+                }
+            },
             light: {
                 name: '浅色主题',
                 variables: {
@@ -255,10 +283,10 @@ class ThemeManager {
      * 切换主题
      */
     toggleTheme() {
-        const themeOrder = ['light', 'dark', 'highContrast'];
+        const themeOrder = ['light', 'xiaodaidai', 'dark', 'highContrast'];
         const currentIndex = themeOrder.indexOf(this.currentTheme);
         const nextIndex = (currentIndex + 1) % themeOrder.length;
-        
+
         this.setTheme(themeOrder[nextIndex]);
     }
     

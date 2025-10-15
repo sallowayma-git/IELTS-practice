@@ -797,6 +797,198 @@
         transform: translateY(0) translateX(0);
       }
     }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(15, 23, 42, 0.45);
+      backdrop-filter: blur(12px);
+      z-index: 50;
+      padding: 1.5rem;
+    }
+
+    .modal-backdrop[data-open="true"] {
+      display: flex;
+    }
+
+    .modal-panel {
+      width: min(720px, 100%);
+      border-radius: 24px;
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid rgba(255, 255, 255, 0.8);
+      box-shadow: 0 24px 64px rgba(15, 23, 42, 0.18);
+      padding: 2rem;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .modal-panel::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: radial-gradient(circle at 18% 12%, rgba(255, 200, 61, 0.12), transparent 60%),
+        radial-gradient(circle at 82% 18%, rgba(161, 191, 255, 0.16), transparent 62%);
+      pointer-events: none;
+      opacity: 0.85;
+    }
+
+    .modal-content {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .modal-close {
+      position: absolute;
+      top: 1.25rem;
+      right: 1.25rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      border-radius: 16px;
+      background: rgba(15, 23, 42, 0.08);
+      color: #0f172a;
+      font-size: 1.1rem;
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+      transition: transform 0.15s ease, background 0.15s ease;
+    }
+
+    .modal-close:hover {
+      transform: translateY(-1px);
+      background: rgba(15, 23, 42, 0.12);
+    }
+
+    .modal-grid {
+      display: grid;
+      gap: 1.25rem;
+    }
+
+    @media (min-width: 768px) {
+      .modal-grid.two-column {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    .modal-section {
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.86);
+      border: 1px solid rgba(255, 255, 255, 0.85);
+      padding: 1.5rem;
+      box-shadow: 0 18px 44px rgba(161, 191, 255, 0.22);
+    }
+
+    .modal-section h3 {
+      font-weight: 600;
+      font-size: 1rem;
+      color: #1f2937;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .modal-stat {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      padding: 0.85rem 1rem;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.85);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    }
+
+    .modal-stat .label {
+      font-size: 0.75rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #64748b;
+      font-weight: 600;
+    }
+
+    .modal-stat .value {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .modal-stat .meta {
+      font-size: 0.8rem;
+      color: #475569;
+    }
+
+    .theme-option-list {
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    @media (min-width: 640px) {
+      .theme-option-list {
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      }
+    }
+
+    .theme-option {
+      border-radius: 18px;
+      padding: 1rem;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.85);
+      box-shadow: 0 14px 34px rgba(161, 191, 255, 0.18);
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+      cursor: pointer;
+      transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    .theme-option:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 18px 42px rgba(255, 200, 61, 0.22);
+    }
+
+    .theme-option[data-active="true"] {
+      border-color: rgba(255, 200, 61, 0.6);
+      box-shadow: 0 18px 42px rgba(255, 200, 61, 0.28);
+    }
+
+    .theme-option h4 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #1f2937;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .theme-option p {
+      font-size: 0.85rem;
+      color: #475569;
+      line-height: 1.5;
+    }
+
+    .modal-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    .modal-footer .btn {
+      padding-inline: 1.5rem;
+    }
   </style>
 </head>
 <body class="min-h-full text-slate-900">
@@ -818,13 +1010,11 @@
           </div>
           <div class="flex flex-col items-start gap-4 md:items-end">
             <div class="flex flex-wrap gap-3">
-              <button class="btn btn-sm" id="import-records-btn">💾 导入记录</button>
-              <button class="btn btn-sm" id="clear-cache-entry">🧼 清理缓存</button>
-              <button class="btn btn-sm btn-info" id="sync-status-btn">🔄 同步状态</button>
+              <span class="rounded-full bg-white/70 px-4 py-2 text-sm font-semibold text-slate-600 shadow-inner shadow-white/30" id="header-data-status">📡 正在接入真实练习数据...</span>
             </div>
             <div class="relative flex items-center gap-4 rounded-[16px] bg-white/70 px-5 py-4 shadow-inner shadow-white/40">
               <div class="h-3 w-3 animate-ping rounded-full bg-[#34d399]/80"></div>
-              <p class="text-sm text-slate-600">实时同步：最新学习数据已连接</p>
+              <p class="text-sm text-slate-600" id="header-sync-meta">统计中：等待练习记录加载</p>
             </div>
           </div>
         </div>
@@ -847,22 +1037,22 @@
             <div class="overview-hero-main">
               <span class="overview-eyebrow">勇气王国指挥席</span>
               <h1 class="overview-headline">猪猪侠勇气驾驶舱</h1>
-              <p class="overview-description">把听说读写指标装进勇气晶核，猪猪侠战队随时汇报你的 IELTS 任务进展。</p>
+              <p class="overview-description">把近 7 天练习表现装进勇气晶核，猪猪侠战队随时回传你的真实学习节奏。</p>
                 <div class="overview-metric-lane">
                   <div class="overview-metric-tile">
-                    <span class="overview-metric-label">活跃学习者</span>
-                    <span class="overview-metric-value" id="overview-active-students">128</span>
-                    <span class="overview-metric-meta">本周较上周 +12%</span>
+                    <span class="overview-metric-label">近7天平均分</span>
+                    <span class="overview-metric-value" id="overview-weekly-avg-score">--</span>
+                    <span class="overview-metric-meta" id="overview-weekly-avg-meta">等待真实练习数据</span>
                   </div>
                   <div class="overview-metric-tile">
-                    <span class="overview-metric-label">平均正确率</span>
-                    <span class="overview-metric-value" id="overview-accuracy">87%</span>
-                    <span class="overview-metric-meta">连续提升 4 天</span>
+                    <span class="overview-metric-label">近7天练习次数</span>
+                    <span class="overview-metric-value" id="overview-weekly-sessions">--</span>
+                    <span class="overview-metric-meta" id="overview-weekly-sessions-meta">正在统计</span>
                   </div>
                   <div class="overview-metric-tile">
-                    <span class="overview-metric-label">沉浸时长</span>
-                    <span class="overview-metric-value" id="overview-hours">36h</span>
-                    <span class="overview-metric-meta">目标达成率 92%</span>
+                    <span class="overview-metric-label">当前连续练习</span>
+                    <span class="overview-metric-value" id="overview-current-streak">--</span>
+                    <span class="overview-metric-meta" id="overview-current-streak-meta">统计中</span>
                   </div>
                 </div>
                 <div class="overview-hero-actions">
@@ -876,15 +1066,15 @@
                   <div class="overview-orbit-ring overview-orbit-ring--primary"></div>
                   <div class="overview-orbit-ring overview-orbit-ring--secondary"></div>
                   <div class="overview-orbit-core">
-                    <span class="overview-orbit-label">沉浸学习</span>
-                    <span class="overview-orbit-value" id="overview-hours-mirror">36h</span>
-                    <span class="overview-orbit-meta">本周目标 92%</span>
+                    <span class="overview-orbit-label">累计平均分</span>
+                    <span class="overview-orbit-value" id="overview-overall-accuracy">--</span>
+                    <span class="overview-orbit-meta" id="overview-overall-meta">等待练习数据</span>
                   </div>
                 </div>
                 <div class="overview-accuracy-chip">
-                  <span class="chip-label">平均正确率</span>
-                  <span class="chip-value" id="overview-accuracy-chip">87%</span>
-                  <span class="chip-meta">勇气能量持续走高</span>
+                  <span class="chip-label">近7天学习时长</span>
+                  <span class="chip-value" id="overview-weekly-time">--</span>
+                  <span class="chip-meta" id="overview-weekly-time-meta">真实练习数据加载中</span>
                 </div>
               </div>
             </div>
@@ -894,26 +1084,18 @@
             <section class="glass-panel rounded-[24px] p-6 shadow-lg shadow-[#a1bfff33]">
               <header class="flex items-center justify-between gap-4">
                 <div>
-                  <h2 class="overview-section-title text-lg font-semibold text-slate-800">能力轨道</h2>
-                  <p class="mt-1 text-sm text-slate-500">自动汇总各类题库表现，实时回写分类仪表。</p>
+                  <h2 class="overview-section-title text-lg font-semibold text-slate-800">练习实力雷达</h2>
+                  <p class="mt-1 text-sm text-slate-500">按分类统计真实练习次数与平均分，自动校准训练节奏。</p>
                 </div>
-                <span class="rounded-full bg-[#ddeeff80] px-3 py-1 text-xs font-semibold text-[#1d4ed8]">智能聚合</span>
+                <span class="rounded-full bg-[#ddeeff80] px-3 py-1 text-xs font-semibold text-[#1d4ed8]">真实练习</span>
               </header>
-              <div id="category-overview" class="overview-category-grid mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div class="legacy-empty-state">
-                  <div class="text-2xl">🍊</div>
-                  <p class="mt-2 text-sm">正在唤醒分类数据...</p>
-                </div>
-              </div>
+              <div id="category-overview" class="overview-category-grid mt-6 grid grid-cols-1 gap-4 md:grid-cols-2"></div>
             </section>
 
             <aside class="glass-panel rounded-[24px] p-6 shadow-lg shadow-[#ff6b6b30]">
-              <h2 class="overview-section-title text-lg font-semibold text-slate-800">即时通知</h2>
-              <p class="mt-1 text-sm text-slate-500">学习节奏提醒、题库更新与激励提示。</p>
-              <div id="message-container" class="mt-4 space-y-3">
-                <div class="overview-toast sun">☀️ 今日早间提醒：完成精读后别忘记记录体会。</div>
-                <div class="overview-toast blue">🔔 新增题库 12 套，已同步至题库浏览页。</div>
-              </div>
+              <h2 class="overview-section-title text-lg font-semibold text-slate-800">练习提醒</h2>
+              <p class="mt-1 text-sm text-slate-500">用真实数据推送节奏提醒、进步趋势与打气提示。</p>
+              <div id="message-container" class="mt-4 space-y-3"></div>
             </aside>
           </div>
 
@@ -935,29 +1117,7 @@
                 <button class="lane-chip" onclick="if (typeof window.openExam === 'function') { openExam('random'); }">🎯 即刻开局</button>
                 <button class="lane-chip" onclick="if (typeof window.loadLibrary === 'function') { loadLibrary(); }">📥 重新同步题库</button>
               </div>
-              <div class="overview-weekly-timeline space-y-3">
-                <div class="timeline-item">
-                  <div class="timeline-bullet">Mon</div>
-                  <div class="timeline-content">
-                    <p class="timeline-title">阅读真题校准</p>
-                    <p class="timeline-meta text-[#34d399]">已完成</p>
-                  </div>
-                </div>
-                <div class="timeline-item">
-                  <div class="timeline-bullet">Wed</div>
-                  <div class="timeline-content">
-                    <p class="timeline-title">听力集中训练</p>
-                    <p class="timeline-meta text-[#f59e0b]">进行中</p>
-                  </div>
-                </div>
-                <div class="timeline-item">
-                  <div class="timeline-bullet">Fri</div>
-                  <div class="timeline-content">
-                    <p class="timeline-title">写作语料整理</p>
-                    <p class="timeline-meta text-[#64748b]">待开始</p>
-                  </div>
-                </div>
-              </div>
+              <div class="overview-weekly-timeline space-y-3" id="overview-timeline"></div>
             </div>
           </div>
         </section>
@@ -1122,6 +1282,78 @@
     </div>
   </div>
 
+  <div id="library-config-modal" class="modal-backdrop" data-open="false" aria-hidden="true">
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="library-config-title">
+      <button type="button" class="modal-close" data-modal-close="library-config-modal" aria-label="关闭题库配置">✕</button>
+      <div class="modal-content">
+        <header class="space-y-2">
+          <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Library Sync</p>
+          <h2 id="library-config-title" class="text-2xl font-semibold text-slate-800">📂 题库配置中心</h2>
+          <p class="text-sm text-slate-600" id="library-config-summary">读取真实题库索引中...</p>
+        </header>
+        <div class="modal-grid two-column">
+          <section class="modal-section" aria-labelledby="library-stat-title">
+            <h3 id="library-stat-title">📊 数据概览</h3>
+            <div class="mt-4 grid gap-3" id="library-stat-grid">
+              <div class="modal-stat">
+                <span class="label">TOTAL</span>
+                <span class="value" id="library-stat-total">--</span>
+                <span class="meta" id="library-stat-total-meta">真实数据接入中</span>
+              </div>
+              <div class="modal-stat">
+                <span class="label">READING</span>
+                <span class="value" id="library-stat-reading">--</span>
+                <span class="meta" id="library-stat-reading-meta">等待同步</span>
+              </div>
+              <div class="modal-stat">
+                <span class="label">LISTENING</span>
+                <span class="value" id="library-stat-listening">--</span>
+                <span class="meta" id="library-stat-listening-meta">等待同步</span>
+              </div>
+            </div>
+          </section>
+          <section class="modal-section" aria-labelledby="library-module-title">
+            <h3 id="library-module-title">🧭 模块选择</h3>
+            <p class="mt-2 text-sm text-slate-600">切换需要加载的分类模块，实时查看覆盖度。</p>
+            <div class="mt-4 space-y-3" id="library-module-options"></div>
+          </section>
+        </div>
+        <section class="modal-section" aria-labelledby="library-category-title">
+          <h3 id="library-category-title">🗂️ 分类统计</h3>
+          <div class="mt-4 grid gap-3 md:grid-cols-2" id="library-category-grid"></div>
+        </section>
+        <footer class="modal-footer">
+          <span class="text-sm text-slate-500" id="library-config-footer-meta">等待真实数据...</span>
+          <div class="flex flex-wrap gap-2">
+            <button class="btn btn-sm" type="button" data-modal-close="library-config-modal">关闭</button>
+            <button class="btn btn-sm btn-info" type="button" id="library-refresh-btn">🔄 重新统计</button>
+          </div>
+        </footer>
+      </div>
+    </div>
+  </div>
+
+  <div id="theme-switcher-modal" class="modal-backdrop" data-open="false" aria-hidden="true">
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="theme-switcher-title">
+      <button type="button" class="modal-close" data-modal-close="theme-switcher-modal" aria-label="关闭主题切换">✕</button>
+      <div class="modal-content">
+        <header class="space-y-2">
+          <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Theme Center</p>
+          <h2 id="theme-switcher-title" class="text-2xl font-semibold text-slate-800">🎨 主题切换</h2>
+          <p class="text-sm text-slate-600">选择系统内置主题，设置将写入真实存储策略。</p>
+        </header>
+        <div class="theme-option-list" id="theme-option-list"></div>
+        <footer class="modal-footer">
+          <span class="text-sm text-slate-500" id="theme-switcher-meta">当前主题：识别中...</span>
+          <div class="flex flex-wrap gap-2">
+            <button class="btn btn-sm" type="button" id="theme-reset-btn">♻️ 重置为系统默认</button>
+            <button class="btn btn-sm" type="button" data-modal-close="theme-switcher-modal">关闭</button>
+          </div>
+        </footer>
+      </div>
+    </div>
+  </div>
+
   <script>
     function setupMotionPreferences() {
       var root = document.documentElement;
@@ -1147,40 +1379,1121 @@
       apply();
     }
 
-    function syncOverviewMirrors() {
-      var pairs = [
-        { sourceId: 'overview-hours', targetIds: ['overview-hours-mirror'] },
-        { sourceId: 'overview-accuracy', targetIds: ['overview-accuracy-chip'] }
-      ];
+    var examSummaryCache = null;
+    var practiceSummaryCache = null;
+    var practiceSummaryPromise = null;
 
-      pairs.forEach(function (pair) {
-        var source = document.getElementById(pair.sourceId);
-        if (!source) {
-          return;
+    function formatNumberValue(value) {
+      if (typeof value !== 'number' || isNaN(value)) {
+        return '--';
+      }
+      try {
+        return value.toLocaleString('zh-CN');
+      } catch (_) {
+        return String(value);
+      }
+    }
+
+    function formatPercentValue(value, digits) {
+      if (typeof value !== 'number' || !isFinite(value)) {
+        return '--%';
+      }
+      var precision = typeof digits === 'number' ? Math.max(0, digits) : 0;
+      var factor = Math.pow(10, precision);
+      var rounded = Math.round(value * factor) / factor;
+      return rounded.toFixed(precision) + '%';
+    }
+
+    function formatTimestamp(date) {
+      if (!(date instanceof Date) || isNaN(date.getTime())) {
+        return '--';
+      }
+      try {
+        return date.toLocaleString('zh-CN', { hour12: false });
+      } catch (_) {
+        return date.toISOString();
+      }
+    }
+
+    function ensureArray(maybeArray) {
+      return Array.isArray(maybeArray) ? maybeArray : [];
+    }
+
+    var DAY_IN_MS = 24 * 60 * 60 * 1000;
+
+    function parseDateInput(input) {
+      if (!input && input !== 0) {
+        return null;
+      }
+      if (input instanceof Date) {
+        return isNaN(input.getTime()) ? null : input;
+      }
+      if (typeof input === 'number' && isFinite(input)) {
+        var fromNumber = new Date(input);
+        return isNaN(fromNumber.getTime()) ? null : fromNumber;
+      }
+      if (typeof input === 'string') {
+        var trimmed = input.trim();
+        if (!trimmed) {
+          return null;
         }
-
-        var targets = pair.targetIds
-          .map(function (id) { return document.getElementById(id); })
-          .filter(Boolean);
-
-        if (!targets.length) {
-          return;
+        var parsed = new Date(trimmed);
+        if (!isNaN(parsed.getTime())) {
+          return parsed;
         }
+        var numeric = Number(trimmed);
+        if (!isNaN(numeric)) {
+          var fromNumeric = new Date(numeric);
+          if (!isNaN(fromNumeric.getTime())) {
+            return fromNumeric;
+          }
+        }
+      }
+      return null;
+    }
 
-        var update = function () {
-          var value = source.textContent;
-          targets.forEach(function (target) {
-            target.textContent = value;
-          });
-        };
+    function startOfDay(date) {
+      if (!(date instanceof Date) || isNaN(date.getTime())) {
+        return new Date();
+      }
+      return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    }
 
-        update();
+    function endOfDay(date) {
+      if (!(date instanceof Date) || isNaN(date.getTime())) {
+        return new Date();
+      }
+      return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
+    }
 
-        if (typeof MutationObserver !== 'undefined') {
-          var observer = new MutationObserver(update);
-          observer.observe(source, { characterData: true, childList: true, subtree: true });
+    function toDayKey(date) {
+      if (!(date instanceof Date) || isNaN(date.getTime())) {
+        return null;
+      }
+      var month = String(date.getMonth() + 1).padStart(2, '0');
+      var day = String(date.getDate()).padStart(2, '0');
+      return date.getFullYear() + '-' + month + '-' + day;
+    }
+
+    function dayKeyToTime(key) {
+      if (typeof key !== 'string') {
+        return NaN;
+      }
+      var parts = key.split('-');
+      if (parts.length !== 3) {
+        return NaN;
+      }
+      var year = Number(parts[0]);
+      var month = Number(parts[1]);
+      var day = Number(parts[2]);
+      if (!isFinite(year) || !isFinite(month) || !isFinite(day)) {
+        return NaN;
+      }
+      var date = new Date(year, month - 1, day);
+      return isNaN(date.getTime()) ? NaN : date.getTime();
+    }
+
+    function formatDayLabel(date) {
+      if (!(date instanceof Date) || isNaN(date.getTime())) {
+        return '--';
+      }
+      return String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+    }
+
+    function formatDurationMinutes(minutes) {
+      if (typeof minutes !== 'number' || !isFinite(minutes) || minutes <= 0) {
+        return '0 分钟';
+      }
+      if (minutes >= 180) {
+        var hours = Math.round((minutes / 60) * 10) / 10;
+        return (hours % 1 === 0 ? hours.toFixed(0) : hours.toFixed(1)) + ' 小时';
+      }
+      if (minutes >= 60) {
+        var intHours = Math.floor(minutes / 60);
+        var remaining = Math.round(minutes - intHours * 60);
+        return intHours + ' 小时' + (remaining > 0 ? ' ' + remaining + ' 分' : '');
+      }
+      if (minutes >= 1) {
+        return Math.round(minutes) + ' 分钟';
+      }
+      return Math.max(1, Math.round(minutes * 60)) + ' 秒';
+    }
+
+    function normalizePracticeRecord(record) {
+      if (!record || typeof record !== 'object') {
+        return null;
+      }
+
+      var accuracy = typeof record.accuracy === 'number' ? record.accuracy : null;
+      var percentage = typeof record.percentage === 'number' ? record.percentage : null;
+      if (accuracy === null && percentage !== null) {
+        accuracy = percentage > 1 ? percentage / 100 : percentage;
+      }
+      if (accuracy !== null && accuracy > 1) {
+        accuracy = accuracy / 100;
+      }
+      if (accuracy === null || !isFinite(accuracy)) {
+        accuracy = 0;
+      }
+      accuracy = Math.max(0, Math.min(1, accuracy));
+
+      var duration = 0;
+      if (typeof record.duration === 'number' && isFinite(record.duration)) {
+        duration = Math.max(0, record.duration);
+      } else if (record.realData && typeof record.realData.duration === 'number' && isFinite(record.realData.duration)) {
+        duration = Math.max(0, record.realData.duration);
+      }
+
+      var timestamp = parseDateInput(record.endTime)
+        || parseDateInput(record.completedAt)
+        || parseDateInput(record.realData && record.realData.endTime)
+        || parseDateInput(record.createdAt)
+        || parseDateInput(record.date)
+        || parseDateInput(record.startTime);
+
+      var category = (record.metadata && (record.metadata.category || record.metadata.section)) || record.category || '未分类';
+      if (!category) {
+        category = '未分类';
+      }
+      var type = (record.metadata && record.metadata.type) || record.type || '';
+      var title = record.examTitle || record.title || (record.metadata && record.metadata.title) || record.examId || record.id || '未命名练习';
+
+      return {
+        accuracy: accuracy,
+        duration: duration,
+        completedAt: timestamp,
+        dayKey: timestamp ? toDayKey(timestamp) : null,
+        category: category,
+        type: type,
+        title: title
+      };
+    }
+
+    function calculatePracticeSummary(records) {
+      var now = new Date();
+      var todayStart = startOfDay(now);
+      var recentStart = new Date(todayStart.getTime() - 6 * DAY_IN_MS);
+      var previousStart = new Date(recentStart.getTime() - 7 * DAY_IN_MS);
+      var previousEndDate = new Date(recentStart.getTime() - DAY_IN_MS);
+      var recentEnd = endOfDay(now);
+      var previousEnd = endOfDay(previousEndDate);
+
+      var normalized = ensureArray(records).map(normalizePracticeRecord).filter(function (item) { return !!item; });
+
+      var totalAccuracy = 0;
+      var totalDuration = 0;
+      var categoriesMap = {};
+      var daySet = new Set();
+      var lastPracticeAt = null;
+
+      normalized.forEach(function (item) {
+        totalAccuracy += item.accuracy || 0;
+        totalDuration += item.duration || 0;
+        if (item.completedAt && (!lastPracticeAt || item.completedAt > lastPracticeAt)) {
+          lastPracticeAt = item.completedAt;
+        }
+        if (item.dayKey) {
+          daySet.add(item.dayKey);
+        }
+        var key = item.category || '未分类';
+        if (!categoriesMap[key]) {
+          categoriesMap[key] = { name: key, practices: 0, accuracySum: 0, duration: 0, lastPracticedAt: null, typeCounts: {} };
+        }
+        var bucket = categoriesMap[key];
+        bucket.practices += 1;
+        bucket.accuracySum += item.accuracy || 0;
+        bucket.duration += item.duration || 0;
+        if (item.completedAt && (!bucket.lastPracticedAt || item.completedAt > bucket.lastPracticedAt)) {
+          bucket.lastPracticedAt = item.completedAt;
+        }
+        if (item.type) {
+          bucket.typeCounts[item.type] = (bucket.typeCounts[item.type] || 0) + 1;
         }
       });
+
+      function withinRange(entry, start, end) {
+        return entry.completedAt && entry.completedAt >= start && entry.completedAt <= end;
+      }
+
+      var recentRecords = normalized.filter(function (item) { return withinRange(item, recentStart, recentEnd); });
+      var previousRecords = normalized.filter(function (item) { return withinRange(item, startOfDay(previousStart), previousEnd); });
+
+      function averageAccuracy(list) {
+        if (!list.length) {
+          return 0;
+        }
+        return list.reduce(function (sum, item) { return sum + (item.accuracy || 0); }, 0) / list.length;
+      }
+
+      function totalMinutes(list) {
+        if (!list.length) {
+          return 0;
+        }
+        return list.reduce(function (sum, item) { return sum + (item.duration || 0); }, 0) / 60;
+      }
+
+      var recentAccuracy = averageAccuracy(recentRecords);
+      var previousAccuracy = averageAccuracy(previousRecords);
+      var bestRecentRecord = null;
+      recentRecords.forEach(function (item) {
+        if (!bestRecentRecord || (item.accuracy || 0) > (bestRecentRecord.accuracy || 0) || ((item.accuracy || 0) === (bestRecentRecord.accuracy || 0) && item.completedAt && bestRecentRecord.completedAt && item.completedAt > bestRecentRecord.completedAt)) {
+          bestRecentRecord = item;
+        }
+      });
+
+      var categories = Object.keys(categoriesMap).map(function (key) {
+        var data = categoriesMap[key];
+        var dominantType = '';
+        var maxCount = 0;
+        Object.keys(data.typeCounts).forEach(function (typeKey) {
+          var count = data.typeCounts[typeKey];
+          if (count > maxCount) {
+            maxCount = count;
+            dominantType = typeKey;
+          }
+        });
+        return {
+          name: data.name,
+          type: dominantType,
+          practices: data.practices,
+          averageAccuracy: data.practices ? data.accuracySum / data.practices : 0,
+          totalMinutes: data.duration / 60,
+          lastPracticedAt: data.lastPracticedAt
+        };
+      }).sort(function (a, b) {
+        if (b.practices !== a.practices) {
+          return b.practices - a.practices;
+        }
+        return (b.averageAccuracy || 0) - (a.averageAccuracy || 0);
+      });
+
+      var timeline = normalized.filter(function (item) { return !!item.completedAt; }).sort(function (a, b) {
+        return b.completedAt - a.completedAt;
+      }).slice(0, 4).map(function (item) {
+        return {
+          title: item.title,
+          category: item.category,
+          type: item.type,
+          accuracy: item.accuracy || 0,
+          duration: item.duration || 0,
+          completedAt: item.completedAt
+        };
+      });
+
+      var currentStreak = 0;
+      var cursor = new Date(todayStart);
+      while (daySet.has(toDayKey(cursor))) {
+        currentStreak += 1;
+        cursor = new Date(cursor.getTime() - DAY_IN_MS);
+      }
+
+      var longestStreak = 0;
+      if (daySet.size) {
+        var ordered = Array.from(daySet).map(dayKeyToTime).filter(function (time) { return typeof time === 'number' && !isNaN(time); }).sort(function (a, b) { return a - b; });
+        if (ordered.length) {
+          longestStreak = 1;
+          var running = 1;
+          for (var i = 1; i < ordered.length; i += 1) {
+            if (ordered[i] - ordered[i - 1] === DAY_IN_MS) {
+              running += 1;
+            } else if (ordered[i] !== ordered[i - 1]) {
+              if (running > longestStreak) {
+                longestStreak = running;
+              }
+              running = 1;
+            }
+          }
+          if (running > longestStreak) {
+            longestStreak = running;
+          }
+        }
+      }
+
+      return {
+        generatedAt: new Date(),
+        totals: {
+          sessions: normalized.length,
+          totalMinutes: totalDuration / 60,
+          overallAccuracy: normalized.length ? totalAccuracy / normalized.length : 0,
+          uniqueDays: daySet.size
+        },
+        recent: {
+          start: recentStart,
+          end: recentEnd,
+          sessions: recentRecords.length,
+          averageAccuracy: recentAccuracy,
+          totalMinutes: totalMinutes(recentRecords),
+          improvement: recentAccuracy - previousAccuracy,
+          frequencyPerDay: recentRecords.length ? recentRecords.length / 7 : 0,
+          bestRecord: bestRecentRecord
+        },
+        previous: {
+          sessions: previousRecords.length,
+          averageAccuracy: previousAccuracy
+        },
+        streak: {
+          current: currentStreak,
+          longest: longestStreak,
+          lastActive: lastPracticeAt
+        },
+        categories: categories,
+        timeline: timeline,
+        lastPracticeAt: lastPracticeAt
+      };
+    }
+
+    function fetchPracticeRecords() {
+      var direct = ensureArray(window.practiceRecords);
+      if (direct.length) {
+        return Promise.resolve(direct);
+      }
+      var stateRecords = window.app && window.app.state && window.app.state.practice && ensureArray(window.app.state.practice.records);
+      if (stateRecords && stateRecords.length) {
+        return Promise.resolve(stateRecords);
+      }
+      if (window.storage && typeof window.storage.get === 'function') {
+        return window.storage.get('practice_records', []).then(function (records) {
+          return ensureArray(records);
+        }).catch(function (error) {
+          console.warn('[Dashboard] 获取练习记录失败:', error);
+          return [];
+        });
+      }
+      return Promise.resolve([]);
+    }
+
+    function getPracticeSummary(force) {
+      if (!force && practiceSummaryCache) {
+        return Promise.resolve(practiceSummaryCache);
+      }
+      if (!force && practiceSummaryPromise) {
+        return practiceSummaryPromise;
+      }
+      practiceSummaryPromise = fetchPracticeRecords().then(function (records) {
+        var summary = calculatePracticeSummary(records);
+        practiceSummaryCache = summary;
+        practiceSummaryPromise = null;
+        return summary;
+      }).catch(function (error) {
+        console.warn('[Dashboard] 统计练习数据失败:', error);
+        practiceSummaryPromise = null;
+        var fallback = calculatePracticeSummary([]);
+        practiceSummaryCache = fallback;
+        return fallback;
+      });
+      return practiceSummaryPromise;
+    }
+
+    function calculateExamSummary() {
+      var rawReading = ensureArray(window.completeExamIndex).map(function (item) {
+        var next = item ? Object.assign({}, item) : {};
+        if (!next.type) {
+          next.type = 'reading';
+        }
+        return next;
+      });
+      var rawListening = ensureArray(window.listeningExamIndex).map(function (item) {
+        var next = item ? Object.assign({}, item) : {};
+        next.type = 'listening';
+        return next;
+      });
+
+      var combined = rawReading.concat(rawListening);
+      var totals = {
+        reading: rawReading.length,
+        listening: rawListening.length,
+        total: combined.length,
+        html: 0,
+        pdf: 0,
+        audio: 0
+      };
+
+      combined.forEach(function (entry) {
+        if (!entry) {
+          return;
+        }
+        if (entry.hasHtml) {
+          totals.html += 1;
+        }
+        if (entry.hasPdf) {
+          totals.pdf += 1;
+        }
+        if (entry.mp3Filename || entry.audio || entry.audioUrl) {
+          totals.audio += 1;
+        }
+      });
+
+      var stats = { reading: [], listening: [], meta: { total: totals.total } };
+      if (window.AppServices && window.AppServices.overviewStats && typeof window.AppServices.overviewStats.calculate === 'function') {
+        try {
+          stats = window.AppServices.overviewStats.calculate(combined);
+        } catch (error) {
+          console.warn('[Dashboard] 统计题库分类失败:', error);
+        }
+      }
+
+      var coverage = {
+        html: totals.total ? (totals.html / totals.total) * 100 : 0,
+        pdf: totals.total ? (totals.pdf / totals.total) * 100 : 0,
+        listeningShare: totals.total ? (totals.listening / totals.total) * 100 : 0,
+        audio: totals.listening ? (totals.audio / totals.listening) * 100 : 0
+      };
+
+      var categoryShare = { reading: {}, listening: {} };
+      if (totals.reading) {
+        stats.reading.forEach(function (entry) {
+          if (entry && typeof entry.total === 'number') {
+            categoryShare.reading[entry.category] = entry.total / totals.reading * 100;
+          }
+        });
+      }
+      if (totals.listening) {
+        stats.listening.forEach(function (entry) {
+          if (entry && typeof entry.total === 'number') {
+            categoryShare.listening[entry.category] = entry.total / totals.listening * 100;
+          }
+        });
+      }
+
+      return {
+        totals: totals,
+        stats: stats,
+        coverage: coverage,
+        categoryShare: categoryShare,
+        generatedAt: new Date(),
+        documentTimestamp: new Date(document.lastModified || Date.now())
+      };
+    }
+
+    function getExamSummary(force) {
+      if (force || !examSummaryCache) {
+        examSummaryCache = calculateExamSummary();
+      }
+      return examSummaryCache;
+    }
+
+    function updatePracticeHeader(summary) {
+      var dataStatus = document.getElementById('header-data-status');
+      var syncMeta = document.getElementById('header-sync-meta');
+      if (dataStatus) {
+        if (summary && summary.totals.sessions > 0) {
+          dataStatus.textContent = '📡 已记录 ' + formatNumberValue(summary.totals.sessions) + ' 次练习 · 覆盖 ' + formatNumberValue(summary.totals.uniqueDays) + ' 天';
+        } else {
+          dataStatus.textContent = '📡 暂无练习记录，等待首次真实数据';
+        }
+      }
+      if (syncMeta) {
+        var lastPracticeText = '暂无练习时间';
+        if (summary && summary.lastPracticeAt instanceof Date && !isNaN(summary.lastPracticeAt.getTime())) {
+          lastPracticeText = formatTimestamp(summary.lastPracticeAt);
+        }
+        syncMeta.textContent = '统计时间：' + formatTimestamp(summary ? summary.generatedAt : new Date()) + ' · 最近练习 ' + lastPracticeText;
+      }
+    }
+
+    function populatePracticeOverview(summary) {
+      var weeklyAvgEl = document.getElementById('overview-weekly-avg-score');
+      var weeklyAvgMeta = document.getElementById('overview-weekly-avg-meta');
+      var weeklySessionsEl = document.getElementById('overview-weekly-sessions');
+      var weeklySessionsMeta = document.getElementById('overview-weekly-sessions-meta');
+      var streakEl = document.getElementById('overview-current-streak');
+      var streakMeta = document.getElementById('overview-current-streak-meta');
+      var overallAccuracyEl = document.getElementById('overview-overall-accuracy');
+      var overallMeta = document.getElementById('overview-overall-meta');
+      var weeklyTimeEl = document.getElementById('overview-weekly-time');
+      var weeklyTimeMeta = document.getElementById('overview-weekly-time-meta');
+
+      var recentSessions = summary ? summary.recent.sessions : 0;
+      var recentAverage = summary ? summary.recent.averageAccuracy : 0;
+      var frequencyPerDay = summary ? summary.recent.frequencyPerDay : 0;
+      var improvement = summary ? summary.recent.improvement : 0;
+      var totalSessions = summary ? summary.totals.sessions : 0;
+      var totalMinutes = summary ? summary.totals.totalMinutes : 0;
+
+      if (weeklyAvgEl) {
+        weeklyAvgEl.textContent = recentSessions ? formatPercentValue(recentAverage * 100, 1) : '--';
+      }
+      if (weeklyAvgMeta) {
+        if (recentSessions) {
+          var freqText = frequencyPerDay ? (Math.round(frequencyPerDay * 10) / 10).toString() : '0';
+          var trendText = '';
+          if (summary && summary.previous.sessions > 0 && Math.abs(improvement) >= 0.001) {
+            var trendSymbol = improvement >= 0 ? '↑' : '↓';
+            trendText = ' · 趋势 ' + trendSymbol + formatPercentValue(Math.abs(improvement) * 100, 1);
+          }
+          weeklyAvgMeta.textContent = '日均 ' + freqText + ' 次' + trendText;
+        } else {
+          weeklyAvgMeta.textContent = '等待练习记录';
+        }
+      }
+
+      if (weeklySessionsEl) {
+        weeklySessionsEl.textContent = recentSessions ? formatNumberValue(recentSessions) : '0';
+      }
+      if (weeklySessionsMeta) {
+        weeklySessionsMeta.textContent = totalSessions ? '累计 ' + formatNumberValue(totalSessions) + ' 次练习' : '尚未产生练习记录';
+      }
+
+      if (streakEl) {
+        var streakValue = summary ? summary.streak.current : 0;
+        streakEl.textContent = (streakValue ? formatNumberValue(streakValue) : '0') + ' 天';
+      }
+      if (streakMeta) {
+        var longest = summary ? summary.streak.longest : 0;
+        streakMeta.textContent = longest ? '历史最长 ' + formatNumberValue(longest) + ' 天' : '等待练习记录';
+      }
+
+      if (overallAccuracyEl) {
+        overallAccuracyEl.textContent = totalSessions ? formatPercentValue(summary.totals.overallAccuracy * 100, 1) : '--';
+      }
+      if (overallMeta) {
+        overallMeta.textContent = totalSessions ? '累计 ' + formatNumberValue(totalSessions) + ' 次 · 总时长 ' + formatDurationMinutes(totalMinutes) : '等待练习记录';
+      }
+
+      if (weeklyTimeEl) {
+        weeklyTimeEl.textContent = recentSessions ? formatDurationMinutes(summary.recent.totalMinutes) : '0 分钟';
+      }
+      if (weeklyTimeMeta) {
+        weeklyTimeMeta.textContent = totalMinutes ? '累计 ' + formatDurationMinutes(totalMinutes) : '尚未统计学习时长';
+      }
+    }
+
+    function renderPracticeCategories(summary) {
+      var container = document.getElementById('category-overview');
+      if (!container) {
+        return;
+      }
+      container.innerHTML = '';
+
+      var categories = summary && summary.categories ? summary.categories.slice(0, 4) : [];
+      if (!categories.length) {
+        var empty = document.createElement('div');
+        empty.className = 'legacy-empty-state';
+        empty.innerHTML = '<div class="text-2xl">📭</div><p class="mt-2 text-sm">暂无练习统计，开始一场训练试试。</p>';
+        container.appendChild(empty);
+        return;
+      }
+
+      categories.forEach(function (item) {
+        var card = document.createElement('article');
+        card.className = 'rounded-[20px] border border-white/70 bg-white/80 p-5 shadow-inner shadow-white/40 flex flex-col gap-3';
+
+        var label = document.createElement('span');
+        label.className = 'text-xs font-semibold uppercase tracking-[0.18em] text-slate-500';
+        var typeLabel = item.type === 'listening' ? '听力' : item.type === 'reading' ? '阅读' : '综合';
+        label.textContent = typeLabel + ' · ' + item.name;
+        card.appendChild(label);
+
+        var value = document.createElement('span');
+        value.className = 'text-3xl font-bold text-slate-900';
+        value.textContent = formatNumberValue(item.practices) + ' 次';
+        card.appendChild(value);
+
+        var meta = document.createElement('span');
+        meta.className = 'text-sm text-slate-500';
+        meta.textContent = '平均分 ' + formatPercentValue((item.averageAccuracy || 0) * 100, 1) + ' · 总时长 ' + formatDurationMinutes(item.totalMinutes || 0);
+        card.appendChild(meta);
+
+        var progressTrack = document.createElement('div');
+        progressTrack.className = 'h-2 rounded-full bg-white/60 overflow-hidden';
+        var progressBar = document.createElement('div');
+        progressBar.className = 'h-full rounded-full';
+        var accuracyPercent = Math.max(0, Math.min(100, (item.averageAccuracy || 0) * 100));
+        progressBar.style.width = (accuracyPercent > 0 ? Math.max(8, accuracyPercent) : 0) + '%';
+        progressBar.style.background = item.type === 'listening'
+          ? 'linear-gradient(135deg, rgba(161, 191, 255, 0.8), rgba(122, 168, 255, 0.95))'
+          : 'linear-gradient(135deg, rgba(255, 200, 61, 0.8), rgba(255, 179, 71, 0.95))';
+        progressTrack.appendChild(progressBar);
+        card.appendChild(progressTrack);
+
+        container.appendChild(card);
+      });
+    }
+
+    function renderPracticeMessages(summary) {
+      var container = document.getElementById('message-container');
+      if (!container) {
+        return;
+      }
+      container.innerHTML = '';
+
+      var messages = [];
+      if (!summary || summary.totals.sessions === 0) {
+        messages.push({ variant: 'blue', text: '📭 暂无练习记录，安排一场练习激活数据面板。' });
+      } else {
+        messages.push({
+          variant: 'sun',
+          text: '☀️ 近7天平均分 ' + formatPercentValue(summary.recent.averageAccuracy * 100, 1) + ' · ' + formatNumberValue(summary.recent.sessions) + ' 次练习'
+        });
+
+        if (summary.previous.sessions > 0) {
+          var delta = summary.recent.improvement;
+          if (Math.abs(delta) >= 0.001) {
+            messages.push({
+              variant: delta >= 0 ? 'sun' : 'blue',
+              text: (delta >= 0 ? '📈 提升 ' : '📉 下降 ') + formatPercentValue(Math.abs(delta) * 100, 1) + ' 相比前7天'
+            });
+          } else {
+            messages.push({ variant: 'blue', text: '🔔 与前7天持平，继续保持练习节奏。' });
+          }
+        } else {
+          messages.push({ variant: 'blue', text: '🔔 本周开启真实练习，保持节奏稳步前进。' });
+        }
+
+        if (summary.streak.current > 1) {
+          messages.push({ variant: 'sun', text: '🔥 已连续练习 ' + formatNumberValue(summary.streak.current) + ' 天，目标刷新 ' + formatNumberValue(Math.max(summary.streak.longest, summary.streak.current)) + ' 天记录。' });
+        } else if (!summary.streak.current) {
+          messages.push({ variant: 'blue', text: '💪 今天还未练习，来一组 15 分钟冲刺吧。' });
+        }
+
+        if (summary.recent.bestRecord) {
+          var best = summary.recent.bestRecord;
+          var typeLabel = best.type === 'listening' ? '听力' : best.type === 'reading' ? '阅读' : '综合';
+          messages.push({
+            variant: 'sun',
+            text: '🏅 ' + typeLabel + ' · ' + (best.category || '未分类') + ' 正确率 ' + formatPercentValue((best.accuracy || 0) * 100, 0)
+          });
+        }
+      }
+
+      messages.slice(0, 3).forEach(function (message) {
+        var toast = document.createElement('div');
+        toast.className = 'overview-toast ' + (message.variant === 'blue' ? 'blue' : 'sun');
+        toast.textContent = message.text;
+        container.appendChild(toast);
+      });
+    }
+
+    function renderPracticeTimeline(summary) {
+      var container = document.getElementById('overview-timeline');
+      if (!container) {
+        return;
+      }
+      container.innerHTML = '';
+
+      var timeline = summary && summary.timeline ? summary.timeline.slice(0, 3) : [];
+      if (!timeline.length) {
+        var empty = document.createElement('div');
+        empty.className = 'legacy-empty-state';
+        empty.innerHTML = '<div class="text-2xl">⏳</div><p class="mt-2 text-sm">暂无练习记录，完成一场练习即可刷新。</p>';
+        container.appendChild(empty);
+        return;
+      }
+
+      timeline.forEach(function (item) {
+        var entry = document.createElement('div');
+        entry.className = 'timeline-item';
+
+        var bullet = document.createElement('div');
+        bullet.className = 'timeline-bullet';
+        bullet.textContent = formatDayLabel(item.completedAt);
+        entry.appendChild(bullet);
+
+        var content = document.createElement('div');
+        content.className = 'timeline-content';
+
+        var title = document.createElement('p');
+        title.className = 'timeline-title';
+        title.textContent = (item.title || ((item.type === 'listening' ? '听力' : item.type === 'reading' ? '阅读' : '综合') + '练习'));
+        content.appendChild(title);
+
+        var meta = document.createElement('p');
+        meta.className = 'timeline-meta';
+        meta.style.color = item.type === 'listening' ? '#1d4ed8' : '#f59e0b';
+        var accuracyText = formatPercentValue((item.accuracy || 0) * 100, 0);
+        var durationText = formatDurationMinutes((item.duration || 0) / 60);
+        meta.textContent = accuracyText + ' · ' + (item.category || '未分类') + ' · ' + durationText;
+        content.appendChild(meta);
+
+        entry.appendChild(content);
+        container.appendChild(entry);
+      });
+    }
+
+    function updateSettingsPanel(summary) {
+      var status = document.getElementById('settings-library-status');
+      var total = document.getElementById('total-exams');
+      var html = document.getElementById('html-exams');
+      var pdf = document.getElementById('pdf-exams');
+      var lastUpdate = document.getElementById('last-update');
+
+      if (status) {
+        status.textContent = '已加载 ' + formatNumberValue(summary.totals.total) + ' 套题目';
+      }
+      if (total) {
+        total.textContent = formatNumberValue(summary.totals.total);
+      }
+      if (html) {
+        html.textContent = formatNumberValue(summary.totals.html);
+      }
+      if (pdf) {
+        pdf.textContent = formatNumberValue(summary.totals.pdf);
+      }
+      if (lastUpdate) {
+        lastUpdate.textContent = formatTimestamp(summary.documentTimestamp);
+      }
+    }
+
+    function applyPracticeSummary(summary) {
+      updatePracticeHeader(summary);
+      populatePracticeOverview(summary);
+      renderPracticeCategories(summary);
+      renderPracticeMessages(summary);
+      renderPracticeTimeline(summary);
+    }
+
+    function applyExamSummary(summary) {
+      if (!summary) {
+        return;
+      }
+      updateSettingsPanel(summary);
+    }
+
+    function createModalController(modalId) {
+      var modal = document.getElementById(modalId);
+      if (!modal) {
+        return null;
+      }
+
+      var keyHandler = function (event) {
+        if (event.key === 'Escape') {
+          close();
+        }
+      };
+
+      function open() {
+        modal.setAttribute('data-open', 'true');
+        modal.setAttribute('aria-hidden', 'false');
+        document.addEventListener('keydown', keyHandler);
+        window.setTimeout(function () {
+          var target = modal.querySelector('[data-modal-autofocus]');
+          if (!target) {
+            target = modal.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+          }
+          if (target && typeof target.focus === 'function') {
+            target.focus();
+          }
+        }, 20);
+      }
+
+      function close() {
+        modal.setAttribute('data-open', 'false');
+        modal.setAttribute('aria-hidden', 'true');
+        document.removeEventListener('keydown', keyHandler);
+      }
+
+      modal.addEventListener('click', function (event) {
+        if (event.target === modal) {
+          close();
+        }
+      });
+
+      var closers = modal.querySelectorAll('[data-modal-close="' + modalId + '"]');
+      Array.prototype.forEach.call(closers, function (closer) {
+        closer.addEventListener('click', function () {
+          close();
+        });
+      });
+
+      return {
+        open: open,
+        close: close,
+        modal: modal
+      };
+    }
+
+    function renderLibraryModal(summary) {
+      var summaryLine = document.getElementById('library-config-summary');
+      if (summaryLine) {
+        summaryLine.textContent = '已加载 ' + formatNumberValue(summary.totals.total) + ' 套题目，统计时间 ' + formatTimestamp(summary.generatedAt) + '。';
+      }
+
+      var statTotal = document.getElementById('library-stat-total');
+      var statTotalMeta = document.getElementById('library-stat-total-meta');
+      var statReading = document.getElementById('library-stat-reading');
+      var statReadingMeta = document.getElementById('library-stat-reading-meta');
+      var statListening = document.getElementById('library-stat-listening');
+      var statListeningMeta = document.getElementById('library-stat-listening-meta');
+
+      if (statTotal) {
+        statTotal.textContent = formatNumberValue(summary.totals.total);
+      }
+      if (statTotalMeta) {
+        statTotalMeta.textContent = 'HTML ' + formatNumberValue(summary.totals.html) + ' · PDF ' + formatNumberValue(summary.totals.pdf);
+      }
+      if (statReading) {
+        statReading.textContent = formatNumberValue(summary.totals.reading);
+      }
+      if (statReadingMeta) {
+        statReadingMeta.textContent = '占总量 ' + formatPercentValue(summary.totals.total ? summary.totals.reading / summary.totals.total * 100 : 0, 1);
+      }
+      if (statListening) {
+        statListening.textContent = formatNumberValue(summary.totals.listening);
+      }
+      if (statListeningMeta) {
+        statListeningMeta.textContent = '音频完备率 ' + formatPercentValue(summary.coverage.audio, 1);
+      }
+
+      var moduleContainer = document.getElementById('library-module-options');
+      if (moduleContainer) {
+        moduleContainer.innerHTML = '';
+        var moduleTotals = {
+          reading: summary.totals.reading,
+          listening: summary.totals.listening
+        };
+        var modules = [
+          { id: 'reading', label: '阅读题库', description: '覆盖 P1 - P3 分类', total: summary.totals.reading },
+          { id: 'listening', label: '听力题库', description: '覆盖 P3 - P4 分类', total: summary.totals.listening }
+        ];
+
+        modules.forEach(function (item) {
+          var row = document.createElement('label');
+          row.className = 'flex items-center justify-between gap-3 rounded-[16px] bg-white/80 px-4 py-3 text-sm text-slate-600 border border-white/70 shadow-inner shadow-white/40';
+
+          var info = document.createElement('div');
+          info.className = 'flex flex-col';
+
+          var title = document.createElement('span');
+          title.className = 'font-semibold text-slate-800';
+          title.textContent = item.label + ' · ' + formatNumberValue(item.total) + ' 套';
+          info.appendChild(title);
+
+          var desc = document.createElement('span');
+          desc.className = 'text-xs text-slate-500';
+          desc.textContent = item.description;
+          info.appendChild(desc);
+
+          var checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.value = item.id;
+          checkbox.checked = item.total > 0;
+          checkbox.className = 'h-5 w-5 rounded border-white/70 text-[#ffc83d] focus:ring-[#ffc83d]';
+
+          row.appendChild(info);
+          row.appendChild(checkbox);
+          moduleContainer.appendChild(row);
+        });
+
+        var updateFooter = function () {
+          var selected = moduleContainer.querySelectorAll('input[type="checkbox"]:checked');
+          var totalSelected = 0;
+          selected.forEach(function (input) {
+            var id = input.value;
+            if (moduleTotals[id]) {
+              totalSelected += moduleTotals[id];
+            }
+          });
+          var footer = document.getElementById('library-config-footer-meta');
+          if (footer) {
+            if (selected.length) {
+              footer.textContent = '已选模块 ' + selected.length + ' 项 · ' + formatNumberValue(totalSelected) + ' 套题目';
+            } else {
+              footer.textContent = '未选择任何模块';
+            }
+          }
+        };
+
+        var checkboxes = moduleContainer.querySelectorAll('input[type="checkbox"]');
+        Array.prototype.forEach.call(checkboxes, function (input) {
+          input.addEventListener('change', updateFooter);
+        });
+        updateFooter();
+      }
+
+      var categoryGrid = document.getElementById('library-category-grid');
+      if (categoryGrid) {
+        categoryGrid.innerHTML = '';
+        var segments = [];
+        summary.stats.reading.forEach(function (item) {
+          if (item) { segments.push({ type: 'reading', category: item.category, total: item.total, share: summary.categoryShare.reading[item.category] || 0 }); }
+        });
+        summary.stats.listening.forEach(function (item) {
+          if (item) { segments.push({ type: 'listening', category: item.category, total: item.total, share: summary.categoryShare.listening[item.category] || 0 }); }
+        });
+
+        if (!segments.length) {
+          var empty = document.createElement('div');
+          empty.className = 'legacy-empty-state';
+          empty.innerHTML = '<div class="text-2xl">🗃️</div><p class="mt-2 text-sm">暂无分类数据。</p>';
+          categoryGrid.appendChild(empty);
+        } else {
+          segments.sort(function (a, b) { return (b.total || 0) - (a.total || 0); });
+          segments.forEach(function (item) {
+            var cell = document.createElement('div');
+            cell.className = 'modal-stat';
+            var label = document.createElement('span');
+            label.className = 'label';
+            label.textContent = (item.type === 'listening' ? 'LISTENING' : 'READING') + ' · ' + item.category;
+            cell.appendChild(label);
+
+            var value = document.createElement('span');
+            value.className = 'value';
+            value.textContent = formatNumberValue(item.total);
+            cell.appendChild(value);
+
+            var meta = document.createElement('span');
+            meta.className = 'meta';
+            meta.textContent = '模块占比 ' + formatPercentValue(item.share, 1);
+            cell.appendChild(meta);
+
+            categoryGrid.appendChild(cell);
+          });
+        }
+      }
+    }
+
+    function setupLibraryModal(summaryGetter, onSummaryUpdated) {
+      var controller = createModalController('library-config-modal');
+      if (!controller) {
+        return null;
+      }
+
+      function fetchSummary(force) {
+        var summary = summaryGetter(!!force);
+        if (typeof onSummaryUpdated === 'function') {
+          onSummaryUpdated(summary);
+        }
+        return summary;
+      }
+
+      function refreshWithoutModal(force) {
+        var summary = fetchSummary(force);
+        if (controller.modal && controller.modal.getAttribute('data-open') === 'true') {
+          renderLibraryModal(summary);
+        }
+        return summary;
+      }
+
+      function openModal(force) {
+        var summary = fetchSummary(force);
+        renderLibraryModal(summary);
+        controller.open();
+        return summary;
+      }
+
+      var loadButton = document.getElementById('load-library-btn');
+      if (loadButton) {
+        loadButton.addEventListener('click', function () {
+          openModal(false);
+        });
+      }
+
+      var configButton = document.getElementById('library-config-btn');
+      if (configButton) {
+        configButton.addEventListener('click', function () {
+          openModal(false);
+        });
+      }
+
+      var refreshButton = document.getElementById('library-refresh-btn');
+      if (refreshButton) {
+        refreshButton.addEventListener('click', function () {
+          refreshWithoutModal(true);
+        });
+      }
+
+      return {
+        open: function () { openModal(false); },
+        openWithRefresh: function () { openModal(true); },
+        load: function (force) { return refreshWithoutModal(force); }
+      };
+    }
+
+    function setupThemeModal() {
+      var controller = createModalController('theme-switcher-modal');
+      if (!controller) {
+        return null;
+      }
+
+      var themeOptions = [
+        { id: 'xiaodaidai', label: '小呆呆主题', description: '主控制台主题，包含果冻玻璃与暖色氛围。', icon: '🌤️' },
+        { id: 'light', label: '浅色主题', description: '标准浅色方案，与主站阅读体验一致。', icon: '🌈' },
+        { id: 'dark', label: '深色主题', description: '夜间护眼模式，降低背景亮度。', icon: '🌙' },
+        { id: 'highContrast', label: '高对比主题', description: '辅助可访问性，增强文本与控件对比。', icon: '⚡️' }
+      ];
+
+      var optionList = document.getElementById('theme-option-list');
+      var meta = document.getElementById('theme-switcher-meta');
+      var resetBtn = document.getElementById('theme-reset-btn');
+
+      function resolveThemeName(themeId) {
+        var current = themeOptions.find(function (item) { return item.id === themeId; });
+        return current ? current.label : themeId || '默认';
+      }
+
+      function applyTheme(themeId) {
+        var root = document.documentElement;
+        if (themeId) {
+          root.setAttribute('data-theme', themeId);
+        } else {
+          root.removeAttribute('data-theme');
+        }
+        if (window.__themeSwitcher && typeof window.__themeSwitcher.recordInternalTheme === 'function') {
+          try {
+            window.__themeSwitcher.recordInternalTheme(themeId || 'default');
+          } catch (error) {
+            console.warn('[Theme] 记录主题失败:', error);
+          }
+        }
+        updateActive(themeId || 'xiaodaidai');
+      }
+
+      function updateActive(themeId) {
+        var currentId = themeId || document.documentElement.getAttribute('data-theme') || 'xiaodaidai';
+        if (optionList) {
+          var items = optionList.querySelectorAll('.theme-option');
+          Array.prototype.forEach.call(items, function (item) {
+            var id = item.getAttribute('data-theme-id');
+            item.setAttribute('data-active', id === currentId ? 'true' : 'false');
+          });
+        }
+        if (meta) {
+          meta.textContent = '当前主题：' + resolveThemeName(currentId);
+        }
+      }
+
+      function renderOptions() {
+        if (!optionList) {
+          return;
+        }
+        optionList.innerHTML = '';
+        var currentId = document.documentElement.getAttribute('data-theme') || 'xiaodaidai';
+        themeOptions.forEach(function (option) {
+          var button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'theme-option';
+          button.setAttribute('data-theme-id', option.id);
+          button.setAttribute('data-active', option.id === currentId ? 'true' : 'false');
+
+          var title = document.createElement('h4');
+          title.textContent = option.icon + ' ' + option.label;
+          button.appendChild(title);
+
+          var desc = document.createElement('p');
+          desc.textContent = option.description;
+          button.appendChild(desc);
+
+          button.addEventListener('click', function () {
+            applyTheme(option.id);
+          });
+
+          optionList.appendChild(button);
+        });
+        updateActive(currentId);
+      }
+
+      if (resetBtn) {
+        resetBtn.addEventListener('click', function () {
+          applyTheme('xiaodaidai');
+        });
+      }
+
+      return {
+        open: function () {
+          renderOptions();
+          controller.open();
+        }
+      };
     }
 
     function initializeVirtualExamList() {
@@ -1531,11 +2844,86 @@
     document.addEventListener('DOMContentLoaded', function () {
       setupMotionPreferences();
 
+      var themeModalApi = setupThemeModal();
+      if (themeModalApi && typeof themeModalApi.open === 'function') {
+        window.showThemeSwitcherModal = themeModalApi.open;
+      } else {
+        window.showThemeSwitcherModal = function () {
+          console.warn('[Theme] 主题切换模块未初始化');
+        };
+      }
+
+      var libraryModalApi = setupLibraryModal(getExamSummary, function (updatedSummary) {
+        applyExamSummary(updatedSummary);
+      });
+      var legacyLoadLibrary = typeof window.loadLibrary === 'function' ? window.loadLibrary.bind(window) : null;
+      if (libraryModalApi && typeof libraryModalApi.load === 'function') {
+        window.loadLibrary = function (force) {
+          var result;
+          if (legacyLoadLibrary) {
+            try {
+              result = legacyLoadLibrary(force);
+            } catch (error) {
+              try {
+                libraryModalApi.load(force);
+              } catch (innerError) {
+                console.warn('[Library] 无法刷新题库统计:', innerError);
+              }
+              throw error;
+            }
+          }
+
+          var refreshSummary = function () {
+            try {
+              libraryModalApi.load(force);
+            } catch (error) {
+              console.warn('[Library] 无法刷新题库统计:', error);
+            }
+          };
+
+          if (result && typeof result.then === 'function') {
+            return result
+              .then(function (value) {
+                refreshSummary();
+                return value;
+              })
+              .catch(function (error) {
+                refreshSummary();
+                throw error;
+              });
+          }
+
+          refreshSummary();
+          return result;
+        };
+      } else if (legacyLoadLibrary) {
+        window.loadLibrary = legacyLoadLibrary;
+      } else {
+        window.loadLibrary = function () {
+          console.warn('[Library] 题库配置模块未初始化');
+        };
+      }
+
+      var summary = getExamSummary(false);
+      applyExamSummary(summary);
+
+      getPracticeSummary(false).then(function (practiceSummary) {
+        applyPracticeSummary(practiceSummary);
+      });
+
+      ['practicesessionCompleted', 'practicerealDataProcessed'].forEach(function (eventName) {
+        document.addEventListener(eventName, function () {
+          getPracticeSummary(true).then(function (updatedPracticeSummary) {
+            applyPracticeSummary(updatedPracticeSummary);
+          });
+        });
+      });
+
       var themeToggle = document.getElementById('theme-toggle-button');
       if (themeToggle) {
         themeToggle.addEventListener('click', function () {
           if (typeof window.showThemeSwitcherModal === 'function') {
-            showThemeSwitcherModal();
+            window.showThemeSwitcherModal();
             return;
           }
           if (window.parent && typeof window.parent.showThemeSwitcherModal === 'function') {
@@ -1583,7 +2971,6 @@
       });
 
       activateView('overview');
-      syncOverviewMirrors();
       initializeVirtualExamList();
     });
   </script>
