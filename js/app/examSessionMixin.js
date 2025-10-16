@@ -3,7 +3,7 @@
         /**
           * 打开指定题目进行练习
           */
-        async openExam(examId) {
+        async openExam(examId, options = {}) {
             // 使用活动题库配置键，保证全量/增量切换后仍能打开
             let examIndex = [];
             try {
@@ -31,22 +31,61 @@
                     const pdfUrl = (typeof window.buildResourcePath === 'function')
                         ? window.buildResourcePath(exam, 'pdf')
                         : ((exam.path || '').replace(/\\/g,'/').replace(/\/+\//g,'/') + (exam.pdfFilename || '') );
-                    const pdfWin = window.open(pdfUrl, `pdf_${exam.id}`, 'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes');
-                    if (!pdfWin) throw new Error('无法打开PDF窗口，请检查弹窗设置');
+                    let pdfWin = null;
+
+                    if (options.reuseWindow && !options.reuseWindow.closed) {
+                        try {
+                            options.reuseWindow.location.href = pdfUrl;
+                            options.reuseWindow.focus();
+                            pdfWin = options.reuseWindow;
+                        } catch (reuseError) {
+                            console.warn('[App] 无法复用已打开的标签，尝试重新打开:', reuseError);
+                        }
+                    }
+
+                    if (!pdfWin) {
+                        if (options.target === 'tab') {
+                            try {
+                                pdfWin = window.open(pdfUrl, '_blank');
+                            } catch (_) {}
+                        } else {
+                            try {
+                                pdfWin = window.open(pdfUrl, `pdf_${exam.id}`, 'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes');
+                            } catch (_) {}
+                        }
+                    }
+
+                    if (!pdfWin) {
+                        try {
+                            window.location.href = pdfUrl;
+                            return window;
+                        } catch (e) {
+                            throw new Error('无法打开PDF窗口，请检查弹窗设置');
+                        }
+                    }
+
                     window.showMessage(`正在打开PDF: ${exam.title}`, 'info');
-                    return;
+                    return pdfWin;
                 }
 
                 // 先构造URL并立即打开窗口（保持用户手势，避免被浏览器拦截）
                 const examUrl = this.buildExamUrl(exam);
-                const examWindow = this.openExamWindow(examUrl, exam);
+                const examWindow = this.openExamWindow(examUrl, exam, options);
 
                 // 再进行会话记录与脚本注入
                 await this.startPracticeSession(examId);
                 this.injectDataCollectionScript(examWindow, examId);
                 this.setupExamWindowManagement(examWindow, examId);
 
+                if (options && options.suiteSessionId) {
+                    const sessionInfo = this.ensureExamWindowSession(examId, examWindow);
+                    sessionInfo.suiteSessionId = options.suiteSessionId;
+                    this.examWindows && this.examWindows.set(examId, sessionInfo);
+                }
+
                 window.showMessage(`正在打开题目: ${exam.title}`, 'info');
+
+                return examWindow;
 
             } catch (error) {
                 console.error('Failed to open exam:', error);
@@ -74,7 +113,32 @@
         /**
          * 在新窗口中打开题目
          */
-        openExamWindow(examUrl, exam) {
+        openExamWindow(examUrl, exam, options = {}) {
+            const reuseWindow = options.reuseWindow;
+            if (reuseWindow && !reuseWindow.closed) {
+                try {
+                    reuseWindow.location.href = examUrl;
+                    reuseWindow.focus();
+                    return reuseWindow;
+                } catch (error) {
+                    console.warn('[App] 复用窗口失败，尝试重新打开:', error);
+                }
+            }
+
+            if (options.target === 'tab') {
+                let tabWindow = null;
+                try {
+                    tabWindow = window.open(examUrl, '_blank');
+                    if (tabWindow && typeof tabWindow.focus === 'function') {
+                        tabWindow.focus();
+                    }
+                } catch (_) {}
+
+                if (tabWindow) {
+                    return tabWindow;
+                }
+            }
+
             // 计算窗口尺寸和位置
             const windowFeatures = this.calculateWindowFeatures();
 
@@ -1061,6 +1125,18 @@
          */
         async handlePracticeComplete(examId, data) {
 
+            if (this.suiteExamMap && this.suiteExamMap.has(examId) && typeof this.handleSuitePracticeComplete === 'function') {
+                try {
+                    const handled = await this.handleSuitePracticeComplete(examId, data);
+                    if (handled) {
+                        return;
+                    }
+                } catch (suiteError) {
+                    console.error('[SuitePractice] 处理套题结果失败，回退至普通流程:', suiteError);
+                    window.showMessage && window.showMessage('套题模式出现异常，记录将以单篇形式保存。', 'warning');
+                }
+            }
+
             try {
                 // 直接保存真实数据（采用旧版本的简单方式）
                 await this.saveRealPracticeData(examId, data);
@@ -1328,6 +1404,15 @@
          * 处理题目窗口关闭
          */
         handleExamWindowClosed(examId) {
+
+            if (this.suiteExamMap && this.suiteExamMap.has(examId) && this.currentSuiteSession && this.currentSuiteSession.status === 'active' && this.suiteExamMap.get(examId) === this.currentSuiteSession.id) {
+                window.showMessage && window.showMessage('套题练习窗口已关闭，套题模式将被中断并回退到普通模式。', 'warning');
+                if (typeof this._abortSuiteSession === 'function') {
+                    this._abortSuiteSession(this.currentSuiteSession, { skipExamId: examId }).catch(error => {
+                        console.error('[SuitePractice] 中断套题失败:', error);
+                    });
+                }
+            }
 
             // 更新题目状态
             this.updateExamStatus(examId, 'interrupted');

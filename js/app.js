@@ -70,6 +70,7 @@ class ExamSystemApp {
             mixins.lifecycle || {},
             mixins.navigation || {},
             mixins.examSession || {},
+            mixins.suitePractice || {},
             mixins.fallback || {});
     }
 

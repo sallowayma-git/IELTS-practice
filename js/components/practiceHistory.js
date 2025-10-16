@@ -859,12 +859,16 @@ class PracticeHistory {
         const startTime = (window.Utils && typeof window.Utils.formatDate === 'function')
             ? Utils.formatDate(record.startTime, 'YYYY-MM-DD HH:mm')
             : this.formatDateFallback(record.startTime, 'YYYY-MM-DD HH:mm');
-        
+
         const accuracyClass = accuracy >= 80 ? 'excellent' : accuracy >= 60 ? 'good' : 'needs-improvement';
         const statusClass = record.status === 'completed' ? 'completed' : 'interrupted';
         const recordIdStr = String(record.id);
         const isSelected = this.selectedSet.has(recordIdStr) ? 'checked' : '';
-        
+        const metadata = record.metadata || {};
+        const examTitle = metadata.examTitle || record.examId;
+        const categoryLabel = this.formatCategoryLabel(metadata.category);
+        const frequencyLabel = this.formatFrequencyLabel(metadata.frequency);
+
         return `
             <div class="history-record-item" data-record-id="${recordIdStr}">
                 <div class="record-main">
@@ -875,10 +879,10 @@ class PracticeHistory {
                         <div class="status-indicator ${statusClass}"></div>
                     </div>
                     <div class="record-content">
-                        <h4 class="record-title clickable">${record.metadata.examTitle || record.examId}</h4>
+                        <h4 class="record-title clickable">${examTitle}</h4>
                         <div class="record-meta">
-                            <span class="record-category">${record.metadata.category || 'Unknown'}</span>
-                            <span class="record-frequency">${record.metadata.frequency === 'high' ? '高频' : '次高频'}</span>
+                            <span class="record-category">${categoryLabel}</span>
+                            <span class="record-frequency">${frequencyLabel}</span>
                             <span class="record-time">${startTime}</span>
                         </div>
                     </div>
@@ -928,6 +932,10 @@ class PracticeHistory {
         const statusClass = record.status === 'completed' ? 'completed' : 'interrupted';
         const recordIdStr = String(record.id);
         const isSelected = this.selectedSet.has(recordIdStr);
+        const metadata = record.metadata || {};
+        const examTitle = metadata.examTitle || record.examId;
+        const categoryLabel = this.formatCategoryLabel(metadata.category);
+        const frequencyLabel = this.formatFrequencyLabel(metadata.frequency);
 
         // 创建文档片段提高性能
         const fragment = document.createDocumentFragment();
@@ -963,7 +971,7 @@ class PracticeHistory {
 
         const title = document.createElement('h4');
         title.className = 'record-title clickable practice-record-title';
-        title.textContent = record.metadata.examTitle || record.examId;
+        title.textContent = examTitle;
         title.title = '点击查看详情';
 
         // 兼容性修复：保持与practiceHistoryEnhancer的兼容性
@@ -980,8 +988,8 @@ class PracticeHistory {
         const meta = document.createElement('div');
         meta.className = 'record-meta';
         meta.innerHTML = `
-            <span class="record-category">${record.metadata.category || 'Unknown'}</span>
-            <span class="record-frequency">${record.metadata.frequency === 'high' ? '高频' : '次高频'}</span>
+            <span class="record-category">${categoryLabel}</span>
+            <span class="record-frequency">${frequencyLabel}</span>
             <span class="record-time">${startTime}</span>
         `;
 
@@ -1243,19 +1251,23 @@ class PracticeHistory {
         if (!record) return;
         
         const accuracy = Math.round(record.accuracy * 100);
-        const duration = (window.Utils && typeof window.Utils.formatDuration === 'function') 
+        const duration = (window.Utils && typeof window.Utils.formatDuration === 'function')
             ? Utils.formatDuration(record.duration)
             : this.formatDurationFallback(record.duration);
-        const startTime = (window.Utils && typeof window.Utils.formatDate === 'function') 
+        const startTime = (window.Utils && typeof window.Utils.formatDate === 'function')
             ? Utils.formatDate(record.startTime, 'YYYY-MM-DD HH:mm:ss')
             : this.formatDateFallback(record.startTime, 'YYYY-MM-DD HH:mm:ss');
-        const endTime = (window.Utils && typeof window.Utils.formatDate === 'function') 
+        const endTime = (window.Utils && typeof window.Utils.formatDate === 'function')
             ? Utils.formatDate(record.endTime, 'YYYY-MM-DD HH:mm:ss')
             : this.formatDateFallback(record.endTime, 'YYYY-MM-DD HH:mm:ss');
-        
+        const metadata = record.metadata || {};
+        const examTitle = metadata.examTitle || record.examId;
+        const categoryLabel = this.formatCategoryLabel(metadata.category);
+        const frequencyLabel = this.formatFrequencyLabel(metadata.frequency);
+
         // 生成答案详情表格
         const answersTableHtml = this.generateAnswersTable(record);
-        
+
         const detailsContent = `
             <div class="record-details-modal">
                 <div class="details-header">
@@ -1268,15 +1280,15 @@ class PracticeHistory {
                         <div class="details-grid">
                             <div class="detail-item">
                                 <span class="detail-label">题目标题：</span>
-                                <span class="detail-value">${record.metadata.examTitle || record.examId}</span>
+                                <span class="detail-value">${examTitle}</span>
                             </div>
                             <div class="detail-item">
                                 <span class="detail-label">分类：</span>
-                                <span class="detail-value">${record.metadata.category || 'Unknown'}</span>
+                                <span class="detail-value">${categoryLabel}</span>
                             </div>
                             <div class="detail-item">
                                 <span class="detail-label">频率：</span>
-                                <span class="detail-value">${record.metadata.frequency === 'high' ? '高频' : '次高频'}</span>
+                                <span class="detail-value">${frequencyLabel}</span>
                             </div>
                             <div class="detail-item">
                                 <span class="detail-label">状态：</span>
@@ -1364,57 +1376,78 @@ class PracticeHistory {
      * 生成答案详情表格
      */
     generateAnswersTable(record) {
-        // 检查是否有答案数据
-        if (!record.answers || Object.keys(record.answers).length === 0) {
+        const suiteEntries = this.getSuiteEntries(record);
+        if (suiteEntries.length > 0) {
+            const sections = suiteEntries.map((entry, index) => {
+                const title = this.formatSuiteEntryTitle(entry, index);
+                const sectionContent = this.generateAnswersTableForEntry(entry, { wrapWithSection: false });
+                return `
+                    <section class="suite-entry">
+                        <h5>${title}</h5>
+                        ${sectionContent}
+                    </section>
+                `;
+            }).join('');
+
+            const content = sections || `
+                <div class="no-answers-message">
+                    <p>暂无答案详情数据</p>
+                </div>
+            `;
+
             return `
-                <div class="details-section">
+                <div class="details-section answers-section">
                     <h4>答案详情</h4>
-                    <div class="no-answers-message">
-                        <p>暂无答案详情数据</p>
-                    </div>
+                    ${content}
                 </div>
             `;
         }
-        
-        let answersData = [];
-        
-        // 处理不同格式的答案数据
-        if (record.scoreInfo && record.scoreInfo.details) {
-            // 新格式：包含 scoreInfo.details
-            Object.entries(record.scoreInfo.details).forEach(([questionId, detail]) => {
-                answersData.push({
-                    questionId: questionId,
-                    userAnswer: detail.userAnswer || '-',
-                    correctAnswer: detail.correctAnswer || '-',
-                    isCorrect: detail.isCorrect
-                });
-            });
-        } else {
-            // 旧格式：只有用户答案
-            Object.entries(record.answers).forEach(([questionId, userAnswer]) => {
-                answersData.push({
-                    questionId: questionId,
-                    userAnswer: userAnswer || '-',
-                    correctAnswer: '-', // 旧数据没有正确答案
-                    isCorrect: null // 无法判断
-                });
-            });
+
+        return this.generateAnswersTableForEntry(record, { wrapWithSection: true });
+    }
+
+    generateAnswersTableForEntry(entry, options = {}) {
+        const { wrapWithSection = true } = options;
+        const wrapStart = wrapWithSection ? '<div class="details-section answers-section">' : '';
+        const wrapEnd = wrapWithSection ? '</div>' : '';
+        const heading = wrapWithSection ? '<h4>答案详情</h4>' : '';
+        const renderEmpty = () => wrapWithSection
+            ? `${wrapStart}${heading}<div class="no-answers-message"><p>暂无答案详情数据</p></div>${wrapEnd}`
+            : '<div class="no-answers-message"><p>暂无答案详情数据</p></div>';
+
+        if (!entry) {
+            return renderEmpty();
         }
-        
-        // 按题号排序
-        answersData.sort((a, b) => {
-            const aNum = parseInt(a.questionId.replace(/\D/g, '')) || 0;
-            const bNum = parseInt(b.questionId.replace(/\D/g, '')) || 0;
-            return aNum - bNum;
-        });
-        
-        // 生成表格 HTML
+
+        if (entry.answerComparison && Object.keys(entry.answerComparison).length > 0) {
+            const merged = this.mergeComparisonWithCorrections(entry);
+            const tableHtml = this.generateTableFromComparison(merged);
+            return wrapWithSection ? `${wrapStart}${heading}${tableHtml}${wrapEnd}` : tableHtml;
+        }
+
+        const answersSource = entry.answers || entry.realData?.answers || {};
+        const correctAnswers = this.getCorrectAnswers(entry);
+        const questionNumbers = this.extractQuestionNumbers(answersSource, correctAnswers);
+
+        if (questionNumbers.length === 0) {
+            return wrapWithSection
+                ? `${wrapStart}${heading}<p class="no-details">暂无答题数据</p>${wrapEnd}`
+                : '<p class="no-details">暂无答题数据</p>';
+        }
+
+        const answersData = this.collectAnswersData(entry);
+        if (answersData.length === 0) {
+            return renderEmpty();
+        }
+
         const tableRows = answersData.map((answer, index) => {
-            const correctIcon = answer.isCorrect === true ? '✓' : 
-                               answer.isCorrect === false ? '✗' : '-';
-            const correctClass = answer.isCorrect === true ? 'correct' : 
-                                answer.isCorrect === false ? 'incorrect' : 'unknown';
-            
+            const correctIcon = answer.isCorrect === true ? '✓'
+                : answer.isCorrect === false ? '✗'
+                : '-';
+            const correctClass = answer.isCorrect === true ? 'correct'
+                : answer.isCorrect === false ? 'incorrect'
+                : 'unknown';
+
             return `
                 <tr class="answer-row ${correctClass}">
                     <td class="question-number">${index + 1}</td>
@@ -1424,39 +1457,149 @@ class PracticeHistory {
                 </tr>
             `;
         }).join('');
-        
-        // 统计信息
+
         const totalQuestions = answersData.length;
         const correctCount = answersData.filter(a => a.isCorrect === true).length;
         const incorrectCount = answersData.filter(a => a.isCorrect === false).length;
         const unknownCount = answersData.filter(a => a.isCorrect === null).length;
-        
-        return `
-            <div class="details-section answers-section">
-                <h4>答案详情</h4>
-                <div class="answers-summary">
-                    <span class="summary-item">总题数：${totalQuestions}</span>
-                    ${correctCount > 0 ? `<span class="summary-item correct">正确：${correctCount}</span>` : ''}
-                    ${incorrectCount > 0 ? `<span class="summary-item incorrect">错误：${incorrectCount}</span>` : ''}
-                    ${unknownCount > 0 ? `<span class="summary-item unknown">无法判断：${unknownCount}</span>` : ''}
-                </div>
-                <div class="answers-table-container">
-                    <table class="answers-table">
-                        <thead>
-                            <tr>
-                                <th class="col-number">序号</th>
-                                <th class="col-correct">正确答案</th>
-                                <th class="col-user">我的答案</th>
-                                <th class="col-result">对错</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${tableRows}
-                        </tbody>
-                    </table>
-                </div>
+
+        const summary = `
+            <div class="answers-summary">
+                <span class="summary-item">总题数：${totalQuestions}</span>
+                ${correctCount > 0 ? `<span class="summary-item correct">正确：${correctCount}</span>` : ''}
+                ${incorrectCount > 0 ? `<span class="summary-item incorrect">错误：${incorrectCount}</span>` : ''}
+                ${unknownCount > 0 ? `<span class="summary-item unknown">无法判断：${unknownCount}</span>` : ''}
             </div>
         `;
+
+        const table = `
+            <div class="answers-table-container">
+                <table class="answers-table">
+                    <thead>
+                        <tr>
+                            <th class="col-number">序号</th>
+                            <th class="col-correct">正确答案</th>
+                            <th class="col-user">我的答案</th>
+                            <th class="col-result">对错</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${tableRows}
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        const content = `${summary}${table}`;
+
+        return wrapWithSection ? `${wrapStart}${heading}${content}${wrapEnd}` : content;
+    }
+
+    collectAnswersData(record) {
+        if (!record) {
+            return [];
+        }
+
+        const detailsSource = record.scoreInfo?.details
+            || record.realData?.scoreInfo?.details
+            || null;
+
+        let answersData = [];
+
+        if (detailsSource && Object.keys(detailsSource).length > 0) {
+            answersData = Object.entries(detailsSource).map(([questionId, detail]) => ({
+                questionId,
+                userAnswer: detail?.userAnswer ?? '-',
+                correctAnswer: detail?.correctAnswer ?? '-',
+                isCorrect: typeof detail?.isCorrect === 'boolean' ? detail.isCorrect : null
+            }));
+        } else {
+            const answersSource = record.answers || record.realData?.answers || {};
+            answersData = Object.entries(answersSource).map(([questionId, userAnswer]) => ({
+                questionId,
+                userAnswer: userAnswer || '-',
+                correctAnswer: '-',
+                isCorrect: null
+            }));
+        }
+
+        return answersData.sort((a, b) => {
+            const aNum = parseInt(String(a.questionId).replace(/\D/g, ''), 10) || 0;
+            const bNum = parseInt(String(b.questionId).replace(/\D/g, ''), 10) || 0;
+            return aNum - bNum;
+        });
+    }
+
+    getSuiteEntries(record) {
+        if (!record || !Array.isArray(record.suiteEntries)) {
+            return [];
+        }
+        return record.suiteEntries.filter(entry => entry);
+    }
+
+    formatSuiteEntryTitle(entry, index) {
+        if (!entry) {
+            return `套题第${index + 1}篇`;
+        }
+        const metadata = entry.metadata || {};
+        return metadata.examTitle
+            || entry.title
+            || entry.examTitle
+            || `套题第${index + 1}篇`;
+    }
+
+    formatCategoryLabel(category) {
+        if (category == null) {
+            return 'Unknown';
+        }
+        if (typeof category === 'string') {
+            const trimmed = category.trim();
+            return trimmed.length > 0 ? trimmed : 'Unknown';
+        }
+        return String(category);
+    }
+
+    formatFrequencyLabel(frequency) {
+        const normalized = typeof frequency === 'string'
+            ? frequency.toLowerCase()
+            : '';
+
+        if (normalized === 'suite') {
+            return '套题';
+        }
+        if (normalized === 'high') {
+            return '高频';
+        }
+
+        return '次高频';
+    }
+
+    extractQuestionNumbers(userAnswers, correctAnswers) {
+        const questions = new Set();
+
+        Object.keys(userAnswers || {}).forEach(key => {
+            const num = this.extractNumberFromKey(key);
+            if (num != null) {
+                questions.add(num);
+            }
+        });
+
+        Object.keys(correctAnswers || {}).forEach(key => {
+            const num = this.extractNumberFromKey(key);
+            if (num != null) {
+                questions.add(num);
+            }
+        });
+
+        return Array.from(questions).sort((a, b) => a - b);
+    }
+
+    extractNumberFromKey(key) {
+        if (!key) {
+            return null;
+        }
+        const match = String(key).match(/(\d+)/);
+        return match ? parseInt(match[1], 10) : null;
     }
     
     /**
@@ -1747,66 +1890,148 @@ class PracticeHistory {
      * @returns {string} Markdown格式的文本
      */
     generateMarkdownExport(record) {
-        const examTitle = record.metadata.examTitle || record.examId;
-        const category = record.metadata.category || 'Unknown';
-        const frequency = record.metadata.frequency === 'high' ? '高频' : '次高频';
-        const accuracy = Math.round(record.accuracy * 100);
-        const score = `${record.correctAnswers}/${record.totalQuestions}`;
-        
-        // 格式：## Part 2 高频 Corporate Social Responsibility  11/13企业社会责任
-        let markdown = `## ${category} ${frequency} ${examTitle}  ${score}${examTitle}\n\n`;
-        
-        // 表格头部，包含错误分析列
+        const metadata = record.metadata || {};
+        const examTitle = metadata.examTitle || record.examId || '未知题目';
+        const category = this.formatCategoryLabel(metadata.category);
+        const suiteEntries = this.getSuiteEntries(record);
+        const score = this.getScoreFraction(record);
+
+        if (suiteEntries.length > 0) {
+            const scoreSuffix = score ? ` ${score}` : '';
+            let markdown = `## ${category} 套题 ${examTitle}${scoreSuffix}\n\n`;
+
+            suiteEntries.forEach((entry, index) => {
+                const entryTitle = this.formatSuiteEntryTitle(entry, index);
+                const entryScore = this.getScoreFraction(entry);
+                const scoreSuffix = entryScore ? ` ${entryScore}` : '';
+                markdown += `### ${entryTitle}${scoreSuffix}\n\n`;
+                markdown += this.generateMarkdownTableForEntry(entry);
+                markdown += '\n';
+            });
+
+            return markdown.trimEnd();
+        }
+
+        const frequency = this.formatFrequencyLabel(metadata.frequency);
+        const scoreSuffix = score ? ` ${score}` : '';
+        let markdown = `## ${category} ${frequency} ${examTitle}${scoreSuffix}\n\n`;
+        markdown += this.generateMarkdownTableForEntry(record);
+
+        return markdown.trimEnd();
+    }
+
+    generateMarkdownTableForEntry(entry) {
+        const answersData = this.collectAnswersData(entry);
+
+        if (answersData.length === 0) {
+            return '暂无答案详情\n';
+        }
+
+        let markdown = '';
         markdown += `| 序号  | 正确答案              | 我的答案              | 对错  | 错误分析 |\n`;
         markdown += `| --- | ----------------- | ----------------- | --- | ---- |\n`;
-        
-        // 处理答案数据
-        let answersData = [];
-        
-        if (record.scoreInfo && record.scoreInfo.details) {
-            // 新格式数据：包含scoreInfo.details
-            Object.entries(record.scoreInfo.details).forEach(([questionId, detail]) => {
-                answersData.push({
-                    questionId: questionId,
-                    userAnswer: detail.userAnswer || '',
-                    correctAnswer: detail.correctAnswer || '',
-                    isCorrect: detail.isCorrect
-                });
-            });
-        } else {
-            // 旧格式数据：仅包含answers对象
-            Object.entries(record.answers || {}).forEach(([questionId, userAnswer]) => {
-                answersData.push({
-                    questionId: questionId,
-                    userAnswer: userAnswer || '',
-                    correctAnswer: '', // 旧数据无正确答案
-                    isCorrect: null
-                });
-            });
-        }
-        
-        // 排序并生成表格行
-        answersData.sort((a, b) => {
-            const aNum = parseInt(a.questionId.replace(/\D/g, '')) || 0;
-            const bNum = parseInt(b.questionId.replace(/\D/g, '')) || 0;
-            return aNum - bNum;
-        });
-        
+
         answersData.forEach((answer, index) => {
-            const questionNum = answer.questionId.toUpperCase();
-            const correctAnswer = answer.correctAnswer || '';
-            const userAnswer = answer.userAnswer || '';
-            const resultIcon = answer.isCorrect === true ? '✅' : 
-                              answer.isCorrect === false ? '❌' : '❓';
-            
-            // 格式化答案显示，确保对齐
+            const questionId = answer.questionId
+                ? String(answer.questionId).toUpperCase()
+                : `Q${index + 1}`;
+            const correctAnswer = (answer.correctAnswer || '').toString();
+            const userAnswer = (answer.userAnswer || '').toString();
+            const resultIcon = answer.isCorrect === true ? '✅'
+                : answer.isCorrect === false ? '❌'
+                : '❓';
+
             const formattedCorrect = correctAnswer.padEnd(17, ' ');
             const formattedUser = userAnswer.padEnd(17, ' ');
-            
-            markdown += `| ${questionNum} | ${formattedCorrect} | ${formattedUser} | ${resultIcon}   |      |\n`;
+
+            markdown += `| ${questionId} | ${formattedCorrect} | ${formattedUser} | ${resultIcon}   |      |\n`;
         });
-        
+
         return markdown;
+    }
+
+    getScoreFraction(record) {
+        if (!record) {
+            return '';
+        }
+
+        const correct = typeof record.correctAnswers === 'number'
+            ? record.correctAnswers
+            : typeof record.score === 'number'
+                ? record.score
+                : typeof record.scoreInfo?.correct === 'number'
+                    ? record.scoreInfo.correct
+                    : typeof record.realData?.scoreInfo?.correct === 'number'
+                        ? record.realData.scoreInfo.correct
+                        : null;
+
+        const total = typeof record.totalQuestions === 'number'
+            ? record.totalQuestions
+            : typeof record.scoreInfo?.total === 'number'
+                ? record.scoreInfo.total
+                : typeof record.realData?.scoreInfo?.total === 'number'
+                    ? record.realData.scoreInfo.total
+                    : record.answers
+                        ? Object.keys(record.answers).length
+                        : record.realData?.answers
+                            ? Object.keys(record.realData.answers).length
+                            : null;
+
+        if (correct == null || total == null) {
+            return '';
+        }
+
+        return `${correct}/${total}`;
+    }
+
+    getCorrectAnswers(record) {
+        if (!record) {
+            return {};
+        }
+
+        if (record.correctAnswers && Object.keys(record.correctAnswers).length > 0) {
+            return record.correctAnswers;
+        }
+
+        if (record.realData?.correctAnswers && Object.keys(record.realData.correctAnswers).length > 0) {
+            return record.realData.correctAnswers;
+        }
+
+        if (record.answerComparison) {
+            const answers = {};
+            Object.keys(record.answerComparison).forEach(key => {
+                const item = record.answerComparison[key];
+                if (item && item.correctAnswer) {
+                    answers[key] = item.correctAnswer;
+                }
+            });
+            if (Object.keys(answers).length > 0) {
+                return answers;
+            }
+        }
+
+        const detailSources = [];
+        if (record.realData?.scoreInfo?.details) {
+            detailSources.push(record.realData.scoreInfo.details);
+        }
+        if (record.scoreInfo?.details) {
+            detailSources.push(record.scoreInfo.details);
+        }
+
+        for (const details of detailSources) {
+            const answers = {};
+            Object.keys(details || {}).forEach(key => {
+                const detail = details[key];
+                if (detail && detail.correctAnswer != null && String(detail.correctAnswer).trim() !== '') {
+                    answers[key] = detail.correctAnswer;
+                }
+            });
+            if (Object.keys(answers).length > 0) {
+                return answers;
+            }
+        }
+
+        return {};
     }
 
     /**

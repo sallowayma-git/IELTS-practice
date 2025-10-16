@@ -666,6 +666,9 @@ function updateOverview() {
                     if (typeof startRandomPractice === 'function') {
                         startRandomPractice(category, type);
                     }
+                },
+                onStartSuite: () => {
+                    startSuitePractice();
                 }
             }
         });
@@ -693,6 +696,33 @@ function renderOverviewLegacy(container, stats) {
     }
 
     const sections = [];
+
+    const suiteCard = adapter.create('div', {
+        className: 'category-card suite-mode-card'
+    }, [
+        adapter.create('div', { className: 'suite-card-content' }, [
+            adapter.create('div', { className: 'suite-card-icon', ariaHidden: 'true' }, '🧠'),
+            adapter.create('div', { className: 'suite-card-copy' }, [
+                adapter.create('div', { className: 'suite-card-title' }, '套题模式'),
+                adapter.create('div', { className: 'suite-card-description' }, '一次串联听力与阅读，全真模拟并自动记录进度。')
+            ])
+        ]),
+        adapter.create('div', { className: 'suite-card-actions' }, [
+            adapter.create('button', {
+                type: 'button',
+                className: 'btn btn-primary',
+                dataset: {
+                    action: 'start-suite-mode',
+                    overviewAction: 'suite'
+                }
+            }, [
+                adapter.create('span', { className: 'category-action-icon', ariaHidden: 'true' }, '🚀'),
+                adapter.create('span', { className: 'category-action-label' }, '开启套题模式')
+            ])
+        ])
+    ]);
+
+    sections.push(suiteCard);
 
     const appendSection = (title, entries, icon) => {
         if (!entries || entries.length === 0) {
@@ -785,15 +815,24 @@ function setupOverviewInteractions() {
     }
 
     const invokeAction = (target, event) => {
-        const category = target.dataset.category;
-        const type = target.dataset.examType || 'reading';
         const action = target.dataset.overviewAction;
-
-        if (!action || !category) {
+        if (!action) {
             return;
         }
 
         event.preventDefault();
+
+        if (action === 'suite') {
+            startSuitePractice();
+            return;
+        }
+
+        const category = target.dataset.category;
+        const type = target.dataset.examType || 'reading';
+
+        if (!category) {
+            return;
+        }
 
         if (action === 'browse') {
             if (typeof browseCategory === 'function') {
@@ -3589,6 +3628,28 @@ function showDeveloperTeam() {
 function hideDeveloperTeam() {
     const modal = document.getElementById('developer-modal');
     if (modal) modal.classList.remove('show');
+}
+
+function startSuitePractice() {
+    const appInstance = window.app;
+    if (appInstance && typeof appInstance.startSuitePractice === 'function') {
+        try {
+            return appInstance.startSuitePractice();
+        } catch (error) {
+            console.error('[SuitePractice] 启动失败', error);
+            if (typeof showMessage === 'function') {
+                showMessage('套题模式启动失败，请稍后重试', 'error');
+            }
+            return;
+        }
+    }
+
+    const fallbackNotice = '套题模式尚未初始化，请完成加载后再试。';
+    if (typeof showMessage === 'function') {
+        showMessage(fallbackNotice, 'warning');
+    } else if (typeof alert === 'function') {
+        alert(fallbackNotice);
+    }
 }
 
 function startRandomPractice(category, type = 'reading') {
