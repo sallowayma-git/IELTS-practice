@@ -12,7 +12,8 @@
             this.containerSelector = containerSelector;
             this.actions = {
                 onBrowseCategory: null,
-                onRandomPractice: null
+                onRandomPractice: null,
+                onStartSuite: null
             };
             this.delegatesBound = false;
         }
@@ -44,6 +45,13 @@
                 }
             });
 
+            this.events.delegate('click', `${this.containerSelector} [data-action="start-suite-mode"]`, function (event) {
+                event.preventDefault();
+                if (typeof view.actions.onStartSuite === 'function') {
+                    view.actions.onStartSuite();
+                }
+            });
+
             this.delegatesBound = true;
         }
 
@@ -62,6 +70,7 @@
             this.ensureDelegates();
 
             const fragment = document.createDocumentFragment();
+            fragment.appendChild(this.createSuiteCard());
             const readingSection = this.createSection({
                 title: '阅读',
                 icon: '📖',
@@ -147,6 +156,30 @@
                     flexWrap: 'nowrap'
                 }
             }, [browseButton, randomButton]);
+        }
+
+        createSuiteCard() {
+            const startButton = this.dom.create('button', {
+                className: 'btn btn-primary',
+                type: 'button',
+                dataset: {
+                    action: 'start-suite-mode',
+                    overviewAction: 'suite'
+                }
+            }, '🚀 开启套题模式');
+
+            const header = this.dom.create('div', { className: 'suite-card-content' }, [
+                this.dom.create('div', { className: 'suite-card-icon' }, '🧠'),
+                this.dom.create('div', { className: 'suite-card-copy' }, [
+                    this.dom.create('div', { className: 'suite-card-title' }, '套题模式'),
+                    this.dom.create('div', { className: 'suite-card-description' }, '串联听力与阅读，一次完成整套模拟并自动记录进度。')
+                ])
+            ]);
+
+            return this.dom.create('div', { className: 'category-card suite-mode-card' }, [
+                header,
+                this.dom.create('div', { className: 'suite-card-actions' }, [startButton])
+            ]);
         }
     }
 

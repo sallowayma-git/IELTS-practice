@@ -6,7 +6,7 @@ class ThemeManager {
     constructor() {
         this.themes = {
             xiaodaidai: {
-                name: '小呆呆主题',
+                name: '小呆呆控制台',
                 variables: {
                     '--primary-color': '#ffc83d',
                     '--primary-color-light': 'rgba(255, 200, 61, 0.18)',
