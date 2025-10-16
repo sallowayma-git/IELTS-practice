@@ -201,6 +201,7 @@ async def _exercise_settings(page: Page) -> None:
     await navigate_theme(".theme-option:nth-of-type(1) button")
     await navigate_theme(".theme-option:nth-of-type(4) button")
     await navigate_theme(".theme-option:nth-of-type(5) button")
+    await navigate_theme(".theme-option:nth-of-type(6) button")
 
     await page.locator(".theme-modal-close").click()
     await page.wait_for_selector("#theme-switcher-modal.show", state="detached")

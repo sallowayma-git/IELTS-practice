@@ -74,6 +74,10 @@ class PracticeRecordModal {
         const safeTitle = record.title || record.metadata?.examTitle || '未知题目';
         const safeCategory = record.category || record.metadata?.category || 'Unknown';
         const safeFrequency = record.frequency || record.metadata?.frequency || 'unknown';
+        const suiteEntries = this.getSuiteEntries(record);
+        const displayFrequency = suiteEntries.length > 0
+            ? '套题练习'
+            : (this.formatFrequencyLabel(safeFrequency) || safeFrequency || '未知频率');
         const startTs = record.startTime || record.date;
         const durationSec = (typeof record.duration === 'number' ? record.duration
                             : (record.realData && typeof record.realData.duration === 'number' ? record.realData.duration
@@ -107,7 +111,7 @@ class PracticeRecordModal {
                     
                     <div class="modal-body">
                         <div class="record-summary">
-                            <h4>${safeCategory}-${safeFrequency}-${safeTitle}</h4>
+                            <h4>${safeCategory}-${displayFrequency}-${safeTitle}</h4>
                             <div class="record-meta">
                                 <div class="meta-item">
                                     <span class="meta-label">练习时间:</span>
@@ -142,13 +146,36 @@ class PracticeRecordModal {
      * 生成答题详情表格
      */
     generateAnswerTable(record) {
-        // 优先使用answerComparison数据（若存在则与其他来源合并补全缺失的正确答案）
+        const suiteEntries = this.getSuiteEntries(record);
+
+        if (suiteEntries.length > 0) {
+            const sections = suiteEntries.map((entry, index) => {
+                const title = this.formatSuiteEntryTitle(entry, index);
+                const table = this.generateAnswerTableForSingle(entry);
+                return `
+                    <section class="suite-entry">
+                        <h5>${title}</h5>
+                        ${table}
+                    </section>
+                `;
+            }).join('');
+
+            return sections || '<p class="no-details">暂无详细答题数据</p>';
+        }
+
+        return this.generateAnswerTableForSingle(record);
+    }
+
+    generateAnswerTableForSingle(record) {
+        if (!record) {
+            return '<p class="no-details">暂无详细答题数据</p>';
+        }
+
         if (record.answerComparison && Object.keys(record.answerComparison).length > 0) {
             const merged = this.mergeComparisonWithCorrections(record);
             return this.generateTableFromComparison(merged);
         }
-        
-        // 降级到原有逻辑
+
         if (!record.realData || !record.realData.answers) {
             if (!record.answers) {
                 return '<p class="no-details">暂无详细答题数据</p>';
@@ -157,10 +184,8 @@ class PracticeRecordModal {
 
         const answers = record.answers || record.realData?.answers || {};
         const correctAnswers = this.getCorrectAnswers(record);
-        
-        // 获取所有题目编号并排序
         const questionNumbers = this.extractQuestionNumbers(answers, correctAnswers);
-        
+
         if (questionNumbers.length === 0) {
             return '<p class="no-details">暂无答题数据</p>';
         }
@@ -178,15 +203,14 @@ class PracticeRecordModal {
                     </thead>
                     <tbody>
         `;
-        
+
         questionNumbers.forEach(qNum => {
             const userAnswer = this.getUserAnswer(answers, qNum);
             const correctAnswer = this.getCorrectAnswer(correctAnswers, qNum);
             const isCorrect = this.compareAnswers(userAnswer, correctAnswer);
             const result = isCorrect ? '✓' : '✗';
             const resultClass = isCorrect ? 'correct' : 'incorrect';
-            
-            // 截断过长的答案文本
+
             const truncateAnswer = (answer, maxLength = 50) => {
                 if (!answer) return 'No Answer';
                 if (answer.length <= maxLength) return answer;
@@ -202,13 +226,13 @@ class PracticeRecordModal {
                 </tr>
             `;
         });
-        
+
         table += `
                     </tbody>
                 </table>
             </div>
         `;
-        
+
         return table;
     }
 
@@ -542,9 +566,43 @@ class PracticeRecordModal {
         if (!userAnswer || !correctAnswer) {
             return false;
         }
-        
+
         const normalize = (str) => String(str).trim().toLowerCase();
         return normalize(userAnswer) === normalize(correctAnswer);
+    }
+
+    getSuiteEntries(record) {
+        if (!record || !Array.isArray(record.suiteEntries)) {
+            return [];
+        }
+        return record.suiteEntries.filter(entry => entry);
+    }
+
+    formatSuiteEntryTitle(entry, index) {
+        if (!entry) {
+            return `套题第${index + 1}篇`;
+        }
+        const metadata = entry.metadata || {};
+        return metadata.examTitle
+            || entry.title
+            || entry.examTitle
+            || `套题第${index + 1}篇`;
+    }
+
+    formatFrequencyLabel(frequency) {
+        const normalized = typeof frequency === 'string'
+            ? frequency.toLowerCase()
+            : '';
+
+        if (normalized === 'suite') {
+            return '套题';
+        }
+
+        if (normalized === 'high') {
+            return '高频';
+        }
+
+        return '次高频';
     }
 
     /**

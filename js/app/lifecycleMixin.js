@@ -30,6 +30,10 @@
                 // 设置事件监听器
                 this.setupEventListeners();
 
+                if (typeof this.initializeSuiteMode === 'function') {
+                    this.initializeSuiteMode();
+                }
+
                 // 调用 main.js 的遗留组件初始化
                 if (typeof window.initializeLegacyComponents === 'function') {
                     this.updateLoadingMessage('正在初始化遗留组件...');
