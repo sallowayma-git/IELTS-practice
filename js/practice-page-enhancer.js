@@ -365,18 +365,132 @@ if (!window.practicePageEnhancer) {
                 return;
             }
             window.addEventListener('message', (event) => {
-                if (event.data && event.data.type === 'INIT_SESSION') {
-                    this.sessionId = event.data.data.sessionId;
-                    this.examId = event.data.data.examId; // 存储 examId
+                const payload = event && event.data ? event.data : null;
+                if (!payload || typeof payload.type !== 'string') {
+                    return;
+                }
+
+                if (payload.type === 'INIT_SESSION') {
+                    const initData = payload.data || {};
+                    this.sessionId = initData.sessionId;
+                    this.examId = initData.examId; // 存储 examId
+                    if (initData.suiteSessionId) {
+                        this.enableSuiteMode(initData);
+                    }
                     console.log('[PracticeEnhancer] 收到会话初始化:', this.sessionId, 'Exam ID:', this.examId);
                     this.sendMessage('SESSION_READY', {
                         pageType: this.detectPageType(),
                         url: window.location.href,
                         title: document.title
                     });
+                    return;
+                }
+
+                if (!this.suiteModeActive) {
+                    return;
+                }
+
+                if (payload.type === 'SUITE_NAVIGATE') {
+                    this.handleSuiteNavigation(payload.data || {});
+                } else if (payload.type === 'SUITE_FORCE_CLOSE') {
+                    this.teardownSuiteGuards();
+                    if (this._nativeClose) {
+                        this._nativeClose();
+                    }
                 }
             });
             console.log('[PracticeEnhancer] 通信设置完成');
+        },
+
+        enableSuiteMode: function(initData = {}) {
+            if (this.suiteModeActive) {
+                return;
+            }
+
+            this.suiteModeActive = true;
+            this.suiteSessionId = initData.suiteSessionId || null;
+            this.installSuiteGuards();
+        },
+
+        installSuiteGuards: function() {
+            if (this.suiteGuardsInstalled) {
+                return;
+            }
+
+            this.suiteGuardsInstalled = true;
+            this._nativeClose = typeof window.close === 'function' ? window.close.bind(window) : null;
+            this._nativeOpen = typeof window.open === 'function' ? window.open.bind(window) : null;
+
+            const guardClose = () => {
+                this.notifySuiteCloseAttempt('script_request');
+                return undefined;
+            };
+
+            try { window.close = guardClose; } catch (_) {}
+            try { window.self.close = guardClose; } catch (_) {}
+            try { window.top.close = guardClose; } catch (_) {}
+
+            if (this._nativeOpen) {
+                const originalOpen = this._nativeOpen;
+                window.open = (url = '', target = '', features = '') => {
+                    const normalizedTarget = typeof target === 'string' ? target.trim() : '';
+                    if (!normalizedTarget || normalizedTarget === '_self' || normalizedTarget === window.name) {
+                        this.notifySuiteCloseAttempt('self_target_open');
+                        return window;
+                    }
+                    return originalOpen(url, target, features);
+                };
+            }
+        },
+
+        teardownSuiteGuards: function() {
+            if (!this.suiteGuardsInstalled) {
+                return;
+            }
+
+            this.suiteGuardsInstalled = false;
+
+            if (this._nativeClose) {
+                try {
+                    window.close = this._nativeClose;
+                    window.self.close = this._nativeClose;
+                    window.top.close = this._nativeClose;
+                } catch (_) {}
+            }
+
+            if (this._nativeOpen) {
+                try {
+                    window.open = this._nativeOpen;
+                } catch (_) {}
+            }
+
+            this.suiteModeActive = false;
+            this.suiteSessionId = null;
+        },
+
+        notifySuiteCloseAttempt: function(reason) {
+            this.sendMessage('SUITE_CLOSE_ATTEMPT', {
+                examId: this.examId || null,
+                suiteSessionId: this.suiteSessionId || null,
+                reason: reason || 'unknown',
+                timestamp: Date.now()
+            });
+        },
+
+        handleSuiteNavigation: function(data) {
+            if (!data || !data.url) {
+                return;
+            }
+
+            if (data.examId) {
+                this.nextExamId = data.examId;
+            }
+
+            try {
+                window.location.href = data.url;
+            } catch (error) {
+                console.warn('[PracticeEnhancer] 套题导航失败:', error);
+            }
         },
 
         detectPageType: function () {

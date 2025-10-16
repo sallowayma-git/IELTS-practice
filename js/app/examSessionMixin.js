@@ -127,8 +127,11 @@
 
             if (options.target === 'tab') {
                 let tabWindow = null;
+                const requestedName = typeof options.windowName === 'string' && options.windowName.trim()
+                    ? options.windowName.trim()
+                    : '_blank';
                 try {
-                    tabWindow = window.open(examUrl, '_blank');
+                    tabWindow = window.open(examUrl, requestedName);
                     if (tabWindow && typeof tabWindow.focus === 'function') {
                         tabWindow.focus();
                     }
@@ -277,64 +280,237 @@
          */
         injectInlineScript(examWindow, examId) {
             try {
-                // 创建一个简化版的数据采集器
+                if (!examWindow || !examWindow.document || !examWindow.document.head) {
+                    throw new Error('inline_target_unavailable');
+                }
+
+                const sessionToken = `${examId}_${Date.now()}`;
                 const inlineScript = examWindow.document.createElement('script');
+                inlineScript.type = 'text/javascript';
                 inlineScript.textContent = `
-                    // 简化版数据采集器
-                    window.practiceDataCollector = {
-                        sessionId: '${examId}_${Date.now()}',
-                        startTime: Date.now(),
-                        answers: {},
+                    (function() {
+                        if (window.__IELTS_INLINE_ENHANCER__) {
+                            return;
+                        }
+                        window.__IELTS_INLINE_ENHANCER__ = true;
 
-                        initialize: function() {
-                            this.setupBasicListeners();
-                        },
-
-                        setupBasicListeners: function() {
-                            // 基本的答题监听
-                            document.addEventListener('change', (e) => {
-                                if (e.target.name && (e.target.type === 'radio' || e.target.type === 'text')) {
-                                    this.answers[e.target.name] = e.target.value;
-                                }
-                            });
-
-                            // 监听提交按钮
-                            const submitBtn = document.querySelector('button[onclick*="grade"]');
-                            if (submitBtn) {
-                                submitBtn.addEventListener('click', () => {
-                                    setTimeout(() => this.sendResults(), 200);
-                                });
+                        var parentWindow = window.opener || window.parent || null;
+                        var state = {
+                            sessionId: ${JSON.stringify(sessionToken)},
+                            examId: ${JSON.stringify(examId)},
+                            startTime: Date.now(),
+                            answers: {},
+                            suite: {
+                                active: false,
+                                sessionId: null,
+                                guarded: false,
+                                nativeClose: typeof window.close === 'function' ? window.close.bind(window) : null,
+                                nativeOpen: typeof window.open === 'function' ? window.open.bind(window) : null
                             }
-                        },
+                        };
 
-                        sendResults: function() {
-                            if (window.opener) {
-                                window.opener.postMessage({
-                                    type: 'PRACTICE_COMPLETE',
-                                    data: {
-                                        sessionId: this.sessionId,
-                                        answers: this.answers,
-                                        duration: Math.round((Date.now() - this.startTime) / 1000),
-                                        source: 'inline_collector'
-                                    }
-                                }, '*');
+                        function sendMessage(type, data) {
+                            if (!parentWindow || typeof parentWindow.postMessage !== 'function') {
+                                return;
+                            }
+                            try {
+                                parentWindow.postMessage({ type: type, data: data || {} }, '*');
+                            } catch (error) {
+                                console.warn('[InlineEnhancer] 无法发送消息:', error);
                             }
                         }
-                    };
 
-                    // 自动初始化
-                    if (document.readyState === 'loading') {
-                        document.addEventListener('DOMContentLoaded', () => {
-                            window.practiceDataCollector.initialize();
+                        function notifySuiteCloseAttempt(reason) {
+                            if (!state.suite.active) {
+                                return;
+                            }
+                            sendMessage('SUITE_CLOSE_ATTEMPT', {
+                                examId: state.examId,
+                                suiteSessionId: state.suite.sessionId,
+                                reason: reason || 'unknown',
+                                timestamp: Date.now()
+                            });
+                        }
+
+                        function installSuiteGuards() {
+                            if (state.suite.guarded) {
+                                return;
+                            }
+                            state.suite.guarded = true;
+
+                            if (!state.suite.nativeClose && typeof window.close === 'function') {
+                                state.suite.nativeClose = window.close.bind(window);
+                            }
+
+                            var guardedClose = function() {
+                                notifySuiteCloseAttempt('script_request');
+                                return undefined;
+                            };
+
+                            try { window.close = guardedClose; } catch (_) {}
+                            try { window.self.close = guardedClose; } catch (_) {}
+                            try { window.top.close = guardedClose; } catch (_) {}
+
+                            if (!state.suite.nativeOpen && typeof window.open === 'function') {
+                                state.suite.nativeOpen = window.open.bind(window);
+                            }
+
+                            if (state.suite.nativeOpen) {
+                                window.open = function(url, target, features) {
+                                    var normalizedTarget = typeof target === 'string' ? target.trim() : '';
+                                    if (!normalizedTarget || normalizedTarget === '_self' || normalizedTarget === window.name) {
+                                        notifySuiteCloseAttempt('self_target_open');
+                                        return window;
+                                    }
+                                    return state.suite.nativeOpen.call(window, url, target, features);
+                                };
+                            }
+                        }
+
+                        function teardownSuiteGuards() {
+                            if (!state.suite.guarded) {
+                                return;
+                            }
+                            state.suite.guarded = false;
+
+                            if (state.suite.nativeClose) {
+                                try {
+                                    var originalClose = state.suite.nativeClose;
+                                    window.close = originalClose;
+                                    window.self.close = originalClose;
+                                    window.top.close = originalClose;
+                                } catch (_) {}
+                            }
+
+                            if (state.suite.nativeOpen) {
+                                try { window.open = state.suite.nativeOpen; } catch (_) {}
+                            }
+                        }
+
+                        function handleSuiteNavigate(data) {
+                            if (!data || !data.url) {
+                                return;
+                            }
+                            try {
+                                window.location.href = data.url;
+                            } catch (error) {
+                                console.warn('[InlineEnhancer] 套题导航失败:', error);
+                            }
+                        }
+
+                        function handleInitSession(message) {
+                            var initData = message && message.data ? message.data : {};
+                            if (initData.sessionId) {
+                                state.sessionId = initData.sessionId;
+                            }
+                            if (initData.examId) {
+                                state.examId = initData.examId;
+                            }
+                            if (initData.suiteSessionId) {
+                                state.suite.active = true;
+                                state.suite.sessionId = initData.suiteSessionId;
+                                installSuiteGuards();
+                            }
+
+                            sendMessage('SESSION_READY', {
+                                sessionId: state.sessionId,
+                                examId: state.examId,
+                                url: window.location.href,
+                                title: document.title || ''
+                            });
+                        }
+
+                        window.addEventListener('message', function(event) {
+                            var message = event && event.data ? event.data : null;
+                            if (!message || typeof message.type !== 'string') {
+                                return;
+                            }
+
+                            if (message.type === 'INIT_SESSION') {
+                                handleInitSession(message);
+                                return;
+                            }
+
+                            if (!state.suite.active) {
+                                return;
+                            }
+
+                            if (message.type === 'SUITE_NAVIGATE') {
+                                handleSuiteNavigate(message.data || {});
+                            } else if (message.type === 'SUITE_FORCE_CLOSE') {
+                                teardownSuiteGuards();
+                                if (state.suite.nativeClose) {
+                                    state.suite.nativeClose.call(window);
+                                }
+                            }
                         });
-                    } else {
-                        window.practiceDataCollector.initialize();
-                    }
+
+                        var collector = {
+                            get sessionId() { return state.sessionId; },
+                            get examId() { return state.examId; },
+                            get answers() { return state.answers; },
+                            startTime: state.startTime,
+                            initialize: function() {
+                                this.setupBasicListeners();
+                                this.setupSubmitListeners();
+                            },
+                            setupBasicListeners: function() {
+                                document.addEventListener('change', function(event) {
+                                    var target = event && event.target ? event.target : null;
+                                    if (!target || !target.name) {
+                                        return;
+                                    }
+                                    var tag = (target.tagName || '').toUpperCase();
+                                    if (target.type === 'radio' || target.type === 'text' || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+                                        state.answers[target.name] = target.value;
+                                    }
+                                }, true);
+                            },
+                            setupSubmitListeners: function() {
+                                var buttons = Array.prototype.slice.call(document.querySelectorAll('button, input[type="submit"]'));
+                                if (!buttons.length) {
+                                    var legacy = document.querySelector('button[onclick*="grade"]');
+                                    if (legacy) {
+                                        buttons.push(legacy);
+                                    }
+                                }
+
+                                buttons.forEach(function(btn) {
+                                    if (!btn || typeof btn.addEventListener !== 'function') {
+                                        return;
+                                    }
+                                    btn.addEventListener('click', function() {
+                                        setTimeout(function() {
+                                            collector.sendResults();
+                                        }, 200);
+                                    }, false);
+                                });
+                            },
+                            sendResults: function() {
+                                sendMessage('PRACTICE_COMPLETE', {
+                                    sessionId: state.sessionId,
+                                    examId: state.examId,
+                                    duration: Math.round((Date.now() - state.startTime) / 1000),
+                                    answers: state.answers,
+                                    source: 'inline_collector'
+                                });
+                            }
+                        };
+
+                        window.practiceDataCollector = collector;
+
+                        if (document.readyState === 'loading') {
+                            document.addEventListener('DOMContentLoaded', function() {
+                                collector.initialize();
+                            });
+                        } else {
+                            collector.initialize();
+                        }
+                    })();
                 `;
 
                 examWindow.document.head.appendChild(inlineScript);
 
-                // 初始化会话
                 setTimeout(() => {
                     this.initializePracticeSession(examWindow, examId);
                 }, 300);
@@ -351,36 +527,70 @@
         initializePracticeSession(examWindow, examId) {
             try {
                 const sessionId = `${examId}_${Date.now()}`;
+                const now = Date.now();
+
+                let existingInfo = null;
+                if (this.examWindows && this.examWindows.has(examId)) {
+                    existingInfo = this.examWindows.get(examId) || null;
+                }
+
+                let suiteSessionId = existingInfo && existingInfo.suiteSessionId
+                    ? existingInfo.suiteSessionId
+                    : null;
+
+                if (!suiteSessionId && this.currentSuiteSession) {
+                    const activeMatch = this.currentSuiteSession.activeExamId === examId;
+                    const sequenceIndex = Number.isInteger(this.currentSuiteSession.currentIndex)
+                        ? this.currentSuiteSession.currentIndex
+                        : 0;
+                    const sequenceMatch = Array.isArray(this.currentSuiteSession.sequence)
+                        && this.currentSuiteSession.sequence.length > sequenceIndex
+                        && this.currentSuiteSession.sequence[sequenceIndex]
+                        && this.currentSuiteSession.sequence[sequenceIndex].examId === examId;
+
+                    if (activeMatch || sequenceMatch) {
+                        suiteSessionId = this.currentSuiteSession.id;
+                    }
+                }
+
+                const initPayload = {
+                    sessionId: sessionId,
+                    examId: examId,
+                    parentOrigin: window.location.origin,
+                    timestamp: now,
+                    suiteSessionId: suiteSessionId || null
+                };
 
                 // 发送会话初始化消息
                 examWindow.postMessage({
                     type: 'INIT_SESSION',
-                    data: {
-                        sessionId: sessionId,
-                        examId: examId,
-                        parentOrigin: window.location.origin,
-                        timestamp: Date.now()
-                    }
+                    data: initPayload
                 }, '*');
-
 
                 // 存储会话信息
                 if (!this.examWindows) {
                     this.examWindows = new Map();
                 }
 
-                if (this.examWindows.has(examId)) {
-                    const windowInfo = this.examWindows.get(examId);
-                    windowInfo.sessionId = sessionId;
-                    windowInfo.initTime = Date.now();
-                    this.examWindows.set(examId, windowInfo);
+                if (existingInfo) {
+                    existingInfo.sessionId = sessionId;
+                    existingInfo.initTime = now;
+                    existingInfo.status = 'initialized';
+                    if (suiteSessionId && !existingInfo.suiteSessionId) {
+                        existingInfo.suiteSessionId = suiteSessionId;
+                    }
+                    if (!existingInfo.window || existingInfo.window.closed) {
+                        existingInfo.window = examWindow;
+                    }
+                    this.examWindows.set(examId, existingInfo);
                 } else {
                     console.warn('[DataInjection] 未找到窗口信息，创建新的');
                     this.examWindows.set(examId, {
                         window: examWindow,
                         sessionId: sessionId,
-                        initTime: Date.now(),
-                        status: 'initialized'
+                        initTime: now,
+                        status: 'initialized',
+                        suiteSessionId: suiteSessionId || null
                     });
                 }
 
@@ -676,6 +886,9 @@
                     case 'ERROR_OCCURRED':
                         this.handleDataCollectionError(examId, data);
                         break;
+                    case 'SUITE_CLOSE_ATTEMPT':
+                        console.warn('[SuitePractice] 练习页尝试关闭套题窗口:', data);
+                        break;
                     default:
                 }
             };
@@ -691,10 +904,14 @@
             // 向题目窗口发送初始化消息（兼容 0.2 增强器监听的 INIT_SESSION）
             examWindow.addEventListener('load', () => {
                 const windowInfo = this.ensureExamWindowSession(examId, examWindow);
+                const suiteSessionId = typeof this._resolveSuiteSessionId === 'function'
+                    ? this._resolveSuiteSessionId(examId, windowInfo)
+                    : null;
                 const initPayload = {
                     examId: examId,
                     parentOrigin: window.location.origin,
-                    sessionId: windowInfo.expectedSessionId
+                    sessionId: windowInfo.expectedSessionId,
+                    suiteSessionId: suiteSessionId
                 };
                 try {
                     // 首选 0.2 的大写事件名，保证 practicePageEnhancer 能收到并设置 sessionId
@@ -717,10 +934,14 @@
             if (this._handshakeTimers.has(examId)) return;
 
             const windowInfo = this.ensureExamWindowSession(examId, examWindow);
+            const suiteSessionId = typeof this._resolveSuiteSessionId === 'function'
+                ? this._resolveSuiteSessionId(examId, windowInfo)
+                : null;
             const initPayload = {
                 examId,
                 parentOrigin: window.location.origin,
-                sessionId: windowInfo.expectedSessionId
+                sessionId: windowInfo.expectedSessionId,
+                suiteSessionId
             };
 
             let attempts = 0;

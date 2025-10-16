@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import sys
 from datetime import datetime, timezone
 from html.parser import HTMLParser
@@ -467,6 +468,64 @@ def run_checks() -> Tuple[List[dict], bool]:
             }
             results.append(_format_result("Mixin 方法契约覆盖", coverage_passed, coverage_detail))
             all_passed &= coverage_passed
+
+    suite_flow_test = REPO_ROOT / "developer" / "tests" / "js" / "suiteModeFlow.test.js"
+    if suite_flow_test.exists():
+        try:
+            completed = subprocess.run(
+                ["node", str(suite_flow_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            result_detail = f"执行失败: {output_text.strip()}"
+            suite_passed = False
+        else:
+            raw_output = completed.stdout.strip() or completed.stderr.strip()
+            try:
+                payload = json.loads(raw_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                suite_passed = False
+                result_detail = f"输出解析失败: {parse_error}"
+            else:
+                suite_passed = payload.get("status") == "pass"
+                result_detail = payload.get("detail", payload)
+        results.append(_format_result("套题模式首篇衔接测试", suite_passed, result_detail))
+        all_passed &= suite_passed
+    else:
+        results.append(_format_result("套题模式首篇衔接测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    inline_fallback_test = REPO_ROOT / "developer" / "tests" / "js" / "suiteInlineFallback.test.js"
+    if inline_fallback_test.exists():
+        try:
+            completed_inline = subprocess.run(
+                ["node", str(inline_fallback_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            inline_passed = False
+            inline_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_inline_output = completed_inline.stdout.strip() or completed_inline.stderr.strip()
+            try:
+                inline_payload = json.loads(raw_inline_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                inline_passed = False
+                inline_detail = f"输出解析失败: {parse_error}"
+            else:
+                inline_passed = inline_payload.get("status") == "pass"
+                inline_detail = inline_payload.get("detail", inline_payload)
+        results.append(_format_result("套题模式内联注入测试", inline_passed, inline_detail))
+        all_passed &= inline_passed
+    else:
+        results.append(_format_result("套题模式内联注入测试", False, "测试脚本缺失"))
+        all_passed = False
 
     return results, all_passed
 
