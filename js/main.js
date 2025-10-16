@@ -698,16 +698,23 @@ function renderOverviewLegacy(container, stats) {
     const sections = [];
 
     const suiteCard = adapter.create('div', {
-        className: 'category-card suite-mode-card'
+        className: 'category-card'
     }, [
-        adapter.create('div', { className: 'suite-card-content' }, [
-            adapter.create('div', { className: 'suite-card-icon', ariaHidden: 'true' }, '🧠'),
-            adapter.create('div', { className: 'suite-card-copy' }, [
-                adapter.create('div', { className: 'suite-card-title' }, '套题模式'),
-                adapter.create('div', { className: 'suite-card-description' }, '一次串联听力与阅读，全真模拟并自动记录进度。')
+        adapter.create('div', { className: 'category-header' }, [
+            adapter.create('div', { className: 'category-icon', ariaHidden: 'true' }, '🚀'),
+            adapter.create('div', {}, [
+                adapter.create('div', { className: 'category-title' }, '套题模式'),
+                adapter.create('div', { className: 'category-meta' }, '三篇阅读一键串联')
             ])
         ]),
-        adapter.create('div', { className: 'suite-card-actions' }, [
+        adapter.create('div', {
+            className: 'category-actions',
+            style: {
+                display: 'flex',
+                justifyContent: 'flex-end',
+                alignItems: 'center'
+            }
+        }, [
             adapter.create('button', {
                 type: 'button',
                 className: 'btn btn-primary',
