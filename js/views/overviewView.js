@@ -166,19 +166,27 @@
                     action: 'start-suite-mode',
                     overviewAction: 'suite'
                 }
-            }, '🚀 开启套题模式');
-
-            const header = this.dom.create('div', { className: 'suite-card-content' }, [
-                this.dom.create('div', { className: 'suite-card-icon' }, '🧠'),
-                this.dom.create('div', { className: 'suite-card-copy' }, [
-                    this.dom.create('div', { className: 'suite-card-title' }, '套题模式'),
-                    this.dom.create('div', { className: 'suite-card-description' }, '串联听力与阅读，一次完成整套模拟并自动记录进度。')
-                ])
+            }, [
+                this.dom.create('span', { className: 'category-action-icon', ariaHidden: 'true' }, '🚀'),
+                this.dom.create('span', { className: 'category-action-label' }, '开启套题模式')
             ]);
 
-            return this.dom.create('div', { className: 'category-card suite-mode-card' }, [
-                header,
-                this.dom.create('div', { className: 'suite-card-actions' }, [startButton])
+            return this.dom.create('div', { className: 'category-card' }, [
+                this.dom.create('div', { className: 'category-header' }, [
+                    this.dom.create('div', { className: 'category-icon' }, '🔄'),
+                    this.dom.create('div', {}, [
+                        this.dom.create('div', { className: 'category-title' }, '套题模式'),
+                        this.dom.create('div', { className: 'category-meta' }, '三篇阅读一键串联')
+                    ])
+                ]),
+                this.dom.create('div', {
+                    className: 'category-actions',
+                    style: {
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center'
+                    }
+                }, [startButton])
             ]);
         }
     }
