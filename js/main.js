@@ -1502,9 +1502,67 @@ function displayExams(exams) {
     setupExamActionHandlers();
 }
 
+const ABSOLUTE_URL_RE = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//;
+const WINDOWS_ABSOLUTE_RE = /^[a-zA-Z]:[\\/]/;
+
+function isAbsolutePath(value) {
+  if (!value) {
+    return false;
+  }
+  const normalized = String(value).trim();
+  return ABSOLUTE_URL_RE.test(normalized)
+    || WINDOWS_ABSOLUTE_RE.test(normalized)
+    || normalized.startsWith('\\\\')
+    || normalized.startsWith('//')
+    || normalized.startsWith('/');
+}
+
+function ensureTrailingSlash(value) {
+  if (!value) {
+    return '';
+  }
+  return value.endsWith('/') ? value : value + '/';
+}
+
+function joinAbsoluteResource(base, file) {
+  const basePart = base ? String(base).replace(/\\/g, '/') : '';
+  const filePart = file ? String(file).replace(/\\/g, '/').replace(/^\/+/, '') : '';
+  if (!basePart) {
+    return encodeURI(filePart);
+  }
+  if (!filePart) {
+    return encodeURI(basePart);
+  }
+  const baseWithSlash = basePart.endsWith('/') ? basePart : basePart + '/';
+  return encodeURI(baseWithSlash + filePart);
+}
+
+function encodePathSegments(path) {
+  if (!path) {
+    return '';
+  }
+
+  const segments = String(path).split('/');
+  return segments.map((segment) => {
+    if (!segment) {
+      return segment;
+    }
+    try {
+      return encodeURIComponent(decodeURIComponent(segment));
+    } catch (error) {
+      return encodeURIComponent(segment);
+    }
+  }).join('/');
+}
+
 function resolveExamBasePath(exam) {
   const relativePath = exam && exam.path ? String(exam.path) : "";
-  let combined = relativePath;
+  const normalizedRelative = relativePath.replace(/\\/g, '/').trim();
+  if (normalizedRelative && isAbsolutePath(normalizedRelative)) {
+    return ensureTrailingSlash(normalizedRelative);
+  }
+
+  let combined = normalizedRelative;
   try {
     const pathMap = getPathMap() || {};
     const type = exam && exam.type;
@@ -1512,7 +1570,6 @@ function resolveExamBasePath(exam) {
     const fallback = type && DEFAULT_PATH_MAP[type] ? DEFAULT_PATH_MAP[type] : {};
     const root = mergeRootWithFallback(mapped.root, fallback.root);
     const normalizedRoot = root.replace(/\\/g, '/');
-    const normalizedRelative = relativePath.replace(/\\/g, '/').replace(/^\/+/, '');
     if (normalizedRoot) {
       if (normalizedRelative && normalizedRelative.startsWith(normalizedRoot)) {
         combined = normalizedRelative;
@@ -1529,11 +1586,10 @@ function resolveExamBasePath(exam) {
       combined = fallbackTopRoot + normalizedCombined;
     }
   } catch (_) {}
-  if (!combined.endsWith('/')) {
-    combined += '/';
-  }
-  combined = combined.replace(/\\/g, '/').replace(/\/+\//g, '/');
-  return combined;
+
+  combined = combined.replace(/\\/g, '/');
+  combined = combined.replace(/\/{2,}/g, '/');
+  return ensureTrailingSlash(combined);
 }
 
 function extractTopLevelRootSegment(root) {
@@ -1784,16 +1840,27 @@ function buildResourcePath(exam, kind = 'html') {
     const file = sanitizeFilename(rawName, kind);
     const prefix = normalizeThemeBasePrefix(typeof window !== 'undefined' ? window.HP_BASE_PREFIX : null);
 
-    const baseSegment = (basePath || '').replace(/^\.+\//, '').replace(/^\/+/, '');
-    const normalizedBase = baseSegment && !baseSegment.endsWith('/') ? baseSegment + '/' : baseSegment;
-    const relativePath = (normalizedBase || '') + file;
-
-    if (prefix === './') {
-        return './' + encodeURI(relativePath);
+    const normalizedFile = file ? String(file).replace(/\\/g, '/') : '';
+    if (isAbsolutePath(normalizedFile)) {
+        return joinAbsoluteResource(normalizedFile, '');
     }
 
-    const joined = prefix ? prefix + '/' + relativePath : relativePath;
-    return encodeURI(joined);
+    const normalizedBasePath = basePath ? String(basePath).replace(/\\/g, '/') : '';
+    if (isAbsolutePath(normalizedBasePath)) {
+        return joinAbsoluteResource(normalizedBasePath, normalizedFile);
+    }
+
+    const baseSegment = normalizedBasePath.replace(/^\.+\//, '').replace(/^\/+/, '');
+    const normalizedBase = baseSegment && !baseSegment.endsWith('/') ? baseSegment + '/' : baseSegment;
+    const relativePath = (normalizedBase || '') + normalizedFile;
+    const encodedRelative = encodePathSegments(relativePath);
+
+    if (prefix === './') {
+        return encodedRelative ? './' + encodedRelative : './';
+    }
+
+    const trimmedPrefix = prefix ? prefix.replace(/\/+$/g, '') : '';
+    return trimmedPrefix ? `${trimmedPrefix}/${encodedRelative}` : encodedRelative;
 }
 function sanitizeFilename(name, kind) {
     if (!name) return '';
@@ -3659,33 +3726,90 @@ function startSuitePractice() {
     }
 }
 
-function startRandomPractice(category, type = 'reading') {
-    // 增加数组化防御
-    const list = getExamIndexState();
-    const categoryExams = list.filter(exam => exam.category === category && exam.type === type);
-    if (categoryExams.length === 0) {
-        showMessage(`${category} ${type === 'reading' ? '阅读' : '听力'} 分类暂无可用题目`, 'error');
+function openExamWithFallback(exam, delay = 600) {
+    if (!exam) {
+        if (typeof showMessage === 'function') {
+            showMessage('未找到可用题目', 'error');
+        }
         return;
     }
-    const randomExam = categoryExams[Math.floor(Math.random() * categoryExams.length)];
-    showMessage(`随机选择: ${randomExam.title}`, 'info');
 
-    // 确保弹出新窗口加载题目（HTML或PDF）
-    setTimeout(() => {
-        if (randomExam.hasHtml) {
-            // 有HTML文件，弹出新窗口
-            openExam(randomExam.id);
-        } else {
-            // 只有PDF文件，也要弹出新窗口
-            const fullPath = buildResourcePath(randomExam, 'pdf');
-            const pdfWindow = window.open(fullPath, `exam_${randomExam.id}`, 'width=1200,height=800,scrollbars=yes,resizable=yes');
-            if (pdfWindow) {
-                showMessage('正在打开: ' + randomExam.title, 'success');
+    const launch = () => {
+        try {
+            if (exam.hasHtml) {
+                openExam(exam.id);
             } else {
-                showMessage('无法打开窗口，请检查弹窗设置', 'error');
+                viewPDF(exam.id);
+            }
+        } catch (error) {
+            console.error('[QuickLane] 启动题目失败:', error);
+            if (typeof showMessage === 'function') {
+                showMessage('无法打开题目，请检查题库路径', 'error');
             }
         }
-    }, 1000);
+    };
+
+    if (delay > 0) {
+        setTimeout(launch, delay);
+    } else {
+        launch();
+    }
+}
+
+function startRandomPractice(category, type = 'reading') {
+    const list = getExamIndexState();
+    const categoryExams = list.filter((exam) => exam.category === category && exam.type === type);
+    if (categoryExams.length === 0) {
+        if (typeof showMessage === 'function') {
+            showMessage(`${category} ${type === 'reading' ? '阅读' : '听力'} 分类暂无可用题目`, 'error');
+        }
+        return;
+    }
+
+    const randomExam = categoryExams[Math.floor(Math.random() * categoryExams.length)];
+    if (typeof showMessage === 'function') {
+        showMessage(`随机选择: ${randomExam.title}`, 'info');
+    }
+
+    openExamWithFallback(randomExam);
+}
+
+function startListeningSprint() {
+    const list = getExamIndexState();
+    const listeningExams = list.filter((exam) => exam.type === 'listening');
+    if (!listeningExams.length) {
+        if (typeof showMessage === 'function') {
+            showMessage('听力题库尚未加载', 'error');
+        }
+        return;
+    }
+
+    const selected = listeningExams[Math.floor(Math.random() * listeningExams.length)];
+    if (typeof showMessage === 'function') {
+        showMessage(`🎧 听力随机冲刺: ${selected.title}`, 'info');
+    }
+
+    openExamWithFallback(selected);
+}
+
+function startInstantLaunch() {
+    const list = getExamIndexState();
+    if (!list.length) {
+        if (typeof showMessage === 'function') {
+            showMessage('题库尚未加载', 'error');
+        }
+        return;
+    }
+
+    const htmlPreferred = list.filter((exam) => exam.hasHtml);
+    const pool = htmlPreferred.length ? htmlPreferred : list;
+    const selected = pool[Math.floor(Math.random() * pool.length)];
+
+    if (typeof showMessage === 'function') {
+        showMessage(`⚡ 即刻开局: ${selected.title}`, 'info');
+    }
+
+    openExamWithFallback(selected);
 }
 
 // Safe exporter (compat with old UI)
@@ -3709,6 +3833,541 @@ async function exportPracticeData() {
         try { showMessage('导出失败: ' + (e && e.message || e), 'error'); } catch(_) {}
         console.error('[Export] failed', e);
     }
+}
+
+const DEFAULT_VOCAB_SPARK_WORDS = [
+    { word: 'meticulous', meaning: '一丝不苟的' },
+    { word: 'resilient', meaning: '有韧性的' },
+    { word: 'articulate', meaning: '善于表达的' },
+    { word: 'pragmatic', meaning: '务实的' },
+    { word: 'immerse', meaning: '沉浸' },
+    { word: 'synthesize', meaning: '综合' },
+    { word: 'discern', meaning: '辨别' },
+    { word: 'alleviate', meaning: '缓解' },
+    { word: 'coherent', meaning: '连贯的' },
+    { word: 'scrutinize', meaning: '仔细审查' },
+    { word: 'fortify', meaning: '强化' },
+    { word: 'contemplate', meaning: '深思' },
+    { word: 'mitigate', meaning: '减轻' },
+    { word: 'propel', meaning: '推动' },
+    { word: 'elaborate', meaning: '详尽阐述' },
+    { word: 'culminate', meaning: '达到顶点' },
+    { word: 'bolster', meaning: '支撑' },
+    { word: 'artistry', meaning: '艺术技巧' },
+    { word: 'vigilant', meaning: '警觉的' },
+    { word: 'versatile', meaning: '多才多艺的' }
+];
+
+let vocabSparkLexicon = null;
+let vocabSparkLoadingPromise = null;
+let vocabSparkState = null;
+let vocabSparkFallbackNoticeShown = false;
+let vocabSparkInputBound = false;
+let vocabSparkDeck = [];
+
+function normalizeVocabEntry(entry) {
+    if (!entry || typeof entry !== 'object') {
+        return null;
+    }
+    const word = typeof entry.word === 'string' ? entry.word.trim() : '';
+    const meaning = typeof entry.meaning === 'string' ? entry.meaning.trim() : '';
+    if (!word || !meaning) {
+        return null;
+    }
+    return { word, meaning };
+}
+
+function ensureVocabSparkInputBindings() {
+    if (vocabSparkInputBound) {
+        return;
+    }
+    const input = document.getElementById('mini-game-answer');
+    if (!input) {
+        return;
+    }
+    input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            handleMiniGameNext('next');
+        }
+    });
+    vocabSparkInputBound = true;
+}
+
+function clearVocabSparkRevealTimer() {
+    if (vocabSparkState && vocabSparkState.revealTimer) {
+        clearTimeout(vocabSparkState.revealTimer);
+        vocabSparkState.revealTimer = null;
+    }
+}
+
+function resetVocabSparkDeck() {
+    vocabSparkDeck = [];
+}
+
+async function ensureVocabSparkLexicon() {
+    if (Array.isArray(vocabSparkLexicon) && vocabSparkLexicon.length) {
+        return vocabSparkLexicon.slice();
+    }
+
+    if (vocabSparkLoadingPromise) {
+        return vocabSparkLoadingPromise.then((list) => list.slice());
+    }
+
+    const loader = async () => {
+        try {
+            const response = await fetch('assets/data/vocabulary.json', { cache: 'no-store' });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const payload = await response.json();
+            const normalized = Array.isArray(payload)
+                ? payload.map(normalizeVocabEntry).filter(Boolean)
+                : [];
+
+            if (!normalized.length) {
+                throw new Error('词汇表为空');
+            }
+
+            vocabSparkLexicon = normalized;
+            resetVocabSparkDeck();
+            return vocabSparkLexicon.slice();
+        } catch (error) {
+            console.warn('[VocabSpark] 词汇表加载失败，使用内置词库:', error);
+            vocabSparkLexicon = DEFAULT_VOCAB_SPARK_WORDS.map(normalizeVocabEntry).filter(Boolean);
+            if (!vocabSparkLexicon.length) {
+                throw error;
+            }
+            if (!vocabSparkFallbackNoticeShown && typeof showMessage === 'function') {
+                showMessage('词汇表加载失败，已使用内置词库', 'warning');
+                vocabSparkFallbackNoticeShown = true;
+            }
+            resetVocabSparkDeck();
+            return vocabSparkLexicon.slice();
+        }
+    };
+
+    vocabSparkLoadingPromise = loader().finally(() => {
+        vocabSparkLoadingPromise = null;
+    });
+
+    return vocabSparkLoadingPromise.then((list) => list.slice());
+}
+
+function drawVocabSparkQueue(lexicon, desiredCount = 10) {
+    if (!Array.isArray(lexicon) || !lexicon.length) {
+        return [];
+    }
+
+    const total = Math.min(Math.max(1, desiredCount), lexicon.length);
+
+    if (!Array.isArray(vocabSparkDeck)) {
+        vocabSparkDeck = [];
+    }
+
+    const normalizeKey = (entry) => String(entry.word || '').toLowerCase();
+
+    const ensureDeck = () => {
+        const base = shuffleArray(lexicon);
+        vocabSparkDeck = base.slice();
+    };
+
+    if (!vocabSparkDeck.length) {
+        ensureDeck();
+    }
+
+    if (vocabSparkDeck.length < total) {
+        const carry = vocabSparkDeck.slice();
+        ensureDeck();
+
+        if (carry.length) {
+            const used = new Set(carry.map(normalizeKey));
+            for (const entry of vocabSparkDeck) {
+                const key = normalizeKey(entry);
+                if (!used.has(key)) {
+                    carry.push(entry);
+                    used.add(key);
+                }
+                if (carry.length >= total) {
+                    break;
+                }
+            }
+            vocabSparkDeck = carry;
+        }
+    }
+
+    if (vocabSparkDeck.length < total) {
+        const filler = shuffleArray(lexicon);
+        for (let i = 0; i < filler.length && vocabSparkDeck.length < total; i += 1) {
+            vocabSparkDeck.push(filler[i]);
+        }
+    }
+
+    const queue = vocabSparkDeck.splice(0, total).map((entry) => ({ ...entry }));
+    return queue;
+}
+
+async function startVocabSparkGame() {
+    const modal = document.getElementById('mini-game-modal');
+    const questionEl = document.getElementById('mini-game-question');
+    const feedbackEl = document.getElementById('mini-game-feedback');
+    const progressEl = document.getElementById('mini-game-progress');
+    const inputWrapper = document.getElementById('mini-game-input-wrapper');
+    const answerInput = document.getElementById('mini-game-answer');
+    const nextBtn = document.querySelector('.mini-game-next');
+
+    if (!modal || !questionEl || !feedbackEl || !progressEl || !inputWrapper || !answerInput || !nextBtn) {
+        if (typeof showMessage === 'function') {
+            showMessage('小游戏容器缺失', 'error');
+        }
+        return;
+    }
+
+    ensureVocabSparkInputBindings();
+    clearVocabSparkRevealTimer();
+
+    modal.removeAttribute('hidden');
+    modal.classList.add('active');
+
+    questionEl.textContent = '词库加载中，请稍候...';
+    questionEl.classList.remove('reveal');
+    inputWrapper.classList.remove('hidden');
+    answerInput.value = '';
+    answerInput.disabled = true;
+    answerInput.classList.remove('is-error');
+    feedbackEl.textContent = '';
+    progressEl.textContent = '';
+    nextBtn.textContent = '下一题';
+    nextBtn.disabled = true;
+    nextBtn.dataset.gameAction = 'next';
+
+    try {
+        const lexicon = await ensureVocabSparkLexicon();
+        if (!lexicon.length) {
+            throw new Error('词汇表为空');
+        }
+
+        const queue = drawVocabSparkQueue(lexicon, 10);
+        if (!queue.length) {
+            throw new Error('词汇表为空');
+        }
+
+        vocabSparkState = {
+            queue,
+            total: queue.length,
+            completed: 0,
+            score: 0,
+            current: null,
+            phase: 'answering',
+            revealTimer: null
+        };
+
+        renderVocabSparkQuestion(true);
+    } catch (error) {
+        console.error('[VocabSpark] 初始化失败:', error);
+        if (typeof showMessage === 'function') {
+            showMessage('词汇挑战初始化失败，请稍后重试', 'error');
+        }
+        closeMiniGame();
+    }
+}
+
+function renderVocabSparkQuestion(initial = false) {
+    if (!vocabSparkState || !Array.isArray(vocabSparkState.queue)) {
+        return;
+    }
+
+    const questionEl = document.getElementById('mini-game-question');
+    const feedbackEl = document.getElementById('mini-game-feedback');
+    const progressEl = document.getElementById('mini-game-progress');
+    const nextBtn = document.querySelector('.mini-game-next');
+    const inputWrapper = document.getElementById('mini-game-input-wrapper');
+    const answerInput = document.getElementById('mini-game-answer');
+
+    if (!questionEl || !feedbackEl || !progressEl || !nextBtn || !inputWrapper || !answerInput) {
+        return;
+    }
+
+    if (!vocabSparkState.queue.length) {
+        renderVocabSparkSummary();
+        return;
+    }
+
+    clearVocabSparkRevealTimer();
+
+    vocabSparkState.current = vocabSparkState.queue[0];
+    vocabSparkState.phase = 'answering';
+
+    questionEl.textContent = vocabSparkState.current.meaning;
+    questionEl.classList.remove('reveal');
+    inputWrapper.classList.remove('hidden');
+    answerInput.disabled = false;
+    answerInput.value = '';
+    answerInput.classList.remove('is-error');
+    answerInput.focus();
+
+    feedbackEl.textContent = initial
+        ? '请根据中文释义输入英文单词'
+        : '继续输入下一题的英文拼写';
+
+    progressEl.textContent = `第 ${vocabSparkState.completed + 1} / ${vocabSparkState.total} 题`;
+    nextBtn.textContent = '下一题';
+    nextBtn.disabled = false;
+    nextBtn.dataset.gameAction = 'next';
+}
+
+function renderVocabSparkSummary() {
+    const questionEl = document.getElementById('mini-game-question');
+    const feedbackEl = document.getElementById('mini-game-feedback');
+    const progressEl = document.getElementById('mini-game-progress');
+    const nextBtn = document.querySelector('.mini-game-next');
+    const inputWrapper = document.getElementById('mini-game-input-wrapper');
+    const answerInput = document.getElementById('mini-game-answer');
+
+    if (!questionEl || !feedbackEl || !progressEl || !nextBtn || !inputWrapper || !answerInput || !vocabSparkState) {
+        return;
+    }
+
+    clearVocabSparkRevealTimer();
+
+    questionEl.textContent = '🎉 恭喜完成词汇火花挑战！';
+    questionEl.classList.remove('reveal');
+    inputWrapper.classList.add('hidden');
+    answerInput.disabled = true;
+    answerInput.value = '';
+    answerInput.classList.remove('is-error');
+
+    feedbackEl.textContent = `本轮共答对 ${vocabSparkState.score} / ${vocabSparkState.total} 题`;
+    progressEl.textContent = '';
+    nextBtn.textContent = '再来一局';
+    nextBtn.disabled = false;
+    nextBtn.dataset.gameAction = 'restart';
+    vocabSparkState.phase = 'summary';
+}
+
+function evaluateVocabSparkAnswer() {
+    if (!vocabSparkState || !vocabSparkState.current) {
+        return;
+    }
+
+    const questionEl = document.getElementById('mini-game-question');
+    const feedbackEl = document.getElementById('mini-game-feedback');
+    const nextBtn = document.querySelector('.mini-game-next');
+    const answerInput = document.getElementById('mini-game-answer');
+
+    if (!questionEl || !feedbackEl || !nextBtn || !answerInput) {
+        return;
+    }
+
+    const raw = answerInput.value || '';
+    const normalized = raw.trim();
+    if (!normalized) {
+        feedbackEl.textContent = '请先输入与释义对应的英文单词。';
+        answerInput.focus();
+        return;
+    }
+
+    const expected = String(vocabSparkState.current.word || '').trim();
+    if (normalized.toLowerCase() === expected.toLowerCase()) {
+        vocabSparkState.queue.shift();
+        vocabSparkState.completed += 1;
+        vocabSparkState.score += 1;
+        feedbackEl.textContent = '✅ 正确，继续下一题！';
+        answerInput.value = '';
+        answerInput.classList.remove('is-error');
+
+        if (!vocabSparkState.queue.length) {
+            renderVocabSparkSummary();
+            return;
+        }
+
+        setTimeout(() => {
+            renderVocabSparkQuestion();
+        }, 360);
+        return;
+    }
+
+    feedbackEl.textContent = `❌ 正确拼写：${expected}`;
+    answerInput.classList.add('is-error');
+    answerInput.disabled = true;
+    nextBtn.disabled = true;
+    questionEl.classList.add('reveal');
+    questionEl.textContent = `正确拼写：${expected}`;
+    vocabSparkState.phase = 'revealing';
+
+    clearVocabSparkRevealTimer();
+    vocabSparkState.revealTimer = setTimeout(() => {
+        if (!vocabSparkState || vocabSparkState.phase === 'summary') {
+            return;
+        }
+
+        questionEl.textContent = vocabSparkState.current.meaning;
+        questionEl.classList.remove('reveal');
+        answerInput.disabled = false;
+        answerInput.value = '';
+        answerInput.classList.remove('is-error');
+        answerInput.focus();
+        feedbackEl.textContent = '再试一次，把拼写牢记于心。';
+        nextBtn.disabled = false;
+        vocabSparkState.phase = 'answering';
+    }, 3000);
+}
+
+function handleMiniGameNext(action) {
+    if (action === 'restart') {
+        startVocabSparkGame();
+        return;
+    }
+
+    if (!vocabSparkState) {
+        return;
+    }
+
+    if (vocabSparkState.phase === 'summary') {
+        startVocabSparkGame();
+        return;
+    }
+
+    if (vocabSparkState.phase === 'revealing') {
+        return;
+    }
+
+    evaluateVocabSparkAnswer();
+}
+
+function closeMiniGame() {
+    const modal = document.getElementById('mini-game-modal');
+    if (!modal) {
+        return;
+    }
+
+    clearVocabSparkRevealTimer();
+    modal.classList.remove('active');
+    modal.setAttribute('hidden', 'hidden');
+
+    const questionEl = document.getElementById('mini-game-question');
+    const feedbackEl = document.getElementById('mini-game-feedback');
+    const progressEl = document.getElementById('mini-game-progress');
+    const inputWrapper = document.getElementById('mini-game-input-wrapper');
+    const answerInput = document.getElementById('mini-game-answer');
+
+    if (questionEl) {
+        questionEl.textContent = '准备好点燃词汇力了吗？';
+        questionEl.classList.remove('reveal');
+    }
+    if (feedbackEl) {
+        feedbackEl.textContent = '';
+    }
+    if (progressEl) {
+        progressEl.textContent = '';
+    }
+    if (inputWrapper) {
+        inputWrapper.classList.remove('hidden');
+    }
+    if (answerInput) {
+        answerInput.value = '';
+        answerInput.disabled = false;
+        answerInput.classList.remove('is-error');
+    }
+
+    vocabSparkState = null;
+}
+
+function handleQuickLaneAction(target) {
+    if (!target || !target.dataset) {
+        return;
+    }
+
+    const action = target.dataset.laneAction;
+    if (!action) {
+        return;
+    }
+
+    switch (action) {
+        case 'browse':
+            {
+                const laneCategory = target.dataset.laneCategory || 'all';
+                const laneType = target.dataset.laneType || 'all';
+
+                if (typeof browseCategory === 'function') {
+                    browseCategory(laneCategory, laneType);
+                    break;
+                }
+
+                if (window.app && typeof window.app.navigateToView === 'function') {
+                    window.app.navigateToView('browse');
+                } else if (typeof window.showView === 'function') {
+                    window.showView('browse', false);
+                }
+
+                if (typeof applyBrowseFilter === 'function') {
+                    applyBrowseFilter(laneCategory, laneType);
+                } else if (laneType !== 'all' && typeof filterByType === 'function') {
+                    setTimeout(() => filterByType(laneType), 0);
+                }
+            }
+            break;
+        case 'listening-sprint':
+            startListeningSprint();
+            break;
+        case 'instant-start':
+            startInstantLaunch();
+            break;
+        case 'sync-library':
+            if (typeof loadLibrary === 'function') {
+                loadLibrary();
+            } else if (typeof showMessage === 'function') {
+                showMessage('题库加载模块未就绪', 'error');
+            }
+            break;
+        case 'vocab-spark':
+            launchMiniGame('vocab-spark');
+            break;
+        default:
+            break;
+    }
+}
+
+function setupQuickLaneInteractions() {
+    document.addEventListener('click', (event) => {
+        const laneButton = event.target.closest('[data-lane-action]');
+        if (laneButton) {
+            event.preventDefault();
+            handleQuickLaneAction(laneButton);
+            return;
+        }
+
+        const laneTrigger = event.target.closest('[data-action="launch-mini-game"]');
+        if (laneTrigger) {
+            event.preventDefault();
+            launchMiniGame(laneTrigger.dataset.game);
+        }
+    });
+
+    const modal = document.getElementById('mini-game-modal');
+    if (!modal) {
+        return;
+    }
+
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) {
+            closeMiniGame();
+            return;
+        }
+
+        const control = event.target.closest('[data-game-action]');
+        if (control) {
+            event.preventDefault();
+            const action = control.dataset.gameAction;
+            if (action === 'close') {
+                closeMiniGame();
+                return;
+            }
+            handleMiniGameNext(action);
+        }
+    });
+
+    ensureVocabSparkInputBindings();
 }
 
 function setupIndexSettingsButtons() {
@@ -3776,10 +4435,52 @@ function setupIndexSettingsButtons() {
     });
 }
 
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', setupIndexSettingsButtons);
-} else {
+function shuffleArray(list) {
+    const array = Array.isArray(list) ? list.slice() : [];
+    for (let i = array.length - 1; i > 0; i -= 1) {
+        const j = getSecureRandomInt(i + 1);
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+}
+
+function getSecureRandomInt(maxExclusive) {
+    const max = typeof maxExclusive === 'number' && maxExclusive > 0 ? Math.floor(maxExclusive) : 0;
+    if (!max) {
+        return 0;
+    }
+
+    if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+        const buffer = new Uint32Array(1);
+        crypto.getRandomValues(buffer);
+        return buffer[0] % max;
+    }
+
+    return Math.floor(Math.random() * max);
+}
+
+async function launchMiniGame(gameId) {
+    if (gameId === 'vocab-spark') {
+        await startVocabSparkGame();
+        return;
+    }
+
+    if (typeof showMessage === 'function') {
+        showMessage('小游戏即将上线，敬请期待', 'info');
+    }
+}
+
+function initializeIndexInteractions() {
     setupIndexSettingsButtons();
+    setupQuickLaneInteractions();
+}
+
+try { window.launchMiniGame = launchMiniGame; } catch (_) {}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeIndexInteractions);
+} else {
+    initializeIndexInteractions();
 }
 
 // 新增修复3C：在js/main.js末尾添加监听examIndexLoaded事件，调用loadExamList()并隐藏浏览页spinner

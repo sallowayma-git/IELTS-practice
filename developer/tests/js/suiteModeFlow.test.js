@@ -189,6 +189,9 @@ async function main() {
 
     app.injectDataCollectionScript = function injectDataCollectionScript(examWindow, examId) {
         this.initializePracticeSession(examWindow, examId);
+        if (typeof this.handleSessionReady === 'function') {
+            this.handleSessionReady(examId, { pageType: 'reading' });
+        }
     };
     app.setupExamWindowManagement = function setupExamWindowManagement() {};
 
