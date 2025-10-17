@@ -22,14 +22,15 @@ class KeyboardShortcuts {
      * 设置事件监听器
      */
     setupEventListeners() {
+        // 键盘事件和自定义事件必须使用原生 addEventListener
         document.addEventListener('keydown', this.handleKeyDown.bind(this));
         document.addEventListener('keyup', this.handleKeyUp.bind(this));
-        
-        // 监听模态框打开/关闭
+
+        // 监听模态框打开/关闭 - 自定义事件，必须使用原生监听
         document.addEventListener('modalOpened', (e) => {
             this.modalStack.push(e.detail.modalId);
         });
-        
+
         document.addEventListener('modalClosed', (e) => {
             const index = this.modalStack.indexOf(e.detail.modalId);
             if (index > -1) {
@@ -527,17 +528,28 @@ class KeyboardShortcuts {
         }
     }
     
-    startQuickPractice() {
-        // 随机选择一个题目开始练习
-        const examIndex = window.storage?.get('exam_index', []);
-        if (examIndex && examIndex.length > 0) {
-            const randomExam = examIndex[Math.floor(Math.random() * examIndex.length)];
-            if (window.app) {
-                window.app.openExam(randomExam.id);
-                this.showShortcutFeedback(`开始练习: ${randomExam.title}`);
+    async startQuickPractice() {
+        try {
+            let examIndex = [];
+            if (window.storage && typeof window.storage.get === 'function') {
+                const stored = await window.storage.get('exam_index', []);
+                examIndex = Array.isArray(stored) ? stored : [];
+            } else if (Array.isArray(window.examIndex)) {
+                examIndex = window.examIndex;
             }
-        } else {
-            this.showShortcutFeedback('暂无可用题目', 'warning');
+
+            if (examIndex.length > 0) {
+                const randomExam = examIndex[Math.floor(Math.random() * examIndex.length)];
+                if (window.app && randomExam) {
+                    window.app.openExam(randomExam.id);
+                    this.showShortcutFeedback(`开始练习: ${randomExam.title}`);
+                }
+            } else {
+                this.showShortcutFeedback('暂无可用题目', 'warning');
+            }
+        } catch (error) {
+            console.error('[KeyboardShortcuts] 快速练习启动失败:', error);
+            this.showShortcutFeedback('加载题库失败', 'error');
         }
     }
     
@@ -577,7 +589,10 @@ class KeyboardShortcuts {
         
         // 搜索功能
         input.addEventListener('input', Utils.debounce((e) => {
-            this.performQuickSearch(e.target.value, results);
+            this.performQuickSearch(e.target.value, results).catch(error => {
+                console.error('[KeyboardShortcuts] 快速搜索触发失败:', error);
+                results.innerHTML = '<div class="no-results">无法加载题库数据</div>';
+            });
         }, 300));
         
         // 关闭功能
@@ -604,30 +619,47 @@ class KeyboardShortcuts {
     /**
      * 执行快速搜索
      */
-    performQuickSearch(query, resultsContainer) {
+    async performQuickSearch(query, resultsContainer) {
         if (!query.trim()) {
             resultsContainer.innerHTML = '';
             return;
         }
-        
-        const examIndex = window.storage?.get('exam_index', []) || [];
-        const results = examIndex.filter(exam => 
-            exam.title.toLowerCase().includes(query.toLowerCase()) ||
-            exam.category.toLowerCase().includes(query.toLowerCase())
-        ).slice(0, 10);
-        
-        if (results.length === 0) {
-            resultsContainer.innerHTML = '<div class="no-results">未找到相关题目</div>';
-            return;
+
+        try {
+            let examIndex = [];
+            if (window.storage && typeof window.storage.get === 'function') {
+                const stored = await window.storage.get('exam_index', []);
+                examIndex = Array.isArray(stored) ? stored : [];
+            } else if (Array.isArray(window.examIndex)) {
+                examIndex = window.examIndex;
+            }
+
+            const normalized = examIndex.filter(exam =>
+                exam && typeof exam.title === 'string' && typeof exam.category === 'string'
+            );
+
+            const results = normalized.filter(exam =>
+                exam.title.toLowerCase().includes(query.toLowerCase()) ||
+                exam.category.toLowerCase().includes(query.toLowerCase())
+            ).slice(0, 10);
+
+            if (results.length === 0) {
+                resultsContainer.innerHTML = '<div class="no-results">未找到相关题目</div>';
+                return;
+            }
+
+            resultsContainer.innerHTML = results.map(exam => `
+                <div class="quick-search-item" data-exam-id="${exam.id}">
+                    <div class="search-item-title">${exam.title}</div>
+                    <div class="search-item-meta">${exam.category} • ${exam.frequency === 'high' ? '高频' : '次高频'}</div>
+                </div>
+            `).join('');
+
+        } catch (error) {
+            console.error('[KeyboardShortcuts] 快速搜索失败:', error);
+            resultsContainer.innerHTML = '<div class="no-results">无法加载题库数据</div>';
         }
-        
-        resultsContainer.innerHTML = results.map(exam => `
-            <div class="quick-search-item" data-exam-id="${exam.id}">
-                <div class="search-item-title">${exam.title}</div>
-                <div class="search-item-meta">${exam.category} • ${exam.frequency === 'high' ? '高频' : '次高频'}</div>
-            </div>
-        `).join('');
-        
+
         // 添加点击事件
         resultsContainer.addEventListener('click', (e) => {
             const item = e.target.closest('.quick-search-item');

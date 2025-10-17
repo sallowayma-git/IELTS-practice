@@ -6,11 +6,15 @@ class SettingsPanel {
     constructor() {
         this.isVisible = false;
         this.settings = this.loadSettings();
-        
+
+        // 全局引用，供事件委托使用
+        window.settingsPanel = this;
+
         this.init();
     }
     
-    init() {
+    async init() {
+        this.settings = await this.loadSettings();
         this.createSettingsButton();
         this.setupEventListeners();
     }
@@ -18,29 +22,30 @@ class SettingsPanel {
     /**
      * 加载设置
      */
-    loadSettings() {
+    async loadSettings() {
+        const themeSettings = await window.storage?.get('theme_settings', {});
         return {
-            theme: window.storage?.get('current_theme', 'light'),
-            fontSize: window.storage?.get('theme_settings', {}).fontSize || 'normal',
-            reduceMotion: window.storage?.get('theme_settings', {}).reduceMotion || false,
-            highContrast: window.storage?.get('theme_settings', {}).highContrast || false,
-            autoTheme: window.storage?.get('theme_settings', {}).autoTheme || true,
-            keyboardShortcuts: window.storage?.get('keyboard_shortcuts_enabled', true),
-            soundEffects: window.storage?.get('sound_effects_enabled', false),
-            autoSave: window.storage?.get('auto_save_enabled', true),
-            notifications: window.storage?.get('notifications_enabled', true)
+            theme: await window.storage?.get('current_theme', 'light'),
+            fontSize: themeSettings.fontSize || 'normal',
+            reduceMotion: themeSettings.reduceMotion || false,
+            highContrast: themeSettings.highContrast || false,
+            autoTheme: themeSettings.autoTheme || true,
+            keyboardShortcuts: await window.storage?.get('keyboard_shortcuts_enabled', true),
+            soundEffects: await window.storage?.get('sound_effects_enabled', false),
+            autoSave: await window.storage?.get('auto_save_enabled', true),
+            notifications: await window.storage?.get('notifications_enabled', true)
         };
     }
     
     /**
      * 保存设置
      */
-    saveSettings() {
+    async saveSettings() {
         if (window.storage) {
-            window.storage.set('keyboard_shortcuts_enabled', this.settings.keyboardShortcuts);
-            window.storage.set('sound_effects_enabled', this.settings.soundEffects);
-            window.storage.set('auto_save_enabled', this.settings.autoSave);
-            window.storage.set('notifications_enabled', this.settings.notifications);
+            await window.storage.set('keyboard_shortcuts_enabled', this.settings.keyboardShortcuts);
+            await window.storage.set('sound_effects_enabled', this.settings.soundEffects);
+            await window.storage.set('auto_save_enabled', this.settings.autoSave);
+            await window.storage.set('notifications_enabled', this.settings.notifications);
         }
     }
     
@@ -50,11 +55,11 @@ class SettingsPanel {
     createSettingsButton() {
         const settingsButton = document.createElement('button');
         settingsButton.className = 'settings-button';
-        settingsButton.innerHTML = '⚙️';
+        settingsButton.textContent = '⚙️';
         settingsButton.title = '系统设置 (Ctrl+Shift+S)';
         settingsButton.setAttribute('aria-label', '打开系统设置');
         
-        settingsButton.addEventListener('click', () => this.show());
+        // 设置按钮点击已通过事件委托处理
         
         // 添加到页面
         document.body.appendChild(settingsButton);
@@ -106,17 +111,136 @@ class SettingsPanel {
      * 设置事件监听器
      */
     setupEventListeners() {
-        // 键盘快捷键
-        document.addEventListener('keydown', (e) => {
-            if (e.ctrlKey && e.shiftKey && e.key === 'S') {
-                e.preventDefault();
-                this.toggle();
-            }
-            
-            if (e.key === 'Escape' && this.isVisible) {
-                this.hide();
-            }
-        });
+        // 使用事件委托替换独立监听器
+        if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
+            // 设置按钮点击
+            window.DOM.delegate('click', '.settings-button', function(e) {
+                window.settingsPanel.show();
+            });
+
+            // 模态框事件
+            window.DOM.delegate('click', '.modal-close', function(e) {
+                window.settingsPanel.hide();
+            });
+
+            window.DOM.delegate('click', '.settings-overlay', function(e) {
+                if (e.target === this) {
+                    window.settingsPanel.hide();
+                }
+            });
+
+            // 标签切换
+            window.DOM.delegate('click', '.settings-tab', function(e) {
+                window.settingsPanel.switchTab(this.dataset.tab);
+            });
+
+            // 键盘快捷键（必须使用document.addEventListener，因为DOM.delegate不支持document作为selector）
+            document.addEventListener('keydown', function(e) {
+                if (e.ctrlKey && e.shiftKey && e.key === 'S') {
+                    e.preventDefault();
+                    window.settingsPanel.toggle();
+                }
+
+                if (e.key === 'Escape' && window.settingsPanel.isVisible) {
+                    window.settingsPanel.hide();
+                }
+            });
+
+            // 设置项变化事件
+            window.DOM.delegate('change', '#theme-select', function(e) {
+                window.settingsPanel.updateSetting('theme', this.value);
+            });
+
+            window.DOM.delegate('change', '#auto-theme-toggle', function(e) {
+                window.settingsPanel.updateSetting('autoTheme', this.checked);
+            });
+
+            window.DOM.delegate('change', '#font-size-select', function(e) {
+                window.settingsPanel.updateSetting('fontSize', this.value);
+            });
+
+            window.DOM.delegate('change', '#high-contrast-toggle', function(e) {
+                window.settingsPanel.updateSetting('highContrast', this.checked);
+            });
+
+            window.DOM.delegate('change', '#reduce-motion-toggle', function(e) {
+                window.settingsPanel.updateSetting('reduceMotion', this.checked);
+            });
+
+            window.DOM.delegate('change', '#keyboard-shortcuts-toggle', function(e) {
+                window.settingsPanel.updateSetting('keyboardShortcuts', this.checked);
+            });
+
+            window.DOM.delegate('click', '#view-shortcuts-btn', function(e) {
+                window.settingsPanel.showKeyboardShortcuts();
+            });
+
+            // 声音设置
+            window.DOM.delegate('change', '#sound-effects-toggle', function(e) {
+                window.settingsPanel.updateSetting('soundEffects', this.checked);
+            });
+
+            window.DOM.delegate('change', '#notifications-toggle', function(e) {
+                window.settingsPanel.updateSetting('notifications', this.checked);
+            });
+
+            window.DOM.delegate('change', '#auto-save-toggle', function(e) {
+                window.settingsPanel.updateSetting('autoSave', this.checked);
+            });
+
+            // 数据管理按钮
+            window.DOM.delegate('click', '#data-management-btn', function(e) {
+                window.settingsPanel.openDataManagement();
+            });
+
+            window.DOM.delegate('click', '#library-loader-btn', function(e) {
+                window.settingsPanel.openLibraryLoader();
+            });
+
+            window.DOM.delegate('click', '#system-maintenance-btn', function(e) {
+                window.settingsPanel.openSystemMaintenance();
+            });
+
+            window.DOM.delegate('click', '#clear-data-btn', function(e) {
+                window.settingsPanel.clearAllData();
+            });
+
+            window.DOM.delegate('click', '#reset-tutorials-btn', function(e) {
+                window.settingsPanel.resetTutorials();
+            });
+
+            window.DOM.delegate('click', '#show-tutorials-btn', function(e) {
+                window.settingsPanel.showTutorials();
+            });
+
+            // 关于页面按钮
+            window.DOM.delegate('click', '#reset-settings-btn', function(e) {
+                window.settingsPanel.resetSettings();
+            });
+
+            window.DOM.delegate('click', '#export-settings-btn', function(e) {
+                window.settingsPanel.exportSettings();
+            });
+
+            window.DOM.delegate('click', '#save-settings-btn', async function(e) {
+                await window.settingsPanel.saveSettings();
+                window.settingsPanel.showMessage('设置已保存', 'success');
+            });
+
+            console.log('[SettingsPanel] 使用事件委托设置监听器');
+        } else {
+            // 降级到传统监听器
+            document.addEventListener('keydown', (e) => {
+                if (e.ctrlKey && e.shiftKey && e.key === 'S') {
+                    e.preventDefault();
+                    this.toggle();
+                }
+
+                if (e.key === 'Escape' && this.isVisible) {
+                    this.hide();
+                }
+            });
+        }
     }
     
     /**
@@ -158,230 +282,327 @@ class SettingsPanel {
             this.show();
         }
     }
+
+    getDomBuilder() {
+        if (!this.domBuilder) {
+            if (window.DOMBuilder && typeof window.DOMBuilder.create === 'function') {
+                this.domBuilder = window.DOMBuilder;
+            } else if (window.DOM && window.DOM.builder) {
+                this.domBuilder = window.DOM.builder;
+            } else {
+                this.domBuilder = {
+                    create: (tag, attributes = {}, children = []) => {
+                        const element = document.createElement(tag);
+                        Object.entries(attributes).forEach(([key, value]) => {
+                            if (key === 'className') {
+                                element.className = value;
+                            } else if (key === 'dataset') {
+                                Object.assign(element.dataset, value);
+                            } else if (key === 'text') {
+                                element.textContent = value;
+                            } else {
+                                element.setAttribute(key, value);
+                            }
+                        });
+                        const childArray = Array.isArray(children) ? children : [children];
+                        childArray.forEach(child => {
+                            if (child == null) return;
+                            if (typeof child === 'string') {
+                                element.appendChild(document.createTextNode(child));
+                            } else {
+                                element.appendChild(child);
+                            }
+                        });
+                        return element;
+                    }
+                };
+            }
+        }
+        return this.domBuilder;
+    }
+
+    createSection(builder, title, items) {
+        return builder.create('div', { className: 'settings-section' }, [
+            builder.create('h4', {}, title),
+            ...items
+        ]);
+    }
+
+    createCheckboxItem(builder, { id, label, checked, description }) {
+        const inputAttributes = { type: 'checkbox', id };
+        if (checked) {
+            inputAttributes.checked = 'checked';
+        }
+        const contents = [
+            builder.create('label', { className: 'settings-checkbox' }, [
+                builder.create('input', inputAttributes),
+                builder.create('span', {}, label)
+            ])
+        ];
+        if (description) {
+            contents.push(builder.create('p', { className: 'settings-description' }, description));
+        }
+        return builder.create('div', { className: 'settings-item' }, contents);
+    }
+
+    createSelectItem(builder, { id, label, options, selected }) {
+        const optionNodes = options.map(option => {
+            const attrs = { value: option.value };
+            if (option.value === selected) {
+                attrs.selected = 'selected';
+            }
+            return builder.create('option', attrs, option.label);
+        });
+        return builder.create('div', { className: 'settings-item' }, [
+            builder.create('label', {}, label),
+            builder.create('select', { id, className: 'settings-select' }, optionNodes)
+        ]);
+    }
+
+    createButtonItem(builder, { id, text, className, description }) {
+        const button = builder.create('button', { id, className }, text);
+        const contents = [button];
+        if (description) {
+            contents.push(builder.create('p', { className: 'settings-description' }, description));
+        }
+        return builder.create('div', { className: 'settings-item' }, contents);
+    }
+
+    buildTabs(builder) {
+        const tabs = [
+            { key: 'appearance', label: '外观设置', active: true },
+            { key: 'accessibility', label: '无障碍' },
+            { key: 'interaction', label: '交互设置' },
+            { key: 'advanced', label: '高级设置' }
+        ];
+        const tabButtons = tabs.map(tab => builder.create('button', {
+            className: `settings-tab${tab.active ? ' active' : ''}`,
+            dataset: { tab: tab.key }
+        }, tab.label));
+        return builder.create('div', { className: 'settings-tabs' }, tabButtons);
+    }
+
+    buildAppearanceTab(builder) {
+        const themeOptions = [
+            { value: 'xiaodaidai', label: '小呆呆控制台' },
+            { value: 'light', label: '浅色主题' },
+            { value: 'dark', label: '深色主题' },
+            { value: 'highContrast', label: '高对比度' }
+        ];
+        const fontOptions = [
+            { value: 'small', label: '小' },
+            { value: 'normal', label: '正常' },
+            { value: 'large', label: '大' },
+            { value: 'extra-large', label: '特大' }
+        ];
+
+        return builder.create('div', { className: 'settings-tab-content active', id: 'appearance-settings' }, [
+            this.createSection(builder, '主题设置', [
+                this.createSelectItem(builder, {
+                    id: 'theme-select',
+                    label: '主题选择',
+                    options: themeOptions,
+                    selected: this.settings.theme
+                }),
+                this.createCheckboxItem(builder, {
+                    id: 'auto-theme-toggle',
+                    label: '自动跟随系统主题',
+                    checked: this.settings.autoTheme
+                })
+            ]),
+            this.createSection(builder, '字体设置', [
+                this.createSelectItem(builder, {
+                    id: 'font-size-select',
+                    label: '字体大小',
+                    options: fontOptions,
+                    selected: this.settings.fontSize
+                })
+            ])
+        ]);
+    }
+
+    buildAccessibilityTab(builder) {
+        return builder.create('div', { className: 'settings-tab-content', id: 'accessibility-settings' }, [
+            this.createSection(builder, '视觉辅助', [
+                this.createCheckboxItem(builder, {
+                    id: 'high-contrast-toggle',
+                    label: '高对比度模式',
+                    checked: this.settings.highContrast,
+                    description: '提供更清晰的视觉对比，适合视力较弱的用户'
+                }),
+                this.createCheckboxItem(builder, {
+                    id: 'reduce-motion-toggle',
+                    label: '减少动画效果',
+                    checked: this.settings.reduceMotion,
+                    description: '减少页面动画，适合对动画敏感的用户'
+                })
+            ]),
+            this.createSection(builder, '键盘导航', [
+                this.createCheckboxItem(builder, {
+                    id: 'keyboard-navigation-toggle',
+                    label: '启用键盘导航增强',
+                    checked: true,
+                    description: '增强焦点指示器和键盘导航体验'
+                })
+            ])
+        ]);
+    }
+
+    buildInteractionTab(builder) {
+        return builder.create('div', { className: 'settings-tab-content', id: 'interaction-settings' }, [
+            this.createSection(builder, '快捷键设置', [
+                this.createCheckboxItem(builder, {
+                    id: 'keyboard-shortcuts-toggle',
+                    label: '启用键盘快捷键',
+                    checked: this.settings.keyboardShortcuts,
+                    description: '使用 Ctrl+H 查看所有可用快捷键'
+                }),
+                this.createButtonItem(builder, {
+                    id: 'view-shortcuts-btn',
+                    text: '查看快捷键列表',
+                    className: 'btn btn-outline'
+                })
+            ]),
+            this.createSection(builder, '反馈设置', [
+                this.createCheckboxItem(builder, {
+                    id: 'sound-effects-toggle',
+                    label: '启用音效反馈',
+                    checked: this.settings.soundEffects
+                }),
+                this.createCheckboxItem(builder, {
+                    id: 'notifications-toggle',
+                    label: '启用通知提醒',
+                    checked: this.settings.notifications
+                })
+            ])
+        ]);
+    }
+
+    buildAdvancedTab(builder) {
+        const systemInfo = builder.create('div', { className: 'system-info' }, [
+            builder.create('p', {}, [
+                builder.create('strong', {}, '浏览器：'),
+                ` ${navigator.userAgent.split(' ')[0]}`
+            ]),
+            builder.create('p', {}, [
+                builder.create('strong', {}, '版本：'),
+                ' 1.0.0'
+            ]),
+            builder.create('p', {}, [
+                builder.create('strong', {}, '存储使用：'),
+                builder.create('span', { id: 'storage-usage' }, '计算中...')
+            ])
+        ]);
+
+        return builder.create('div', { className: 'settings-tab-content', id: 'advanced-settings' }, [
+            this.createSection(builder, '数据设置', [
+                this.createCheckboxItem(builder, {
+                    id: 'auto-save-toggle',
+                    label: '自动保存进度',
+                    checked: this.settings.autoSave
+                }),
+                this.createButtonItem(builder, {
+                    id: 'data-management-btn',
+                    text: '数据管理',
+                    className: 'btn btn-primary',
+                    description: '导入导出、备份恢复练习数据'
+                }),
+                this.createButtonItem(builder, {
+                    id: 'library-loader-btn',
+                    text: '加载题库',
+                    className: 'btn',
+                    description: '阅读/听力题库全量重载与增量更新'
+                }),
+                this.createButtonItem(builder, {
+                    id: 'system-maintenance-btn',
+                    text: '系统维护',
+                    className: 'btn btn-secondary',
+                    description: '系统诊断、性能监控和维护工具'
+                }),
+                this.createButtonItem(builder, {
+                    id: 'clear-data-btn',
+                    text: '清除所有数据',
+                    className: 'btn btn-outline',
+                    description: '这将删除所有练习记录和设置'
+                })
+            ]),
+            this.createSection(builder, '教程设置', [
+                this.createButtonItem(builder, {
+                    id: 'reset-tutorials-btn',
+                    text: '重置教程进度',
+                    className: 'btn btn-outline',
+                    description: '重新显示所有教程'
+                }),
+                this.createButtonItem(builder, {
+                    id: 'show-tutorials-btn',
+                    text: '选择教程',
+                    className: 'btn btn-outline'
+                })
+            ]),
+            this.createSection(builder, '系统信息', [
+                builder.create('div', { className: 'settings-item' }, [systemInfo])
+            ])
+        ]);
+    }
     
     /**
      * 创建设置模态框
      */
     createSettingsModal() {
-        const overlay = document.createElement('div');
-        overlay.className = 'settings-overlay modal-overlay show';
-        
-        const modal = document.createElement('div');
-        modal.className = 'settings-modal modal';
-        modal.setAttribute('tabindex', '-1');
-        modal.setAttribute('role', 'dialog');
-        modal.setAttribute('aria-labelledby', 'settings-title');
-        
-        modal.innerHTML = `
-            <div class="modal-header">
-                <h2 id="settings-title">系统设置</h2>
-                <button class="modal-close" aria-label="关闭设置">×</button>
-            </div>
-            <div class="modal-body">
-                ${this.createSettingsContent()}
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-outline reset-settings">重置为默认</button>
-                <button class="btn btn-secondary export-settings">导出设置</button>
-                <button class="btn btn-primary save-settings">保存设置</button>
-            </div>
-        `;
-        
+        const builder = this.getDomBuilder();
+        const overlay = builder.create('div', { className: 'settings-overlay modal-overlay show' });
+        const modal = builder.create('div', {
+            className: 'settings-modal modal',
+            tabindex: '-1',
+            role: 'dialog',
+            'aria-labelledby': 'settings-title'
+        });
+
+        const header = builder.create('div', { className: 'modal-header' }, [
+            builder.create('h2', { id: 'settings-title' }, '系统设置'),
+            builder.create('button', { className: 'modal-close', 'aria-label': '关闭设置' }, '×')
+        ]);
+
+        const body = builder.create('div', { className: 'modal-body' }, this.createSettingsContent(builder));
+
+        const footer = builder.create('div', { className: 'modal-footer' }, [
+            builder.create('button', { className: 'btn btn-outline', id: 'reset-settings-btn' }, '重置为默认'),
+            builder.create('button', { className: 'btn btn-secondary', id: 'export-settings-btn' }, '导出设置'),
+            builder.create('button', { className: 'btn btn-primary', id: 'save-settings-btn' }, '保存设置')
+        ]);
+
+        modal.appendChild(header);
+        modal.appendChild(body);
+        modal.appendChild(footer);
+
         overlay.appendChild(modal);
         document.body.appendChild(overlay);
-        
-        // 设置事件监听器
+
         this.setupModalEvents(overlay, modal);
     }
-    
+
     /**
      * 创建设置内容
      */
-    createSettingsContent() {
-        return `
-            <div class="settings-tabs">
-                <button class="settings-tab active" data-tab="appearance">外观设置</button>
-                <button class="settings-tab" data-tab="accessibility">无障碍</button>
-                <button class="settings-tab" data-tab="interaction">交互设置</button>
-                <button class="settings-tab" data-tab="advanced">高级设置</button>
-            </div>
-            
-            <div class="settings-content">
-                <div class="settings-tab-content active" id="appearance-settings">
-                    <div class="settings-section">
-                        <h4>主题设置</h4>
-                        <div class="settings-item">
-                            <label>主题选择</label>
-                            <select id="theme-select" class="settings-select">
-                                <option value="light" ${this.settings.theme === 'light' ? 'selected' : ''}>浅色主题</option>
-                                <option value="dark" ${this.settings.theme === 'dark' ? 'selected' : ''}>深色主题</option>
-                                <option value="highContrast" ${this.settings.theme === 'highContrast' ? 'selected' : ''}>高对比度</option>
-                            </select>
-                        </div>
-                        <div class="settings-item">
-                            <label class="settings-checkbox">
-                                <input type="checkbox" id="auto-theme" ${this.settings.autoTheme ? 'checked' : ''}>
-                                <span>自动跟随系统主题</span>
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <div class="settings-section">
-                        <h4>字体设置</h4>
-                        <div class="settings-item">
-                            <label>字体大小</label>
-                            <select id="font-size-select" class="settings-select">
-                                <option value="small" ${this.settings.fontSize === 'small' ? 'selected' : ''}>小</option>
-                                <option value="normal" ${this.settings.fontSize === 'normal' ? 'selected' : ''}>正常</option>
-                                <option value="large" ${this.settings.fontSize === 'large' ? 'selected' : ''}>大</option>
-                                <option value="extra-large" ${this.settings.fontSize === 'extra-large' ? 'selected' : ''}>特大</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="settings-tab-content" id="accessibility-settings">
-                    <div class="settings-section">
-                        <h4>视觉辅助</h4>
-                        <div class="settings-item">
-                            <label class="settings-checkbox">
-                                <input type="checkbox" id="high-contrast" ${this.settings.highContrast ? 'checked' : ''}>
-                                <span>高对比度模式</span>
-                            </label>
-                            <p class="settings-description">提供更清晰的视觉对比，适合视力较弱的用户</p>
-                        </div>
-                        <div class="settings-item">
-                            <label class="settings-checkbox">
-                                <input type="checkbox" id="reduce-motion" ${this.settings.reduceMotion ? 'checked' : ''}>
-                                <span>减少动画效果</span>
-                            </label>
-                            <p class="settings-description">减少页面动画，适合对动画敏感的用户</p>
-                        </div>
-                    </div>
-                    
-                    <div class="settings-section">
-                        <h4>键盘导航</h4>
-                        <div class="settings-item">
-                            <label class="settings-checkbox">
-                                <input type="checkbox" id="keyboard-navigation" checked>
-                                <span>启用键盘导航增强</span>
-                            </label>
-                            <p class="settings-description">增强焦点指示器和键盘导航体验</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="settings-tab-content" id="interaction-settings">
-                    <div class="settings-section">
-                        <h4>快捷键设置</h4>
-                        <div class="settings-item">
-                            <label class="settings-checkbox">
-                                <input type="checkbox" id="keyboard-shortcuts" ${this.settings.keyboardShortcuts ? 'checked' : ''}>
-                                <span>启用键盘快捷键</span>
-                            </label>
-                            <p class="settings-description">使用 Ctrl+H 查看所有可用快捷键</p>
-                        </div>
-                        <div class="settings-item">
-                            <button class="btn btn-outline" id="view-shortcuts">查看快捷键列表</button>
-                        </div>
-                    </div>
-                    
-                    <div class="settings-section">
-                        <h4>反馈设置</h4>
-                        <div class="settings-item">
-                            <label class="settings-checkbox">
-                                <input type="checkbox" id="sound-effects" ${this.settings.soundEffects ? 'checked' : ''}>
-                                <span>启用音效反馈</span>
-                            </label>
-                        </div>
-                        <div class="settings-item">
-                            <label class="settings-checkbox">
-                                <input type="checkbox" id="notifications" ${this.settings.notifications ? 'checked' : ''}>
-                                <span>启用通知提醒</span>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="settings-tab-content" id="advanced-settings">
-                    <div class="settings-section">
-                        <h4>数据设置</h4>
-                        <div class="settings-item">
-                            <label class="settings-checkbox">
-                                <input type="checkbox" id="auto-save" ${this.settings.autoSave ? 'checked' : ''}>
-                                <span>自动保存进度</span>
-                            </label>
-                        </div>
-                        <div class="settings-item">
-                            <button class="btn btn-primary" id="data-management">数据管理</button>
-                            <p class="settings-description">导入导出、备份恢复练习数据</p>
-                        </div>
-                        <div class="settings-item">
-                            <button class="btn" id="library-loader">加载题库</button>
-                            <p class="settings-description">阅读/听力题库全量重载与增量更新</p>
-                        </div>
-                        <div class="settings-item">
-                            <button class="btn btn-secondary" id="system-maintenance">系统维护</button>
-                            <p class="settings-description">系统诊断、性能监控和维护工具</p>
-                        </div>
-                        <div class="settings-item">
-                            <button class="btn btn-outline" id="clear-data">清除所有数据</button>
-                            <p class="settings-description">这将删除所有练习记录和设置</p>
-                        </div>
-                    </div>
-                    
-                    <div class="settings-section">
-                        <h4>教程设置</h4>
-                        <div class="settings-item">
-                            <button class="btn btn-outline" id="reset-tutorials">重置教程进度</button>
-                            <p class="settings-description">重新显示所有教程</p>
-                        </div>
-                        <div class="settings-item">
-                            <button class="btn btn-outline" id="show-tutorials">选择教程</button>
-                        </div>
-                    </div>
-                    
-                    <div class="settings-section">
-                        <h4>系统信息</h4>
-                        <div class="settings-item">
-                            <div class="system-info">
-                                <p><strong>浏览器：</strong> ${navigator.userAgent.split(' ')[0]}</p>
-                                <p><strong>版本：</strong> 1.0.0</p>
-                                <p><strong>存储使用：</strong> <span id="storage-usage">计算中...</span></p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
+    createSettingsContent(builder) {
+        const tabs = this.buildTabs(builder);
+        const content = builder.create('div', { className: 'settings-content' }, [
+            this.buildAppearanceTab(builder),
+            this.buildAccessibilityTab(builder),
+            this.buildInteractionTab(builder),
+            this.buildAdvancedTab(builder)
+        ]);
+        return [tabs, content];
     }
     
     /**
      * 设置模态框事件监听器
      */
     setupModalEvents(overlay, modal) {
-        // 关闭按钮
-        const closeBtn = modal.querySelector('.modal-close');
-        closeBtn.addEventListener('click', () => this.hide());
-        
-        // 点击背景关闭
-        overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) {
-                this.hide();
-            }
-        });
-        
-        // 标签切换
-        const tabs = modal.querySelectorAll('.settings-tab');
-        tabs.forEach(tab => {
-            tab.addEventListener('click', () => {
-                this.switchTab(tab.dataset.tab);
-            });
-        });
-        
-        // 设置项事件
-        this.setupSettingsEvents(modal);
-        
+        // 模态框事件已通过事件委托处理
+
+        // 设置项事件已通过事件委托处理
+
         // 计算存储使用量
         this.calculateStorageUsage();
     }
@@ -407,192 +628,124 @@ class SettingsPanel {
      * 设置设置项事件监听器
      */
     setupSettingsEvents(modal) {
-        // 主题选择
-        const themeSelect = modal.querySelector('#theme-select');
-        if (themeSelect) {
-            themeSelect.addEventListener('change', (e) => {
-                if (window.app?.themeManager) {
-                    window.app.themeManager.setTheme(e.target.value);
-                }
-            });
-        }
-        
-        // 自动主题
-        const autoThemeToggle = modal.querySelector('#auto-theme');
-        if (autoThemeToggle) {
-            autoThemeToggle.addEventListener('change', (e) => {
-                if (window.app?.themeManager) {
-                    window.app.themeManager.toggleAutoTheme();
-                }
-            });
-        }
-        
-        // 字体大小
-        const fontSizeSelect = modal.querySelector('#font-size-select');
-        if (fontSizeSelect) {
-            fontSizeSelect.addEventListener('change', (e) => {
-                if (window.app?.themeManager) {
-                    window.app.themeManager.setFontSize(e.target.value);
-                }
-            });
-        }
-        
-        // 高对比度
-        const highContrastToggle = modal.querySelector('#high-contrast');
-        if (highContrastToggle) {
-            highContrastToggle.addEventListener('change', (e) => {
-                if (window.app?.themeManager) {
-                    window.app.themeManager.toggleHighContrast();
-                }
-            });
-        }
-        
-        // 减少动画
-        const reduceMotionToggle = modal.querySelector('#reduce-motion');
-        if (reduceMotionToggle) {
-            reduceMotionToggle.addEventListener('change', (e) => {
-                if (window.app?.themeManager) {
-                    window.app.themeManager.toggleReduceMotion();
-                }
-            });
-        }
-        
-        // 键盘快捷键
-        const keyboardShortcutsToggle = modal.querySelector('#keyboard-shortcuts');
-        if (keyboardShortcutsToggle) {
-            keyboardShortcutsToggle.addEventListener('change', (e) => {
-                this.settings.keyboardShortcuts = e.target.checked;
-                if (window.app?.keyboardShortcuts) {
-                    if (e.target.checked) {
-                        window.app.keyboardShortcuts.enable();
-                    } else {
-                        window.app.keyboardShortcuts.disable();
+        const settingsContainer = modal.querySelector('.modal-body'); // 假设所有设置项都在.modal-body内
+        if (!settingsContainer) return;
+
+        const handleChange = (e) => {
+            const target = e.target;
+            if (!target) return;
+
+            const id = target.id;
+            const themeManager = window.app?.themeManager;
+            const keyboardShortcuts = window.app?.keyboardShortcuts;
+
+            switch (id) {
+                case 'theme-select':
+                    themeManager?.setTheme(target.value);
+                    break;
+                case 'auto-theme-toggle':
+                    themeManager?.toggleAutoTheme();
+                    break;
+                case 'font-size-select':
+                    themeManager?.setFontSize(target.value);
+                    break;
+                case 'high-contrast-toggle':
+                    themeManager?.toggleHighContrast();
+                    break;
+                case 'reduce-motion-toggle':
+                    themeManager?.toggleReduceMotion();
+                    break;
+                case 'keyboard-shortcuts-toggle':
+                    this.settings.keyboardShortcuts = target.checked;
+                    if (keyboardShortcuts) {
+                        target.checked ? keyboardShortcuts.enable() : keyboardShortcuts.disable();
                     }
-                }
-            });
-        }
-        
-        // 查看快捷键
-        const viewShortcutsBtn = modal.querySelector('#view-shortcuts');
-        if (viewShortcutsBtn) {
-            viewShortcutsBtn.addEventListener('click', () => {
-                if (window.app?.keyboardShortcuts) {
-                    window.app.keyboardShortcuts.showShortcutsModal();
-                }
-            });
-        }
-        
-        // 其他设置
-        const soundEffectsToggle = modal.querySelector('#sound-effects');
-        if (soundEffectsToggle) {
-            soundEffectsToggle.addEventListener('change', (e) => {
-                this.settings.soundEffects = e.target.checked;
-            });
-        }
-        
-        const notificationsToggle = modal.querySelector('#notifications');
-        if (notificationsToggle) {
-            notificationsToggle.addEventListener('change', (e) => {
-                this.settings.notifications = e.target.checked;
-            });
-        }
-        
-        const autoSaveToggle = modal.querySelector('#auto-save');
-        if (autoSaveToggle) {
-            autoSaveToggle.addEventListener('change', (e) => {
-                this.settings.autoSave = e.target.checked;
-            });
-        }
-        
-        // 数据管理
-        const dataManagementBtn = modal.querySelector('#data-management');
-        if (dataManagementBtn) {
-            dataManagementBtn.addEventListener('click', () => {
-                this.hide();
-                if (window.dataManagementPanel) {
-                    window.dataManagementPanel.show();
-                }
-            });
+                    break;
+                case 'sound-effects-toggle':
+                    this.settings.soundEffects = target.checked;
+                    break;
+                case 'notifications-toggle':
+                    this.settings.notifications = target.checked;
+                    break;
+                case 'auto-save-toggle':
+                    this.settings.autoSave = target.checked;
+                    break;
+            }
+        };
+
+        const handleClick = (e) => {
+            const target = e.target;
+            if (!target) return;
+
+            const id = target.id;
+
+            switch (id) {
+                case 'view-shortcuts-btn':
+                    window.app?.keyboardShortcuts?.showShortcutsModal();
+                    break;
+                case 'data-management-btn':
+                    this.hide();
+                    if (window.dataManagementPanel) {
+                        window.dataManagementPanel.show();
+                    }
+                    break;
+                case 'library-loader-btn':
+                    this.hide();
+                    if (window.showLibraryLoaderModal) {
+                        window.showLibraryLoaderModal();
+                    } else if (window.showMessage) {
+                        window.showMessage('加载题库功能尚未初始化', 'warning');
+                    }
+                    break;
+                case 'system-maintenance-btn':
+                    this.hide();
+                    if (window.systemMaintenancePanel) {
+                        window.systemMaintenancePanel.show();
+                    }
+                    break;
+                case 'clear-data-btn':
+                    this.confirmClearData();
+                    break;
+                case 'reset-tutorials-btn':
+                    if (window.app?.tutorialSystem) {
+                        window.app.tutorialSystem.resetTutorialProgress();
+                    }
+                    break;
+                case 'show-tutorials-btn':
+                    if (window.app?.tutorialSystem) {
+                        this.hide();
+                        window.app.tutorialSystem.showTutorialSelector();
+                    }
+                    break;
+                case 'reset-settings-btn':
+                    this.resetToDefaults();
+                    break;
+                case 'export-settings-btn':
+                    this.exportSettings();
+                    break;
+                case 'save-settings-btn':
+                    (async () => {
+                        await this.saveSettings();
+                        this.hide();
+                        if (window.showMessage) {
+                            window.showMessage('设置已保存', 'success');
+                        }
+                    })();
+                    break;
+            }
+        };
+
+        // 使用统一的事件委托
+        if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
+            window.DOM.delegate('change', '.modal-body', handleChange);
+            window.DOM.delegate('click', '.modal-body', handleClick);
+        } else {
+            // Fallback: 仍然需要为每个元素添加监听器，但逻辑是集中的
+            settingsContainer.addEventListener('change', handleChange);
+            settingsContainer.addEventListener('click', handleClick);
         }
 
-        // 加载题库
-        const libraryLoaderBtn = modal.querySelector('#library-loader');
-        if (libraryLoaderBtn) {
-            libraryLoaderBtn.addEventListener('click', () => {
-                this.hide();
-                if (window.showLibraryLoaderModal) {
-                    window.showLibraryLoaderModal();
-                } else if (window.showMessage) {
-                    window.showMessage('加载题库功能尚未初始化', 'warning');
-                }
-            });
-        }
-        
-        // 系统维护
-        const systemMaintenanceBtn = modal.querySelector('#system-maintenance');
-        if (systemMaintenanceBtn) {
-            systemMaintenanceBtn.addEventListener('click', () => {
-                this.hide();
-                if (window.systemMaintenancePanel) {
-                    window.systemMaintenancePanel.show();
-                }
-            });
-        }
-        
-        // 清除数据
-        const clearDataBtn = modal.querySelector('#clear-data');
-        if (clearDataBtn) {
-            clearDataBtn.addEventListener('click', () => {
-                this.confirmClearData();
-            });
-        }
-        
-        // 重置教程
-        const resetTutorialsBtn = modal.querySelector('#reset-tutorials');
-        if (resetTutorialsBtn) {
-            resetTutorialsBtn.addEventListener('click', () => {
-                if (window.app?.tutorialSystem) {
-                    window.app.tutorialSystem.resetTutorialProgress();
-                }
-            });
-        }
-        
-        // 显示教程
-        const showTutorialsBtn = modal.querySelector('#show-tutorials');
-        if (showTutorialsBtn) {
-            showTutorialsBtn.addEventListener('click', () => {
-                if (window.app?.tutorialSystem) {
-                    this.hide();
-                    window.app.tutorialSystem.showTutorialSelector();
-                }
-            });
-        }
-        
-        // 底部按钮
-        const resetBtn = modal.querySelector('.reset-settings');
-        if (resetBtn) {
-            resetBtn.addEventListener('click', () => {
-                this.resetToDefaults();
-            });
-        }
-        
-        const exportBtn = modal.querySelector('.export-settings');
-        if (exportBtn) {
-            exportBtn.addEventListener('click', () => {
-                this.exportSettings();
-            });
-        }
-        
-        const saveBtn = modal.querySelector('.save-settings');
-        if (saveBtn) {
-            saveBtn.addEventListener('click', () => {
-                this.saveSettings();
-                this.hide();
-                if (window.showMessage) {
-                    window.showMessage('设置已保存', 'success');
-                }
-            });
-        }
+        this.calculateStorageUsage();
     }
     
     /**
@@ -622,11 +775,15 @@ class SettingsPanel {
     /**
      * 确认清除数据
      */
-    confirmClearData() {
+    async confirmClearData() {
         const confirmed = confirm('确定要清除所有数据吗？这个操作无法撤销。');
         if (confirmed) {
             try {
-                localStorage.clear();
+                if (window.storage && typeof window.storage.clear === 'function') {
+                    await window.storage.clear();
+                } else {
+                    localStorage.clear();
+                }
                 if (window.showMessage) {
                     window.showMessage('所有数据已清除', 'info');
                 }
@@ -676,12 +833,45 @@ class SettingsPanel {
     }
     
     /**
+     * 计算存储使用量
+     */
+    async calculateStorageUsage() {
+        setTimeout(async () => {
+            const usageElement = document.querySelector('#storage-usage');
+            if (usageElement) {
+                try {
+                    let totalSize = 0;
+                    if (window.storage && typeof window.storage.keys === 'function') {
+                        const keys = await window.storage.keys();
+                        for (const key of keys) {
+                            const value = await window.storage.get(key);
+                            totalSize += JSON.stringify(value).length;
+                        }
+                    } else {
+                        // Fallback to localStorage
+                        for (let i = 0; i < localStorage.length; i++) {
+                            const key = localStorage.key(i);
+                            if (key) {
+                                totalSize += localStorage.getItem(key).length;
+                            }
+                        }
+                    }
+                    
+                    const sizeInKB = (totalSize / 1024).toFixed(2);
+                    usageElement.textContent = `${sizeInKB} KB`;
+                } catch (error) {
+                    usageElement.textContent = '无法计算';
+                }
+            }
+        }, 100);
+    }
+    /**
      * 导出设置
      */
-    exportSettings() {
+    async exportSettings() {
         const allSettings = {
-            theme: window.storage?.get('current_theme'),
-            themeSettings: window.storage?.get('theme_settings'),
+            theme: await window.storage?.get('current_theme'),
+            themeSettings: await window.storage?.get('theme_settings'),
             appSettings: this.settings,
             exportDate: new Date().toISOString()
         };

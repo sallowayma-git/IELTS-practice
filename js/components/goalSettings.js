@@ -7,7 +7,10 @@ class GoalSettings {
         this.container = container || document.getElementById('goals-view');
         this.goalManager = null;
         this.currentEditingGoal = null;
-        
+
+        // 全局引用，供事件委托使用
+        window.goalSettings = this;
+
         this.init();
     }
 
@@ -165,59 +168,101 @@ class GoalSettings {
      * 设置事件监听器
      */
     setupEventListeners() {
-        // 创建目标按钮
-        document.getElementById('create-goal-btn')?.addEventListener('click', () => {
-            this.showGoalModal();
-        });
+        // 使用事件委托替换独立监听器
+        if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
+            // 创建目标按钮
+            window.DOM.delegate('click', '#create-goal-btn', function(e) {
+                window.goalSettings.showGoalModal();
+            });
 
-        // 模态框关闭
-        document.getElementById('close-modal')?.addEventListener('click', () => {
-            this.hideGoalModal();
-        });
+            // 模态框关闭按钮
+            window.DOM.delegate('click', '#close-modal', function(e) {
+                window.goalSettings.hideGoalModal();
+            });
 
-        document.getElementById('cancel-goal')?.addEventListener('click', () => {
-            this.hideGoalModal();
-        });
+            window.DOM.delegate('click', '#cancel-goal', function(e) {
+                window.goalSettings.hideGoalModal();
+            });
 
-        // 点击模态框背景关闭
-        document.getElementById('goal-modal')?.addEventListener('click', (e) => {
-            if (e.target.id === 'goal-modal') {
+            // 点击模态框背景关闭
+            window.DOM.delegate('click', '#goal-modal', function(e) {
+                if (e.target.id === 'goal-modal') {
+                    window.goalSettings.hideGoalModal();
+                }
+            });
+
+            // 表单选项变化
+            window.DOM.delegate('change', '#goal-type', function(e) {
+                window.goalSettings.updateGoalTypeHelp(this.value);
+            });
+
+            window.DOM.delegate('change', '#target-type', function(e) {
+                window.goalSettings.updateTargetTypeHelp(this.value);
+                window.goalSettings.updateTargetUnit(this.value);
+            });
+
+            // 通知设置切换
+            window.DOM.delegate('change', '#enable-notifications', function(e) {
+                window.goalSettings.toggleNotificationSettings(this.checked);
+            });
+
+            // 表单提交
+            window.DOM.delegate('submit', '#goal-form', function(e) {
+                e.preventDefault();
+                window.goalSettings.handleFormSubmit();
+            });
+
+            console.log('[GoalSettings] 使用事件委托设置监听器');
+        } else {
+            // 降级到传统监听器
+            document.getElementById('create-goal-btn')?.addEventListener('click', () => {
+                this.showGoalModal();
+            });
+
+            document.getElementById('close-modal')?.addEventListener('click', () => {
                 this.hideGoalModal();
-            }
-        });
+            });
 
-        // 表单选项变化
-        document.getElementById('goal-type')?.addEventListener('change', (e) => {
-            this.updateGoalTypeHelp(e.target.value);
-        });
+            document.getElementById('cancel-goal')?.addEventListener('click', () => {
+                this.hideGoalModal();
+            });
 
-        document.getElementById('target-type')?.addEventListener('change', (e) => {
-            this.updateTargetTypeHelp(e.target.value);
-            this.updateTargetUnit(e.target.value);
-        });
+            document.getElementById('goal-modal')?.addEventListener('click', (e) => {
+                if (e.target.id === 'goal-modal') {
+                    this.hideGoalModal();
+                }
+            });
 
-        // 通知设置切换
-        document.getElementById('enable-notifications')?.addEventListener('change', (e) => {
-            this.toggleNotificationSettings(e.target.checked);
-        });
+            document.getElementById('goal-type')?.addEventListener('change', (e) => {
+                this.updateGoalTypeHelp(e.target.value);
+            });
 
-        // 表单提交
-        document.getElementById('goal-form')?.addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.handleFormSubmit();
-        });
+            document.getElementById('target-type')?.addEventListener('change', (e) => {
+                this.updateTargetTypeHelp(e.target.value);
+                this.updateTargetUnit(e.target.value);
+            });
 
-        // 监听目标相关事件
+            document.getElementById('enable-notifications')?.addEventListener('change', (e) => {
+                this.toggleNotificationSettings(e.target.checked);
+            });
+
+            document.getElementById('goal-form')?.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.handleFormSubmit();
+            });
+        }
+
+        // 自定义事件监听（这些事件不能用DOM.delegate处理）
         document.addEventListener('goalCreated', (e) => {
-            this.onGoalCreated(e.detail);
+            window.goalSettings.onGoalCreated(e.detail);
         });
 
         document.addEventListener('goalUpdated', (e) => {
-            this.onGoalUpdated(e.detail);
+            window.goalSettings.onGoalUpdated(e.detail);
         });
 
         document.addEventListener('goalDeleted', (e) => {
-            this.onGoalDeleted(e.detail);
+            window.goalSettings.onGoalDeleted(e.detail);
         });
     }
 
@@ -338,15 +383,19 @@ class GoalSettings {
      */
     toggleNotificationSettings(show) {
         const notificationSettings = document.getElementById('notification-settings');
-        notificationSettings.style.display = show ? 'block' : 'none';
+        if (typeof window.DOMStyles !== 'undefined' && window.DOMStyles.setStyle) {
+            window.DOMStyles.setStyle(notificationSettings, { display: show ? 'block' : 'none' });
+        } else {
+            notificationSettings.style.display = show ? 'block' : 'none';
+        }
     }
 
     /**
      * 处理表单提交
      */
-    handleFormSubmit() {
+    async handleFormSubmit() {
         const formData = this.getFormData();
-        
+
         if (!this.validateFormData(formData)) {
             return;
         }
@@ -354,14 +403,14 @@ class GoalSettings {
         try {
             if (this.currentEditingGoal) {
                 // 更新现有目标
-                this.goalManager.updateGoal(this.currentEditingGoal.id, formData);
+                await this.goalManager.updateGoal(this.currentEditingGoal.id, formData);
                 window.showMessage('目标更新成功！', 'success');
             } else {
                 // 创建新目标
-                this.goalManager.createGoal(formData);
+                await this.goalManager.createGoal(formData);
                 window.showMessage('目标创建成功！', 'success');
             }
-            
+
             this.hideGoalModal();
         } catch (error) {
             console.error('Goal operation failed:', error);
@@ -577,10 +626,10 @@ class GoalSettings {
     /**
      * 删除目标
      */
-    deleteGoal(goalId) {
+    async deleteGoal(goalId) {
         if (confirm('确定要删除这个目标吗？此操作不可撤销。')) {
             try {
-                this.goalManager.deleteGoal(goalId);
+                await this.goalManager.deleteGoal(goalId);
                 window.showMessage('目标删除成功！', 'success');
             } catch (error) {
                 console.error('Delete goal failed:', error);

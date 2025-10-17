@@ -289,7 +289,7 @@ class HelpSystem {
         helpButton.title = '帮助 (Ctrl+H)';
         helpButton.setAttribute('aria-label', '打开帮助系统');
         
-        helpButton.addEventListener('click', () => this.show());
+        helpButton.addEventListener('click', () => this.show()); // 动态创建的按钮，保持原生监听
         
         // 添加到页面
         document.body.appendChild(helpButton);
@@ -343,6 +343,7 @@ class HelpSystem {
      */
     setupEventListeners() {
         // 键盘快捷键
+        // 键盘事件必须使用原生 addEventListener
         document.addEventListener('keydown', (e) => {
             if (e.ctrlKey && e.key === 'h') {
                 e.preventDefault();
@@ -447,27 +448,36 @@ class HelpSystem {
      * 设置模态框事件监听器
      */
     setupModalEvents(overlay, modal) {
-        // 关闭按钮
+        // 关闭按钮 - 动态创建，保持原生监听
         const closeBtn = modal.querySelector('.help-close');
         closeBtn.addEventListener('click', () => this.hide());
-        
-        // 点击背景关闭
+
+        // 点击背景关闭 - 动态创建，保持原生监听
         overlay.addEventListener('click', (e) => {
             if (e.target === overlay) {
                 this.hide();
             }
         });
-        
-        // 导航切换
-        const navItems = modal.querySelectorAll('.help-nav-item');
-        navItems.forEach(item => {
-            item.addEventListener('click', () => {
+
+        // 导航切换 - 可以使用事件委托优化
+        if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
+            window.DOM.delegate('click', '.help-nav-item', (e) => {
+                const item = e.target.closest('.help-nav-item');
+                if (!item) return;
                 const section = item.dataset.section;
                 this.switchSection(section);
             });
-        });
-        
-        // 键盘导航
+        } else {
+            const navItems = modal.querySelectorAll('.help-nav-item');
+            navItems.forEach(item => {
+                item.addEventListener('click', () => {
+                    const section = item.dataset.section;
+                    this.switchSection(section);
+                });
+            });
+        }
+
+        // 键盘导航 - 模态框级别，保持原生监听
         modal.addEventListener('keydown', (e) => {
             if (e.key === 'Tab') {
                 this.handleTabNavigation(e, modal);

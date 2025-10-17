@@ -9,13 +9,19 @@ class TutorialSystem {
         this.currentTutorial = null;
         this.overlay = null;
         this.tutorials = this.initializeTutorials();
-        
+        this._hasVisitedFallback = false;
+        this.completedTutorials = [];
+        this._completedTutorialsLoaded = false;
+
         this.init();
     }
-    
+
     init() {
         this.setupEventListeners();
         this.checkFirstVisit();
+        this.refreshCompletedTutorials().catch(error => {
+            console.error('[TutorialSystem] 加载教程进度失败:', error);
+        });
     }
     
     /**
@@ -156,7 +162,7 @@ class TutorialSystem {
      * 设置事件监听器
      */
     setupEventListeners() {
-        // 键盘快捷键
+        // 键盘快捷键 - 必须使用原生 addEventListener
         document.addEventListener('keydown', (e) => {
             if (this.isActive) {
                 switch (e.key) {
@@ -182,17 +188,51 @@ class TutorialSystem {
      * 检查是否首次访问
      */
     checkFirstVisit() {
-        const hasVisited = window.storage?.get('has_visited', false);
-        if (!hasVisited) {
-            // 延迟显示首次访问教程
+        if (window.storage && typeof window.storage.get === 'function') {
+            window.storage.get('has_visited', false)
+                .then(hasVisited => {
+                    if (!hasVisited) {
+                        setTimeout(() => {
+                            this.start('firstVisit');
+                        }, 2000);
+
+                        window.storage.set('has_visited', true).catch(error => {
+                            console.error('[TutorialSystem] 标记首次访问失败:', error);
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('[TutorialSystem] 读取首次访问状态失败:', error);
+                });
+            return;
+        }
+
+        if (!this._hasVisitedFallback) {
             setTimeout(() => {
                 this.start('firstVisit');
             }, 2000);
-            
-            window.storage?.set('has_visited', true);
+            this._hasVisitedFallback = true;
         }
     }
-    
+
+    async refreshCompletedTutorials() {
+        if (window.storage && typeof window.storage.get === 'function') {
+            try {
+                const stored = await window.storage.get('completed_tutorials', []);
+                this.completedTutorials = Array.isArray(stored) ? stored : [];
+            } catch (error) {
+                console.error('[TutorialSystem] 获取已完成教程列表失败:', error);
+                this.completedTutorials = [];
+            } finally {
+                this._completedTutorialsLoaded = true;
+            }
+            return;
+        }
+
+        this.completedTutorials = Array.isArray(this.completedTutorials) ? this.completedTutorials : [];
+        this._completedTutorialsLoaded = true;
+    }
+
     /**
      * 开始教程
      */
@@ -418,25 +458,49 @@ class TutorialSystem {
      * 设置提示框事件监听器
      */
     setupTooltipEvents(tooltip) {
-        const prevBtn = tooltip.querySelector('.tutorial-prev');
-        const nextBtn = tooltip.querySelector('.tutorial-next');
-        const completeBtn = tooltip.querySelector('.tutorial-complete');
-        const skipBtn = tooltip.querySelector('.tutorial-skip');
-        
-        if (prevBtn) {
-            prevBtn.addEventListener('click', () => this.previousStep());
-        }
-        
-        if (nextBtn) {
-            nextBtn.addEventListener('click', () => this.nextStep());
-        }
-        
-        if (completeBtn) {
-            completeBtn.addEventListener('click', () => this.completeTutorial());
-        }
-        
-        if (skipBtn) {
-            skipBtn.addEventListener('click', () => this.stop());
+        // 教程控制按钮 - 可以使用事件委托优化
+        if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
+            window.DOM.delegate('click', '.tutorial-prev', (e) => {
+                const btn = e.target.closest('.tutorial-prev');
+                if (!btn) return;
+                this.previousStep();
+            });
+            window.DOM.delegate('click', '.tutorial-next', (e) => {
+                const btn = e.target.closest('.tutorial-next');
+                if (!btn) return;
+                this.nextStep();
+            });
+            window.DOM.delegate('click', '.tutorial-complete', (e) => {
+                const btn = e.target.closest('.tutorial-complete');
+                if (!btn) return;
+                this.completeTutorial();
+            });
+            window.DOM.delegate('click', '.tutorial-skip', (e) => {
+                const btn = e.target.closest('.tutorial-skip');
+                if (!btn) return;
+                this.stop();
+            });
+        } else {
+            const prevBtn = tooltip.querySelector('.tutorial-prev');
+            const nextBtn = tooltip.querySelector('.tutorial-next');
+            const completeBtn = tooltip.querySelector('.tutorial-complete');
+            const skipBtn = tooltip.querySelector('.tutorial-skip');
+
+            if (prevBtn) {
+                prevBtn.addEventListener('click', () => this.previousStep());
+            }
+
+            if (nextBtn) {
+                nextBtn.addEventListener('click', () => this.nextStep());
+            }
+
+            if (completeBtn) {
+                completeBtn.addEventListener('click', () => this.completeTutorial());
+            }
+
+            if (skipBtn) {
+                skipBtn.addEventListener('click', () => this.stop());
+            }
         }
     }
     
@@ -477,18 +541,35 @@ class TutorialSystem {
     /**
      * 完成教程
      */
-    completeTutorial() {
+    async completeTutorial() {
         if (window.showMessage) {
             window.showMessage('教程完成！您现在可以开始使用系统了。', 'success');
         }
-        
+
         // 记录教程完成状态
-        const completedTutorials = window.storage?.get('completed_tutorials', []);
-        if (this.currentTutorial && !completedTutorials.includes(this.currentTutorial.name)) {
-            completedTutorials.push(this.currentTutorial.name);
-            window.storage?.set('completed_tutorials', completedTutorials);
+        if (this.currentTutorial) {
+            const tutorialName = this.currentTutorial.name;
+            if (window.storage && typeof window.storage.get === 'function') {
+                try {
+                    const existing = await window.storage.get('completed_tutorials', []);
+                    const list = Array.isArray(existing) ? existing : [];
+                    if (!list.includes(tutorialName)) {
+                        list.push(tutorialName);
+                        await window.storage.set('completed_tutorials', list);
+                    }
+                    this.completedTutorials = list;
+                    this._completedTutorialsLoaded = true;
+                } catch (error) {
+                    console.error('[TutorialSystem] 保存教程完成状态失败:', error);
+                }
+            } else {
+                if (!this.completedTutorials.includes(tutorialName)) {
+                    this.completedTutorials.push(tutorialName);
+                }
+                this._completedTutorialsLoaded = true;
+            }
         }
-        
+
         this.stop();
     }
     
@@ -508,18 +589,37 @@ class TutorialSystem {
      * 检查教程是否已完成
      */
     isTutorialCompleted(tutorialKey) {
-        const completedTutorials = window.storage?.get('completed_tutorials', []);
         const tutorial = this.tutorials[tutorialKey];
-        return tutorial && completedTutorials.includes(tutorial.name);
+        if (!tutorial) {
+            return false;
+        }
+
+        if (!this._completedTutorialsLoaded) {
+            this.refreshCompletedTutorials().catch(error => {
+                console.error('[TutorialSystem] 异步刷新教程状态失败:', error);
+            });
+        }
+
+        return this.completedTutorials.includes(tutorial.name);
     }
-    
+
     /**
      * 重置教程状态
      */
-    resetTutorialProgress() {
-        window.storage?.set('completed_tutorials', []);
-        window.storage?.set('has_visited', false);
-        
+    async resetTutorialProgress() {
+        if (window.storage && typeof window.storage.set === 'function') {
+            try {
+                await window.storage.set('completed_tutorials', []);
+                await window.storage.set('has_visited', false);
+            } catch (error) {
+                console.error('[TutorialSystem] 重置教程状态失败:', error);
+            }
+        }
+
+        this.completedTutorials = [];
+        this._completedTutorialsLoaded = true;
+        this._hasVisitedFallback = false;
+
         if (window.showMessage) {
             window.showMessage('教程进度已重置', 'info');
         }
@@ -570,16 +670,26 @@ class TutorialSystem {
         
         this.showModal(selectorContent);
         
-        // 设置事件监听器
+        // 设置事件监听器 - 可以使用事件委托优化
         setTimeout(() => {
-            const startButtons = document.querySelectorAll('.start-tutorial');
-            startButtons.forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const tutorialKey = e.target.dataset.tutorial;
+            if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
+                window.DOM.delegate('click', '.start-tutorial', (e) => {
+                    const btn = e.target.closest('.start-tutorial');
+                    if (!btn) return;
+                    const tutorialKey = btn.dataset.tutorial;
                     document.querySelector('.modal-overlay').remove();
                     this.start(tutorialKey);
                 });
-            });
+            } else {
+                const startButtons = document.querySelectorAll('.start-tutorial');
+                startButtons.forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const tutorialKey = e.target.dataset.tutorial;
+                        document.querySelector('.modal-overlay').remove();
+                        this.start(tutorialKey);
+                    });
+                });
+            }
         }, 100);
     }
     
@@ -593,19 +703,28 @@ class TutorialSystem {
         
         document.body.appendChild(modalOverlay);
         
-        // 点击背景关闭
+        // 点击背景关闭 - 动态创建，保持原生监听
         modalOverlay.addEventListener('click', (e) => {
             if (e.target === modalOverlay) {
                 modalOverlay.remove();
             }
         });
-        
-        // 关闭按钮
-        const closeBtn = modalOverlay.querySelector('.modal-close');
-        if (closeBtn) {
-            closeBtn.addEventListener('click', () => {
-                modalOverlay.remove();
+
+        // 关闭按钮 - 可以使用事件委托优化
+        if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
+            window.DOM.delegate('click', '.modal-close', (e) => {
+                const btn = e.target.closest('.modal-close');
+                if (!btn) return;
+                const modal = document.querySelector('.modal-overlay');
+                if (modal) modal.remove();
             });
+        } else {
+            const closeBtn = modalOverlay.querySelector('.modal-close');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', () => {
+                    modalOverlay.remove();
+                });
+            }
         }
     }
 }

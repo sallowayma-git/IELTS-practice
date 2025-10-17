@@ -312,13 +312,13 @@
       <img class="map-hit" src="../../assets/images/The-Marauders-Map-main/map.png" width="1440" height="900" usemap="#hp-map" alt="Harry Potter Map" />
       <map name="hp-map">
         <!-- Hogwarts (Overview) - scaled from 1200x750 by 1.2 -->
-        <area shape="poly" coords="552,198, 648,228, 828,300, 780,372, 660,348, 564,342" href="#overview" alt="Hogwarts" title="前往总览">
+        <area shape="poly" coords="552,198, 648,228, 828,300, 780,372, 660,348, 564,342" href="HP/Welcome.html#overview" data-target="overview" alt="Hogwarts" title="前往总览">
         <!-- The Burrow (Records) - nudged right-down -->
-        <area shape="poly" coords="246,270, 348,294, 342,354, 288,342, 252,360" href="#records" alt="The Burrow" title="查看练习记录">
+        <area shape="poly" coords="246,270, 348,294, 342,354, 288,342, 252,360" href="HP/Welcome.html#history" data-target="records" alt="The Burrow" title="查看练习记录">
         <!-- Quidditch Pitch (Question Bank) - nudged left -->
-        <area shape="poly" coords="1048,192, 1108,210, 1120,240, 1096,270, 1036,276, 982,258, 970,228, 994,204" href="#questions" alt="Quidditch Pitch" title="进入题库">
+        <area shape="poly" coords="1048,192, 1108,210, 1120,240, 1096,270, 1036,276, 982,258, 970,228, 994,204" href="HP/Welcome.html#practice" data-target="questions" alt="Quidditch Pitch" title="进入题库">
         <!-- Azkaban (Settings) rect x1,y1,x2,y2 - nudged left -->
-        <area shape="rect" coords="306,558, 384,732" href="#settings" alt="Azkaban" title="打开设置">
+        <area shape="rect" coords="306,558, 384,732" href="HP/Welcome.html#settings" data-target="settings" alt="Azkaban" title="打开设置">
       </map>
 
       <!-- Effects Layer (not interactive) -->
@@ -454,30 +454,66 @@
       bindHover('area[alt="Azkaban"]', document.getElementById('azkaban-effects'));
 
       // Handle navigation for each clickable area
-      document.querySelectorAll('map[name="hp-map"] area').forEach(a => {
-        a.addEventListener('click', (e) => {
-          e.preventDefault();
+      const viewMap = new Map([
+        ['overview', 'overview'],
+        ['records', 'history'],
+        ['history', 'history'],
+        ['questions', 'practice'],
+        ['practice', 'practice'],
+        ['settings', 'settings']
+      ]);
 
-          // Get the href attribute to determine destination
-          const href = a.getAttribute('href');
+      const sanitizeView = (value) => {
+        const key = (value || '').trim().toLowerCase();
+        if (!key) return '';
+        if (viewMap.has(key)) return viewMap.get(key);
+        return key;
+      };
 
-          // Navigate based on the destination
-          switch(href) {
-            case '#overview':
-              window.location.href = 'HP/Welcome.html';
-              break;
-            case '#records':
-              window.location.href = 'HP/Practice History.html';
-              break;
-            case '#questions':
-              window.location.href = 'HP/practice.html';
-              break;
-            case '#settings':
-              window.location.href = 'HP/setting.html';
-              break;
-            default:
-              console.log('Unknown destination:', href);
+      const extractHash = (href) => {
+        if (!href) return '';
+        const match = href.match(/#([^#]+)$/);
+        return match ? match[1] : '';
+      };
+
+      const resolveView = (area) => {
+        if (!area) return 'overview';
+        const datasetTarget = sanitizeView(area.getAttribute('data-target'));
+        if (datasetTarget) return datasetTarget;
+        try {
+          const href = area.getAttribute('href') || '';
+          if (!href) return 'overview';
+          const url = new URL(href, window.location.href);
+          const hash = sanitizeView((url.hash || '').replace('#', ''));
+          if (hash) return hash;
+        } catch (error) {
+          const fallbackHash = sanitizeView(extractHash(area.getAttribute('href')));
+          if (fallbackHash) return fallbackHash;
+          console.warn('[hp-map] 无法解析链接', error);
+        }
+        return 'overview';
+      };
+
+      const buildTargetUrl = (area, view) => {
+        const rawHref = area && area.getAttribute('href');
+        const suffix = `?view=${view}#${view}`;
+        if (!rawHref) return `HP/Welcome.html${suffix}`;
+        const base = rawHref.replace(/[#?].*/, '');
+        const prefix = base || 'HP/Welcome.html';
+        return `${prefix}${suffix}`;
+      };
+
+      document.querySelectorAll('map[name="hp-map"] area').forEach((area) => {
+        area.addEventListener('click', (event) => {
+          event.preventDefault();
+          const view = resolveView(area);
+          const targetUrl = buildTargetUrl(area, view);
+          try {
+            sessionStorage.setItem('hp.portal.pendingView', view);
+          } catch (error) {
+            console.warn('[hp-map] 无法记录目标视图', error);
           }
+          window.location.assign(targetUrl);
         });
       });
     })();

@@ -5,6 +5,34 @@
 class ThemeManager {
     constructor() {
         this.themes = {
+            xiaodaidai: {
+                name: '小呆呆控制台',
+                variables: {
+                    '--primary-color': '#ffc83d',
+                    '--primary-color-light': 'rgba(255, 200, 61, 0.18)',
+                    '--primary-hover': '#f59e0b',
+                    '--secondary-color': '#64748b',
+                    '--success-color': '#34d399',
+                    '--success-color-light': 'rgba(52, 211, 153, 0.14)',
+                    '--warning-color': '#f59e0b',
+                    '--error-color': '#ef4444',
+                    '--accent-color': '#a1bfff',
+
+                    '--bg-primary': '#f7f9fb',
+                    '--bg-secondary': '#fff8e1',
+                    '--bg-tertiary': '#ffe4b5',
+
+                    '--text-primary': '#1f2937',
+                    '--text-secondary': '#4b5563',
+                    '--text-tertiary': '#64748b',
+                    '--text-muted': '#94a3b8',
+
+                    '--border-color': 'rgba(255, 200, 61, 0.35)',
+                    '--shadow-sm': '0 6px 16px rgba(161, 191, 255, 0.25)',
+                    '--shadow-md': '0 12px 28px rgba(255, 200, 61, 0.22)',
+                    '--shadow-lg': '0 24px 60px rgba(161, 191, 255, 0.3)'
+                }
+            },
             light: {
                 name: '浅色主题',
                 variables: {
@@ -102,8 +130,8 @@ class ThemeManager {
         this.init();
     }
     
-    init() {
-        this.loadSettings();
+    async init() {
+        await this.loadSettings();
         this.setupSystemThemeDetection();
         this.applyCurrentTheme();
         this.setupEventListeners();
@@ -112,21 +140,21 @@ class ThemeManager {
     /**
      * 加载保存的设置
      */
-    loadSettings() {
-        const savedSettings = window.storage?.get('theme_settings', {});
+    async loadSettings() {
+        const savedSettings = await window.storage?.get('theme_settings', {});
         this.settings = { ...this.settings, ...savedSettings };
         
-        const savedTheme = window.storage?.get('current_theme', 'light');
+        const savedTheme = await window.storage?.get('current_theme', 'light');
         this.currentTheme = savedTheme;
     }
     
     /**
      * 保存设置
      */
-    saveSettings() {
+    async saveSettings() {
         if (window.storage) {
-            window.storage.set('theme_settings', this.settings);
-            window.storage.set('current_theme', this.currentTheme);
+            await window.storage.set('theme_settings', this.settings);
+            await window.storage.set('current_theme', this.currentTheme);
         }
     }
     
@@ -137,14 +165,16 @@ class ThemeManager {
         if (window.matchMedia) {
             const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
             const reduceMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-            
+
+            // Note: MediaQueryEventListeners cannot be easily replaced with event delegation
+            // These are system-level media queries that need the traditional addEventListener
             // 监听系统主题变化
             darkModeQuery.addEventListener('change', (e) => {
                 if (this.settings.autoTheme) {
                     this.setTheme(e.matches ? 'dark' : 'light');
                 }
             });
-            
+
             // 监听减少动画偏好
             reduceMotionQuery.addEventListener('change', (e) => {
                 this.settings.reduceMotion = e.matches;
@@ -165,7 +195,7 @@ class ThemeManager {
      * 设置事件监听器
      */
     setupEventListeners() {
-        // 监听键盘快捷键
+        // 监听键盘快捷键 - 全局事件必须使用原生 addEventListener
         document.addEventListener('keydown', (e) => {
             if (e.ctrlKey && e.shiftKey && e.key === 'T') {
                 e.preventDefault();
@@ -253,10 +283,10 @@ class ThemeManager {
      * 切换主题
      */
     toggleTheme() {
-        const themeOrder = ['light', 'dark', 'highContrast'];
+        const themeOrder = ['light', 'xiaodaidai', 'dark', 'highContrast'];
         const currentIndex = themeOrder.indexOf(this.currentTheme);
         const nextIndex = (currentIndex + 1) % themeOrder.length;
-        
+
         this.setTheme(themeOrder[nextIndex]);
     }
     
@@ -302,16 +332,18 @@ class ThemeManager {
     /**
      * 切换高对比度
      */
-    toggleHighContrast() {
+    async toggleHighContrast() {
         this.settings.highContrast = !this.settings.highContrast;
         
         if (this.settings.highContrast) {
+            await window.storage?.set('previous_theme', this.currentTheme); // Save current before switch
             this.setTheme('highContrast');
         } else {
             // 恢复到之前的主题或默认主题
-            const previousTheme = window.storage?.get('previous_theme', 'light');
+            const previousTheme = await window.storage?.get('previous_theme', 'light');
             this.setTheme(previousTheme);
         }
+        await this.saveSettings(); // Ensure saved
     }
     
     /**
@@ -357,7 +389,7 @@ class ThemeManager {
     /**
      * 重置为默认设置
      */
-    resetToDefaults() {
+    async resetToDefaults() {
         this.currentTheme = 'light';
         this.settings = {
             fontSize: 'normal',
@@ -367,7 +399,7 @@ class ThemeManager {
         };
         
         this.applyCurrentTheme();
-        this.saveSettings();
+        await this.saveSettings();
         
         if (window.showMessage) {
             window.showMessage('主题设置已重置为默认值', 'info');

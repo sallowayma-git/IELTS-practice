@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>状态序列化刷新测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container { max-width: 800px; margin: 0 auto; }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .result { margin: 10px 0; padding: 10px; border-radius: 4px; }
+        .pass {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .fail {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        button {
+            padding: 10px 15px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-success { background-color: #28a745; color: white; }
+        .btn-warning { background-color: #ffc107; color: black; }
+        .btn-danger { background-color: #dc3545; color: white; }
+        button:hover { opacity: 0.8; transform: translateY(-1px); }
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .status.success { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        .status.info { background: #d1ecf1; color: #0c5460; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 状态序列化刷新测试</h1>
+        <p>测试Set/Map对象在页面刷新后的持久化能力</p>
+
+        <div class="test-section">
+            <h3>📋 测试步骤:</h3>
+            <ol>
+                <li><strong>点击"创建测试数据"</strong> - 创建包含Set/Map的测试状态</li>
+                <li><strong>点击"保存状态到存储"</strong> - 序列化并保存到localStorage</li>
+                <li><strong>刷新页面 (F5)</strong> - 模拟用户刷新行为</li>
+                <li><strong>点击"验证恢复的状态"</strong> - 检查数据完整性</li>
+            </ol>
+
+            <div style="margin: 15px 0;">
+                <button class="btn-primary" onclick="createTestData()">🔧 创建测试数据</button>
+                <button class="btn-success" onclick="saveState()">💾 保存状态到存储</button>
+                <button class="btn-warning" onclick="loadState()">📂 加载状态</button>
+                <button class="btn-danger" onclick="verifyState()">✅ 验证恢复的状态</button>
+                <button class="btn-primary" onclick="runFullTest()">🧪 运行完整测试</button>
+                <button class="btn-primary" onclick="runIntegrityValidation()">🔍 运行完整性验证</button>
+                <button class="btn-danger" onclick="clearTestData()">🗑️ 清除测试数据</button>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>📊 测试结果:</h3>
+            <div id="test-results">
+                <div class="status info">点击上方按钮开始测试</div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>📋 当前状态:</h3>
+            <pre id="current-state">无状态数据</pre>
+        </div>
+
+        <div class="test-section">
+            <h3>🔍 存储检查:</h3>
+            <div id="storage-check">
+                <button class="btn-primary" onclick="checkStorage()">检查localStorage内容</button>
+                <pre id="storage-content" style="margin-top: 10px;"></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- 加载必要的脚本 -->
+    <script src="../../js/utils/storage.js"></script>
+    <script src="../../js/data/dataSources/storageDataSource.js"></script>
+    <script src="../../js/data/repositories/baseRepository.js"></script>
+    <script src="../../js/data/repositories/dataRepositoryRegistry.js"></script>
+    <script src="../../js/data/repositories/practiceRepository.js"></script>
+    <script src="../../js/data/repositories/settingsRepository.js"></script>
+    <script src="../../js/data/repositories/backupRepository.js"></script>
+    <script src="../../js/data/repositories/metaRepository.js"></script>
+    <script src="../../js/data/index.js"></script>
+    <script src="../../js/utils/stateSerializer.js"></script>
+    <script src="./js/stateSerializerTest.js"></script>
+    <script src="./js/dataIntegrityValidator.js"></script>
+
+    <script>
+        let testState = null;
+        const test = new StateSerializerTest();
+        const validator = new DataIntegrityValidator();
+        const TEST_KEY = 'refresh_test_state';
+
+        // 创建测试数据
+        function createTestData() {
+            testState = {
+                // 模拟app.js中的实际状态结构
+                exam: {
+                    filteredExams: ['exam1', 'exam2', 'exam3'],
+                    configurations: new Map([
+                        ['config1', { enabled: true, difficulty: 'medium' }],
+                        ['config2', { enabled: false, difficulty: 'hard' }]
+                    ])
+                },
+                practice: {
+                    selectedRecords: new Set(['record1', 'record2', 'record3']),
+                    bulkDeleteMode: false,
+                    records: [
+                        { id: 'record1', score: 85, type: 'reading' },
+                        { id: 'record2', score: 92, type: 'listening' },
+                        { id: 'record3', score: 78, type: 'reading' }
+                    ]
+                },
+                ui: {
+                    browseFilter: { category: 'all', type: 'all' },
+                    currentVirtualScroller: null,
+                    loading: false
+                },
+                system: {
+                    processedSessions: new Set(['session1', 'session2']),
+                    fallbackExamSessions: new Map([
+                        ['fallback1', { examId: 'exam1', data: 'backup data' }],
+                        ['fallback2', { examId: 'exam2', data: 'backup data 2' }]
+                    ]),
+                    failedScripts: new Set(['script1'])
+                },
+                timestamp: new Date().toISOString(),
+                testId: Math.random().toString(36).substr(2, 9)
+            };
+
+            updateDisplay('✅ 测试数据已创建', false);
+            updateCurrentState();
+        }
+
+        // 保存状态到存储
+        async function saveState() {
+            if (!testState) {
+                updateDisplay('❌ 请先创建测试数据', true);
+                return;
+            }
+
+            try {
+                const serialized = StateSerializer.serialize(testState);
+                await storage.set(TEST_KEY, serialized);
+
+                // 验证保存是否成功
+                const saved = await storage.get(TEST_KEY);
+                if (saved) {
+                    updateDisplay('✅ 状态已成功保存到localStorage', false);
+                } else {
+                    updateDisplay('❌ 保存验证失败', true);
+                }
+            } catch (error) {
+                updateDisplay('❌ 保存失败: ' + error.message, true);
+            }
+        }
+
+        // 从存储加载状态
+        async function loadState() {
+            try {
+                const stored = await storage.get(TEST_KEY);
+                if (stored) {
+                    testState = StateSerializer.deserialize(stored);
+                    updateDisplay('✅ 状态已成功从localStorage加载', false);
+                    updateCurrentState();
+                } else {
+                    updateDisplay('⚠️ 未找到存储的状态数据', true);
+                }
+            } catch (error) {
+                updateDisplay('❌ 加载失败: ' + error.message, true);
+            }
+        }
+
+        // 验证恢复的状态
+        function verifyState() {
+            if (!testState) {
+                updateDisplay('❌ 无状态数据可验证', true);
+                return;
+            }
+
+            const results = [];
+            let allPassed = true;
+
+            // 验证practice.selectedRecords (Set)
+            const setSelected = testState.practice.selectedRecords instanceof Set &&
+                               testState.practice.selectedRecords.size === 3;
+            results.push({
+                name: 'practice.selectedRecords (Set)',
+                passed: setSelected,
+                details: setSelected ? '✅ Set正确恢复，包含3个元素' : '❌ Set恢复失败'
+            });
+            if (!setSelected) allPassed = false;
+
+            // 验证exam.configurations (Map)
+            const configMap = testState.exam.configurations instanceof Map &&
+                            testState.exam.configurations.size === 2;
+            results.push({
+                name: 'exam.configurations (Map)',
+                passed: configMap,
+                details: configMap ? '✅ Map正确恢复，包含2个配置' : '❌ Map恢复失败'
+            });
+            if (!configMap) allPassed = false;
+
+            // 验证system.processedSessions (Set)
+            const processedSet = testState.system.processedSessions instanceof Set &&
+                               testState.system.processedSessions.size === 2;
+            results.push({
+                name: 'system.processedSessions (Set)',
+                passed: processedSet,
+                details: processedSet ? '✅ Set正确恢复，包含2个会话' : '❌ Set恢复失败'
+            });
+            if (!processedSet) allPassed = false;
+
+            // 验证system.fallbackExamSessions (Map)
+            const fallbackMap = testState.system.fallbackExamSessions instanceof Map &&
+                              testState.system.fallbackExamSessions.size === 2;
+            results.push({
+                name: 'system.fallbackExamSessions (Map)',
+                passed: fallbackMap,
+                details: fallbackMap ? '✅ Map正确恢复，包含2个回退会话' : '❌ Map恢复失败'
+            });
+            if (!fallbackMap) allPassed = false;
+
+            // 验证普通数组和对象
+            const arraysValid = Array.isArray(testState.practice.records) &&
+                               testState.practice.records.length === 3;
+            results.push({
+                name: 'practice.records (Array)',
+                passed: arraysValid,
+                details: arraysValid ? '✅ 数组正确恢复' : '❌ 数组恢复失败'
+            });
+            if (!arraysValid) allPassed = false;
+
+            // 显示详细结果
+            let html = '<h4>🔍 详细验证结果:</h4>';
+            results.forEach(r => {
+                html += `<div class="result ${r.passed ? 'pass' : 'fail'}">${r.details}</div>`;
+            });
+            html += `<div class="result ${allPassed ? 'pass' : 'fail'}"><strong>${
+                allPassed ? '🎉 所有测试通过！Set/Map序列化工作正常' : '💥 测试失败！存在数据完整性问题'
+            }</strong></div>`;
+
+            document.getElementById('test-results').innerHTML = html;
+
+            updateDisplay(allPassed ? '🎉 状态验证完成！所有数据完整' : '💥 状态验证失败！数据损坏', !allPassed);
+        }
+
+        // 运行完整测试套件
+        async function runFullTest() {
+            updateDisplay('🧪 正在运行完整测试套件...', false);
+            try {
+                await test.runAllTests();
+                updateDisplay('✅ 完整测试套件执行完成', false);
+            } catch (error) {
+                updateDisplay('❌ 测试套件执行失败: ' + error.message, true);
+            }
+        }
+
+        // 运行数据完整性验证
+        async function runIntegrityValidation() {
+            updateDisplay('🔍 正在运行数据完整性验证...', false);
+            try {
+                await validator.runAllValidations();
+                const report = validator.generateReport();
+
+                let html = '<h4>🔍 数据完整性验证报告:</h4>';
+                html += `<div class="result ${report.summary.failedTests === 0 ? 'pass' : 'fail'}">`;
+                html += `总验证: ${report.summary.totalTests}, 通过: ${report.summary.passedTests}, 失败: ${report.summary.failedTests}`;
+                html += ` (成功率: ${report.summary.successRate})</div>`;
+
+                if (report.summary.failedTests > 0) {
+                    html += '<div class="result fail"><strong>失败的验证:</strong></div>';
+                    report.failedTests.forEach(failure => {
+                        html += `<div class="result fail">- ${failure.category}: ${failure.name} (${failure.error})</div>`;
+                    });
+                }
+
+                html += '<h5>分类结果:</h5>';
+                report.categories.forEach(cat => {
+                    html += `<div class="result ${cat.failed === 0 ? 'pass' : 'fail'}">`;
+                    html += `${cat.name}: ${cat.passed}/${cat.total} (成功率: ${cat.successRate})</div>`;
+                });
+
+                document.getElementById('test-results').innerHTML = html;
+                updateDisplay(`✅ 数据完整性验证完成 (成功率: ${report.summary.successRate})`, report.summary.failedTests > 0);
+
+            } catch (error) {
+                updateDisplay('❌ 完整性验证失败: ' + error.message, true);
+            }
+        }
+
+        // 清除测试数据
+        async function clearTestData() {
+            try {
+                await storage.remove(TEST_KEY);
+                testState = null;
+                updateDisplay('🗑️ 测试数据已清除', false);
+                updateCurrentState();
+                document.getElementById('test-results').innerHTML = '<div class="status info">测试数据已清除</div>';
+            } catch (error) {
+                updateDisplay('❌ 清除失败: ' + error.message, true);
+            }
+        }
+
+        // 检查localStorage内容
+        async function checkStorage() {
+            try {
+                const keys = Object.keys(localStorage);
+                const relevantKeys = keys.filter(key => key.includes('state') || key.includes('test'));
+
+                let content = 'localStorage相关键:\n';
+                if (relevantKeys.length === 0) {
+                    content += '  无相关存储键\n';
+                } else {
+                    relevantKeys.forEach(key => {
+                        const value = localStorage.getItem(key);
+                        content += `  ${key}: ${value.length > 100 ? value.substring(0, 100) + '...' : value}\n`;
+                    });
+                }
+
+                if (testState) {
+                    content += '\n当前内存中的testState:\n';
+                    content += `  testId: ${testState.testId}\n`;
+                    content += `  timestamp: ${testState.timestamp}\n`;
+                    content += `  practice.selectedRecords.size: ${testState.practice.selectedRecords.size}\n`;
+                    content += `  system.processedSessions.size: ${testState.system.processedSessions.size}\n`;
+                }
+
+                document.getElementById('storage-content').textContent = content;
+            } catch (error) {
+                document.getElementById('storage-content').textContent = '检查失败: ' + error.message;
+            }
+        }
+
+        // 更新状态显示
+        function updateDisplay(message, isError = false) {
+            console.log((isError ? '❌' : '✅') + ' ' + message);
+        }
+
+        // 更新当前状态显示
+        function updateCurrentState() {
+            const element = document.getElementById('current-state');
+            if (!testState) {
+                element.textContent = '无状态数据';
+                return;
+            }
+
+            element.textContent = JSON.stringify(testState, (key, value) => {
+                if (value instanceof Set) return `Set(${Array.from(value).join(', ')})`;
+                if (value instanceof Map) return `Map(${Array.from(value.entries()).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(', ')})`;
+                return value;
+            }, 2);
+        }
+
+        // 页面加载时自动尝试恢复状态并验证
+        window.addEventListener('load', async () => {
+            updateDisplay('📄 页面加载完成，尝试恢复状态...', false);
+
+            await loadState();
+            if (testState) {
+                updateDisplay('🔄 检测到已保存的状态，开始自动验证...', false);
+                setTimeout(() => {
+                    verifyState();
+                }, 500);
+            } else {
+                updateDisplay('📋 未找到保存的状态，请创建新的测试数据', false);
+            }
+        });
+    </script>
+</body>
+</html>
