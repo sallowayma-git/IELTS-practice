@@ -8,8 +8,65 @@ class SystemDiagnostics {
         this.performanceMetrics = [];
         this.errorLogs = [];
         this.maintenanceTasks = [];
-        
+
         this.initialize();
+    }
+
+    _getStorage() {
+        const candidate = typeof window !== 'undefined' ? window.storage : null;
+        return candidate && typeof candidate === 'object' ? candidate : null;
+    }
+
+    async _resolveMaybePromise(value, fallback) {
+        try {
+            if (value && typeof value.then === 'function') {
+                const resolved = await value;
+                return resolved == null && fallback !== undefined ? fallback : resolved;
+            }
+            if (value == null && fallback !== undefined) {
+                return fallback;
+            }
+            return value;
+        } catch (error) {
+            if (fallback !== undefined) {
+                return fallback;
+            }
+            throw error;
+        }
+    }
+
+    async _storageGet(key, fallback) {
+        const storage = this._getStorage();
+        if (!storage || typeof storage.get !== 'function') {
+            return fallback;
+        }
+        return this._resolveMaybePromise(storage.get(key, fallback), fallback);
+    }
+
+    async _storageSet(key, value) {
+        const storage = this._getStorage();
+        if (!storage || typeof storage.set !== 'function') {
+            return false;
+        }
+        await this._resolveMaybePromise(storage.set(key, value), false);
+        return true;
+    }
+
+    async _storageRemove(key) {
+        const storage = this._getStorage();
+        if (!storage || typeof storage.remove !== 'function') {
+            return false;
+        }
+        await this._resolveMaybePromise(storage.remove(key), false);
+        return true;
+    }
+
+    async _getStorageInfo() {
+        const storage = this._getStorage();
+        if (!storage || typeof storage.getStorageInfo !== 'function') {
+            return null;
+        }
+        return this._resolveMaybePromise(storage.getStorageInfo(), null);
     }
 
     /**
@@ -17,16 +74,18 @@ class SystemDiagnostics {
      */
     initialize() {
         console.log('SystemDiagnostics initialized');
-        
+
         // 设置错误监听
         this.setupErrorLogging();
-        
+
         // 设置性能监控
         this.setupPerformanceMonitoring();
-        
+
         // 加载历史数据
-        this.loadHistoricalData();
-        
+        this.loadHistoricalData().catch((error) => {
+            console.warn('加载历史诊断数据失败:', error);
+        });
+
         // 设置定期诊断
         this.setupPeriodicDiagnostics();
     }
@@ -92,8 +151,8 @@ class SystemDiagnostics {
         }
 
         this.diagnosticResults.push(results);
-        this.saveDiagnosticResults();
-        
+        await this.saveDiagnosticResults();
+
         return results;
     }
 
@@ -108,7 +167,7 @@ class SystemDiagnostics {
 
         try {
             // 获取题库索引
-            const examIndex = storage.get('exam_index', []);
+            const examIndex = await this._storageGet('exam_index', []);
             totalExams = examIndex.length;
 
             if (examIndex.length === 0) {
@@ -209,7 +268,7 @@ class SystemDiagnostics {
         let corruptedFiles = 0;
 
         try {
-            const examIndex = storage.get('exam_index', []);
+            const examIndex = await this._storageGet('exam_index', []);
             
             // 模拟文件检查（在实际环境中需要实际的文件系统访问）
             for (const exam of examIndex) {
@@ -252,8 +311,8 @@ class SystemDiagnostics {
 
         try {
             // 检查练习记录与题库索引的一致性
-            const practiceRecords = storage.get('practice_records', []);
-            const examIndex = storage.get('exam_index', []);
+            const practiceRecords = await this._storageGet('practice_records', []);
+            const examIndex = await this._storageGet('exam_index', []);
             const examIds = new Set(examIndex.map(exam => exam.id));
 
             // 检查练习记录中的题目ID是否存在于索引中
@@ -270,7 +329,7 @@ class SystemDiagnostics {
             });
 
             // 检查用户统计数据一致性
-            const userStats = storage.get('user_stats', {});
+            const userStats = await this._storageGet('user_stats', {});
             if (userStats.totalPractices !== practiceRecords.length) {
                 warnings.push({
                     type: 'stats_mismatch',
@@ -318,7 +377,7 @@ class SystemDiagnostics {
 
         try {
             // 检查存储可用性
-            const storageInfo = storage.getStorageInfo();
+            const storageInfo = await this._getStorageInfo();
             
             if (!storageInfo) {
                 issues.push({
@@ -353,10 +412,10 @@ class SystemDiagnostics {
 
             // 检查关键数据完整性
             const criticalKeys = ['exam_index', 'practice_records', 'user_stats'];
-            criticalKeys.forEach(key => {
+            for (const key of criticalKeys) {
                 try {
-                    const data = storage.get(key);
-                    if (data === null) {
+                    const data = await this._storageGet(key, null);
+                    if (data === null || data === undefined) {
                         warnings.push({
                             type: 'missing_data',
                             severity: 'medium',
@@ -372,7 +431,7 @@ class SystemDiagnostics {
                         suggestion: '数据可能已损坏，考虑从备份恢复'
                     });
                 }
-            });
+            }
 
         } catch (error) {
             issues.push({
@@ -388,7 +447,7 @@ class SystemDiagnostics {
     /**
      * 性能监控
      */
-    startPerformanceMonitoring() {
+    async startPerformanceMonitoring() {
         const metrics = {
             timestamp: new Date().toISOString(),
             type: 'performance',
@@ -416,13 +475,13 @@ class SystemDiagnostics {
             }
 
             // 存储操作性能
-            metrics.data.storage = this.measureStoragePerformance();
+            metrics.data.storage = await this.measureStoragePerformance();
 
             // 题库操作性能
-            metrics.data.examOperations = this.measureExamOperationPerformance();
+            metrics.data.examOperations = await this.measureExamOperationPerformance();
 
             this.performanceMetrics.push(metrics);
-            this.savePerformanceMetrics();
+            await this.savePerformanceMetrics();
 
         } catch (error) {
             console.error('Performance monitoring failed:', error);
@@ -434,27 +493,29 @@ class SystemDiagnostics {
     /**
      * 测量存储性能
      */
-    measureStoragePerformance() {
+    async measureStoragePerformance() {
+        const storage = this._getStorage();
+        if (!storage || typeof storage.set !== 'function' || typeof storage.get !== 'function') {
+            return { message: 'Storage unavailable' };
+        }
+
         const testData = { test: 'performance_test', timestamp: Date.now() };
-        const iterations = 100;
-        
-        // 写入性能测试
+        const iterations = 50;
+
         const writeStart = performance.now();
         for (let i = 0; i < iterations; i++) {
-            storage.set(`perf_test_${i}`, testData);
+            await this._storageSet(`perf_test_${i}`, testData);
         }
         const writeTime = performance.now() - writeStart;
 
-        // 读取性能测试
         const readStart = performance.now();
         for (let i = 0; i < iterations; i++) {
-            storage.get(`perf_test_${i}`);
+            await this._storageGet(`perf_test_${i}`, null);
         }
         const readTime = performance.now() - readStart;
 
-        // 清理测试数据
         for (let i = 0; i < iterations; i++) {
-            storage.remove(`perf_test_${i}`);
+            await this._storageRemove(`perf_test_${i}`);
         }
 
         return {
@@ -467,9 +528,9 @@ class SystemDiagnostics {
     /**
      * 测量题库操作性能
      */
-    measureExamOperationPerformance() {
-        const examIndex = storage.get('exam_index', []);
-        
+    async measureExamOperationPerformance() {
+        const examIndex = await this._storageGet('exam_index', []);
+
         if (examIndex.length === 0) {
             return { message: 'No exam data available for performance testing' };
         }
@@ -503,7 +564,7 @@ class SystemDiagnostics {
      * 错误日志收集
      */
     setupErrorLogging() {
-        // 全局错误监听
+        // 全局错误监听 - 必须使用原生 addEventListener
         window.addEventListener('error', (event) => {
             this.logError({
                 type: 'javascript_error',
@@ -516,7 +577,7 @@ class SystemDiagnostics {
             });
         });
 
-        // Promise 拒绝监听
+        // Promise 拒绝监听 - 必须使用原生 addEventListener
         window.addEventListener('unhandledrejection', (event) => {
             this.logError({
                 type: 'unhandled_promise_rejection',
@@ -549,7 +610,9 @@ class SystemDiagnostics {
             this.errorLogs.splice(0, this.errorLogs.length - 1000);
         }
 
-        this.saveErrorLogs();
+        this.saveErrorLogs().catch((error) => {
+            console.error('保存错误日志失败:', error);
+        });
         console.error('System error logged:', errorInfo);
     }
 
@@ -748,7 +811,7 @@ class SystemDiagnostics {
         }
 
         this.maintenanceTasks.push(maintenanceResult);
-        this.saveMaintenanceHistory();
+        await this.saveMaintenanceHistory();
 
         return maintenanceResult;
     }
@@ -771,7 +834,7 @@ class SystemDiagnostics {
                 await this.compressStorageData();
                 break;
             case 'clear_error_logs':
-                this.clearErrorLogs();
+                await this.clearErrorLogs();
                 break;
             default:
                 throw new Error(`Unknown maintenance task: ${task}`);
@@ -786,13 +849,13 @@ class SystemDiagnostics {
         const oneYearAgo = new Date();
         oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
         
-        const records = storage.get('practice_records', []);
-        const validRecords = records.filter(record => 
+        const records = await this._storageGet('practice_records', []);
+        const validRecords = records.filter(record =>
             new Date(record.startTime) > oneYearAgo
         );
-        
+
         if (validRecords.length !== records.length) {
-            storage.set('practice_records', validRecords);
+            await this._storageSet('practice_records', validRecords);
             console.log(`Cleaned up ${records.length - validRecords.length} expired records`);
         }
     }
@@ -822,7 +885,7 @@ class SystemDiagnostics {
      */
     async compressStorageData() {
         // 移除不必要的字段，压缩数据结构
-        const records = storage.get('practice_records', []);
+        const records = await this._storageGet('practice_records', []);
         const compressedRecords = records.map(record => {
             // 移除冗余字段，保留核心数据
             return {
@@ -839,17 +902,17 @@ class SystemDiagnostics {
                 }
             };
         });
-        
-        storage.set('practice_records', compressedRecords);
+
+        await this._storageSet('practice_records', compressedRecords);
         console.log('Storage data compressed');
     }
 
     /**
      * 清理错误日志
      */
-    clearErrorLogs() {
+    async clearErrorLogs() {
         this.errorLogs = [];
-        this.saveErrorLogs();
+        await this.saveErrorLogs();
         console.log('Error logs cleared');
     }
 
@@ -871,63 +934,67 @@ class SystemDiagnostics {
     setupPeriodicDiagnostics() {
         // 每小时进行一次性能监控
         setInterval(() => {
-            this.startPerformanceMonitoring();
+            this.startPerformanceMonitoring().catch((error) => {
+                console.error('定时性能监控失败:', error);
+            });
         }, 60 * 60 * 1000);
 
         // 每天进行一次完整性检查
         setInterval(() => {
-            this.checkExamIntegrity();
+            this.checkExamIntegrity().catch((error) => {
+                console.error('定时完整性检查失败:', error);
+            });
         }, 24 * 60 * 60 * 1000);
     }
 
     /**
      * 保存诊断结果
      */
-    saveDiagnosticResults() {
+    async saveDiagnosticResults() {
         // 保持最近50次诊断结果
         if (this.diagnosticResults.length > 50) {
             this.diagnosticResults.splice(0, this.diagnosticResults.length - 50);
         }
-        storage.set('diagnostic_results', this.diagnosticResults);
+        await this._storageSet('diagnostic_results', this.diagnosticResults);
     }
 
     /**
      * 保存性能指标
      */
-    savePerformanceMetrics() {
+    async savePerformanceMetrics() {
         // 保持最近100次性能指标
         if (this.performanceMetrics.length > 100) {
             this.performanceMetrics.splice(0, this.performanceMetrics.length - 100);
         }
-        storage.set('performance_metrics', this.performanceMetrics);
+        await this._storageSet('performance_metrics', this.performanceMetrics);
     }
 
     /**
      * 保存错误日志
      */
-    saveErrorLogs() {
-        storage.set('error_logs', this.errorLogs);
+    async saveErrorLogs() {
+        await this._storageSet('error_logs', this.errorLogs);
     }
 
     /**
      * 保存维护历史
      */
-    saveMaintenanceHistory() {
+    async saveMaintenanceHistory() {
         // 保持最近20次维护记录
         if (this.maintenanceTasks.length > 20) {
             this.maintenanceTasks.splice(0, this.maintenanceTasks.length - 20);
         }
-        storage.set('maintenance_history', this.maintenanceTasks);
+        await this._storageSet('maintenance_history', this.maintenanceTasks);
     }
 
     /**
      * 加载历史数据
      */
-    loadHistoricalData() {
-        this.diagnosticResults = storage.get('diagnostic_results', []);
-        this.performanceMetrics = storage.get('performance_metrics', []);
-        this.errorLogs = storage.get('error_logs', []);
-        this.maintenanceTasks = storage.get('maintenance_history', []);
+    async loadHistoricalData() {
+        this.diagnosticResults = await this._storageGet('diagnostic_results', []);
+        this.performanceMetrics = await this._storageGet('performance_metrics', []);
+        this.errorLogs = await this._storageGet('error_logs', []);
+        this.maintenanceTasks = await this._storageGet('maintenance_history', []);
     }
 
     /**

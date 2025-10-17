@@ -34,9 +34,10 @@ class TouchHandler {
      * 设置触摸事件监听
      */
     setupTouchEvents() {
+        // 全局触摸事件必须使用原生 addEventListener，不能使用事件委托
         document.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: true });
         document.addEventListener('touchend', this.handleTouchEnd.bind(this), { passive: true });
-        
+
         // 防止双击缩放
         let lastTouchEnd = 0;
         document.addEventListener('touchend', (e) => {
@@ -148,59 +149,65 @@ class TouchHandler {
      * 设置卡片滑动操作
      */
     setupCardSwipe() {
+        // DOMContentLoaded是全局事件，必须使用原生 addEventListener
         document.addEventListener('DOMContentLoaded', () => {
-            const examCards = document.querySelectorAll('.exam-card');
-            
-            examCards.forEach(card => {
-                let startX = 0;
-                let currentX = 0;
-                let cardBeingDragged = null;
-                
-                card.addEventListener('touchstart', (e) => {
-                    startX = e.touches[0].clientX;
-                    cardBeingDragged = card;
-                    card.style.transition = 'none';
-                }, { passive: true });
-                
-                card.addEventListener('touchmove', (e) => {
-                    if (!cardBeingDragged) return;
-                    
-                    currentX = e.touches[0].clientX;
-                    const deltaX = currentX - startX;
-                    
-                    // 限制滑动距离
-                    const maxSlide = 100;
-                    const slideDistance = Math.max(-maxSlide, Math.min(maxSlide, deltaX));
-                    
-                    card.style.transform = `translateX(${slideDistance}px)`;
-                    
-                    // 显示操作提示
-                    if (Math.abs(slideDistance) > 30) {
-                        this.showSwipeHint(card, slideDistance > 0 ? 'right' : 'left');
+            this.initializeCardSwipe();
+        });
+    }
+
+    initializeCardSwipe() {
+        const examCards = document.querySelectorAll('.exam-card');
+
+        examCards.forEach(card => {
+            let startX = 0;
+            let currentX = 0;
+            let cardBeingDragged = null;
+
+            // 触摸事件不在DOM委托支持范围内，必须使用原生 addEventListener
+            card.addEventListener('touchstart', (e) => {
+                startX = e.touches[0].clientX;
+                cardBeingDragged = card;
+                card.style.transition = 'none';
+            }, { passive: true });
+
+            card.addEventListener('touchmove', (e) => {
+                if (!cardBeingDragged) return;
+
+                currentX = e.touches[0].clientX;
+                const deltaX = currentX - startX;
+
+                // 限制滑动距离
+                const maxSlide = 100;
+                const slideDistance = Math.max(-maxSlide, Math.min(maxSlide, deltaX));
+
+                card.style.transform = `translateX(${slideDistance}px)`;
+
+                // 显示操作提示
+                if (Math.abs(slideDistance) > 30) {
+                    this.showSwipeHint(card, slideDistance > 0 ? 'right' : 'left');
+                }
+            }, { passive: true });
+
+            card.addEventListener('touchend', () => {
+                if (!cardBeingDragged) return;
+
+                const deltaX = currentX - startX;
+
+                card.style.transition = 'transform 0.3s ease';
+                card.style.transform = 'translateX(0)';
+
+                // 执行滑动操作
+                if (Math.abs(deltaX) > 50) {
+                    if (deltaX > 0) {
+                        this.handleCardSwipeRight(card);
+                    } else {
+                        this.handleCardSwipeLeft(card);
                     }
-                }, { passive: true });
-                
-                card.addEventListener('touchend', () => {
-                    if (!cardBeingDragged) return;
-                    
-                    const deltaX = currentX - startX;
-                    
-                    card.style.transition = 'transform 0.3s ease';
-                    card.style.transform = 'translateX(0)';
-                    
-                    // 执行滑动操作
-                    if (Math.abs(deltaX) > 50) {
-                        if (deltaX > 0) {
-                            this.handleCardSwipeRight(card);
-                        } else {
-                            this.handleCardSwipeLeft(card);
-                        }
-                    }
-                    
-                    cardBeingDragged = null;
-                    this.hideSwipeHint();
-                }, { passive: true });
-            });
+                }
+
+                cardBeingDragged = null;
+                this.hideSwipeHint();
+            }, { passive: true });
         });
     }
     
@@ -255,45 +262,51 @@ class TouchHandler {
      * 设置模态框滑动关闭
      */
     setupModalSwipe() {
+        // DOMContentLoaded是全局事件，必须使用原生 addEventListener
         document.addEventListener('DOMContentLoaded', () => {
-            const modals = document.querySelectorAll('.modal');
-            
-            modals.forEach(modal => {
-                let startY = 0;
-                let currentY = 0;
-                
-                modal.addEventListener('touchstart', (e) => {
-                    startY = e.touches[0].clientY;
-                }, { passive: true });
-                
-                modal.addEventListener('touchmove', (e) => {
-                    currentY = e.touches[0].clientY;
-                    const deltaY = currentY - startY;
-                    
-                    // 只允许向下滑动关闭
-                    if (deltaY > 0) {
-                        const opacity = Math.max(0.3, 1 - deltaY / 300);
-                        modal.style.transform = `translateY(${deltaY}px)`;
-                        modal.style.opacity = opacity;
+            this.initializeModalSwipe();
+        });
+    }
+
+    initializeModalSwipe() {
+        const modals = document.querySelectorAll('.modal');
+
+        modals.forEach(modal => {
+            let startY = 0;
+            let currentY = 0;
+
+            // 触摸事件不在DOM委托支持范围内，必须使用原生 addEventListener
+            modal.addEventListener('touchstart', (e) => {
+                startY = e.touches[0].clientY;
+            }, { passive: true });
+
+            modal.addEventListener('touchmove', (e) => {
+                currentY = e.touches[0].clientY;
+                const deltaY = currentY - startY;
+
+                // 只允许向下滑动关闭
+                if (deltaY > 0) {
+                    const opacity = Math.max(0.3, 1 - deltaY / 300);
+                    modal.style.transform = `translateY(${deltaY}px)`;
+                    modal.style.opacity = opacity;
+                }
+            }, { passive: true });
+
+            modal.addEventListener('touchend', () => {
+                const deltaY = currentY - startY;
+
+                if (deltaY > 100) {
+                    // 关闭模态框
+                    const closeBtn = modal.querySelector('.modal-close, .close-preview, .close-sessions');
+                    if (closeBtn) {
+                        closeBtn.click();
                     }
-                }, { passive: true });
-                
-                modal.addEventListener('touchend', () => {
-                    const deltaY = currentY - startY;
-                    
-                    if (deltaY > 100) {
-                        // 关闭模态框
-                        const closeBtn = modal.querySelector('.modal-close, .close-preview, .close-sessions');
-                        if (closeBtn) {
-                            closeBtn.click();
-                        }
-                    } else {
-                        // 恢复位置
-                        modal.style.transform = 'translateY(0)';
-                        modal.style.opacity = '1';
-                    }
-                }, { passive: true });
-            });
+                } else {
+                    // 恢复位置
+                    modal.style.transform = 'translateY(0)';
+                    modal.style.opacity = '1';
+                }
+            }, { passive: true });
         });
     }
     
@@ -319,18 +332,19 @@ class TouchHandler {
      */
     addTouchFeedback() {
         const interactiveElements = document.querySelectorAll('.btn, .nav-btn, .exam-card, .category-card');
-        
+
+        // 触摸事件不在DOM委托支持范围内，必须使用原生 addEventListener
         interactiveElements.forEach(element => {
             element.addEventListener('touchstart', () => {
                 element.classList.add('touch-active');
             }, { passive: true });
-            
+
             element.addEventListener('touchend', () => {
                 setTimeout(() => {
                     element.classList.remove('touch-active');
                 }, 150);
             }, { passive: true });
-            
+
             element.addEventListener('touchcancel', () => {
                 element.classList.remove('touch-active');
             }, { passive: true });
@@ -343,13 +357,14 @@ class TouchHandler {
     optimizeScrolling() {
         // 使用 passive 监听器优化滚动性能
         const scrollableElements = document.querySelectorAll('.modal-body, .search-results, .record-list');
-        
+
+        // 触摸事件和滚动事件不在DOM委托支持范围内，必须使用原生 addEventListener
         scrollableElements.forEach(element => {
             element.addEventListener('touchstart', (e) => {
                 // 记录滚动开始位置
                 element.dataset.scrollTop = element.scrollTop;
             }, { passive: true });
-            
+
             element.addEventListener('scroll', (e) => {
                 // 优化滚动性能
                 if (element.scrollTop === 0) {
@@ -357,7 +372,7 @@ class TouchHandler {
                 }
             }, { passive: true });
         });
-        
+
         // 防止过度滚动
         document.body.addEventListener('touchmove', (e) => {
             if (e.target === document.body) {
@@ -372,10 +387,12 @@ class TouchHandler {
     addQuickGestures() {
         // 双击返回顶部
         let lastTap = 0;
+
+        // 全局触摸事件必须使用原生 addEventListener
         document.addEventListener('touchend', (e) => {
             const currentTime = new Date().getTime();
             const tapLength = currentTime - lastTap;
-            
+
             if (tapLength < 500 && tapLength > 0) {
                 // 双击事件
                 if (e.target.closest('.main-content')) {

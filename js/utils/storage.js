@@ -1282,7 +1282,7 @@ class StorageManager {
             }
         }, 300000); // 每5分钟检查一次
 
-        // 页面卸载时清理监控
+        // 页面卸载时清理监控 - 全局事件必须使用原生 addEventListener
         window.addEventListener('beforeunload', () => {
             if (this.monitoringInterval) {
                 clearInterval(this.monitoringInterval);

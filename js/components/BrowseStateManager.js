@@ -27,6 +27,9 @@ class BrowseStateManager {
                 total: 0
             }
         };
+
+        // 全局引用，供事件委托使用
+        window.browseStateManager = this;
         
         // 绑定方法上下文
         this.handleBrowseNavigation = this.handleBrowseNavigation.bind(this);
@@ -55,22 +58,33 @@ class BrowseStateManager {
      * 设置事件监听器
      */
     setupEventListeners() {
-        // 监听导航按钮点击
-        document.addEventListener('click', (event) => {
-            const navBtn = event.target.closest('.nav-btn');
-            if (navBtn && navBtn.textContent.includes('题库浏览')) {
-                this.handleBrowseNavigation();
-            }
-        });
+        // 使用事件委托替换独立监听器
+        if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
+            // 监听导航按钮点击
+            window.DOM.delegate('click', '.nav-btn', function(e) {
+                if (this.textContent.includes('题库浏览')) {
+                    window.browseStateManager.handleBrowseNavigation();
+                }
+            });
 
-        // 监听分类浏览
+            console.log('[BrowseStateManager] 使用事件委托设置监听器');
+        } else {
+            // 降级到传统监听器
+            document.addEventListener('click', (event) => {
+                const navBtn = event.target.closest('.nav-btn');
+                if (navBtn && navBtn.textContent.includes('题库浏览')) {
+                    this.handleBrowseNavigation();
+                }
+            });
+        }
+
+        // 自定义事件和窗口事件监听（这些事件不能用DOM.delegate处理）
         document.addEventListener('categoryBrowse', (event) => {
-            this.setBrowseFilter(event.detail.category);
+            window.browseStateManager.setBrowseFilter(event.detail.category);
         });
 
-        // 监听页面卸载，保存状态
         window.addEventListener('beforeunload', () => {
-            this.saveBrowseState();
+            window.browseStateManager.saveBrowseState();
         });
     }
 

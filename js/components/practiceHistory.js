@@ -20,8 +20,126 @@ class PracticeHistory {
             maxAccuracy: 100
         };
         this.searchQuery = '';
-        
+
+        // 性能优化：虚拟滚动器实例
+        this.virtualScroller = null;
+
+        // 兼容性修复：保存原始方法支持enhancer
+        this._originalCreateRecordItem = this.createRecordItem.bind(this);
+
+        this.dom = window.DOM || null;
+        this.domCreate = this.dom && typeof this.dom.create === 'function'
+            ? this.dom.create.bind(this.dom)
+            : null;
+        this.domReplace = this.dom && typeof this.dom.replaceContent === 'function'
+            ? this.dom.replaceContent.bind(this.dom)
+            : null;
+
         this.initialize();
+    }
+
+    createNode(tag, attrs = {}, children = []) {
+        if (this.domCreate) {
+            return this.domCreate(tag, attrs, children);
+        }
+
+        const element = document.createElement(tag);
+        const { dataset, style, ...rest } = attrs || {};
+
+        if (dataset && typeof dataset === 'object') {
+            Object.assign(element.dataset, dataset);
+        }
+
+        if (style && typeof style === 'object') {
+            Object.assign(element.style, style);
+        }
+
+        Object.entries(rest || {}).forEach(([key, value]) => {
+            if (value == null) {
+                return;
+            }
+            if (key === 'className') {
+                element.className = value;
+                return;
+            }
+            if (key === 'textContent') {
+                element.textContent = value;
+                return;
+            }
+            if (key === 'htmlFor') {
+                element.htmlFor = value;
+                return;
+            }
+            element.setAttribute(key, value);
+        });
+
+        this.appendChildren(element, children);
+
+        return element;
+    }
+
+    appendChildren(element, children) {
+        if (children == null) {
+            return;
+        }
+
+        const list = Array.isArray(children) ? children : [children];
+        list.forEach((child) => {
+            if (child == null) {
+                return;
+            }
+            if (typeof child === 'string') {
+                element.appendChild(document.createTextNode(child));
+            } else if (child instanceof Node) {
+                element.appendChild(child);
+            }
+        });
+    }
+
+    replaceContent(container, content) {
+        if (!container) {
+            return;
+        }
+
+        if (this.domReplace) {
+            this.domReplace(container, content);
+            return;
+        }
+
+        while (container.firstChild) {
+            container.removeChild(container.firstChild);
+        }
+
+        if (content == null) {
+            return;
+        }
+
+        if (Array.isArray(content)) {
+            content.forEach(node => {
+                if (node instanceof Node) {
+                    container.appendChild(node);
+                }
+            });
+        } else if (content instanceof Node) {
+            container.appendChild(content);
+        }
+    }
+
+    createFragment(items) {
+        const fragment = document.createDocumentFragment();
+        items.forEach((item) => {
+            if (item instanceof Node) {
+                fragment.appendChild(item);
+            }
+        });
+        return fragment;
+    }
+
+    parseHTMLToNode(html) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(`<div>${html}</div>`, 'text/html');
+        const wrapper = doc.body.firstElementChild;
+        return wrapper ? wrapper.firstElementChild : null;
     }
 
     /**
@@ -291,29 +409,68 @@ class PracticeHistory {
             });
         }
         
-        // 搜索输入事件
-        const searchInput = document.getElementById('history-search');
-        if (searchInput) {
-            const debounceFunc = (window.Utils && typeof window.Utils.debounce === 'function') 
-                ? Utils.debounce 
-                : this.debounce;
-            searchInput.addEventListener('input', debounceFunc((e) => {
-                this.searchQuery = e.target.value.trim().toLowerCase();
-                this.applyFilters();
-            }, 300));
+        // 搜索输入事件 - 使用事件委托如果可用
+        if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
+            const handleSearch = (e) => {
+                const debounceFunc = (window.Utils && typeof window.Utils.debounce === 'function')
+                    ? Utils.debounce
+                    : this.debounce;
+                debounceFunc(() => {
+                    this.searchQuery = e.target.value.trim().toLowerCase();
+                    this.applyFilters();
+                }, 300)();
+            };
+
+            window.DOM.delegate('input', '#history-search', handleSearch);
+            console.log('[PracticeHistory] 搜索输入使用事件委托');
+        } else {
+            // Fallback to direct event binding
+            const searchInput = document.getElementById('history-search');
+            if (searchInput) {
+                const debounceFunc = (window.Utils && typeof window.Utils.debounce === 'function')
+                    ? Utils.debounce
+                    : this.debounce;
+                searchInput.addEventListener('input', debounceFunc((e) => {
+                    this.searchQuery = e.target.value.trim().toLowerCase();
+                    this.applyFilters();
+                }, 300));
+            }
         }
         
-        // 日期范围筛选器
-        const dateRangeFilter = document.getElementById('date-range-filter');
-        if (dateRangeFilter) {
-            dateRangeFilter.addEventListener('change', (e) => {
+        // 日期范围筛选器 - 使用事件委托如果可用
+        if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
+            const handleDateRange = (e) => {
                 const customDateRange = document.getElementById('custom-date-range');
                 if (e.target.value === 'custom') {
-                    customDateRange.style.display = 'block';
+                    if (typeof window.DOM !== 'undefined' && window.DOM.show) {
+                        window.DOM.show(customDateRange);
+                    } else {
+                        customDateRange.style.display = 'block';
+                    }
                 } else {
-                    customDateRange.style.display = 'none';
+                    if (typeof window.DOM !== 'undefined' && window.DOM.hide) {
+                        window.DOM.hide(customDateRange);
+                    } else {
+                        customDateRange.style.display = 'none';
+                    }
                 }
-            });
+            };
+
+            window.DOM.delegate('change', '#date-range-filter', handleDateRange);
+            console.log('[PracticeHistory] 日期筛选器使用事件委托');
+        } else {
+            // Fallback to direct event binding
+            const dateRangeFilter = document.getElementById('date-range-filter');
+            if (dateRangeFilter) {
+                dateRangeFilter.addEventListener('change', (e) => {
+                    const customDateRange = document.getElementById('custom-date-range');
+                    if (e.target.value === 'custom') {
+                        customDateRange.style.display = 'block';
+                    } else {
+                        customDateRange.style.display = 'none';
+                    }
+                });
+            }
         }
     }
 
@@ -348,13 +505,14 @@ class PracticeHistory {
             // 检查getPracticeRecords方法是否存在
             if (typeof practiceRecorder.getPracticeRecords !== 'function') {
                 console.error('getPracticeRecords method not found on practiceRecorder');
-                // 使用降级方法直接从storage获取
-                this.currentRecords = storage.get('practice_records', []);
+                const fallback = await storage.get('practice_records', []);
+                this.currentRecords = Array.isArray(fallback) ? fallback : [];
             } else {
-                // 获取所有记录
-                this.currentRecords = practiceRecorder.getPracticeRecords();
+                const maybe = practiceRecorder.getPracticeRecords();
+                const resolved = typeof maybe?.then === 'function' ? await maybe : maybe;
+                this.currentRecords = Array.isArray(resolved) ? resolved : [];
             }
-            
+
             // 应用筛选和排序
             this.applyFilters();
             this.selectedSet.clear();
@@ -615,7 +773,7 @@ class PracticeHistory {
     renderHistoryList() {
         const historyList = document.getElementById('history-list');
         if (!historyList) return;
-        
+
         if (this.filteredRecords.length === 0) {
             historyList.innerHTML = `
                 <div class="empty-state">
@@ -626,13 +784,68 @@ class PracticeHistory {
             `;
             return;
         }
-        
+
         // 计算当前页的记录
         const startIndex = (this.currentPage - 1) * this.recordsPerPage;
         const endIndex = startIndex + this.recordsPerPage;
         const pageRecords = this.filteredRecords.slice(startIndex, endIndex);
-        
-        historyList.innerHTML = pageRecords.map(record => this.createRecordItem(record)).join('');
+
+        // 性能修复：智能选择渲染方式，保持enhancer兼容性
+        if (window.performanceOptimizer && pageRecords.length > 10) {
+            // 销毁现有虚拟滚动器
+            if (this.virtualScroller) {
+                this.virtualScroller.destroy();
+                this.virtualScroller = null;
+            }
+
+            // 创建虚拟滚动器
+            this.virtualScroller = window.performanceOptimizer.createVirtualScroller(
+                historyList,
+                pageRecords,
+                (record, index) => {
+                    // 检查是否有enhancer修改了createRecordItem
+                    if (window.practiceHistoryEnhancer && this.createRecordItem !== this._originalCreateRecordItem) {
+                        // 使用enhancer增强的HTML创建DOM
+                        const html = this.createRecordItem(record);
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = html;
+                        return tempDiv.firstElementChild;
+                    } else {
+                        // 使用优化的DOM创建
+                        return this.createRecordElement(record, index);
+                    }
+                },
+                {
+                    itemHeight: 120,
+                    bufferSize: 3,
+                    containerHeight: 600
+                }
+            );
+        } else {
+            // 降级方案：使用DocumentFragment，保持enhancer兼容性
+            const fragment = document.createDocumentFragment();
+
+            if (window.practiceHistoryEnhancer && this.createRecordItem !== this._originalCreateRecordItem) {
+                // 使用enhancer增强的HTML创建
+                pageRecords.forEach(record => {
+                    const html = this.createRecordItem(record);
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = html;
+                    fragment.appendChild(tempDiv.firstElementChild);
+                });
+            } else {
+                // 使用优化的DOM创建
+                pageRecords.forEach(record => {
+                    fragment.appendChild(this.createRecordElement(record));
+                });
+            }
+
+            // 清空容器并添加新元素
+            while (historyList.firstChild) {
+                historyList.removeChild(historyList.firstChild);
+            }
+            historyList.appendChild(fragment);
+        }
     }
 
     /**
@@ -646,12 +859,16 @@ class PracticeHistory {
         const startTime = (window.Utils && typeof window.Utils.formatDate === 'function')
             ? Utils.formatDate(record.startTime, 'YYYY-MM-DD HH:mm')
             : this.formatDateFallback(record.startTime, 'YYYY-MM-DD HH:mm');
-        
+
         const accuracyClass = accuracy >= 80 ? 'excellent' : accuracy >= 60 ? 'good' : 'needs-improvement';
         const statusClass = record.status === 'completed' ? 'completed' : 'interrupted';
         const recordIdStr = String(record.id);
         const isSelected = this.selectedSet.has(recordIdStr) ? 'checked' : '';
-        
+        const metadata = record.metadata || {};
+        const examTitle = metadata.examTitle || record.examId;
+        const categoryLabel = this.formatCategoryLabel(metadata.category);
+        const frequencyLabel = this.formatFrequencyLabel(metadata.frequency);
+
         return `
             <div class="history-record-item" data-record-id="${recordIdStr}">
                 <div class="record-main">
@@ -662,10 +879,10 @@ class PracticeHistory {
                         <div class="status-indicator ${statusClass}"></div>
                     </div>
                     <div class="record-content">
-                        <h4 class="record-title clickable">${record.metadata.examTitle || record.examId}</h4>
+                        <h4 class="record-title clickable">${examTitle}</h4>
                         <div class="record-meta">
-                            <span class="record-category">${record.metadata.category || 'Unknown'}</span>
-                            <span class="record-frequency">${record.metadata.frequency === 'high' ? '高频' : '次高频'}</span>
+                            <span class="record-category">${categoryLabel}</span>
+                            <span class="record-frequency">${frequencyLabel}</span>
                             <span class="record-time">${startTime}</span>
                         </div>
                     </div>
@@ -697,6 +914,142 @@ class PracticeHistory {
                 </div>
             </div>
         `;
+    }
+
+    /**
+     * 创建记录项DOM元素 - Performance optimized DOM creation
+     */
+    createRecordElement(record, index = null) {
+        const accuracy = Math.round(record.accuracy * 100);
+        const duration = (window.Utils && typeof window.Utils.formatDuration === 'function')
+            ? Utils.formatDuration(record.duration)
+            : this.formatDurationFallback(record.duration);
+        const startTime = (window.Utils && typeof window.Utils.formatDate === 'function')
+            ? Utils.formatDate(record.startTime, 'YYYY-MM-DD HH:mm')
+            : this.formatDateFallback(record.startTime, 'YYYY-MM-DD HH:mm');
+
+        const accuracyClass = accuracy >= 80 ? 'excellent' : accuracy >= 60 ? 'good' : 'needs-improvement';
+        const statusClass = record.status === 'completed' ? 'completed' : 'interrupted';
+        const recordIdStr = String(record.id);
+        const isSelected = this.selectedSet.has(recordIdStr);
+        const metadata = record.metadata || {};
+        const examTitle = metadata.examTitle || record.examId;
+        const categoryLabel = this.formatCategoryLabel(metadata.category);
+        const frequencyLabel = this.formatFrequencyLabel(metadata.frequency);
+
+        // 创建文档片段提高性能
+        const fragment = document.createDocumentFragment();
+
+        // 主容器
+        const recordItem = document.createElement('div');
+        recordItem.className = 'history-record-item';
+        recordItem.dataset.recordId = recordIdStr;
+
+        // 记录主内容
+        const recordMain = document.createElement('div');
+        recordMain.className = 'record-main';
+
+        // 复选框
+        const checkboxDiv = document.createElement('div');
+        checkboxDiv.className = 'record-checkbox';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.dataset.recordId = recordIdStr;
+        checkbox.checked = isSelected;
+        checkboxDiv.appendChild(checkbox);
+
+        // 状态指示器
+        const statusDiv = document.createElement('div');
+        statusDiv.className = 'record-status';
+        const statusIndicator = document.createElement('div');
+        statusIndicator.className = `status-indicator ${statusClass}`;
+        statusDiv.appendChild(statusIndicator);
+
+        // 内容区域
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'record-content';
+
+        const title = document.createElement('h4');
+        title.className = 'record-title clickable practice-record-title';
+        title.textContent = examTitle;
+        title.title = '点击查看详情';
+
+        // 兼容性修复：保持与practiceHistoryEnhancer的兼容性
+        title.addEventListener('click', () => {
+            // 优先使用enhancer的详情显示
+            if (window.practiceHistoryEnhancer && window.practiceHistoryEnhancer.showRecordDetails) {
+                window.practiceHistoryEnhancer.showRecordDetails(record.id);
+            } else {
+                // 降级到内置的详情显示
+                this.showRecordDetails(record.id);
+            }
+        });
+
+        const meta = document.createElement('div');
+        meta.className = 'record-meta';
+        meta.innerHTML = `
+            <span class="record-category">${categoryLabel}</span>
+            <span class="record-frequency">${frequencyLabel}</span>
+            <span class="record-time">${startTime}</span>
+        `;
+
+        contentDiv.appendChild(title);
+        contentDiv.appendChild(meta);
+
+        // 统计信息
+        const statsDiv = document.createElement('div');
+        statsDiv.className = 'record-stats';
+        statsDiv.innerHTML = `
+            <div class="stat-item">
+                <span class="stat-value accuracy-${accuracyClass}">${accuracy}%</span>
+                <span class="stat-label">正确率</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value">${duration}</span>
+                <span class="stat-label">用时</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value">${record.correctAnswers}/${record.totalQuestions}</span>
+                <span class="stat-label">题目</span>
+            </div>
+        `;
+
+        // 操作按钮
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'record-actions';
+
+        const retryBtn = document.createElement('button');
+        retryBtn.className = 'btn btn-sm btn-primary';
+        retryBtn.dataset.historyAction = 'retry';
+        retryBtn.dataset.recordId = recordIdStr;
+        retryBtn.textContent = '重新练习';
+
+        const detailsBtn = document.createElement('button');
+        detailsBtn.className = 'btn btn-sm btn-secondary';
+        detailsBtn.dataset.historyAction = 'details';
+        detailsBtn.dataset.recordId = recordIdStr;
+        detailsBtn.textContent = '查看详情';
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'btn btn-sm btn-outline';
+        deleteBtn.dataset.historyAction = 'delete';
+        deleteBtn.dataset.recordId = recordIdStr;
+        deleteBtn.textContent = '删除';
+
+        actionsDiv.appendChild(retryBtn);
+        actionsDiv.appendChild(detailsBtn);
+        actionsDiv.appendChild(deleteBtn);
+
+        // 组装元素
+        recordMain.appendChild(checkboxDiv);
+        recordMain.appendChild(statusDiv);
+        recordMain.appendChild(contentDiv);
+        recordMain.appendChild(statsDiv);
+        recordMain.appendChild(actionsDiv);
+
+        recordItem.appendChild(recordMain);
+
+        return recordItem;
     }
 
     /**
@@ -860,11 +1213,16 @@ class PracticeHistory {
         if (!confirm(`确定要删除选中 ${selectedIds.size} 条记录吗？此操作不可撤销。`)) return;
         
         try {
-            const records = await storage.get('practice_records', []);
+            const store = window.storage;
+            if (!store || typeof store.get !== 'function' || typeof store.set !== 'function') {
+                throw new Error('存储管理器未就绪');
+            }
+
+            const records = await store.get('practice_records', []);
             const kept = records.filter(r => !selectedIds.has(String(r?.id)));
             const deletedCount = records.length - kept.length;
-            await storage.set('practice_records', kept);
-            
+            await store.set('practice_records', kept);
+
             this.currentRecords = this.currentRecords.filter(r => !selectedIds.has(String(r.id)));
             this.filteredRecords = this.filteredRecords.filter(r => !selectedIds.has(String(r.id)));
             this.selectedSet.clear();
@@ -893,19 +1251,23 @@ class PracticeHistory {
         if (!record) return;
         
         const accuracy = Math.round(record.accuracy * 100);
-        const duration = (window.Utils && typeof window.Utils.formatDuration === 'function') 
+        const duration = (window.Utils && typeof window.Utils.formatDuration === 'function')
             ? Utils.formatDuration(record.duration)
             : this.formatDurationFallback(record.duration);
-        const startTime = (window.Utils && typeof window.Utils.formatDate === 'function') 
+        const startTime = (window.Utils && typeof window.Utils.formatDate === 'function')
             ? Utils.formatDate(record.startTime, 'YYYY-MM-DD HH:mm:ss')
             : this.formatDateFallback(record.startTime, 'YYYY-MM-DD HH:mm:ss');
-        const endTime = (window.Utils && typeof window.Utils.formatDate === 'function') 
+        const endTime = (window.Utils && typeof window.Utils.formatDate === 'function')
             ? Utils.formatDate(record.endTime, 'YYYY-MM-DD HH:mm:ss')
             : this.formatDateFallback(record.endTime, 'YYYY-MM-DD HH:mm:ss');
-        
+        const metadata = record.metadata || {};
+        const examTitle = metadata.examTitle || record.examId;
+        const categoryLabel = this.formatCategoryLabel(metadata.category);
+        const frequencyLabel = this.formatFrequencyLabel(metadata.frequency);
+
         // 生成答案详情表格
         const answersTableHtml = this.generateAnswersTable(record);
-        
+
         const detailsContent = `
             <div class="record-details-modal">
                 <div class="details-header">
@@ -918,15 +1280,15 @@ class PracticeHistory {
                         <div class="details-grid">
                             <div class="detail-item">
                                 <span class="detail-label">题目标题：</span>
-                                <span class="detail-value">${record.metadata.examTitle || record.examId}</span>
+                                <span class="detail-value">${examTitle}</span>
                             </div>
                             <div class="detail-item">
                                 <span class="detail-label">分类：</span>
-                                <span class="detail-value">${record.metadata.category || 'Unknown'}</span>
+                                <span class="detail-value">${categoryLabel}</span>
                             </div>
                             <div class="detail-item">
                                 <span class="detail-label">频率：</span>
-                                <span class="detail-value">${record.metadata.frequency === 'high' ? '高频' : '次高频'}</span>
+                                <span class="detail-value">${frequencyLabel}</span>
                             </div>
                             <div class="detail-item">
                                 <span class="detail-label">状态：</span>
@@ -1014,57 +1376,78 @@ class PracticeHistory {
      * 生成答案详情表格
      */
     generateAnswersTable(record) {
-        // 检查是否有答案数据
-        if (!record.answers || Object.keys(record.answers).length === 0) {
+        const suiteEntries = this.getSuiteEntries(record);
+        if (suiteEntries.length > 0) {
+            const sections = suiteEntries.map((entry, index) => {
+                const title = this.formatSuiteEntryTitle(entry, index);
+                const sectionContent = this.generateAnswersTableForEntry(entry, { wrapWithSection: false });
+                return `
+                    <section class="suite-entry">
+                        <h5>${title}</h5>
+                        ${sectionContent}
+                    </section>
+                `;
+            }).join('');
+
+            const content = sections || `
+                <div class="no-answers-message">
+                    <p>暂无答案详情数据</p>
+                </div>
+            `;
+
             return `
-                <div class="details-section">
+                <div class="details-section answers-section">
                     <h4>答案详情</h4>
-                    <div class="no-answers-message">
-                        <p>暂无答案详情数据</p>
-                    </div>
+                    ${content}
                 </div>
             `;
         }
-        
-        let answersData = [];
-        
-        // 处理不同格式的答案数据
-        if (record.scoreInfo && record.scoreInfo.details) {
-            // 新格式：包含 scoreInfo.details
-            Object.entries(record.scoreInfo.details).forEach(([questionId, detail]) => {
-                answersData.push({
-                    questionId: questionId,
-                    userAnswer: detail.userAnswer || '-',
-                    correctAnswer: detail.correctAnswer || '-',
-                    isCorrect: detail.isCorrect
-                });
-            });
-        } else {
-            // 旧格式：只有用户答案
-            Object.entries(record.answers).forEach(([questionId, userAnswer]) => {
-                answersData.push({
-                    questionId: questionId,
-                    userAnswer: userAnswer || '-',
-                    correctAnswer: '-', // 旧数据没有正确答案
-                    isCorrect: null // 无法判断
-                });
-            });
+
+        return this.generateAnswersTableForEntry(record, { wrapWithSection: true });
+    }
+
+    generateAnswersTableForEntry(entry, options = {}) {
+        const { wrapWithSection = true } = options;
+        const wrapStart = wrapWithSection ? '<div class="details-section answers-section">' : '';
+        const wrapEnd = wrapWithSection ? '</div>' : '';
+        const heading = wrapWithSection ? '<h4>答案详情</h4>' : '';
+        const renderEmpty = () => wrapWithSection
+            ? `${wrapStart}${heading}<div class="no-answers-message"><p>暂无答案详情数据</p></div>${wrapEnd}`
+            : '<div class="no-answers-message"><p>暂无答案详情数据</p></div>';
+
+        if (!entry) {
+            return renderEmpty();
         }
-        
-        // 按题号排序
-        answersData.sort((a, b) => {
-            const aNum = parseInt(a.questionId.replace(/\D/g, '')) || 0;
-            const bNum = parseInt(b.questionId.replace(/\D/g, '')) || 0;
-            return aNum - bNum;
-        });
-        
-        // 生成表格 HTML
+
+        if (entry.answerComparison && Object.keys(entry.answerComparison).length > 0) {
+            const merged = this.mergeComparisonWithCorrections(entry);
+            const tableHtml = this.generateTableFromComparison(merged);
+            return wrapWithSection ? `${wrapStart}${heading}${tableHtml}${wrapEnd}` : tableHtml;
+        }
+
+        const answersSource = entry.answers || entry.realData?.answers || {};
+        const correctAnswers = this.getCorrectAnswers(entry);
+        const questionNumbers = this.extractQuestionNumbers(answersSource, correctAnswers);
+
+        if (questionNumbers.length === 0) {
+            return wrapWithSection
+                ? `${wrapStart}${heading}<p class="no-details">暂无答题数据</p>${wrapEnd}`
+                : '<p class="no-details">暂无答题数据</p>';
+        }
+
+        const answersData = this.collectAnswersData(entry);
+        if (answersData.length === 0) {
+            return renderEmpty();
+        }
+
         const tableRows = answersData.map((answer, index) => {
-            const correctIcon = answer.isCorrect === true ? '✓' : 
-                               answer.isCorrect === false ? '✗' : '-';
-            const correctClass = answer.isCorrect === true ? 'correct' : 
-                                answer.isCorrect === false ? 'incorrect' : 'unknown';
-            
+            const correctIcon = answer.isCorrect === true ? '✓'
+                : answer.isCorrect === false ? '✗'
+                : '-';
+            const correctClass = answer.isCorrect === true ? 'correct'
+                : answer.isCorrect === false ? 'incorrect'
+                : 'unknown';
+
             return `
                 <tr class="answer-row ${correctClass}">
                     <td class="question-number">${index + 1}</td>
@@ -1074,39 +1457,149 @@ class PracticeHistory {
                 </tr>
             `;
         }).join('');
-        
-        // 统计信息
+
         const totalQuestions = answersData.length;
         const correctCount = answersData.filter(a => a.isCorrect === true).length;
         const incorrectCount = answersData.filter(a => a.isCorrect === false).length;
         const unknownCount = answersData.filter(a => a.isCorrect === null).length;
-        
-        return `
-            <div class="details-section answers-section">
-                <h4>答案详情</h4>
-                <div class="answers-summary">
-                    <span class="summary-item">总题数：${totalQuestions}</span>
-                    ${correctCount > 0 ? `<span class="summary-item correct">正确：${correctCount}</span>` : ''}
-                    ${incorrectCount > 0 ? `<span class="summary-item incorrect">错误：${incorrectCount}</span>` : ''}
-                    ${unknownCount > 0 ? `<span class="summary-item unknown">无法判断：${unknownCount}</span>` : ''}
-                </div>
-                <div class="answers-table-container">
-                    <table class="answers-table">
-                        <thead>
-                            <tr>
-                                <th class="col-number">序号</th>
-                                <th class="col-correct">正确答案</th>
-                                <th class="col-user">我的答案</th>
-                                <th class="col-result">对错</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${tableRows}
-                        </tbody>
-                    </table>
-                </div>
+
+        const summary = `
+            <div class="answers-summary">
+                <span class="summary-item">总题数：${totalQuestions}</span>
+                ${correctCount > 0 ? `<span class="summary-item correct">正确：${correctCount}</span>` : ''}
+                ${incorrectCount > 0 ? `<span class="summary-item incorrect">错误：${incorrectCount}</span>` : ''}
+                ${unknownCount > 0 ? `<span class="summary-item unknown">无法判断：${unknownCount}</span>` : ''}
             </div>
         `;
+
+        const table = `
+            <div class="answers-table-container">
+                <table class="answers-table">
+                    <thead>
+                        <tr>
+                            <th class="col-number">序号</th>
+                            <th class="col-correct">正确答案</th>
+                            <th class="col-user">我的答案</th>
+                            <th class="col-result">对错</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${tableRows}
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        const content = `${summary}${table}`;
+
+        return wrapWithSection ? `${wrapStart}${heading}${content}${wrapEnd}` : content;
+    }
+
+    collectAnswersData(record) {
+        if (!record) {
+            return [];
+        }
+
+        const detailsSource = record.scoreInfo?.details
+            || record.realData?.scoreInfo?.details
+            || null;
+
+        let answersData = [];
+
+        if (detailsSource && Object.keys(detailsSource).length > 0) {
+            answersData = Object.entries(detailsSource).map(([questionId, detail]) => ({
+                questionId,
+                userAnswer: detail?.userAnswer ?? '-',
+                correctAnswer: detail?.correctAnswer ?? '-',
+                isCorrect: typeof detail?.isCorrect === 'boolean' ? detail.isCorrect : null
+            }));
+        } else {
+            const answersSource = record.answers || record.realData?.answers || {};
+            answersData = Object.entries(answersSource).map(([questionId, userAnswer]) => ({
+                questionId,
+                userAnswer: userAnswer || '-',
+                correctAnswer: '-',
+                isCorrect: null
+            }));
+        }
+
+        return answersData.sort((a, b) => {
+            const aNum = parseInt(String(a.questionId).replace(/\D/g, ''), 10) || 0;
+            const bNum = parseInt(String(b.questionId).replace(/\D/g, ''), 10) || 0;
+            return aNum - bNum;
+        });
+    }
+
+    getSuiteEntries(record) {
+        if (!record || !Array.isArray(record.suiteEntries)) {
+            return [];
+        }
+        return record.suiteEntries.filter(entry => entry);
+    }
+
+    formatSuiteEntryTitle(entry, index) {
+        if (!entry) {
+            return `套题第${index + 1}篇`;
+        }
+        const metadata = entry.metadata || {};
+        return metadata.examTitle
+            || entry.title
+            || entry.examTitle
+            || `套题第${index + 1}篇`;
+    }
+
+    formatCategoryLabel(category) {
+        if (category == null) {
+            return 'Unknown';
+        }
+        if (typeof category === 'string') {
+            const trimmed = category.trim();
+            return trimmed.length > 0 ? trimmed : 'Unknown';
+        }
+        return String(category);
+    }
+
+    formatFrequencyLabel(frequency) {
+        const normalized = typeof frequency === 'string'
+            ? frequency.toLowerCase()
+            : '';
+
+        if (normalized === 'suite') {
+            return '套题';
+        }
+        if (normalized === 'high') {
+            return '高频';
+        }
+
+        return '次高频';
+    }
+
+    extractQuestionNumbers(userAnswers, correctAnswers) {
+        const questions = new Set();
+
+        Object.keys(userAnswers || {}).forEach(key => {
+            const num = this.extractNumberFromKey(key);
+            if (num != null) {
+                questions.add(num);
+            }
+        });
+
+        Object.keys(correctAnswers || {}).forEach(key => {
+            const num = this.extractNumberFromKey(key);
+            if (num != null) {
+                questions.add(num);
+            }
+        });
+
+        return Array.from(questions).sort((a, b) => a - b);
+    }
+
+    extractNumberFromKey(key) {
+        if (!key) {
+            return null;
+        }
+        const match = String(key).match(/(\d+)/);
+        return match ? parseInt(match[1], 10) : null;
     }
     
     /**
@@ -1132,22 +1625,23 @@ class PracticeHistory {
         
         return answerStr || '-';
     }
-    deleteRecord(recordId) {
+    async deleteRecord(recordId) {
         if (!confirm('确定要删除这条练习记录吗？此操作不可撤销。')) {
             return;
         }
-        
+
         try {
             // 从存储中删除记录
-            const allRecords = storage.get('practice_records', []);
-            const updatedRecords = allRecords.filter(r => r.id !== recordId);
-            storage.set('practice_records', updatedRecords);
-            
+            const allRecords = await storage.get('practice_records', []);
+            const list = Array.isArray(allRecords) ? allRecords : [];
+            const updatedRecords = list.filter(r => r.id !== recordId);
+            await storage.set('practice_records', updatedRecords);
+
             // 刷新显示
             this.refreshHistory();
-            
+
             window.showMessage('记录已删除', 'success');
-            
+
         } catch (error) {
             console.error('Failed to delete record:', error);
             window.showMessage('删除记录失败', 'error');
@@ -1396,66 +1890,148 @@ class PracticeHistory {
      * @returns {string} Markdown格式的文本
      */
     generateMarkdownExport(record) {
-        const examTitle = record.metadata.examTitle || record.examId;
-        const category = record.metadata.category || 'Unknown';
-        const frequency = record.metadata.frequency === 'high' ? '高频' : '次高频';
-        const accuracy = Math.round(record.accuracy * 100);
-        const score = `${record.correctAnswers}/${record.totalQuestions}`;
-        
-        // 格式：## Part 2 高频 Corporate Social Responsibility  11/13企业社会责任
-        let markdown = `## ${category} ${frequency} ${examTitle}  ${score}${examTitle}\n\n`;
-        
-        // 表格头部，包含错误分析列
+        const metadata = record.metadata || {};
+        const examTitle = metadata.examTitle || record.examId || '未知题目';
+        const category = this.formatCategoryLabel(metadata.category);
+        const suiteEntries = this.getSuiteEntries(record);
+        const score = this.getScoreFraction(record);
+
+        if (suiteEntries.length > 0) {
+            const scoreSuffix = score ? ` ${score}` : '';
+            let markdown = `## ${category} 套题 ${examTitle}${scoreSuffix}\n\n`;
+
+            suiteEntries.forEach((entry, index) => {
+                const entryTitle = this.formatSuiteEntryTitle(entry, index);
+                const entryScore = this.getScoreFraction(entry);
+                const scoreSuffix = entryScore ? ` ${entryScore}` : '';
+                markdown += `### ${entryTitle}${scoreSuffix}\n\n`;
+                markdown += this.generateMarkdownTableForEntry(entry);
+                markdown += '\n';
+            });
+
+            return markdown.trimEnd();
+        }
+
+        const frequency = this.formatFrequencyLabel(metadata.frequency);
+        const scoreSuffix = score ? ` ${score}` : '';
+        let markdown = `## ${category} ${frequency} ${examTitle}${scoreSuffix}\n\n`;
+        markdown += this.generateMarkdownTableForEntry(record);
+
+        return markdown.trimEnd();
+    }
+
+    generateMarkdownTableForEntry(entry) {
+        const answersData = this.collectAnswersData(entry);
+
+        if (answersData.length === 0) {
+            return '暂无答案详情\n';
+        }
+
+        let markdown = '';
         markdown += `| 序号  | 正确答案              | 我的答案              | 对错  | 错误分析 |\n`;
         markdown += `| --- | ----------------- | ----------------- | --- | ---- |\n`;
-        
-        // 处理答案数据
-        let answersData = [];
-        
-        if (record.scoreInfo && record.scoreInfo.details) {
-            // 新格式数据：包含scoreInfo.details
-            Object.entries(record.scoreInfo.details).forEach(([questionId, detail]) => {
-                answersData.push({
-                    questionId: questionId,
-                    userAnswer: detail.userAnswer || '',
-                    correctAnswer: detail.correctAnswer || '',
-                    isCorrect: detail.isCorrect
-                });
-            });
-        } else {
-            // 旧格式数据：仅包含answers对象
-            Object.entries(record.answers || {}).forEach(([questionId, userAnswer]) => {
-                answersData.push({
-                    questionId: questionId,
-                    userAnswer: userAnswer || '',
-                    correctAnswer: '', // 旧数据无正确答案
-                    isCorrect: null
-                });
-            });
-        }
-        
-        // 排序并生成表格行
-        answersData.sort((a, b) => {
-            const aNum = parseInt(a.questionId.replace(/\D/g, '')) || 0;
-            const bNum = parseInt(b.questionId.replace(/\D/g, '')) || 0;
-            return aNum - bNum;
-        });
-        
+
         answersData.forEach((answer, index) => {
-            const questionNum = answer.questionId.toUpperCase();
-            const correctAnswer = answer.correctAnswer || '';
-            const userAnswer = answer.userAnswer || '';
-            const resultIcon = answer.isCorrect === true ? '✅' : 
-                              answer.isCorrect === false ? '❌' : '❓';
-            
-            // 格式化答案显示，确保对齐
+            const questionId = answer.questionId
+                ? String(answer.questionId).toUpperCase()
+                : `Q${index + 1}`;
+            const correctAnswer = (answer.correctAnswer || '').toString();
+            const userAnswer = (answer.userAnswer || '').toString();
+            const resultIcon = answer.isCorrect === true ? '✅'
+                : answer.isCorrect === false ? '❌'
+                : '❓';
+
             const formattedCorrect = correctAnswer.padEnd(17, ' ');
             const formattedUser = userAnswer.padEnd(17, ' ');
-            
-            markdown += `| ${questionNum} | ${formattedCorrect} | ${formattedUser} | ${resultIcon}   |      |\n`;
+
+            markdown += `| ${questionId} | ${formattedCorrect} | ${formattedUser} | ${resultIcon}   |      |\n`;
         });
-        
+
         return markdown;
+    }
+
+    getScoreFraction(record) {
+        if (!record) {
+            return '';
+        }
+
+        const correct = typeof record.correctAnswers === 'number'
+            ? record.correctAnswers
+            : typeof record.score === 'number'
+                ? record.score
+                : typeof record.scoreInfo?.correct === 'number'
+                    ? record.scoreInfo.correct
+                    : typeof record.realData?.scoreInfo?.correct === 'number'
+                        ? record.realData.scoreInfo.correct
+                        : null;
+
+        const total = typeof record.totalQuestions === 'number'
+            ? record.totalQuestions
+            : typeof record.scoreInfo?.total === 'number'
+                ? record.scoreInfo.total
+                : typeof record.realData?.scoreInfo?.total === 'number'
+                    ? record.realData.scoreInfo.total
+                    : record.answers
+                        ? Object.keys(record.answers).length
+                        : record.realData?.answers
+                            ? Object.keys(record.realData.answers).length
+                            : null;
+
+        if (correct == null || total == null) {
+            return '';
+        }
+
+        return `${correct}/${total}`;
+    }
+
+    getCorrectAnswers(record) {
+        if (!record) {
+            return {};
+        }
+
+        if (record.correctAnswers && Object.keys(record.correctAnswers).length > 0) {
+            return record.correctAnswers;
+        }
+
+        if (record.realData?.correctAnswers && Object.keys(record.realData.correctAnswers).length > 0) {
+            return record.realData.correctAnswers;
+        }
+
+        if (record.answerComparison) {
+            const answers = {};
+            Object.keys(record.answerComparison).forEach(key => {
+                const item = record.answerComparison[key];
+                if (item && item.correctAnswer) {
+                    answers[key] = item.correctAnswer;
+                }
+            });
+            if (Object.keys(answers).length > 0) {
+                return answers;
+            }
+        }
+
+        const detailSources = [];
+        if (record.realData?.scoreInfo?.details) {
+            detailSources.push(record.realData.scoreInfo.details);
+        }
+        if (record.scoreInfo?.details) {
+            detailSources.push(record.scoreInfo.details);
+        }
+
+        for (const details of detailSources) {
+            const answers = {};
+            Object.keys(details || {}).forEach(key => {
+                const detail = details[key];
+                if (detail && detail.correctAnswer != null && String(detail.correctAnswer).trim() !== '') {
+                    answers[key] = detail.correctAnswer;
+                }
+            });
+            if (Object.keys(answers).length > 0) {
+                return answers;
+            }
+        }
+
+        return {};
     }
 
     /**
@@ -1538,6 +2114,15 @@ class PracticeHistory {
      */
     destroy() {
         console.log('PracticeHistory component destroyed');
+
+        // 性能优化：虚拟滚动器清理
+        if (this.virtualScroller) {
+            this.virtualScroller.destroy();
+            this.virtualScroller = null;
+        }
+
+        // 清理事件监听器
+        this.selectedSet.clear();
     }
 }
 

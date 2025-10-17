@@ -17,8 +17,6 @@
     <script>
     if (window.storage && storage.setNamespace) storage.setNamespace('exam_system');
     </script>
-    <!-- 仅影响后续动态生成链接的相对解析，不影响上文已加载资源 -->
-    <base href="../../">
     <style>
         /* 美乐蒂主题色彩 */
         :root {
@@ -4605,7 +4603,7 @@
                   <button class="modal-close" onclick="document.getElementById('theme-switcher').remove()"><i class="fas fa-times"></i></button>
                 </div>
                 <div class="modal-body">
-                  <div style="display:grid;gap:12px;">
+                  <div style="display:grid;gap:12px;max-height:360px;overflow-y:auto;overscroll-behavior:contain;padding-right:4px;">
                     <div style="border:2px solid var(--border-primary);border-radius:12px;padding:16px;background:var(--bg-primary);display:flex;justify-content:space-between;align-items:center;">
                       <div>
                         <div style="color:var(--my-melody-pink);font-weight:600;font-size:1.1rem;">🎀 My Melody (美乐蒂)</div>
@@ -4618,21 +4616,21 @@
                         <div style="color:#1e3a8a;font-weight:600;font-size:1.1rem;">🎓 Academic (专业)</div>
                         <div style="color:var(--text-secondary);font-size:0.9rem;">学术风格，专业高效</div>
                       </div>
-                      <button class="btn btn-primary" onclick="window.location.href='.superdesign/design_iterations/ielts_academic_functional_2.html'">切换</button>
+                      <button class="btn btn-primary" onclick="navigateToThemePortal('.superdesign/design_iterations/ielts_academic_functional_2.html', { label: 'Academic' })">切换</button>
                     </div>
                     <div style="border:2px solid var(--border-primary);border-radius:12px;padding:16px;background:var(--bg-primary);display:flex;justify-content:space-between;align-items:center;">
                       <div>
                         <div style="color:#a16207;font-weight:600;font-size:1.1rem;">🍂 Bloom (秋日)</div>
                         <div style="color:var(--text-secondary);font-size:0.9rem;">温暖配色，适合放松阅读</div>
                       </div>
-                      <button class="btn btn-primary" onclick="window.location.href='index.html'">切换</button>
+                      <button class="btn btn-primary" onclick="navigateToThemePortal('../../index.html', { label: 'Bloom', theme: 'bloom' })">切换</button>
                     </div>
                     <div style="border:2px solid var(--border-primary);border-radius:12px;padding:16px;background:var(--bg-primary);display:flex;justify-content:space-between;align-items:center;">
                       <div>
                         <div style="color:#6a2bbf;font-weight:600;font-size:1.1rem;">🧙 HarryPotter</div>
                         <div style="color:var(--text-secondary);font-size:0.9rem;">哈利波特</div>
                       </div>
-                      <button class="btn btn-primary" aria-label="哈利波特主题（冒险）" onclick="(function(){try{document.documentElement.setAttribute('data-theme','harry');localStorage.setItem('theme','harry');}catch(e){} window.location.href='.superdesign/design_iterations/HarryPoter.html';})()">切换</button>
+                      <button class="btn btn-primary" aria-label="哈利波特主题（冒险）" onclick="navigateToThemePortal('.superdesign/design_iterations/HarryPoter.html', { label: 'HarryPotter', theme: 'harry' })">切换</button>
                     </div>
                   </div>
                 </div>
@@ -6460,6 +6458,7 @@
   window.bootMelodySync = boot;
 })();
 </script>
+<script src="../../js/theme-switcher.js"></script>
 
 </body>
 </html>
