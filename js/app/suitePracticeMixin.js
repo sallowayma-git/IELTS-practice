@@ -66,6 +66,8 @@
                     sequence.push({ examId: picked.id, exam: picked });
                 }
 
+                this._clearSuiteHandshakes();
+
                 const suiteSessionId = this._generateSuiteSessionId();
                 const session = {
                     id: suiteSessionId,
@@ -518,6 +520,8 @@
                 return;
             }
 
+            this._clearSuiteHandshakes();
+
             if (session.windowRef && !session.windowRef.closed && typeof session.windowRef.postMessage === 'function') {
                 try {
                     session.windowRef.postMessage({
@@ -557,6 +561,8 @@
 
             session.status = 'aborted';
 
+            this._clearSuiteHandshakes();
+
             const skipExamId = options.skipExamId;
             if (session.results && session.results.length) {
                 for (const entry of session.results) {
@@ -575,36 +581,6 @@
             }
 
             await this._teardownSuiteSession(session);
-        },
-
-        _reacquireSuiteWindow(windowName, session = null) {
-            const normalizedName = typeof windowName === 'string' && windowName.trim()
-                ? windowName.trim()
-                : 'ielts-suite-mode-tab';
-
-            let reopened = null;
-            try {
-                reopened = window.open('about:blank', normalizedName);
-            } catch (error) {
-                console.warn('[SuitePractice] 无法重建套题标签:', error);
-                reopened = null;
-            }
-
-            if (!reopened) {
-                return null;
-            }
-
-            try {
-                if (typeof reopened.focus === 'function') {
-                    reopened.focus();
-                }
-            } catch (_) {}
-
-            if (session) {
-                this._ensureSuiteWindowGuard(session, reopened);
-            }
-
-            return reopened;
         },
 
         _ensureSuiteWindowGuard(session, targetWindow) {
