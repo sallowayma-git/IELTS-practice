@@ -1834,11 +1834,80 @@ function normalizeThemeBasePrefix(prefix) {
     return normalized.replace(/\/+$/g, '');
 }
 
+function stripQueryAndHash(url) {
+    if (!url) {
+        return '';
+    }
+    const withoutHash = String(url).split('#', 1)[0];
+    return withoutHash.split('?', 1)[0];
+}
+
+function detectScriptBasePrefix() {
+    if (typeof document === 'undefined') {
+        return null;
+    }
+
+    try {
+        const scripts = document.getElementsByTagName('script');
+        const candidates = ['js/main.js', 'js/app.js', 'js/boot-fallbacks.js'];
+
+        for (let i = scripts.length - 1; i >= 0; i -= 1) {
+            const script = scripts[i];
+            if (!script) {
+                continue;
+            }
+
+            const rawSrc = stripQueryAndHash(script.getAttribute('src'));
+            if (!rawSrc) {
+                continue;
+            }
+
+            const normalized = rawSrc.replace(/\\/g, '/').trim();
+            if (!normalized || /^(?:[a-z]+:)?\/\//i.test(normalized)) {
+                continue;
+            }
+
+            for (const candidate of candidates) {
+                const idx = normalized.lastIndexOf(candidate);
+                if (idx === -1) {
+                    continue;
+                }
+
+                const prefix = normalized.slice(0, idx);
+                return prefix || './';
+            }
+        }
+    } catch (error) {
+        try {
+            console.warn('[PathDetection] detectScriptBasePrefix failed:', error);
+        } catch (_) {}
+    }
+
+    return null;
+}
+
+function resolveThemeBasePrefix() {
+    const hint = normalizeThemeBasePrefix(typeof window !== 'undefined' ? window.HP_BASE_PREFIX : null);
+    if (hint && hint !== './') {
+        return hint;
+    }
+
+    const detected = normalizeThemeBasePrefix(detectScriptBasePrefix());
+    if (detected && detected !== './') {
+        try {
+            window.HP_BASE_PREFIX = detected;
+        } catch (_) {}
+        return detected;
+    }
+
+    return hint || './';
+}
+
 function buildResourcePath(exam, kind = 'html') {
     const basePath = resolveExamBasePath(exam);
     const rawName = kind === 'pdf' ? exam.pdfFilename : exam.filename;
     const file = sanitizeFilename(rawName, kind);
-    const prefix = normalizeThemeBasePrefix(typeof window !== 'undefined' ? window.HP_BASE_PREFIX : null);
+    const prefix = resolveThemeBasePrefix();
 
     const normalizedFile = file ? String(file).replace(/\\/g, '/') : '';
     if (isAbsolutePath(normalizedFile)) {
