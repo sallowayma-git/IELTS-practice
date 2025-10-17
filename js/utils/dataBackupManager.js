@@ -63,10 +63,13 @@ class DataBackupManager {
 
         let practiceRecords = [];
         if (window.practiceRecorder && typeof window.practiceRecorder.getPracticeRecords === 'function') {
-            practiceRecords = window.practiceRecorder.getPracticeRecords();
+            const maybe = window.practiceRecorder.getPracticeRecords();
+            practiceRecords = typeof maybe?.then === 'function' ? await maybe : maybe;
         } else {
             practiceRecords = await storage.get('practice_records', []);
         }
+
+        practiceRecords = Array.isArray(practiceRecords) ? practiceRecords : [];
 
         if (dateRange) {
             practiceRecords = this.filterByDateRange(practiceRecords, dateRange);
@@ -1041,10 +1044,8 @@ class DataBackupManager {
                 throw new Error(`Backup ${backupId} not found.`);
             }
 
-            for (const [key, value] of Object.entries(backup.data || {})) {
-                await storage.set(key, value);
-            }
-            return true;
+            // 返回备份对象，让调用者决定如何处理数据
+            return backup;
         } catch (error) {
             console.error('[DataBackupManager] backup restore failed', error);
             throw error;

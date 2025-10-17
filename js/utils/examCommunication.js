@@ -17,11 +17,11 @@ class ExamCommunication {
      * 初始化通信接口
      */
     initialize() {
-        // 监听来自父窗口的消息
+        // 全局事件必须使用原生 addEventListener，不能使用事件委托
         window.addEventListener('message', (event) => {
             this.handleParentMessage(event);
         });
-        
+
         // 页面加载完成后通知父窗口
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => {
@@ -30,12 +30,12 @@ class ExamCommunication {
         } else {
             this.notifyPageReady();
         }
-        
+
         // 页面卸载时通知父窗口
         window.addEventListener('beforeunload', () => {
             this.notifySessionEnded('page_unload');
         });
-        
+
         console.log('ExamCommunication initialized');
     }
 
@@ -291,6 +291,7 @@ class ExamCommunication {
             lastActivity = Date.now();
         };
         
+        // 全局事件必须使用原生 addEventListener，不能使用事件委托
         activityEvents.forEach(event => {
             document.addEventListener(event, updateActivity, { passive: true });
         });

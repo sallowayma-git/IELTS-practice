@@ -1386,13 +1386,14 @@
     <script src="../../js/utils/markdownExporter.js"></script>
     <script src="../../js/components/practiceRecordModal.js"></script>
     <script src="../../js/components/practiceHistoryEnhancer.js"></script>
+    <script src="../../js/utils/dom.js"></script>
+    <script src="../../js/views/legacyViewBundle.js"></script>
     <script src="../../js/utils/componentChecker.js"></script>
     <script src="../../js/theme-switcher.js"></script>
 
     <!-- 加载主脚本 -->
     <!-- Path helpers for nested design pages -->
-    <script src="../../js/plugins/hp/hp-path-prefix.js"></script>
-    <script src="../../js/plugins/hp/hp-path-map.js"></script>
+    <script src="../../js/plugins/hp/hp-path.js"></script>
     <script src="../../js/main.js"></script>
     <script src="../../js/boot-fallbacks.js"></script>
     <script>
@@ -1448,8 +1449,324 @@
         // 选择性批量删除所用集合（仅本页使用）
         let selectedRecordIds = new Set();
 
+        const STORAGE_KEYS = {
+            PRACTICE: 'practice_records',
+            EXAM: 'exam_index'
+        };
+        const STORAGE_META_KEY = '__storage_bridge_meta__';
+
+        function loadBridgeMeta() {
+            try {
+                const raw = localStorage.getItem(STORAGE_META_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (parsed && typeof parsed === 'object') {
+                        return parsed;
+                    }
+                }
+            } catch (e) {
+                console.warn('[StorageBridge] Failed to load bridge meta:', e);
+            }
+            return {};
+        }
+
+        function persistBridgeMeta(meta) {
+            try {
+                localStorage.setItem(STORAGE_META_KEY, JSON.stringify(meta));
+            } catch (e) {
+                console.warn('[StorageBridge] Failed to persist bridge meta:', e);
+            }
+        }
+
+        function readBridgeMeta(key) {
+            const meta = loadBridgeMeta();
+            return meta[key] || {};
+        }
+
+        function updateBridgeMeta(key, updater) {
+            const meta = loadBridgeMeta();
+            const current = meta[key] || {};
+            const next = updater ? updater({ ...current }) : current;
+
+            if (next && Object.keys(next).length > 0) {
+                meta[key] = next;
+            } else {
+                delete meta[key];
+            }
+
+            persistBridgeMeta(meta);
+            return next;
+        }
+
+        function hasSharedStorage() {
+            return !!(window.storage && typeof window.storage.get === 'function' && typeof window.storage.set === 'function');
+        }
+
+        function readLocalArray(key) {
+            try {
+                const raw = localStorage.getItem(key);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed)) {
+                        return parsed;
+                    }
+                }
+            } catch (e) {
+                console.warn('[StorageBridge] Failed to read', key, 'from localStorage:', e);
+            }
+
+            return [];
+        }
+
+        async function readSharedArray(key) {
+            const supportsShared = hasSharedStorage();
+            const meta = readBridgeMeta(key);
+
+            if (supportsShared && meta.sharedDirty !== true) {
+                try {
+                    const data = await window.storage.get(key, []);
+                    if (Array.isArray(data)) {
+                        try { localStorage.setItem(key, JSON.stringify(data)); } catch (e) {
+                            console.warn('[StorageBridge] Failed to mirror', key, 'to localStorage:', e);
+                        }
+                        updateBridgeMeta(key, (prev) => ({
+                            ...prev,
+                            sharedDirty: false,
+                            lastSharedRead: Date.now()
+                        }));
+                        return data;
+                    }
+                    console.warn('[StorageBridge] Shared storage returned non-array data for', key);
+                    updateBridgeMeta(key, (prev) => ({
+                        ...prev,
+                        sharedDirty: true
+                    }));
+                } catch (e) {
+                    console.warn('[StorageBridge] Failed to read', key, 'from shared storage:', e);
+                    updateBridgeMeta(key, (prev) => ({
+                        ...prev,
+                        sharedDirty: true
+                    }));
+                }
+            }
+
+            return readLocalArray(key);
+        }
+
+        async function writeSharedArray(key, value) {
+            const normalized = Array.isArray(value) ? value : [];
+            const supportsShared = hasSharedStorage();
+            const now = Date.now();
+            let sharedSucceeded = false;
+
+            try {
+                localStorage.setItem(key, JSON.stringify(normalized));
+            } catch (e) {
+                console.warn('[StorageBridge] Failed to persist', key, 'to localStorage:', e);
+            }
+
+            updateBridgeMeta(key, (prev) => {
+                const next = { ...prev, lastLocalWrite: now };
+                // 离线写入也必须标记为 dirty，避免恢复共享存储后被空数据覆盖
+                next.sharedDirty = true;
+                return next;
+            });
+
+            if (supportsShared) {
+                try {
+                    await window.storage.set(key, normalized);
+                    sharedSucceeded = true;
+                } catch (e) {
+                    console.warn('[StorageBridge] Failed to write', key, 'to shared storage:', e);
+                }
+            }
+
+            updateBridgeMeta(key, (prev) => {
+                const next = { ...prev };
+                if (!next.lastLocalWrite) {
+                    next.lastLocalWrite = now;
+                }
+                if (supportsShared) {
+                    if (sharedSucceeded) {
+                        next.lastSharedWrite = now;
+                        next.sharedDirty = false;
+                    } else {
+                        next.sharedDirty = true;
+                    }
+                } else {
+                    next.sharedDirty = true;
+                }
+                return next;
+            });
+
+            if (!supportsShared) {
+                try {
+                    window.dispatchEvent(new CustomEvent('storage-sync', { detail: { key } }));
+                } catch (e) {
+                    console.warn('[StorageBridge] Failed to dispatch storage-sync for', key, e);
+                }
+            }
+
+            return normalized;
+        }
+
+        async function clearSharedKey(key) {
+            if (hasSharedStorage()) {
+                try {
+                    if (typeof window.storage.remove === 'function') {
+                        await window.storage.remove(key);
+                    } else {
+                        await window.storage.set(key, []);
+                    }
+                } catch (e) {
+                    console.warn('[StorageBridge] Failed to clear', key, 'from shared storage:', e);
+                }
+            }
+
+            try {
+                localStorage.removeItem(key);
+            } catch (e) {
+                console.warn('[StorageBridge] Failed to remove', key, 'from localStorage:', e);
+            }
+        }
+
+        async function clearSharedNamespace() {
+            if (hasSharedStorage() && typeof window.storage.clear === 'function') {
+                try {
+                    await window.storage.clear();
+                } catch (e) {
+                    console.warn('[StorageBridge] Failed to clear shared namespace:', e);
+                }
+            }
+
+            await Promise.all([
+                clearSharedKey(STORAGE_KEYS.PRACTICE),
+                clearSharedKey(STORAGE_KEYS.EXAM)
+            ]);
+        }
+
+        async function getPracticeRecordsFromStorage() {
+            return await readSharedArray(STORAGE_KEYS.PRACTICE);
+        }
+
+        async function savePracticeRecordsToStorage(records) {
+            return await writeSharedArray(STORAGE_KEYS.PRACTICE, records);
+        }
+
+        async function getExamIndexFromStorage() {
+            return await readSharedArray(STORAGE_KEYS.EXAM);
+        }
+
+        async function saveExamIndexToStorage(index) {
+            return await writeSharedArray(STORAGE_KEYS.EXAM, index);
+        }
+
+        function normalizePracticeRecord(record) {
+            const source = record || {};
+            const fallbackTimestamp = source.timestamp || source.id || Date.now();
+            const isoDate = source.date
+                || (source.timestamp ? new Date(source.timestamp).toISOString() : new Date().toISOString());
+
+            return {
+                id: source.id || fallbackTimestamp,
+                examId: source.examId || '',
+                title: source.title || source.examName || '未命名练习',
+                type: source.type || 'reading',
+                score: source.score || (source.realData ? source.realData.percentage : 0),
+                duration: source.duration || (source.realData ? source.realData.duration : 0),
+                date: isoDate,
+                timestamp: source.timestamp || fallbackTimestamp,
+                realData: source.realData || null
+            };
+        }
+
+        function mergePracticeRecordLists(remoteList, localList) {
+            const map = new Map();
+            let autoIndex = 0;
+
+            function upsert(record) {
+                if (!record || typeof record !== 'object') {
+                    return;
+                }
+
+                let key = record.id || record.timestamp;
+                if (key === undefined || key === null || key === '') {
+                    key = `auto-${autoIndex++}`;
+                }
+
+                const existing = map.get(key);
+                if (!existing) {
+                    map.set(key, { ...record });
+                    return;
+                }
+
+                const existingTs = existing.timestamp || 0;
+                const nextTs = record.timestamp || 0;
+                if (nextTs >= existingTs) {
+                    map.set(key, { ...existing, ...record });
+                }
+            }
+
+            (Array.isArray(remoteList) ? remoteList : []).forEach(upsert);
+            (Array.isArray(localList) ? localList : []).forEach(upsert);
+
+            return Array.from(map.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        }
+
+        function normalizePracticeRecord(record) {
+            const source = record || {};
+            const fallbackTimestamp = source.timestamp || source.id || Date.now();
+            const isoDate = source.date
+                || (source.timestamp ? new Date(source.timestamp).toISOString() : new Date().toISOString());
+
+            return {
+                id: source.id || fallbackTimestamp,
+                examId: source.examId || '',
+                title: source.title || source.examName || '未命名练习',
+                type: source.type || 'reading',
+                score: source.score || (source.realData ? source.realData.percentage : 0),
+                duration: source.duration || (source.realData ? source.realData.duration : 0),
+                date: isoDate,
+                timestamp: source.timestamp || fallbackTimestamp,
+                realData: source.realData || null
+            };
+        }
+
+        function mergePracticeRecordLists(remoteList, localList) {
+            const map = new Map();
+            let autoIndex = 0;
+
+            function upsert(record) {
+                if (!record || typeof record !== 'object') {
+                    return;
+                }
+
+                let key = record.id || record.timestamp;
+                if (key === undefined || key === null || key === '') {
+                    key = `auto-${autoIndex++}`;
+                }
+
+                const existing = map.get(key);
+                if (!existing) {
+                    map.set(key, { ...record });
+                    return;
+                }
+
+                const existingTs = existing.timestamp || 0;
+                const nextTs = record.timestamp || 0;
+                if (nextTs >= existingTs) {
+                    map.set(key, { ...existing, ...record });
+                }
+            }
+
+            (Array.isArray(remoteList) ? remoteList : []).forEach(upsert);
+            (Array.isArray(localList) ? localList : []).forEach(upsert);
+
+            return Array.from(map.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        }
+
         // Initialize the application
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', async function() {
            // 已在主脚本加载后通过设计页适配修正过 PDF 路径，这里避免重复覆盖
            if (window.PDFHandler && window.PDFHandler.prototype) {
                console.log('[OVERRIDE] PDF 路径已通过设计页适配修正，跳过重复覆盖');
@@ -1474,33 +1791,35 @@
                        console.log('[OVERRIDE] 已注入简化 openExam 备用实现');
                    }
                } catch (e) { console.warn('[OVERRIDE] openExam 处理异常:', e); }
-           })();
+            })();
 
 
-            // First try to load data from localStorage
-            loadFromLocalStorage();
+            // First try to load data from shared storage
+            await loadStoredData();
             initializeApp();
-            loadLibrary();
-            syncPracticeRecords();
+            await loadLibrary();
+            await syncPracticeRecords();
         });
 
-        // Load data from localStorage
-        function loadFromLocalStorage() {
+        // Load data from shared storage/local fallback
+        async function loadStoredData() {
             try {
-                const storedExamIndex = localStorage.getItem('exam_index');
-                const storedPracticeRecords = localStorage.getItem('practice_records');
+                const [storedExamIndex, storedPracticeRecords] = await Promise.all([
+                    getExamIndexFromStorage(),
+                    getPracticeRecordsFromStorage()
+                ]);
 
-                if (storedExamIndex) {
-                    examIndex = JSON.parse(storedExamIndex);
-                    console.log('Loaded exam index from localStorage:', examIndex.length, 'items');
+                if (Array.isArray(storedExamIndex) && storedExamIndex.length > 0) {
+                    examIndex = storedExamIndex;
+                    console.log('[StorageBridge] Loaded exam index:', examIndex.length, 'items');
                 }
 
-                if (storedPracticeRecords) {
-                    practiceRecords = JSON.parse(storedPracticeRecords);
-                    console.log('Loaded practice records from localStorage:', practiceRecords.length, 'items');
+                if (Array.isArray(storedPracticeRecords) && storedPracticeRecords.length > 0) {
+                    practiceRecords = storedPracticeRecords;
+                    console.log('[StorageBridge] Loaded practice records:', practiceRecords.length, 'items');
                 }
             } catch (error) {
-                console.error('Failed to load data from localStorage:', error);
+                console.error('[StorageBridge] Failed to load data from storage:', error);
             }
         }
 
@@ -1934,50 +2253,48 @@
                 const exam = safeExamIndex.find(e => e.id === examId);
                 if (exam) {
                     if (exam.hasHtml) {
-                        // Open HTML practice - use the correct path from the exam data
-                        let fullPath;
-
-                        // Check if exam has path and filename properties
-                        if (exam.path && exam.filename) {
-                            // For files in 睡着过项目组 directory
-                            const basePath = '../../';
-                            fullPath = basePath + exam.path + exam.filename;
-                        } else if (exam.htmlPath) {
-                            // Fallback to htmlPath if available
-                            fullPath = exam.htmlPath;
+                        // Open HTML practice - resolve via shared helpers
+                        let fullPath = '';
+                        if (typeof window.buildResourcePath === 'function') {
+                            fullPath = window.buildResourcePath(exam, 'html');
                         } else {
-                            // Default path structure for reading/listening
-                            const basePath = '../../';
-                            if (exam.type === 'reading' || exam.category === 'P1') {
-                                fullPath = basePath + `睡着过项目组(9.4)[134篇]/2. 高频次高频文章[83篇]/1. P1（高频）[12篇]/${exam.filename || exam.id + '.html'}`;
-                            } else if (exam.type === 'listening' || exam.category === 'P2') {
-                                fullPath = basePath + `ListeningPractice/${exam.category}/${exam.filename || exam.id + '.html'}`;
-                            } else {
-                                fullPath = basePath + `睡着过项目组(9.4)[134篇]/2. 高频次高频文章[83篇]/1. P1（高频）[12篇]/${exam.filename || exam.id + '.html'}`;
-                            }
+                            const resolveBase = (typeof window.resolveExamBasePath === 'function') ? window.resolveExamBasePath : null;
+                            let basePath = resolveBase ? resolveBase(exam) : (exam && exam.path ? String(exam.path) : '');
+                            if (basePath && !basePath.endsWith('/')) basePath += '/';
+                            const fallbackFile = exam && (exam.filename || exam.htmlFilename) ? (exam.filename || exam.htmlFilename) : `${exam.id}.html`;
+                            basePath = basePath.replace(/\\/g, '/').replace(/^\.\//, '');
+                            const needsRepoRoot = basePath && !/^(?:\.\.\/|\.\/|\/|[a-z]+:\/\/|[A-Za-z]:[\\/])/i.test(basePath);
+                            const prefix = needsRepoRoot ? '../../' : '';
+                            fullPath = prefix + basePath + fallbackFile;
                         }
 
                         console.log('Attempting to open:', fullPath);
 
                         const examWindow = window.open(fullPath, `exam_${exam.id}`, 'width=1200,height=800,scrollbars=yes,resizable=yes');
                         if (examWindow) {
-                            showMessage('正在打开: ' + (exam.title || exam.name), 'success');
+                            showMessage('正在打开: ' + (exam.title || exam.name) + '（路径：' + fullPath + '）', 'success');
                         } else {
                             showMessage('无法打开窗口，请检查弹窗设置', 'error');
                         }
                     } else if (exam.pdfFilename) {
                         // Open PDF
-                        let pdfPath;
-                        const basePath = '../../';
-                        if (exam.path && exam.pdfFilename) {
-                            pdfPath = basePath + exam.path + exam.pdfFilename;
+                        let pdfPath = '';
+                        if (typeof window.buildResourcePath === 'function') {
+                            pdfPath = window.buildResourcePath(exam, 'pdf');
                         } else {
-                            pdfPath = basePath + (exam.pdfPath || `睡着过项目组(9.4)[134篇]/2. 高频次高频文章[83篇]/1. P1（高频）[12篇]/${exam.pdfFilename}`);
+                            const resolveBase = (typeof window.resolveExamBasePath === 'function') ? window.resolveExamBasePath : null;
+                            let basePath = resolveBase ? resolveBase(exam) : (exam && exam.path ? String(exam.path) : '');
+                            if (basePath && !basePath.endsWith('/')) basePath += '/';
+                            const fallbackPdf = exam && exam.pdfFilename ? exam.pdfFilename : `${exam.id}.pdf`;
+                            basePath = basePath.replace(/\\/g, '/').replace(/^\.\//, '');
+                            const needsRepoRoot = basePath && !/^(?:\.\.\/|\.\/|\/|[a-z]+:\/\/|[A-Za-z]:[\\/])/i.test(basePath);
+                            const prefix = needsRepoRoot ? '../../' : '';
+                            pdfPath = prefix + basePath + fallbackPdf;
                         }
 
                         const pdfWindow = window.open(pdfPath, `pdf_${exam.id}`, 'width=1000,height=800,scrollbars=yes,resizable=yes');
                         if (pdfWindow) {
-                            showMessage('正在打开PDF: ' + (exam.title || exam.name), 'success');
+                            showMessage('正在打开PDF: ' + (exam.title || exam.name) + '（路径：' + pdfPath + '）', 'success');
                         } else {
                             showMessage('PDF 打开失败，请手动打开: ' + pdfPath, 'error');
                         }
@@ -2119,8 +2436,8 @@
             loading.style.display = 'block';
             examList.style.display = 'none';
 
-            setTimeout(() => {
-                loadLibrary(true);
+            setTimeout(async () => {
+                await loadLibrary(true);
                 loading.style.display = 'none';
                 examList.style.display = 'grid';
                 showMessage('题库已刷新', 'success');
@@ -2137,28 +2454,22 @@
         }
 
         // Settings functions
-        function clearCache() {
+        async function clearCache() {
             if (confirm('确定要清除所有缓存数据吗？此操作不可撤销。')) {
-                localStorage.clear();
-                sessionStorage.clear();
+                try { localStorage.clear(); } catch (e) { console.warn('[StorageBridge] localStorage.clear failed:', e); }
+                try { sessionStorage.clear(); } catch (e) { console.warn('[StorageBridge] sessionStorage.clear failed:', e); }
+                await clearSharedNamespace();
                 showMessage('缓存已清除', 'success');
                 setTimeout(() => location.reload(), 1500);
             }
         }
 
         // Fixed clear cache function that also clears practice records
-        function fixedClearCache() {
+        async function fixedClearCache() {
             if (confirm('确定要清除所有缓存数据和练习记录吗？此操作不可撤销。')) {
-                localStorage.clear();
-                sessionStorage.clear();
-                // Also clear practice records from any other storage
-                try {
-                    if (window.storage && typeof storage.clear === 'function') {
-                        storage.clear();
-                    }
-                } catch (e) {
-                    console.warn('Failed to clear storage:', e);
-                }
+                try { localStorage.clear(); } catch (e) { console.warn('[StorageBridge] localStorage.clear failed:', e); }
+                try { sessionStorage.clear(); } catch (e) { console.warn('[StorageBridge] sessionStorage.clear failed:', e); }
+                await clearSharedNamespace();
                 showMessage('缓存和练习记录已清除', 'success');
                 setTimeout(() => location.reload(), 1500);
             }
@@ -2170,60 +2481,67 @@
 
         // Load library - 添加防重复加载
         window._libraryLoadingInProgress = false;
-        function loadLibrary(forceReload = false) {
+        async function loadLibrary(forceReload = false) {
             // 防止重复加载
             if (window._libraryLoadingInProgress && !forceReload) {
                 console.log('[Library] 题库加载已在进行中，跳过重复调用');
                 return;
             }
+
+            if (forceReload) {
+                window._libraryLoadingInProgress = false;
+            }
+
             window._libraryLoadingInProgress = true;
 
             const startTime = performance.now();
-            
-            // Try to load from localStorage first
+
             if (!forceReload) {
+                if (Array.isArray(examIndex) && examIndex.length > 0) {
+                    finishLibraryLoading(startTime);
+                    return;
+                }
+
                 try {
-                    const storedExamIndex = localStorage.getItem('exam_index');
-                    if (storedExamIndex) {
-                        examIndex = JSON.parse(storedExamIndex);
+                    const stored = await getExamIndexFromStorage();
+                    if (Array.isArray(stored) && stored.length > 0) {
+                        examIndex = stored;
                         finishLibraryLoading(startTime);
                         return;
                     }
                 } catch (error) {
-                    console.warn('Failed to load exam index from localStorage:', error);
+                    console.warn('[Library] Failed to load exam index from shared storage:', error);
                 }
-            } else {
-                // 如果是强制刷新，重置状态
-                window._libraryLoadingInProgress = false;
             }
-        
+
             console.log(`[Library] ${forceReload ? 'Force' : 'Normal'} loading library index...`);
             showMessage('正在加载题库索引...', 'info');
-        
+
             try {
                 let readingExams = [];
                 if (window.completeExamIndex && Array.isArray(window.completeExamIndex)) {
                     readingExams = window.completeExamIndex.map(exam => ({ ...exam, type: 'reading' }));
                     console.log(`[Library] Loaded reading library: ${readingExams.length} items`);
                 }
-        
+
                 let listeningExams = [];
                 if (window.listeningExamIndex && Array.isArray(window.listeningExamIndex)) {
                     listeningExams = window.listeningExamIndex;
                     console.log(`[Library] Loaded listening library: ${listeningExams.length} items`);
                 }
-        
+
                 if (readingExams.length === 0 && listeningExams.length === 0) {
                     console.warn('[Library] No built-in library data detected, continuing with empty index');
                 }
-        
+
                 examIndex = [...readingExams, ...listeningExams];
-                localStorage.setItem('exam_index', JSON.stringify(examIndex));
-        
+                await saveExamIndexToStorage(examIndex);
+
                 finishLibraryLoading(startTime);
             } catch (error) {
                 console.error('[Library] Failed to load library:', error);
                 examIndex = [];
+                await saveExamIndexToStorage(examIndex);
                 finishLibraryLoading(startTime);
             }
         }
@@ -2278,7 +2596,7 @@
                 if (!file) return;
 
                 const reader = new FileReader();
-                reader.onload = function(e) {
+                reader.onload = async function(e) {
                     try {
                         const data = JSON.parse(e.target.result);
                         console.log('Import data structure:', data);
@@ -2312,7 +2630,7 @@
                             });
 
                             practiceRecords = importedRecords;
-                            localStorage.setItem('practice_records', JSON.stringify(practiceRecords));
+                            await savePracticeRecordsToStorage(practiceRecords);
                             importedRecordCount = importedRecords.length;
                         }
                         // Also check for nested practice_records in data.data
@@ -2339,7 +2657,7 @@
                             });
 
                             practiceRecords = importedRecords;
-                            localStorage.setItem('practice_records', JSON.stringify(practiceRecords));
+                            await savePracticeRecordsToStorage(practiceRecords);
                             importedRecordCount = importedRecords.length;
                         }
 
@@ -2361,20 +2679,20 @@
                             }));
 
                             examIndex = importedExams;
-                            localStorage.setItem('exam_index', JSON.stringify(examIndex));
+                            await saveExamIndexToStorage(examIndex);
                             importedExamCount = importedExams.length;
                         }
                         // Fallback to direct format
                         else if (data.examIndex) {
                             examIndex = data.examIndex;
-                            localStorage.setItem('exam_index', JSON.stringify(examIndex));
+                            await saveExamIndexToStorage(examIndex);
                             importedExamCount = examIndex.length;
                         }
 
                         // Fallback to direct practice records format
                         if (data.practiceRecords) {
                             practiceRecords = data.practiceRecords;
-                            localStorage.setItem('practice_records', JSON.stringify(practiceRecords));
+                            await savePracticeRecordsToStorage(practiceRecords);
                             importedRecordCount = practiceRecords.length;
                         }
 
@@ -2450,10 +2768,10 @@
             showMessage(`已导出 ${practiceRecords.length} 条练习记录和 ${examIndex.length} 道题目`, 'success');
         }
 
-        function clearPracticeData() {
+        async function clearPracticeData() {
             if (confirm('确定要清除所有练习记录吗？此操作不可撤销！')) {
                 practiceRecords = [];
-                localStorage.removeItem('practice_records');
+                await clearSharedKey(STORAGE_KEYS.PRACTICE);
                 updatePracticeView();
                 updateOverview();
                 showMessage('记录已清除', 'success');
@@ -2467,20 +2785,48 @@ IELTS 学术练习管理系统
 系统版本: 1.0.0
 构建时间: ${new Date().toLocaleString('zh-CN')}
 
-题库信息:
-- 总题目数: ${examIndex.length}
-- 阅读题目: ${examIndex.filter(e => e.type === 'reading').length}
-- 听力题目: ${examIndex.filter(e => e.type === 'listening').length}
+                const normalizedLocal = records.map(normalizePracticeRecord);
+                const supportsShared = hasSharedStorage();
+                const bridgeMeta = readBridgeMeta(STORAGE_KEYS.PRACTICE);
+                let allowSharedWrite = true;
+                let normalizedToPersist = normalizedLocal;
 
-学习统计:
-- 练习记录: ${practiceRecords.length}
-- 总学习时长: ${Math.round(practiceRecords.reduce((sum, r) => sum + (r.duration || 0), 0) / 60)} 分钟
-- 平均分数: ${practiceRecords.length > 0 ? Math.round(practiceRecords.reduce((sum, r) => sum + (r.score || 0), 0) / practiceRecords.length) : 0}%
+                if (supportsShared && bridgeMeta.sharedDirty) {
+                    allowSharedWrite = false;
+                    try {
+                        const sharedRaw = await window.storage.get(STORAGE_KEYS.PRACTICE, []);
+                        if (Array.isArray(sharedRaw)) {
+                            const normalizedShared = sharedRaw.map(normalizePracticeRecord);
+                            normalizedToPersist = mergePracticeRecordLists(normalizedShared, normalizedLocal);
+                            updateBridgeMeta(STORAGE_KEYS.PRACTICE, (prev) => ({
+                                ...prev,
+                                sharedDirty: false,
+                                lastSharedRead: Date.now()
+                            }));
+                            allowSharedWrite = true;
+                        } else {
+                            console.warn('[StorageBridge] Shared practice recovery returned non-array data.');
+                        }
+                    } catch (recoverError) {
+                        console.warn('[StorageBridge] Failed to recover shared practice records before writing:', recoverError);
+                    }
+                }
+                practiceRecords = normalizedToPersist;
 
-浏览器信息:
-- User Agent: ${navigator.userAgent}
-- 语言: ${navigator.language}
-- 平台: ${navigator.platform}
+                if (allowSharedWrite) {
+                    await savePracticeRecordsToStorage(practiceRecords);
+                } else {
+                    try {
+                        localStorage.setItem(STORAGE_KEYS.PRACTICE, JSON.stringify(practiceRecords));
+                        updateBridgeMeta(STORAGE_KEYS.PRACTICE, (prev) => ({
+                            ...prev,
+                            lastLocalWrite: Date.now(),
+                            sharedDirty: true
+                        }));
+                    } catch (persistError) {
+                        console.warn('[StorageBridge] Failed to persist practice records locally while shared state dirty:', persistError);
+                    }
+                }
 
 存储信息:
 - LocalStorage: ${(JSON.stringify(localStorage).length / 1024).toFixed(2)} KB
@@ -2533,7 +2879,7 @@ IELTS 学术练习管理系统
 
         // Sync practice records with storage - 添加防重复调用
         window._syncInProgress = false;
-        function syncPracticeRecords() {
+        async function syncPracticeRecords() {
             // 防止重复同步
             if (window._syncInProgress) {
                 console.log('[Sync] 同步已在进行中，跳过重复调用');
@@ -2542,20 +2888,51 @@ IELTS 学术练习管理系统
             window._syncInProgress = true;
 
             try {
-                const records = JSON.parse(localStorage.getItem('practice_records') || '[]');
+                const rawRecords = await getPracticeRecordsFromStorage();
+                const records = Array.isArray(rawRecords) ? rawRecords : [];
+                const normalizedLocal = records.map(normalizePracticeRecord);
+                const supportsShared = hasSharedStorage();
+                const bridgeMeta = readBridgeMeta(STORAGE_KEYS.PRACTICE);
+                let allowSharedWrite = true;
+                let normalizedToPersist = normalizedLocal;
 
-                // Ensure records have the required fields
-                practiceRecords = records.map(record => ({
-                    id: record.id || record.timestamp || Date.now(),
-                    examId: record.examId || '',
-                    title: record.title || record.examName || '未命名练习',
-                    type: record.type || 'reading',
-                    score: record.score || (record.realData ? record.realData.percentage : 0),
-                    duration: record.duration || (record.realData ? record.realData.duration : 0),
-                    date: record.date || (record.timestamp ? new Date(record.timestamp).toISOString() : new Date().toISOString()),
-                    timestamp: record.timestamp || record.id || Date.now(),
-                    realData: record.realData || null
-                }));
+                if (supportsShared && bridgeMeta.sharedDirty) {
+                    allowSharedWrite = false;
+                    try {
+                        const sharedRaw = await window.storage.get(STORAGE_KEYS.PRACTICE, []);
+                        if (Array.isArray(sharedRaw)) {
+                            const normalizedShared = sharedRaw.map(normalizePracticeRecord);
+                            normalizedToPersist = mergePracticeRecordLists(normalizedShared, normalizedLocal);
+                            updateBridgeMeta(STORAGE_KEYS.PRACTICE, (prev) => ({
+                                ...prev,
+                                sharedDirty: false,
+                                lastSharedRead: Date.now()
+                            }));
+                            allowSharedWrite = true;
+                        } else {
+                            console.warn('[StorageBridge] Shared practice recovery returned non-array data.');
+                        }
+                    } catch (recoverError) {
+                        console.warn('[StorageBridge] Failed to recover shared practice records before writing:', recoverError);
+                    }
+                }
+
+                practiceRecords = normalizedToPersist;
+
+                if (allowSharedWrite) {
+                    await savePracticeRecordsToStorage(practiceRecords);
+                } else {
+                    try {
+                        localStorage.setItem(STORAGE_KEYS.PRACTICE, JSON.stringify(practiceRecords));
+                        updateBridgeMeta(STORAGE_KEYS.PRACTICE, (prev) => ({
+                            ...prev,
+                            lastLocalWrite: Date.now(),
+                            sharedDirty: true
+                        }));
+                    } catch (persistError) {
+                        console.warn('[StorageBridge] Failed to persist practice records locally while shared state dirty:', persistError);
+                    }
+                }
 
                 updatePracticeView();
                 updateOverview();
@@ -2613,14 +2990,14 @@ IELTS 学术练习管理系统
         // Auto-save functionality
         setInterval(() => {
             if (practiceRecords.length > 0) {
-                localStorage.setItem('practice_records', JSON.stringify(practiceRecords));
+                savePracticeRecordsToStorage(practiceRecords).catch(e => console.warn('[StorageBridge] Auto-save failed:', e));
             }
         }, 30000); // Auto-save every 30 seconds
 
         // Handle window unload
         window.addEventListener('beforeunload', function(e) {
             if (practiceRecords.length > 0) {
-                localStorage.setItem('practice_records', JSON.stringify(practiceRecords));
+                savePracticeRecordsToStorage(practiceRecords);
             }
         });
 
@@ -2638,14 +3015,15 @@ IELTS 学术练习管理系统
         if (!window.selectedRecordIds) window.selectedRecordIds = new Set();
 
         // 1) 查看详情：调用现有 PracticeRecordModal 显示弹窗
-        window.viewRecordDetails = function(recordId) {
+        window.viewRecordDetails = async function(recordId) {
             try {
                 if (window.practiceRecordModal && typeof window.practiceRecordModal.showById === 'function') {
                     window.practiceRecordModal.showById(recordId);
                 } else if (window.practiceHistoryEnhancer && typeof window.practiceHistoryEnhancer.showRecordDetails === 'function') {
                     window.practiceHistoryEnhancer.showRecordDetails(recordId);
                 } else {
-                    var recs = JSON.parse(localStorage.getItem('practice_records')||'[]');
+                    var recs = await getPracticeRecordsFromStorage();
+                    if (!Array.isArray(recs)) recs = [];
                     var r = recs.find(function(x){ return String(x.id||x.timestamp) === String(recordId); });
                     alert(r ? ('题目：' + (r.title||'未知') + '\n分数：' + (r.score||0) + '%\n用时：' + (r.duration||0) + '秒') : '记录不存在');
                 }
@@ -2715,15 +3093,16 @@ IELTS 学术练习管理系统
             master.indeterminate = checkedCount > 0 && checkedCount < cbs.length;
         };
 
-        window.batchDeleteSelected = function(){
+        window.batchDeleteSelected = async function(){
             var ids = Array.from(window.selectedRecordIds || []);
             if (ids.length === 0) { try { showMessage('请先选择要删除的记录', 'warning'); } catch(_) {} return; }
             if (!confirm('确定要删除选中的 ' + ids.length + ' 条记录吗？此操作不可撤销。')) return;
             try {
-                var list = JSON.parse(localStorage.getItem('practice_records')||'[]');
+                var list = await getPracticeRecordsFromStorage();
+                if (!Array.isArray(list)) list = [];
                 var idSet = new Set(ids.map(String));
                 list = list.filter(function(r){ return !idSet.has(String(r.id||r.timestamp)); });
-                localStorage.setItem('practice_records', JSON.stringify(list));
+                await savePracticeRecordsToStorage(list);
                 if (window.practiceRecords) window.practiceRecords = list;
             } catch (e) { console.warn('[BatchDelete] 本地存储更新失败:', e); }
             window.selectedRecordIds.clear();
@@ -2742,7 +3121,7 @@ IELTS 学术练习管理系统
                 input.onchange = function(e){
                     var file = e.target.files[0]; if (!file) return;
                     var reader = new FileReader();
-                    reader.onload = function(ev){
+                    reader.onload = async function(ev){
                         try {
                             var data = JSON.parse(ev.target.result);
                             var importedExamCount = 0, importedRecordCount = 0;
@@ -2789,11 +3168,11 @@ IELTS 学术练习管理系统
 
                             // exam index sources
                             if (data && data.data && data.data.exam_system_exam_index && Array.isArray(data.data.exam_system_exam_index.data)) {
-                                try { localStorage.setItem('exam_index', JSON.stringify(data.data.exam_system_exam_index.data)); importedExamCount = data.data.exam_system_exam_index.data.length; } catch(_) {}
+                                try { await saveExamIndexToStorage(data.data.exam_system_exam_index.data); importedExamCount = data.data.exam_system_exam_index.data.length; } catch(_) {}
                             } else if (data && data.exam_system_exam_index && Array.isArray(data.exam_system_exam_index.data)) {
-                                try { localStorage.setItem('exam_index', JSON.stringify(data.exam_system_exam_index.data)); importedExamCount = data.exam_system_exam_index.data.length; } catch(_) {}
+                                try { await saveExamIndexToStorage(data.exam_system_exam_index.data); importedExamCount = data.exam_system_exam_index.data.length; } catch(_) {}
                             } else if (Array.isArray(data.exam_index)) {
-                                try { localStorage.setItem('exam_index', JSON.stringify(data.exam_index)); importedExamCount = data.exam_index.length; } catch(_) {}
+                                try { await saveExamIndexToStorage(data.exam_index); importedExamCount = data.exam_index.length; } catch(_) {}
                             }
 
                             // practice records sources
@@ -2809,7 +3188,7 @@ IELTS 学术练习管理系统
                             }
 
                             if (importedRecords) {
-                                localStorage.setItem('practice_records', JSON.stringify(importedRecords));
+                                await savePracticeRecordsToStorage(importedRecords);
                                 if (window.practiceRecords) window.practiceRecords = importedRecords;
                                 importedRecordCount = importedRecords.length;
                             }
@@ -2853,7 +3232,7 @@ IELTS 学术练习管理系统
                         <div style="color:#a16207;font-weight:600;">Bloom（秋日  暖阳）</div>\
                         <div style="color:var(--color-gray-600);font-size:0.9rem;">温暖配色，适合放松阅读</div>\
                       </div>\
-                      <button class="btn btn-primary" onclick="window.location.href='../../index.html'">切换</button>\
+                      <button class="btn btn-primary" onclick="navigateToThemePortal('../../index.html', { label: 'Bloom', theme: 'bloom' })">切换</button>\
                     </div>\
                   </div>\
                 </div>\
@@ -2882,6 +3261,7 @@ IELTS 学术练习管理系统
                     <p><i class="fas fa-info-circle" style="color: var(--color-primary); margin-right: var(--space-2);"></i>
                     选择您喜欢的主题风格，不同的主题提供不同的视觉体验和学习氛围。</p>
                   </div>
+                  <div style="display:grid;gap:var(--space-4);max-height:360px;overflow-y:auto;overscroll-behavior:contain;padding-right:var(--space-2);">
                   <div class="theme-card active">
                     <div class="theme-info">
                       <div class="theme-details">
@@ -2902,7 +3282,7 @@ IELTS 学术练习管理系统
                         <span style="color: var(--color-gray-500); font-size: var(--font-size-xs);">温暖配色，适合放松阅读</span></p>
                       </div>
                       <div class="theme-actions">
-                        <button class="btn btn-primary" onclick="window.location.href='../../.superdesign/design_iterations/my_melody_ielts_1.html'">
+                        <button class="btn btn-primary" onclick="navigateToThemePortal('../../index.html', { label: 'Bloom', theme: 'bloom' })">
                           <i class="fas fa-exchange-alt" style="margin-right: var(--space-2);"></i>
                           切换主题
                         </button>
@@ -2917,7 +3297,7 @@ IELTS 学术练习管理系统
                         <span style="color: var(--color-gray-500); font-size: var(--font-size-xs);">粉色主题，温馨学习体验</span></p>
                       </div>
                       <div class="theme-actions">
-                        <button class="btn btn-primary" onclick="window.location.href='../../.superdesign/design_iterations/my_melody_ielts_1.html'">
+                        <button class="btn btn-primary" onclick="navigateToThemePortal('../../.superdesign/design_iterations/my_melody_ielts_1.html', { label: 'MyMelody', theme: 'mymelody' })">
                           <i class="fas fa-exchange-alt" style="margin-right: var(--space-2);"></i>
                           切换主题
                         </button>
@@ -2927,32 +3307,18 @@ IELTS 学术练习管理系统
                   <div class="theme-card">
                     <div class="theme-info">
                       <div class="theme-details">
-                        <h4><i class="fas fa-home" style="margin-right: var(--space-2); color: #3b82f6;"></i>主页</h4>
-                        <p>主页面 · 综合功能<br>
-                        <span style="color: var(--color-gray-500); font-size: var(--font-size-xs);">返回主页面，包含所有功能</span></p>
+                        <h4><i class="fas fa-hat-wizard" style="margin-right: var(--space-2); color: #7c3aed;"></i>Harry Potter</h4>
+                        <p>魔法主题 · 活点导航<br>
+                        <span style="color: var(--color-gray-500); font-size: var(--font-size-xs);">前往哈利波特活点地图体验</span></p>
                       </div>
                       <div class="theme-actions">
-                        <button class="btn btn-primary" onclick="window.location.href='../../index.html'">
+                        <button class="btn btn-primary" onclick="navigateToThemePortal('../../.superdesign/design_iterations/HarryPoter.html', { label: 'HarryPotter', theme: 'harry' })">
                           <i class="fas fa-exchange-alt" style="margin-right: var(--space-2);"></i>
                           切换主题
                         </button>
                       </div>
                     </div>
                   </div>
-                  <div class="theme-card">
-                    <div class="theme-info">
-                      <div class="theme-details">
-                        <h4>🧙 HarryPotter</h4>
-                        <p>哈利波特<br>
-                        <span style="color: var(--color-gray-500); font-size: var(--font-size-xs);">深紫配色 · 冒险</span></p>
-                      </div>
-                      <div class="theme-actions">
-                        <button class="btn btn-primary" aria-label="哈利波特主题（冒险）" onclick="(function(){try{document.documentElement.setAttribute('data-theme','harry');localStorage.setItem('theme','harry');}catch(e){} window.location.href='HarryPoter.html';})()">
-                          <i class="fas fa-exchange-alt" style="margin-right: var(--space-2);"></i>
-                          切换主题
-                        </button>
-                      </div>
-                    </div>
                   </div>
                 </div>
                 <div class="modal-footer">
@@ -2970,7 +3336,7 @@ IELTS 学术练习管理系统
         window.decoratePracticeTableForSelection = function(){};
 
         // 切换批量删除模式
-        window.bulkDeleteAction = function(){
+        window.bulkDeleteAction = async function(){
             if (!window.bulkDeleteMode) {
                 setBulkDeleteMode(true);
                 try { showMessage('点击记录行可选择；完成后再次点击完成选择', 'info'); } catch(_) {}
@@ -2979,10 +3345,11 @@ IELTS 学术练习管理系统
                 const ids = Array.from(selectedRecordIds || []);
                 if (ids.length === 0) { setBulkDeleteMode(false); return; }
                 try {
-                    let list = JSON.parse(localStorage.getItem('practice_records')||'[]');
+                    let list = await getPracticeRecordsFromStorage();
+                    if (!Array.isArray(list)) list = [];
                     const setIds = new Set(ids.map(String));
                     list = list.filter(r => !setIds.has(String(r.id||r.timestamp)));
-                    localStorage.setItem('practice_records', JSON.stringify(list));
+                    await savePracticeRecordsToStorage(list);
                     if (window.practiceRecords) window.practiceRecords = list;
                 } catch(e) { console.warn('[BulkDelete] 更新存储失败:', e); }
                 selectedRecordIds.clear();
@@ -3085,12 +3452,16 @@ IELTS 学术练习管理系统
 <script>
 // 修复函数 - 确保在页面加载早期就可用
 function safeGetRecords() {
-    try {
-        if (window.storage && typeof storage.get === 'function') {
-            return storage.get('practice_records', []) || [];
+    if (hasSharedStorage()) {
+        try {
+            window.storage.get('practice_records', []).then(function(list){
+                if (Array.isArray(list)) {
+                    try { localStorage.setItem('practice_records', JSON.stringify(list)); } catch (_) {}
+                }
+            }).catch(function(err){ console.warn('[Fix] storage.get async sync failed:', err); });
+        } catch (e) {
+            console.warn('[Fix] storage.get failed:', e);
         }
-    } catch (e) {
-        console.warn('[Fix] storage.get failed:', e);
     }
     try {
         return JSON.parse(localStorage.getItem('practice_records') || '[]');
@@ -3101,21 +3472,11 @@ function safeGetRecords() {
 }
 
 function safeSetRecords(list) {
-    try {
-        if (window.storage && typeof storage.set === 'function') {
-            storage.set('practice_records', list || []);
-            console.log('[Fix] Records saved via storage.set');
-            return;
-        }
-    } catch (e) {
-        console.warn('[Fix] storage.set failed:', e);
-    }
-    try {
-        localStorage.setItem('practice_records', JSON.stringify(list || []));
-        console.log('[Fix] Records saved via localStorage');
-    } catch(e) {
+    savePracticeRecordsToStorage(list || []).then(() => {
+        console.log('[Fix] Records saved via StorageBridge');
+    }).catch(e => {
         console.error('[Fix] All storage methods failed:', e);
-    }
+    });
 }
 
 function normalizeRecord(r) {
@@ -3139,19 +3500,13 @@ function normalizeRecord(r) {
 }
 
 // 修复清除缓存功能
-window.fixedClearCache = function() {
+window.fixedClearCache = async function() {
     console.log('[Fix] fixedClearCache called');
     if (!confirm('确定要清除所有缓存数据吗？此操作不可撤销！')) return;
 
     try {
-        // 清除所有存储
-        if (window.storage && typeof storage.clear === 'function') {
-            storage.clear();
-            console.log('[Fix] Storage cleared via storage.clear');
-        } else {
-            localStorage.clear();
-            console.log('[Fix] Storage cleared via localStorage.clear');
-        }
+        await clearSharedNamespace();
+        console.log('[Fix] Storage cleared via StorageBridge');
     } catch (e) {
         console.error('[Fix] Error clearing storage:', e);
     }

@@ -7,7 +7,10 @@ class PDFHandler {
         this.pdfViewerUrl = null;
         this.supportedFormats = ['.pdf'];
         this.openWindows = new Map(); // Track opened PDF windows
-        
+
+        // 全局引用，供事件委托使用
+        window.pdfHandler = this;
+
         console.log('[PDFHandler] PDF Handler initialized');
     }
 

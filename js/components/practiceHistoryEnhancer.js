@@ -11,15 +11,20 @@ class PracticeHistoryEnhancer {
      * 初始化增强功能
      */
     initialize() {
-        if (this.initialized) return;
-        
+        if (this.initialized) {
+            console.log('[PracticeHistoryEnhancer] 已初始化，跳过重复初始化');
+            return;
+        }
+
+        // 立即标记为初始化中，防止重复调用
+        this.initialized = true;
+
         try {
             console.log('[PracticeHistoryEnhancer] 开始初始化');
-            
+
             // 等待练习历史组件加载
             this.waitForPracticeHistory().then(() => {
                 this.enhancePracticeHistory();
-                this.initialized = true;
                 console.log('[PracticeHistoryEnhancer] 练习历史增强功能已初始化');
             }).catch(error => {
                 console.error('[PracticeHistoryEnhancer] 初始化失败:', error);
@@ -209,19 +214,18 @@ class PracticeHistoryEnhancer {
     /**
      * 执行导出
      */
-    performExport() {
+    async performExport() {
         try {
             const selectedFormat = document.querySelector('input[name="export-format"]:checked')?.value;
-            
+
             if (selectedFormat === 'markdown') {
                 this.exportAsMarkdown();
             } else {
-                this.exportAsJSON();
+                await this.exportAsJSON();
             }
-            
-            // 关闭对话框
+
             document.getElementById('export-dialog')?.remove();
-            
+
         } catch (error) {
             console.error('导出失败:', error);
             window.showMessage('导出失败: ' + error.message, 'error');
@@ -245,13 +249,13 @@ class PracticeHistoryEnhancer {
     /**
      * 导出为 JSON 格式
      */
-    exportAsJSON() {
+    async exportAsJSON() {
         try {
             // 尝试使用标准的PracticeRecorder
             const practiceRecorder = window.app?.components?.practiceRecorder;
             if (practiceRecorder) {
-                const exportData = practiceRecorder.exportData('json');
-                
+                const exportData = await practiceRecorder.exportData('json');
+
                 const blob = new Blob([exportData], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -271,13 +275,14 @@ class PracticeHistoryEnhancer {
             // 降级到直接从全局变量导出
             let practiceRecords = [];
             let practiceStats = {};
-            
-            if (window.practiceRecords) {
+
+            if (Array.isArray(window.practiceRecords)) {
                 practiceRecords = window.practiceRecords;
-            } else if (window.storage) {
-                practiceRecords = window.storage.get('practice_records', []);
+            } else if (window.storage && typeof window.storage.get === 'function') {
+                const storedRecords = await window.storage.get('practice_records', []);
+                practiceRecords = Array.isArray(storedRecords) ? storedRecords : [];
             }
-            
+
             if (window.practiceStats) {
                 practiceStats = window.practiceStats;
             }
@@ -291,7 +296,7 @@ class PracticeHistoryEnhancer {
                 stats: practiceStats,
                 records: practiceRecords
             };
-            
+
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -365,17 +370,13 @@ class PracticeHistoryEnhancer {
 // 创建全局实例
 window.practiceHistoryEnhancer = new PracticeHistoryEnhancer();
 
-// 自动初始化
-document.addEventListener('DOMContentLoaded', () => {
-    window.practiceHistoryEnhancer.initialize();
-});
-
-// 如果页面已经加载完成，立即初始化
+// 统一初始化逻辑
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         window.practiceHistoryEnhancer.initialize();
     });
 } else {
+    // 页面已加载完成，延迟初始化
     setTimeout(() => {
         window.practiceHistoryEnhancer.initialize();
     }, 100);

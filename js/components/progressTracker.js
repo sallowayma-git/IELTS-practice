@@ -8,7 +8,10 @@ class ProgressTracker {
         this.notificationPermission = null;
         this.reminderInterval = null;
         this.celebrationQueue = [];
-        
+
+        // 全局引用，供事件委托使用
+        window.progressTracker = this;
+
         this.init();
     }
 
@@ -41,27 +44,70 @@ class ProgressTracker {
      * 设置事件监听器
      */
     setupEventListeners() {
-        // 监听目标完成事件
-        document.addEventListener('goalCompleted', (event) => {
-            this.handleGoalCompleted(event.detail);
-        });
+        // 使用事件委托替换独立监听器
+        if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
+            // 进度指示器点击事件
+            window.DOM.delegate('click', '#progress-indicator', function(e) {
+                window.progressTracker.showProgressDetails();
+            });
 
-        // 监听进度更新事件
-        document.addEventListener('progressUpdated', (event) => {
-            this.handleProgressUpdated(event.detail);
-        });
+            // 模态框背景点击关闭
+            window.DOM.delegate('click', '.modal-overlay.show', function(e) {
+                if (e.target === this) {
+                    this.remove();
+                }
+            });
 
-        // 监听练习完成事件
-        document.addEventListener('practiceSessionCompleted', (event) => {
-            this.handlePracticeCompleted(event.detail);
-        });
+            // ESC键关闭模态框
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    const modal = document.querySelector('.modal-overlay.show');
+                    if (modal) {
+                        modal.remove();
+                    }
+                }
+            });
 
-        // 监听页面可见性变化
-        document.addEventListener('visibilitychange', () => {
-            if (!document.hidden) {
-                this.updateProgressDisplay();
-            }
-        });
+            // 自定义事件监听（这些事件不能用DOM.delegate处理）
+            document.addEventListener('goalCompleted', (event) => {
+                window.progressTracker.handleGoalCompleted(event.detail);
+            });
+
+            document.addEventListener('progressUpdated', (event) => {
+                window.progressTracker.handleProgressUpdated(event.detail);
+            });
+
+            document.addEventListener('practiceSessionCompleted', (event) => {
+                window.progressTracker.handlePracticeCompleted(event.detail);
+            });
+
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) {
+                    window.progressTracker.updateProgressDisplay();
+                }
+            });
+
+            console.log('[ProgressTracker] 使用事件委托设置监听器');
+        } else {
+            // 降级到传统监听器
+            document.addEventListener('goalCompleted', (event) => {
+                this.handleGoalCompleted(event.detail);
+            });
+
+            document.addEventListener('progressUpdated', (event) => {
+                this.handleProgressUpdated(event.detail);
+            });
+
+            document.addEventListener('practiceSessionCompleted', (event) => {
+                this.handlePracticeCompleted(event.detail);
+            });
+
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) {
+                    this.updateProgressDisplay();
+                }
+            });
+        }
     }
 
     /**
@@ -97,10 +143,7 @@ class ProgressTracker {
         // 添加到页面
         document.body.appendChild(indicator);
 
-        // 添加点击事件
-        indicator.addEventListener('click', () => {
-            this.showProgressDetails();
-        });
+        // 点击事件已通过事件委托处理
 
         // 初始更新
         this.updateProgressDisplay();
@@ -148,9 +191,18 @@ class ProgressTracker {
 
         const circumference = 113; // 2 * π * 18
         const offset = circumference - (percentage / 100) * circumference;
-        
-        circle.style.strokeDashoffset = offset;
-        circle.style.transition = 'stroke-dashoffset 0.5s ease';
+
+        // 使用DOMStyles工具
+        if (typeof window.DOMStyles !== 'undefined' && window.DOMStyles.setStyle) {
+            window.DOMStyles.setStyle(circle, {
+                strokeDashoffset: offset,
+                transition: 'stroke-dashoffset 0.5s ease'
+            });
+        } else {
+            // 降级到直接操作
+            circle.style.strokeDashoffset = offset;
+            circle.style.transition = 'stroke-dashoffset 0.5s ease';
+        }
     }
 
     /**
@@ -470,17 +522,17 @@ class ProgressTracker {
     startReminderSystem() {
         // 每小时检查一次是否需要发送提醒
         this.reminderInterval = setInterval(() => {
-            this.checkReminders();
+            this.checkReminders().catch(error => console.error('[ProgressTracker] 检查提醒失败', error));
         }, 60 * 60 * 1000); // 1小时
-        
+
         // 立即检查一次
-        this.checkReminders();
+        this.checkReminders().catch(error => console.error('[ProgressTracker] 检查提醒失败', error));
     }
 
     /**
      * 检查提醒
      */
-    checkReminders() {
+    async checkReminders() {
         const currentGoal = this.goalManager.getCurrentGoal();
         if (!currentGoal || !currentGoal.notifications.enabled) return;
         
@@ -494,7 +546,7 @@ class ProgressTracker {
         }
         
         // 检查是否长时间未练习
-        this.checkInactivityReminder(currentGoal);
+        await this.checkInactivityReminder(currentGoal);
     }
 
     /**
@@ -566,11 +618,12 @@ class ProgressTracker {
     /**
      * 检查不活跃提醒
      */
-    checkInactivityReminder(goal) {
-        const lastPracticeDate = storage.get('goal_progress', {})[goal.id]?.lastPracticeDate;
-        
+    async checkInactivityReminder(goal) {
+        const goalProgress = await storage.get('goal_progress', {});
+        const lastPracticeDate = goalProgress?.[goal.id]?.lastPracticeDate;
+
         if (!lastPracticeDate) return;
-        
+
         const today = new Date().toISOString().split('T')[0];
         const daysSinceLastPractice = this.calculateDaysDifference(lastPracticeDate, today);
         
@@ -633,24 +686,10 @@ class ProgressTracker {
         const modalOverlay = document.createElement('div');
         modalOverlay.className = 'modal-overlay show';
         modalOverlay.innerHTML = `<div class="modal">${content}</div>`;
-        
+
         document.body.appendChild(modalOverlay);
-        
-        // 点击背景关闭
-        modalOverlay.addEventListener('click', (e) => {
-            if (e.target === modalOverlay) {
-                modalOverlay.remove();
-            }
-        });
-        
-        // ESC键关闭
-        const escHandler = (e) => {
-            if (e.key === 'Escape') {
-                modalOverlay.remove();
-                document.removeEventListener('keydown', escHandler);
-            }
-        };
-        document.addEventListener('keydown', escHandler);
+
+        // 模态框事件已通过事件委托处理
     }
 
     /**

@@ -1,0 +1,43 @@
+[WARNING] An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing.
+[WARNING] An iframe which has both allow-scripts and allow-same-origin for its sandbox attribute can escape its sandboxing.
+[LOG] [Storage] 开始初始化存储系统
+[LOG] [Storage] localStorage 可用，将使用 localStorage 作为主要存储
+[LOG] [Storage] 强制初始化 IndexedDB 以实现 Hybrid 模式
+[LOG] [Storage] 开始初始化 IndexedDB
+[LOG] [Storage] 打开 IndexedDB 数据库: ExamSystemDB, 版本: 1
+[LOG] [Storage] 启动存储监控...
+[LOG] [Storage] 命名空间已设置为: exam_system_
+[LOG] 主页面已设置共享命名空间: exam_system
+[LOG] [DOM] DOM工具库已加载，统一事件委托、DOM创建和样式管理
+[LOG] [AppPerformance] 性能工具库已加载，统一缓存、防抖节流、渲染监控和内存管理
+[LOG] [TypeChecker] JSDoc类型检查工具已加载
+[LOG] [CodeStandards] 代码规范已加载，Linus式简洁标准生效
+[LOG] [Main] 考试操作按钮事件委托已设置
+[LOG] [RuntimeFixes] PracticeRecorder.recoverTemporaryRecords 已替换为异步实现
+[LOG] [PracticeHistoryEnhancer] 开始初始化
+[WARNING] [App] Optional dependency missing: Utils (continuing)
+[LOG] [Storage] 等待 IndexedDB ready
+[LOG] [Storage] IndexedDB 初始化成功，数据库: ExamSystemDB 版本: 1
+[LOG] [Storage] 开始从 localStorage 迁移数据
+[LOG] [Storage] 发现 0 条需要迁移的键
+[LOG] [Storage] 无数据需要迁移
+[LOG] [Storage] 当前版本: null, 目标版本: 1.0.0
+[LOG] [Storage] 初始化默认数据: user_stats
+[LOG] [Storage] 初始化默认数据: settings
+[LOG] [App] 持久化状态加载完成
+[LOG] ScoreStorage initialized
+[LOG] PracticeRecorder initialized
+[LOG] [System] 浏览状态管理器已初始化
+[LOG] [DataIntegrityManager] 自动备份已启动 (600秒间隔)
+[LOG] [PerformanceOptimizer] 初始化性能优化器
+[LOG] [System] 正在从存储中同步练习记录...
+[LOG] [Storage] IndexedDB 存储成功
+[LOG] [System] 收到存储同步事件，正在更新练习记录... {key: settings}
+[LOG] [System] 0 条练习记录已加载到内存。
+[LOG] [PracticeHistoryEnhancer] 全局函数已增强
+[LOG] [Storage] 开始设置键: practice_records
+[LOG] [System] 收到存储同步事件，正在更新练习记录... {key: practice_records}
+[LOG] [Search] 执行搜索，查询词: ocean
+[LOG] [Search] 搜索结果数量: 1
+[LOG] [VirtualScroller] 初始化虚拟滚动器 {items: 1, itemHeight: 100, containerHeight: 650}
+[LOG] ✅ 命名空间设置验证成功: 存储和读取正常

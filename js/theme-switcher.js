@@ -1,3 +1,211 @@
+const THEME_PORTAL_STORAGE_KEY = 'preferred_theme_portal';
+const THEME_PORTAL_SESSION_SKIP_KEY = 'preferred_theme_skip_session';
+
+function safeParse(json) {
+    if (!json) {
+        return null;
+    }
+    try {
+        const value = JSON.parse(json);
+        return value && typeof value === 'object' ? value : null;
+    } catch (error) {
+        console.warn('[Theme] 无法解析主题首选项:', error);
+        return null;
+    }
+}
+
+const themePreferenceController = {
+    STORAGE_KEY: THEME_PORTAL_STORAGE_KEY,
+    SESSION_KEY: THEME_PORTAL_SESSION_SKIP_KEY,
+
+    load() {
+        try {
+            return safeParse(localStorage.getItem(this.STORAGE_KEY));
+        } catch (error) {
+            console.warn('[Theme] 读取主题首选项失败:', error);
+            return null;
+        }
+    },
+
+    save(payload) {
+        if (!payload || typeof payload !== 'object') {
+            this.clear();
+            return;
+        }
+        try {
+            localStorage.setItem(this.STORAGE_KEY, JSON.stringify(payload));
+        } catch (error) {
+            console.warn('[Theme] 保存主题首选项失败:', error);
+        }
+    },
+
+    clear() {
+        try {
+            localStorage.removeItem(this.STORAGE_KEY);
+        } catch (_) {
+            // no-op
+        }
+    },
+
+    clearSessionSkip() {
+        try {
+            sessionStorage.removeItem(this.SESSION_KEY);
+        } catch (_) {
+            // no-op
+        }
+    },
+
+    markSessionRedirected() {
+        try {
+            sessionStorage.setItem(this.SESSION_KEY, '1');
+        } catch (_) {
+            // no-op
+        }
+    },
+
+    shouldSkipRedirect() {
+        try {
+            return sessionStorage.getItem(this.SESSION_KEY) === '1';
+        } catch (_) {
+            return false;
+        }
+    },
+
+    resolveUrl(target) {
+        if (!target) {
+            return '';
+        }
+
+        const bases = [];
+        try {
+            if (typeof document !== 'undefined' && document.baseURI) {
+                bases.push(document.baseURI);
+            }
+        } catch (_) {}
+
+        try {
+            if (typeof window !== 'undefined' && window.__APP_FRAME_BASE_HREF__) {
+                bases.push(window.__APP_FRAME_BASE_HREF__);
+            }
+        } catch (_) {}
+
+        try {
+            if (typeof window !== 'undefined' && window.location && window.location.href) {
+                bases.push(window.location.href);
+            }
+        } catch (_) {}
+
+        for (var i = 0; i < bases.length; i += 1) {
+            var base = bases[i];
+            if (!base) {
+                continue;
+            }
+            try {
+                return new URL(target, base).href;
+            } catch (_) {
+                // continue trying other bases
+            }
+        }
+
+        try {
+            return new URL(target).href;
+        } catch (_) {
+            return String(target);
+        }
+    },
+
+    recordPortalNavigation(url, meta = {}) {
+        const resolvedUrl = this.resolveUrl(url);
+        const snapshot = {
+            mode: 'portal',
+            url: resolvedUrl,
+            label: meta.label || '',
+            theme: meta.theme || null,
+            updatedAt: Date.now()
+        };
+        this.save(snapshot);
+        this.clearSessionSkip();
+        return this.load();
+    },
+
+    recordInternalTheme(themeId = 'default') {
+        const snapshot = {
+            mode: 'internal',
+            theme: themeId,
+            updatedAt: Date.now()
+        };
+        this.save(snapshot);
+        this.clearSessionSkip();
+        return this.load();
+    },
+
+    maybeAutoRedirect(options = {}) {
+        const { simulate = false } = options || {};
+        const preference = this.load();
+        if (!preference || preference.mode !== 'portal') {
+            return { shouldRedirect: false, preference };
+        }
+
+        if (this.shouldSkipRedirect()) {
+            return { shouldRedirect: false, preference, reason: 'session-skipped' };
+        }
+
+        const targetUrl = this.resolveUrl(preference.url);
+        if (!targetUrl || targetUrl === window.location.href) {
+            return { shouldRedirect: false, preference, reason: 'already-at-target' };
+        }
+
+        if (!simulate) {
+            this.markSessionRedirected();
+            try {
+                window.location.replace(targetUrl);
+            } catch (error) {
+                console.warn('[Theme] 自动跳转失败:', error);
+            }
+        }
+
+        return { shouldRedirect: true, targetUrl, preference };
+    }
+};
+
+if (typeof window !== 'undefined') {
+    window.__themeSwitcher = themePreferenceController;
+}
+
+function handleThemeQueryParameters() {
+    if (typeof window === 'undefined') {
+        return;
+    }
+    let handled = false;
+    try {
+        const params = new URLSearchParams(window.location.search || '');
+        const directive = params.get('theme');
+        if (!directive) {
+            return;
+        }
+        if (['reset', 'main', 'default'].includes(directive)) {
+            themePreferenceController.clear();
+            themePreferenceController.clearSessionSkip();
+            handled = true;
+        } else if (directive === 'portal') {
+            themePreferenceController.clearSessionSkip();
+            handled = true;
+        }
+
+        if (handled) {
+            params.delete('theme');
+            const query = params.toString();
+            const nextUrl = `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash || ''}`;
+            window.history.replaceState({}, document.title, nextUrl);
+        }
+    } catch (error) {
+        console.warn('[Theme] 处理主题参数失败:', error);
+    }
+}
+
+handleThemeQueryParameters();
+themePreferenceController.maybeAutoRedirect();
+
 // Theme switching functionality
 function applyTheme(theme) {
     const root = document.documentElement;
@@ -11,6 +219,7 @@ function applyTheme(theme) {
             localStorage.setItem('bloom-theme-mode', 'light');
         }
         localStorage.setItem('theme', theme);
+        themePreferenceController.recordInternalTheme(theme);
         // Update switcher buttons
         updateBloomThemeButton();
         updateBlueThemeButton();
@@ -24,6 +233,7 @@ function applyDefaultTheme() {
         document.body.classList.remove('theme-blue');
         document.body.classList.remove('blue-dark-mode');
         localStorage.removeItem('theme');
+        themePreferenceController.recordInternalTheme('default');
         // Re-apply Bloom saved mode
         const savedMode = localStorage.getItem('bloom-theme-mode');
         if (savedMode === 'dark') {
@@ -63,6 +273,8 @@ function toggleBloomDarkMode() {
         body.classList.add('bloom-dark-mode');
         localStorage.setItem('bloom-theme-mode', 'dark');
     }
+
+    themePreferenceController.recordInternalTheme('bloom');
 
     updateBloomThemeButton();
 }
@@ -116,6 +328,7 @@ function toggleBlueDarkMode() {
         document.body.classList.add('blue-dark-mode');
         localStorage.setItem('blue-theme-mode', 'dark');
     }
+    themePreferenceController.recordInternalTheme('blue');
     updateBlueThemeButton();
 }
 
@@ -132,6 +345,91 @@ function updateBlueThemeButton() {
         button.textContent = '切换';
         button.onclick = function() { applyTheme('blue'); };
     }
+}
+
+function normalizeThemePortalTarget(url) {
+    const raw = typeof url === 'string' ? url.trim() : '';
+    if (!raw) {
+        return '';
+    }
+
+    if (!raw.startsWith('.superdesign/')) {
+        return raw;
+    }
+
+    if (typeof window === 'undefined' || !window.location) {
+        return raw;
+    }
+
+    try {
+        const pathName = String(window.location.pathname || '').replace(/\\/g, '/');
+        const marker = '/.superdesign/design_iterations/';
+        const markerIndex = pathName.indexOf(marker);
+        if (markerIndex === -1) {
+            return raw;
+        }
+
+        const afterMarker = pathName.slice(markerIndex + marker.length);
+        if (!afterMarker) {
+            return raw;
+        }
+
+        const segments = afterMarker.split('/').filter(Boolean);
+        if (!segments.length) {
+            return raw;
+        }
+
+        const trimmed = raw.replace(/^\.superdesign\/design_iterations\//, '');
+        if (!trimmed || trimmed === raw) {
+            return raw;
+        }
+
+        const depth = Math.max(0, segments.length - 2);
+        if (depth === 0) {
+            return trimmed;
+        }
+
+        const prefix = new Array(depth).fill('..').join('/');
+        return prefix ? prefix + '/' + trimmed : trimmed;
+    } catch (_) {
+        return raw;
+    }
+}
+
+function navigateToThemePortal(url, options = {}) {
+    const meta = options || {};
+    const target = normalizeThemePortalTarget(url);
+    const preference = themePreferenceController.recordPortalNavigation(target, meta);
+    if (meta.theme) {
+        try {
+            document.documentElement.setAttribute('data-theme', meta.theme);
+            localStorage.setItem('theme', meta.theme);
+        } catch (_) {}
+    }
+    if (typeof meta.onBeforeNavigate === 'function') {
+        try {
+            meta.onBeforeNavigate(preference);
+        } catch (error) {
+            console.warn('[Theme] beforeNavigate 回调失败:', error);
+        }
+    }
+
+    const targetUrl = preference && preference.url
+        ? themePreferenceController.resolveUrl(preference.url)
+        : themePreferenceController.resolveUrl(target);
+
+    if (targetUrl) {
+        try {
+            window.location.href = targetUrl;
+        } catch (error) {
+            console.error('[Theme] 跳转主题失败:', error);
+        }
+    }
+}
+
+if (typeof window !== 'undefined') {
+    window.normalizeThemePortalTarget = normalizeThemePortalTarget;
+    window.navigateToThemePortal = navigateToThemePortal;
 }
 
 // Initialize theme switcher when DOM is ready

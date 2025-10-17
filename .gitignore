@@ -6,12 +6,10 @@
 /docs/
 /tools/
 /ListeningPractice/
-<<<<<<< HEAD
 /睡着过项目组(9.4)[134篇]/
-=======
 /.claude/
 /templates/hp/
->>>>>>> efcdb22139c83fde2f4649b033d2b8ea512fe0b1
+/ielts-writing-assistant/
 
 # 忽略可能的系统文件
 .DS_Store
@@ -19,5 +17,9 @@ Thumbs.db
 .claude/settings.local.json
 
 # 使用通配符忽略特殊命名的目录
-*[9.4]*
+*9.4*
 *睡着过项目组*
+developer/tests/e2e/reports/static-ci-report.json
+# 允许路径兼容性测试夹具
+!developer/tests/e2e/fixtures/睡着过项目组(9.4)\[134篇]/
+!developer/tests/e2e/fixtures/睡着过项目组(9.4)\[134篇]/**
