@@ -191,7 +191,7 @@
     <div id="fullscreen-clock-overlay" class="clock-overlay is-hidden" role="dialog" aria-modal="true"
         aria-label="全屏时钟">
         <div class="clock-overlay-inner controls-hidden" data-clock-role="overlay-inner">
-            <button class="clock-fullscreen-btn" type="button" data-action="toggle-clock-fullscreen"
+            <button class="clock-action-btn clock-fullscreen-btn" type="button" data-action="toggle-clock-fullscreen"
                 aria-label="切换全屏模式" aria-pressed="false">
                 <svg class="fullscreen-icon icon-enter" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
                     <polyline points="4 9 4 4 9 4"></polyline>
@@ -200,13 +200,22 @@
                     <line x1="20" y1="20" x2="14" y2="14"></line>
                 </svg>
                 <svg class="fullscreen-icon icon-exit" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                    <polyline points="9 4 4 4 4 9"></polyline>
-                    <line x1="4" y1="4" x2="10" y2="10"></line>
-                    <polyline points="15 20 20 20 20 15"></polyline>
+                    <polyline points="15 9 20 9 20 4"></polyline>
+                    <line x1="20" y1="4" x2="14" y2="10"></line>
+                    <polyline points="9 15 4 15 4 20"></polyline>
+                    <line x1="4" y1="20" x2="10" y2="14"></line>
+                    <polyline points="20 15 20 20 15 20"></polyline>
                     <line x1="20" y1="20" x2="14" y2="14"></line>
+                    <polyline points="4 9 4 4 9 4"></polyline>
+                    <line x1="4" y1="4" x2="10" y2="10"></line>
                 </svg>
             </button>
-            <button class="clock-close-btn" type="button" data-action="close-clock" aria-label="关闭时钟">×</button>
+            <button class="clock-action-btn clock-close-btn" type="button" data-action="close-clock" aria-label="关闭时钟">
+                <svg class="fullscreen-icon icon-close" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                    <line x1="8" y1="8" x2="16" y2="16"></line>
+                    <line x1="16" y1="8" x2="8" y2="16"></line>
+                </svg>
+            </button>
             <div class="clock-view-stack" data-clock-role="view-stack">
                 <section class="clock-view is-active" data-clock-view="analog" aria-label="模拟指针时钟">
                     <canvas id="analog-clock-canvas" aria-hidden="true"></canvas>
@@ -217,11 +226,15 @@
                 <section class="clock-view" data-clock-view="digital" aria-label="数字时钟">
                     <div class="digital-clock" id="digital-clock" aria-live="polite"></div>
                 </section>
+                <section class="clock-view" data-clock-view="ambient" aria-label="低对比度数字时钟">
+                    <div class="ambient-clock" id="ambient-clock" aria-live="polite"></div>
+                </section>
             </div>
             <div class="clock-pagination" data-clock-role="pagination" aria-hidden="true">
                 <button class="clock-dot is-active" type="button" data-target-view="analog" aria-label="切换到模拟指针时钟"></button>
                 <button class="clock-dot" type="button" data-target-view="flip" aria-label="切换到翻页时钟"></button>
                 <button class="clock-dot" type="button" data-target-view="digital" aria-label="切换到数字时钟"></button>
+                <button class="clock-dot" type="button" data-target-view="ambient" aria-label="切换到低对比度数字时钟"></button>
             </div>
         </div>
     </div>
