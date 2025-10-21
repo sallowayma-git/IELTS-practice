@@ -22,8 +22,9 @@
         <nav class="main-nav" data-nav-controller="legacy">
             <button class="nav-btn active" type="button" data-view="overview">📊 总览</button>
             <button class="nav-btn" type="button" data-view="browse">📚 题库浏览</button>
-            <button class="nav-btn" type="button" data-view="practice">📝 练习记录</button>
             <button class="nav-btn" type="button" data-view="settings">⚙️ 设置</button>
+            <button class="nav-btn" type="button" data-view="more">✨ 更多</button>
+            <button class="nav-btn" type="button" data-view="practice">📝 练习记录</button>
         </nav>
 
         <!-- 总览页面 -->
@@ -161,6 +162,68 @@
             </div>
         </div>
     </div>
+
+    <!-- 更多页面 -->
+    <div id="more-view" class="view">
+        <h2>✨ 更多工具</h2>
+        <p class="more-view-subtitle">探索额外的学习辅助功能，助你高效备考。</p>
+        <div class="more-tools-grid">
+            <button class="tool-card" type="button" data-action="open-clock">
+                <div class="tool-card-icon">🕒</div>
+                <div class="tool-card-content">
+                    <h3>全屏时钟</h3>
+                    <p>沉浸式模拟指针时钟，实时同步系统时间，陪伴你的专注时刻。</p>
+                </div>
+                <div class="tool-card-arrow">进入</div>
+            </button>
+            <button class="tool-card" type="button" data-action="open-vocab">
+                <div class="tool-card-icon">🧠</div>
+                <div class="tool-card-content">
+                    <h3>单词背诵</h3>
+                    <p>即将上线的核心词汇练习入口，敬请期待更多记忆工具。</p>
+                </div>
+                <div class="tool-card-arrow">预告</div>
+            </button>
+        </div>
+    </div>
+    </div>
+
+    <div id="fullscreen-clock-overlay" class="clock-overlay is-hidden" role="dialog" aria-modal="true"
+        aria-label="全屏时钟">
+        <div class="clock-overlay-inner controls-hidden" data-clock-role="overlay-inner">
+            <button class="clock-fullscreen-btn" type="button" data-action="toggle-clock-fullscreen"
+                aria-label="切换全屏模式" aria-pressed="false">
+                <svg class="fullscreen-icon icon-enter" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                    <polyline points="4 9 4 4 9 4"></polyline>
+                    <line x1="4" y1="4" x2="10" y2="10"></line>
+                    <polyline points="20 15 20 20 15 20"></polyline>
+                    <line x1="20" y1="20" x2="14" y2="14"></line>
+                </svg>
+                <svg class="fullscreen-icon icon-exit" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                    <polyline points="9 4 4 4 4 9"></polyline>
+                    <line x1="4" y1="4" x2="10" y2="10"></line>
+                    <polyline points="15 20 20 20 20 15"></polyline>
+                    <line x1="20" y1="20" x2="14" y2="14"></line>
+                </svg>
+            </button>
+            <button class="clock-close-btn" type="button" data-action="close-clock" aria-label="关闭时钟">×</button>
+            <div class="clock-view-stack" data-clock-role="view-stack">
+                <section class="clock-view is-active" data-clock-view="analog" aria-label="模拟指针时钟">
+                    <canvas id="analog-clock-canvas" aria-hidden="true"></canvas>
+                </section>
+                <section class="clock-view" data-clock-view="flip" aria-label="翻页时钟">
+                    <div class="flip-clock" id="flip-clock" aria-live="polite"></div>
+                </section>
+                <section class="clock-view" data-clock-view="digital" aria-label="数字时钟">
+                    <div class="digital-clock" id="digital-clock" aria-live="polite"></div>
+                </section>
+            </div>
+            <div class="clock-pagination" data-clock-role="pagination" aria-hidden="true">
+                <button class="clock-dot is-active" type="button" data-target-view="analog" aria-label="切换到模拟指针时钟"></button>
+                <button class="clock-dot" type="button" data-target-view="flip" aria-label="切换到翻页时钟"></button>
+                <button class="clock-dot" type="button" data-target-view="digital" aria-label="切换到数字时钟"></button>
+            </div>
+        </div>
     </div>
 
     <!-- 开发团队弹窗 -->

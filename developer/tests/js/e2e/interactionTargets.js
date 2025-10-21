@@ -1,6 +1,6 @@
 (function (global) {
   var targets = Object.freeze({
-    "mainNavigationViews": ["overview", "browse", "practice", "settings"],
+    "mainNavigationViews": ["overview", "browse", "practice", "settings", "more"],
     "settingsButtonIds": [
       "clear-cache-btn",
       "load-library-btn",
