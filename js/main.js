@@ -4581,6 +4581,8 @@ const analogClockState = {
     ratio: typeof window !== 'undefined' && window.devicePixelRatio ? window.devicePixelRatio : 1
 };
 
+const CLOCK_VIEWS = ['analog', 'flip', 'digital', 'ambient'];
+
 const clockUIState = {
     overlayInner: null,
     viewStack: null,
@@ -4602,7 +4604,19 @@ const flipClockState = {
 const digitalClockState = {
     container: null,
     timerId: null,
-    lastRendered: ''
+    lastRendered: '',
+    renderOptions: {
+        colonClass: 'digital-pulse'
+    }
+};
+
+const ambientClockState = {
+    container: null,
+    timerId: null,
+    lastRendered: '',
+    renderOptions: {
+        colonClass: 'ambient-clock__colon'
+    }
 };
 
 function setupMoreViewInteractions() {
@@ -4626,6 +4640,7 @@ function setupMoreViewInteractions() {
     const pagination = overlay.querySelector('[data-clock-role="pagination"]');
     const flipContainer = overlay.querySelector('#flip-clock');
     const digitalContainer = overlay.querySelector('#digital-clock');
+    const ambientContainer = overlay.querySelector('#ambient-clock');
     const dots = pagination ? Array.from(pagination.querySelectorAll('.clock-dot')) : [];
     const fullscreenTrigger = overlay.querySelector('[data-action="toggle-clock-fullscreen"]');
 
@@ -4642,6 +4657,7 @@ function setupMoreViewInteractions() {
 
     flipClockState.container = flipContainer;
     digitalClockState.container = digitalContainer;
+    ambientClockState.container = ambientContainer;
 
     initializeFlipClock(flipContainer);
 
@@ -4710,7 +4726,7 @@ function handleClockPagination(targetView) {
     }
 
     const normalized = String(targetView).toLowerCase();
-    if (!['analog', 'flip', 'digital'].includes(normalized)) {
+    if (!CLOCK_VIEWS.includes(normalized)) {
         return;
     }
 
@@ -4783,7 +4799,7 @@ function resetClockViewsToAnalog() {
 
 function setActiveClockView(viewName, options = {}) {
     const normalized = viewName ? String(viewName).toLowerCase() : '';
-    if (!['analog', 'flip', 'digital'].includes(normalized)) {
+    if (!CLOCK_VIEWS.includes(normalized)) {
         return;
     }
 
@@ -4832,6 +4848,11 @@ function startClockView(viewName) {
 
     if (viewName === 'digital') {
         startDigitalClock();
+        return;
+    }
+
+    if (viewName === 'ambient') {
+        startAmbientClock();
     }
 }
 
@@ -4848,6 +4869,11 @@ function stopClockView(viewName) {
 
     if (viewName === 'digital') {
         stopDigitalClock();
+        return;
+    }
+
+    if (viewName === 'ambient') {
+        stopAmbientClock();
     }
 }
 
@@ -5088,26 +5114,46 @@ function stopFlipClock() {
 }
 
 function startDigitalClock() {
-    if (!digitalClockState.container) {
+    startSimpleDigitalClock(digitalClockState);
+}
+
+function stopDigitalClock() {
+    stopSimpleDigitalClock(digitalClockState);
+}
+
+function startAmbientClock() {
+    startSimpleDigitalClock(ambientClockState);
+}
+
+function stopAmbientClock() {
+    stopSimpleDigitalClock(ambientClockState);
+}
+
+function startSimpleDigitalClock(state) {
+    if (!state || !state.container) {
         return;
     }
 
-    stopDigitalClock();
-    renderDigitalClock();
-    scheduleDigitalClockTick();
+    stopSimpleDigitalClock(state);
+    renderSimpleDigitalClock(state);
+    scheduleSimpleDigitalClockTick(state);
 }
 
-function scheduleDigitalClockTick() {
+function scheduleSimpleDigitalClockTick(state) {
+    if (!state) {
+        return;
+    }
+
     const now = new Date();
     const delay = Math.max(50, 1000 - now.getMilliseconds());
-    digitalClockState.timerId = window.setTimeout(() => {
-        renderDigitalClock();
-        scheduleDigitalClockTick();
+    state.timerId = window.setTimeout(() => {
+        renderSimpleDigitalClock(state);
+        scheduleSimpleDigitalClockTick(state);
     }, delay);
 }
 
-function renderDigitalClock() {
-    if (!digitalClockState.container) {
+function renderSimpleDigitalClock(state) {
+    if (!state || !state.container) {
         return;
     }
 
@@ -5117,21 +5163,27 @@ function renderDigitalClock() {
     const seconds = formatTwoDigits(now.getSeconds());
     const timeString = `${hours}:${minutes}:${seconds}`;
 
-    if (digitalClockState.lastRendered === timeString) {
+    if (state.lastRendered === timeString) {
         return;
     }
 
-    digitalClockState.lastRendered = timeString;
-    digitalClockState.container.innerHTML = `${hours}<span class="digital-pulse">:</span>${minutes}<span class="digital-pulse">:</span>${seconds}`;
+    state.lastRendered = timeString;
+    const colonClass = state.renderOptions && state.renderOptions.colonClass ? state.renderOptions.colonClass : '';
+    const colonMarkup = colonClass ? `<span class="${colonClass}">:</span>` : ':';
+    state.container.innerHTML = `${hours}${colonMarkup}${minutes}${colonMarkup}${seconds}`;
 }
 
-function stopDigitalClock() {
-    if (digitalClockState.timerId) {
-        window.clearTimeout(digitalClockState.timerId);
-        digitalClockState.timerId = null;
+function stopSimpleDigitalClock(state) {
+    if (!state) {
+        return;
     }
 
-    digitalClockState.lastRendered = '';
+    if (state.timerId) {
+        window.clearTimeout(state.timerId);
+        state.timerId = null;
+    }
+
+    state.lastRendered = '';
 }
 
 function formatTwoDigits(value) {
@@ -5164,6 +5216,7 @@ function closeClockOverlay() {
     stopAnalogClock();
     stopFlipClock();
     stopDigitalClock();
+    stopAmbientClock();
     hideClockControlsImmediately();
     resetClockViewsToAnalog();
 }
@@ -5199,8 +5252,8 @@ function resizeClockCanvas(force) {
 
     const ratio = typeof window !== 'undefined' && window.devicePixelRatio ? window.devicePixelRatio : 1;
     const viewportMin = Math.min(window.innerWidth || 0, window.innerHeight || 0) || 0;
-    const targetSize = viewportMin ? Math.min(viewportMin * 0.96, 1080) : 600;
-    const cssSize = Math.max(420, Math.round(targetSize));
+    const targetSize = viewportMin || 600;
+    const cssSize = viewportMin ? Math.round(targetSize) : 600;
 
     if (!force && analogClockState.cssSize === cssSize && analogClockState.ratio === ratio && analogClockState.ctx) {
         return;
