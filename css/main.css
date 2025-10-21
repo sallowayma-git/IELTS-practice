@@ -578,18 +578,10 @@ body.no-scroll {
     padding: 0;
 }
 
-.clock-overlay-inner::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(circle at center, rgba(30, 64, 175, 0.16) 0%, transparent 65%);
-    pointer-events: none;
-}
 
-.clock-fullscreen-btn {
+.clock-action-btn {
     position: absolute;
     top: clamp(16px, 4vw, 48px);
-    left: clamp(16px, 4vw, 48px);
     width: 48px;
     height: 48px;
     border: none;
@@ -605,16 +597,20 @@ body.no-scroll {
     transition: opacity var(--transition-fast), transform var(--transition-fast), color var(--transition-fast);
 }
 
-.clock-fullscreen-btn:hover {
+.clock-action-btn:hover {
     color: rgba(226, 232, 240, 1);
     transform: translateY(-1px);
 }
 
-.clock-fullscreen-btn:active {
+.clock-action-btn:active {
     transform: translateY(0) scale(0.98);
 }
 
-.clock-fullscreen-btn .fullscreen-icon {
+.clock-fullscreen-btn {
+    left: clamp(16px, 4vw, 48px);
+}
+
+.clock-action-btn .fullscreen-icon {
     position: absolute;
     top: 50%;
     left: 50%;
@@ -633,6 +629,9 @@ body.no-scroll {
     opacity: 0;
     transform: translate(-50%, -50%) scale(0.92);
 }
+.clock-close-btn .icon-close {
+    opacity: 1;
+}
 
 .clock-fullscreen-btn.is-fullscreen .icon-enter {
     opacity: 0;
@@ -645,34 +644,12 @@ body.no-scroll {
 }
 
 .clock-close-btn {
-    position: absolute;
-    top: clamp(16px, 4vw, 48px);
     right: clamp(16px, 4vw, 48px);
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.4);
-    background: rgba(15, 23, 42, 0.65);
-    color: #fff;
-    font-size: 1.75rem;
-    line-height: 1;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 20;
-    pointer-events: auto;
-    transition: opacity var(--transition-fast), transform var(--transition-fast), background var(--transition-fast);
-}
-
-.clock-close-btn:hover {
-    transform: scale(1.08);
-    background: rgba(59, 130, 246, 0.6);
 }
 
 #analog-clock-canvas {
-    width: min(100vmin, 1040px);
-    height: min(100vmin, 1040px);
+    width: 100vmin;
+    height: 100vmin;
     max-width: none;
     max-height: none;
     display: block;
@@ -701,7 +678,7 @@ body.no-scroll {
 
 .clock-pagination {
     position: absolute;
-    bottom: clamp(24px, 6vh, 72px);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
     left: 50%;
     transform: translateX(-50%);
     display: flex;
@@ -859,6 +836,21 @@ body.no-scroll {
 
 .digital-clock .digital-pulse {
     animation: digitalPulse 1s infinite;
+}
+
+.ambient-clock {
+    font-size: clamp(68px, 18vmin, 168px);
+    font-weight: 600;
+    letter-spacing: clamp(6px, 1.5vw, 18px);
+    color: rgba(148, 163, 184, 0.22);
+    text-shadow: 0 0 18px rgba(15, 23, 42, 0.25);
+    display: flex;
+    align-items: center;
+    gap: clamp(14px, 2.4vw, 22px);
+}
+
+.ambient-clock__colon {
+    opacity: 0.4;
 }
 
 @keyframes digitalPulse {
