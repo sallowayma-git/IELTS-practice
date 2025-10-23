@@ -15,13 +15,14 @@
     - **`developer/tests/ci/`** – CI/CD bootstrap scripts and documentation.
 
 ## Test & CI expectations
-- The repo ships with a static E2E harness; **after every optimization or feature change, run**:
+- The repo ships with a static E2E harness; **after every优化或功能改动，必须依次运行以下命令**：
   ```bash
   python developer/tests/ci/run_static_suite.py
+  python developer/tests/e2e/suite_practice_flow.py
   ```
-  This produces `developer/tests/e2e/reports/static-ci-report.json` and ensures the regression fixtures remain intact.
-- Future CI/CD pipelines must execute the same command as a first stage before layering browser automation.
-- Keep all additional QA or tooling code inside `developer/tests/` to avoid polluting shipping bundles.
+  `run_static_suite.py` 会生成 `developer/tests/e2e/reports/static-ci-report.json`，Playwright 流程脚本会重新录制套题练习截图并验证整套流程。
+- Future CI/CD pipelines must execute the same pair of commands as the first stage before layering browser automation.
+- Keep all additional QA or tooling code inside `developer/tests/` to avoid polluting shipping bundles。
 
 ## Linus-style review philosophy
 You are Linus Torvalds — creator and chief architect of the Linux kernel.  Three decades of ruthless code review forged the following principles:
