@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>IELTS 阅读练习占位页</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        :root {
+            color-scheme: light dark;
+            --bg: #0f172a;
+            --panel: #111827;
+            --text: #e2e8f0;
+            --muted: #94a3b8;
+            --accent: #38bdf8;
+            --success: #34d399;
+            --warn: #facc15;
+            --error: #f87171;
+        }
+        @media (prefers-color-scheme: light) {
+            :root {
+                --bg: #f8fafc;
+                --panel: #ffffff;
+                --text: #0f172a;
+                --muted: #475569;
+                --accent: #2563eb;
+                --success: #16a34a;
+                --warn: #ca8a04;
+                --error: #dc2626;
+            }
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: radial-gradient(circle at top, rgba(56,189,248,0.16), transparent 55%), var(--bg);
+            color: var(--text);
+        }
+        header {
+            padding: 24px clamp(24px, 5vw, 48px) 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+        header::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(120deg, rgba(56,189,248,0.18), rgba(129,140,248,0.18));
+            opacity: 0.6;
+            pointer-events: none;
+        }
+        header h1 {
+            margin: 0;
+            font-weight: 600;
+            font-size: clamp(20px, 2.6vw, 28px);
+            letter-spacing: 0.02em;
+            position: relative;
+            z-index: 1;
+        }
+        header p {
+            margin: 0;
+            color: var(--muted);
+            font-size: 15px;
+            position: relative;
+            z-index: 1;
+        }
+        main {
+            flex: 1;
+            display: grid;
+            gap: clamp(20px, 4vw, 32px);
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            padding: clamp(24px, 5vw, 48px);
+        }
+        .panel {
+            background: color-mix(in srgb, var(--panel) 92%, transparent);
+            border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+            border-radius: 18px;
+            padding: clamp(20px, 3vw, 32px);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            box-shadow: 0 18px 60px rgba(15,23,42,0.28);
+            position: relative;
+            overflow: hidden;
+        }
+        .panel::before {
+            content: '';
+            position: absolute;
+            inset: -120px 40% auto -60px;
+            height: 220px;
+            background: radial-gradient(circle, rgba(56,189,248,0.18), transparent 65%);
+            transform: rotate(-8deg);
+            pointer-events: none;
+        }
+        .panel h2 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+        }
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 12px;
+        }
+        .meta-item {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding: 12px 14px;
+            border-radius: 12px;
+            background: color-mix(in srgb, var(--panel) 70%, transparent);
+            border: 1px solid color-mix(in srgb, var(--accent) 15%, transparent);
+        }
+        .meta-label { font-size: 13px; color: var(--muted); }
+        .meta-value { font-size: 16px; font-weight: 600; word-break: break-word; }
+        .status {
+            border-radius: 12px;
+            padding: 14px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            background: color-mix(in srgb, var(--accent) 12%, transparent);
+            border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+        }
+        .status strong { font-size: 14px; letter-spacing: 0.04em; }
+        .status span { font-size: 13px; color: var(--muted); }
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        button {
+            border: none;
+            border-radius: 12px;
+            font-size: 15px;
+            padding: 12px 18px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.18s ease, filter 0.2s ease;
+            color: #0f172a;
+            background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #f1f5f9));
+            box-shadow: 0 12px 30px rgba(37, 99, 235, 0.25);
+        }
+        button:disabled {
+            cursor: not-allowed;
+            opacity: 0.6;
+            transform: none;
+            box-shadow: none;
+        }
+        button:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.04); }
+        footer {
+            padding: 16px 24px 28px;
+            font-size: 12px;
+            color: var(--muted);
+            text-align: center;
+        }
+        .log-area {
+            background: color-mix(in srgb, var(--panel) 78%, transparent);
+            border-radius: 12px;
+            padding: 12px 14px;
+            font-size: 12px;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            max-height: 160px;
+            overflow: auto;
+            border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
+        }
+        .log-area div { margin-bottom: 4px; }
+        .log-area .info { color: var(--accent); }
+        .log-area .warn { color: var(--warn); }
+        .log-area .error { color: var(--error); }
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: color-mix(in srgb, var(--accent) 18%, transparent);
+            color: var(--text);
+            font-size: 12px;
+            letter-spacing: 0.02em;
+        }
+    </style>
+</head>
+<body data-exam-id="" data-exam-state="initial">
+<header>
+    <h1 id="exam-title">IELTS 阅读练习占位页</h1>
+    <p id="exam-subtitle">当前题目无法加载，系统已切换到占位练习页。完成练习后将自动跳转至下一篇。</p>
+</header>
+<main>
+    <section class="panel">
+        <h2>当前题目信息</h2>
+        <div class="meta-grid">
+            <div class="meta-item">
+                <span class="meta-label">题目编号</span>
+                <span class="meta-value" id="meta-exam-id">-</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">套题类别</span>
+                <span class="meta-value" id="meta-category">P1</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">会话编号</span>
+                <span class="meta-value" id="meta-session">等待握手</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">套题会话</span>
+                <span class="meta-value" id="meta-suite">-</span>
+            </div>
+        </div>
+        <div class="status" id="status-block">
+            <strong id="status-title">等待父页面握手...</strong>
+            <span id="status-detail">若长时间无响应，请返回主页面重新开启套题模式。</span>
+        </div>
+        <div class="actions">
+            <button id="complete-exam-btn" disabled>提交本篇成绩</button>
+            <button id="force-ready-btn" style="background:linear-gradient(135deg, var(--success), color-mix(in srgb, var(--success) 65%, #f1f5f9)); color:#042f2e;">重新发送握手</button>
+        </div>
+    </section>
+    <section class="panel">
+        <h2>练习说明</h2>
+        <p>本页面用于在题目 HTML 缺失或跨域加载失败时继续套题流程。点击“提交本篇成绩”将模拟当前篇章的作答结果，并通知父页面进入下一篇。</p>
+        <div class="meta-item" style="margin-top:12px;">
+            <span class="meta-label">自动生成成绩范围</span>
+            <span class="meta-value" id="meta-score">正确 8 / 总题数 13（62%）</span>
+        </div>
+        <div class="meta-item">
+            <span class="meta-label">预计用时</span>
+            <span class="meta-value" id="meta-duration">~12 分钟</span>
+        </div>
+        <div class="log-area" id="event-log"></div>
+    </section>
+</main>
+<footer>
+    占位页将继续向父页面发送 SESSION_READY / PRACTICE_COMPLETE 消息，保障套题练习与练习记录聚合流程正常执行。
+</footer>
+<script>
+(function() {
+    const opener = window.opener || window.parent;
+    const state = {
+        examId: null,
+        title: 'IELTS 阅读练习',
+        category: 'P1',
+        sessionId: null,
+        suiteSessionId: null,
+        sequenceIndex: null,
+        submitted: false,
+        baseDuration: 11 * 60,
+        correctCount: 8,
+        totalCount: 13
+    };
+
+    const dom = {
+        title: document.getElementById('exam-title'),
+        subtitle: document.getElementById('exam-subtitle'),
+        metaExam: document.getElementById('meta-exam-id'),
+        metaCategory: document.getElementById('meta-category'),
+        metaSession: document.getElementById('meta-session'),
+        metaSuite: document.getElementById('meta-suite'),
+        metaScore: document.getElementById('meta-score'),
+        metaDuration: document.getElementById('meta-duration'),
+        statusTitle: document.getElementById('status-title'),
+        statusDetail: document.getElementById('status-detail'),
+        completeBtn: document.getElementById('complete-exam-btn'),
+        forceReadyBtn: document.getElementById('force-ready-btn'),
+        log: document.getElementById('event-log')
+    };
+
+    function decodeParam(value) {
+        if (!value) return '';
+        try { return decodeURIComponent(value.replace(/\+/g, ' ')); }
+        catch (_) { return value; }
+    }
+
+    function parseParams() {
+        const params = new URLSearchParams(window.location.search);
+        const title = decodeParam(params.get('title')) || state.title;
+        const examId = decodeParam(params.get('examId')) || null;
+        const category = decodeParam(params.get('category')) || 'P1';
+        const seq = params.get('index');
+
+        state.title = title;
+        state.examId = examId;
+        state.category = category;
+        state.sequenceIndex = seq != null ? Number(seq) : null;
+
+        document.body.dataset.examId = examId || '';
+        dom.title.textContent = title || 'IELTS 阅读练习占位页';
+        dom.subtitle.innerHTML = seq != null
+            ? `当前为套题第 <span class="pill">${Number(seq) + 1}</span> 篇，请在完成后点击提交。`
+            : '当前题目无法加载，系统已切换到占位练习页。';
+        dom.metaExam.textContent = examId || '未提供';
+        dom.metaCategory.textContent = category || 'P1';
+        dom.metaScore.textContent = `正确 ${state.correctCount} / 总题数 ${state.totalCount}（${Math.round((state.correctCount / state.totalCount) * 100)}%）`;
+        dom.metaDuration.textContent = '~12 分钟';
+    }
+
+    function log(message, level = 'info') {
+        if (!dom.log) return;
+        const entry = document.createElement('div');
+        entry.className = level;
+        const timestamp = new Date().toLocaleTimeString();
+        entry.textContent = `[${timestamp}] ${message}`;
+        dom.log.prepend(entry);
+    }
+
+    function buildEnvelope(type, payload) {
+        const data = Object.assign({
+            examId: state.examId,
+            title: state.title,
+            category: state.category,
+            suiteSessionId: state.suiteSessionId,
+            sessionId: state.sessionId,
+            source: 'suite_placeholder',
+            timestamp: Date.now()
+        }, payload || {});
+        return { type, data, source: 'suite_placeholder' };
+    }
+
+    function postMessage(type, payload) {
+        if (!opener || opener === window) {
+            log('未检测到父窗口，消息未发送。', 'warn');
+            return;
+        }
+        try {
+            opener.postMessage(buildEnvelope(type, payload), '*');
+            log(`已发送 ${type} 消息`, 'info');
+        } catch (error) {
+            log(`发送 ${type} 消息失败: ${error}`, 'error');
+        }
+    }
+
+    function markState(stateLabel, detail) {
+        document.body.dataset.examState = stateLabel;
+        dom.statusTitle.textContent = stateLabel;
+        if (detail) {
+            dom.statusDetail.textContent = detail;
+        }
+    }
+
+    function sendSessionReady() {
+        markState('已与父页面建立会话', '等待当前篇章作答完成。');
+        dom.completeBtn.disabled = false;
+        postMessage('SESSION_READY', {
+            url: window.location.href,
+            pageType: 'suite-placeholder',
+            status: 'ready'
+        });
+    }
+
+    function submitResults() {
+        if (state.submitted) {
+            log('当前篇章已提交，忽略重复点击。', 'warn');
+            return;
+        }
+        const duration = state.baseDuration + Math.round(Math.random() * 180);
+        const correct = state.correctCount + Math.round(Math.random() * 2 - 1);
+        const total = state.totalCount;
+        const accuracy = Math.max(0, Math.min(1, correct / total));
+        const percentage = Math.round(accuracy * 100);
+
+        const answers = {};
+        const comparison = {};
+        for (let i = 1; i <= total; i++) {
+            const qKey = `Q${i}`;
+            answers[qKey] = i <= correct ? 'A' : 'B';
+            comparison[qKey] = {
+                questionId: qKey,
+                correctAnswer: i <= correct ? 'A' : 'B',
+                userAnswer: answers[qKey],
+                isCorrect: i <= correct
+            };
+        }
+
+        const payload = {
+            completedAt: new Date().toISOString(),
+            duration,
+            scoreInfo: {
+                correct,
+                total,
+                accuracy,
+                percentage,
+                source: 'suite_placeholder',
+                details: comparison
+            },
+            answers,
+            answerComparison: comparison,
+            metadata: {
+                category: state.category,
+                examTitle: state.title,
+                suitePlaceholder: true
+            }
+        };
+
+        postMessage('PRACTICE_COMPLETE', payload);
+        state.submitted = true;
+        dom.completeBtn.disabled = true;
+        markState('已上报成绩，等待下一篇...', '请稍候，系统将自动跳转至下一篇套题。');
+    }
+
+    function handleIncoming(event) {
+        const payload = event && event.data ? event.data : null;
+        if (!payload || typeof payload !== 'object') {
+            return;
+        }
+        const envelope = payload;
+        const rawType = envelope.type || envelope.action;
+        if (!rawType) {
+            return;
+        }
+        const type = String(rawType).toUpperCase();
+        const data = envelope.data || {};
+
+        if (type === 'INIT_SESSION' || type === 'INIT_EXAM_SESSION') {
+            if (data.sessionId) {
+                state.sessionId = data.sessionId;
+                dom.metaSession.textContent = data.sessionId;
+            }
+            if (data.suiteSessionId) {
+                state.suiteSessionId = data.suiteSessionId;
+                dom.metaSuite.textContent = data.suiteSessionId;
+            }
+            if (data.examId) {
+                state.examId = data.examId;
+                document.body.dataset.examId = data.examId;
+                dom.metaExam.textContent = data.examId;
+            }
+            markState('握手成功，等待作答', '可点击“提交本篇成绩”模拟完成。');
+            dom.completeBtn.disabled = false;
+        }
+
+        if (type === 'INIT_SESSION' || type === 'INIT_EXAM_SESSION') {
+            sendSessionReady();
+        }
+
+        if (type === 'SUITE_NAVIGATE') {
+            log('收到套题导航指令，准备跳转下一篇。', 'info');
+            const nextUrl = data.url || '';
+            if (nextUrl) {
+                try {
+                    window.location.href = nextUrl;
+                } catch (error) {
+                    log('跳转下一篇失败: ' + error, 'error');
+                }
+            }
+        }
+    }
+
+    dom.completeBtn.addEventListener('click', submitResults);
+    dom.forceReadyBtn.addEventListener('click', () => {
+        if (!state.sessionId) {
+            log('仍未获得 sessionId，将发送占位会话。', 'warn');
+        }
+        sendSessionReady();
+    });
+
+    window.addEventListener('message', handleIncoming);
+
+    parseParams();
+    log('占位页已初始化，等待父窗口发送 INIT_SESSION。');
+    setTimeout(() => {
+        if (!state.sessionId) {
+            log('仍未握手，尝试主动发送 SESSION_READY。', 'warn');
+            sendSessionReady();
+        }
+    }, 1500);
+})();
+</script>
+</body>
+</html>
