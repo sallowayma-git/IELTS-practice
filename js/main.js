@@ -252,7 +252,7 @@ function ensureExamListView() {
   }
 
   // --- Initialization ---
-function initializeLegacyComponents() {
+async function initializeLegacyComponents() {
     try { showMessage('系统准备就绪', 'success'); } catch(_) {}
 
     try {
@@ -292,32 +292,28 @@ function initializeLegacyComponents() {
     }
 
     // Clean up old cache and configurations for v1.1.0 upgrade (one-time only)
+    let needsCleanup = false;
     try {
-      const done = localStorage.getItem('upgrade_v1_1_0_cleanup_done');
-      if (!done) {
-        cleanupOldCache().finally(() => {
-          try { localStorage.setItem('upgrade_v1_1_0_cleanup_done','1'); } catch(_) {}
-        });
-      }
-    } catch(_) {}
+        needsCleanup = !localStorage.getItem('upgrade_v1_1_0_cleanup_done');
+    } catch (error) {
+        console.warn('[System] 检查升级标记失败，将继续执行清理流程', error);
+        needsCleanup = true;
+    }
 
-    // 防止索引在每次加载时被清空 - 新增修复3A
-    try {
-      const cleanupDone = localStorage.getItem('upgrade_v1_1_0_cleanup_done');
-      if (!cleanupDone) {
+    if (needsCleanup) {
         console.log('[System] 首次运行，执行升级清理...');
-        cleanupOldCache().finally(() => {
-          try { localStorage.setItem('upgrade_v1_1_0_cleanup_done','1'); } catch(_) {}
-        });
-      } else {
+        try {
+            await cleanupOldCache();
+        } finally {
+            try { localStorage.setItem('upgrade_v1_1_0_cleanup_done','1'); } catch(_) {}
+        }
+    } else {
         console.log('[System] 升级清理已完成，跳过重复清理');
-      }
-    } catch(_) {}
-
+    }
 
     // Load data and setup listeners
-    loadLibrary();
-    syncPracticeRecords(); // Load initial records and update UI
+    await loadLibrary();
+    await syncPracticeRecords(); // Load initial records and update UI
     setupMessageListener(); // Listen for updates from child windows
     setupStorageSyncListener(); // Listen for storage changes from other tabs
 }
@@ -551,53 +547,99 @@ async function savePracticeRecordFallback(examId, realData) {
 
 async function loadLibrary(forceReload = false) {
     const startTime = performance.now();
-    const activeConfigKey = await getActiveLibraryConfigurationKey();
-    let cachedData = await storage.get(activeConfigKey);
+    const rawKey = await getActiveLibraryConfigurationKey();
+    const activeConfigKey = typeof rawKey === 'string' && rawKey.trim()
+        ? rawKey.trim()
+        : 'exam_index';
+    const isDefaultConfig = activeConfigKey === 'exam_index';
 
-    // 仅当缓存为非空数组时使用缓存
-    if (!forceReload && Array.isArray(cachedData) && cachedData.length > 0) {
+    let cachedData = null;
+    try {
+        if (!isDefaultConfig) {
+            cachedData = await storage.get(activeConfigKey);
+        } else {
+            await storage.set('active_exam_index_key', 'exam_index');
+        }
+    } catch (error) {
+        console.warn('[Library] 读取题库缓存失败:', error);
+    }
+
+    if (!forceReload && !isDefaultConfig && Array.isArray(cachedData) && cachedData.length > 0) {
         const updatedIndex = setExamIndexState(cachedData);
         try {
-            const configs = await storage.get('exam_index_configurations', []);
-            if (!configs.some(c => c.key === 'exam_index')) {
-                configs.push({ name: '默认题库', key: 'exam_index', examCount: updatedIndex.length || 0, timestamp: Date.now() });
-                await storage.set('exam_index_configurations', configs);
-            }
-            const activeKey = await storage.get('active_exam_index_key');
-            if (!activeKey) await storage.set('active_exam_index_key', 'exam_index');
             await savePathMapForConfiguration(activeConfigKey, updatedIndex, { setActive: true });
-        } catch (_) {}
+        } catch (error) {
+            console.warn('[Library] 应用路径映射失败:', error);
+        }
         finishLibraryLoading(startTime);
         return;
     }
 
-    // 新增修复3B：从脚本重建索引（阅读+听力），若两者皆无则不写入空索引
+    if (!isDefaultConfig) {
+        const normalized = Array.isArray(cachedData) ? cachedData : [];
+        setExamIndexState(normalized);
+        if (!normalized.length) {
+            console.warn('[Library] 当前题库配置中没有找到可用数据');
+            if (typeof showMessage === 'function') {
+                showMessage('当前题库配置没有数据，请重新导入或切换至默认题库。', 'warning');
+            }
+        }
+        finishLibraryLoading(startTime);
+        return;
+    }
+
     try {
-        let readingExams = [];
-        if (Array.isArray(window.completeExamIndex)) {
-            readingExams = window.completeExamIndex.map(exam => ({ ...exam, type: 'reading' }));
-        }
+        const readingExams = Array.isArray(window.completeExamIndex)
+            ? window.completeExamIndex.map((exam) => Object.assign({}, exam, { type: 'reading' }))
+            : [];
+        const listeningExams = Array.isArray(window.listeningExamIndex)
+            ? window.listeningExamIndex.map((exam) => Object.assign({}, exam, { type: 'listening' }))
+            : [];
 
-        let listeningExams = [];
-        if (Array.isArray(window.listeningExamIndex)) {
-            listeningExams = window.listeningExamIndex; // 已含 type: 'listening'
-        }
-
-        if (readingExams.length === 0 && listeningExams.length === 0) {
+        if (!readingExams.length && !listeningExams.length) {
             setExamIndexState([]);
-            finishLibraryLoading(startTime); // 不写入空索引，避免污染缓存
+            console.warn('[Library] 未检测到默认题库脚本中的题源数据');
+            finishLibraryLoading(startTime);
             return;
         }
 
-        const updatedIndex = setExamIndexState([...readingExams, ...listeningExams]);
-        await storage.set(activeConfigKey, updatedIndex);
-        await saveLibraryConfiguration('默认题库', activeConfigKey, updatedIndex.length);
-        await setActiveLibraryConfiguration(activeConfigKey);
-        await savePathMapForConfiguration(activeConfigKey, updatedIndex, { setActive: true });
+        const combined = [...readingExams, ...listeningExams];
+        const updatedIndex = setExamIndexState(combined);
+
+        const metadata = {
+            source: 'default-script',
+            generatedAt: Date.now(),
+            counts: {
+                total: combined.length,
+                reading: readingExams.length,
+                listening: listeningExams.length
+            },
+            pathRoot: {
+                reading: resolveScriptPathRoot('reading'),
+                listening: resolveScriptPathRoot('listening')
+            }
+        };
+        try { window.examIndexMetadata = metadata; } catch (_) {}
+
+        const overrideMap = {
+            reading: {
+                root: metadata.pathRoot.reading,
+                exceptions: {}
+            },
+            listening: {
+                root: metadata.pathRoot.listening,
+                exceptions: {}
+            }
+        };
+
+        await storage.set('exam_index', updatedIndex);
+        await saveLibraryConfiguration('默认题库', 'exam_index', updatedIndex.length);
+        await setActiveLibraryConfiguration('exam_index');
+        await savePathMapForConfiguration('exam_index', updatedIndex, { setActive: true, overrideMap });
 
         finishLibraryLoading(startTime);
     } catch (error) {
-        console.error('[Library] 加载题库失败:', error);
+        console.error('[Library] 加载默认题库失败:', error);
         if (typeof showMessage === 'function') {
             showMessage('题库刷新失败: ' + (error?.message || error), 'error');
         }
@@ -606,6 +648,34 @@ async function loadLibrary(forceReload = false) {
         finishLibraryLoading(startTime);
     }
 }
+
+function resolveScriptPathRoot(type) {
+    const defaultRoot = type === 'reading'
+        ? '睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/'
+        : 'ListeningPractice/';
+    try {
+        if (type === 'reading') {
+            const rootMeta = window.completeExamIndex && window.completeExamIndex.pathRoot;
+            if (typeof rootMeta === 'string' && rootMeta.trim()) {
+                return rootMeta.trim();
+            }
+            if (rootMeta && typeof rootMeta === 'object' && typeof rootMeta.reading === 'string') {
+                return rootMeta.reading.trim();
+            }
+        } else if (type === 'listening') {
+            const listeningRoot = window.listeningExamIndex && window.listeningExamIndex.pathRoot;
+            if (typeof listeningRoot === 'string' && listeningRoot.trim()) {
+                return listeningRoot.trim();
+            }
+            const completeRoot = window.completeExamIndex && window.completeExamIndex.pathRoot;
+            if (completeRoot && typeof completeRoot === 'object' && typeof completeRoot.listening === 'string') {
+                return completeRoot.listening.trim();
+            }
+        }
+    } catch (_) {}
+    return defaultRoot;
+}
+
 function finishLibraryLoading(startTime) {
     const loadTime = performance.now() - startTime;
     // 修复题库索引加载链路问题：顺序为设置window.examIndex → updateOverview() → dispatchEvent('examIndexLoaded')
