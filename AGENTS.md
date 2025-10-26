@@ -13,6 +13,11 @@
     - **`developer/tests/e2e/app-e2e-runner.html`** – launches the production app in an iframe and runs scripted smoke checks.
     - **`developer/tests/js/`** – reusable JavaScript utilities for manual and automated QA.
     - **`developer/tests/ci/`** – CI/CD bootstrap scripts and documentation.
+    
+## Cloud Sync Safeguard
+
+- Cloud runners do **not** upload any file or folder blocked by `.gitignore`. The bundled reading bank `睡着过项目组(9.4)[134篇]` lives in that ignore list, so it never appears remotely.
+- Treat the default exam paths as immutable. AI tooling must **not** rewrite, move, or renormalize the default script paths for the built-in question bank; doing so will break local-only assets that are intentionally absent in cloud storage.
 
 ## Test & CI expectations
 - The repo ships with a static E2E harness; **after every优化或功能改动，必须依次运行以下命令**：
