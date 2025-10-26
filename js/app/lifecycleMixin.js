@@ -37,7 +37,7 @@
                 // 调用 main.js 的遗留组件初始化
                 if (typeof window.initializeLegacyComponents === 'function') {
                     this.updateLoadingMessage('正在初始化遗留组件...');
-                    window.initializeLegacyComponents();
+                    await window.initializeLegacyComponents();
                 }
 
                 this.updateLoadingMessage('正在加载初始数据...');
