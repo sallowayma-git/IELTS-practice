@@ -1,423 +1,483 @@
 # Practice Session System
 
 > **Relevant source files**
-> * [js/app.js](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/js/app.js)
-> * [js/practice-page-enhancer.js](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/js/practice-page-enhancer.js)
-> * [templates/template_base.html](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/templates/template_base.html)
+> * [developer/tests/e2e/playwright_index_clickthrough.py](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/developer/tests/e2e/playwright_index_clickthrough.py)
+> * [developer/tests/js/e2e/indexSnapshot.js](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/developer/tests/js/e2e/indexSnapshot.js)
+> * [js/app/examSessionMixin.js](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/app/examSessionMixin.js)
+> * [js/app/lifecycleMixin.js](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/app/lifecycleMixin.js)
+> * [js/core/practiceRecorder.js](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/practiceRecorder.js)
+> * [js/core/scoreStorage.js](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/scoreStorage.js)
+> * [js/views/overviewView.js](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/views/overviewView.js)
 
-This document explains how individual practice sessions work in the IELTS Reading Practice System, covering the complete flow from opening a practice page to collecting session results. The system manages the lifecycle of practice windows, handles bidirectional communication between the main application and practice pages, and provides enhanced functionality through script injection.
+The Practice Session System manages the complete lifecycle of IELTS practice sessions from initialization through completion and data persistence. The system coordinates cross-window communication between the main application and practice pages, collects user answers and interaction data, and processes results for storage.
 
-For information about the main application architecture, see [Core Application](/sallowayma-git/IELTS-practice/2-core-application). For details about the practice history and analytics, see [User Interface & Styling](/sallowayma-git/IELTS-practice/4-user-interface-and-styling).
+This page covers the core session management classes (`PracticeRecorder`, `ScoreStorage`), the practice page enhancement script, and the cross-window communication protocol. For underlying data storage mechanisms, see [Data Management System](/sallowayma-git/IELTS-practice/4-data-management-system). For exam content structure, see [Exam Content & Data System](/sallowayma-git/IELTS-practice/6-exam-content-and-data-system).
 
-## Practice Session Architecture
+## Architecture Overview
 
-The Practice Session System operates through three main components working together: the practice page template, the enhancement system, and the session management in the main application.
+The system uses a distributed architecture with session management in the main window and data collection in practice windows. Session state persists in `localStorage` even if practice windows close unexpectedly.
+
+### Component Structure
 
 ```mermaid
 flowchart TD
 
 ExamSystemApp["ExamSystemApp"]
-openExam["openExam()"]
-injectScript["injectDataCollectionScript()"]
-setupComm["setupExamWindowCommunication()"]
-template["template_base.html"]
-enhancer["PracticePageEnhancer"]
-loadEnhancer["loadPracticePageEnhancer()"]
-inlineEnhancer["loadInlineEnhancer()"]
-postMessage["window.postMessage()"]
-messageHandler["messageHandler"]
-fallbackComm["localStorage fallback"]
-answerTracking["Answer Tracking"]
-sessionData["Session Data"]
-practiceComplete["PRACTICE_COMPLETE"]
+examSessionMixin["examSessionMixin<br>openExam()"]
+PracticeRecorder["PracticeRecorder<br>startPracticeSession()"]
+PracticeWindow["Practice Window"]
+activeSessions["activeSessions: Map"]
+ScoreStorage["ScoreStorage<br>savePracticeRecord()"]
+MetaRepo["MetaRepository<br>active_sessions<br>temp_records"]
+practicePageEnhancer["practicePageEnhancer<br>injected script"]
+AnswerCollector["Answer Collectors<br>setupAnswerListeners()"]
+CorrectAnswerExtractor["CorrectAnswerExtractor<br>extractFromPage()"]
+PracticeRepo["PracticeRepository<br>overwrite()"]
+MetaRepo2["MetaRepository<br>user_stats"]
 
-openExam --> template
-injectScript --> enhancer
-enhancer --> postMessage
-setupComm --> messageHandler
-enhancer --> answerTracking
-practiceComplete --> ExamSystemApp
-
-subgraph subGraph3 ["Data Collection"]
-    answerTracking
-    sessionData
-    practiceComplete
-    answerTracking --> sessionData
-    sessionData --> practiceComplete
-end
-
-subgraph subGraph2 ["Communication Layer"]
-    postMessage
-    messageHandler
-    fallbackComm
-    postMessage --> messageHandler
-    messageHandler --> fallbackComm
-end
-
-subgraph subGraph1 ["Practice Window"]
-    template
-    enhancer
-    loadEnhancer
-    inlineEnhancer
-    template --> loadEnhancer
-    loadEnhancer --> enhancer
-    loadEnhancer --> inlineEnhancer
-end
-
-subgraph subGraph0 ["Main Application (improved-working-system.html)"]
-    ExamSystemApp
-    openExam
-    injectScript
-    setupComm
-    ExamSystemApp --> openExam
-    openExam --> injectScript
-end
+ExamSystemApp --> examSessionMixin
+examSessionMixin --> PracticeRecorder
+examSessionMixin --> PracticeWindow
+PracticeRecorder --> activeSessions
+PracticeRecorder --> ScoreStorage
+PracticeRecorder --> MetaRepo
+PracticeWindow --> practicePageEnhancer
+practicePageEnhancer --> AnswerCollector
+practicePageEnhancer --> CorrectAnswerExtractor
+ScoreStorage --> PracticeRepo
+ScoreStorage --> MetaRepo2
+PracticeRecorder --> practicePageEnhancer
+practicePageEnhancer --> PracticeRecorder
 ```
 
-**Sources:** [js/app.js L843-L875](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/js/app.js#L843-L875)
+**Core Classes and Files**
 
- [templates/template_base.html L1216-L1358](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/templates/template_base.html#L1216-L1358)
-
- [js/practice-page-enhancer.js L17-L64](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/js/practice-page-enhancer.js#L17-L64)
-
-## Template Base System
-
-The `template_base.html` file serves as the foundation for all practice pages, providing a complete practice interface with built-in functionality.
-
-### Core Template Components
-
-The template includes several key systems:
-
-| Component | Purpose | Key Elements |
+| Component | File | Purpose |
 | --- | --- | --- |
-| Layout System | Two-pane interface with resizable divider | `.shell`, `#left`, `#right`, `#divider` |
-| Navigation System | Question navigation and progress tracking | `.practice-nav`, `.q-item`, `#timer` |
-| Answer Collection | Form elements with change tracking | `input[name^="q"]`, answer event listeners |
-| Enhancement Loading | Script injection and fallback systems | `loadPracticePageEnhancer()`, `loadInlineEnhancer()` |
+| `PracticeRecorder` | [js/core/practiceRecorder.js L5-L1500](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/practiceRecorder.js#L5-L1500) | Session lifecycle management, message handling |
+| `ScoreStorage` | [js/core/scoreStorage.js L5-L950](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/scoreStorage.js#L5-L950) | Record standardization, statistics updates, persistence |
+| `examSessionMixin` | [js/app/examSessionMixin.js L1-L868](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/app/examSessionMixin.js#L1-L868) | Window opening, script injection, session initialization |
+| `practicePageEnhancer` | js/practice-page-enhancer.js | Answer collection, user interaction tracking |
 
-```mermaid
-flowchart TD
+Sources: [js/core/practiceRecorder.js L5-L27](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/practiceRecorder.js#L5-L27)
 
-shell[".shell"]
-left["#left (Reading Passage)"]
-divider["#divider (Resizer)"]
-right["#right (Questions)"]
-nav[".practice-nav (Navigation)"]
-timer["#timer"]
-notes["#notes"]
-highlight["Highlight System"]
-grading["grade()"]
-loadEnhancer["loadPracticePageEnhancer()"]
-inlineEnhancer["loadInlineEnhancer()"]
-messageListener["message event listener"]
+ [js/core/scoreStorage.js L5-L24](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/scoreStorage.js#L5-L24)
 
-nav --> timer
-right --> grading
-left --> highlight
-grading --> loadEnhancer
+ [js/app/examSessionMixin.js L1-L94](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/app/examSessionMixin.js#L1-L94)
 
-subgraph subGraph2 ["Enhancement Integration"]
-    loadEnhancer
-    inlineEnhancer
-    messageListener
-    loadEnhancer --> inlineEnhancer
-    loadEnhancer --> messageListener
-end
+## Session Lifecycle
 
-subgraph subGraph1 ["Built-in Features"]
-    timer
-    notes
-    highlight
-    grading
-end
+`PracticeRecorder` manages session state through initialization, active monitoring, and completion processing.
 
-subgraph subGraph0 ["Template Structure"]
-    shell
-    left
-    divider
-    right
-    nav
-    shell --> left
-    shell --> divider
-    shell --> right
-    shell --> nav
-end
-```
-
-**Sources:** [templates/template_base.html L35-L575](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/templates/template_base.html#L35-L575)
-
- [templates/template_base.html L1216-L1358](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/templates/template_base.html#L1216-L1358)
-
-## Session Communication Protocol
-
-Communication between the main application and practice pages uses `window.postMessage()` with localStorage fallbacks for reliability.
-
-### Message Types and Flow
-
-The system defines specific message types for different phases of the practice session:
+### Initialization Flow
 
 ```mermaid
 sequenceDiagram
-  participant Main App (ExamSystemApp)
+  participant ExamSystemApp
+  participant examSessionMixin
+  participant PracticeRecorder
   participant Practice Window
-  participant PracticePageEnhancer
+  participant practicePageEnhancer
 
-  Main App (ExamSystemApp)->>Practice Window: Open window with buildExamUrl()
-  Main App (ExamSystemApp)->>PracticePageEnhancer: Inject script via injectDataCollectionScript()
-  PracticePageEnhancer->>Main App (ExamSystemApp): SESSION_READY with pageType detection
-  Main App (ExamSystemApp)->>PracticePageEnhancer: INIT_SESSION with sessionId
-  loop [Practice Session]
-    PracticePageEnhancer->>PracticePageEnhancer: Track answers via handleAnswerChange()
-    PracticePageEnhancer->>Main App (ExamSystemApp): PROGRESS_UPDATE with answeredQuestions
-    PracticePageEnhancer->>PracticePageEnhancer: Monitor user interactions
-  end
-  PracticePageEnhancer->>PracticePageEnhancer: Intercept grade() function call
-  PracticePageEnhancer->>PracticePageEnhancer: Extract results via extractFinalResults()
-  PracticePageEnhancer->>Main App (ExamSystemApp): PRACTICE_COMPLETE with session data
-  Main App (ExamSystemApp)->>Main App (ExamSystemApp): Process via handlePracticeComplete()
+  ExamSystemApp->>examSessionMixin: "openExam(examId, options)"
+  examSessionMixin->>examSessionMixin: "buildExamUrl(exam)"
+  examSessionMixin->>Practice Window: "window.open(examUrl)"
+  examSessionMixin->>PracticeRecorder: "startPracticeSession(examId)"
+  PracticeRecorder->>PracticeRecorder: "generateSessionId()"
+  PracticeRecorder->>PracticeRecorder: "activeSessions.set(examId, data)"
+  PracticeRecorder->>PracticeRecorder: "saveActiveSessions()"
+  examSessionMixin->>examSessionMixin: "injectDataCollectionScript(window, examId)"
+  Practice Window->>practicePageEnhancer: "DOMContentLoaded"
+  practicePageEnhancer->>practicePageEnhancer: "initialize()"
+  examSessionMixin->>Practice Window: "postMessage(INIT_SESSION, data)"
+  practicePageEnhancer->>examSessionMixin: "postMessage(SESSION_READY)"
+  PracticeRecorder->>PracticeRecorder: "handleSessionStarted(data)"
 ```
 
-### Communication Error Handling
+**Session Data Structure**
 
-The system implements multiple fallback mechanisms:
+The `activeSessions` Map stores session objects with the following fields (created in [js/core/practiceRecorder.js L293-L335](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/practiceRecorder.js#L293-L335)
 
-| Mechanism | Trigger | Implementation |
+):
+
+| Field | Type | Purpose |
 | --- | --- | --- |
-| Primary Communication | Normal operation | `window.postMessage()` |
-| Retry Logic | Message send failure | `handleCommunicationError()` with exponential backoff |
-| localStorage Fallback | Cross-origin issues | `handleCommunicationFallback()` |
-| Degraded Mode | Multiple failures | `enterDegradedMode()` |
+| `sessionId` | string | Generated via `generateSessionId()`: `session_${Date.now()}_${random}` |
+| `examId` | string | Exam identifier from exam index |
+| `startTime` | ISO string | Timestamp when `startPracticeSession()` called |
+| `lastActivity` | ISO string | Updated on progress messages, used for timeout detection |
+| `status` | enum | `started` → `active` → `completed`/`paused`/`error`/`timeout` |
+| `progress` | object | `{currentQuestion, totalQuestions, answeredQuestions, timeSpent}` |
+| `answers` | array | User answers collected during session |
+| `metadata` | object | `{examTitle, category, frequency, userAgent, screenResolution, timezone}` |
 
-**Sources:** [js/practice-page-enhancer.js L88-L203](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/js/practice-page-enhancer.js#L88-L203)
+Sources: [js/core/practiceRecorder.js L293-L335](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/practiceRecorder.js#L293-L335)
 
- [js/app.js L1221-L1284](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/js/app.js#L1221-L1284)
+ [js/app/examSessionMixin.js L6-L94](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/app/examSessionMixin.js#L6-L94)
 
-## Enhancement and Data Collection
+### State Transitions
 
-The `PracticePageEnhancer` class provides advanced functionality that gets injected into practice pages:
-
-### Data Collection Architecture
-
-```
-
-```
-
-### Answer Tracking Implementation
-
-The enhancement system monitors all form interactions:
-
-```python
-// Event listeners from practice-page-enhancer.js
-document.addEventListener('change', this.handleAnswerChange);
-document.addEventListener('input', this.handleAnswerChange);
-```
-
-Answer data is structured as:
-
-| Field | Type | Description |
-| --- | --- | --- |
-| `questionId` | string | Form element name (e.g., "q1", "q2") |
-| `value` | string/null | Selected or entered answer |
-| `timestamp` | number | When answer was recorded |
-| `timeFromStart` | number | Milliseconds since session start |
-
-**Sources:** [js/practice-page-enhancer.js L355-L414](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/js/practice-page-enhancer.js#L355-L414)
-
- [js/practice-page-enhancer.js L490-L576](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/js/practice-page-enhancer.js#L490-L576)
-
-## Session Lifecycle Management
-
-The main application manages the complete lifecycle of practice sessions through the `ExamSystemApp` class:
-
-### Session Initialization Flow
+Session state is managed through message handlers that update the `activeSessions` Map and persist to storage:
 
 ```mermaid
-flowchart TD
-
-startPractice["startPracticeSession()"]
-buildUrl["buildExamUrl()"]
-openWindow["openExamWindow()"]
-calcFeatures["calculateWindowFeatures()"]
-injectScript["injectDataCollectionScript()"]
-loadScript["fetch practice-page-enhancer.js"]
-injectInline["injectInlineScript()"]
-initSession["initializePracticeSession()"]
-examWindows["this.examWindows Map"]
-sessionId["generateSessionId()"]
-setupComm["setupExamWindowCommunication()"]
-
-openWindow --> injectScript
-initSession --> sessionId
-openWindow --> examWindows
-
-subgraph subGraph2 ["Session Tracking"]
-    examWindows
-    sessionId
-    setupComm
-    setupComm --> examWindows
-end
-
-subgraph subGraph1 ["Script Injection"]
-    injectScript
-    loadScript
-    injectInline
-    initSession
-    injectScript --> loadScript
-    loadScript --> injectInline
-    injectScript --> initSession
-end
-
-subgraph subGraph0 ["Session Start (ExamSystemApp)"]
-    startPractice
-    buildUrl
-    openWindow
-    calcFeatures
-    startPractice --> buildUrl
-    buildUrl --> openWindow
-    openWindow --> calcFeatures
-end
+stateDiagram-v2
+    [*] --> started : "startPracticeSession(examId)"
+    started --> active : "handleSessionStarted(data)"
+    active --> paused : "handleSessionResumed(data)"
+    paused --> active : "handleSessionResumed(data)"
+    active --> completed : "handleSessionCompleted(data)"
+    active --> error : "handleSessionError(data)"
+    active --> timeout : "handleSessionError(data)"
+    completed --> [*] : "endPracticeSession(examId, 'completed')"
+    error --> [*] : "endPracticeSession(examId, 'error')"
+    timeout --> [*] : "endPracticeSession(examId, 'timeout')"
 ```
 
-### Session Data Structure
+**Monitoring and Persistence**
 
-Active sessions are tracked in the `examWindows` Map with the following structure:
+The system implements automatic session management features (from [js/core/practiceRecorder.js L9-L27](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/practiceRecorder.js#L9-L27)
 
-```yaml
-examWindows: Map<examId, {
-    window: Window,
-    sessionId: string,
-    startTime: number,
-    status: 'active' | 'initialized' | 'completed',
-    dataCollectorReady?: boolean,
-    pageType?: string,
-    lastProgress?: object
-}>
-```
+):
 
-**Sources:** [js/app.js L1477-L1519](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/js/app.js#L1477-L1519)
-
- [js/app.js L950-L1038](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/js/app.js#L950-L1038)
-
- [js/app.js L1191-L1216](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/js/app.js#L1191-L1216)
-
-## Session Completion and Data Processing
-
-When a practice session completes, the system processes results through multiple handlers:
-
-### Result Processing Pipeline
-
-```mermaid
-flowchart TD
-
-gradeFunction["Original grade() function"]
-intercepted["Intercepted grade()"]
-extractResults["extractFinalResults()"]
-extractScore["extractScoreFromPage()"]
-pageResults["Results from #results element"]
-answerData["Collected answer data"]
-handleComplete["handlePracticeComplete()"]
-saveData["saveRealPracticeData()"]
-showNotification["showRealCompletionNotification()"]
-updateUI["updateExamStatus()"]
-
-extractResults --> extractScore
-extractResults --> answerData
-answerData --> handleComplete
-
-subgraph subGraph2 ["Main Application"]
-    handleComplete
-    saveData
-    showNotification
-    updateUI
-    handleComplete --> saveData
-    handleComplete --> showNotification
-    handleComplete --> updateUI
-end
-
-subgraph subGraph1 ["Data Extraction"]
-    extractScore
-    pageResults
-    answerData
-    extractScore --> pageResults
-end
-
-subgraph subGraph0 ["Practice Page"]
-    gradeFunction
-    intercepted
-    extractResults
-    gradeFunction --> intercepted
-    intercepted --> extractResults
-end
-```
-
-### Practice Record Structure
-
-Completed sessions are stored as practice records with this structure:
-
-| Field | Type | Description |
+| Feature | Implementation | Configuration |
 | --- | --- | --- |
-| `id` | string | Unique record identifier |
-| `examId` | string | Reference to exam in index |
-| `sessionId` | string | Practice session identifier |
-| `dataSource` | string | "real" for actual session data |
-| `realData.scoreInfo` | object | Score details from page extraction |
-| `realData.answers` | object | All collected answers |
-| `realData.interactions` | array | User interaction history |
-| `duration` | number | Session duration in seconds |
-| `startTime` | string | ISO timestamp of session start |
-| `endTime` | string | ISO timestamp of completion |
+| Auto-save | `autoSaveTimer` interval calls `saveAllSessions()` | Every 30 seconds ([js/core/practiceRecorder.js L9-L10](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/practiceRecorder.js#L9-L10) <br> ) |
+| Timeout detection | `setupSessionListener()` checks `lastActivity` | 30 minutes inactivity ([js/core/practiceRecorder.js L557-L592](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/practiceRecorder.js#L557-L592) <br> ) |
+| Session restoration | `restoreActiveSessions()` loads from `MetaRepository` | On `initialize()` ([js/core/practiceRecorder.js L223-L239](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/practiceRecorder.js#L223-L239) <br> ) |
+| Interrupted records | `saveInterruptedRecord()` captures partial sessions | On timeout/error ([js/core/practiceRecorder.js L901-L912](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/practiceRecorder.js#L901-L912) <br> ) |
 
-**Sources:** [js/practice-page-enhancer.js L460-L488](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/js/practice-page-enhancer.js#L460-L488)
+Sources: [js/core/practiceRecorder.js L9-L27](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/practiceRecorder.js#L9-L27)
 
- [js/app.js L1598-L1635](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/js/app.js#L1598-L1635)
+ [js/core/practiceRecorder.js L223-L239](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/practiceRecorder.js#L223-L239)
 
- [js/app.js L1419-L1465](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/js/app.js#L1419-L1465)
+ [js/core/practiceRecorder.js L557-L592](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/practiceRecorder.js#L557-L592)
 
-## Error Handling and Fallbacks
+ [js/core/practiceRecorder.js L606-L628](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/practiceRecorder.js#L606-L628)
 
-The Practice Session System includes comprehensive error handling at multiple levels:
+## Cross-Window Communication
 
-### Fallback Hierarchy
+The system uses `window.postMessage()` for bidirectional communication between the main application and practice windows.
+
+### Message Flow
 
 ```mermaid
-flowchart TD
+sequenceDiagram
+  participant Main Window
+  participant (examSessionMixin)
+  participant PracticeRecorder
+  participant Practice Window
+  participant practicePageEnhancer
 
-fetchScript["fetch() practice-page-enhancer.js"]
-inlineScript["injectInlineScript()"]
-simpleCollector["Basic answer tracking"]
-primaryComm["Primary: postMessage Communication"]
-retryLogic["Retry: handleCommunicationError()"]
-fallbackComm["Fallback: localStorage Communication"]
-degradedMode["Degraded: enterDegradedMode()"]
-inlineCollector["Inline: Simple Data Collector"]
-
-primaryComm --> retryLogic
-retryLogic --> fallbackComm
-fallbackComm --> degradedMode
-degradedMode --> inlineCollector
-
-subgraph subGraph0 ["Script Injection Fallbacks"]
-    fetchScript
-    inlineScript
-    simpleCollector
-    fetchScript --> inlineScript
-    inlineScript --> simpleCollector
-end
+  Main Window->>Practice Window: "postMessage({type: 'INIT_SESSION', data: {sessionId, examId}})"
+  practicePageEnhancer->>Main Window: "postMessage({type: 'SESSION_READY', data: {sessionId, url}})"
+  note over practicePageEnhancer: User completes practice
+  practicePageEnhancer->>PracticeRecorder: "postMessage({type: 'PRACTICE_COMPLETE', data: {answers, results}})"
+  PracticeRecorder->>PracticeRecorder: "handleSessionCompleted(data)"
 ```
 
-### Error Recovery Mechanisms
+**Message Protocol**
 
-The system implements several recovery strategies:
+All messages use the structure `{type: string, data: object}`. The `PracticeRecorder.handleExamMessage()` method routes incoming messages based on the `type` field ([js/core/practiceRecorder.js L258-L288](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/practiceRecorder.js#L258-L288)
 
-| Error Type | Detection | Recovery Action | Implementation |
+):
+
+| Message Type | Direction | Handler Method | Data Payload |
 | --- | --- | --- | --- |
-| Script load failure | `fetch().catch()` | Inject inline script | `injectInlineScript()` |
-| Communication failure | `postMessage` exception | Use localStorage | `handleCommunicationFallback()` |
-| Window closed | `window.closed` check | Clean up session | `cleanupExamSession()` |
-| Cross-origin issues | Message send failure | Show user notice | `showUserFriendlyError()` |
+| `INIT_SESSION` | Main → Practice | N/A (handled by enhancer) | `{sessionId, examId, parentOrigin, timestamp}` |
+| `SESSION_READY` | Practice → Main | N/A (confirmation only) | `{sessionId, examId, url, title}` |
+| `session_started` | Practice → Main | `handleSessionStarted()` | `{examId, sessionId, metadata}` |
+| `session_progress` | Practice → Main | `handleSessionProgress()` | `{examId, progress, answers}` |
+| `session_completed` | Practice → Main | `handleSessionCompleted()` | `{examId, results, endTime}` |
+| `session_paused` | Practice → Main | `handleSessionPaused()` | `{examId}` |
+| `session_resumed` | Practice → Main | `handleSessionResumed()` | `{examId}` |
+| `session_error` | Practice → Main | `handleSessionError()` | `{examId, error}` |
 
-**Sources:** [js/practice-page-enhancer.js L157-L261](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/js/practice-page-enhancer.js#L157-L261)
+### Script Injection
 
- [js/app.js L1043-L1113](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/js/app.js#L1043-L1113)
+The main application injects the data collection script into practice windows using `examSessionMixin.injectDataCollectionScript()` ([js/app/examSessionMixin.js L203-L276](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/app/examSessionMixin.js#L203-L276)
 
- [js/app.js L1965-L1983](https://github.com/sallowayma-git/IELTS-practice/blob/db0f538c/js/app.js#L1965-L1983)
+):
+
+1. Wait for practice window to load (checks `document.readyState`)
+2. Fetch `js/practice-page-enhancer.js` content
+3. Create `<script>` element with fetched content
+4. Append to practice window's `<head>`
+5. Send `INIT_SESSION` message after 1500ms delay
+6. Fallback to `injectInlineScript()` if fetch fails ([js/app/examSessionMixin.js L281-L522](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/app/examSessionMixin.js#L281-L522) )
+
+Sources: [js/core/practiceRecorder.js L258-L288](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/practiceRecorder.js#L258-L288)
+
+ [js/app/examSessionMixin.js L203-L276](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/app/examSessionMixin.js#L203-L276)
+
+ [js/app/examSessionMixin.js L281-L522](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/app/examSessionMixin.js#L281-L522)
+
+ [js/app/examSessionMixin.js L527-L600](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/app/examSessionMixin.js#L527-L600)
+
+## Answer Collection
+
+The `practicePageEnhancer` script collects user answers using event listeners and DOM queries. The script is injected by `examSessionMixin` and runs in the practice window context.
+
+### Collection Strategy
+
+The enhancer uses multiple collection methods to handle different question formats:
+
+| Collection Method | Target Elements | Event Triggers |
+| --- | --- | --- |
+| Form inputs | `input[type="text"]`, `input[type="radio"]`, `textarea` | `change`, `input` |
+| Select dropdowns | `select` elements | `change` |
+| Drag-drop zones | `[data-dropzone]`, `.dropzone` | `drop` |
+| Matching exercises | `[data-match]`, `.match-item` | `click` |
+| Ordering exercises | `[data-order]`, `.sortable-item` | `dragend` |
+
+The `collectAllAnswers()` method aggregates answers from all sources and stores them in the `answers` object. This object is sent to the main window via `postMessage` when the user completes the practice.
+
+### Answer Extraction Pattern
+
+```mermaid
+flowchart TD
+
+CAE["CorrectAnswerExtractor<br>(embedded class)"]
+extractFromPage["extractFromPage()"]
+extractFromAnswersObject["extractFromAnswersObject()<br>scan global variables"]
+extractFromResultsTable["extractFromResultsTable()<br>parse DOM tables"]
+extractFromDOM["extractFromDOM()<br>data attributes & classes"]
+extractFromScripts["extractFromScripts()<br>parse script tags"]
+GlobalVars["window.answers<br>window.correctAnswers<br>window.examAnswers"]
+Tables[".results-table<br>.answer-table"]
+Attrs["[data-correct-answer]<br>.correct-answer<br>.solution"]
+Scripts["Script content:<br>const correctAnswers = {...}"]
+normalizeAnswer["normalizeAnswer()<br>standardize format"]
+
+CAE --> extractFromPage
+extractFromPage --> extractFromAnswersObject
+extractFromPage --> extractFromResultsTable
+extractFromPage --> extractFromDOM
+extractFromPage --> extractFromScripts
+extractFromAnswersObject --> GlobalVars
+extractFromResultsTable --> Tables
+extractFromDOM --> Attrs
+extractFromScripts --> Scripts
+extractFromPage --> normalizeAnswer
+```
+
+**Extraction Sources**
+
+The `CorrectAnswerExtractor` class (embedded in `practicePageEnhancer`) checks multiple sources in order:
+
+1. **Global variables**: `window.answers`, `window.correctAnswers`, `window.examAnswers`
+2. **Results tables**: DOM elements with classes `.results-table`, `.answer-table`, `.correct-answers-table`
+3. **Data attributes**: Elements with `data-correct-answer`, `data-answer`, `data-solution`
+4. **Script tags**: Parses JavaScript for patterns like `const correctAnswers = {...}`
+
+The `normalizeAnswer()` method standardizes formats:
+
+* TRUE/FALSE → boolean values
+* A/B/C/D → uppercase letters
+* Text answers → trimmed, lowercase for comparison
+
+Sources: Referenced in system design (script not in provided files but referenced in [js/app/examSessionMixin.js L236](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/app/examSessionMixin.js#L236-L236)
+
+)
+
+## Record Processing and Storage
+
+When a session completes, `PracticeRecorder.handleSessionCompleted()` processes the session data and creates a structured practice record.
+
+### Completion Flow
+
+```mermaid
+flowchart TD
+
+Complete["postMessage:<br>session_completed"]
+handleSessionCompleted["PracticeRecorder.<br>handleSessionCompleted(data)"]
+lookupExamIndexEntry["lookupExamIndexEntry(examId)"]
+resolvePracticeType["resolvePracticeType(session, examEntry)"]
+resolveRecordDate["resolveRecordDate(session, endTime)"]
+buildRecordMetadata["buildRecordMetadata(session, examEntry, type)"]
+createRecord["Create practiceRecord object"]
+savePracticeRecord["savePracticeRecord(record)"]
+ScoreStorage["ScoreStorage.<br>savePracticeRecord(record)"]
+standardizeRecord["standardizeRecord(recordData)"]
+validateRecord["validateRecord(record)"]
+storageSet["storage.set('practice_records')"]
+fallback["fallbackSavePracticeRecord(record)"]
+practiceRepo["practiceRepo.overwrite(records)"]
+updateUserStats["updateUserStats(record)"]
+metaRepo["metaRepo.set('user_stats')"]
+endPracticeSession["endPracticeSession(examId)"]
+
+Complete --> handleSessionCompleted
+handleSessionCompleted --> lookupExamIndexEntry
+handleSessionCompleted --> resolvePracticeType
+handleSessionCompleted --> resolveRecordDate
+handleSessionCompleted --> buildRecordMetadata
+handleSessionCompleted --> createRecord
+createRecord --> savePracticeRecord
+savePracticeRecord --> ScoreStorage
+ScoreStorage --> standardizeRecord
+standardizeRecord --> validateRecord
+validateRecord --> storageSet
+savePracticeRecord --> fallback
+fallback --> practiceRepo
+savePracticeRecord --> updateUserStats
+updateUserStats --> metaRepo
+handleSessionCompleted --> endPracticeSession
+```
+
+**Record Structure**
+
+The `practiceRecord` object created in `handleSessionCompleted()` ([js/core/practiceRecorder.js L387-L442](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/practiceRecorder.js#L387-L442)
+
+):
+
+| Field | Source | Type |
+| --- | --- | --- |
+| `id` | `record_${sessionId}` | string |
+| `examId` | Session data | string |
+| `sessionId` | Session data | string |
+| `startTime` | Session `startTime` | ISO string |
+| `endTime` | Message `endTime` or `new Date()` | ISO string |
+| `duration` | `(endTime - startTime) / 1000` | number (seconds) |
+| `status` | `'completed'` | string |
+| `type` | `resolvePracticeType()` result | `'reading'` or `'listening'` |
+| `date` | `resolveRecordDate()` result | ISO string |
+| `score` | `results.score` | number |
+| `totalQuestions` | `results.totalQuestions` | number |
+| `correctAnswers` | `results.correctAnswers` | number |
+| `accuracy` | `results.accuracy` | number (0-1) |
+| `answers` | `results.answers` or session `answers` | array |
+| `questionTypePerformance` | `results.questionTypePerformance` | object |
+| `metadata` | `buildRecordMetadata()` result | object |
+| `createdAt` | `endTime` | ISO string |
+
+Sources: [js/core/practiceRecorder.js L387-L442](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/practiceRecorder.js#L387-L442)
+
+ [js/core/practiceRecorder.js L180-L195](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/practiceRecorder.js#L180-L195)
+
+### Save Strategy and Error Handling
+
+`PracticeRecorder.savePracticeRecord()` implements a multi-tier save strategy with verification ([js/core/practiceRecorder.js L641-L677](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/practiceRecorder.js#L641-L677)
+
+):
+
+```mermaid
+flowchart TD
+
+savePracticeRecord["savePracticeRecord(record)"]
+Attempt1["Attempt 1:<br>ScoreStorage.savePracticeRecord()"]
+Verify1["verifyRecordSaved(id)"]
+Return["Return savedRecord"]
+Attempt2["Attempt 2: Retry after 100ms"]
+Verify2["verifyRecordSaved(id)"]
+Attempt3["Attempt 3: Retry after 200ms"]
+Verify3["verifyRecordSaved(id)"]
+Fallback["fallbackSavePracticeRecord(record)"]
+standardizeRecordForFallback["standardizeRecordForFallback(recordData)"]
+practiceRepoOverwrite["practiceRepo.overwrite(records)"]
+FallbackVerify["verifyRecordSaved(id)"]
+updateUserStatsManually["updateUserStatsManually(record)"]
+TempStorage["saveToTemporaryStorage(record)"]
+Throw["Throw Error"]
+
+savePracticeRecord --> Attempt1
+Attempt1 --> Verify1
+Verify1 --> Return
+Verify1 --> Attempt2
+Attempt2 --> Verify2
+Verify2 --> Return
+Verify2 --> Attempt3
+Attempt3 --> Verify3
+Verify3 --> Return
+Verify3 --> Fallback
+Fallback --> standardizeRecordForFallback
+standardizeRecordForFallback --> practiceRepoOverwrite
+practiceRepoOverwrite --> FallbackVerify
+FallbackVerify --> updateUserStatsManually
+FallbackVerify --> TempStorage
+updateUserStatsManually --> Return
+TempStorage --> Throw
+```
+
+**Fallback Implementation Details**
+
+The `fallbackSavePracticeRecord()` method ([js/core/practiceRecorder.js L682-L723](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/practiceRecorder.js#L682-L723)
+
+):
+
+1. Calls `standardizeRecordForFallback()` to ensure record format compatibility
+2. Retrieves existing records via `practiceRepo.list()`
+3. Checks for duplicate IDs and updates existing record if found
+4. Adds new record to beginning of array (maintains newest-first order)
+5. Trims array to 1000 records maximum
+6. Calls `practiceRepo.overwrite(records)` to persist
+7. Verifies save with `verifyRecordSaved()`
+8. Updates user stats manually if ScoreStorage is unavailable
+
+If all save attempts fail, the record is saved to temporary storage via `metaRepo.set('temp_practice_records')` for later recovery.
+
+Sources: [js/core/practiceRecorder.js L641-L723](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/practiceRecorder.js#L641-L723)
+
+ [js/core/practiceRecorder.js L728-L798](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/practiceRecorder.js#L728-L798)
+
+ [js/core/practiceRecorder.js L879-L898](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/practiceRecorder.js#L879-L898)
+
+## Integration with Storage System
+
+The Practice Session System integrates closely with the broader data management architecture while maintaining operational independence.
+
+### Storage Interface
+
+```mermaid
+flowchart TD
+
+PR["PracticeRecorder"]
+PPE["practicePageEnhancer"]
+SS["ScoreStorage"]
+SM["StorageManager"]
+LS["localStorage"]
+IDB["IndexedDB"]
+TMP["Temporary Storage"]
+
+PR --> SS
+PR --> SM
+PR --> TMP
+SM --> LS
+SM --> IDB
+PPE --> SM
+
+subgraph subGraph2 ["Persistence Layer"]
+    LS
+    IDB
+    TMP
+end
+
+subgraph subGraph1 ["Storage Abstraction"]
+    SS
+    SM
+    SS --> SM
+end
+
+subgraph subGraph0 ["Practice Session Layer"]
+    PR
+    PPE
+end
+```
+
+**Data Flow and Consistency**
+
+Sources: [js/core/practiceRecorder.js L12-L18](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/practiceRecorder.js#L12-L18)
+
+ [js/practice-page-enhancer.js L306-L334](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/practice-page-enhancer.js#L306-L334)
+
+The system maintains data consistency through:
+
+* **Shared Namespace**: Both components use `exam_system` storage namespace
+* **Transactional Saves**: Practice records are saved atomically with verification
+* **Statistics Updates**: User statistics are automatically updated with each completed session
+* **Backup Integration**: Practice records are included in system-wide backup operations
+
+The practice session system serves as a critical data collection and processing layer, ensuring reliable capture of user practice data while maintaining system resilience through comprehensive error handling and recovery mechanisms.
+
+Sources: [js/core/practiceRecorder.js L1-L1500](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/practiceRecorder.js#L1-L1500)
+
+ [js/practice-page-enhancer.js L1-L1400](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/practice-page-enhancer.js#L1-L1400)
