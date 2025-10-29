@@ -421,6 +421,34 @@ if (!window.practicePageEnhancer) {
             this._nativeClose = typeof window.close === 'function' ? window.close.bind(window) : null;
             this._nativeOpen = typeof window.open === 'function' ? window.open.bind(window) : null;
 
+            const windowName = typeof window.name === 'string'
+                ? window.name.trim().toLowerCase()
+                : '';
+
+            const isSelfTarget = (rawTarget) => {
+                if (rawTarget == null) {
+                    return true;
+                }
+
+                const normalized = typeof rawTarget === 'string'
+                    ? rawTarget.trim().toLowerCase()
+                    : String(rawTarget).trim().toLowerCase();
+
+                if (!normalized) {
+                    return true;
+                }
+
+                if (windowName && normalized === windowName) {
+                    return true;
+                }
+
+                if (['_self', 'self', '_parent', 'parent', '_top', 'top', 'window', 'this'].includes(normalized)) {
+                    return true;
+                }
+
+                return false;
+            };
+
             const guardClose = () => {
                 this.notifySuiteCloseAttempt('script_request');
                 return undefined;
@@ -433,8 +461,7 @@ if (!window.practicePageEnhancer) {
             if (this._nativeOpen) {
                 const originalOpen = this._nativeOpen;
                 window.open = (url = '', target = '', features = '') => {
-                    const normalizedTarget = typeof target === 'string' ? target.trim() : '';
-                    if (!normalizedTarget || normalizedTarget === '_self' || normalizedTarget === window.name) {
+                    if (isSelfTarget(target)) {
                         this.notifySuiteCloseAttempt('self_target_open');
                         return window;
                     }
