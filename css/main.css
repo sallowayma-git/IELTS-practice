@@ -1412,12 +1412,12 @@ body.no-scroll {
 
 .practice-history-list,
 #practice-history-list {
-    /* Height is now controlled by the VirtualScroller in JavaScript */
+    
     overflow-y: auto;
-    position: relative; /* Required for virtual scroller positioning */
+    position: relative; 
     display: flex;
     flex-direction: column;
-    gap: var(--space-md); /* 稍微收缩间距 */
+    gap: var(--space-md); 
 }
 
 .practice-history-list .record-selection,
@@ -1517,9 +1517,9 @@ body.no-scroll {
 
 .record-meta-line {
     display: flex;
-    align-items: baseline; /* 使用 baseline 对齐，确保文字基线一致 */
+    align-items: baseline; 
     margin-top: 8px;
-    gap: 20px; /* 日期和用时之间的间距 */
+    gap: 20px; 
     opacity: 0.8;
     color: #0D0D0D;
 }
@@ -1530,12 +1530,12 @@ body.no-scroll {
 
 .record-duration-value {
     display: flex;
-    align-items: baseline; /* 同样使用 baseline 对齐 */
+    align-items: baseline; 
     gap: 5px;
 }
 
 .record-duration-value .duration-time {
-    font-size: 1.1em; /* 让用时数值稍微大一点，但仍与基线对齐 */
+    font-size: 1.1em; 
 }
 
 .record-percentage-container {
@@ -1549,7 +1549,7 @@ body.no-scroll {
 
 .record-actions-container {
     display: flex;
-    justify-content: flex-end; /* 内容靠右 */
+    justify-content: flex-end; 
     flex-shrink: 0;
 }
 
