@@ -1,0 +1,46 @@
+{
+  "exportDate": "2024-10-01T08:00:00.000Z",
+  "version": "1.0.0",
+  "data": {
+    "practice_records": [
+      {
+        "id": "fixture_record_1",
+        "examId": "listening-fixture-01",
+        "title": "Listening Fixture 01",
+        "type": "listening",
+        "category": "practice",
+        "date": "2024-09-30T09:15:00.000Z",
+        "startTime": "2024-09-30T09:15:00.000Z",
+        "endTime": "2024-09-30T09:25:00.000Z",
+        "duration": 600,
+        "score": 7,
+        "totalQuestions": 10,
+        "correctAnswers": 7,
+        "realData": {
+          "answers": {
+            "q1": "a",
+            "q2": "b",
+            "q3": "c",
+            "q4": "d",
+            "q5": "e",
+            "q6": "f",
+            "q7": "g",
+            "q8": "h",
+            "q9": "i",
+            "q10": "j"
+          },
+          "score": 7,
+          "totalQuestions": 10,
+          "accuracy": 0.7,
+          "duration": 600
+        }
+      }
+    ],
+    "system_settings": {
+      "language": "zh-CN",
+      "theme": "dark",
+      "autoSave": true,
+      "notifications": false
+    }
+  }
+}
