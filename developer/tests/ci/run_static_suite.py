@@ -313,6 +313,17 @@ def run_checks() -> Tuple[List[dict], bool]:
             results.append(_format_result(f"E2E 依赖 {script_path.name}", script_passed, script_detail))
             all_passed &= script_passed
 
+        fixture_path = REPO_ROOT / "developer" / "tests" / "e2e" / "fixtures" / "data-integrity-import-sample.json"
+        fixture_passed, fixture_detail = _ensure_exists(fixture_path)
+        results.append(_format_result("E2E 导入样例数据", fixture_passed, fixture_detail))
+        all_passed &= fixture_passed
+
+        app_e2e_script = REPO_ROOT / "developer" / "tests" / "js" / "e2e" / "appE2ETest.js"
+        if app_e2e_script.exists():
+            snippet_passed, snippet_detail = _check_contains(app_e2e_script, "testDataIntegrityImportFlow")
+            results.append(_format_result("E2E 导入测试存在性", snippet_passed, snippet_detail))
+            all_passed &= snippet_passed
+
         interaction_path = REPO_ROOT / "developer" / "tests" / "js" / "e2e" / "interactionTargets.js"
         targets, detail = _load_interaction_targets(interaction_path)
         targets_passed = targets is not None
