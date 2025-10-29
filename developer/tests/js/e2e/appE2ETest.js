@@ -218,6 +218,7 @@ class AppE2ETestSuite {
             await this.testPracticeHistoryBulkDelete();
             await this.testPracticeSubmissionMessageFlow();
             await this.testSettingsControlButtons();
+            await this.testDataIntegrityImportFlow();
             await this.testThemePortals();
 
             this.setStatus('全部测试执行完毕');
@@ -557,6 +558,83 @@ class AppE2ETestSuite {
             }
 
             await this.runSettingsButtonAssertion(action);
+        }
+    }
+
+    async testDataIntegrityImportFlow() {
+        const name = '数据导入执行';
+        let backupId = null;
+        try {
+            const manager = this.win.dataIntegrityManager;
+            if (!manager || typeof manager.importData !== 'function') {
+                this.recordResult(name, false, '缺少 dataIntegrityManager.importData');
+                return;
+            }
+
+            const fixtureUrl = './fixtures/data-integrity-import-sample.json';
+            const response = await fetch(fixtureUrl, { cache: 'no-store' });
+            if (!response.ok) {
+                this.recordResult(name, false, `获取样例失败: ${response.status}`);
+                return;
+            }
+
+            const text = await response.text();
+            const blobSource = typeof File === 'function'
+                ? new File([text], 'data-integrity-import-sample.json', { type: 'application/json' })
+                : new Blob([text], { type: 'application/json' });
+
+            const before = await manager.getCriticalData();
+            const result = await manager.importData(blobSource);
+            backupId = result?.backupId || null;
+            const after = await manager.getCriticalData();
+
+            const records = Array.isArray(after.practice_records) ? after.practice_records : [];
+            const imported = records.find((entry) => entry && entry.id === 'fixture_record_1');
+            const settings = after.system_settings || {};
+
+            const passed = !!imported
+                && imported.examId === 'listening-fixture-01'
+                && settings.language === 'zh-CN'
+                && typeof result?.importedCount === 'number'
+                && result.importedCount >= 1;
+
+            this.recordResult(name, passed, {
+                importedCount: result?.importedCount ?? null,
+                backupId,
+                language: settings.language || null,
+                recordExamId: imported?.examId || null
+            });
+
+            if (backupId) {
+                try {
+                    await manager.restoreBackup(backupId);
+                } catch (error) {
+                    console.warn('[E2E] 恢复导入前备份失败:', error);
+                }
+                return;
+            }
+
+            if (manager.repositories && typeof manager.repositories.transaction === 'function') {
+                try {
+                    await manager.repositories.transaction(['practice', 'settings'], async (repos, tx) => {
+                        if (Array.isArray(before.practice_records)) {
+                            await repos.practice.overwrite(before.practice_records, { transaction: tx });
+                        }
+                        if (before.system_settings && typeof repos.settings?.saveAll === 'function') {
+                            await repos.settings.saveAll(before.system_settings, { transaction: tx });
+                        }
+                    });
+                } catch (error) {
+                    console.warn('[E2E] 回滚导入数据失败:', error);
+                }
+            }
+        } catch (error) {
+            this.recordResult(name, false, error?.message || String(error));
+            if (backupId) {
+                try {
+                    await this.win.dataIntegrityManager.restoreBackup(backupId);
+                } catch (_) {}
+            }
         }
     }
 
