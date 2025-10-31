@@ -4783,10 +4783,43 @@ function handleVocabEntry(event) {
     if (event && typeof event.preventDefault === 'function') {
         event.preventDefault();
     }
+    const mountView = () => {
+        if (window.VocabSessionView && typeof window.VocabSessionView.mount === 'function') {
+            window.VocabSessionView.mount('#vocab-view');
+        }
+    };
+
+    const vocabView = document.getElementById('vocab-view');
+    if (vocabView) {
+        vocabView.removeAttribute('hidden');
+    }
+
+    if (app && typeof app.navigateToView === 'function') {
+        app.navigateToView('vocab');
+        const moreNavBtn = document.querySelector('.nav-btn[data-view="more"]');
+        if (moreNavBtn) {
+            moreNavBtn.classList.add('active');
+        }
+        mountView();
+        return;
+    }
+
+    const moreView = document.getElementById('more-view');
+    if (vocabView && moreView) {
+        moreView.classList.remove('active');
+        vocabView.classList.add('active');
+        const moreNavBtn = document.querySelector('.nav-btn[data-view="more"]');
+        if (moreNavBtn) {
+            moreNavBtn.classList.add('active');
+        }
+        mountView();
+        return;
+    }
+
     if (typeof window.showMessage === 'function') {
-        window.showMessage('单词背诵模块正在筹备中，敬请期待。', 'info');
+        window.showMessage('未能打开词汇视图，请检查页面结构。', 'warning');
     } else {
-        window.alert('单词背诵模块正在筹备中，敬请期待。');
+        window.alert('未能打开词汇视图，请检查页面结构。');
     }
 }
 

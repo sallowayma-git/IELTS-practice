@@ -370,6 +370,17 @@ class DataIntegrityManager {
                 data.system_settings = {};
             }
 
+            try {
+                const metaRepo = this.repositories.meta;
+                if (metaRepo && typeof metaRepo.get === 'function') {
+                    data.vocab_words = await metaRepo.get('vocab_words', []);
+                    data.vocab_user_config = await metaRepo.get('vocab_user_config', null);
+                    data.vocab_review_queue = await metaRepo.get('vocab_review_queue', []);
+                }
+            } catch (vocabError) {
+                console.warn('[DataIntegrityManager] 获取词汇数据失败:', vocabError);
+            }
+
             return data;
         } catch (error) {
             console.error('[DataIntegrityManager] 获取关键数据失败:', error);
