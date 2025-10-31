@@ -180,12 +180,15 @@
                 <div class="tool-card-icon">🧠</div>
                 <div class="tool-card-content">
                     <h3>单词背诵</h3>
-                    <p>即将上线的核心词汇练习入口，敬请期待更多记忆工具。</p>
+                    <p>本地 Leitner 分箱 + 艾宾浩斯复习节奏，随时继续你的词汇任务。</p>
                 </div>
-                <div class="tool-card-arrow">预告</div>
+                <div class="tool-card-arrow">进入</div>
             </button>
         </div>
     </div>
+    <section id="vocab-view" class="view" data-view="vocab" hidden>
+        <div class="vocab-view-shell" data-vocab-role="root"></div>
+    </section>
     </div>
 
     <div id="fullscreen-clock-overlay" class="clock-overlay is-hidden" role="dialog" aria-modal="true"
@@ -389,6 +392,11 @@
     <script src="js/data/index.js"></script>
     <script src="js/utils/stateSerializer.js"></script>
     <script src="js/utils/simpleStorageWrapper.js"></script>
+    <script src="js/utils/vocabDataIO.js"></script>
+    <script src="js/core/vocabScheduler.js"></script>
+    <script src="js/core/vocabStore.js"></script>
+    <script src="js/components/vocabDashboardCards.js"></script>
+    <script src="js/components/vocabSessionView.js"></script>
     <script src="js/utils/dataBackupManager.js"></script>
     <script src="js/components/dataManagementPanel.js"></script>
 
