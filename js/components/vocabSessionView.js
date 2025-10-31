@@ -52,6 +52,7 @@
             duePending: 0,
             meaningVisible: false,
             recognitionFailed: false,
+            recognitionMode: 'idle',
             lastAnswer: null,
             typedAnswer: '',
             queueSeed: 0
@@ -648,6 +649,15 @@
             state.session.stage = 'recall';
             state.session.meaningVisible = false;
             state.session.recognitionFailed = false;
+            state.session.recognitionMode = 'known';
+            render();
+            return;
+        }
+        if (action === 'recognize-fuzzy') {
+            state.session.stage = 'recall';
+            state.session.meaningVisible = true;
+            state.session.recognitionFailed = false;
+            state.session.recognitionMode = 'fuzzy';
             render();
             return;
         }
@@ -655,6 +665,7 @@
             state.session.stage = 'recall';
             state.session.meaningVisible = true;
             state.session.recognitionFailed = true;
+            state.session.recognitionMode = 'unknown';
             render();
             return;
         }
@@ -836,6 +847,7 @@
         state.session.currentWord = { ...next };
         state.session.meaningVisible = false;
         state.session.recognitionFailed = false;
+        state.session.recognitionMode = 'idle';
         state.session.stage = !next.lastReviewed && !isRetry ? 'recognition' : 'recall';
         state.session.typedAnswer = '';
         state.session.queueSeed += 1;
@@ -984,6 +996,7 @@
                     <p class="vocab-card__instruction">你认识这个单词吗？</p>
                     <div class="vocab-card__actions vocab-card__actions--inline">
                         <button class="btn btn-primary" type="button" data-action="recognize">认识</button>
+                        <button class="btn btn-soft" type="button" data-action="recognize-fuzzy">模糊</button>
                         <button class="btn btn-outline" type="button" data-action="not-recognize">不认识</button>
                     </div>
                 </div>
@@ -997,6 +1010,9 @@
             const revealControl = session.meaningVisible
                 ? ''
                 : '<button class="btn btn-soft" type="button" data-action="reveal-meaning">显示释义 (F)</button>';
+            const instructionText = session.recognitionFailed
+                ? '先巩固释义，再尝试拼写'
+                : (session.recognitionMode === 'fuzzy' ? '有点模糊？结合释义尝试拼写' : '请输入正确拼写');
             card.innerHTML = `
                 <div class="vocab-card vocab-card--recall">
                     <div class="vocab-card__wordline">
@@ -1004,7 +1020,7 @@
                         ${revealControl}
                     </div>
                     ${meaningBlock}
-                    <p class="vocab-card__instruction">${session.recognitionFailed ? '先巩固释义，再尝试拼写' : '请输入正确拼写'}</p>
+                    <p class="vocab-card__instruction">${instructionText}</p>
                     <div class="vocab-card__input-block">
                         <input type="text" name="answer" autocomplete="off" placeholder="在此输入拼写" value="${escapeHtml(session.typedAnswer)}">
                         <div class="vocab-card__input-actions">
