@@ -462,5 +462,6 @@ IELTS-practice/
 - [x] 完成 `VocabStore` 与 `vocabScheduler` 的 API 骨架实现。✅
   - [ ] 编写 `scheduleAfterResult` / `updateWord` 使用范例与快照校验，补齐“单元示例”文档。
 - [x] 定义默认词表文件与目录结构，确保 `assets/wordlists/` 被构建系统拾取。✅（`ielts_core.json` 已填充 3610 词条，并补齐示例句/清洗释义）
+  - [x] 释义去重：移除释义中出现的词头本身（如 former、interrupt 等），保留词性标签，避免提示作弊信息。
 - [x] 与 `DataIntegrityManager` 对齐备份键清单，确认新键会在自动备份中被采集。✅（已拉取 `vocab_*` 数据）
 - [ ] 评估与 `Vocab Spark` mini-game 共存策略，必要时在 `VocabSessionView` 初始化时暂停/销毁迷你游戏状态。
