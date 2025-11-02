@@ -223,6 +223,8 @@
 
             const currentHref = resolveHref(examWindow);
             const normalizedHref = (currentHref || '').toLowerCase();
+            const retryOptions = options && typeof options === 'object' ? options : {};
+            const retryCount = Number.isFinite(retryOptions.guardRetryCount) ? retryOptions.guardRetryCount : 0;
 
             const isPlaceholder = normalizedHref.includes('templates/exam-placeholder.html');
             if (isPlaceholder) {
@@ -230,10 +232,26 @@
             }
 
             const shouldFallback = () => {
-                if (!normalizedHref) {
-                    return true;
-                }
-                if (normalizedHref === 'about:blank') {
+                if (!normalizedHref || normalizedHref === 'about:blank') {
+                    if (retryCount < 4) {
+                        const nextCount = retryCount + 1;
+                        const delay = Math.min(1500, 250 * nextCount);
+                        try {
+                            setTimeout(() => {
+                                try {
+                                    this._guardExamWindowContent(examWindow, exam, {
+                                        ...retryOptions,
+                                        guardRetryCount: nextCount
+                                    });
+                                } catch (retryError) {
+                                    console.warn('[App] 题目窗口占位页重试失败:', retryError);
+                                }
+                            }, delay);
+                        } catch (timerError) {
+                            console.warn('[App] 无法安排题目窗口占位页重试:', timerError);
+                        }
+                        return false;
+                    }
                     return true;
                 }
                 if (normalizedHref.startsWith('chrome-error://')
