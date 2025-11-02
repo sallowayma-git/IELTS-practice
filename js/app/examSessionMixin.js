@@ -71,10 +71,11 @@
 
                 // 先构造URL并立即打开窗口（保持用户手势，避免被浏览器拦截）
                 const examUrl = this.buildExamUrl(exam);
-                let examWindow = this.openExamWindow(examUrl, exam, options);
+                const guardOptions = { ...options, examId };
+                let examWindow = this.openExamWindow(examUrl, exam, guardOptions);
 
                 try {
-                    const guardedWindow = this._guardExamWindowContent(examWindow, exam, options);
+                    const guardedWindow = this._guardExamWindowContent(examWindow, exam, guardOptions);
                     if (guardedWindow) {
                         examWindow = guardedWindow;
                     }
@@ -225,6 +226,14 @@
             const normalizedHref = (currentHref || '').toLowerCase();
             const retryOptions = options && typeof options === 'object' ? options : {};
             const retryCount = Number.isFinite(retryOptions.guardRetryCount) ? retryOptions.guardRetryCount : 0;
+            const examId = retryOptions.examId;
+
+            if (examId && this.examWindows && this.examWindows.has(examId)) {
+                const windowInfo = this.examWindows.get(examId);
+                if (windowInfo && windowInfo.dataCollectorReady) {
+                    return examWindow;
+                }
+            }
 
             const isPlaceholder = normalizedHref.includes('templates/exam-placeholder.html');
             if (isPlaceholder) {
@@ -826,7 +835,7 @@
             }
 
             try {
-                const guardedWindow = this._guardExamWindowContent(examWindow, exam, options);
+                const guardedWindow = this._guardExamWindowContent(examWindow, exam, { ...options, examId });
                 if (guardedWindow) {
                     examWindow = guardedWindow;
                 }
