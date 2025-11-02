@@ -139,14 +139,33 @@
     --fw-bold: 700;
 }
 
+@property --body-gradient-angle {
+    syntax: '<angle>';
+    inherits: false;
+    initial-value: 135deg;
+}
+
 body {
     font-family: var(--font-family-primary);
-    background: linear-gradient(180deg, #f8f9fb 0%, #f2f3f7 100%);
+    background: linear-gradient(var(--body-gradient-angle), #ffd89b 0%, #19547b 100%);
+    animation: bodyGradientRotation 120s ease-in-out infinite;
     min-height: 100vh;
     color: var(--color-gray-900);
     line-height: var(--line-height-normal);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+}
+
+@keyframes bodyGradientRotation {
+    0% {
+        --body-gradient-angle: 135deg;
+    }
+    50% {
+        --body-gradient-angle: 225deg;
+    }
+    100% {
+        --body-gradient-angle: 495deg;
+    }
 }
 
 body.no-scroll {
