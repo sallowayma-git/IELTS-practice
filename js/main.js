@@ -124,9 +124,12 @@ function setBrowseFilterState(category = 'all', type = 'all') {
         type: typeof type === 'string' ? type : 'all'
     };
     if (stateService) {
-        return stateService.setBrowseFilter(normalized);
+        const result = stateService.setBrowseFilter(normalized);
+        persistBrowseFilter(result.category, result.type);
+        return result;
     }
     syncGlobalBrowseState(normalized.category, normalized.type);
+    persistBrowseFilter(normalized.category, normalized.type);
     return normalized;
 }
 
@@ -192,6 +195,539 @@ function clearSelectedRecordsState() {
     return getSelectedRecordsState();
 }
 
+
+
+
+const BROWSE_VIEW_PREFERENCE_KEY = 'browse_view_preferences_v2';
+let browsePreferencesCache = null;
+let currentBrowseScrollElement = null;
+let removeBrowseScrollListener = null;
+let pendingBrowseAutoScroll = null;
+let browsePreferenceUiInitialized = false;
+
+function normalizeCategoryKey(category) {
+    if (!category || typeof category !== 'string') {
+        return 'all';
+    }
+    const trimmed = category.trim();
+    if (!trimmed) {
+        return 'all';
+    }
+    const match = trimmed.match(/^(P\d)$/i);
+    if (match) {
+        return match[1].toUpperCase();
+    }
+    return trimmed;
+}
+
+function normalizeExamType(type) {
+    if (!type || typeof type !== 'string') {
+        return 'all';
+    }
+    const lower = type.toLowerCase();
+    if (lower === 'reading' || lower === 'listening') {
+        return lower;
+    }
+    if (lower.includes('阅读')) {
+        return 'reading';
+    }
+    if (lower.includes('听力')) {
+        return 'listening';
+    }
+    return 'all';
+}
+
+function buildBrowseFilterKey(category, type) {
+    return `${normalizeCategoryKey(category)}|${normalizeExamType(type)}`;
+}
+
+function getDefaultBrowsePreferences() {
+    return {
+        scrollPositions: {},
+        autoScrollEnabled: false,
+        lastFilter: null
+    };
+}
+
+function loadBrowsePreferencesFromStorage() {
+    try {
+        const raw = localStorage.getItem(BROWSE_VIEW_PREFERENCE_KEY);
+        if (!raw) {
+            return getDefaultBrowsePreferences();
+        }
+        const parsed = JSON.parse(raw);
+        const defaults = getDefaultBrowsePreferences();
+        const next = Object.assign({}, defaults, parsed || {});
+        if (!next.scrollPositions || typeof next.scrollPositions !== 'object') {
+            next.scrollPositions = {};
+        }
+        return next;
+    } catch (error) {
+        console.warn('[BrowsePreferences] 无法读取浏览偏好，使用默认值', error);
+        return getDefaultBrowsePreferences();
+    }
+}
+
+function getBrowseViewPreferences() {
+    if (!browsePreferencesCache) {
+        browsePreferencesCache = loadBrowsePreferencesFromStorage();
+    }
+    return browsePreferencesCache;
+}
+
+function saveBrowseViewPreferences(partial = {}) {
+    const current = getBrowseViewPreferences();
+    const next = {
+        scrollPositions: Object.assign({}, current.scrollPositions, partial.scrollPositions || {}),
+        autoScrollEnabled: Object.prototype.hasOwnProperty.call(partial, 'autoScrollEnabled')
+            ? !!partial.autoScrollEnabled
+            : current.autoScrollEnabled,
+        lastFilter: Object.prototype.hasOwnProperty.call(partial, 'lastFilter')
+            ? (partial.lastFilter || null)
+            : current.lastFilter
+    };
+
+    try {
+        localStorage.setItem(BROWSE_VIEW_PREFERENCE_KEY, JSON.stringify(next));
+        browsePreferencesCache = next;
+    } catch (error) {
+        console.warn('[BrowsePreferences] 保存浏览偏好失败', error);
+        browsePreferencesCache = next;
+    }
+    return browsePreferencesCache;
+}
+
+function persistBrowseFilter(category, type) {
+    const normalizedCategory = normalizeCategoryKey(category);
+    const normalizedType = normalizeExamType(type);
+    saveBrowseViewPreferences({
+        lastFilter: { category: normalizedCategory, type: normalizedType }
+    });
+}
+
+function getPersistedBrowseFilter() {
+    const prefs = getBrowseViewPreferences();
+    if (!prefs.lastFilter) {
+        return null;
+    }
+    return {
+        category: normalizeCategoryKey(prefs.lastFilter.category),
+        type: normalizeExamType(prefs.lastFilter.type)
+    };
+}
+
+function setBrowseTitle(text) {
+    const titleEl = document.getElementById('browse-title');
+    if (titleEl) {
+        titleEl.textContent = text;
+    }
+}
+
+if (typeof window !== 'undefined') {
+    window.setBrowseTitle = setBrowseTitle;
+}
+
+function formatBrowseTitle(category = 'all', type = 'all') {
+    const normalizedCategory = normalizeCategoryKey(category);
+    const normalizedType = normalizeExamType(type);
+    if (normalizedCategory === 'all' && normalizedType === 'all') {
+        return '题库浏览';
+    }
+
+    const parts = [];
+    if (normalizedCategory !== 'all') {
+        parts.push(normalizedCategory);
+    }
+    if (normalizedType !== 'all') {
+        parts.push(normalizedType === 'reading' ? '阅读' : '听力');
+    }
+    parts.push('题库浏览');
+    return parts.join(' ');
+}
+
+function debounce(fn, wait) {
+    let timer = null;
+    return function debounced(...args) {
+        if (timer) {
+            clearTimeout(timer);
+        }
+        timer = setTimeout(() => {
+            timer = null;
+            fn.apply(this, args);
+        }, wait);
+    };
+}
+
+function recordBrowseScrollPosition(category, type, scrollTop) {
+    const key = buildBrowseFilterKey(category, type);
+    saveBrowseViewPreferences({
+        scrollPositions: { [key]: Math.max(0, Math.round(scrollTop || 0)) }
+    });
+}
+
+function ensureBrowseScrollListener(scrollEl) {
+    if (!scrollEl) {
+        return;
+    }
+    if (currentBrowseScrollElement === scrollEl) {
+        return;
+    }
+    if (typeof removeBrowseScrollListener === 'function') {
+        removeBrowseScrollListener();
+        removeBrowseScrollListener = null;
+    }
+
+    const handler = debounce(() => {
+        const category = getCurrentCategory();
+        const type = getCurrentExamType();
+        recordBrowseScrollPosition(category, type, scrollEl.scrollTop);
+    }, 150);
+
+    scrollEl.addEventListener('scroll', handler, { passive: true });
+    currentBrowseScrollElement = scrollEl;
+    removeBrowseScrollListener = () => {
+        try { scrollEl.removeEventListener('scroll', handler); } catch (_) {}
+        currentBrowseScrollElement = null;
+    };
+}
+
+function requestBrowseAutoScroll(category, type, source = 'category-card') {
+    pendingBrowseAutoScroll = {
+        category: normalizeCategoryKey(category),
+        type: normalizeExamType(type),
+        source,
+        timestamp: Date.now()
+    };
+}
+
+function clearPendingBrowseAutoScroll() {
+    pendingBrowseAutoScroll = null;
+}
+
+if (typeof window !== 'undefined') {
+    window.clearPendingBrowseAutoScroll = clearPendingBrowseAutoScroll;
+}
+
+function consumeBrowseAutoScroll(category, type) {
+    if (!pendingBrowseAutoScroll) {
+        return null;
+    }
+    const now = Date.now();
+    if (now - pendingBrowseAutoScroll.timestamp > 5000) {
+        pendingBrowseAutoScroll = null;
+        return null;
+    }
+    const normalizedCategory = normalizeCategoryKey(category);
+    const normalizedType = normalizeExamType(type);
+    const categoryMatch = pendingBrowseAutoScroll.category === normalizedCategory;
+    const typeMatch = pendingBrowseAutoScroll.type === 'all'
+        || pendingBrowseAutoScroll.type === normalizedType;
+    if (categoryMatch && typeMatch) {
+        const context = pendingBrowseAutoScroll;
+        pendingBrowseAutoScroll = null;
+        return context;
+    }
+    return null;
+}
+
+function escapeCssIdentifier(value) {
+    if (typeof value !== 'string') {
+        return '';
+    }
+    if (window.CSS && typeof window.CSS.escape === 'function') {
+        return window.CSS.escape(value);
+    }
+    return value.replace(/[^a-zA-Z0-9_-]/g, '\$&');
+}
+
+function deriveRecordTimestamp(record) {
+    if (!record || typeof record !== 'object') {
+        return Number.NaN;
+    }
+    const candidates = [];
+    if (record.date) candidates.push(record.date);
+    if (record.endTime) candidates.push(record.endTime);
+    if (record.completedAt) candidates.push(record.completedAt);
+    if (record.timestamp) candidates.push(record.timestamp);
+    if (record.startTime) candidates.push(record.startTime);
+    const realData = record.realData || {};
+    if (realData.completedAt) candidates.push(realData.completedAt);
+    if (realData.endTime) candidates.push(realData.endTime);
+    if (realData.date) candidates.push(realData.date);
+
+    for (const value of candidates) {
+        if (value == null) {
+            continue;
+        }
+        if (typeof value === 'number') {
+            if (Number.isFinite(value)) {
+                return value;
+            }
+            continue;
+        }
+        const parsed = Date.parse(value);
+        if (!Number.isNaN(parsed)) {
+            return parsed;
+        }
+    }
+    return Number.NaN;
+}
+
+function resolveRecordExamInfo(record, examIndex) {
+    if (!record || typeof record !== 'object') {
+        return null;
+    }
+    const examId = record.examId || record.id || null;
+    let category = normalizeCategoryKey(record.category || record.examCategory);
+    let type = normalizeExamType(record.type || record.examType);
+    let title = record.title || record.examTitle || null;
+
+    if (category === 'all' || !title || type === 'all') {
+        const list = Array.isArray(examIndex) ? examIndex : [];
+        let entry = null;
+        if (examId) {
+            entry = list.find((exam) => exam && exam.id === examId);
+        }
+        if (!entry && title) {
+            entry = list.find((exam) => exam && exam.title === title);
+        }
+        if (entry) {
+            if (category === 'all' && entry.category) {
+                category = normalizeCategoryKey(entry.category);
+            }
+            if (type === 'all' && entry.type) {
+                type = normalizeExamType(entry.type);
+            }
+            if (!title && entry.title) {
+                title = entry.title;
+            }
+        }
+    }
+
+    if (!examId && !title) {
+        return null;
+    }
+
+    return {
+        examId,
+        category,
+        type,
+        title: title || examId
+    };
+}
+
+function findLastPracticeExamEntry(exams, category, type) {
+    const normalizedCategory = normalizeCategoryKey(category);
+    const normalizedType = normalizeExamType(type);
+    const records = getPracticeRecordsState();
+    if (!Array.isArray(records) || records.length === 0) {
+        return null;
+    }
+
+    const examIndex = getExamIndexState();
+    let latest = null;
+    let latestTimestamp = Number.NEGATIVE_INFINITY;
+
+    records.forEach((record) => {
+        const info = resolveRecordExamInfo(record, examIndex);
+        if (!info) {
+            return;
+        }
+        if (normalizedCategory !== 'all' && info.category !== normalizedCategory) {
+            return;
+        }
+        if (normalizedType !== 'all' && info.type !== normalizedType) {
+            return;
+        }
+        const timestamp = deriveRecordTimestamp(record);
+        if (!Number.isFinite(timestamp)) {
+            return;
+        }
+        if (timestamp > latestTimestamp) {
+            latestTimestamp = timestamp;
+            latest = info;
+        }
+    });
+
+    if (!latest) {
+        return null;
+    }
+
+    const list = Array.isArray(exams) ? exams : [];
+    const index = list.findIndex((exam) => {
+        if (!exam) {
+            return false;
+        }
+        if (latest.examId && exam.id === latest.examId) {
+            return true;
+        }
+        if (latest.title && exam.title === latest.title) {
+            return true;
+        }
+        return false;
+    });
+
+    if (index === -1) {
+        return null;
+    }
+
+    return { index, exam: list[index] };
+}
+
+function scrollExamListToEntry(scrollEl, entry) {
+    if (!scrollEl || !entry || entry.index == null || entry.index < 0) {
+        return false;
+    }
+    const exam = entry.exam || {};
+    let selector = null;
+    if (exam.id) {
+        selector = `[data-exam-id="${escapeCssIdentifier(exam.id)}"]`;
+    }
+
+    let element = selector ? scrollEl.querySelector(selector) : null;
+    if (!element) {
+        const items = scrollEl.querySelectorAll('.exam-item');
+        element = Array.from(items).find((item) => {
+            const titleNode = item.querySelector('h4');
+            return titleNode && titleNode.textContent && exam.title && titleNode.textContent.trim() === exam.title.trim();
+        }) || null;
+    }
+
+    if (!element) {
+        return false;
+    }
+
+    const targetTop = element.offsetTop - (scrollEl.clientHeight / 2) + (element.offsetHeight / 2);
+    scrollEl.scrollTop = Math.max(0, targetTop);
+    return true;
+}
+
+function restoreBrowseScrollPosition(scrollEl, category, type) {
+    const prefs = getBrowseViewPreferences();
+    const key = buildBrowseFilterKey(category, type);
+    const stored = prefs.scrollPositions[key];
+    if (typeof stored === 'number' && stored >= 0) {
+        scrollEl.scrollTop = stored;
+        return true;
+    }
+    return false;
+}
+
+function handlePostExamListRender(exams, { category, type } = {}) {
+    const scrollEl = document.querySelector('#exam-list-container .exam-list');
+    if (!scrollEl) {
+        return;
+    }
+
+    ensureBrowseScrollListener(scrollEl);
+
+    const normalizedCategory = normalizeCategoryKey(category || getCurrentCategory());
+    const normalizedType = normalizeExamType(type || getCurrentExamType());
+    const autoScrollContext = consumeBrowseAutoScroll(normalizedCategory, normalizedType);
+    const prefs = getBrowseViewPreferences();
+
+    const applyScroll = () => {
+        const performFallback = () => {
+            if (!restoreBrowseScrollPosition(scrollEl, normalizedCategory, normalizedType)) {
+                scrollEl.scrollTop = 0;
+            }
+        };
+
+        if (autoScrollContext && prefs.autoScrollEnabled && normalizedCategory !== 'all') {
+            const entry = findLastPracticeExamEntry(exams, normalizedCategory, normalizedType);
+            if (entry) {
+                const attemptScroll = (remaining) => {
+                    if (scrollExamListToEntry(scrollEl, entry)) {
+                        recordBrowseScrollPosition(normalizedCategory, normalizedType, scrollEl.scrollTop);
+                        return;
+                    }
+                    if (remaining > 0) {
+                        setTimeout(() => attemptScroll(remaining - 1), 80);
+                    } else {
+                        performFallback();
+                    }
+                };
+
+                attemptScroll(5);
+                return;
+            }
+        }
+
+        performFallback();
+    };
+
+    if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(applyScroll);
+    } else {
+        applyScroll();
+    }
+}
+
+function setupBrowsePreferenceUI() {
+    const trigger = document.getElementById('browse-title-trigger');
+    const panel = document.getElementById('browse-preference-panel');
+    const checkbox = document.getElementById('browse-remember-position');
+
+    if (!trigger || !panel || !checkbox) {
+        return;
+    }
+
+    const prefs = getBrowseViewPreferences();
+    checkbox.checked = !!prefs.autoScrollEnabled;
+
+    if (browsePreferenceUiInitialized) {
+        return;
+    }
+
+    browsePreferenceUiInitialized = true;
+
+    const closePanel = () => {
+        panel.hidden = true;
+        trigger.setAttribute('aria-expanded', 'false');
+    };
+
+    const togglePanel = () => {
+        const willOpen = panel.hidden;
+        panel.hidden = !willOpen;
+        trigger.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    };
+
+    trigger.addEventListener('click', (event) => {
+        event.preventDefault();
+        togglePanel();
+    });
+
+    trigger.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            togglePanel();
+        }
+    });
+
+    document.addEventListener('click', (event) => {
+        if (panel.hidden) {
+            return;
+        }
+        if (event.target === trigger || trigger.contains(event.target)) {
+            return;
+        }
+        if (panel.contains(event.target)) {
+            return;
+        }
+        closePanel();
+    });
+
+    checkbox.addEventListener('change', (event) => {
+        const enabled = !!event.target.checked;
+        saveBrowseViewPreferences({ autoScrollEnabled: enabled });
+    });
+}
+
+if (typeof window !== 'undefined') {
+    window.handlePostExamListRender = handlePostExamListRender;
+    window.requestBrowseAutoScroll = requestBrowseAutoScroll;
+    window.setupBrowsePreferenceUI = setupBrowsePreferenceUI;
+}
 
 
 const preferredFirstExamByCategory = {
@@ -260,6 +796,8 @@ async function initializeLegacyComponents() {
     } catch (error) {
         console.warn('[Navigation] 初始化导航控制器失败:', error);
     }
+
+    setupBrowsePreferenceUI();
 
     // Setup UI Listeners
     const folderPicker = document.getElementById('folder-picker');
@@ -1281,6 +1819,7 @@ function applyPracticeSummaryFallback(summary) {
 
 function browseCategory(category, type = 'reading') {
 
+    requestBrowseAutoScroll(category, type);
     // 先设置筛选器，确保 App 路径也能获取到筛选参数
     try {
         setBrowseFilterState(category, type);
@@ -1311,11 +1850,7 @@ function browseCategory(category, type = 'reading') {
     // 降级路径：手动处理浏览筛选
     try {
         // 正确更新标题使用中文字符串
-        const typeText = type === 'listening' ? '听力' : '阅读';
-        const titleEl = document.getElementById('browse-title');
-        if (titleEl) {
-            titleEl.textContent = `📚 ${category} ${typeText}题库浏览`;
-        }
+        setBrowseTitle(formatBrowseTitle(category, type));
 
         // 导航到浏览视图
         if (window.app && typeof window.app.navigateToView === 'function') {
@@ -1341,7 +1876,7 @@ function browseCategory(category, type = 'reading') {
 
 function filterByType(type) {
     setBrowseFilterState('all', type);
-    document.getElementById('browse-title').textContent = '📚 题库浏览';
+    setBrowseTitle(formatBrowseTitle('all', type));
     loadExamList();
 }
 
@@ -1371,11 +1906,9 @@ function applyBrowseFilter(category = 'all', type = null) {
             } catch (_) { type = 'all'; }
         }
 
-        setBrowseFilterState(normalizedCategory, type);
-
-        // 保持标题简洁
-        const titleEl = document.getElementById('browse-title');
-        if (titleEl) titleEl.textContent = '📚 题库浏览';
+        const normalizedType = normalizeExamType(type);
+        setBrowseFilterState(normalizedCategory, normalizedType);
+        setBrowseTitle(formatBrowseTitle(normalizedCategory, normalizedType));
 
         // 若未在浏览视图，则尽力切换
         if (typeof window.showView === 'function' && !document.getElementById('browse-view')?.classList.contains('active')) {
@@ -1393,8 +1926,14 @@ function applyBrowseFilter(category = 'all', type = null) {
 // Initialize browse view when it's activated
 function initializeBrowseView() {
     console.log('[System] Initializing browse view...');
-    setBrowseFilterState('all', 'all');
-    document.getElementById('browse-title').textContent = '📚 题库浏览';
+    const persisted = getPersistedBrowseFilter();
+    if (persisted) {
+        setBrowseFilterState(persisted.category, persisted.type);
+        setBrowseTitle(formatBrowseTitle(persisted.category, persisted.type));
+    } else {
+        setBrowseFilterState('all', 'all');
+        setBrowseTitle(formatBrowseTitle('all', 'all'));
+    }
     loadExamList();
 }
 
@@ -1463,6 +2002,8 @@ function loadExamList() {
 
     const activeList = setFilteredExamsState(examsToShow);
     displayExams(activeList);
+    handlePostExamListRender(activeList, { category: activeCategory, type: activeExamType });
+    return activeList;
 }
 
 function displayExams(exams) {
