@@ -111,6 +111,12 @@
                 }
             } catch (_) {}
 
+            try {
+                if (typeof window.requestBrowseAutoScroll === 'function') {
+                    window.requestBrowseAutoScroll(category, type);
+                }
+            } catch (_) {}
+
             // 无论是否存在旧的 ExamBrowser，都统一走新浏览视图
             this.navigateToView('browse');
 

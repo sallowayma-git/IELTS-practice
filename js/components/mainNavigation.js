@@ -352,13 +352,17 @@ class MainNavigation {
             window.app.navigateToView('browse');
             
             // 更新浏览页面标题
-            const browseTitle = document.getElementById('browse-title');
-            if (browseTitle) {
-                let title = `${category} 题库浏览`;
-                if (frequency) {
-                    title += ` - ${frequency === 'high' ? '高频' : '次高频'}题目`;
+            let title = `${category} 题库浏览`;
+            if (frequency) {
+                title += ` - ${frequency === 'high' ? '高频' : '次高频'}题目`;
+            }
+            if (typeof window.setBrowseTitle === 'function') {
+                window.setBrowseTitle(title);
+            } else {
+                const browseTitle = document.getElementById('browse-title');
+                if (browseTitle) {
+                    browseTitle.textContent = title;
                 }
-                browseTitle.textContent = title;
             }
         }
     }
