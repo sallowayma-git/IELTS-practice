@@ -26,6 +26,90 @@
         return Math.round(clamped * 1000) / 1000;
     }
 
+    function normalizeCategory(value, fallback = null) {
+        if (typeof value !== 'string') {
+            return fallback;
+        }
+        const normalized = value.trim().toLowerCase();
+        if (!normalized) {
+            return fallback;
+        }
+        if (/(自设|自定|自訂|自建|自制|custom|user|personal|self)/.test(normalized)) {
+            return 'user';
+        }
+        if (/(外部|其他|其它|共享|公共|他人|others|other|external|shared|community|third)/.test(normalized)) {
+            return 'external';
+        }
+        return fallback;
+    }
+
+    function extractCategory(source, fallback = 'external') {
+        if (!source) {
+            return fallback;
+        }
+        if (typeof source === 'string') {
+            return normalizeCategory(source, fallback);
+        }
+        if (typeof source !== 'object') {
+            return fallback;
+        }
+        const candidates = [];
+        const collect = (value) => {
+            if (typeof value === 'string' && value.trim()) {
+                candidates.push(value);
+            }
+        };
+        collect(source.category);
+        collect(source.listType);
+        collect(source.listCategory);
+        collect(source.origin);
+        collect(source.source);
+        collect(source.sourceType);
+        collect(source.typeLabel);
+        collect(source.type);
+        if (source.meta && typeof source.meta === 'object' && source.meta !== source) {
+            const nested = extractCategory(source.meta, null);
+            if (nested) {
+                return nested;
+            }
+        }
+        for (let i = 0; i < candidates.length; i += 1) {
+            const resolved = normalizeCategory(candidates[i], null);
+            if (resolved) {
+                return resolved;
+            }
+        }
+        return fallback;
+    }
+
+    function cloneProgressEntry(raw) {
+        if (!raw || typeof raw !== 'object') {
+            return null;
+        }
+        if (!raw.word || !raw.meaning) {
+            return null;
+        }
+        const clone = {};
+        Object.keys(raw).forEach((key) => {
+            clone[key] = raw[key];
+        });
+        return clone;
+    }
+
+    function buildImportResult(type, entries, meta = {}) {
+        const safeEntries = Array.isArray(entries) ? entries.filter(Boolean) : [];
+        const normalizedMeta = { ...meta };
+        normalizedMeta.category = normalizeCategory(normalizedMeta.category, type === 'progress' ? 'user' : 'external');
+        if (Array.isArray(normalizedMeta.reviewQueue)) {
+            normalizedMeta.reviewQueue = normalizedMeta.reviewQueue.map((item) => String(item));
+        }
+        return {
+            type,
+            entries: safeEntries,
+            meta: normalizedMeta
+        };
+    }
+
     function normalizeEntry(raw) {
         if (!raw || typeof raw !== 'object') {
             return null;
@@ -102,7 +186,7 @@
             .map((line) => line.trim())
             .filter((line) => line.length);
         if (!lines.length) {
-            return [];
+            return buildImportResult('wordlist', [], { format: 'csv' });
         }
         const delimiter = selectDelimiter(lines[0]);
         const headerCells = splitCsvLine(lines[0], delimiter).map((cell) => cell.toLowerCase());
@@ -126,18 +210,56 @@
                 entries.push(normalized);
             }
         }
-        return entries;
+        return buildImportResult('wordlist', entries, {
+            format: 'csv',
+            originalLength: Math.max(lines.length - 1, 0)
+        });
     }
 
     function parseJson(text) {
         const payload = JSON.parse(text);
         if (Array.isArray(payload)) {
-            return payload.map(normalizeEntry).filter(Boolean);
+            return buildImportResult('wordlist', payload.map(normalizeEntry).filter(Boolean), {
+                format: 'json',
+                originalLength: payload.length
+            });
         }
         if (payload && typeof payload === 'object' && Array.isArray(payload.words)) {
-            return payload.words.map(normalizeEntry).filter(Boolean);
+            const metaCategory = extractCategory(payload.meta, null);
+            const category = extractCategory(payload, metaCategory || 'external');
+            const looksProgress = typeof payload.version === 'string'
+                || Array.isArray(payload.reviewQueue)
+                || payload.words.some((item) => item && (item.id || item.box || item.correctCount || item.lastReviewed || item.nextReview));
+            if (looksProgress) {
+                const entries = payload.words.map(cloneProgressEntry).filter(Boolean);
+                return buildImportResult('progress', entries, {
+                    format: 'json',
+                    originalLength: payload.words.length,
+                    category: category || 'user',
+                    version: typeof payload.version === 'string' ? payload.version : undefined,
+                    config: payload.config && typeof payload.config === 'object' ? { ...payload.config } : undefined,
+                    reviewQueue: Array.isArray(payload.reviewQueue) ? payload.reviewQueue.slice() : undefined,
+                    name: typeof payload.name === 'string' ? payload.name : undefined,
+                    source: typeof payload.source === 'string' ? payload.source : undefined,
+                    exportedAt: typeof payload.exportedAt === 'string' ? payload.exportedAt : undefined
+                });
+            }
+            return buildImportResult('wordlist', payload.words.map(normalizeEntry).filter(Boolean), {
+                format: 'json',
+                originalLength: payload.words.length,
+                category
+            });
         }
-        return [];
+        if (payload && typeof payload === 'object' && Array.isArray(payload.entries)) {
+            const metaCategory = extractCategory(payload.meta, null);
+            const category = extractCategory(payload, metaCategory || 'external');
+            return buildImportResult('wordlist', payload.entries.map(normalizeEntry).filter(Boolean), {
+                format: 'json',
+                originalLength: payload.entries.length,
+                category
+            });
+        }
+        return buildImportResult('wordlist', [], { format: 'json' });
     }
 
     async function readFileAsText(file) {
@@ -163,24 +285,27 @@
         const extension = name.split('.').pop();
         const mimeType = typeof file.type === 'string' ? file.type.toLowerCase() : '';
         const text = await readFileAsText(file);
-        let entries = [];
+        let result;
         try {
             if (extension === 'csv' || SUPPORTED_CSV_TYPES.has(mimeType)) {
-                entries = parseCsv(text);
+                result = parseCsv(text);
             } else if (extension === 'json' || SUPPORTED_JSON_TYPES.has(mimeType)) {
-                entries = parseJson(text);
+                result = parseJson(text);
             } else {
                 // 默认按 JSON 解析
-                entries = parseJson(text);
+                result = parseJson(text);
             }
         } catch (error) {
             console.warn('[VocabDataIO] 词表解析失败:', error);
             throw error;
         }
-        if (!entries.length) {
+        const normalizedResult = Array.isArray(result)
+            ? buildImportResult('wordlist', result)
+            : result;
+        if (!normalizedResult.entries.length) {
             throw new Error('未在文件中发现有效词汇数据');
         }
-        return entries;
+        return normalizedResult;
     }
 
     async function exportProgress() {
