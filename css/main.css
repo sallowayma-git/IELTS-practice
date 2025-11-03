@@ -98,6 +98,11 @@
     --library-config-item-active-bg: rgba(102, 126, 234, 0.18);
     --library-config-item-active-border: rgba(102, 126, 234, 0.35);
 
+    /* Exam item tokens */
+    --exam-item-bg: #d9cbba;
+    --exam-item-border-color: #737373;
+    --exam-item-border-width: 2px;
+
     /* Suite practice card */
     --suite-card-title-color: var(--color-gray-900);
     --suite-card-description-color: var(--color-gray-600);
@@ -1718,6 +1723,7 @@ body.no-scroll {
     transition: background-color var(--transition-fast), transform var(--transition-fast);
     color: inherit;
     flex-shrink: 0;
+    position: relative;
 }
 
 .browse-title-trigger:hover,
@@ -1725,6 +1731,21 @@ body.no-scroll {
     background: rgba(255, 255, 255, 0.2);
     transform: translateY(-1px);
     outline: none;
+}
+
+.browse-title-trigger::after {
+    content: '';
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #f87171;
+    opacity: 0;
+    transform: translate(50%, -50%);
+    transition: opacity var(--transition-fast);
+    pointer-events: none;
 }
 
 #browse-title {
@@ -1757,71 +1778,74 @@ body.no-scroll {
     color: var(--color-gray-100);
     cursor: pointer;
     user-select: none;
-    padding: var(--space-sm) var(--space-md);
+    padding: var(--space-xs) 0;
     border-radius: var(--border-radius-md);
-    background: rgba(148, 163, 184, 0.12);
-    border: 1px solid rgba(148, 163, 184, 0.4);
-    transition: background var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+    transition: color var(--transition-fast);
 }
 
 .browse-preference-option:hover {
-    background: rgba(102, 126, 234, 0.08);
-    border-color: rgba(102, 126, 234, 0.4);
-    box-shadow: 0 0 0 1px rgba(102, 126, 234, 0.15);
+    color: #ffffff;
 }
 
 .browse-preference-option input {
+    appearance: none;
     width: 18px;
     height: 18px;
     cursor: pointer;
-    transition: border-color var(--transition-fast),
-        background var(--transition-fast),
-        box-shadow var(--transition-fast),
-        transform var(--transition-fast);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+    border-radius: 6px;
+    border: var(--exam-item-border-width) solid var(--exam-item-border-color);
+    background: var(--exam-item-bg);
+    display: grid;
+    place-items: center;
+    transition: border-color var(--transition-fast), background var(--transition-fast), transform var(--transition-fast);
 }
 
-.browse-preference-option input[type="checkbox"]::after {
+.browse-preference-option input::after {
     content: '';
-    width: 6px;
+    width: 10px;
     height: 10px;
-    border: solid var(--color-white);
-    border-width: 0 2px 2px 0;
-    transform: rotate(45deg) scale(0);
-    transform-origin: bottom left;
-    transition: transform var(--transition-fast) ease-out;
+    border-radius: 3px;
+    background: rgba(248, 113, 113, 0.95);
+    transform: scale(0.25);
+    opacity: 0;
+    transition: transform var(--transition-fast), opacity var(--transition-fast);
 }
 
 .browse-preference-option input[type="checkbox"]:checked {
-    background: var(--color-brand-primary);
-    border-color: var(--color-brand-primary);
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.25);
+    border-color: var(--exam-item-border-color);
+    background: var(--exam-item-bg);
 }
 
 .browse-preference-option input[type="checkbox"]:checked::after {
-    transform: rotate(45deg) scale(1);
+    transform: scale(1);
+    opacity: 1;
 }
 
 .browse-preference-option input[type="checkbox"]:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.35);
+    border-color: rgba(248, 113, 113, 0.8);
 }
 
 .browse-preference-text {
-    color: var(--color-gray-700);
+    color: var(--color-gray-100);
     font-size: var(--font-size-sm);
 }
 
 .browse-title-trigger.active {
-    background: var(--color-brand-primary);
-    color: var(--color-white);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
+    background: rgba(255, 255, 255, 0.16);
+    color: var(--color-brand-primary);
+    box-shadow: none;
+}
+
+.browse-title-trigger.active::after {
+    opacity: 1;
 }
 
 .browse-title-trigger.active:hover,
 .browse-title-trigger.active:focus {
-    background: var(--color-brand-primary);
-    color: var(--color-white);
+    background: rgba(255, 255, 255, 0.22);
+    color: var(--color-brand-primary);
+    box-shadow: none;
 }
 
 #type-filter-buttons {
@@ -2160,10 +2184,10 @@ body.no-scroll {
 }
 
 .exam-item {
-    background: #D9CBBA;
+    background: var(--exam-item-bg);
     padding: var(--space-lg);
     border-radius: var(--border-radius-lg);
-    border: 2px solid #737373;
+    border: var(--exam-item-border-width) solid var(--exam-item-border-color);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -3974,6 +3998,9 @@ body.no-scroll {
 body.bloom-dark-mode {
     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f23 100%);
     color: #e8eaf6;
+    --exam-item-bg: #2a3a5a;
+    --exam-item-border-color: #4a5a7a;
+    --exam-item-border-width: 2px;
 }
 
 .bloom-dark-mode .container {
@@ -4098,8 +4125,8 @@ body.blue-dark-mode,
 }
 
 .bloom-dark-mode .exam-item {
-    background: #2a3a5a;
-    border: 2px solid #4a5a7a;
+    background: var(--exam-item-bg);
+    border: var(--exam-item-border-width) solid var(--exam-item-border-color);
     color: #e8eaf6;
 }
 
@@ -4344,6 +4371,11 @@ body.blue-dark-mode,
     --blue-boat-outside: 12vw; /* how far boat starts/ends outside container */
     --blue-boat-width: 140px;
     --blue-boat-half: 70px;
+
+    /* Exam item tokens */
+    --exam-item-bg: #ffffff;
+    --exam-item-border-color: rgba(5, 84, 242, 0.18);
+    --exam-item-border-width: 1px;
 }
 
 /* Base */
@@ -4487,8 +4519,8 @@ body.theme-blue .category-card::before {
 /* Exam items */
 :root[data-theme="blue"] .exam-item,
 body.theme-blue .exam-item {
-    background: #ffffff;
-    border: 1px solid rgba(5, 84, 242, 0.18);
+    background: var(--exam-item-bg);
+    border: var(--exam-item-border-width) solid var(--exam-item-border-color);
 }
 
 :root[data-theme="blue"] .exam-item:hover,
@@ -4735,6 +4767,10 @@ body.theme-blue.blue-dark-mode .header h1::before,
 /* Blue Dark Mode (toggle via .blue-dark-mode on body) */
 body.theme-blue.blue-dark-mode,
 :root[data-theme="blue"] body.blue-dark-mode {
+    --exam-item-bg: rgba(12, 26, 54, 0.85);
+    --exam-item-border-color: rgba(87, 183, 242, 0.28);
+    --exam-item-border-width: 1px;
+
     background-image:
       /* wave front */ url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='160' viewBox='0 0 1200 160' preserveAspectRatio='none'><path fill='%2307B0F2' fill-opacity='0.25' d='M0,72 C 100,104 200,40 300,72 C 400,104 500,40 600,72 C 700,104 800,40 900,72 C 1000,104 1100,40 1200,72 L1200,160 L0,160 Z'/></svg>"),
       /* wave back */  url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1000' height='200' viewBox='0 0 1000 200' preserveAspectRatio='none'><path fill='%2305C7F2' fill-opacity='0.30' d='M0,112 C 120,144 240,80 360,112 C 480,144 600,80 720,112 C 840,144 960,80 1080,112 L1080,200 L0,200 Z'/></svg>"),
@@ -4768,8 +4804,8 @@ body.theme-blue.blue-dark-mode .stat-card,
 body.theme-blue.blue-dark-mode #settings-view > div > div,
 body.theme-blue.blue-dark-mode .practice-history,
 body.theme-blue.blue-dark-mode .history-item {
-    background: rgba(12, 26, 54, 0.85);
-    border: 1px solid rgba(87, 183, 242, 0.28);
+    background: var(--exam-item-bg);
+    border: var(--exam-item-border-width) solid var(--exam-item-border-color);
     color: #e8f2ff;
 }
 

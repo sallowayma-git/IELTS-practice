@@ -1,4 +1,6 @@
 (function(global) {
+    const MAX_LEGACY_PRACTICE_RECORDS = 1000;
+
     const mixin = {
         /**
           * 打开指定题目进行练习
@@ -1870,8 +1872,8 @@
                 practiceRecords.unshift(practiceRecord);
 
                 // 限制记录数量
-                if (practiceRecords.length > 100) {
-                    practiceRecords.splice(100);
+                if (practiceRecords.length > MAX_LEGACY_PRACTICE_RECORDS) {
+                    practiceRecords.splice(MAX_LEGACY_PRACTICE_RECORDS);
                 }
 
                 const saveResult = await storage.set('practice_records', practiceRecords);
