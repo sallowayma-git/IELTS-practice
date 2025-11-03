@@ -1,4 +1,6 @@
 (function(global) {
+    const MAX_LEGACY_PRACTICE_RECORDS = 1000;
+
     const mixin = {
         initializeSuiteMode() {
             if (this._suiteModeReady) {
@@ -446,8 +448,8 @@
             }
 
             practiceRecords.unshift(record);
-            if (practiceRecords.length > 100) {
-                practiceRecords.splice(100);
+            if (practiceRecords.length > MAX_LEGACY_PRACTICE_RECORDS) {
+                practiceRecords.splice(MAX_LEGACY_PRACTICE_RECORDS);
             }
 
             await storage.set('practice_records', practiceRecords);

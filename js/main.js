@@ -703,22 +703,25 @@ function handlePostExamListRender(exams, { category, type } = {}) {
             }
         };
 
-        if (autoScrollContext && prefs.autoScrollEnabled && normalizedCategory !== 'all') {
+        const attemptScrollToEntry = (entry, remaining, onFail) => {
+            if (scrollExamListToEntry(scrollEl, entry)) {
+                recordBrowseScrollPosition(normalizedCategory, normalizedType, scrollEl.scrollTop);
+                return;
+            }
+            if (remaining > 0) {
+                setTimeout(() => attemptScrollToEntry(entry, remaining - 1, onFail), 80);
+                return;
+            }
+            if (typeof onFail === 'function') {
+                onFail();
+            }
+        };
+
+        if (prefs.autoScrollEnabled && normalizedCategory !== 'all') {
             const entry = findLastPracticeExamEntry(exams, normalizedCategory, normalizedType);
             if (entry) {
-                const attemptScroll = (remaining) => {
-                    if (scrollExamListToEntry(scrollEl, entry)) {
-                        recordBrowseScrollPosition(normalizedCategory, normalizedType, scrollEl.scrollTop);
-                        return;
-                    }
-                    if (remaining > 0) {
-                        setTimeout(() => attemptScroll(remaining - 1), 80);
-                    } else {
-                        performFallback();
-                    }
-                };
-
-                attemptScroll(5);
+                const retries = autoScrollContext ? 7 : 4;
+                attemptScrollToEntry(entry, retries, performFallback);
                 return;
             }
         }
@@ -841,6 +844,11 @@ function ensureExamListView() {
           containerSelector: '.main-nav',
           activeClass: 'active',
           syncOnNavigate: true,
+          onRepeatNavigate: function onRepeatNavigate(viewName) {
+              if (viewName === 'browse') {
+                  resetBrowseViewToAll();
+              }
+          },
           onNavigate: function onNavigate(viewName) {
               if (typeof window.showView === 'function') {
                   window.showView(viewName);
@@ -2082,6 +2090,22 @@ function loadExamList() {
     displayExams(activeList);
     handlePostExamListRender(activeList, { category: activeCategory, type: activeExamType });
     return activeList;
+}
+
+function resetBrowseViewToAll() {
+    clearPendingBrowseAutoScroll();
+    const currentCategory = getCurrentCategory();
+    const currentType = getCurrentExamType();
+
+    if (currentCategory === 'all' && currentType === 'all') {
+        setBrowseTitle(formatBrowseTitle('all', 'all'));
+        loadExamList();
+        return;
+    }
+
+    setBrowseFilterState('all', 'all');
+    setBrowseTitle(formatBrowseTitle('all', 'all'));
+    loadExamList();
 }
 
 function displayExams(exams) {
