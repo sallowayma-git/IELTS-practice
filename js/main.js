@@ -244,7 +244,8 @@ function buildBrowseFilterKey(category, type) {
 function getDefaultBrowsePreferences() {
     return {
         scrollPositions: {},
-        autoScrollEnabled: false,
+        listAnchors: {},
+        autoScrollEnabled: true,
         lastFilter: null
     };
 }
@@ -295,6 +296,75 @@ function saveBrowseViewPreferences(partial = {}) {
         browsePreferencesCache = next;
     }
     return browsePreferencesCache;
+}
+
+function updateBrowsePreferenceIndicator(enabled) {
+    const trigger = document.getElementById('browse-title-trigger');
+    if (!trigger) {
+        return;
+    }
+    const isEnabled = !!enabled;
+    trigger.classList.toggle('active', isEnabled);
+    trigger.setAttribute('aria-pressed', isEnabled ? 'true' : 'false');
+}
+
+function sanitizeScrollPositionMap(map) {
+    if (!map || typeof map !== 'object') {
+        return {};
+    }
+    const sanitized = {};
+    for (const [key, value] of Object.entries(map)) {
+        if (typeof key !== 'string' || !key) {
+            continue;
+        }
+        const numeric = Number(value);
+        if (Number.isFinite(numeric) && numeric >= 0) {
+            sanitized[key] = Math.round(numeric);
+        }
+    }
+    return sanitized;
+}
+
+function mergeBrowseAnchors(currentAnchors = {}, updates) {
+    const next = Object.assign({}, currentAnchors);
+    if (!updates || typeof updates !== 'object') {
+        return next;
+    }
+
+    for (const [key, value] of Object.entries(updates)) {
+        if (typeof key !== 'string' || !key) {
+            continue;
+        }
+        if (value === null) {
+            delete next[key];
+            continue;
+        }
+        if (!value || typeof value !== 'object') {
+            continue;
+        }
+
+        const normalized = {};
+        if (typeof value.examId === 'string' && value.examId.trim()) {
+            normalized.examId = value.examId.trim();
+        }
+        if (typeof value.title === 'string' && value.title.trim()) {
+            normalized.title = value.title.trim();
+        }
+        if (Number.isFinite(value.scrollTop) && value.scrollTop >= 0) {
+            normalized.scrollTop = Math.round(value.scrollTop);
+        }
+        const ts = Number(value.timestamp);
+        normalized.timestamp = Number.isFinite(ts) && ts > 0 ? Math.round(ts) : Date.now();
+
+        if (!normalized.examId && !normalized.title && typeof normalized.scrollTop !== 'number') {
+            delete next[key];
+            continue;
+        }
+
+        next[key] = normalized;
+    }
+
+    return next;
 }
 
 function persistBrowseFilter(category, type) {
@@ -674,6 +744,7 @@ function setupBrowsePreferenceUI() {
 
     const prefs = getBrowseViewPreferences();
     checkbox.checked = !!prefs.autoScrollEnabled;
+    updateBrowsePreferenceIndicator(prefs.autoScrollEnabled);
 
     if (browsePreferenceUiInitialized) {
         return;
@@ -719,7 +790,14 @@ function setupBrowsePreferenceUI() {
 
     checkbox.addEventListener('change', (event) => {
         const enabled = !!event.target.checked;
-        saveBrowseViewPreferences({ autoScrollEnabled: enabled });
+        const next = saveBrowseViewPreferences({ autoScrollEnabled: enabled });
+        updateBrowsePreferenceIndicator(next.autoScrollEnabled);
+        if (typeof showMessage === 'function') {
+            const message = enabled ? '已开启列表位置记录，将自动恢复到上次浏览的位置' : '已关闭列表位置记录';
+            showMessage(message, 'info');
+        }
+        panel.hidden = true;
+        trigger.setAttribute('aria-expanded', 'false');
     });
 }
 
