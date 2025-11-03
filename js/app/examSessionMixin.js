@@ -1295,9 +1295,6 @@
                         const records = await storage.get('practice_records', []);
                         records.unshift(practiceRecord);
 
-                        if (records.length > 1000) {
-                            records.splice(1000);
-                        }
 
                         await storage.set('practice_records', records);
 
