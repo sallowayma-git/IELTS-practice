@@ -124,9 +124,12 @@ function setBrowseFilterState(category = 'all', type = 'all') {
         type: typeof type === 'string' ? type : 'all'
     };
     if (stateService) {
-        const result = stateService.setBrowseFilter(normalized);
-        persistBrowseFilter(result.category, result.type);
-        return result;
+        stateService.setBrowseFilter(normalized);
+        const latest = stateService.getBrowseFilter();
+        const nextCategory = typeof latest?.category === 'string' ? latest.category : normalized.category;
+        const nextType = typeof latest?.type === 'string' ? latest.type : normalized.type;
+        persistBrowseFilter(nextCategory, nextType);
+        return { category: nextCategory, type: nextType };
     }
     syncGlobalBrowseState(normalized.category, normalized.type);
     persistBrowseFilter(normalized.category, normalized.type);
