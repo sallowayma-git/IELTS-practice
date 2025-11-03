@@ -207,6 +207,7 @@ let currentBrowseScrollElement = null;
 let removeBrowseScrollListener = null;
 let pendingBrowseAutoScroll = null;
 let browsePreferenceUiInitialized = false;
+let pendingBrowseScrollSnapshot = null;
 
 function normalizeCategoryKey(category) {
     if (!category || typeof category !== 'string') {
@@ -299,6 +300,32 @@ function saveBrowseViewPreferences(partial = {}) {
         browsePreferencesCache = next;
     }
     return browsePreferencesCache;
+}
+
+function captureBrowseScrollSnapshot(category, type, scrollTop) {
+    const normalizedCategory = normalizeCategoryKey(category);
+    const normalizedType = normalizeExamType(type);
+    const sanitizedScrollTop = Math.max(0, Math.round(scrollTop || 0));
+    pendingBrowseScrollSnapshot = {
+        category: normalizedCategory,
+        type: normalizedType,
+        scrollTop: sanitizedScrollTop
+    };
+    return pendingBrowseScrollSnapshot;
+}
+
+function persistBrowseScrollSnapshot(snapshot) {
+    if (!snapshot) {
+        return;
+    }
+    const key = buildBrowseFilterKey(snapshot.category, snapshot.type);
+    saveBrowseViewPreferences({
+        scrollPositions: { [key]: snapshot.scrollTop }
+    });
+}
+
+function flushPendingBrowseScrollPosition() {
+    persistBrowseScrollSnapshot(pendingBrowseScrollSnapshot);
 }
 
 function updateBrowsePreferenceIndicator(enabled) {
@@ -432,10 +459,8 @@ function debounce(fn, wait) {
 }
 
 function recordBrowseScrollPosition(category, type, scrollTop) {
-    const key = buildBrowseFilterKey(category, type);
-    saveBrowseViewPreferences({
-        scrollPositions: { [key]: Math.max(0, Math.round(scrollTop || 0)) }
-    });
+    const snapshot = captureBrowseScrollSnapshot(category, type, scrollTop);
+    persistBrowseScrollSnapshot(snapshot);
 }
 
 function ensureBrowseScrollListener(scrollEl) {
@@ -450,18 +475,41 @@ function ensureBrowseScrollListener(scrollEl) {
         removeBrowseScrollListener = null;
     }
 
-    const handler = debounce(() => {
-        const category = getCurrentCategory();
-        const type = getCurrentExamType();
-        recordBrowseScrollPosition(category, type, scrollEl.scrollTop);
+    const persist = debounce(() => {
+        flushPendingBrowseScrollPosition();
     }, 150);
 
-    scrollEl.addEventListener('scroll', handler, { passive: true });
+    const handleScroll = () => {
+        const category = getCurrentCategory();
+        const type = getCurrentExamType();
+        captureBrowseScrollSnapshot(category, type, scrollEl.scrollTop);
+        persist();
+    };
+
+    const initialCategory = getCurrentCategory();
+    const initialType = getCurrentExamType();
+    captureBrowseScrollSnapshot(initialCategory, initialType, scrollEl.scrollTop);
+
+    scrollEl.addEventListener('scroll', handleScroll, { passive: true });
     currentBrowseScrollElement = scrollEl;
     removeBrowseScrollListener = () => {
-        try { scrollEl.removeEventListener('scroll', handler); } catch (_) {}
+        try { scrollEl.removeEventListener('scroll', handleScroll); } catch (_) {}
         currentBrowseScrollElement = null;
+        flushPendingBrowseScrollPosition();
     };
+}
+
+if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', flushPendingBrowseScrollPosition);
+    window.addEventListener('beforeunload', flushPendingBrowseScrollPosition);
+}
+
+if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            flushPendingBrowseScrollPosition();
+        }
+    });
 }
 
 function requestBrowseAutoScroll(category, type, source = 'category-card') {
