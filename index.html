@@ -39,8 +39,15 @@
         <!-- 题库浏览页面 -->
         <div id="browse-view" class="view">
 
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <h2 id="browse-title">📚 题库浏览</h2>
+            <div class="browse-title-bar">
+                <button class="browse-title-trigger" id="browse-title-trigger" type="button" aria-haspopup="true" aria-expanded="false" title="列表偏好">📚</button>
+                <h2 id="browse-title">题库浏览</h2>
+                <div class="browse-preference-panel" id="browse-preference-panel" hidden>
+                    <label class="browse-preference-option">
+                        <input type="checkbox" id="browse-remember-position">
+                        列表位置记录
+                    </label>
+                </div>
                 <div id="type-filter-buttons">
                     <button class="btn btn-sm" onclick="filterByType('all')">全部</button>
                     <button class="btn btn-sm" onclick="filterByType('reading')">阅读</button>
