@@ -1872,11 +1872,6 @@
 
                 practiceRecords.unshift(practiceRecord);
 
-                // 限制记录数量
-                if (practiceRecords.length > 100) {
-                    practiceRecords.splice(100);
-                }
-
                 const saveResult = await storage.set('practice_records', practiceRecords);
 
                 // 立即验证保存是否成功

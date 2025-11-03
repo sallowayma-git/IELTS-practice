@@ -244,6 +244,7 @@ function buildBrowseFilterKey(category, type) {
 function getDefaultBrowsePreferences() {
     return {
         scrollPositions: {},
+        listAnchors: {},
         autoScrollEnabled: false,
         lastFilter: null
     };
@@ -261,6 +262,9 @@ function loadBrowsePreferencesFromStorage() {
         if (!next.scrollPositions || typeof next.scrollPositions !== 'object') {
             next.scrollPositions = {};
         }
+        if (!next.listAnchors || typeof next.listAnchors !== 'object') {
+            next.listAnchors = {};
+        }
         return next;
     } catch (error) {
         console.warn('[BrowsePreferences] 无法读取浏览偏好，使用默认值', error);
@@ -277,8 +281,11 @@ function getBrowseViewPreferences() {
 
 function saveBrowseViewPreferences(partial = {}) {
     const current = getBrowseViewPreferences();
+    const scrollUpdate = sanitizeScrollPositionMap(partial.scrollPositions);
+    const anchorUpdate = mergeBrowseAnchors(current.listAnchors, partial.listAnchors);
     const next = {
-        scrollPositions: Object.assign({}, current.scrollPositions, partial.scrollPositions || {}),
+        scrollPositions: Object.assign({}, current.scrollPositions, scrollUpdate),
+        listAnchors: anchorUpdate,
         autoScrollEnabled: Object.prototype.hasOwnProperty.call(partial, 'autoScrollEnabled')
             ? !!partial.autoScrollEnabled
             : current.autoScrollEnabled,
@@ -295,6 +302,65 @@ function saveBrowseViewPreferences(partial = {}) {
         browsePreferencesCache = next;
     }
     return browsePreferencesCache;
+}
+
+function sanitizeScrollPositionMap(map) {
+    if (!map || typeof map !== 'object') {
+        return {};
+    }
+    const sanitized = {};
+    for (const [key, value] of Object.entries(map)) {
+        if (typeof key !== 'string' || !key) {
+            continue;
+        }
+        const numeric = Number(value);
+        if (Number.isFinite(numeric) && numeric >= 0) {
+            sanitized[key] = Math.round(numeric);
+        }
+    }
+    return sanitized;
+}
+
+function mergeBrowseAnchors(currentAnchors = {}, updates) {
+    const next = Object.assign({}, currentAnchors);
+    if (!updates || typeof updates !== 'object') {
+        return next;
+    }
+
+    for (const [key, value] of Object.entries(updates)) {
+        if (typeof key !== 'string' || !key) {
+            continue;
+        }
+        if (value === null) {
+            delete next[key];
+            continue;
+        }
+        if (!value || typeof value !== 'object') {
+            continue;
+        }
+
+        const normalized = {};
+        if (typeof value.examId === 'string' && value.examId.trim()) {
+            normalized.examId = value.examId.trim();
+        }
+        if (typeof value.title === 'string' && value.title.trim()) {
+            normalized.title = value.title.trim();
+        }
+        if (Number.isFinite(value.scrollTop) && value.scrollTop >= 0) {
+            normalized.scrollTop = Math.round(value.scrollTop);
+        }
+        const ts = Number(value.timestamp);
+        normalized.timestamp = Number.isFinite(ts) && ts > 0 ? Math.round(ts) : Date.now();
+
+        if (!normalized.examId && !normalized.title && typeof normalized.scrollTop !== 'number') {
+            delete next[key];
+            continue;
+        }
+
+        next[key] = normalized;
+    }
+
+    return next;
 }
 
 function persistBrowseFilter(category, type) {
@@ -358,11 +424,20 @@ function debounce(fn, wait) {
     };
 }
 
-function recordBrowseScrollPosition(category, type, scrollTop) {
+function recordBrowseScrollPosition(category, type, scrollEl) {
+    if (!scrollEl || typeof scrollEl.scrollTop !== 'number') {
+        return;
+    }
     const key = buildBrowseFilterKey(category, type);
-    saveBrowseViewPreferences({
-        scrollPositions: { [key]: Math.max(0, Math.round(scrollTop || 0)) }
-    });
+    const scrollTop = Math.max(0, Math.round(scrollEl.scrollTop || 0));
+    const anchor = captureBrowseListAnchor(scrollEl);
+    const payload = {
+        scrollPositions: { [key]: scrollTop }
+    };
+    if (anchor) {
+        payload.listAnchors = { [key]: anchor };
+    }
+    saveBrowseViewPreferences(payload);
 }
 
 function ensureBrowseScrollListener(scrollEl) {
@@ -380,7 +455,7 @@ function ensureBrowseScrollListener(scrollEl) {
     const handler = debounce(() => {
         const category = getCurrentCategory();
         const type = getCurrentExamType();
-        recordBrowseScrollPosition(category, type, scrollEl.scrollTop);
+        recordBrowseScrollPosition(category, type, scrollEl);
     }, 150);
 
     scrollEl.addEventListener('scroll', handler, { passive: true });
@@ -613,6 +688,154 @@ function restoreBrowseScrollPosition(scrollEl, category, type) {
     return false;
 }
 
+function getBrowseAnchorForFilter(category, type) {
+    const prefs = getBrowseViewPreferences();
+    const key = buildBrowseFilterKey(category, type);
+    const anchor = prefs.listAnchors && prefs.listAnchors[key];
+    if (!anchor || typeof anchor !== 'object') {
+        return null;
+    }
+    const normalized = {};
+    if (typeof anchor.examId === 'string' && anchor.examId.trim()) {
+        normalized.examId = anchor.examId.trim();
+    }
+    if (typeof anchor.title === 'string' && anchor.title.trim()) {
+        normalized.title = anchor.title.trim();
+    }
+    if (Number.isFinite(anchor.scrollTop) && anchor.scrollTop >= 0) {
+        normalized.scrollTop = Math.round(anchor.scrollTop);
+    }
+    if (Number.isFinite(anchor.timestamp) && anchor.timestamp > 0) {
+        normalized.timestamp = Math.round(anchor.timestamp);
+    }
+    if (!normalized.examId && !normalized.title && typeof normalized.scrollTop !== 'number') {
+        return null;
+    }
+    return normalized;
+}
+
+function captureBrowseListAnchor(scrollEl) {
+    if (!scrollEl || typeof scrollEl.scrollTop !== 'number') {
+        return null;
+    }
+    const scrollTop = Math.max(0, Math.round(scrollEl.scrollTop || 0));
+    const items = Array.from(scrollEl.querySelectorAll('.exam-item'));
+    if (items.length === 0) {
+        return { scrollTop, timestamp: Date.now() };
+    }
+
+    const viewportTop = scrollTop;
+    let anchorElement = null;
+    for (let i = 0; i < items.length; i += 1) {
+        const item = items[i];
+        const itemTop = item.offsetTop;
+        const itemBottom = itemTop + item.offsetHeight;
+        if (itemBottom >= viewportTop) {
+            anchorElement = item;
+            break;
+        }
+    }
+
+    if (!anchorElement) {
+        anchorElement = items[items.length - 1];
+    }
+
+    const examId = anchorElement.dataset.examId ? String(anchorElement.dataset.examId) : null;
+    const titleNode = anchorElement.querySelector('h4');
+    const title = titleNode && titleNode.textContent ? titleNode.textContent.trim() : null;
+
+    return {
+        examId: examId && examId.trim() ? examId.trim() : null,
+        title: title && title.length ? title : null,
+        scrollTop,
+        timestamp: Date.now()
+    };
+}
+
+function findExamEntryFromAnchor(exams, anchor) {
+    if (!anchor) {
+        return null;
+    }
+    const list = Array.isArray(exams) ? exams : [];
+    let index = -1;
+    if (anchor.examId) {
+        index = list.findIndex((exam) => exam && exam.id === anchor.examId);
+    }
+    if (index === -1 && anchor.title) {
+        index = list.findIndex((exam) => exam && exam.title === anchor.title);
+    }
+    if (index === -1) {
+        return null;
+    }
+    return { index, exam: list[index] };
+}
+
+function applyStoredBrowseAnchor(scrollEl, category, type, exams) {
+    const anchor = getBrowseAnchorForFilter(category, type);
+    if (!anchor) {
+        return false;
+    }
+
+    const entry = findExamEntryFromAnchor(exams, anchor);
+    if (entry && scrollExamListToEntry(scrollEl, entry)) {
+        recordBrowseScrollPosition(category, type, scrollEl);
+        return true;
+    }
+
+    if (typeof anchor.scrollTop === 'number') {
+        scrollEl.scrollTop = Math.max(0, anchor.scrollTop);
+        recordBrowseScrollPosition(category, type, scrollEl);
+        return true;
+    }
+
+    return false;
+}
+
+function applyStoredBrowsePosition(scrollEl, category, type, exams) {
+    if (!scrollEl) {
+        return false;
+    }
+    const normalizedCategory = normalizeCategoryKey(category);
+    const normalizedType = normalizeExamType(type);
+    if (applyStoredBrowseAnchor(scrollEl, normalizedCategory, normalizedType, exams)) {
+        return true;
+    }
+    if (restoreBrowseScrollPosition(scrollEl, normalizedCategory, normalizedType)) {
+        recordBrowseScrollPosition(normalizedCategory, normalizedType, scrollEl);
+        return true;
+    }
+    return false;
+}
+
+function rememberBrowseAnchorFromItem(examItem) {
+    if (!examItem) {
+        return;
+    }
+    const listEl = examItem.closest('.exam-list');
+    const category = getCurrentCategory();
+    const type = getCurrentExamType();
+    const key = buildBrowseFilterKey(category, type);
+    const examId = examItem.dataset.examId ? String(examItem.dataset.examId).trim() : null;
+    const titleNode = examItem.querySelector('h4');
+    const title = titleNode && titleNode.textContent ? titleNode.textContent.trim() : null;
+    const scrollTop = listEl && typeof listEl.scrollTop === 'number'
+        ? Math.max(0, Math.round(listEl.scrollTop || 0))
+        : 0;
+    const anchor = {
+        examId: examId || null,
+        title: title || null,
+        scrollTop,
+        timestamp: Date.now()
+    };
+    const payload = {
+        listAnchors: { [key]: anchor }
+    };
+    if (listEl) {
+        payload.scrollPositions = { [key]: scrollTop };
+    }
+    saveBrowseViewPreferences(payload);
+}
+
 function handlePostExamListRender(exams, { category, type } = {}) {
     const scrollEl = document.querySelector('#exam-list-container .exam-list');
     if (!scrollEl) {
@@ -628,9 +851,11 @@ function handlePostExamListRender(exams, { category, type } = {}) {
 
     const applyScroll = () => {
         const performFallback = () => {
-            if (!restoreBrowseScrollPosition(scrollEl, normalizedCategory, normalizedType)) {
-                scrollEl.scrollTop = 0;
+            if (applyStoredBrowsePosition(scrollEl, normalizedCategory, normalizedType, exams)) {
+                return;
             }
+            scrollEl.scrollTop = 0;
+            recordBrowseScrollPosition(normalizedCategory, normalizedType, scrollEl);
         };
 
         if (autoScrollContext && prefs.autoScrollEnabled && normalizedCategory !== 'all') {
@@ -638,7 +863,7 @@ function handlePostExamListRender(exams, { category, type } = {}) {
             if (entry) {
                 const attemptScroll = (remaining) => {
                     if (scrollExamListToEntry(scrollEl, entry)) {
-                        recordBrowseScrollPosition(normalizedCategory, normalizedType, scrollEl.scrollTop);
+                        recordBrowseScrollPosition(normalizedCategory, normalizedType, scrollEl);
                         return;
                     }
                     if (remaining > 0) {
@@ -6208,6 +6433,11 @@ function setupExamActionHandlers() {
         const examId = target.dataset.examId;
         if (!action || !examId) {
             return;
+        }
+
+        const examItem = target.closest('.exam-item');
+        if (examItem) {
+            rememberBrowseAnchorFromItem(examItem);
         }
 
         event.preventDefault();

@@ -1706,13 +1706,16 @@ body.no-scroll {
     position: absolute;
     top: calc(100% + 8px);
     left: 0;
-    background: rgba(30, 41, 59, 0.92);
+    background: rgba(255, 255, 255, 0.94);
     border: 1px solid rgba(148, 163, 184, 0.35);
     border-radius: var(--border-radius-lg);
     padding: var(--space-md) var(--space-lg);
     box-shadow: var(--shadow-lg);
     z-index: 20;
-    min-width: 180px;
+    min-width: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
 }
 
 .browse-preference-option {
@@ -1720,14 +1723,53 @@ body.no-scroll {
     align-items: center;
     gap: var(--space-sm);
     font-weight: var(--font-weight-medium);
-    color: var(--color-gray-100);
+    color: var(--color-gray-700);
     cursor: pointer;
+    user-select: none;
 }
 
-.browse-preference-option input {
+.browse-preference-option input[type="checkbox"] {
+    -webkit-appearance: none;
+    appearance: none;
     width: 18px;
     height: 18px;
+    border-radius: var(--border-radius-sm);
+    border: 2px solid var(--color-gray-300);
+    background: var(--color-white);
+    display: grid;
+    place-content: center;
     cursor: pointer;
+    transition: border-color var(--transition-fast),
+        background var(--transition-fast),
+        box-shadow var(--transition-fast),
+        transform var(--transition-fast);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+}
+
+.browse-preference-option input[type="checkbox"]::after {
+    content: '';
+    width: 6px;
+    height: 10px;
+    border: solid var(--color-white);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg) scale(0);
+    transform-origin: bottom left;
+    transition: transform var(--transition-fast) ease-out;
+}
+
+.browse-preference-option input[type="checkbox"]:checked {
+    background: var(--color-brand-primary);
+    border-color: var(--color-brand-primary);
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.25);
+}
+
+.browse-preference-option input[type="checkbox"]:checked::after {
+    transform: rotate(45deg) scale(1);
+}
+
+.browse-preference-option input[type="checkbox"]:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.35);
 }
 
 #type-filter-buttons {

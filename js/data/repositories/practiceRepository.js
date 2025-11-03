@@ -23,7 +23,11 @@
                 ],
                 cloneOnRead: options.cloneOnRead !== false
             });
-            this.maxRecords = options.maxRecords || 1000;
+            if (Number.isFinite(options.maxRecords) && options.maxRecords > 0) {
+                this.maxRecords = Math.floor(options.maxRecords);
+            } else {
+                this.maxRecords = Number.POSITIVE_INFINITY;
+            }
         }
 
         normalizeRecord(record) {
@@ -119,7 +123,7 @@
                 } else {
                     records.unshift(normalized);
                 }
-                if (this.maxRecords && records.length > this.maxRecords) {
+                if (Number.isFinite(this.maxRecords) && records.length > this.maxRecords) {
                     records = records.slice(0, this.maxRecords);
                 }
                 await this.write(records, { transaction: tx, skipValidation: true, clone: false });

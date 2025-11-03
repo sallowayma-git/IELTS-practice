@@ -41,7 +41,7 @@
         const dataSource = new ExamData.StorageDataSource(window.storage);
         const registry = new ExamData.DataRepositoryRegistry(dataSource);
 
-        const practiceRepo = new ExamData.PracticeRepository(dataSource, { maxRecords: 1000 });
+        const practiceRepo = new ExamData.PracticeRepository(dataSource);
         const settingsRepo = new ExamData.SettingsRepository(dataSource);
         const backupRepo = new ExamData.BackupRepository(dataSource, { maxBackups: 20 });
         const metaRepo = new ExamData.MetaRepository(dataSource, {

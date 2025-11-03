@@ -446,9 +446,6 @@
             }
 
             practiceRecords.unshift(record);
-            if (practiceRecords.length > 100) {
-                practiceRecords.splice(100);
-            }
 
             await storage.set('practice_records', practiceRecords);
         },

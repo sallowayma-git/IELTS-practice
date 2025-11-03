@@ -17,7 +17,9 @@ class ScoreStorage {
         };
 
         this.currentVersion = '1.0.0';
-        this.maxRecords = 1000;
+        this.maxRecords = Number.isFinite(options?.maxRecords) && options.maxRecords > 0
+            ? Math.floor(options.maxRecords)
+            : Number.POSITIVE_INFINITY;
         this.storage = this.createStorageAdapter();
 
         this.initialize();
@@ -340,7 +342,7 @@ class ScoreStorage {
             }
 
             // 维护记录数量限制
-            if (records.length > this.maxRecords) {
+            if (Number.isFinite(this.maxRecords) && records.length > this.maxRecords) {
                 records.splice(this.maxRecords);
             }
 

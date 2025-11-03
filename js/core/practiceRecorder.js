@@ -697,10 +697,6 @@ class PracticeRecorder {
                 records.unshift(standardizedRecord);
             }
 
-            if (records.length > 1000) {
-                records = records.slice(0, 1000);
-            }
-
             const saveSuccess = await this.practiceRepo.overwrite(records);
             if (!saveSuccess) {
                 throw new Error('Storage.set returned false');
@@ -905,9 +901,7 @@ class PracticeRecorder {
         const records = Array.isArray(existing) ? [...existing] : [];
         records.push(record);
 
-        const finalRecords = records.length > 100 ? records.slice(-100) : records;
-
-        await this.metaRepo.set('interrupted_records', finalRecords);
+        await this.metaRepo.set('interrupted_records', records);
         console.log(`Interrupted record saved: ${record.id}`);
     }
 
