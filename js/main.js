@@ -86,12 +86,58 @@ function getPracticeRecordsState() {
 }
 
 function setPracticeRecordsState(records) {
+    let normalized;
     if (stateService) {
-        return stateService.setPracticeRecords(records);
+        normalized = stateService.setPracticeRecords(records);
+    } else {
+        normalized = Array.isArray(records) ? records.slice() : [];
+        try { window.practiceRecords = normalized; } catch (_) {}
     }
-    const normalized = Array.isArray(records) ? records : [];
-    try { window.practiceRecords = normalized; } catch (_) {}
-    return normalized;
+    const finalRecords = Array.isArray(normalized) ? normalized : [];
+    updateBrowseAnchorsFromRecords(finalRecords);
+    return finalRecords;
+}
+
+function updateBrowseAnchorsFromRecords(records) {
+    const list = Array.isArray(records) ? records : [];
+    const examIndex = getExamIndexState();
+    const updates = {};
+    const seenKeys = new Set();
+
+    list.forEach((record) => {
+        const info = resolveRecordExamInfo(record, examIndex);
+        if (!info) {
+            return;
+        }
+        const key = buildBrowseFilterKey(info.category, info.type);
+        const timestamp = deriveRecordTimestamp(record);
+        if (!Number.isFinite(timestamp)) {
+            return;
+        }
+        const anchor = {
+            examId: info.examId || null,
+            title: info.title || null,
+            timestamp
+        };
+        const existing = updates[key];
+        if (!existing || timestamp > existing.timestamp) {
+            updates[key] = anchor;
+        }
+        seenKeys.add(key);
+    });
+
+    const currentAnchors = getBrowseViewPreferences().listAnchors || {};
+    Object.keys(currentAnchors || {}).forEach((key) => {
+        if (!seenKeys.has(key)) {
+            updates[key] = null;
+        }
+    });
+
+    if (Object.keys(updates).length === 0) {
+        return;
+    }
+
+    saveBrowseViewPreferences({ listAnchors: updates });
 }
 
 function getFilteredExamsState() {
@@ -266,6 +312,7 @@ function loadBrowsePreferencesFromStorage() {
         if (!next.scrollPositions || typeof next.scrollPositions !== 'object') {
             next.scrollPositions = {};
         }
+        next.listAnchors = mergeBrowseAnchors({}, next.listAnchors);
         return next;
     } catch (error) {
         console.warn('[BrowsePreferences] 无法读取浏览偏好，使用默认值', error);
@@ -284,6 +331,7 @@ function saveBrowseViewPreferences(partial = {}) {
     const current = getBrowseViewPreferences();
     const next = {
         scrollPositions: Object.assign({}, current.scrollPositions, partial.scrollPositions || {}),
+        listAnchors: mergeBrowseAnchors(current.listAnchors, partial.listAnchors),
         autoScrollEnabled: Object.prototype.hasOwnProperty.call(partial, 'autoScrollEnabled')
             ? !!partial.autoScrollEnabled
             : current.autoScrollEnabled,
@@ -395,6 +443,29 @@ function mergeBrowseAnchors(currentAnchors = {}, updates) {
     }
 
     return next;
+}
+
+function getBrowseListAnchor(category, type) {
+    const prefs = getBrowseViewPreferences();
+    const key = buildBrowseFilterKey(category, type);
+    const anchor = prefs.listAnchors && prefs.listAnchors[key];
+    if (!anchor || typeof anchor !== 'object') {
+        return null;
+    }
+    const result = {};
+    if (typeof anchor.examId === 'string' && anchor.examId.trim()) {
+        result.examId = anchor.examId.trim();
+    }
+    if (typeof anchor.title === 'string' && anchor.title.trim()) {
+        result.title = anchor.title.trim();
+    }
+    if (Number.isFinite(anchor.timestamp) && anchor.timestamp > 0) {
+        result.timestamp = Math.round(anchor.timestamp);
+    }
+    if (!result.examId && !result.title) {
+        return null;
+    }
+    return result;
 }
 
 function persistBrowseFilter(category, type) {
@@ -695,6 +766,24 @@ function findLastPracticeExamEntry(exams, category, type) {
     return { index, exam: list[index] };
 }
 
+function findExamEntryByAnchor(exams, anchor) {
+    if (!anchor || typeof anchor !== 'object') {
+        return null;
+    }
+    const list = Array.isArray(exams) ? exams : [];
+    let index = -1;
+    if (anchor.examId) {
+        index = list.findIndex((exam) => exam && exam.id === anchor.examId);
+    }
+    if (index === -1 && anchor.title) {
+        index = list.findIndex((exam) => exam && exam.title === anchor.title);
+    }
+    if (index === -1) {
+        return null;
+    }
+    return { index, exam: list[index] };
+}
+
 function scrollExamListToEntry(scrollEl, entry) {
     if (!scrollEl || !entry || entry.index == null || entry.index < 0) {
         return false;
@@ -750,7 +839,9 @@ function handlePostExamListRender(exams, { category, type } = {}) {
     const applyScroll = () => {
         const performFallback = () => {
             if (!restoreBrowseScrollPosition(scrollEl, normalizedCategory, normalizedType)) {
-                scrollEl.scrollTop = 0;
+                if (prefs.autoScrollEnabled) {
+                    scrollEl.scrollTop = 0;
+                }
             }
         };
 
@@ -774,6 +865,14 @@ function handlePostExamListRender(exams, { category, type } = {}) {
                 const retries = autoScrollContext ? 7 : 4;
                 attemptScrollToEntry(entry, retries, performFallback);
                 return;
+            }
+            const anchor = getBrowseListAnchor(normalizedCategory, normalizedType);
+            if (anchor) {
+                const entryFromAnchor = findExamEntryByAnchor(exams, anchor);
+                if (entryFromAnchor) {
+                    attemptScrollToEntry(entryFromAnchor, 3, performFallback);
+                    return;
+                }
             }
         }
 
@@ -847,7 +946,7 @@ function setupBrowsePreferenceUI() {
         const next = saveBrowseViewPreferences({ autoScrollEnabled: enabled });
         updateBrowsePreferenceIndicator(next.autoScrollEnabled);
         if (typeof showMessage === 'function') {
-            const message = enabled ? '已开启列表位置记录，将自动恢复到上次浏览的位置' : '已关闭列表位置记录';
+            const message = enabled ? '已开启列表位置记录，将自动恢复到上次答题的位置' : '已关闭列表位置记录';
             showMessage(message, 'info');
         }
         panel.hidden = true;
