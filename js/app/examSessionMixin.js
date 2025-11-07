@@ -278,6 +278,12 @@
                 return examWindow;
             }
 
+            const isTestMode = this._shouldUsePlaceholderPage();
+            if (!isTestMode) {
+                console.warn('[App] 非测试环境，跳过占位页重定向');
+                return examWindow;
+            }
+
             const placeholderUrl = this._buildExamPlaceholderUrl(exam, options);
             if (!placeholderUrl) {
                 return examWindow;
@@ -338,6 +344,17 @@
             const query = params.toString();
             const url = query ? `${basePath}?${query}` : basePath;
             return this._ensureAbsoluteUrl(url);
+        },
+
+        _shouldUsePlaceholderPage() {
+            try {
+                if (window.EnvironmentDetector && typeof window.EnvironmentDetector.isInTestEnvironment === 'function') {
+                    return window.EnvironmentDetector.isInTestEnvironment();
+                }
+            } catch (error) {
+                console.warn('[App] 无法访问 EnvironmentDetector:', error);
+            }
+            return false;
         },
 
         /**

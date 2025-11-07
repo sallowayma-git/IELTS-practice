@@ -188,6 +188,25 @@
     </style>
 </head>
 <body data-exam-id="" data-exam-state="initial">
+<!-- 环境检查警告覆盖层 -->
+<div id="access-denied-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.95); color: #e2e8f0; z-index: 9999; display: flex; align-items: center; justify-content: center; flex-direction: column; padding: 40px; text-align: center; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;">
+    <div style="max-width: 600px; background: rgba(30, 41, 59, 0.9); border-radius: 16px; padding: 32px; border: 1px solid rgba(239, 68, 68, 0.3); box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);">
+        <div style="font-size: 48px; margin-bottom: 16px;">🚫</div>
+        <h1 style="margin: 0 0 16px; font-size: 24px; color: #fecaca; font-weight: 600;">访问被拒绝</h1>
+        <p style="margin: 0 0 20px; color: #cbd5e1; line-height: 1.6;">此页面是 <strong>测试专用页面</strong>，严禁在生产环境中访问。</p>
+        <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 16px; margin: 20px 0; text-align: left;">
+            <h3 style="margin: 0 0 8px; font-size: 16px; color: #fca5a5;">页面信息</h3>
+            <ul style="margin: 0; padding-left: 20px; color: #94a3b8; font-size: 14px;">
+                <li>文件: <code>templates/exam-placeholder.html</code></li>
+                <li>用途: IELTS 套题练习占位页</li>
+                <li>限制: 仅限测试环境使用</li>
+            </ul>
+        </div>
+        <button onclick="window.close()" style="background: linear-gradient(135deg, #ef4444, #dc2626); color: white; border: none; border-radius: 8px; padding: 12px 24px; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 16px;">关闭页面</button>
+        <p style="margin: 16px 0 0; font-size: 12px; color: #64748b;">如有疑问，请联系开发团队</p>
+    </div>
+</div>
+
 <header>
     <h1 id="exam-title">IELTS 阅读练习占位页</h1>
     <p id="exam-subtitle">当前题目无法加载，系统已切换到占位练习页。完成练习后将自动跳转至下一篇。</p>
