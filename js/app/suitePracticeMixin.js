@@ -276,12 +276,14 @@
                 const startTime = startTimestamp;
                 const startTimeIso = new Date(startTime).toISOString();
                 const endTimeIso = new Date(completionTime).toISOString();
-                const timeLabel = this._formatSuiteTimeLabel(startTime);
+                const suiteSequence = await this._resolveSuiteSequenceNumber(startTime);
+                const dateLabel = this._formatSuiteDateLabel(startTime);
+                const displayTitle = `${dateLabel}套题练习${suiteSequence}`;
 
                 const record = {
                     id: session.id,
                     examId: `suite-${session.id}`,
-                    title: `${timeLabel} 套题练习`,
+                    title: displayTitle,
                     type: 'reading',
                     suiteMode: true,
                     date: endTimeIso,
@@ -298,9 +300,11 @@
                     suiteEntries,
                     frequency: 'suite',
                     metadata: {
-                        examTitle: `${timeLabel} 套题练习`,
+                        examTitle: displayTitle,
                         category: '套题练习',
                         frequency: 'suite',
+                        suiteSequence,
+                        suiteDisplayDate: dateLabel,
                         suiteSessionId: session.id,
                         suiteEntries,
                         startedAt: startTimeIso,
@@ -478,14 +482,108 @@
             }
         },
 
-        _formatSuiteTimeLabel(timestamp) {
+        _formatSuiteDateLabel(timestamp) {
             const date = new Date(timestamp);
-            const year = date.getFullYear();
             const month = String(date.getMonth() + 1).padStart(2, '0');
             const day = String(date.getDate()).padStart(2, '0');
-            const hours = String(date.getHours()).padStart(2, '0');
-            const minutes = String(date.getMinutes()).padStart(2, '0');
-            return `${year}-${month}-${day} ${hours}:${minutes}`;
+            return `${month}月${day}日`;
+        },
+
+        async _resolveSuiteSequenceNumber(timestamp) {
+            const date = new Date(timestamp);
+            if (Number.isNaN(date.getTime())) {
+                return 1;
+            }
+
+            const targetYear = date.getFullYear();
+            const targetMonth = date.getMonth();
+            const targetDate = date.getDate();
+
+            const normalizeList = list => (Array.isArray(list) ? list : []);
+
+            const collectRecords = async () => {
+                if (this.components && this.components.practiceRecorder && typeof this.components.practiceRecorder.getPracticeRecords === 'function') {
+                    try {
+                        const records = await this.components.practiceRecorder.getPracticeRecords();
+                        return normalizeList(records);
+                    } catch (error) {
+                        console.warn('[SuitePractice] 读取PracticeRecorder记录失败，尝试使用存储降级:', error);
+                    }
+                }
+
+                if (typeof storage?.get === 'function') {
+                    try {
+                        const fallbackRecords = await storage.get('practice_records', []);
+                        return normalizeList(fallbackRecords);
+                    } catch (error) {
+                        console.warn('[SuitePractice] 读取practice_records失败:', error);
+                    }
+                }
+
+                return [];
+            };
+
+            const existingRecords = await collectRecords();
+
+            const isSuiteRecord = record => {
+                if (!record) {
+                    return false;
+                }
+                if (record.suiteMode === true) {
+                    return true;
+                }
+                if (record.frequency === 'suite') {
+                    return true;
+                }
+                if (record.metadata && record.metadata.frequency === 'suite') {
+                    return true;
+                }
+                return false;
+            };
+
+            const resolveRecordDate = record => {
+                const candidates = [
+                    record.startTime,
+                    record.metadata && record.metadata.startedAt,
+                    record.date,
+                    record.endTime,
+                    record.metadata && record.metadata.completedAt
+                ];
+
+                for (const value of candidates) {
+                    if (!value) {
+                        continue;
+                    }
+                    const parsed = new Date(value);
+                    if (!Number.isNaN(parsed.getTime())) {
+                        return parsed;
+                    }
+                }
+
+                return null;
+            };
+
+            let count = 0;
+            for (const record of existingRecords) {
+                if (!isSuiteRecord(record)) {
+                    continue;
+                }
+
+                const recordDate = resolveRecordDate(record);
+                if (!recordDate) {
+                    continue;
+                }
+
+                if (
+                    recordDate.getFullYear() === targetYear
+                    && recordDate.getMonth() === targetMonth
+                    && recordDate.getDate() === targetDate
+                ) {
+                    count += 1;
+                }
+            }
+
+            return count + 1;
         },
 
         async _savePartialSuiteAsIndividual(session) {
