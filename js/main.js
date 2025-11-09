@@ -267,6 +267,10 @@ function normalizeCategoryKey(category) {
     if (match) {
         return match[1].toUpperCase();
     }
+    const embedded = trimmed.match(/\b(P[1-4])\b/i);
+    if (embedded) {
+        return embedded[1].toUpperCase();
+    }
     return trimmed;
 }
 
@@ -2923,37 +2927,6 @@ function openPDFSafely(pdfPath, examTitle = 'PDF') {
     }
 }
 
-// Export current exam index to a timestamped script file under assets/scripts (download)
-function exportExamIndexToScriptFile(fullIndex, noteLabel = '') {
-    try {
-        const reading = (fullIndex || []).filter(e => e.type === 'reading').map(e => {
-            const { type, ...rest } = e || {};
-            return rest;
-        });
-        const listening = (fullIndex || []).filter(e => e.type === 'listening');
-
-        const pad = (n) => String(n).padStart(2, '0');
-        const d = new Date();
-        const ts = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
-        const header = `// 题库配置导出 ${d.toLocaleString()}\n// 说明: 保存此文件到 assets/scripts/ 并在需要时手动在 index.html 引入以覆盖内置数据\n`;
-        const content = `${header}window.completeExamIndex = ${JSON.stringify(reading, null, 2)};\n\nwindow.listeningExamIndex = ${JSON.stringify(listening, null, 2)};\n`;
-
-        const blob = new Blob([content], { type: 'application/javascript; charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `exam-index-${ts}.js`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        try { showMessage(`题库配置已导出: exam-index-${ts}.js（请移动到 assets/scripts/）`, 'success'); } catch(_) {}
-    } catch (e) {
-        console.error('[LibraryExport] 题库配置导出失败:', e);
-        try { showMessage('题库配置导出失败: ' + (e && e.message || e), 'error'); } catch(_) {}
-    }
-}
-
 // --- Helper Functions ---
 function getViewName(viewName) {
     switch (viewName) {
@@ -3297,8 +3270,6 @@ async function handleLibraryUpload(options, files) {
             await savePathMapForConfiguration(targetKey, newIndex, { overrideMap: derivedPathMap, setActive: true });
             await saveLibraryConfiguration(configName, targetKey, newIndex.length);
             await setActiveLibraryConfiguration(targetKey);
-            // 导出为时间命名脚本，便于统一管理
-            try { exportExamIndexToScriptFile(newIndex, configName); } catch(_) {}
             showMessage('新的题库配置已创建并激活；正在重新加载...', 'success');
             setTimeout(() => { location.reload(); }, 800);
             return;
@@ -3331,8 +3302,6 @@ async function handleLibraryUpload(options, files) {
         await saveLibraryConfiguration(incName, targetKey, newIndex.length);
         showMessage('索引已更新；正在刷新界面...', 'success');
         setExamIndexState(newIndex);
-        // 也导出一次，便于归档
-        try { exportExamIndexToScriptFile(newIndex, incName); } catch(_) {}
         updateOverview();
         if (document.getElementById('browse-view')?.classList.contains('active')) {
             loadExamList();
