@@ -1089,7 +1089,14 @@
             return;
         }
         if (action === 'skip') {
-            applyResult('correct', { skipped: true });
+            const { recognitionMode, recognitionFailed } = state.session;
+            let status = 'correct';
+            if (recognitionFailed || recognitionMode === 'unknown') {
+                status = 'wrong';
+            } else if (recognitionMode === 'fuzzy') {
+                status = 'near';
+            }
+            applyResult(status, { skipped: true });
             return;
         }
         if (action === 'next-word') {
