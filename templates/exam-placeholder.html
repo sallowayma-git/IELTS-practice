@@ -189,7 +189,7 @@
 </head>
 <body data-exam-id="" data-exam-state="initial">
 <!-- 环境检查警告覆盖层 -->
-<div id="access-denied-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.95); color: #e2e8f0; z-index: 9999; display: flex; align-items: center; justify-content: center; flex-direction: column; padding: 40px; text-align: center; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;">
+<div id="access-denied-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.95); color: #e2e8f0; z-index: 9999; align-items: center; justify-content: center; flex-direction: column; padding: 40px; text-align: center; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;">
     <div style="max-width: 600px; background: rgba(30, 41, 59, 0.9); border-radius: 16px; padding: 32px; border: 1px solid rgba(239, 68, 68, 0.3); box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);">
         <div style="font-size: 48px; margin-bottom: 16px;">🚫</div>
         <h1 style="margin: 0 0 16px; font-size: 24px; color: #fecaca; font-weight: 600;">访问被拒绝</h1>
@@ -206,7 +206,6 @@
         <p style="margin: 16px 0 0; font-size: 12px; color: #64748b;">如有疑问，请联系开发团队</p>
     </div>
 </div>
-
 <header>
     <h1 id="exam-title">IELTS 阅读练习占位页</h1>
     <p id="exam-subtitle">当前题目无法加载，系统已切换到占位练习页。完成练习后将自动跳转至下一篇。</p>
@@ -258,9 +257,28 @@
 <footer>
     占位页将继续向父页面发送 SESSION_READY / PRACTICE_COMPLETE 消息，保障套题练习与练习记录聚合流程正常执行。
 </footer>
+<script src="../js/utils/environmentDetector.js"></script>
 <script>
 (function() {
     const opener = window.opener || window.parent;
+    const overlay = document.getElementById('access-denied-overlay');
+    const detector = window.EnvironmentDetector;
+    const isTestEnv = detector && typeof detector.isInTestEnvironment === 'function'
+        ? detector.isInTestEnvironment()
+        : false;
+
+    if (!isTestEnv) {
+        if (overlay) {
+            overlay.style.display = 'flex';
+        }
+        document.body.dataset.examState = 'blocked';
+        console.warn('[SuitePlaceholder] 非测试环境禁止访问，占位页已锁定。');
+        return;
+    }
+
+    if (overlay) {
+        overlay.style.display = 'none';
+    }
     const state = {
         examId: null,
         title: 'IELTS 阅读练习',

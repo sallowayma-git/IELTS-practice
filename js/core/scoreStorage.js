@@ -377,12 +377,19 @@ class ScoreStorage {
         const endTime = recordData.endTime && !Number.isNaN(new Date(recordData.endTime).getTime())
             ? new Date(recordData.endTime).toISOString()
             : recordDate;
+        const resolvedTitle = recordData.title
+            || metadata.examTitle
+            || metadata.title
+            || recordData.examTitle
+            || recordData.examId
+            || '未命名练习';
 
         return {
             // 基础信息
             id: recordData.id || this.generateRecordId(),
             examId: recordData.examId,
             sessionId: recordData.sessionId,
+            title: resolvedTitle,
             type,
 
             // 时间信息
