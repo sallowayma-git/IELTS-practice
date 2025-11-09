@@ -386,8 +386,13 @@ class PracticeRecorder {
      */
     async handleSessionCompleted(data) {
         const { examId, results } = data;
+        console.log(`[PracticeRecorder] 收到会话完成消息 for examId: ${examId}`, data);
 
-        if (!this.activeSessions.has(examId)) return;
+
+        if (!this.activeSessions.has(examId)) {
+            console.warn(`[PracticeRecorder] 收到孤立的会话完成消息: ${examId}`);
+            return;
+        }
 
         let session = this.activeSessions.get(examId);
         const endTime = data.endTime && !Number.isNaN(new Date(data.endTime).getTime())
@@ -423,10 +428,12 @@ class PracticeRecorder {
             createdAt: endTime
         };
         
+        console.log('[PracticeRecorder] 创建的练习记录对象:', practiceRecord);
+
         try {
             const savedRecord = await this.savePracticeRecord(practiceRecord) || practiceRecord;
+            console.log('[PracticeRecorder] savePracticeRecord 调用成功');
             await this.updateUserStats(practiceRecord);
-
             this.endPracticeSession(examId);
 
             console.log(`Practice session completed: ${examId}`);

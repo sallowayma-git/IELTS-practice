@@ -23,7 +23,7 @@ class StorageManager {
 
             // 强制初始化 IndexedDB 以实现 Hybrid 模式，并在版本检查前确保 DB ready
             console.log('[Storage] 强制初始化 IndexedDB 以实现 Hybrid 模式');
-            await this.initializeIndexedDBStorage();
+            // await this.initializeIndexedDBStorage();
 
             // 初始化版本信息
             const currentVersion = await this.get('system_version');
@@ -49,7 +49,7 @@ class StorageManager {
 
         } catch (error) {
             console.warn('[Storage] localStorage 不可用，fallback 到 IndexedDB:', error);
-            await this.initializeIndexedDBStorage();
+            // await this.initializeIndexedDBStorage();
         }
     }
 
@@ -119,7 +119,7 @@ class StorageManager {
     async ensureIndexedDBReady() {
         if (!this.indexedDB) {
             console.log('[Storage] 等待 IndexedDB ready');
-            await this.initializeIndexedDBStorage();
+            // await this.initializeIndexedDBStorage();
         }
     }
 
@@ -500,24 +500,17 @@ class StorageManager {
                 }
             } else {
                 console.log('[Storage] 使用 localStorage 存储 (主要存储)');
-                // 使用localStorage存储
-                const quotaCheck = await this.checkStorageQuota(serializedValue.length);
-                if (!quotaCheck) {
-                    console.warn('[Storage] 存储空间不足，尝试清理旧数据');
-                    this.cleanupOldData();
-
-                    const quotaCheckAfterCleanup = await this.checkStorageQuota(serializedValue.length);
-                    if (!quotaCheckAfterCleanup) {
-                        console.error('[Storage] 存储空间仍然不足，无法保存数据');
-                        this.handleStorageQuotaExceeded(key, value);
-                        return false;
-                    }
+                try {
+                    localStorage.setItem(this.getKey(key), serializedValue);
+                    console.log(`[Storage] localStorage 写入成功 for key: ${key}`);
+                    // 派发事件，通知其他页面数据已更新
+                    window.dispatchEvent(new CustomEvent('storage-sync', { detail: { key } }));
+                    return true;
+                } catch (e) {
+                    console.error(`[Storage] localStorage 写入失败 for key: ${key}`, e);
+                    this.handleStorageError(key, value, e);
+                    return false;
                 }
-
-                localStorage.setItem(this.getKey(key), serializedValue);
-                // 派发事件，通知其他页面数据已更新
-                window.dispatchEvent(new CustomEvent('storage-sync', { detail: { key } }));
-                return true;
             }
         } catch (error) {
             console.error('[Storage] set 操作错误:', error);

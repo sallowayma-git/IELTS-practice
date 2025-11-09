@@ -231,11 +231,14 @@
             return;
         }
         try {
-            const response = await fetch('assets/wordlists/ielts_core.json', { cache: 'no-store' });
+            console.log('[VocabStore] 默认词库为空，尝试从 /assets/wordlists/ielts_core.json 加载');
+            const response = await fetch('/assets/wordlists/ielts_core.json', { cache: 'no-store' });
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
             const payload = await response.json();
+            console.log('[VocabStore] 成功获取默认词库文件');
+
             const validator = window.VocabDataIO;
             if (validator && typeof validator.validateSchema === 'function' && !validator.validateSchema(payload)) {
                 console.warn('[VocabStore] 默认词库校验失败，跳过加载');
@@ -252,8 +255,9 @@
             setWordsInternal(normalized);
             state.lastLoadSource = 'default';
             await persist(STORAGE_KEYS.WORDS, normalized);
+            console.log(`[VocabStore] 成功加载并持久化 ${normalized.length} 个默认词汇`);
         } catch (error) {
-            console.warn('[VocabStore] 默认词库加载失败:', error);
+            console.error('[VocabStore] 默认词库加载失败:', error);
         }
     }
 

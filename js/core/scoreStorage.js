@@ -319,9 +319,11 @@ class ScoreStorage {
      * 保存练习记录
      */
     async savePracticeRecord(recordData) {
+        console.log('[ScoreStorage] 开始保存练习记录:', recordData.id);
         try {
             // 标准化记录格式
             const standardizedRecord = this.standardizeRecord(recordData);
+            console.log('[ScoreStorage] 记录已标准化:', standardizedRecord);
             
             // 验证记录数据
             this.validateRecord(standardizedRecord);
@@ -332,7 +334,7 @@ class ScoreStorage {
             // 检查是否已存在相同ID的记录
             const existingIndex = records.findIndex(r => r.id === standardizedRecord.id);
             if (existingIndex !== -1) {
-                console.log('更新现有记录:', standardizedRecord.id);
+                console.log('[ScoreStorage] 更新现有记录:', standardizedRecord.id);
                 records[existingIndex] = standardizedRecord;
             } else {
                 // 添加新记录到开头（保持最新记录在前）
@@ -345,19 +347,21 @@ class ScoreStorage {
             }
 
             // 保存记录
+            console.log('[ScoreStorage] 正在调用 storage.set 保存记录...');
             const saveResult = await this.storage.set(this.storageKeys.practiceRecords, records);
             if (!saveResult) {
                 throw new Error('Failed to save records to storage');
             }
+            console.log('[ScoreStorage] storage.set 调用完成');
 
             // 更新用户统计
             await this.updateUserStats(standardizedRecord);
             
-            console.log('Practice record saved:', standardizedRecord.id);
+            console.log('[ScoreStorage] 练习记录保存成功:', standardizedRecord.id);
             return standardizedRecord;
             
         } catch (error) {
-            console.error('Failed to save practice record:', error);
+            console.error('[ScoreStorage] 保存练习记录失败:', error);
             throw error;
         }
     }
