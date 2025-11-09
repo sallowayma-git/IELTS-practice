@@ -283,7 +283,6 @@
                 console.warn('[App] 非测试环境，跳过占位页重定向');
                 return examWindow;
             }
-
             const placeholderUrl = this._buildExamPlaceholderUrl(exam, options);
             if (!placeholderUrl) {
                 return examWindow;

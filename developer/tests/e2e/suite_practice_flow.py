@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from pathlib import Path
+import re
 from typing import List
 
 from playwright.async_api import (  # type: ignore[import-untyped]
@@ -19,6 +20,7 @@ from playwright.async_api import (  # type: ignore[import-untyped]
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 INDEX_PATH = REPO_ROOT / "index.html"
+INDEX_URL = f"{INDEX_PATH.as_uri()}?test_env=1"
 REPORT_DIR = REPO_ROOT / "developer" / "tests" / "e2e" / "reports"
 
 
@@ -122,7 +124,7 @@ async def run() -> None:
             context.on("page", lambda pg: _collect_console(pg, console_log))
 
             page = await context.new_page()
-            await page.goto(INDEX_PATH.as_uri())
+            await page.goto(INDEX_URL)
             await _ensure_app_ready(page)
             await _dismiss_overlays(page)
 
@@ -174,10 +176,27 @@ async def run() -> None:
             target_record = suite_record.first
             await target_record.wait_for(state="visible", timeout=5000)
 
+            record_id = await target_record.get_attribute("data-record-id")
+            if not record_id:
+                raise AssertionError("Suite practice record not found in history list")
+
+            title_text = await page.evaluate(
+                "(id) => {\n"
+                "  const base = '#history-list .history-record-item[data-record-id=\\'' + id + '\\']';\n"
+                "  const titleEl = document.querySelector(base + ' .record-title')\n"
+                "    || document.querySelector(base + ' .practice-record-title');\n"
+                "  return titleEl ? titleEl.textContent.trim() : null;\n"
+                "}",
+                record_id,
+            )
+            if not title_text:
+                raise AssertionError("Suite practice record title element missing")
+            if not re.match(r"^\d{2}月\d{2}日套题练习\d+$", title_text):
+                raise AssertionError(f"Unexpected suite record title: {title_text}")
+
             list_path = REPORT_DIR / "suite-practice-record-list.png"
             await page.locator("#practice-view").screenshot(path=str(list_path))
 
-            record_id = await target_record.get_attribute("data-record-id")
             await page.evaluate(
                 "(id) => {\n"
                 "  if (window.app?.components?.practiceHistory?.showRecordDetails) {\n"
