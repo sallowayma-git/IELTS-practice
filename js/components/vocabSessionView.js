@@ -8,12 +8,6 @@
     const KEY_BINDINGS = Object.freeze({
         Enter: 'submit',
         NumpadEnter: 'submit',
-        Digit1: 'wrong',
-        Digit2: 'near',
-        Digit3: 'correct',
-        Numpad1: 'wrong',
-        Numpad2: 'near',
-        Numpad3: 'correct',
         KeyF: 'reveal',
         Escape: 'escape'
     });
@@ -251,16 +245,6 @@
                     </div>
                 </div>
             </main>
-            <footer class="vocab-bottom-bar" data-vocab-role="bottom-bar" hidden>
-                <div class="vocab-bottom-bar__container">
-                    <div class="vocab-bottom-bar__actions" data-vocab-role="bottom-actions">
-                        <button class="btn btn-result btn-result--danger" type="button" data-result="wrong" disabled>错 ·1</button>
-                        <button class="btn btn-result btn-result--neutral" type="button" data-result="near" disabled>近似 ·2</button>
-                        <button class="btn btn-result btn-result--success" type="button" data-result="correct" disabled>对 ·3</button>
-                    </div>
-                </div>
-            </footer>
-            <div class="vocab-bottom-spacer" data-vocab-role="bottom-spacer" aria-hidden="true" hidden></div>
             <div class="visually-hidden" aria-live="polite" data-vocab-role="live-region"></div>
             <input type="file" accept=".json,.csv" data-vocab-role="import-input" hidden>
             <div class="vocab-settings-modal" data-vocab-role="settings-modal" hidden>
@@ -320,9 +304,6 @@
             sideSurface: layout.querySelector('[data-vocab-role=\"side-surface\"]'),
             noteInput: layout.querySelector('[data-field=\"note\"]'),
             noteStatus: layout.querySelector('[data-field=\"note-status\"]'),
-            bottomBar: layout.querySelector('[data-vocab-role=\"bottom-bar\"]'),
-            bottomActions: layout.querySelector('[data-vocab-role=\"bottom-actions\"]'),
-            bottomSpacer: layout.querySelector('[data-vocab-role=\"bottom-spacer\"]'),
             liveRegion: layout.querySelector('[data-vocab-role=\"live-region\"]'),
             importInput: layout.querySelector('[data-vocab-role=\"import-input\"]'),
             settingsModal: layout.querySelector('[data-vocab-role=\"settings-modal\"]'),
@@ -341,16 +322,19 @@
     }
     function navigateToMoreView() {
         const moreView = document.getElementById('more-view');
+        const vocabView = document.getElementById('vocab-view');
         if (window.app && typeof window.app.navigateToView === 'function') {
-            window.app.navigateToView('more');
-            return;
+            try {
+                window.app.navigateToView('more');
+            } catch (error) {
+                console.warn('[VocabSessionView] navigateToView("more") 失败:', error);
+            }
+        }
+        if (vocabView) {
+            vocabView.classList.remove('active');
+            vocabView.setAttribute('hidden', 'hidden');
         }
         if (moreView) {
-            const vocabView = document.getElementById('vocab-view');
-            if (vocabView) {
-                vocabView.classList.remove('active');
-                vocabView.setAttribute('hidden', 'hidden');
-            }
             moreView.classList.add('active');
             moreView.removeAttribute('hidden');
         }
@@ -465,18 +449,6 @@
             });
             state.elements.sidePanel.dataset.bound = 'true';
         }
-        if (state.elements.bottomActions && !state.elements.bottomActions.dataset.bound) {
-            state.elements.bottomActions.addEventListener('click', (event) => {
-                const trigger = event.target.closest('button[data-result]');
-                const result = trigger?.dataset?.result;
-                if (!trigger || !result) {
-                    return;
-                }
-                event.preventDefault();
-                applyResult(result);
-            });
-            state.elements.bottomActions.dataset.bound = 'true';
-        }
         if (!state.keyboardHandler) {
             state.keyboardHandler = (event) => {
                 const command = KEY_BINDINGS[event.code];
@@ -499,9 +471,6 @@
                 } else if (command === 'reveal' && state.session.stage === 'recall') {
                     event.preventDefault();
                     revealMeaning();
-                } else if (['wrong', 'near', 'correct'].includes(command) && state.session.stage === 'recall') {
-                    event.preventDefault();
-                    applyResult(command);
                 } else if (command === 'escape') {
                     if (state.menuOpen) {
                         event.preventDefault();
@@ -1120,7 +1089,7 @@
             return;
         }
         if (action === 'skip') {
-            applyResult('wrong', { skipped: true });
+            applyResult('correct', { skipped: true });
             return;
         }
         if (action === 'next-word') {
