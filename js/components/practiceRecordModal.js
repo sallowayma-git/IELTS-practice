@@ -298,7 +298,19 @@ class PracticeRecordModal {
                 .map((entry, index) => {
                     const entryRecord = this.prepareRecordForDisplay(entry);
                     const title = this.formatSuiteEntryTitle(entryRecord, index);
-                    const content = this.renderAnswersSection(this.getNormalizedEntries(entryRecord), { wrap: false });
+                    const normalizedEntries = this.getNormalizedEntries(entryRecord);
+                    let content = '';
+
+                    if (this.hasNormalizedEntries(normalizedEntries)) {
+                        content = this.renderAnswersSection(normalizedEntries, { wrap: false });
+                    } else {
+                        content = this.generateLegacyAnswerTableForSingle(entryRecord);
+                    }
+
+                    if (!content || !String(content).trim()) {
+                        content = '<div class="no-answers-message"><p>\u6682\u65e0\u8be6\u7ec6\u7b54\u9898\u6570\u636e</p></div>';
+                    }
+
                     return `
                         <section class="suite-entry">
                             <h5>${this.escapeHtml(title)}</h5>
@@ -306,12 +318,22 @@ class PracticeRecordModal {
                         </section>
                     `;
                 })
+                .filter(Boolean)
                 .join('');
 
-            return sections || '<div class="no-answers-message"><p>\u6682\u65e0\u8be6\u7ec6\u7b54\u9898\u6570\u636e</p></div>';
+            if (sections && sections.trim()) {
+                return sections;
+            }
+
+            return this.generateLegacyAnswerTableForSingle(preparedRecord);
         }
 
-        return this.renderAnswersSection(this.getNormalizedEntries(preparedRecord), { wrap: true });
+        const normalizedEntries = this.getNormalizedEntries(preparedRecord);
+        if (this.hasNormalizedEntries(normalizedEntries)) {
+            return this.renderAnswersSection(normalizedEntries, { wrap: true });
+        }
+
+        return this.generateLegacyAnswerTableForSingle(preparedRecord);
     }
 
     getNormalizedEntries(record) {
@@ -320,6 +342,10 @@ class PracticeRecordModal {
             return Array.isArray(entries) ? entries : [];
         }
         return [];
+    }
+
+    hasNormalizedEntries(entries) {
+        return Array.isArray(entries) && entries.length > 0;
     }
 
     collectAllEntries(record) {
@@ -427,6 +453,416 @@ class PracticeRecordModal {
                 </table>
             </div>
         `;
+    }
+
+    generateLegacyAnswerTableForSingle(record) {
+        if (!record) {
+            return '<div class="no-answers-message"><p>\u6682\u65e0\u7b54\u9898\u6570\u636e</p></div>';
+        }
+
+        if (record.answerComparison && Object.keys(record.answerComparison).length > 0) {
+            const merged = this.mergeComparisonWithCorrections(record);
+            return this.generateLegacyTableFromComparison(merged);
+        }
+
+        const answers = record.answers || (record.realData && record.realData.answers) || {};
+        const correctAnswers = this.getLegacyCorrectAnswers(record);
+        const questionNumbers = this.extractLegacyQuestionNumbers(answers, correctAnswers);
+
+        if (questionNumbers.length === 0) {
+            return '<div class="no-answers-message"><p>\u6682\u65e0\u7b54\u9898\u6570\u636e</p></div>';
+        }
+
+        const rows = questionNumbers
+            .map((questionNumber) => {
+                const userAnswer = this.getLegacyUserAnswer(answers, questionNumber);
+                const correctAnswer = this.getLegacyCorrectAnswer(correctAnswers, questionNumber);
+                const isCorrect = this.compareLegacyAnswers(userAnswer, correctAnswer);
+                const resultClass = isCorrect ? 'correct' : 'incorrect';
+                const resultIcon = isCorrect ? '&#10003;' : '&#10005;';
+                const safeUser = userAnswer != null ? this.truncateAnswer(userAnswer) : '\u672a\u4f5c\u7b54';
+                const safeCorrect = correctAnswer != null ? this.truncateAnswer(correctAnswer) : '\u65e0';
+
+                return `
+                    <tr class="answer-row ${resultClass}">
+                        <td class="question-num">${this.escapeHtml(String(questionNumber))}</td>
+                        <td class="correct-answer" title="${this.escapeHtml(correctAnswer == null ? '' : String(correctAnswer))}">
+                            ${this.escapeHtml(safeCorrect)}
+                        </td>
+                        <td class="user-answer" title="${this.escapeHtml(userAnswer == null ? '' : String(userAnswer))}">
+                            ${this.escapeHtml(safeUser)}
+                        </td>
+                        <td class="result-icon ${resultClass}">${resultIcon}</td>
+                    </tr>
+                `;
+            })
+            .join('');
+
+        return `
+            <div class="answers-table-container">
+                <table class="answer-table">
+                    <thead>
+                        <tr>
+                            <th>\u9898\u53f7</th>
+                            <th>\u6b63\u786e\u7b54\u6848</th>
+                            <th>\u6211\u7684\u7b54\u6848</th>
+                            <th>\u5bf9\u9519</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    generateLegacyTableFromComparison(answerComparison) {
+        if (!answerComparison || Object.keys(answerComparison).length === 0) {
+            return '<div class="no-answers-message"><p>\u6682\u65e0\u7b54\u9898\u6570\u636e</p></div>';
+        }
+
+        const cloneDeep = (data) => JSON.parse(JSON.stringify(data || {}));
+        const normalized = (() => {
+            const comp = cloneDeep(answerComparison);
+            const letterKeys = Object.keys(comp).filter(key => /^q[a-z]$/i.test(key)).sort();
+            const numericKeys = Object.keys(comp)
+                .filter(key => /q\d+$/i.test(key))
+                .sort((a, b) => {
+                    const numA = parseInt(a.replace(/\D/g, ''), 10);
+                    const numB = parseInt(b.replace(/\D/g, ''), 10);
+                    return numA - numB;
+                });
+
+            if (letterKeys.length === 0 || numericKeys.length === 0) {
+                return comp;
+            }
+
+            let windowStart = -1;
+            for (let i = 0; i + letterKeys.length - 1 < numericKeys.length; i += 1) {
+                const first = parseInt(numericKeys[i].replace(/\D/g, ''), 10);
+                const last = parseInt(numericKeys[i + letterKeys.length - 1].replace(/\D/g, ''), 10);
+                if (!Number.isNaN(first) && !Number.isNaN(last) && (last - first + 1) === letterKeys.length) {
+                    windowStart = i;
+                    break;
+                }
+            }
+            if (windowStart === -1) {
+                return comp;
+            }
+
+            for (let i = 0; i < letterKeys.length; i += 1) {
+                const letterKey = letterKeys[i];
+                const numericKey = numericKeys[windowStart + i];
+                if (!numericKey) {
+                    continue;
+                }
+
+                const letterEntry = comp[letterKey] || {};
+                const numericEntry = comp[numericKey] || {};
+
+                const mergedCorrect = (numericEntry.correctAnswer != null && String(numericEntry.correctAnswer).trim() !== '')
+                    ? numericEntry.correctAnswer
+                    : letterEntry.correctAnswer;
+                const mergedUser = (numericEntry.userAnswer != null && String(numericEntry.userAnswer).trim() !== '')
+                    ? numericEntry.userAnswer
+                    : letterEntry.userAnswer;
+                const mergedIsCorrect = typeof letterEntry.isCorrect === 'boolean'
+                    ? letterEntry.isCorrect
+                    : numericEntry.isCorrect;
+
+                comp[numericKey] = {
+                    correctAnswer: mergedCorrect || '',
+                    userAnswer: mergedUser || '',
+                    isCorrect: Boolean(mergedIsCorrect)
+                };
+                delete comp[letterKey];
+            }
+
+            return comp;
+        })();
+
+        const sortedKeys = Object.keys(normalized).sort((a, b) => {
+            const numA = parseInt(a.replace(/\D/g, ''), 10);
+            const numB = parseInt(b.replace(/\D/g, ''), 10);
+            if (!Number.isNaN(numA) && !Number.isNaN(numB)) {
+                return numA - numB;
+            }
+            return a.localeCompare(b);
+        });
+
+        const rows = sortedKeys
+            .map((key) => {
+                const comparison = normalized[key] || {};
+                const questionLabel = key.replace(/^q/i, '');
+                const isCorrect = comparison.isCorrect === true;
+                const resultClass = isCorrect ? 'correct' : 'incorrect';
+                const resultIcon = isCorrect ? '&#10003;' : '&#10005;';
+
+                const userDisplay = comparison.userAnswer != null
+                    ? this.truncateAnswer(comparison.userAnswer)
+                    : '\u672a\u4f5c\u7b54';
+                const correctDisplay = comparison.correctAnswer != null
+                    ? this.truncateAnswer(comparison.correctAnswer)
+                    : '\u65e0';
+
+                return `
+                    <tr class="answer-row ${resultClass}">
+                        <td class="question-num">${this.escapeHtml(questionLabel)}</td>
+                        <td class="correct-answer" title="${this.escapeHtml(comparison.correctAnswer == null ? '' : String(comparison.correctAnswer))}">
+                            ${this.escapeHtml(correctDisplay)}
+                        </td>
+                        <td class="user-answer" title="${this.escapeHtml(comparison.userAnswer == null ? '' : String(comparison.userAnswer))}">
+                            ${this.escapeHtml(userDisplay)}
+                        </td>
+                        <td class="result-icon ${resultClass}">${resultIcon}</td>
+                    </tr>
+                `;
+            })
+            .join('');
+
+        return `
+            <div class="answers-table-container">
+                <table class="answer-table">
+                    <thead>
+                        <tr>
+                            <th>\u9898\u53f7</th>
+                            <th>\u6b63\u786e\u7b54\u6848</th>
+                            <th>\u6211\u7684\u7b54\u6848</th>
+                            <th>\u5bf9\u9519</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    mergeComparisonWithCorrections(record) {
+        const comparison = JSON.parse(JSON.stringify(record.answerComparison || {}));
+        const sources = [
+            record.correctAnswers || {},
+            record.realData && record.realData.correctAnswers,
+            (record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details)
+                ? Object.fromEntries(Object.entries(record.realData.scoreInfo.details).map(([key, detail]) => [key, detail && detail.correctAnswer]))
+                : null,
+            (record.scoreInfo && record.scoreInfo.details)
+                ? Object.fromEntries(Object.entries(record.scoreInfo.details).map(([key, detail]) => [key, detail && detail.correctAnswer]))
+                : null
+        ].filter(Boolean);
+
+        const getFromSources = (key) => {
+            for (const source of sources) {
+                if (source && source[key] != null && String(source[key]).trim() !== '') {
+                    return source[key];
+                }
+            }
+            return null;
+        };
+
+        Object.keys(comparison).forEach((key) => {
+            const item = comparison[key] || {};
+            if (item.correctAnswer == null || String(item.correctAnswer).trim() === '') {
+                const fixed = getFromSources(key);
+                if (fixed != null) {
+                    item.correctAnswer = fixed;
+                }
+            }
+            if (item.userAnswer == null) {
+                item.userAnswer = '';
+            }
+            if (item.correctAnswer == null) {
+                item.correctAnswer = '';
+            }
+            comparison[key] = item;
+        });
+
+        const letterKeys = Object.keys(comparison).filter(key => /^q[a-z]$/i.test(key));
+        if (letterKeys.length > 0) {
+            let numericKeys = Object.keys(comparison).filter(key => /q\d+$/i.test(key));
+            if (numericKeys.length === 0) {
+                sources.forEach((source) => {
+                    if (!source) {
+                        return;
+                    }
+                    Object.keys(source).forEach((key) => {
+                        if (/q\d+$/i.test(key)) {
+                            numericKeys.push(key);
+                        }
+                    });
+                });
+                numericKeys = Array.from(new Set(numericKeys));
+            }
+            letterKeys.sort();
+            numericKeys.sort((a, b) => (parseInt(a.replace(/\D/g, ''), 10) || 0) - (parseInt(b.replace(/\D/g, ''), 10) || 0));
+
+            if (numericKeys.length >= letterKeys.length) {
+                let windowStart = 0;
+                let found = false;
+                for (let i = 0; i + letterKeys.length - 1 < numericKeys.length; i += 1) {
+                    const first = parseInt(numericKeys[i].replace(/\D/g, ''), 10);
+                    const last = parseInt(numericKeys[i + letterKeys.length - 1].replace(/\D/g, ''), 10);
+                    if (!Number.isNaN(first) && !Number.isNaN(last) && (last - first + 1) === letterKeys.length) {
+                        windowStart = i;
+                        found = true;
+                        break;
+                    }
+                }
+                const slice = numericKeys.slice(windowStart, windowStart + letterKeys.length);
+                if (found && slice.length === letterKeys.length) {
+                    for (let i = 0; i < letterKeys.length; i += 1) {
+                        const letterKey = letterKeys[i];
+                        const numericKey = slice[i];
+                        if (!numericKey) {
+                            continue;
+                        }
+                        const item = comparison[letterKey] || {};
+                        if (!item.correctAnswer || String(item.correctAnswer).trim() === '') {
+                            const numericItem = comparison[numericKey];
+                            let value = numericItem && numericItem.correctAnswer;
+                            if (!value) {
+                                value = getFromSources(numericKey);
+                            }
+                            if (value != null) {
+                                item.correctAnswer = value;
+                            }
+                        }
+                        if (item.userAnswer == null) {
+                            item.userAnswer = '';
+                        }
+                        if (item.correctAnswer == null) {
+                            item.correctAnswer = '';
+                        }
+                        comparison[letterKey] = item;
+                    }
+                }
+            }
+        }
+
+        return comparison;
+    }
+
+    getLegacyCorrectAnswers(record) {
+        if (record.correctAnswers && Object.keys(record.correctAnswers).length > 0) {
+            return record.correctAnswers;
+        }
+
+        if (record.realData && record.realData.correctAnswers && Object.keys(record.realData.correctAnswers).length > 0) {
+            return record.realData.correctAnswers;
+        }
+
+        if (record.answerComparison) {
+            const extracted = {};
+            Object.keys(record.answerComparison).forEach((key) => {
+                const comparison = record.answerComparison[key];
+                if (comparison && comparison.correctAnswer) {
+                    extracted[key] = comparison.correctAnswer;
+                }
+            });
+            if (Object.keys(extracted).length > 0) {
+                return extracted;
+            }
+        }
+
+        const detailSources = [];
+        if (record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details) {
+            detailSources.push(record.realData.scoreInfo.details);
+        }
+        if (record.scoreInfo && record.scoreInfo.details) {
+            detailSources.push(record.scoreInfo.details);
+        }
+        for (const details of detailSources) {
+            const extracted = {};
+            Object.keys(details || {}).forEach((key) => {
+                const detail = details[key];
+                if (detail && detail.correctAnswer != null && String(detail.correctAnswer).trim() !== '') {
+                    extracted[key] = detail.correctAnswer;
+                }
+            });
+            if (Object.keys(extracted).length > 0) {
+                return extracted;
+            }
+        }
+
+        return {};
+    }
+
+    extractLegacyQuestionNumbers(userAnswers, correctAnswers) {
+        const allQuestions = new Set();
+
+        Object.keys(userAnswers || {}).forEach((key) => {
+            const num = this.extractLegacyNumber(key);
+            if (num != null) {
+                allQuestions.add(num);
+            }
+        });
+
+        Object.keys(correctAnswers || {}).forEach((key) => {
+            const num = this.extractLegacyNumber(key);
+            if (num != null) {
+                allQuestions.add(num);
+            }
+        });
+
+        return Array.from(allQuestions).sort((a, b) => a - b);
+    }
+
+    extractLegacyNumber(key) {
+        const match = typeof key === 'string' ? key.match(/(\d+)/) : null;
+        if (!match) {
+            return null;
+        }
+        const parsed = parseInt(match[1], 10);
+        return Number.isNaN(parsed) ? null : parsed;
+    }
+
+    getLegacyUserAnswer(answers, questionNumber) {
+        const possibleKeys = [`q${questionNumber}`, `question${questionNumber}`, String(questionNumber)];
+        for (const key of possibleKeys) {
+            if (Object.prototype.hasOwnProperty.call(answers, key)) {
+                const answer = answers[key];
+                if (Array.isArray(answer) && answer.length > 0) {
+                    const lastItem = answer[answer.length - 1];
+                    if (lastItem && typeof lastItem === 'object' && lastItem.value != null) {
+                        return lastItem.value;
+                    }
+                    return lastItem;
+                }
+                return answer;
+            }
+        }
+        return null;
+    }
+
+    getLegacyCorrectAnswer(correctAnswers, questionNumber) {
+        const possibleKeys = [`q${questionNumber}`, `question${questionNumber}`, String(questionNumber)];
+        for (const key of possibleKeys) {
+            if (Object.prototype.hasOwnProperty.call(correctAnswers, key)) {
+                return correctAnswers[key];
+            }
+        }
+        return null;
+    }
+
+    compareLegacyAnswers(userAnswer, correctAnswer) {
+        if (userAnswer == null || correctAnswer == null) {
+            return false;
+        }
+        const normalize = (value) => String(value).trim().toLowerCase();
+        return normalize(userAnswer) === normalize(correctAnswer);
+    }
+
+    truncateAnswer(value, maxLength = 50) {
+        if (value == null) {
+            return '';
+        }
+        const str = String(value);
+        if (str.length <= maxLength) {
+            return str;
+        }
+        return `${str.substring(0, maxLength)}...`;
     }
 
     escapeHtml(value) {
