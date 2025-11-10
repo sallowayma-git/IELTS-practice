@@ -3270,8 +3270,14 @@ async function handleLibraryUpload(options, files) {
             await savePathMapForConfiguration(targetKey, newIndex, { overrideMap: derivedPathMap, setActive: true });
             await saveLibraryConfiguration(configName, targetKey, newIndex.length);
             await setActiveLibraryConfiguration(targetKey);
-            showMessage('新的题库配置已创建并激活；正在重新加载...', 'success');
-            setTimeout(() => { location.reload(); }, 800);
+            try {
+                await applyLibraryConfiguration(targetKey, newIndex, { skipConfigRefresh: false });
+                showMessage('新的题库配置已创建并激活', 'success');
+            } catch (applyError) {
+                console.warn('[LibraryLoader] 自动应用新题库失败，回退为整页刷新', applyError);
+                showMessage('新的题库已保存，正在刷新界面...', 'warning');
+                setTimeout(() => { location.reload(); }, 500);
+            }
             return;
         }
 
