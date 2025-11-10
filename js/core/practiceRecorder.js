@@ -259,9 +259,11 @@ class PracticeRecorder {
      * 处理来自考试窗口的消息
      */
     handleExamMessage(event) {
-        const { type, data } = event.data || {};
-        
-        if (!type || !data) return;
+        const normalized = this.normalizeIncomingMessage(event && event.data);
+        if (!normalized) {
+            return;
+        }
+        const { type, data } = normalized;
         
         switch (type) {
             case 'session_started':
@@ -284,7 +286,162 @@ class PracticeRecorder {
             case 'session_error':
                 this.handleSessionError(data);
                 break;
+            default:
+                break;
         }
+    }
+
+    normalizeIncomingMessage(rawMessage) {
+        if (!rawMessage || typeof rawMessage !== 'object') {
+            return null;
+        }
+
+        const rawType = typeof rawMessage.type === 'string' ? rawMessage.type.trim() : '';
+        if (!rawType) {
+            return null;
+        }
+
+        const typeMap = {
+            PRACTICE_COMPLETE: 'session_completed',
+            practice_complete: 'session_completed',
+            practice_completed: 'session_completed',
+            PracticeComplete: 'session_completed',
+            SESSION_COMPLETE: 'session_completed',
+            session_complete: 'session_completed',
+            sessionCompleted: 'session_completed',
+            SESSION_PROGRESS: 'session_progress',
+            session_progress: 'session_progress',
+            practice_progress: 'session_progress'
+        };
+
+        const normalizedType = typeMap[rawType] || rawType;
+        const payload = rawMessage.data || {};
+
+        if (normalizedType === 'session_completed') {
+            const shaped = this.ensureCompletionPayloadShape(payload);
+            if (!shaped) {
+                console.warn('[PracticeRecorder] 收到无法识别的练习完成数据，已忽略');
+                return null;
+            }
+            return { type: 'session_completed', data: shaped };
+        }
+
+        if (!payload || typeof payload !== 'object') {
+            return null;
+        }
+
+        return { type: normalizedType, data: payload };
+    }
+
+    ensureCompletionPayloadShape(data) {
+        if (!data || typeof data !== 'object') {
+            return null;
+        }
+
+        if (data.examId && data.results) {
+            return data;
+        }
+
+        return this.normalizePracticeCompletePayload(data);
+    }
+
+    normalizePracticeCompletePayload(payload) {
+        if (!payload || typeof payload !== 'object') {
+            return null;
+        }
+
+        const scoreInfo = payload.scoreInfo || {};
+        const toNumber = (value, fallback = 0) => {
+            const num = Number(value);
+            return Number.isFinite(num) ? num : fallback;
+        };
+
+        const normalizedAnswers = this.normalizeAnswerCollection(payload.answers, payload.correctAnswers);
+        const totalQuestions = toNumber(
+            payload.totalQuestions ?? scoreInfo.total ?? scoreInfo.totalQuestions,
+            normalizedAnswers.length
+        );
+        const correctAnswers = toNumber(
+            payload.correctAnswersCount ?? scoreInfo.correct ?? scoreInfo.score ?? payload.score,
+            0
+        );
+        const accuracy = typeof payload.accuracy === 'number'
+            ? payload.accuracy
+            : (typeof scoreInfo.accuracy === 'number'
+                ? scoreInfo.accuracy
+                : (totalQuestions > 0 ? correctAnswers / totalQuestions : 0));
+        const percentage = typeof scoreInfo.percentage === 'number'
+            ? scoreInfo.percentage
+            : Math.round(accuracy * 100);
+        const duration = toNumber(
+            payload.duration,
+            (payload.endTime && payload.startTime)
+                ? Math.round((new Date(payload.endTime) - new Date(payload.startTime)) / 1000)
+                : 0
+        );
+
+        const examId = payload.examId || payload.metadata?.examId || null;
+        if (!examId) {
+            return null;
+        }
+
+        return {
+            examId,
+            sessionId: payload.sessionId || null,
+            results: {
+                score: toNumber(scoreInfo.score, correctAnswers),
+                totalQuestions,
+                correctAnswers,
+                accuracy,
+                percentage,
+                duration,
+                answers: normalizedAnswers,
+                questionTypePerformance: payload.questionTypePerformance || {},
+                interactions: payload.interactions || [],
+                startTime: payload.startTime || null,
+                endTime: payload.endTime || null,
+                metadata: payload.metadata || {},
+                source: scoreInfo.source || payload.pageType || 'practice_page'
+            }
+        };
+    }
+
+    normalizeAnswerCollection(answers = {}, correctAnswers = {}) {
+        if (Array.isArray(answers)) {
+            return answers;
+        }
+        const list = [];
+        const normalizedCorrect = correctAnswers && typeof correctAnswers === 'object' ? correctAnswers : {};
+        const entries = answers && typeof answers === 'object'
+            ? Object.entries(answers)
+            : [];
+        const now = new Date().toISOString();
+
+        for (const [rawKey, rawValue] of entries) {
+            const normalizedKey = rawKey && rawKey.startsWith('q') ? rawKey : `q${rawKey}`;
+            const answerValue = (rawValue && typeof rawValue === 'object' && 'answer' in rawValue)
+                ? rawValue.answer
+                : rawValue;
+            const expected = normalizedCorrect[rawKey]
+                ?? normalizedCorrect[normalizedKey]
+                ?? null;
+            const normalizedAnswerValue = answerValue == null ? '' : String(answerValue).trim().toLowerCase();
+            const normalizedExpectedValue = expected == null ? '' : String(expected).trim().toLowerCase();
+            const isCorrect = expected === null
+                ? undefined
+                : normalizedAnswerValue === normalizedExpectedValue;
+
+            list.push({
+                questionId: normalizedKey,
+                answer: answerValue,
+                correct: isCorrect,
+                timeSpent: (rawValue && typeof rawValue.timeSpent === 'number') ? rawValue.timeSpent : 0,
+                questionType: (rawValue && rawValue.questionType) || 'unknown',
+                timestamp: now
+            });
+        }
+
+        return list;
     }
 
     /**
@@ -385,22 +542,39 @@ class PracticeRecorder {
      * 处理会话完成
      */
     async handleSessionCompleted(data) {
-        const { examId, results } = data;
+        const payload = this.ensureCompletionPayloadShape(data);
+        if (!payload) {
+            console.warn('[PracticeRecorder] 无法处理会话完成事件：缺少必要数据');
+            return;
+        }
 
-        if (!this.activeSessions.has(examId)) return;
+        const { examId, results, sessionId } = payload;
+        if (!examId) {
+            console.warn('[PracticeRecorder] 完成事件缺少 examId，已忽略');
+            return;
+        }
+
+        if (!this.activeSessions.has(examId)) {
+            console.warn('[PracticeRecorder] 未找到匹配的活动会话，examId = %s', examId);
+            return;
+        }
 
         let session = this.activeSessions.get(examId);
-        const endTime = data.endTime && !Number.isNaN(new Date(data.endTime).getTime())
+        if (sessionId && session && session.sessionId !== sessionId) {
+            session.sessionId = sessionId;
+        }
+
+        const resolvedEndTime = data && data.endTime
             ? new Date(data.endTime).toISOString()
-            : new Date().toISOString();
+            : (results && results.endTime ? new Date(results.endTime).toISOString() : new Date().toISOString());
 
         const examEntry = this.lookupExamIndexEntry(examId);
         const type = this.resolvePracticeType({ ...session, examId }, examEntry);
-        const recordDate = this.resolveRecordDate({ ...session, endTime }, endTime);
+        const recordDate = this.resolveRecordDate({ ...session, endTime: resolvedEndTime }, resolvedEndTime);
         const metadata = this.buildRecordMetadata({ ...session, examId }, examEntry, type);
 
         // 计算总用时
-        const duration = new Date(endTime) - new Date(session.startTime);
+        const duration = new Date(resolvedEndTime) - new Date(session.startTime);
         
         // 创建练习记录
         const practiceRecord = {
@@ -408,19 +582,21 @@ class PracticeRecorder {
             examId,
             sessionId: session.sessionId,
             startTime: session.startTime,
-            endTime,
+            endTime: resolvedEndTime,
             duration: Math.floor(duration / 1000), // 秒
             status: 'completed',
             type,
             date: recordDate,
-            score: results.score || 0,
-            totalQuestions: results.totalQuestions || session.progress.totalQuestions,
-            correctAnswers: results.correctAnswers || 0,
-            accuracy: results.accuracy || 0,
-            answers: results.answers || session.answers,
-            questionTypePerformance: results.questionTypePerformance || {},
+            score: results?.score || 0,
+            totalQuestions: results?.totalQuestions || session.progress.totalQuestions,
+            correctAnswers: results?.correctAnswers || 0,
+            accuracy: results?.accuracy || 0,
+            answers: (results && Array.isArray(results.answers) && results.answers.length)
+                ? results.answers
+                : (session.answers || []),
+            questionTypePerformance: results?.questionTypePerformance || {},
             metadata,
-            createdAt: endTime
+            createdAt: resolvedEndTime
         };
         
         try {
@@ -1682,4 +1858,3 @@ class PracticeRecorder {
 
 // 确保全局可用
 window.PracticeRecorder = PracticeRecorder;
-
