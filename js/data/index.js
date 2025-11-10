@@ -17,6 +17,16 @@
         };
     }
 
+    function createDefaultVocabConfig() {
+        return {
+            dailyNew: 20,
+            reviewLimit: 100,
+            masteryCount: 4,
+            theme: 'auto',
+            notify: true
+        };
+    }
+
     function bootstrap() {
         if (!window.storage) {
             console.warn('[data/index] StorageManager 未就绪，延迟初始化数据仓库');
@@ -78,6 +88,24 @@
                 validators: [
                     (value) => Array.isArray(value) || 'exam_index 必须为数组'
                 ]
+            },
+            vocab_words: {
+                defaultValue: () => [],
+                validators: [
+                    (value) => Array.isArray(value) || 'vocab_words 必须为数组'
+                ]
+            },
+            vocab_user_config: {
+                defaultValue: createDefaultVocabConfig,
+                validators: [
+                    (value) => (value && typeof value === 'object' && !Array.isArray(value)) || 'vocab_user_config 必须为对象'
+                ]
+            },
+            vocab_review_queue: {
+                defaultValue: () => [],
+                validators: [
+                    (value) => Array.isArray(value) || 'vocab_review_queue 必须为数组'
+                ]
             }
         });
 
@@ -111,6 +139,7 @@
 
         ExamData.registry = registry;
         ExamData.createDefaultUserStats = createDefaultUserStats;
+        ExamData.createDefaultVocabConfig = createDefaultVocabConfig;
         console.log('[data/index] 数据仓库初始化完成');
     }
 

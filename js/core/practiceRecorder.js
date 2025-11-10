@@ -758,12 +758,19 @@ class PracticeRecorder {
         const startTime = recordData.startTime && !Number.isNaN(new Date(recordData.startTime).getTime())
             ? new Date(recordData.startTime).toISOString()
             : recordDate;
+        const resolvedTitle = recordData.title
+            || metadata.examTitle
+            || metadata.title
+            || examEntry?.title
+            || recordData.examId
+            || '未命名练习';
 
         return {
             // 基础信息
             id: recordData.id || this.generateRecordId(),
             examId: recordData.examId,
             sessionId: recordData.sessionId,
+            title: resolvedTitle,
 
             // 时间信息
             startTime,
