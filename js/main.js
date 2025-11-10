@@ -86,12 +86,58 @@ function getPracticeRecordsState() {
 }
 
 function setPracticeRecordsState(records) {
+    let normalized;
     if (stateService) {
-        return stateService.setPracticeRecords(records);
+        normalized = stateService.setPracticeRecords(records);
+    } else {
+        normalized = Array.isArray(records) ? records.slice() : [];
+        try { window.practiceRecords = normalized; } catch (_) {}
     }
-    const normalized = Array.isArray(records) ? records : [];
-    try { window.practiceRecords = normalized; } catch (_) {}
-    return normalized;
+    const finalRecords = Array.isArray(normalized) ? normalized : [];
+    updateBrowseAnchorsFromRecords(finalRecords);
+    return finalRecords;
+}
+
+function updateBrowseAnchorsFromRecords(records) {
+    const list = Array.isArray(records) ? records : [];
+    const examIndex = getExamIndexState();
+    const updates = {};
+    const seenKeys = new Set();
+
+    list.forEach((record) => {
+        const info = resolveRecordExamInfo(record, examIndex);
+        if (!info) {
+            return;
+        }
+        const key = buildBrowseFilterKey(info.category, info.type);
+        const timestamp = deriveRecordTimestamp(record);
+        if (!Number.isFinite(timestamp)) {
+            return;
+        }
+        const anchor = {
+            examId: info.examId || null,
+            title: info.title || null,
+            timestamp
+        };
+        const existing = updates[key];
+        if (!existing || timestamp > existing.timestamp) {
+            updates[key] = anchor;
+        }
+        seenKeys.add(key);
+    });
+
+    const currentAnchors = getBrowseViewPreferences().listAnchors || {};
+    Object.keys(currentAnchors || {}).forEach((key) => {
+        if (!seenKeys.has(key)) {
+            updates[key] = null;
+        }
+    });
+
+    if (Object.keys(updates).length === 0) {
+        return;
+    }
+
+    saveBrowseViewPreferences({ listAnchors: updates });
 }
 
 function getFilteredExamsState() {
@@ -124,9 +170,15 @@ function setBrowseFilterState(category = 'all', type = 'all') {
         type: typeof type === 'string' ? type : 'all'
     };
     if (stateService) {
-        return stateService.setBrowseFilter(normalized);
+        stateService.setBrowseFilter(normalized);
+        const latest = stateService.getBrowseFilter();
+        const nextCategory = typeof latest?.category === 'string' ? latest.category : normalized.category;
+        const nextType = typeof latest?.type === 'string' ? latest.type : normalized.type;
+        persistBrowseFilter(nextCategory, nextType);
+        return { category: nextCategory, type: nextType };
     }
     syncGlobalBrowseState(normalized.category, normalized.type);
+    persistBrowseFilter(normalized.category, normalized.type);
     return normalized;
 }
 
@@ -194,6 +246,725 @@ function clearSelectedRecordsState() {
 
 
 
+
+const BROWSE_VIEW_PREFERENCE_KEY = 'browse_view_preferences_v2';
+let browsePreferencesCache = null;
+let currentBrowseScrollElement = null;
+let removeBrowseScrollListener = null;
+let pendingBrowseAutoScroll = null;
+let browsePreferenceUiInitialized = false;
+let pendingBrowseScrollSnapshot = null;
+
+function normalizeCategoryKey(category) {
+    if (!category || typeof category !== 'string') {
+        return 'all';
+    }
+    const trimmed = category.trim();
+    if (!trimmed) {
+        return 'all';
+    }
+    const match = trimmed.match(/^(P\d)$/i);
+    if (match) {
+        return match[1].toUpperCase();
+    }
+    const embedded = trimmed.match(/\b(P[1-4])\b/i);
+    if (embedded) {
+        return embedded[1].toUpperCase();
+    }
+    return trimmed;
+}
+
+function normalizeExamType(type) {
+    if (!type || typeof type !== 'string') {
+        return 'all';
+    }
+    const lower = type.toLowerCase();
+    if (lower === 'reading' || lower === 'listening') {
+        return lower;
+    }
+    if (lower.includes('阅读')) {
+        return 'reading';
+    }
+    if (lower.includes('听力')) {
+        return 'listening';
+    }
+    return 'all';
+}
+
+function buildBrowseFilterKey(category, type) {
+    return `${normalizeCategoryKey(category)}|${normalizeExamType(type)}`;
+}
+
+function getDefaultBrowsePreferences() {
+    return {
+        scrollPositions: {},
+        listAnchors: {},
+        autoScrollEnabled: true,
+        lastFilter: null
+    };
+}
+
+function loadBrowsePreferencesFromStorage() {
+    try {
+        const raw = localStorage.getItem(BROWSE_VIEW_PREFERENCE_KEY);
+        if (!raw) {
+            return getDefaultBrowsePreferences();
+        }
+        const parsed = JSON.parse(raw);
+        const defaults = getDefaultBrowsePreferences();
+        const next = Object.assign({}, defaults, parsed || {});
+        if (!next.scrollPositions || typeof next.scrollPositions !== 'object') {
+            next.scrollPositions = {};
+        }
+        next.listAnchors = mergeBrowseAnchors({}, next.listAnchors);
+        return next;
+    } catch (error) {
+        console.warn('[BrowsePreferences] 无法读取浏览偏好，使用默认值', error);
+        return getDefaultBrowsePreferences();
+    }
+}
+
+function getBrowseViewPreferences() {
+    if (!browsePreferencesCache) {
+        browsePreferencesCache = loadBrowsePreferencesFromStorage();
+    }
+    return browsePreferencesCache;
+}
+
+function saveBrowseViewPreferences(partial = {}) {
+    const current = getBrowseViewPreferences();
+    const next = {
+        scrollPositions: Object.assign({}, current.scrollPositions, partial.scrollPositions || {}),
+        listAnchors: mergeBrowseAnchors(current.listAnchors, partial.listAnchors),
+        autoScrollEnabled: Object.prototype.hasOwnProperty.call(partial, 'autoScrollEnabled')
+            ? !!partial.autoScrollEnabled
+            : current.autoScrollEnabled,
+        lastFilter: Object.prototype.hasOwnProperty.call(partial, 'lastFilter')
+            ? (partial.lastFilter || null)
+            : current.lastFilter
+    };
+
+    try {
+        localStorage.setItem(BROWSE_VIEW_PREFERENCE_KEY, JSON.stringify(next));
+        browsePreferencesCache = next;
+    } catch (error) {
+        console.warn('[BrowsePreferences] 保存浏览偏好失败', error);
+        browsePreferencesCache = next;
+    }
+    return browsePreferencesCache;
+}
+
+function captureBrowseScrollSnapshot(category, type, scrollTop) {
+    const normalizedCategory = normalizeCategoryKey(category);
+    const normalizedType = normalizeExamType(type);
+    const sanitizedScrollTop = Math.max(0, Math.round(scrollTop || 0));
+    pendingBrowseScrollSnapshot = {
+        category: normalizedCategory,
+        type: normalizedType,
+        scrollTop: sanitizedScrollTop
+    };
+    return pendingBrowseScrollSnapshot;
+}
+
+function persistBrowseScrollSnapshot(snapshot) {
+    if (!snapshot) {
+        return;
+    }
+    const key = buildBrowseFilterKey(snapshot.category, snapshot.type);
+    saveBrowseViewPreferences({
+        scrollPositions: { [key]: snapshot.scrollTop }
+    });
+}
+
+function flushPendingBrowseScrollPosition() {
+    persistBrowseScrollSnapshot(pendingBrowseScrollSnapshot);
+}
+
+function updateBrowsePreferenceIndicator(enabled) {
+    const trigger = document.getElementById('browse-title-trigger');
+    if (!trigger) {
+        return;
+    }
+    const isEnabled = !!enabled;
+    trigger.classList.toggle('active', isEnabled);
+    trigger.setAttribute('aria-pressed', isEnabled ? 'true' : 'false');
+}
+
+function sanitizeScrollPositionMap(map) {
+    if (!map || typeof map !== 'object') {
+        return {};
+    }
+    const sanitized = {};
+    for (const [key, value] of Object.entries(map)) {
+        if (typeof key !== 'string' || !key) {
+            continue;
+        }
+        const numeric = Number(value);
+        if (Number.isFinite(numeric) && numeric >= 0) {
+            sanitized[key] = Math.round(numeric);
+        }
+    }
+    return sanitized;
+}
+
+function mergeBrowseAnchors(currentAnchors = {}, updates) {
+    const next = Object.assign({}, currentAnchors);
+    if (!updates || typeof updates !== 'object') {
+        return next;
+    }
+
+    for (const [key, value] of Object.entries(updates)) {
+        if (typeof key !== 'string' || !key) {
+            continue;
+        }
+        if (value === null) {
+            delete next[key];
+            continue;
+        }
+        if (!value || typeof value !== 'object') {
+            continue;
+        }
+
+        const normalized = {};
+        if (typeof value.examId === 'string' && value.examId.trim()) {
+            normalized.examId = value.examId.trim();
+        }
+        if (typeof value.title === 'string' && value.title.trim()) {
+            normalized.title = value.title.trim();
+        }
+        if (Number.isFinite(value.scrollTop) && value.scrollTop >= 0) {
+            normalized.scrollTop = Math.round(value.scrollTop);
+        }
+        const ts = Number(value.timestamp);
+        normalized.timestamp = Number.isFinite(ts) && ts > 0 ? Math.round(ts) : Date.now();
+
+        if (!normalized.examId && !normalized.title && typeof normalized.scrollTop !== 'number') {
+            delete next[key];
+            continue;
+        }
+
+        next[key] = normalized;
+    }
+
+    return next;
+}
+
+function getBrowseListAnchor(category, type) {
+    const prefs = getBrowseViewPreferences();
+    const key = buildBrowseFilterKey(category, type);
+    const anchor = prefs.listAnchors && prefs.listAnchors[key];
+    if (!anchor || typeof anchor !== 'object') {
+        return null;
+    }
+    const result = {};
+    if (typeof anchor.examId === 'string' && anchor.examId.trim()) {
+        result.examId = anchor.examId.trim();
+    }
+    if (typeof anchor.title === 'string' && anchor.title.trim()) {
+        result.title = anchor.title.trim();
+    }
+    if (Number.isFinite(anchor.timestamp) && anchor.timestamp > 0) {
+        result.timestamp = Math.round(anchor.timestamp);
+    }
+    if (!result.examId && !result.title) {
+        return null;
+    }
+    return result;
+}
+
+function persistBrowseFilter(category, type) {
+    const normalizedCategory = normalizeCategoryKey(category);
+    const normalizedType = normalizeExamType(type);
+    saveBrowseViewPreferences({
+        lastFilter: { category: normalizedCategory, type: normalizedType }
+    });
+}
+
+function getPersistedBrowseFilter() {
+    const prefs = getBrowseViewPreferences();
+    if (!prefs.lastFilter) {
+        return null;
+    }
+    return {
+        category: normalizeCategoryKey(prefs.lastFilter.category),
+        type: normalizeExamType(prefs.lastFilter.type)
+    };
+}
+
+function setBrowseTitle(text) {
+    const titleEl = document.getElementById('browse-title');
+    if (titleEl) {
+        titleEl.textContent = text;
+    }
+}
+
+if (typeof window !== 'undefined') {
+    window.setBrowseTitle = setBrowseTitle;
+}
+
+function formatBrowseTitle(category = 'all', type = 'all') {
+    const normalizedCategory = normalizeCategoryKey(category);
+    const normalizedType = normalizeExamType(type);
+    if (normalizedCategory === 'all' && normalizedType === 'all') {
+        return '题库浏览';
+    }
+
+    const parts = [];
+    if (normalizedCategory !== 'all') {
+        parts.push(normalizedCategory);
+    }
+    if (normalizedType !== 'all') {
+        parts.push(normalizedType === 'reading' ? '阅读' : '听力');
+    }
+    parts.push('题库浏览');
+    return parts.join(' ');
+}
+
+function debounce(fn, wait) {
+    let timer = null;
+    return function debounced(...args) {
+        if (timer) {
+            clearTimeout(timer);
+        }
+        timer = setTimeout(() => {
+            timer = null;
+            fn.apply(this, args);
+        }, wait);
+    };
+}
+
+function recordBrowseScrollPosition(category, type, scrollTop) {
+    const snapshot = captureBrowseScrollSnapshot(category, type, scrollTop);
+    persistBrowseScrollSnapshot(snapshot);
+}
+
+function ensureBrowseScrollListener(scrollEl) {
+    if (!scrollEl) {
+        return;
+    }
+    if (currentBrowseScrollElement === scrollEl) {
+        return;
+    }
+    if (typeof removeBrowseScrollListener === 'function') {
+        removeBrowseScrollListener();
+        removeBrowseScrollListener = null;
+    }
+
+    const persist = debounce(() => {
+        flushPendingBrowseScrollPosition();
+    }, 150);
+
+    const handleScroll = () => {
+        const category = getCurrentCategory();
+        const type = getCurrentExamType();
+        captureBrowseScrollSnapshot(category, type, scrollEl.scrollTop);
+        persist();
+    };
+
+    const initialCategory = getCurrentCategory();
+    const initialType = getCurrentExamType();
+    captureBrowseScrollSnapshot(initialCategory, initialType, scrollEl.scrollTop);
+
+    scrollEl.addEventListener('scroll', handleScroll, { passive: true });
+    currentBrowseScrollElement = scrollEl;
+    removeBrowseScrollListener = () => {
+        try { scrollEl.removeEventListener('scroll', handleScroll); } catch (_) {}
+        currentBrowseScrollElement = null;
+        flushPendingBrowseScrollPosition();
+    };
+}
+
+if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', flushPendingBrowseScrollPosition);
+    window.addEventListener('beforeunload', flushPendingBrowseScrollPosition);
+}
+
+if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            flushPendingBrowseScrollPosition();
+        }
+    });
+}
+
+function requestBrowseAutoScroll(category, type, source = 'category-card') {
+    pendingBrowseAutoScroll = {
+        category: normalizeCategoryKey(category),
+        type: normalizeExamType(type),
+        source,
+        timestamp: Date.now()
+    };
+}
+
+function clearPendingBrowseAutoScroll() {
+    pendingBrowseAutoScroll = null;
+}
+
+if (typeof window !== 'undefined') {
+    window.clearPendingBrowseAutoScroll = clearPendingBrowseAutoScroll;
+}
+
+function consumeBrowseAutoScroll(category, type) {
+    if (!pendingBrowseAutoScroll) {
+        return null;
+    }
+    const now = Date.now();
+    if (now - pendingBrowseAutoScroll.timestamp > 5000) {
+        pendingBrowseAutoScroll = null;
+        return null;
+    }
+    const normalizedCategory = normalizeCategoryKey(category);
+    const normalizedType = normalizeExamType(type);
+    const categoryMatch = pendingBrowseAutoScroll.category === normalizedCategory;
+    const typeMatch = pendingBrowseAutoScroll.type === 'all'
+        || pendingBrowseAutoScroll.type === normalizedType;
+    if (categoryMatch && typeMatch) {
+        const context = pendingBrowseAutoScroll;
+        pendingBrowseAutoScroll = null;
+        return context;
+    }
+    return null;
+}
+
+function escapeCssIdentifier(value) {
+    if (typeof value !== 'string') {
+        return '';
+    }
+    if (window.CSS && typeof window.CSS.escape === 'function') {
+        return window.CSS.escape(value);
+    }
+    return value.replace(/[^a-zA-Z0-9_-]/g, '\$&');
+}
+
+function deriveRecordTimestamp(record) {
+    if (!record || typeof record !== 'object') {
+        return Number.NaN;
+    }
+    const candidates = [];
+    if (record.date) candidates.push(record.date);
+    if (record.endTime) candidates.push(record.endTime);
+    if (record.completedAt) candidates.push(record.completedAt);
+    if (record.timestamp) candidates.push(record.timestamp);
+    if (record.startTime) candidates.push(record.startTime);
+    const realData = record.realData || {};
+    if (realData.completedAt) candidates.push(realData.completedAt);
+    if (realData.endTime) candidates.push(realData.endTime);
+    if (realData.date) candidates.push(realData.date);
+
+    for (const value of candidates) {
+        if (value == null) {
+            continue;
+        }
+        if (typeof value === 'number') {
+            if (Number.isFinite(value)) {
+                return value;
+            }
+            continue;
+        }
+        const parsed = Date.parse(value);
+        if (!Number.isNaN(parsed)) {
+            return parsed;
+        }
+    }
+    return Number.NaN;
+}
+
+function resolveRecordExamInfo(record, examIndex) {
+    if (!record || typeof record !== 'object') {
+        return null;
+    }
+    const examId = record.examId || record.id || null;
+    let category = normalizeCategoryKey(record.category || record.examCategory);
+    let type = normalizeExamType(record.type || record.examType);
+    let title = record.title || record.examTitle || null;
+
+    if (category === 'all' || !title || type === 'all') {
+        const list = Array.isArray(examIndex) ? examIndex : [];
+        let entry = null;
+        if (examId) {
+            entry = list.find((exam) => exam && exam.id === examId);
+        }
+        if (!entry && title) {
+            entry = list.find((exam) => exam && exam.title === title);
+        }
+        if (entry) {
+            if (category === 'all' && entry.category) {
+                category = normalizeCategoryKey(entry.category);
+            }
+            if (type === 'all' && entry.type) {
+                type = normalizeExamType(entry.type);
+            }
+            if (!title && entry.title) {
+                title = entry.title;
+            }
+        }
+    }
+
+    if (!examId && !title) {
+        return null;
+    }
+
+    return {
+        examId,
+        category,
+        type,
+        title: title || examId
+    };
+}
+
+function findLastPracticeExamEntry(exams, category, type) {
+    const normalizedCategory = normalizeCategoryKey(category);
+    const normalizedType = normalizeExamType(type);
+    const records = getPracticeRecordsState();
+    if (!Array.isArray(records) || records.length === 0) {
+        return null;
+    }
+
+    const examIndex = getExamIndexState();
+    let latest = null;
+    let latestTimestamp = Number.NEGATIVE_INFINITY;
+
+    records.forEach((record) => {
+        const info = resolveRecordExamInfo(record, examIndex);
+        if (!info) {
+            return;
+        }
+        if (normalizedCategory !== 'all' && info.category !== normalizedCategory) {
+            return;
+        }
+        if (normalizedType !== 'all' && info.type !== normalizedType) {
+            return;
+        }
+        const timestamp = deriveRecordTimestamp(record);
+        if (!Number.isFinite(timestamp)) {
+            return;
+        }
+        if (timestamp > latestTimestamp) {
+            latestTimestamp = timestamp;
+            latest = info;
+        }
+    });
+
+    if (!latest) {
+        return null;
+    }
+
+    const list = Array.isArray(exams) ? exams : [];
+    const index = list.findIndex((exam) => {
+        if (!exam) {
+            return false;
+        }
+        if (latest.examId && exam.id === latest.examId) {
+            return true;
+        }
+        if (latest.title && exam.title === latest.title) {
+            return true;
+        }
+        return false;
+    });
+
+    if (index === -1) {
+        return null;
+    }
+
+    return { index, exam: list[index] };
+}
+
+function findExamEntryByAnchor(exams, anchor) {
+    if (!anchor || typeof anchor !== 'object') {
+        return null;
+    }
+    const list = Array.isArray(exams) ? exams : [];
+    let index = -1;
+    if (anchor.examId) {
+        index = list.findIndex((exam) => exam && exam.id === anchor.examId);
+    }
+    if (index === -1 && anchor.title) {
+        index = list.findIndex((exam) => exam && exam.title === anchor.title);
+    }
+    if (index === -1) {
+        return null;
+    }
+    return { index, exam: list[index] };
+}
+
+function scrollExamListToEntry(scrollEl, entry) {
+    if (!scrollEl || !entry || entry.index == null || entry.index < 0) {
+        return false;
+    }
+    const exam = entry.exam || {};
+    let selector = null;
+    if (exam.id) {
+        selector = `[data-exam-id="${escapeCssIdentifier(exam.id)}"]`;
+    }
+
+    let element = selector ? scrollEl.querySelector(selector) : null;
+    if (!element) {
+        const items = scrollEl.querySelectorAll('.exam-item');
+        element = Array.from(items).find((item) => {
+            const titleNode = item.querySelector('h4');
+            return titleNode && titleNode.textContent && exam.title && titleNode.textContent.trim() === exam.title.trim();
+        }) || null;
+    }
+
+    if (!element) {
+        return false;
+    }
+
+    const targetTop = element.offsetTop - (scrollEl.clientHeight / 2) + (element.offsetHeight / 2);
+    scrollEl.scrollTop = Math.max(0, targetTop);
+    return true;
+}
+
+function restoreBrowseScrollPosition(scrollEl, category, type) {
+    const prefs = getBrowseViewPreferences();
+    const key = buildBrowseFilterKey(category, type);
+    const stored = prefs.scrollPositions[key];
+    if (typeof stored === 'number' && stored >= 0) {
+        scrollEl.scrollTop = stored;
+        return true;
+    }
+    return false;
+}
+
+function handlePostExamListRender(exams, { category, type } = {}) {
+    const scrollEl = document.querySelector('#exam-list-container .exam-list');
+    if (!scrollEl) {
+        return;
+    }
+
+    ensureBrowseScrollListener(scrollEl);
+
+    const normalizedCategory = normalizeCategoryKey(category || getCurrentCategory());
+    const normalizedType = normalizeExamType(type || getCurrentExamType());
+    const autoScrollContext = consumeBrowseAutoScroll(normalizedCategory, normalizedType);
+    const prefs = getBrowseViewPreferences();
+
+    const applyScroll = () => {
+        const performFallback = () => {
+            if (!restoreBrowseScrollPosition(scrollEl, normalizedCategory, normalizedType)) {
+                if (prefs.autoScrollEnabled) {
+                    scrollEl.scrollTop = 0;
+                }
+            }
+        };
+
+        const attemptScrollToEntry = (entry, remaining, onFail) => {
+            if (scrollExamListToEntry(scrollEl, entry)) {
+                recordBrowseScrollPosition(normalizedCategory, normalizedType, scrollEl.scrollTop);
+                return;
+            }
+            if (remaining > 0) {
+                setTimeout(() => attemptScrollToEntry(entry, remaining - 1, onFail), 80);
+                return;
+            }
+            if (typeof onFail === 'function') {
+                onFail();
+            }
+        };
+
+        if (prefs.autoScrollEnabled && normalizedCategory !== 'all') {
+            const entry = findLastPracticeExamEntry(exams, normalizedCategory, normalizedType);
+            if (entry) {
+                const retries = autoScrollContext ? 7 : 4;
+                attemptScrollToEntry(entry, retries, performFallback);
+                return;
+            }
+            const anchor = getBrowseListAnchor(normalizedCategory, normalizedType);
+            if (anchor) {
+                const entryFromAnchor = findExamEntryByAnchor(exams, anchor);
+                if (entryFromAnchor) {
+                    attemptScrollToEntry(entryFromAnchor, 3, performFallback);
+                    return;
+                }
+            }
+        }
+
+        performFallback();
+    };
+
+    if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(applyScroll);
+    } else {
+        applyScroll();
+    }
+}
+
+function setupBrowsePreferenceUI() {
+    const trigger = document.getElementById('browse-title-trigger');
+    const panel = document.getElementById('browse-preference-panel');
+    const checkbox = document.getElementById('browse-remember-position');
+
+    if (!trigger || !panel || !checkbox) {
+        return;
+    }
+
+    const prefs = getBrowseViewPreferences();
+    checkbox.checked = !!prefs.autoScrollEnabled;
+    updateBrowsePreferenceIndicator(prefs.autoScrollEnabled);
+
+    if (browsePreferenceUiInitialized) {
+        return;
+    }
+
+    browsePreferenceUiInitialized = true;
+
+    const closePanel = () => {
+        panel.hidden = true;
+        trigger.setAttribute('aria-expanded', 'false');
+    };
+
+    const togglePanel = () => {
+        const willOpen = panel.hidden;
+        panel.hidden = !willOpen;
+        trigger.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    };
+
+    trigger.addEventListener('click', (event) => {
+        event.preventDefault();
+        togglePanel();
+    });
+
+    trigger.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            togglePanel();
+        }
+    });
+
+    document.addEventListener('click', (event) => {
+        if (panel.hidden) {
+            return;
+        }
+        if (event.target === trigger || trigger.contains(event.target)) {
+            return;
+        }
+        if (panel.contains(event.target)) {
+            return;
+        }
+        closePanel();
+    });
+
+    checkbox.addEventListener('change', (event) => {
+        const enabled = !!event.target.checked;
+        const next = saveBrowseViewPreferences({ autoScrollEnabled: enabled });
+        updateBrowsePreferenceIndicator(next.autoScrollEnabled);
+        if (typeof showMessage === 'function') {
+            const message = enabled ? '已开启列表位置记录，将自动恢复到上次答题的位置' : '已关闭列表位置记录';
+            showMessage(message, 'info');
+        }
+        panel.hidden = true;
+        trigger.setAttribute('aria-expanded', 'false');
+    });
+}
+
+if (typeof window !== 'undefined') {
+    window.handlePostExamListRender = handlePostExamListRender;
+    window.requestBrowseAutoScroll = requestBrowseAutoScroll;
+    window.setupBrowsePreferenceUI = setupBrowsePreferenceUI;
+}
+
+
 const preferredFirstExamByCategory = {
   'P1_reading': { id: 'p1-09', title: 'Listening to the Ocean 海洋探测' },
   'P2_reading': { id: 'p2-high-12', title: 'The fascinating world of attine ants 切叶蚁' },
@@ -227,6 +998,11 @@ function ensureExamListView() {
           containerSelector: '.main-nav',
           activeClass: 'active',
           syncOnNavigate: true,
+          onRepeatNavigate: function onRepeatNavigate(viewName) {
+              if (viewName === 'browse') {
+                  resetBrowseViewToAll();
+              }
+          },
           onNavigate: function onNavigate(viewName) {
               if (typeof window.showView === 'function') {
                   window.showView(viewName);
@@ -260,6 +1036,8 @@ async function initializeLegacyComponents() {
     } catch (error) {
         console.warn('[Navigation] 初始化导航控制器失败:', error);
     }
+
+    setupBrowsePreferenceUI();
 
     // Setup UI Listeners
     const folderPicker = document.getElementById('folder-picker');
@@ -1281,6 +2059,7 @@ function applyPracticeSummaryFallback(summary) {
 
 function browseCategory(category, type = 'reading') {
 
+    requestBrowseAutoScroll(category, type);
     // 先设置筛选器，确保 App 路径也能获取到筛选参数
     try {
         setBrowseFilterState(category, type);
@@ -1311,11 +2090,7 @@ function browseCategory(category, type = 'reading') {
     // 降级路径：手动处理浏览筛选
     try {
         // 正确更新标题使用中文字符串
-        const typeText = type === 'listening' ? '听力' : '阅读';
-        const titleEl = document.getElementById('browse-title');
-        if (titleEl) {
-            titleEl.textContent = `📚 ${category} ${typeText}题库浏览`;
-        }
+        setBrowseTitle(formatBrowseTitle(category, type));
 
         // 导航到浏览视图
         if (window.app && typeof window.app.navigateToView === 'function') {
@@ -1341,7 +2116,7 @@ function browseCategory(category, type = 'reading') {
 
 function filterByType(type) {
     setBrowseFilterState('all', type);
-    document.getElementById('browse-title').textContent = '📚 题库浏览';
+    setBrowseTitle(formatBrowseTitle('all', type));
     loadExamList();
 }
 
@@ -1371,11 +2146,9 @@ function applyBrowseFilter(category = 'all', type = null) {
             } catch (_) { type = 'all'; }
         }
 
-        setBrowseFilterState(normalizedCategory, type);
-
-        // 保持标题简洁
-        const titleEl = document.getElementById('browse-title');
-        if (titleEl) titleEl.textContent = '📚 题库浏览';
+        const normalizedType = normalizeExamType(type);
+        setBrowseFilterState(normalizedCategory, normalizedType);
+        setBrowseTitle(formatBrowseTitle(normalizedCategory, normalizedType));
 
         // 若未在浏览视图，则尽力切换
         if (typeof window.showView === 'function' && !document.getElementById('browse-view')?.classList.contains('active')) {
@@ -1393,8 +2166,14 @@ function applyBrowseFilter(category = 'all', type = null) {
 // Initialize browse view when it's activated
 function initializeBrowseView() {
     console.log('[System] Initializing browse view...');
-    setBrowseFilterState('all', 'all');
-    document.getElementById('browse-title').textContent = '📚 题库浏览';
+    const persisted = getPersistedBrowseFilter();
+    if (persisted) {
+        setBrowseFilterState(persisted.category, persisted.type);
+        setBrowseTitle(formatBrowseTitle(persisted.category, persisted.type));
+    } else {
+        setBrowseFilterState('all', 'all');
+        setBrowseTitle(formatBrowseTitle('all', 'all'));
+    }
     loadExamList();
 }
 
@@ -1463,6 +2242,24 @@ function loadExamList() {
 
     const activeList = setFilteredExamsState(examsToShow);
     displayExams(activeList);
+    handlePostExamListRender(activeList, { category: activeCategory, type: activeExamType });
+    return activeList;
+}
+
+function resetBrowseViewToAll() {
+    clearPendingBrowseAutoScroll();
+    const currentCategory = getCurrentCategory();
+    const currentType = getCurrentExamType();
+
+    if (currentCategory === 'all' && currentType === 'all') {
+        setBrowseTitle(formatBrowseTitle('all', 'all'));
+        loadExamList();
+        return;
+    }
+
+    setBrowseFilterState('all', 'all');
+    setBrowseTitle(formatBrowseTitle('all', 'all'));
+    loadExamList();
 }
 
 function displayExams(exams) {
@@ -2130,37 +2927,6 @@ function openPDFSafely(pdfPath, examTitle = 'PDF') {
     }
 }
 
-// Export current exam index to a timestamped script file under assets/scripts (download)
-function exportExamIndexToScriptFile(fullIndex, noteLabel = '') {
-    try {
-        const reading = (fullIndex || []).filter(e => e.type === 'reading').map(e => {
-            const { type, ...rest } = e || {};
-            return rest;
-        });
-        const listening = (fullIndex || []).filter(e => e.type === 'listening');
-
-        const pad = (n) => String(n).padStart(2, '0');
-        const d = new Date();
-        const ts = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
-        const header = `// 题库配置导出 ${d.toLocaleString()}\n// 说明: 保存此文件到 assets/scripts/ 并在需要时手动在 index.html 引入以覆盖内置数据\n`;
-        const content = `${header}window.completeExamIndex = ${JSON.stringify(reading, null, 2)};\n\nwindow.listeningExamIndex = ${JSON.stringify(listening, null, 2)};\n`;
-
-        const blob = new Blob([content], { type: 'application/javascript; charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `exam-index-${ts}.js`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        try { showMessage(`题库配置已导出: exam-index-${ts}.js（请移动到 assets/scripts/）`, 'success'); } catch(_) {}
-    } catch (e) {
-        console.error('[LibraryExport] 题库配置导出失败:', e);
-        try { showMessage('题库配置导出失败: ' + (e && e.message || e), 'error'); } catch(_) {}
-    }
-}
-
 // --- Helper Functions ---
 function getViewName(viewName) {
     switch (viewName) {
@@ -2504,8 +3270,6 @@ async function handleLibraryUpload(options, files) {
             await savePathMapForConfiguration(targetKey, newIndex, { overrideMap: derivedPathMap, setActive: true });
             await saveLibraryConfiguration(configName, targetKey, newIndex.length);
             await setActiveLibraryConfiguration(targetKey);
-            // 导出为时间命名脚本，便于统一管理
-            try { exportExamIndexToScriptFile(newIndex, configName); } catch(_) {}
             showMessage('新的题库配置已创建并激活；正在重新加载...', 'success');
             setTimeout(() => { location.reload(); }, 800);
             return;
@@ -2538,8 +3302,6 @@ async function handleLibraryUpload(options, files) {
         await saveLibraryConfiguration(incName, targetKey, newIndex.length);
         showMessage('索引已更新；正在刷新界面...', 'success');
         setExamIndexState(newIndex);
-        // 也导出一次，便于归档
-        try { exportExamIndexToScriptFile(newIndex, incName); } catch(_) {}
         updateOverview();
         if (document.getElementById('browse-view')?.classList.contains('active')) {
             loadExamList();
@@ -4783,10 +5545,43 @@ function handleVocabEntry(event) {
     if (event && typeof event.preventDefault === 'function') {
         event.preventDefault();
     }
+    const mountView = () => {
+        if (window.VocabSessionView && typeof window.VocabSessionView.mount === 'function') {
+            window.VocabSessionView.mount('#vocab-view');
+        }
+    };
+
+    const vocabView = document.getElementById('vocab-view');
+    if (vocabView) {
+        vocabView.removeAttribute('hidden');
+    }
+
+    if (app && typeof app.navigateToView === 'function') {
+        app.navigateToView('vocab');
+        const moreNavBtn = document.querySelector('.nav-btn[data-view="more"]');
+        if (moreNavBtn) {
+            moreNavBtn.classList.add('active');
+        }
+        mountView();
+        return;
+    }
+
+    const moreView = document.getElementById('more-view');
+    if (vocabView && moreView) {
+        moreView.classList.remove('active');
+        vocabView.classList.add('active');
+        const moreNavBtn = document.querySelector('.nav-btn[data-view="more"]');
+        if (moreNavBtn) {
+            moreNavBtn.classList.add('active');
+        }
+        mountView();
+        return;
+    }
+
     if (typeof window.showMessage === 'function') {
-        window.showMessage('单词背诵模块正在筹备中，敬请期待。', 'info');
+        window.showMessage('未能打开词汇视图，请检查页面结构。', 'warning');
     } else {
-        window.alert('单词背诵模块正在筹备中，敬请期待。');
+        window.alert('未能打开词汇视图，请检查页面结构。');
     }
 }
 

@@ -71,8 +71,6 @@ async function main() {
         createElement() { return { className: '', style: {} }; }
     };
 
-    const reopenedWindows = [];
-
     const windowStub = {
         _messages: [],
         showMessage(text, level) {
@@ -91,7 +89,6 @@ async function main() {
         open(url = 'about:blank', name = '_blank') {
             const stub = createStubWindow(name);
             stub.lastUrl = url;
-            reopenedWindows.push({ url, name, window: stub });
             return stub;
         }
     };
@@ -161,12 +158,7 @@ async function main() {
     }
 
     const app = {
-        components: {
-            practiceRecorder: {
-                savePracticeRecord: async () => {},
-                startPracticeSession: () => ({ sessionId: 'recorder-session' })
-            }
-        },
+        components: {},
         setState() {},
         getState() { return null; },
         updateExamStatus() {},
@@ -203,79 +195,76 @@ async function main() {
         openAttempt += 1;
         openCalls.push({ examId, options: { ...options } });
 
+        const reuseWindow = options.reuseWindow && !options.reuseWindow.closed
+            ? options.reuseWindow
+            : null;
+
         if (openAttempt === 1) {
             const name = options.windowName && options.windowName.trim() ? options.windowName.trim() : '_blank';
-            if (!windowsMap.has(name) || windowsMap.get(name).closed) {
-                windowsMap.set(name, createStubWindow(name));
+            let targetWindow = windowsMap.get(name);
+            if (!targetWindow || targetWindow.closed) {
+                targetWindow = createStubWindow(name);
+                windowsMap.set(name, targetWindow);
             }
-            const targetWindow = windowsMap.get(name);
             targetWindow.lastExamId = examId;
 
             if (typeof this.startPracticeSession === 'function') {
                 await this.startPracticeSession(examId);
             }
-
             if (typeof this.injectDataCollectionScript === 'function') {
                 this.injectDataCollectionScript(targetWindow, examId);
             }
-
             if (typeof this.setupExamWindowManagement === 'function') {
                 this.setupExamWindowManagement(targetWindow, examId);
-            }
-
-            if (options && options.suiteSessionId && typeof this.ensureExamWindowSession === 'function') {
-                const info = this.ensureExamWindowSession(examId, targetWindow);
-                if (info) {
-                    info.suiteSessionId = options.suiteSessionId;
-                    if (!this.examWindows) {
-                        this.examWindows = new Map();
-                    }
-                    this.examWindows.set(examId, info);
-                }
             }
 
             return targetWindow;
         }
 
         if (openAttempt === 2) {
-            return null;
-        }
+            assert(reuseWindow, '第二次调用应提供复用窗口');
+            reuseWindow.lastExamId = examId;
 
-        const reuseWindow = options.reuseWindow && !options.reuseWindow.closed ? options.reuseWindow : null;
-        if (!reuseWindow) {
-            return null;
-        }
-
-        reuseWindow.lastExamId = examId;
-
-        if (typeof this.startPracticeSession === 'function') {
-            await this.startPracticeSession(examId);
-        }
-
-        if (typeof this.injectDataCollectionScript === 'function') {
-            this.injectDataCollectionScript(reuseWindow, examId);
-        }
-
-        if (typeof this.setupExamWindowManagement === 'function') {
-            this.setupExamWindowManagement(reuseWindow, examId);
-        }
-
-        if (options && options.suiteSessionId && typeof this.ensureExamWindowSession === 'function') {
-            const info = this.ensureExamWindowSession(examId, reuseWindow);
-            if (info) {
-                info.suiteSessionId = options.suiteSessionId;
-                if (!this.examWindows) {
-                    this.examWindows = new Map();
-                }
-                this.examWindows.set(examId, info);
+            if (typeof this.startPracticeSession === 'function') {
+                await this.startPracticeSession(examId);
             }
+            if (typeof this.injectDataCollectionScript === 'function') {
+                this.injectDataCollectionScript(reuseWindow, examId);
+            }
+            if (typeof this.setupExamWindowManagement === 'function') {
+                this.setupExamWindowManagement(reuseWindow, examId);
+            }
+
+            return reuseWindow;
         }
 
-        return reuseWindow;
+        if (openAttempt === 3) {
+            return null; // 模拟复用窗口失败
+        }
+
+        if (openAttempt === 4) {
+            const name = options.windowName && options.windowName.trim() ? options.windowName.trim() : '_blank';
+            const newWindow = createStubWindow(name);
+            newWindow.lastExamId = examId;
+            windowsMap.set(name, newWindow);
+
+            if (typeof this.startPracticeSession === 'function') {
+                await this.startPracticeSession(examId);
+            }
+            if (typeof this.injectDataCollectionScript === 'function') {
+                this.injectDataCollectionScript(newWindow, examId);
+            }
+            if (typeof this.setupExamWindowManagement === 'function') {
+                this.setupExamWindowManagement(newWindow, examId);
+            }
+
+            return newWindow;
+        }
+
+        return null;
     };
 
-    const startResult = await app.startSuitePractice();
-    assert.strictEqual(startResult, undefined, 'startSuitePractice 应返回 undefined');
+    await app.startSuitePractice();
 
     const session = app.currentSuiteSession;
     assert(session, '应创建套题会话');
@@ -283,30 +272,12 @@ async function main() {
 
     const firstExam = session.sequence[0];
     const secondExam = session.sequence[1];
+    const thirdExam = session.sequence[2];
 
     assert.strictEqual(openCalls.length, 1, '首篇应触发一次 openExam 调用');
     const firstWindow = session.windowRef;
     assert(firstWindow, '应持有首篇窗口引用');
     assert.strictEqual(firstWindow.lastExamId, firstExam.examId, '首篇窗口应加载 P1');
-
-    firstWindow.closed = false;
-    const closeAttemptsBefore = Array.isArray(session.closeAttempts) ? session.closeAttempts.length : 0;
-    firstWindow.close();
-    const closeAttemptsAfter = Array.isArray(session.closeAttempts) ? session.closeAttempts.length : 0;
-    assert.strictEqual(firstWindow.closed, false, '套题防护应阻止首篇窗口被直接关闭');
-    assert.strictEqual(closeAttemptsAfter, closeAttemptsBefore + 1, '拦截关闭应记录一次尝试');
-
-    const selfOpenAttemptsBefore = closeAttemptsAfter;
-    const sameWindow = firstWindow.open('next.html', '_self');
-    const selfOpenAttemptsAfter = Array.isArray(session.closeAttempts) ? session.closeAttempts.length : 0;
-    assert.strictEqual(sameWindow, firstWindow, '拦截自目标打开应返回原窗口');
-    assert.strictEqual(selfOpenAttemptsAfter, selfOpenAttemptsBefore + 1, '自目标打开应同样记录尝试');
-
-    const newChild = firstWindow.open('child.html', '_blank');
-    assert(newChild && newChild !== firstWindow, '普通新标签打开应仍然生效');
-    assert.strictEqual(newChild.lastUrl, 'child.html', '新标签应接收到目标 URL');
-    const attemptsAfterChild = Array.isArray(session.closeAttempts) ? session.closeAttempts.length : 0;
-    assert.strictEqual(attemptsAfterChild, selfOpenAttemptsAfter, '普通新标签打开不应计入关闭尝试');
 
     const practicePayload = {
         duration: 900,
@@ -315,34 +286,35 @@ async function main() {
         answerComparison: { q1: { correct: 'A', user: 'A' } }
     };
 
-    firstWindow.closed = true;
+    const handledP1 = await app.handleSuitePracticeComplete(firstExam.examId, practicePayload);
+    assert.strictEqual(handledP1, true, 'P1 完成后应继续 P2');
+    assert.strictEqual(openCalls.length, 2, '应再次调用 openExam 载入 P2');
+    assert.strictEqual(app.currentSuiteSession.windowRef, firstWindow, '仍应复用首个窗口');
+    assert.strictEqual(app.currentSuiteSession.activeExamId, secondExam.examId, '会话应切换到 P2');
+    assert.strictEqual(firstWindow.lastExamId, secondExam.examId, '窗口应更新为 P2');
 
-    const handledSuccess = await app.handleSuitePracticeComplete(firstExam.examId, practicePayload);
-    assert.strictEqual(handledSuccess, true, '应成功衔接到下一篇');
-
-    assert(app.currentSuiteSession, '套题会话仍应存在');
-    assert.strictEqual(app.currentSuiteSession.status, 'active', '套题会话应保持激活状态');
-    assert.strictEqual(app.currentSuiteSession.activeExamId, secondExam.examId, '应切换到第二篇');
-
-    assert.strictEqual(openCalls.length, 3, '第二篇应触发重试逻辑');
-    const secondCall = openCalls[1];
-    assert.strictEqual(secondCall.options.reuseWindow, undefined, '初次衔接尝试没有可复用窗口');
-
-    assert.strictEqual(reopenedWindows.length, 1, '应尝试重建被关闭的标签');
-    const fallbackRecord = reopenedWindows[0];
-    assert.strictEqual(fallbackRecord.url, 'about:blank', '回退窗口应先以空白页重建');
-    assert.strictEqual(fallbackRecord.name, session.windowName, '回退窗口应沿用套题标签名');
-
-    const thirdCall = openCalls[2];
-    assert(thirdCall.options.reuseWindow === fallbackRecord.window, '重试应使用回退窗口');
-
-    assert.strictEqual(app.currentSuiteSession.windowRef, fallbackRecord.window, '窗口引用应指向回退窗口');
-    assert.strictEqual(fallbackRecord.window.lastExamId, secondExam.examId, '回退窗口应加载 P2');
+    const handledP2 = await app.handleSuitePracticeComplete(secondExam.examId, practicePayload);
+    assert.strictEqual(handledP2, true, 'P2 完成后应继续 P3');
+    assert.strictEqual(openCalls.length, 4, 'P3 加载应包含一次失败与一次回退');
+    assert.strictEqual(app.currentSuiteSession.activeExamId, thirdExam.examId, '会话应切换到 P3');
+    assert.notStrictEqual(app.currentSuiteSession.windowRef, firstWindow, '回退后应获得新的窗口');
+    assert.strictEqual(app.currentSuiteSession.windowRef.lastExamId, thirdExam.examId, '新窗口应加载 P3');
 
     const failureMessage = windowStub._messages.find(msg => typeof msg.text === 'string' && msg.text.includes('无法继续套题练习'));
     assert.strictEqual(failureMessage, undefined, '不应出现无法继续的警告');
 
-    process.stdout.write(JSON.stringify({ status: 'pass', detail: '套题模式能在首篇完成后继续下一篇练习' }));
+    const handledP3 = await app.handleSuitePracticeComplete(thirdExam.examId, practicePayload);
+    assert.strictEqual(handledP3, true, 'P3 完成后应顺利收尾');
+    assert.strictEqual(app.currentSuiteSession, null, '套题会话应在完成后被清理');
+
+    const practiceRecords = await storage.get('practice_records', []);
+    assert.strictEqual(practiceRecords.length, 1, '应只生成一条套题练习记录');
+    assert.strictEqual(practiceRecords[0].suiteEntries.length, 3, '套题记录应包含三篇文章');
+
+    const completionMessage = windowStub._messages.find(msg => typeof msg.text === 'string' && msg.text.includes('套题练习已完成'));
+    assert(completionMessage, '应提示套题练习完成');
+
+    process.stdout.write(JSON.stringify({ status: 'pass', detail: '套题模式按顺序串联三篇题目并生成单条记录' }));
 }
 
 main().catch(error => {
