@@ -514,6 +514,76 @@ class PracticeRecorder {
         return map;
     }
 
+    mergeAnswerSources(...sources) {
+        return sources.reduce((acc, source) => {
+            if (!source) {
+                return acc;
+            }
+            const normalized = this.normalizeAnswerMap(source);
+            Object.entries(normalized || {}).forEach(([key, value]) => {
+                if (value === undefined || value === null) {
+                    return;
+                }
+                const trimmed = String(value).trim();
+                if (!trimmed) {
+                    return;
+                }
+                acc[key] = trimmed;
+            });
+            return acc;
+        }, {});
+    }
+
+    convertDetailsToAnswerMap(details, key = 'correctAnswer') {
+        if (!details || typeof details !== 'object') {
+            return {};
+        }
+        const map = {};
+        Object.entries(details).forEach(([questionId, detail]) => {
+            if (!detail || detail[key] == null) {
+                return;
+            }
+            map[questionId] = detail[key];
+        });
+        return map;
+    }
+
+    convertComparisonToAnswerMap(comparison, key = 'correctAnswer') {
+        if (!comparison || typeof comparison !== 'object') {
+            return {};
+        }
+        const map = {};
+        Object.entries(comparison).forEach(([questionId, entry]) => {
+            if (!entry || typeof entry !== 'object') {
+                return;
+            }
+            const value = entry[key] ?? (key === 'correctAnswer' ? entry.correct : entry.user);
+            if (value != null) {
+                map[questionId] = value;
+            }
+        });
+        return map;
+    }
+
+    normalizeAnswerComparison(comparison) {
+        if (!comparison || typeof comparison !== 'object') {
+            return {};
+        }
+        const normalized = {};
+        Object.entries(comparison).forEach(([questionId, entry]) => {
+            if (!entry || typeof entry !== 'object') {
+                return;
+            }
+            normalized[questionId] = {
+                questionId: entry.questionId || questionId,
+                userAnswer: this.normalizeAnswerValue(entry.userAnswer ?? entry.user ?? entry.answer),
+                correctAnswer: this.normalizeAnswerValue(entry.correctAnswer ?? entry.correct),
+                isCorrect: typeof entry.isCorrect === 'boolean' ? entry.isCorrect : null
+            };
+        });
+        return normalized;
+    }
+
     convertAnswerMapToArray(answerMap = {}, correctMap = {}) {
         const list = [];
         if (!answerMap || typeof answerMap !== 'object') {
@@ -776,15 +846,34 @@ class PracticeRecorder {
             type
         );
 
-        const answerMap = results?.answerMap
-            || (Array.isArray(results?.answers) ? this.convertAnswerArrayToMap(results.answers) : (session.answers || {}));
-        const correctAnswerMap = results?.correctAnswerMap || {};
+        const answerMap = this.mergeAnswerSources(
+            results?.answerMap,
+            Array.isArray(results?.answers) ? this.convertAnswerArrayToMap(results.answers) : results?.answers,
+            results?.realData?.answers,
+            session.answers,
+            this.convertComparisonToAnswerMap(results?.answerComparison, 'userAnswer')
+        );
+
+        const correctAnswerMap = this.mergeAnswerSources(
+            results?.correctAnswerMap,
+            results?.correctAnswers,
+            results?.realData?.correctAnswers,
+            this.convertDetailsToAnswerMap(results?.scoreInfo?.details, 'correctAnswer'),
+            this.convertDetailsToAnswerMap(results?.realData?.scoreInfo?.details, 'correctAnswer'),
+            this.convertComparisonToAnswerMap(results?.answerComparison, 'correctAnswer'),
+            session?.correctAnswerMap
+        );
+
         const answerDetails = results?.answerDetails || this.buildAnswerDetails(answerMap, correctAnswerMap);
         const answerList = this.convertAnswerMapToArray(answerMap, correctAnswerMap);
         const scoreInfo = Object.assign({}, results?.scoreInfo || {});
         if (!scoreInfo.details || Object.keys(scoreInfo.details || {}).length === 0) {
             scoreInfo.details = answerDetails;
         }
+
+        const normalizedComparison = this.normalizeAnswerComparison(
+            results?.answerComparison || results?.realData?.answerComparison || null
+        );
 
         const durationMs = Math.max(new Date(resolvedEndTime) - new Date(resolvedStartTime), 0);
 
@@ -819,6 +908,11 @@ class PracticeRecorder {
                 source: results?.source || 'practice_page'
             })
         };
+
+        if (normalizedComparison && Object.keys(normalizedComparison).length > 0) {
+            practiceRecord.answerComparison = normalizedComparison;
+            practiceRecord.realData.answerComparison = normalizedComparison;
+        }
         
         try {
             const savedRecord = await this.savePracticeRecord(practiceRecord) || practiceRecord;

@@ -574,7 +574,7 @@ class PracticeRecordModal {
                 comp[numericKey] = {
                     correctAnswer: mergedCorrect || '',
                     userAnswer: mergedUser || '',
-                    isCorrect: Boolean(mergedIsCorrect)
+                    isCorrect: typeof mergedIsCorrect === 'boolean' ? mergedIsCorrect : null
                 };
                 delete comp[letterKey];
             }
@@ -591,28 +591,54 @@ class PracticeRecordModal {
             return a.localeCompare(b);
         });
 
-        const rows = sortedKeys
+        const sanitizedRows = sortedKeys
             .map((key) => {
                 const comparison = normalized[key] || {};
                 const questionLabel = key.replace(/^q/i, '');
-                const isCorrect = comparison.isCorrect === true;
-                const resultClass = isCorrect ? 'correct' : 'incorrect';
-                const resultIcon = isCorrect ? '&#10003;' : '&#10005;';
+                const normalizedUser = this.normalizeAnswerDisplay(comparison.userAnswer);
+                const normalizedCorrect = this.normalizeAnswerDisplay(comparison.correctAnswer);
+                const hasUserAnswer = this.hasMeaningfulAnswer(normalizedUser);
+                const hasCorrectAnswer = this.hasMeaningfulAnswer(normalizedCorrect);
 
-                const userDisplay = comparison.userAnswer != null
-                    ? this.truncateAnswer(comparison.userAnswer)
+                if (!hasUserAnswer && !hasCorrectAnswer) {
+                    return null;
+                }
+
+                return {
+                    key,
+                    questionLabel,
+                    userAnswer: hasUserAnswer ? normalizedUser : '',
+                    correctAnswer: hasCorrectAnswer ? normalizedCorrect : '',
+                    isCorrect: typeof comparison.isCorrect === 'boolean' ? comparison.isCorrect : null
+                };
+            })
+            .filter(Boolean);
+
+        if (sanitizedRows.length === 0) {
+            return '<div class="no-answers-message"><p>\u6682\u65e0\u7b54\u9898\u6570\u636e</p></div>';
+        }
+
+        const rows = sanitizedRows
+            .map((entry) => {
+                const resultFlag = entry.isCorrect;
+                const hasResult = typeof resultFlag === 'boolean';
+                const resultClass = hasResult ? (resultFlag ? 'correct' : 'incorrect') : 'unknown';
+                const resultIcon = hasResult ? (resultFlag ? '&#10003;' : '&#10005;') : '-';
+
+                const userDisplay = entry.userAnswer
+                    ? this.truncateAnswer(entry.userAnswer)
                     : '\u672a\u4f5c\u7b54';
-                const correctDisplay = comparison.correctAnswer != null
-                    ? this.truncateAnswer(comparison.correctAnswer)
+                const correctDisplay = entry.correctAnswer
+                    ? this.truncateAnswer(entry.correctAnswer)
                     : '\u65e0';
 
                 return `
                     <tr class="answer-row ${resultClass}">
-                        <td class="question-num">${this.escapeHtml(questionLabel)}</td>
-                        <td class="correct-answer" title="${this.escapeHtml(comparison.correctAnswer == null ? '' : String(comparison.correctAnswer))}">
+                        <td class="question-num">${this.escapeHtml(entry.questionLabel)}</td>
+                        <td class="correct-answer" title="${this.escapeHtml(entry.correctAnswer)}">
                             ${this.escapeHtml(correctDisplay)}
                         </td>
-                        <td class="user-answer" title="${this.escapeHtml(comparison.userAnswer == null ? '' : String(comparison.userAnswer))}">
+                        <td class="user-answer" title="${this.escapeHtml(entry.userAnswer)}">
                             ${this.escapeHtml(userDisplay)}
                         </td>
                         <td class="result-icon ${resultClass}">${resultIcon}</td>
@@ -638,6 +664,62 @@ class PracticeRecordModal {
                 </table>
             </div>
         `;
+    }
+
+    normalizeAnswerDisplay(value) {
+        if (value === undefined || value === null) {
+            return '';
+        }
+        if (typeof value === 'string') {
+            return value.trim();
+        }
+        if (typeof value === 'number' || typeof value === 'boolean') {
+            return String(value).trim();
+        }
+        if (Array.isArray(value)) {
+            return value
+                .map((item) => this.normalizeAnswerDisplay(item))
+                .filter(Boolean)
+                .join(',');
+        }
+        if (typeof value === 'object') {
+            const preferKeys = ['value', 'label', 'text', 'answer', 'content'];
+            for (const key of preferKeys) {
+                if (typeof value[key] === 'string') {
+                    return value[key].trim();
+                }
+            }
+            if (typeof value.innerText === 'string') {
+                return value.innerText.trim();
+            }
+            if (typeof value.textContent === 'string') {
+                return value.textContent.trim();
+            }
+            try {
+                return JSON.stringify(value);
+            } catch (_) {
+                return String(value);
+            }
+        }
+        return String(value).trim();
+    }
+
+    hasMeaningfulAnswer(value) {
+        if (value == null) {
+            return false;
+        }
+        const text = String(value).trim();
+        if (!text) {
+            return false;
+        }
+        const lowered = text.toLowerCase();
+        if (lowered === 'n/a' || lowered === 'no answer' || lowered === '未作答' || lowered === '无' || lowered === 'none') {
+            return false;
+        }
+        if (/^\[object\s[^\]]+\]$/i.test(text)) {
+            return false;
+        }
+        return true;
     }
 
     mergeComparisonWithCorrections(record) {
@@ -854,15 +936,62 @@ class PracticeRecordModal {
         return normalize(userAnswer) === normalize(correctAnswer);
     }
 
-    truncateAnswer(value, maxLength = 50) {
-        if (value == null) {
+    normalizeAnswerValue(value) {
+        if (value === null || value === undefined) {
             return '';
         }
-        const str = String(value);
-        if (str.length <= maxLength) {
-            return str;
+
+        if (typeof value === 'boolean') {
+            return value ? 'True' : 'False';
         }
-        return `${str.substring(0, maxLength)}...`;
+
+        if (Array.isArray(value)) {
+            return value
+                .map(item => this.normalizeAnswerValue(item))
+                .filter(Boolean)
+                .join(', ');
+        }
+
+        if (typeof value === 'object') {
+            const preferKeys = ['value', 'label', 'text', 'answer', 'content'];
+            for (const key of preferKeys) {
+                const candidate = value[key];
+                if (typeof candidate === 'string' && candidate.trim()) {
+                    return candidate.trim();
+                }
+            }
+            if (typeof value.innerText === 'string' && value.innerText.trim()) {
+                return value.innerText.trim();
+            }
+            if (typeof value.textContent === 'string' && value.textContent.trim()) {
+                return value.textContent.trim();
+            }
+            try {
+                const json = JSON.stringify(value);
+                if (json && json !== '{}') {
+                    return json;
+                }
+            } catch (_) {
+                // ignore JSON errors and fallback
+            }
+            return String(value);
+        }
+
+        return String(value).trim();
+    }
+
+    truncateAnswer(value, maxLength = 50) {
+        const normalized = this.normalizeAnswerValue(value);
+        if (!normalized) {
+            return '';
+        }
+        if (/^\[object\s[^\]]+\]$/i.test(normalized)) {
+            return '';
+        }
+        if (normalized.length <= maxLength) {
+            return normalized;
+        }
+        return `${normalized.substring(0, Math.max(0, maxLength - 3))}...`;
     }
 
     escapeHtml(value) {
