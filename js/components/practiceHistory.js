@@ -1501,6 +1501,7 @@ class PracticeHistory {
         }
 
         const detailsSource = record.scoreInfo?.details
+            || record.answerDetails
             || record.realData?.scoreInfo?.details
             || null;
 
@@ -1514,13 +1515,23 @@ class PracticeHistory {
                 isCorrect: typeof detail?.isCorrect === 'boolean' ? detail.isCorrect : null
             }));
         } else {
-            const answersSource = record.answers || record.realData?.answers || {};
-            answersData = Object.entries(answersSource).map(([questionId, userAnswer]) => ({
-                questionId,
-                userAnswer: userAnswer || '-',
-                correctAnswer: '-',
-                isCorrect: null
-            }));
+            const answersSource = record.answers || record.realData?.answers || record.answerList || record.realData?.answerList || {};
+            if (Array.isArray(answersSource)) {
+                answersData = answersSource.map((entry, index) => ({
+                    questionId: entry?.questionId || `q${index + 1}`,
+                    userAnswer: entry?.answer || entry?.userAnswer || '-',
+                    correctAnswer: entry?.correctAnswer || '-',
+                    isCorrect: typeof entry?.correct === 'boolean' ? entry.correct
+                        : (typeof entry?.isCorrect === 'boolean' ? entry.isCorrect : null)
+                }));
+            } else if (answersSource && typeof answersSource === 'object') {
+                answersData = Object.entries(answersSource).map(([questionId, userAnswer]) => ({
+                    questionId,
+                    userAnswer: userAnswer || '-',
+                    correctAnswer: '-',
+                    isCorrect: null
+                }));
+            }
         }
 
         return answersData.sort((a, b) => {

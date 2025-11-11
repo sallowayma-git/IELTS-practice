@@ -490,7 +490,23 @@
         title.appendChild(document.createTextNode(exam.title || ''));
 
         var meta = this._createElement('div', { className: 'exam-meta' });
-        meta.textContent = (exam.category || '') + ' | ' + (exam.type || '');
+        var metaText;
+        if (typeof window !== 'undefined' && typeof window.formatExamMetaText === 'function') {
+            metaText = window.formatExamMetaText(exam);
+        } else {
+            var fallbackParts = [];
+            if (exam && typeof exam.sequenceNumber === 'number') {
+                fallbackParts.push(String(exam.sequenceNumber));
+            }
+            if (exam && exam.category) {
+                fallbackParts.push(exam.category);
+            }
+            if (exam && exam.type) {
+                fallbackParts.push(exam.type);
+            }
+            metaText = fallbackParts.join(' | ');
+        }
+        meta.textContent = metaText;
 
         infoContent.appendChild(title);
         infoContent.appendChild(meta);

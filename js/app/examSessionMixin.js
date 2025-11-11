@@ -1,25 +1,93 @@
 (function(global) {
     const MAX_LEGACY_PRACTICE_RECORDS = 1000;
 
+    async function getActiveExamIndexSnapshot() {
+        const stateGetters = [
+            () => (typeof global.getExamIndexState === 'function') ? global.getExamIndexState() : null,
+            () => (typeof getExamIndexState === 'function') ? getExamIndexState : null
+        ];
+
+        for (const getterFactory of stateGetters) {
+            try {
+                const getter = getterFactory();
+                if (typeof getter === 'function') {
+                    const state = getter();
+                    if (Array.isArray(state) && state.length) {
+                        return state.slice();
+                    }
+                }
+            } catch (_) {}
+        }
+
+        let activeKey = 'exam_index';
+        try {
+            if (typeof global.getActiveLibraryConfigurationKey === 'function') {
+                const resolved = await global.getActiveLibraryConfigurationKey();
+                if (resolved && typeof resolved === 'string' && resolved.trim()) {
+                    activeKey = resolved.trim();
+                }
+            } else {
+                const storedKey = await storage.get('active_exam_index_key', 'exam_index');
+                if (storedKey && typeof storedKey === 'string' && storedKey.trim()) {
+                    activeKey = storedKey.trim();
+                }
+            }
+        } catch (_) {
+            try {
+                const storedKey = await storage.get('active_exam_index_key', 'exam_index');
+                if (storedKey && typeof storedKey === 'string' && storedKey.trim()) {
+                    activeKey = storedKey.trim();
+                }
+            } catch (_) {}
+        }
+
+        let dataset = await storage.get(activeKey, []) || [];
+        if ((!Array.isArray(dataset) || dataset.length === 0) && activeKey !== 'exam_index') {
+            dataset = await storage.get('exam_index', []) || [];
+        }
+        if (!Array.isArray(dataset) || dataset.length === 0) {
+            if (Array.isArray(global.examIndex) && global.examIndex.length) {
+                dataset = global.examIndex.slice();
+            } else if (Array.isArray(global.completeExamIndex) && global.completeExamIndex.length) {
+                dataset = global.completeExamIndex.slice();
+            }
+        }
+        return Array.isArray(dataset) ? dataset : [];
+    }
+
+    async function findExamDefinition(examId) {
+        if (!examId) {
+            return null;
+        }
+        const list = await getActiveExamIndexSnapshot();
+        const match = list.find(entry => entry && entry.id === examId);
+        if (match) {
+            return match;
+        }
+
+        const fallbacks = [
+            Array.isArray(global.examIndex) ? global.examIndex : null,
+            Array.isArray(global.completeExamIndex) ? global.completeExamIndex : null,
+            Array.isArray(global.listeningExamIndex) ? global.listeningExamIndex : null
+        ];
+        for (const fallback of fallbacks) {
+            if (!Array.isArray(fallback)) continue;
+            const found = fallback.find(entry => entry && entry.id === examId);
+            if (found) {
+                return found;
+            }
+        }
+
+        return null;
+    }
+
     const mixin = {
         /**
           * 打开指定题目进行练习
           */
         async openExam(examId, options = {}) {
-            // 使用活动题库配置键，保证全量/增量切换后仍能打开
-            let examIndex = [];
-            try {
-                const activeKey = await storage.get('active_exam_index_key', 'exam_index');
-                examIndex = await storage.get(activeKey, []) || [];
-                if ((!examIndex || examIndex.length === 0) && activeKey !== 'exam_index') {
-                    examIndex = await storage.get('exam_index', []);
-                }
-            } catch (_) {
-                examIndex = await storage.get('exam_index', []);
-            }
-
-            // 增加数组化防御
-            let list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
+            const examIndex = await getActiveExamIndexSnapshot();
+            const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
             const exam = list.find(e => e.id === examId);
 
             if (!exam) {
@@ -1298,8 +1366,7 @@
                 handleRealPracticeData: async (examId, realData) => {
                     try {
                         // 获取题目信息
-                        const examIndex = await storage.get('exam_index', []);
-                        const exam = examIndex.find(e => e.id === examId);
+                        const exam = await findExamDefinition(examId);
 
                         if (!exam) {
                             console.error('[FallbackRecorder] 无法找到题目信息:', examId);
@@ -1495,15 +1562,10 @@
          * 开始练习会话
          */
         async startPracticeSession(examId) {
-            let examIndex = await storage.get('exam_index', []);
-            if (!Array.isArray(examIndex)) {
-                console.warn('[App] examIndex不是数组，回退到 window.examIndex');
-                examIndex = Array.isArray(window.examIndex) ? window.examIndex : [];
-            }
-            const exam = examIndex.find(e => e.id === examId);
-
+            const exam = await findExamDefinition(examId);
             if (!exam) {
                 console.error('Exam not found:', examId);
+                window.showMessage && window.showMessage('题目索引未加载，请重试或重新导入题库。', 'error');
                 return;
             }
 
@@ -1684,6 +1746,14 @@
                 }
             }
 
+            const recorderAvailable = this.components
+                && this.components.practiceRecorder
+                && typeof this.components.practiceRecorder.savePracticeRecord === 'function';
+
+            if (recorderAvailable) {
+                return;
+            }
+
             try {
                 // 直接保存真实数据（采用旧版本的简单方式）
                 await this.saveRealPracticeData(examId, data);
@@ -1786,9 +1856,7 @@
         async saveRealPracticeData(examId, realData) {
             try {
 
-                let examIndex = await storage.get('exam_index', []);
-                const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
-                const exam = list.find(e => e.id === examId);
+                const exam = await findExamDefinition(examId);
 
                 if (!exam) {
                     console.error('[DataCollection] 无法找到题目信息:', examId);
@@ -1914,7 +1982,7 @@
          * 显示真实完成通知
          */
         async showRealCompletionNotification(examId, realData) {
-            const examIndex = await storage.get('exam_index', []);
+            const examIndex = await getActiveExamIndexSnapshot();
             const list = Array.isArray(examIndex) ? examIndex : [];
             const exam = list.find(e => e.id === examId);
 
@@ -2031,7 +2099,7 @@
          * 显示题目完成通知
          */
         async showExamCompletionNotification(examId, resultData) {
-            const examIndex = await storage.get('exam_index', []);
+            const examIndex = await getActiveExamIndexSnapshot();
             const exam = examIndex.find(e => e.id === examId);
 
             if (!exam) return;
@@ -2049,7 +2117,7 @@
          * 显示详细结果
          */
         async showDetailedResults(examId, resultData) {
-            const examIndex = await storage.get('exam_index', []);
+            const examIndex = await getActiveExamIndexSnapshot();
             const exam = examIndex.find(e => e.id === examId);
 
             if (!exam) return;
@@ -2188,7 +2256,7 @@
          * 显示练习完成通知
          */
         async showPracticeCompletionNotification(examId, practiceRecord) {
-            const examIndex = await storage.get('exam_index', []);
+            const examIndex = await getActiveExamIndexSnapshot();
             const exam = examIndex.find(e => e.id === examId);
 
             if (!exam) return;
@@ -2210,7 +2278,7 @@
          * 显示详细练习结果
          */
         async showDetailedPracticeResults(examId, practiceRecord) {
-            const examIndex = await storage.get('exam_index', []);
+            const examIndex = await getActiveExamIndexSnapshot();
             const exam = examIndex.find(e => e.id === examId);
 
             if (!exam) return;
@@ -2310,7 +2378,7 @@
          */
         async showActiveSessionsDetails() {
             const activeSessions = await storage.get('active_sessions', []);
-            const examIndex = await storage.get('exam_index', []);
+            const examIndex = await getActiveExamIndexSnapshot();
 
             if (activeSessions.length === 0) {
                 window.showMessage('当前没有活动的练习会话', 'info');
