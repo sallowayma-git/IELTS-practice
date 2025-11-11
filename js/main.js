@@ -70,10 +70,11 @@ function getExamIndexState() {
 }
 
 function setExamIndexState(list) {
+    const normalized = Array.isArray(list) ? list.slice() : [];
+    assignExamSequenceNumbers(normalized);
     if (stateService) {
-        return stateService.setExamIndex(list);
+        return stateService.setExamIndex(normalized);
     }
-    const normalized = Array.isArray(list) ? list : [];
     try { window.examIndex = normalized; } catch (_) {}
     return normalized;
 }
@@ -97,6 +98,42 @@ function setPracticeRecordsState(records) {
     updateBrowseAnchorsFromRecords(finalRecords);
     return finalRecords;
 }
+
+function assignExamSequenceNumbers(exams) {
+    if (!Array.isArray(exams)) {
+        return exams;
+    }
+    exams.forEach((exam, index) => {
+        if (!exam || typeof exam !== 'object') {
+            return;
+        }
+        exam.sequenceNumber = index + 1;
+    });
+    return exams;
+}
+
+function formatExamMetaText(exam) {
+    if (!exam || typeof exam !== 'object') {
+        return '';
+    }
+    const parts = [];
+    if (Number.isFinite(exam.sequenceNumber)) {
+        parts.push(String(exam.sequenceNumber));
+    }
+    if (exam.category) {
+        parts.push(exam.category);
+    }
+    if (exam.type) {
+        parts.push(exam.type);
+    }
+    return parts.join(' | ');
+}
+
+try {
+    if (typeof window !== 'undefined') {
+        window.formatExamMetaText = formatExamMetaText;
+    }
+} catch (_) {}
 
 function updateBrowseAnchorsFromRecords(records) {
     const list = Array.isArray(records) ? records : [];
@@ -1382,6 +1419,7 @@ async function loadLibrary(forceReload = false) {
         }
 
         const combined = [...readingExams, ...listeningExams];
+        assignExamSequenceNumbers(combined);
         const updatedIndex = setExamIndexState(combined);
 
         const metadata = {
@@ -2325,7 +2363,8 @@ function displayExams(exams) {
         title.textContent = exam.title || '';
         const meta = document.createElement('div');
         meta.className = 'exam-meta';
-        meta.textContent = `${exam.category || ''} | ${exam.type || ''}`;
+        const metaText = formatExamMetaText(exam);
+        meta.textContent = metaText || `${exam.category || ''} | ${exam.type || ''}`;
         infoContent.appendChild(title);
         infoContent.appendChild(meta);
         info.appendChild(infoContent);
@@ -3250,6 +3289,7 @@ async function handleLibraryUpload(options, files) {
             const dedupAdd = additions.filter(e => !existingKeys.has((e.path || '') + '|' + (e.filename || '') + '|' + e.title));
             newIndex = [...currentIndex, ...dedupAdd];
         }
+        assignExamSequenceNumbers(newIndex);
 
         // 对于全量重载，创建一个新的题库配置并自动切换
         if (mode === 'full') {
