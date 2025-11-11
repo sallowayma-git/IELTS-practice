@@ -1253,6 +1253,147 @@ async function syncPracticeRecords() {
     updatePracticeView();
 }
 
+const completionNoticeState = {
+    lastSessionId: null,
+    lastShownAt: 0
+};
+
+function extractCompletionPayload(envelope) {
+    if (!envelope || typeof envelope !== 'object') {
+        return null;
+    }
+    const candidates = [envelope.data, envelope.payload, envelope.results, envelope.detail, envelope];
+    for (let i = 0; i < candidates.length; i += 1) {
+        const candidate = candidates[i];
+        if (candidate && typeof candidate === 'object') {
+            if (
+                candidate.scoreInfo ||
+                typeof candidate.correctAnswers !== 'undefined' ||
+                typeof candidate.totalQuestions !== 'undefined' ||
+                (candidate.answers && typeof candidate.answers === 'object')
+            ) {
+                return candidate;
+            }
+        }
+    }
+    return null;
+}
+
+function extractCompletionSessionId(envelope) {
+    if (!envelope || typeof envelope !== 'object') {
+        return null;
+    }
+    if (typeof envelope.sessionId === 'string' && envelope.sessionId.trim()) {
+        return envelope.sessionId.trim();
+    }
+    const payload = extractCompletionPayload(envelope);
+    if (payload && typeof payload.sessionId === 'string' && payload.sessionId.trim()) {
+        return payload.sessionId.trim();
+    }
+    return null;
+}
+
+function shouldAnnounceCompletion(sessionId) {
+    const now = Date.now();
+    if (sessionId && completionNoticeState.lastSessionId === sessionId) {
+        return false;
+    }
+    if (!sessionId && (now - completionNoticeState.lastShownAt) < 1500) {
+        return false;
+    }
+    completionNoticeState.lastSessionId = sessionId || null;
+    completionNoticeState.lastShownAt = now;
+    return true;
+}
+
+function pickNumericValue(values) {
+    for (let i = 0; i < values.length; i += 1) {
+        const value = values[i];
+        if (value === undefined || value === null) {
+            continue;
+        }
+        const num = Number(value);
+        if (Number.isFinite(num)) {
+            return num;
+        }
+    }
+    return null;
+}
+
+function extractCompletionStats(payload) {
+    if (!payload || typeof payload !== 'object') {
+        return null;
+    }
+    const scoreInfo = payload.scoreInfo || (payload.realData && payload.realData.scoreInfo) || {};
+    const correct = pickNumericValue([
+        scoreInfo.correct,
+        payload.correctAnswers,
+        payload.score,
+        payload.realData && payload.realData.correctAnswers
+    ]);
+    const total = pickNumericValue([
+        scoreInfo.total,
+        payload.totalQuestions,
+        payload.questionCount,
+        payload.realData && payload.realData.totalQuestions,
+        payload.answerComparison && typeof payload.answerComparison === 'object'
+            ? Object.keys(payload.answerComparison).length
+            : null,
+        payload.answers && typeof payload.answers === 'object'
+            ? Object.keys(payload.answers).length
+            : null
+    ]);
+    let percentage = pickNumericValue([
+        scoreInfo.percentage,
+        payload.percentage,
+        typeof scoreInfo.accuracy === 'number' ? scoreInfo.accuracy * 100 : null,
+        typeof payload.accuracy === 'number' ? payload.accuracy * 100 : null
+    ]);
+    if (!Number.isFinite(percentage) && Number.isFinite(correct) && Number.isFinite(total) && total > 0) {
+        percentage = (correct / total) * 100;
+    }
+
+    const hasScore = Number.isFinite(correct) && Number.isFinite(total) && total > 0;
+    const hasPercentage = Number.isFinite(percentage);
+    if (!hasPercentage && !hasScore) {
+        return null;
+    }
+
+    return {
+        percentage: hasPercentage ? percentage : null,
+        correct: hasScore ? correct : null,
+        total: hasScore ? total : null
+    };
+}
+
+function formatPercentageDisplay(value) {
+    if (!Number.isFinite(value)) {
+        return null;
+    }
+    const rounded = Math.round(value * 10) / 10;
+    return Number.isInteger(rounded) ? `${rounded}%` : `${rounded.toFixed(1)}%`;
+}
+
+function showCompletionSummary(envelope) {
+    const payload = extractCompletionPayload(envelope);
+    const stats = extractCompletionStats(payload);
+    if (!stats) {
+        return;
+    }
+    const parts = [];
+    const pctText = formatPercentageDisplay(stats.percentage);
+    if (pctText) {
+        parts.push(`本次正确率 ${pctText}`);
+    }
+    if (Number.isFinite(stats.correct) && Number.isFinite(stats.total)) {
+        parts.push(`得分 ${stats.correct}/${stats.total}`);
+    }
+    if (parts.length === 0) {
+        return;
+    }
+    showMessage(`📊 ${parts.join('，')}`, 'info');
+}
+
 function setupMessageListener() {
     window.addEventListener('message', (event) => {
         // 更兼容的安全检查：允许同源或file协议下的子窗口
@@ -1276,19 +1417,27 @@ function setupMessageListener() {
                 }
             } catch (_) {}
         } else if (type === 'PRACTICE_COMPLETE' || type === 'practice_completed') {
-            const sessionId = (data && data.sessionId) || null;
+            const payload = extractCompletionPayload(data) || {};
+            const sessionId = extractCompletionSessionId(data);
             const rec = sessionId ? fallbackExamSessions.get(sessionId) : null;
+            const shouldNotify = shouldAnnounceCompletion(sessionId);
             if (rec) {
                 console.log('[Fallback] 收到练习完成（降级路径），保存真实数据');
-                savePracticeRecordFallback(rec.examId, data).finally(() => {
+                savePracticeRecordFallback(rec.examId, payload).finally(() => {
                     try { if (rec && rec.timer) clearInterval(rec.timer); } catch(_) {}
                     try { fallbackExamSessions.delete(sessionId); } catch(_) {}
-                    showMessage('练习已完成，正在更新记录...', 'success');
+                    if (shouldNotify) {
+                        showMessage('练习已完成，正在更新记录...', 'success');
+                        showCompletionSummary(payload);
+                    }
                     setTimeout(syncPracticeRecords, 300);
                 });
             } else {
                 console.log('[System] 收到练习完成消息，正在同步记录...');
-                showMessage('练习已完成，正在更新记录...', 'success');
+                if (shouldNotify) {
+                    showMessage('练习已完成，正在更新记录...', 'success');
+                    showCompletionSummary(payload);
+                }
                 setTimeout(syncPracticeRecords, 300);
             }
         }
