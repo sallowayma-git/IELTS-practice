@@ -268,7 +268,7 @@ class PracticeRecorder {
             return;
         }
         const { type, data } = normalized;
-        
+
         switch (type) {
             case 'session_started':
                 this.handleSessionStarted(data);
@@ -483,7 +483,12 @@ class PracticeRecorder {
             return '';
         }
         if (typeof value === 'string') {
-            return value.trim();
+            const trimmed = value.trim();
+            // 过滤 [object Object] 这样的无效字符串
+            if (/^\[object\s/i.test(trimmed)) {
+                return '';
+            }
+            return trimmed;
         }
         if (typeof value === 'number' || typeof value === 'boolean') {
             return String(value).trim();
@@ -495,16 +500,28 @@ class PracticeRecorder {
             const preferKeys = ['value', 'label', 'text', 'answer', 'content'];
             for (const key of preferKeys) {
                 if (typeof value[key] === 'string') {
-                    return value[key].trim();
+                    const extracted = value[key].trim();
+                    // 确保提取的值不是 [object Object]
+                    if (extracted && !/^\[object\s/i.test(extracted)) {
+                        return extracted;
+                    }
                 }
             }
-            if (typeof value.innerText === 'string') return value.innerText.trim();
-            if (typeof value.textContent === 'string') return value.textContent.trim();
-            try {
-                return JSON.stringify(value);
-            } catch (_) {
-                return String(value);
+            if (typeof value.innerText === 'string') {
+                const text = value.innerText.trim();
+                if (text && !/^\[object\s/i.test(text)) {
+                    return text;
+                }
             }
+            if (typeof value.textContent === 'string') {
+                const text = value.textContent.trim();
+                if (text && !/^\[object\s/i.test(text)) {
+                    return text;
+                }
+            }
+            // 对于无法提取有效值的对象，返回空字符串而不是序列化
+            console.warn('[PracticeRecorder] 无法从对象中提取有效答案值:', value);
+            return '';
         }
         return String(value);
     }
@@ -521,6 +538,10 @@ class PracticeRecorder {
         }
         if (rawAnswers && typeof rawAnswers === 'object') {
             Object.entries(rawAnswers).forEach(([rawKey, rawValue]) => {
+                // 过滤噪声键
+                if (this.isNoiseKey(rawKey)) {
+                    return;
+                }
                 const key = rawKey && rawKey.startsWith('q') ? rawKey : `q${rawKey}`;
                 map[key] = this.normalizeAnswerValue(
                     rawValue && typeof rawValue === 'object' && 'answer' in rawValue
@@ -530,6 +551,50 @@ class PracticeRecorder {
             });
         }
         return map;
+    }
+
+    isNoiseKey(key) {
+        if (!key) return true;
+
+        const keyStr = String(key).toLowerCase();
+
+        // 噪声关键字列表
+        const noiseKeys = [
+            'playback-speed', 'playbackspeed', 'volume-slider', 'volumeslider',
+            'audio-volume', 'audiocurrenttime', 'audio-duration', 'audioduration',
+            'settings', 'lastfocuselement', 'sessionid', 'examid',
+            'nextexamid', 'previousexamid', 'folder', 'source', 'result',
+            'metadata', 'practicesettings', 'config', 'state'
+        ];
+
+        // 检查是否在噪声列表中
+        if (noiseKeys.includes(keyStr)) {
+            return true;
+        }
+
+        // 检查噪声模式
+        const noisePatterns = [
+            /playback/i, /volume/i, /slider/i, /speed/i,
+            /audio/i, /duration/i, /config/i, /setting/i
+        ];
+
+        for (const pattern of noisePatterns) {
+            if (pattern.test(keyStr)) {
+                return true;
+            }
+        }
+
+        // 检查题号范围（只保留合理的题号）
+        const questionMatch = keyStr.match(/q?(\d+)/);
+        if (questionMatch) {
+            const num = parseInt(questionMatch[1], 10);
+            // 题号必须在1-200之间
+            if (num < 1 || num > 200) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     mergeAnswerSources(...sources) {
@@ -592,6 +657,10 @@ class PracticeRecorder {
         }
         const normalized = {};
         Object.entries(comparison).forEach(([questionId, entry]) => {
+            // 过滤噪声键
+            if (this.isNoiseKey(questionId)) {
+                return;
+            }
             if (!entry || typeof entry !== 'object') {
                 return;
             }
@@ -701,7 +770,7 @@ class PracticeRecorder {
     startPracticeSession(examId, examData = {}) {
         const sessionId = this.generateSessionId();
         const startTime = new Date().toISOString();
-        
+
         const sessionData = {
             sessionId,
             examId,
@@ -724,21 +793,21 @@ class PracticeRecorder {
                 timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
             }
         };
-        
+
         // 存储会话
         this.activeSessions.set(examId, sessionData);
         this.saveActiveSessions().catch(error => {
             console.error('[PracticeRecorder] 保存活动会话失败:', error);
         });
-        
+
         // 设置会话监听器
         this.setupSessionListener(examId);
-        
+
         console.log(`Practice session started for exam: ${examId}`);
-        
+
         // 触发事件
         this.dispatchSessionEvent('sessionStarted', { examId, sessionData });
-        
+
         return sessionData;
     }
 
@@ -747,22 +816,22 @@ class PracticeRecorder {
      */
     handleSessionStarted(data) {
         const { examId, sessionId, metadata } = data;
-        
+
         if (this.activeSessions.has(examId)) {
             let session = this.activeSessions.get(examId);
             session.sessionId = sessionId;
             session.status = 'active';
             session.lastActivity = new Date().toISOString();
-            
+
             if (metadata) {
                 session.metadata = { ...session.metadata, ...metadata };
             }
-            
+
             this.activeSessions.set(examId, session);
             this.saveActiveSessions().catch(error => {
                 console.error('[PracticeRecorder] 保存活动会话失败:', error);
             });
-            
+
             console.log(`Session confirmed started: ${examId}`);
         }
     }
@@ -772,19 +841,19 @@ class PracticeRecorder {
      */
     handleSessionProgress(data) {
         const { examId, progress, answers } = data;
-        
+
         if (!this.activeSessions.has(examId)) return;
-        
+
         let session = this.activeSessions.get(examId);
         session.lastActivity = new Date().toISOString();
         session.progress = { ...session.progress, ...progress };
-        
+
         if (answers) {
             session.answers = Array.isArray(answers)
                 ? this.convertAnswerArrayToMap(answers)
                 : answers;
         }
-        
+
         this.activeSessions.set(examId, session);
 
         // 触发进度事件
@@ -941,7 +1010,7 @@ class PracticeRecorder {
             practiceRecord.answerComparison = normalizedComparison;
             practiceRecord.realData.answerComparison = normalizedComparison;
         }
-        
+
         try {
             const savedRecord = await this.savePracticeRecord(practiceRecord) || practiceRecord;
             await this.updateUserStats(savedRecord);
@@ -967,18 +1036,18 @@ class PracticeRecorder {
      */
     handleSessionPaused(data) {
         const { examId } = data;
-        
+
         if (!this.activeSessions.has(examId)) return;
-        
+
         let session = this.activeSessions.get(examId);
         session.status = 'paused';
         session.lastActivity = new Date().toISOString();
-        
+
         this.activeSessions.set(examId, session);
         this.saveActiveSessions().catch(error => {
             console.error('[PracticeRecorder] 保存活动会话失败:', error);
         });
-        
+
         console.log(`Session paused: ${examId}`);
     }
 
@@ -987,18 +1056,18 @@ class PracticeRecorder {
      */
     handleSessionResumed(data) {
         const { examId } = data;
-        
+
         if (!this.activeSessions.has(examId)) return;
-        
+
         let session = this.activeSessions.get(examId);
         session.status = 'active';
         session.lastActivity = new Date().toISOString();
-        
+
         this.activeSessions.set(examId, session);
         this.saveActiveSessions().catch(error => {
             console.error('[PracticeRecorder] 保存活动会话失败:', error);
         });
-        
+
         console.log(`Session resumed: ${examId}`);
     }
 
@@ -1007,21 +1076,21 @@ class PracticeRecorder {
      */
     handleSessionError(data) {
         const { examId, error } = data;
-        
+
         if (!this.activeSessions.has(examId)) return;
-        
+
         let session = this.activeSessions.get(examId);
         session.status = 'error';
         session.error = error;
         session.lastActivity = new Date().toISOString();
-        
+
         this.activeSessions.set(examId, session);
         this.saveActiveSessions().catch(error => {
             console.error('[PracticeRecorder] 保存活动会话失败:', error);
         });
-        
+
         console.error(`Session error for ${examId}:`, error);
-        
+
         // 触发错误事件
         this.dispatchSessionEvent('sessionError', { examId, error });
     }
@@ -1031,14 +1100,14 @@ class PracticeRecorder {
      */
     endPracticeSession(examId, reason = 'completed') {
         if (!this.activeSessions.has(examId)) return;
-        
+
         let session = this.activeSessions.get(examId);
-        
+
         // 如果会话未完成，创建中断记录
         if (reason !== 'completed' && session.status !== 'completed') {
             const endTime = new Date().toISOString();
             const duration = new Date(endTime) - new Date(session.startTime);
-            
+
             const interruptedRecord = {
                 id: `interrupted_${session.sessionId}`,
                 examId,
@@ -1053,21 +1122,21 @@ class PracticeRecorder {
                 metadata: session.metadata,
                 createdAt: endTime
             };
-            
+
             this.saveInterruptedRecord(interruptedRecord).catch(error => {
                 console.error('[PracticeRecorder] 保存中断记录失败:', error);
             });
         }
-        
+
         // 清理会话
         this.activeSessions.delete(examId);
         this.cleanupSessionListener(examId);
         this.saveActiveSessions().catch(error => {
             console.error('[PracticeRecorder] 保存活动会话失败:', error);
         });
-        
+
         console.log(`Practice session ended: ${examId} (${reason})`);
-        
+
         // 触发结束事件
         this.dispatchSessionEvent('sessionEnded', { examId, reason });
     }
@@ -1080,7 +1149,7 @@ class PracticeRecorder {
         const listener = setInterval(() => {
             this.checkSessionActivity(examId);
         }, 60000); // 每分钟检查一次
-        
+
         this.sessionListeners.set(examId, listener);
     }
 
@@ -1099,12 +1168,12 @@ class PracticeRecorder {
      */
     checkSessionActivity(examId) {
         if (!this.activeSessions.has(examId)) return;
-        
+
         let session = this.activeSessions.get(examId);
         const now = new Date();
         const lastActivity = new Date(session.lastActivity);
         const inactiveTime = now - lastActivity;
-        
+
         // 如果超过30分钟无活动，标记为超时
         if (inactiveTime > 30 * 60 * 1000) {
             console.warn(`Session timeout detected for exam: ${examId}`);
@@ -1335,7 +1404,7 @@ class PracticeRecorder {
             version: '1.0.0',
             createdAt: recordData.createdAt || now,
             updatedAt: now,
-            
+
             // 降级保存标识
             savedBy: 'fallback',
             fallbackReason: 'ScoreStorage unavailable'
@@ -1380,21 +1449,32 @@ class PracticeRecorder {
             return record;
         }
         const clone = Object.assign({}, record);
+        // normalizeAnswerMap 已经自动过滤噪声键和无效值
         const answerMap = (record.answers && typeof record.answers === 'object' && !Array.isArray(record.answers))
-            ? record.answers
+            ? this.normalizeAnswerMap(record.answers)
             : this.convertAnswerArrayToMap(record.answerList || []);
         let correctMap = record.correctAnswerMap || {};
         if (!correctMap || Object.keys(correctMap).length === 0) {
             correctMap = this.deriveCorrectMapFromDetails(record.answerDetails || record.scoreInfo?.details);
         }
+        correctMap = this.normalizeAnswerMap(correctMap);
+
         const answerList = this.convertAnswerMapToArray(answerMap, correctMap);
         clone.answerList = answerList;
         clone.answers = answerList;
+
+        if (clone.answerComparison) {
+            clone.answerComparison = this.normalizeAnswerComparison(clone.answerComparison);
+        }
+
         if (clone.realData) {
             clone.realData = Object.assign({}, clone.realData, {
                 answers: answerMap,
                 correctAnswers: correctMap
             });
+            if (clone.realData.answerComparison) {
+                clone.realData.answerComparison = this.normalizeAnswerComparison(clone.realData.answerComparison);
+            }
         }
         return clone;
     }
@@ -1523,7 +1603,7 @@ class PracticeRecorder {
             lastPracticeDate: null,
             achievements: []
         });
-        
+
         // 更新基础统计
         const duration = Number(practiceRecord.duration) || 0;
         const accuracy = Number(practiceRecord.accuracy) || 0;
@@ -1568,7 +1648,7 @@ class PracticeRecorder {
                         correctAnswers: 0
                     };
                 }
-                
+
                 const typeStats = stats.questionTypeStats[type];
                 typeStats.practices += 1;
                 typeStats.totalQuestions += performance.total || 0;
@@ -1617,7 +1697,7 @@ class PracticeRecorder {
                 if (filters.endDate && new Date(record.startTime) > new Date(filters.endDate)) return false;
                 if (filters.minAccuracy && record.accuracy < filters.minAccuracy) return false;
                 if (filters.maxAccuracy && record.accuracy > filters.maxAccuracy) return false;
-                
+
                 return true;
             });
         }
@@ -1794,7 +1874,7 @@ class PracticeRecorder {
         if (!realData || typeof realData !== 'object') {
             return null;
         }
-        
+
         // 必需字段检查
         const requiredFields = ['sessionId', 'duration'];
         for (const field of requiredFields) {
@@ -1803,31 +1883,31 @@ class PracticeRecorder {
                 return null;
             }
         }
-        
+
         // 数据类型检查
         if (typeof realData.duration !== 'number' || realData.duration < 0) {
             console.warn('[PracticeRecorder] 无效的练习时间');
             return null;
         }
-        
+
         // 答案数据检查
         if (realData.answers && typeof realData.answers !== 'object') {
             console.warn('[PracticeRecorder] 无效的答案数据格式');
             return null;
         }
-        
+
         // 分数信息检查
         if (realData.scoreInfo) {
             const { correct, total, accuracy, percentage } = realData.scoreInfo;
-            
+
             if (correct !== undefined && total !== undefined) {
-                if (typeof correct !== 'number' || typeof total !== 'number' || 
+                if (typeof correct !== 'number' || typeof total !== 'number' ||
                     correct < 0 || total < 0 || correct > total) {
                     console.warn('[PracticeRecorder] 无效的分数数据');
                     return null;
                 }
             }
-            
+
             if (accuracy !== undefined) {
                 if (typeof accuracy !== 'number' || accuracy < 0 || accuracy > 1) {
                     console.warn('[PracticeRecorder] 无效的正确率数据');
@@ -1835,7 +1915,7 @@ class PracticeRecorder {
                 }
             }
         }
-        
+
         return realData;
     }
 
@@ -1845,36 +1925,36 @@ class PracticeRecorder {
     createRealPracticeRecord(exam, realData) {
         const now = new Date();
         const recordId = `real_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        
+
         // 提取分数信息
         const scoreInfo = realData.scoreInfo || {};
         const score = scoreInfo.correct || 0;
         const totalQuestions = scoreInfo.total || Object.keys(realData.answers || {}).length;
         const accuracy = scoreInfo.accuracy || (totalQuestions > 0 ? score / totalQuestions : 0);
-        
+
         const practiceRecord = {
             // 基础信息 - 与ScoreStorage兼容
             id: recordId,
             examId: exam.id,
             sessionId: realData.sessionId,
-            
+
             // 时间信息
-            startTime: realData.startTime ? new Date(realData.startTime).toISOString() : 
-                      new Date(Date.now() - realData.duration * 1000).toISOString(),
+            startTime: realData.startTime ? new Date(realData.startTime).toISOString() :
+                new Date(Date.now() - realData.duration * 1000).toISOString(),
             endTime: realData.endTime ? new Date(realData.endTime).toISOString() : now.toISOString(),
             duration: realData.duration || 0,
-            
+
             // 成绩信息
             status: 'completed',
             score: score,
             totalQuestions: totalQuestions,
             correctAnswers: score, // 正确答案数等于分数
             accuracy: accuracy,
-            
+
             // 答题详情 - 转换为ScoreStorage期望的格式
             answers: this.convertAnswersFormat(realData.answers || {}),
             questionTypePerformance: this.extractQuestionTypePerformance(realData),
-            
+
             // 元数据 - 与ScoreStorage兼容
             metadata: {
                 examTitle: exam.title || '',
@@ -1884,7 +1964,7 @@ class PracticeRecorder {
                 dataQuality: this.assessDataQuality(realData),
                 processingTime: Date.now()
             },
-            
+
             // 额外的真实数据信息
             realData: {
                 sessionId: realData.sessionId,
@@ -1896,13 +1976,13 @@ class PracticeRecorder {
                 url: realData.url,
                 source: scoreInfo.source || 'data_collector'
             },
-            
+
             // 系统信息
             dataSource: 'real',
             isRealData: true,
             createdAt: now.toISOString()
         };
-        
+
         return practiceRecord;
     }
 
@@ -1913,7 +1993,7 @@ class PracticeRecorder {
         if (!answers || typeof answers !== 'object') {
             return [];
         }
-        
+
         return Object.entries(answers).map(([questionId, answer], index) => ({
             questionId: questionId,
             answer: answer,
@@ -1932,7 +2012,7 @@ class PracticeRecorder {
         if (realData.questionTypePerformance) {
             return realData.questionTypePerformance;
         }
-        
+
         // 如果有scoreInfo，尝试从中提取
         if (realData.scoreInfo) {
             const { correct, total } = realData.scoreInfo;
@@ -1946,7 +2026,7 @@ class PracticeRecorder {
                 };
             }
         }
-        
+
         return {};
     }
 
@@ -1956,23 +2036,23 @@ class PracticeRecorder {
     assessDataQuality(realData) {
         let quality = 'good';
         const issues = [];
-        
+
         // 检查数据完整性
         if (!realData.scoreInfo) {
             issues.push('no_score_info');
             quality = 'fair';
         }
-        
+
         if (!realData.answers || Object.keys(realData.answers).length === 0) {
             issues.push('no_answers');
             quality = 'poor';
         }
-        
+
         if (!realData.interactions || realData.interactions.length === 0) {
             issues.push('no_interactions');
             if (quality === 'good') quality = 'fair';
         }
-        
+
         // 检查时间合理性
         if (realData.duration < 60) { // 少于1分钟
             issues.push('too_short');
@@ -1981,7 +2061,7 @@ class PracticeRecorder {
             issues.push('too_long');
             if (quality === 'good') quality = 'fair';
         }
-        
+
         return {
             level: quality,
             issues: issues,
@@ -2000,9 +2080,9 @@ class PracticeRecorder {
             'poor': 0.50,
             'questionable': 0.30
         };
-        
+
         let confidence = baseConfidence[quality] || 0.50;
-        
+
         // 根据问题调整可信度
         const penaltyMap = {
             'no_score_info': 0.10,
@@ -2011,11 +2091,11 @@ class PracticeRecorder {
             'too_short': 0.15,
             'too_long': 0.05
         };
-        
+
         issues.forEach(issue => {
             confidence -= penaltyMap[issue] || 0.05;
         });
-        
+
         return Math.max(0.1, Math.min(1.0, confidence));
     }
 
@@ -2028,10 +2108,10 @@ class PracticeRecorder {
         // 检查是否有活动会话
         if (this.activeSessions.has(examId)) {
             let session = this.activeSessions.get(examId);
-            
+
             // 生成模拟结果
             const simulatedResults = this.generateSimulatedResults(session);
-            
+
             // 使用现有的完成处理逻辑
             return await this.handleSessionCompleted({
                 examId: examId,
@@ -2049,12 +2129,12 @@ class PracticeRecorder {
     generateSimulatedResults(session) {
         const duration = Math.floor((Date.now() - new Date(session.startTime).getTime()) / 1000);
         const estimatedQuestions = session.progress.totalQuestions || 13;
-        
+
         // 生成合理的模拟分数
         const baseScore = Math.floor(estimatedQuestions * 0.7); // 70%基准
         const variation = Math.floor(Math.random() * (estimatedQuestions * 0.3)); // ±30%变化
         const score = Math.max(0, Math.min(estimatedQuestions, baseScore + variation - estimatedQuestions * 0.15));
-        
+
         return {
             score: score,
             totalQuestions: estimatedQuestions,
@@ -2071,10 +2151,10 @@ class PracticeRecorder {
      */
     setupPracticePageCommunication(examWindow, sessionId) {
         console.log('[PracticeRecorder] 建立练习页面通信:', sessionId);
-        
+
         // 这个方法可以被ExamSystemApp调用来建立通信
         // 实际的消息处理已经在initialize()中设置
-        
+
         // 可以在这里添加特定于会话的通信设置
         if (examWindow && !examWindow.closed) {
             // 发送记录器就绪信号
@@ -2163,7 +2243,7 @@ class PracticeRecorder {
                     quota: 'unknown'
                 }
             };
-            
+
             // 检查练习记录
             const records = await this.practiceRepo.list();
             const recordList = Array.isArray(records) ? records : [];
@@ -2182,20 +2262,20 @@ class PracticeRecorder {
             const tempList = Array.isArray(tempRecords) ? tempRecords : [];
             report.temporaryRecords.total = tempList.length;
             report.temporaryRecords.needsRecovery = tempList.filter(r => r && r.needsRecovery).length;
-            
+
             // 检查活动会话
             const now = Date.now();
             this.activeSessions.forEach(session => {
                 const lastActivity = new Date(session.lastActivity).getTime();
                 const inactiveTime = now - lastActivity;
-                
+
                 if (inactiveTime < 30 * 60 * 1000) { // 30分钟内
                     report.activeSessions.active++;
                 } else {
                     report.activeSessions.stale++;
                 }
             });
-            
+
             // 检查存储状态
             try {
                 const storageInfo = window.storage && typeof window.storage.getStorageInfo === 'function'
@@ -2219,13 +2299,13 @@ class PracticeRecorder {
      */
     validateRecordIntegrity(record) {
         const requiredFields = ['id', 'examId', 'startTime', 'endTime'];
-        
+
         for (const field of requiredFields) {
             if (!record[field]) {
                 return false;
             }
         }
-        
+
         // 验证时间格式
         try {
             new Date(record.startTime);
@@ -2233,16 +2313,16 @@ class PracticeRecorder {
         } catch (error) {
             return false;
         }
-        
+
         // 验证数值范围
         if (record.accuracy !== undefined && (record.accuracy < 0 || record.accuracy > 1)) {
             return false;
         }
-        
+
         if (record.duration !== undefined && record.duration < 0) {
             return false;
         }
-        
+
         return true;
     }
 
@@ -2254,13 +2334,13 @@ class PracticeRecorder {
         if (this.autoSaveTimer) {
             clearInterval(this.autoSaveTimer);
         }
-        
+
         // 清理会话监听器
         for (const listener of this.sessionListeners.values()) {
             clearInterval(listener);
         }
         this.sessionListeners.clear();
-        
+
         // 保存所有数据
         this.saveAllSessions().catch(error => {
             console.error('[PracticeRecorder] 销毁时保存会话失败:', error);
