@@ -1,3 +1,7 @@
+const AnswerSanitizer = (typeof window !== 'undefined' && window.AnswerSanitizer)
+    ? window.AnswerSanitizer
+    : null;
+
 /**
  * 练习记录管理器
  * 负责练习会话管理、成绩记录和数据持久化
@@ -356,6 +360,10 @@ class PracticeRecorder {
             return Number.isFinite(num) ? num : fallback;
         };
 
+        const normalizedComparison = this.normalizeAnswerComparison(
+            payload.answerComparison || payload.realData?.answerComparison || null
+        );
+
         const answerMap = this.normalizeAnswerMap(payload.answers);
         const correctAnswerMap = this.normalizeAnswerMap(payload.correctAnswers);
         const answerDetails = this.buildAnswerDetails(answerMap, correctAnswerMap);
@@ -405,12 +413,19 @@ class PracticeRecorder {
                 answerMap,
                 correctAnswerMap,
                 answerDetails,
+                answerComparison: normalizedComparison,
                 questionTypePerformance: payload.questionTypePerformance || {},
                 interactions: payload.interactions || [],
                 startTime: payload.startTime || null,
                 endTime: payload.endTime || null,
                 metadata: payload.metadata || {},
-                source: scoreInfo.source || payload.pageType || 'practice_page'
+                source: scoreInfo.source || payload.pageType || 'practice_page',
+                realData: Object.assign({}, payload.realData || {}, {
+                    answers: answerMap,
+                    correctAnswers: correctAnswerMap,
+                    answerComparison: normalizedComparison,
+                    scoreInfo: Object.assign({}, scoreInfo, { details: answerDetails })
+                })
             }
         };
     }
@@ -461,6 +476,9 @@ class PracticeRecorder {
     }
 
     normalizeAnswerValue(value) {
+        if (AnswerSanitizer && typeof AnswerSanitizer.normalizeValue === 'function') {
+            return AnswerSanitizer.normalizeValue(value);
+        }
         if (value === undefined || value === null) {
             return '';
         }
@@ -569,15 +587,25 @@ class PracticeRecorder {
         if (!comparison || typeof comparison !== 'object') {
             return {};
         }
+        if (AnswerSanitizer && typeof AnswerSanitizer.sanitizeComparisonMap === 'function') {
+            return AnswerSanitizer.sanitizeComparisonMap(comparison);
+        }
         const normalized = {};
         Object.entries(comparison).forEach(([questionId, entry]) => {
             if (!entry || typeof entry !== 'object') {
                 return;
             }
+            const userAnswer = this.normalizeAnswerValue(entry.userAnswer ?? entry.user ?? entry.answer);
+            const correctAnswer = this.normalizeAnswerValue(entry.correctAnswer ?? entry.correct);
+            const hasUser = !!userAnswer;
+            const hasCorrect = !!correctAnswer;
+            if (!hasUser && !hasCorrect) {
+                return;
+            }
             normalized[questionId] = {
                 questionId: entry.questionId || questionId,
-                userAnswer: this.normalizeAnswerValue(entry.userAnswer ?? entry.user ?? entry.answer),
-                correctAnswer: this.normalizeAnswerValue(entry.correctAnswer ?? entry.correct),
+                userAnswer,
+                correctAnswer,
                 isCorrect: typeof entry.isCorrect === 'boolean' ? entry.isCorrect : null
             };
         });
