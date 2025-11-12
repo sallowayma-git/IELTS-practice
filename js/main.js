@@ -86,12 +86,28 @@ function getPracticeRecordsState() {
     return Array.isArray(window.practiceRecords) ? window.practiceRecords : [];
 }
 
+function enrichPracticeRecordForUI(record) {
+    if (!record || typeof record !== 'object') {
+        return record;
+    }
+    if (typeof window !== 'undefined' && window.DataConsistencyManager) {
+        try {
+            const manager = new DataConsistencyManager();
+            return manager.enrichRecordData(record);
+        } catch (error) {
+            console.warn('[PracticeRecords] enrichRecordData 失败，返回原始记录:', error);
+        }
+    }
+    return record;
+}
+
 function setPracticeRecordsState(records) {
     let normalized;
     if (stateService) {
-        normalized = stateService.setPracticeRecords(records);
+        const enriched = Array.isArray(records) ? records.map(enrichPracticeRecordForUI) : [];
+        normalized = stateService.setPracticeRecords(enriched);
     } else {
-        normalized = Array.isArray(records) ? records.slice() : [];
+        normalized = Array.isArray(records) ? records.map(enrichPracticeRecordForUI) : [];
         try { window.practiceRecords = normalized; } catch (_) {}
     }
     const finalRecords = Array.isArray(normalized) ? normalized : [];
@@ -1454,6 +1470,126 @@ function setupStorageSyncListener() {
     });
 }
 
+function normalizeFallbackAnswerValue(value) {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  if (typeof value === 'boolean') {
+    return value ? 'True' : 'False';
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => normalizeFallbackAnswerValue(item))
+      .filter(Boolean)
+      .join(', ');
+  }
+  if (typeof value === 'object') {
+    const preferKeys = ['value', 'label', 'text', 'answer', 'content'];
+    for (const key of preferKeys) {
+      if (typeof value[key] === 'string' && value[key].trim()) {
+        return value[key].trim();
+      }
+    }
+    if (typeof value.innerText === 'string' && value.innerText.trim()) {
+      return value.innerText.trim();
+    }
+    if (typeof value.textContent === 'string' && value.textContent.trim()) {
+      return value.textContent.trim();
+    }
+    try {
+      const json = JSON.stringify(value);
+      if (json && json !== '{}' && json !== '[]') {
+        return json;
+      }
+    } catch (_) {}
+    return String(value);
+  }
+  return String(value).trim();
+}
+
+function normalizeFallbackAnswerMap(rawAnswers) {
+  const map = {};
+  if (!rawAnswers) {
+    return map;
+  }
+  if (Array.isArray(rawAnswers)) {
+    rawAnswers.forEach((entry, index) => {
+      if (!entry) return;
+      const key = entry.questionId || `q${index + 1}`;
+      map[key] = normalizeFallbackAnswerValue(entry.answer ?? entry.userAnswer ?? entry.value ?? entry);
+    });
+    return map;
+  }
+  Object.entries(rawAnswers).forEach(([rawKey, rawValue]) => {
+    if (!rawKey) return;
+    const key = rawKey.startsWith('q') ? rawKey : `q${rawKey}`;
+    map[key] = normalizeFallbackAnswerValue(
+      rawValue && typeof rawValue === 'object' && 'answer' in rawValue
+        ? rawValue.answer
+        : rawValue
+    );
+  });
+  return map;
+}
+
+function buildFallbackAnswerDetails(answerMap = {}, correctMap = {}) {
+  const details = {};
+  const keys = new Set([
+    ...Object.keys(answerMap || {}),
+    ...Object.keys(correctMap || {})
+  ]);
+  keys.forEach((key) => {
+    const userAnswer = normalizeFallbackAnswerValue(answerMap[key]);
+    const correctAnswer = normalizeFallbackAnswerValue(correctMap[key]);
+    let isCorrect = null;
+    if (correctAnswer) {
+      isCorrect = userAnswer && userAnswer.toLowerCase() === correctAnswer.toLowerCase();
+    }
+    details[key] = {
+      userAnswer: userAnswer || '-',
+      correctAnswer: correctAnswer || '-',
+      isCorrect
+    };
+  });
+  return details;
+}
+
+function normalizeFallbackAnswerComparison(existingComparison, answerMap, correctMap) {
+  const normalized = {};
+  const source = existingComparison && typeof existingComparison === 'object' ? existingComparison : {};
+  Object.entries(source).forEach(([questionId, entry]) => {
+    if (!entry || typeof entry !== 'object') return;
+    normalized[questionId] = {
+      questionId,
+      userAnswer: normalizeFallbackAnswerValue(entry.userAnswer ?? entry.user ?? entry.answer),
+      correctAnswer: normalizeFallbackAnswerValue(entry.correctAnswer ?? entry.correct),
+      isCorrect: typeof entry.isCorrect === 'boolean' ? entry.isCorrect : null
+    };
+  });
+
+  const mergedKeys = new Set([
+    ...Object.keys(answerMap || {}),
+    ...Object.keys(correctMap || {})
+  ]);
+  mergedKeys.forEach((key) => {
+    if (normalized[key]) return;
+    const userAnswer = normalizeFallbackAnswerValue(answerMap[key]);
+    const correctAnswer = normalizeFallbackAnswerValue(correctMap[key]);
+    let isCorrect = null;
+    if (correctAnswer) {
+      isCorrect = userAnswer && userAnswer.toLowerCase() === correctAnswer.toLowerCase();
+    }
+    normalized[key] = {
+      questionId: key,
+      userAnswer: userAnswer || '',
+      correctAnswer: correctAnswer || '',
+      isCorrect
+    };
+  });
+
+  return normalized;
+}
+
 // 降级保存：将 PRACTICE_COMPLETE 的真实数据写入 practice_records（与旧视图字段兼容）
 async function savePracticeRecordFallback(examId, realData) {
   try {
@@ -1462,9 +1598,22 @@ async function savePracticeRecordFallback(examId, realData) {
 
     const sInfo = realData && realData.scoreInfo ? realData.scoreInfo : {};
     const correct = typeof sInfo.correct === 'number' ? sInfo.correct : 0;
-    const total = typeof sInfo.total === 'number' ? sInfo.total : (realData.answers ? Object.keys(realData.answers).length : 0);
+    const normalizedAnswers = normalizeFallbackAnswerMap(realData.answers);
+    const normalizedCorrectMap = normalizeFallbackAnswerMap(realData.correctAnswers);
+    const total = typeof sInfo.total === 'number' ? sInfo.total : Object.keys(normalizedCorrectMap).length || Object.keys(normalizedAnswers).length;
     const acc = typeof sInfo.accuracy === 'number' ? sInfo.accuracy : (total > 0 ? correct / total : 0);
     const pct = typeof sInfo.percentage === 'number' ? sInfo.percentage : Math.round(acc * 100);
+
+    const answerDetails = buildFallbackAnswerDetails(normalizedAnswers, normalizedCorrectMap);
+    const answerComparison = normalizeFallbackAnswerComparison(realData.answerComparison, normalizedAnswers, normalizedCorrectMap);
+    const scoreInfo = {
+      correct,
+      total,
+      accuracy: acc,
+      percentage: pct,
+      details: answerDetails,
+      source: sInfo.source || realData.source || 'fallback'
+    };
 
     const record = {
       id: Date.now(),
@@ -1478,9 +1627,11 @@ async function savePracticeRecordFallback(examId, realData) {
         accuracy: acc,
         percentage: pct,
         duration: realData.duration,
-        answers: realData.answers || {},
-        correctAnswers: realData.correctAnswers || {},
+        answers: normalizedAnswers,
+        correctAnswers: normalizedCorrectMap,
         interactions: realData.interactions || [],
+        answerComparison,
+        scoreInfo,
         isRealData: true,
         source: sInfo.source || 'fallback'
       },
@@ -1494,7 +1645,11 @@ async function savePracticeRecordFallback(examId, realData) {
       totalQuestions: total,
       accuracy: acc,
       percentage: pct,
-      answers: realData.answers || {},
+      answers: normalizedAnswers,
+      answerDetails,
+      correctAnswerMap: normalizedCorrectMap,
+      answerComparison,
+      scoreInfo,
       startTime: new Date((realData.startTime ?? (Date.now() - (realData.duration || 0) * 1000))).toISOString(),
       endTime: new Date((realData.endTime ?? Date.now())).toISOString()
     };
@@ -2154,6 +2309,36 @@ function updatePracticeView() {
         itemFactory: renderPracticeRecordItem
     });
     refreshBulkDeleteButton();
+}
+
+let practiceSessionEventBound = false;
+function ensurePracticeSessionSyncListener() {
+    if (practiceSessionEventBound) {
+        return;
+    }
+    practiceSessionEventBound = true;
+    document.addEventListener('practiceSessionCompleted', (event) => {
+        try {
+            const detail = event && event.detail ? event.detail : {};
+            let record = detail.practiceRecord;
+            if (record && typeof record === 'object') {
+                record = enrichPracticeRecordForUI(record);
+                const current = getPracticeRecordsState();
+                const filtered = Array.isArray(current)
+                    ? current.filter((item) => item && item.id !== record.id)
+                    : [];
+                setPracticeRecordsState([record, ...filtered]);
+                updatePracticeView();
+            }
+        } catch (syncError) {
+            console.warn('[PracticeView] practiceSessionCompleted 事件处理失败:', syncError);
+        } finally {
+            // 仍然执行一次全面同步，确保 ScoreStorage/StorageRepo 状态一致
+            setTimeout(() => {
+                try { syncPracticeRecords(); } catch (_) {}
+            }, 200);
+        }
+    });
 }
 
 function computePracticeSummaryFallback(records) {
@@ -6678,3 +6863,4 @@ function setupExamActionHandlers() {
 }
 
 setupExamActionHandlers();
+ensurePracticeSessionSyncListener();

@@ -480,6 +480,27 @@ def run_checks() -> Tuple[List[dict], bool]:
             results.append(_format_result("Mixin 方法契约覆盖", coverage_passed, coverage_detail))
             all_passed &= coverage_passed
 
+    sanitizer_test = REPO_ROOT / "developer" / "tests" / "js" / "answerSanitizer.test.js"
+    if sanitizer_test.exists():
+        try:
+            completed_sanitizer = subprocess.run(
+                ["node", str(sanitizer_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            sanitizer_passed = False
+            sanitizer_detail = f"执行失败: {(exc.stdout or exc.stderr or str(exc)).strip()}"
+        else:
+            sanitizer_passed = True
+            sanitizer_detail = completed_sanitizer.stdout.strip() or "已执行"
+        results.append(_format_result("AnswerSanitizer 单元测试", sanitizer_passed, sanitizer_detail))
+        all_passed &= sanitizer_passed
+    else:
+        results.append(_format_result("AnswerSanitizer 单元测试", False, "测试脚本缺失"))
+        all_passed = False
+
     suite_flow_test = REPO_ROOT / "developer" / "tests" / "js" / "suiteModeFlow.test.js"
     if suite_flow_test.exists():
         try:
