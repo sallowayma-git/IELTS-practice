@@ -1194,13 +1194,14 @@ if (!window.practicePageEnhancer) {
                     // 生成答案比较数据
                     const answerComparison = self.generateAnswerComparison();
 
-                    // 使用从URL提取的真实examId，而不是父窗口传递的通用ID
-                    const realExamId = self.extractExamIdFromUrl();
+                    const derivedExamId = self.extractExamIdFromUrl();
+                    const resolvedExamId = self.examId || derivedExamId;
                     
                     const results = {
                         sessionId: self.sessionId,
-                        examId: realExamId, // 使用从URL提取的真实examId
-                        originalExamId: self.examId, // 保留原始的examId用于调试
+                        examId: resolvedExamId,
+                        derivedExamId,
+                        originalExamId: self.examId,
                         startTime: self.startTime,
                         endTime: endTime,
                         duration: duration,

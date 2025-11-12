@@ -1419,6 +1419,12 @@ class PracticeHistory {
             return renderEmpty();
         }
 
+        const normalizedEntries = this.getNormalizedEntries(entry);
+        if (normalizedEntries.length > 0) {
+            const tableHtml = this.renderNormalizedAnswers(normalizedEntries);
+            return wrapWithSection ? `${wrapStart}${heading}${tableHtml}${wrapEnd}` : tableHtml;
+        }
+
         if (entry.answerComparison && Object.keys(entry.answerComparison).length > 0) {
             const merged = this.mergeComparisonWithCorrections(entry);
             const tableHtml = this.generateTableFromComparison(merged);
@@ -1495,12 +1501,179 @@ class PracticeHistory {
         return wrapWithSection ? `${wrapStart}${heading}${content}${wrapEnd}` : content;
     }
 
+    getNormalizedEntries(record) {
+        if (!record || !window.AnswerComparisonUtils || typeof window.AnswerComparisonUtils.getNormalizedEntries !== 'function') {
+            return [];
+        }
+        try {
+            const entries = window.AnswerComparisonUtils.getNormalizedEntries(record) || [];
+            return entries.filter(entry => entry && (entry.hasUserAnswer || entry.hasCorrectAnswer));
+        } catch (error) {
+            console.warn('[PracticeHistory] 归一化答案失败:', error);
+            return [];
+        }
+    }
+
+    renderNormalizedAnswers(entries) {
+        if (!Array.isArray(entries) || entries.length === 0) {
+            return '<div class="no-answers-message"><p>暂无答案详情数据</p></div>';
+        }
+
+        const summary = this.buildNormalizedSummary(entries);
+        const summaryParts = [`<span class="summary-item">总题数：${summary.total}</span>`];
+        if (summary.correct > 0) {
+            summaryParts.push(`<span class="summary-item correct">正确：${summary.correct}</span>`);
+        }
+        if (summary.incorrect > 0) {
+            summaryParts.push(`<span class="summary-item incorrect">错误：${summary.incorrect}</span>`);
+        }
+        if (summary.unanswered > 0) {
+            summaryParts.push(`<span class="summary-item unknown">未作答：${summary.unanswered}</span>`);
+        }
+
+        const rows = entries.map((entry, index) => {
+            const label = entry.displayNumber || entry.questionNumber || `Q${index + 1}`;
+            const hasUser = entry.hasUserAnswer && entry.userAnswer;
+            const hasCorrect = entry.hasCorrectAnswer && entry.correctAnswer;
+            const userDisplay = this.escapeHtmlForAnswers(hasUser ? entry.userAnswer : '未作答');
+            const correctDisplay = this.escapeHtmlForAnswers(hasCorrect ? entry.correctAnswer : '无');
+            const resultFlag = entry.isCorrect;
+            const resultClass = resultFlag === true ? 'correct' : resultFlag === false ? 'incorrect' : 'unknown';
+            const icon = resultFlag === true ? '✓' : resultFlag === false ? '✗' : '-';
+
+            return `
+                <tr class="answer-row ${resultClass}">
+                    <td class="question-number">${this.escapeHtmlForAnswers(label)}</td>
+                    <td class="correct-answer">${correctDisplay}</td>
+                    <td class="user-answer">${userDisplay}</td>
+                    <td class="result-icon ${resultClass}">${icon}</td>
+                </tr>
+            `;
+        }).join('');
+
+        return `
+            <div class="answers-summary">
+                ${summaryParts.join(' ')}
+            </div>
+            <div class="answers-table-container">
+                <table class="answers-table">
+                    <thead>
+                        <tr>
+                            <th class="col-number">序号</th>
+                            <th class="col-correct">正确答案</th>
+                            <th class="col-user">我的答案</th>
+                            <th class="col-result">对错</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    buildNormalizedSummary(entries) {
+        if (window.AnswerComparisonUtils && typeof window.AnswerComparisonUtils.summariseEntries === 'function') {
+            return window.AnswerComparisonUtils.summariseEntries(entries);
+        }
+        let correct = 0;
+        let incorrect = 0;
+        let unanswered = 0;
+        entries.forEach(entry => {
+            if (!entry || !entry.hasUserAnswer) {
+                unanswered += 1;
+                return;
+            }
+            if (entry.isCorrect === true) {
+                correct += 1;
+            } else if (entry.isCorrect === false) {
+                incorrect += 1;
+            } else {
+                unanswered += 1;
+            }
+        });
+        return {
+            total: entries.length,
+            correct,
+            incorrect,
+            unanswered
+        };
+    }
+
+    escapeHtmlForAnswers(value) {
+        if (value == null) {
+            return '';
+        }
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    generateTableFromComparison(answerComparison) {
+        if (!answerComparison || Object.keys(answerComparison).length === 0) {
+            return '<div class="no-answers-message"><p>暂无答案详情数据</p></div>';
+        }
+
+        const normalizedEntries = this.getNormalizedEntries({ answerComparison });
+        if (normalizedEntries.length > 0) {
+            return this.renderNormalizedAnswers(normalizedEntries);
+        }
+
+        const sortedKeys = Object.keys(answerComparison).sort((a, b) => {
+            const numA = parseInt(String(a).replace(/\D/g, ''), 10);
+            const numB = parseInt(String(b).replace(/\D/g, ''), 10);
+            if (Number.isFinite(numA) && Number.isFinite(numB)) {
+                return numA - numB;
+            }
+            return String(a).localeCompare(String(b));
+        });
+
+        const rows = sortedKeys.map((key, index) => {
+            const entry = answerComparison[key] || {};
+            const userDisplay = this.formatAnswer(entry.userAnswer);
+            const correctDisplay = this.formatAnswer(entry.correctAnswer);
+            const resultClass = entry.isCorrect === true ? 'correct' : entry.isCorrect === false ? 'incorrect' : 'unknown';
+            const icon = entry.isCorrect === true ? '✓' : entry.isCorrect === false ? '✗' : '-';
+            return `
+                <tr class="answer-row ${resultClass}">
+                    <td class="question-number">${index + 1}</td>
+                    <td class="correct-answer">${correctDisplay}</td>
+                    <td class="user-answer">${userDisplay}</td>
+                    <td class="result-icon ${resultClass}">${icon}</td>
+                </tr>
+            `;
+        }).join('');
+
+        return `
+            <div class="answers-table-container">
+                <table class="answers-table">
+                    <thead>
+                        <tr>
+                            <th class="col-number">序号</th>
+                            <th class="col-correct">正确答案</th>
+                            <th class="col-user">我的答案</th>
+                            <th class="col-result">对错</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
     collectAnswersData(record) {
         if (!record) {
             return [];
         }
 
         const detailsSource = record.scoreInfo?.details
+            || record.answerDetails
             || record.realData?.scoreInfo?.details
             || null;
 
@@ -1514,13 +1687,23 @@ class PracticeHistory {
                 isCorrect: typeof detail?.isCorrect === 'boolean' ? detail.isCorrect : null
             }));
         } else {
-            const answersSource = record.answers || record.realData?.answers || {};
-            answersData = Object.entries(answersSource).map(([questionId, userAnswer]) => ({
-                questionId,
-                userAnswer: userAnswer || '-',
-                correctAnswer: '-',
-                isCorrect: null
-            }));
+            const answersSource = record.answers || record.realData?.answers || record.answerList || record.realData?.answerList || {};
+            if (Array.isArray(answersSource)) {
+                answersData = answersSource.map((entry, index) => ({
+                    questionId: entry?.questionId || `q${index + 1}`,
+                    userAnswer: entry?.answer || entry?.userAnswer || '-',
+                    correctAnswer: entry?.correctAnswer || '-',
+                    isCorrect: typeof entry?.correct === 'boolean' ? entry.correct
+                        : (typeof entry?.isCorrect === 'boolean' ? entry.isCorrect : null)
+                }));
+            } else if (answersSource && typeof answersSource === 'object') {
+                answersData = Object.entries(answersSource).map(([questionId, userAnswer]) => ({
+                    questionId,
+                    userAnswer: userAnswer || '-',
+                    correctAnswer: '-',
+                    isCorrect: null
+                }));
+            }
         }
 
         return answersData.sort((a, b) => {
@@ -1606,24 +1789,110 @@ class PracticeHistory {
      * 格式化答案显示
      */
     formatAnswer(answer) {
-        if (!answer || answer === null || answer === undefined) {
+        if (answer === null || answer === undefined) {
             return '-';
         }
-        
-        // 处理布尔值
+
+        if (Array.isArray(answer)) {
+            const joined = answer
+                .map(item => this.formatAnswer(item))
+                .filter(value => value && value !== '-')
+                .join(', ');
+            return joined || '-';
+        }
+
+        if (typeof answer === 'object') {
+            const preferKeys = ['value', 'label', 'text', 'answer', 'content'];
+            for (const key of preferKeys) {
+                const candidate = answer[key];
+                if (typeof candidate === 'string' && candidate.trim()) {
+                    return this.truncateAnswer(candidate.trim());
+                }
+            }
+            if (typeof answer.innerText === 'string' && answer.innerText.trim()) {
+                return this.truncateAnswer(answer.innerText.trim());
+            }
+            if (typeof answer.textContent === 'string' && answer.textContent.trim()) {
+                return this.truncateAnswer(answer.textContent.trim());
+            }
+            try {
+                const json = JSON.stringify(answer);
+                if (json && json !== '{}') {
+                    return this.truncateAnswer(json);
+                }
+            } catch (_) {
+                // ignore
+            }
+            return '-';
+        }
+
         if (typeof answer === 'boolean') {
             return answer ? 'True' : 'False';
         }
-        
-        // 处理字符串
+
         const answerStr = String(answer).trim();
-        
-        // 如果答案太长，截断并显示省略号
-        if (answerStr.length > 50) {
-            return answerStr.substring(0, 47) + '...';
+        if (!answerStr) {
+            return '-';
         }
-        
-        return answerStr || '-';
+        return this.truncateAnswer(answerStr);
+    }
+
+    normalizeAnswerValue(value) {
+        if (value === null || value === undefined) {
+            return '';
+        }
+
+        if (typeof value === 'boolean') {
+            return value ? 'True' : 'False';
+        }
+
+        if (Array.isArray(value)) {
+            return value
+                .map(item => this.normalizeAnswerValue(item))
+                .filter(Boolean)
+                .join(', ');
+        }
+
+        if (typeof value === 'object') {
+            const preferKeys = ['value', 'label', 'text', 'answer', 'content'];
+            for (const key of preferKeys) {
+                const candidate = value[key];
+                if (typeof candidate === 'string' && candidate.trim()) {
+                    return candidate.trim();
+                }
+            }
+            if (typeof value.innerText === 'string' && value.innerText.trim()) {
+                return value.innerText.trim();
+            }
+            if (typeof value.textContent === 'string' && value.textContent.trim()) {
+                return value.textContent.trim();
+            }
+            try {
+                const json = JSON.stringify(value);
+                if (json && json !== '{}') {
+                    return json;
+                }
+            } catch (_) {
+                // ignore
+            }
+            return String(value);
+        }
+
+        return String(value).trim();
+    }
+
+    truncateAnswer(value, maxLength = 50) {
+        const normalized = this.normalizeAnswerValue(value);
+        if (!normalized) {
+            return '-';
+        }
+        if (/^\[object\s[^\]]+\]$/i.test(normalized)) {
+            return '-';
+        }
+        if (normalized.length <= maxLength) {
+            return normalized;
+        }
+        return `${normalized.substring(0, Math.max(0, maxLength - 3))}...`;
     }
     async deleteRecord(recordId) {
         if (!confirm('确定要删除这条练习记录吗？此操作不可撤销。')) {
@@ -1921,6 +2190,11 @@ class PracticeHistory {
     }
 
     generateMarkdownTableForEntry(entry) {
+        const normalizedEntries = this.getNormalizedEntries(entry);
+        if (normalizedEntries.length > 0) {
+            return this.generateMarkdownFromNormalizedEntries(normalizedEntries);
+        }
+
         const answersData = this.collectAnswersData(entry);
 
         if (answersData.length === 0) {
@@ -1945,6 +2219,32 @@ class PracticeHistory {
             const formattedUser = userAnswer.padEnd(17, ' ');
 
             markdown += `| ${questionId} | ${formattedCorrect} | ${formattedUser} | ${resultIcon}   |      |\n`;
+        });
+
+        return markdown;
+    }
+
+    generateMarkdownFromNormalizedEntries(entries) {
+        if (!Array.isArray(entries) || entries.length === 0) {
+            return '暂无答案详情\n';
+        }
+
+        let markdown = '';
+        markdown += `| 序号  | 正确答案              | 我的答案              | 对错  | 错误分析 |\n`;
+        markdown += `| --- | ----------------- | ----------------- | --- | ---- |\n`;
+
+        entries.forEach((entry, index) => {
+            const label = entry.displayNumber || entry.questionNumber || `Q${index + 1}`;
+            const correctAnswer = entry.hasCorrectAnswer ? (entry.correctAnswer || '') : '无';
+            const userAnswer = entry.hasUserAnswer ? (entry.userAnswer || '') : '未作答';
+            const resultIcon = entry.isCorrect === true ? '✅'
+                : entry.isCorrect === false ? '❌'
+                : '❓';
+
+            const formattedCorrect = correctAnswer.padEnd(17, ' ');
+            const formattedUser = userAnswer.padEnd(17, ' ');
+
+            markdown += `| ${label} | ${formattedCorrect} | ${formattedUser} | ${resultIcon}   |      |\n`;
         });
 
         return markdown;
