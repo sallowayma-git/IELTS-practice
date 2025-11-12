@@ -142,6 +142,8 @@
             if (value.value != null) {
                 return normalizeForComparison(value.value);
             }
+            // 无法提取有效值的对象，返回null
+            return { display: null, normalized: null };
         }
 
         const str = toStringKey(value);
@@ -150,6 +152,12 @@
         }
 
         const collapsed = str.replace(/\s+/g, ' ').trim();
+        
+        // 过滤 [object Object] 这样的无效字符串
+        if (/^\[object\s/i.test(collapsed)) {
+            return { display: null, normalized: null };
+        }
+        
         const lowered = collapsed.toLowerCase();
 
         if (NO_ANSWER_MARKERS.has(lowered)) {
