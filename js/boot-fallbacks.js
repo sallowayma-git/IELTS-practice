@@ -47,7 +47,8 @@
       if (normalized==='browse' && (resetCategory===undefined || resetCategory===true)){
         window.currentCategory = 'all';
         window.currentExamType = 'all';
-        var t=document.getElementById('browse-title'); if (t) t.textContent='📚 题库浏览';
+        if (typeof window.setBrowseTitle === 'function') { window.setBrowseTitle('题库浏览'); return; }
+        var t=document.getElementById('browse-title'); if (t) t.textContent='题库浏览';
       }
       if (normalized==='browse' && typeof window.loadExamList==='function') window.loadExamList();
       if (normalized==='practice' && typeof window.updatePracticeView==='function') window.updatePracticeView();

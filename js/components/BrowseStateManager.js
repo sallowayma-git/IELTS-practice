@@ -93,10 +93,14 @@ class BrowseStateManager {
      */
     handleBrowseNavigation() {
         console.log('[BrowseStateManager] 处理浏览导航，重置为显示所有考试');
-        
+
+        if (typeof window.clearPendingBrowseAutoScroll === 'function') {
+            try { window.clearPendingBrowseAutoScroll(); } catch (_) {}
+        }
+
         // 重置到全部考试视图
         this.resetToAllExams();
-        
+
         // 记录导航历史
         this.addToHistory({
             action: 'navigate_to_browse',
@@ -294,12 +298,16 @@ class BrowseStateManager {
         
         // 重置过滤器
         this.currentFilter = 'all';
-        
+
         // 更新全局变量
         if (window.currentCategory !== undefined) {
             window.currentCategory = 'all';
         }
-        
+
+        if (typeof window.setBrowseFilterState === 'function') {
+            try { window.setBrowseFilterState('all', 'all'); } catch (_) {}
+        }
+
         // 更新状态
         this.setState({
             currentCategory: null,
@@ -336,13 +344,16 @@ class BrowseStateManager {
      * 更新浏览标题
      */
     updateBrowseTitle(filter) {
+        const label = filter === 'all'
+            ? '题库浏览'
+            : `${filter} 题库浏览`;
+        if (typeof window.setBrowseTitle === 'function') {
+            window.setBrowseTitle(label);
+            return;
+        }
         const browseTitle = document.getElementById('browse-title');
         if (browseTitle) {
-            if (filter === 'all') {
-                browseTitle.textContent = '📚 题库浏览';
-            } else {
-                browseTitle.textContent = `📚 ${filter} 题库浏览`;
-            }
+            browseTitle.textContent = label;
         }
     }
 
