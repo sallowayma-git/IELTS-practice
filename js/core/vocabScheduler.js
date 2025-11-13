@@ -1,11 +1,36 @@
 (function(window) {
-    const REVIEW_INTERVAL_HOURS = Object.freeze({
-        1: 6,
-        2: 24,
-        3: 72,
-        4: 168,
-        5: 720
+    // SuperMemo SM-2 算法常量
+    const SM2_CONSTANTS = Object.freeze({
+        MIN_EASE_FACTOR: 1.3,
+        MAX_EASE_FACTOR: 3.0,
+        INITIAL_INTERVAL_DAYS: 1,
+        SECOND_INTERVAL_DAYS: 6,
+        MAX_INTRA_CYCLES: 12
     });
+
+    // 三档起始难度因子
+    const INITIAL_EASE_FACTORS = Object.freeze({
+        easy: 2.8,    // 简单：高起始难度因子，间隔长
+        good: 2.5,    // 一般：标准起始难度因子
+        hard: 1.8     // 困难：低起始难度因子，间隔短，需要更多复习
+    });
+
+    // 轮内循环的EF调整
+    const INTRA_EF_ADJUSTMENTS = Object.freeze({
+        easy: 0.15,   // 简单：提升难度因子
+        good: 0.05,   // 一般：小幅提升
+        hard: -0.10   // 困难：降低难度因子
+    });
+
+    // 质量评分映射（简化为 3 档）
+    const QUALITY_RATINGS = Object.freeze({
+        wrong: 0,      // 完全错误
+        hard: 3,       // 正确但很困难
+        good: 4,       // 正确但有犹豫
+        easy: 5        // 完美回忆（秒答）
+    });
+
+    // 向后兼容：旧的 Leitner 箱号
     const MAX_BOX = 5;
     const MIN_BOX = 1;
 
@@ -23,44 +48,220 @@
         return parsed;
     }
 
-    function calculateNextReview(box, referenceTime) {
-        const normalizedBox = Math.max(MIN_BOX, Math.min(MAX_BOX, Number(box) || MIN_BOX));
+    /**
+     * SM-2 算法：计算难度因子
+     * @param {number} oldEF - 旧难度因子
+     * @param {number} quality - 质量评分 (0-5)
+     * @returns {number} 新难度因子 (1.3-2.5)
+     */
+    function calculateEaseFactor(oldEF, quality) {
+        const q = Math.max(0, Math.min(5, Number(quality) || 0));
+        const ef = oldEF || SM2_CONSTANTS.DEFAULT_EASE_FACTOR;
+        
+        // SM-2 公式：EF' = EF + (0.1 - (5 - q) × (0.08 + (5 - q) × 0.02))
+        const newEF = ef + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));
+        
+        // 限制在 [1.3, 2.5] 范围内
+        return Math.max(
+            SM2_CONSTANTS.MIN_EASE_FACTOR,
+            Math.min(SM2_CONSTANTS.MAX_EASE_FACTOR, newEF)
+        );
+    }
+
+    /**
+     * SM-2 算法：计算下次复习间隔（天）
+     * @param {number} repetitions - 连续正确次数
+     * @param {number} oldInterval - 旧间隔（天）
+     * @param {number} easeFactor - 难度因子
+     * @returns {number} 新间隔（天）
+     */
+    function calculateInterval(repetitions, oldInterval, easeFactor) {
+        const reps = Number(repetitions) || 0;
+        const interval = Number(oldInterval) || 0;
+        const ef = easeFactor || SM2_CONSTANTS.DEFAULT_EASE_FACTOR;
+
+        if (reps === 0) {
+            return SM2_CONSTANTS.INITIAL_INTERVAL_DAYS;
+        }
+        if (reps === 1) {
+            return SM2_CONSTANTS.SECOND_INTERVAL_DAYS;
+        }
+        // reps >= 2: 间隔 = 上次间隔 × 难度因子
+        return Math.round(interval * ef);
+    }
+
+    /**
+     * 计算下次复习时间
+     * @param {number} intervalDays - 间隔天数
+     * @param {Date|string} referenceTime - 基准时间
+     * @returns {Date} 下次复习时间
+     */
+    function calculateNextReview(intervalDays, referenceTime) {
         const base = toDate(referenceTime, new Date());
-        const hours = REVIEW_INTERVAL_HOURS[normalizedBox] || REVIEW_INTERVAL_HOURS[MIN_BOX];
+        const days = Math.max(0, Number(intervalDays) || 0);
         const next = new Date(base.getTime());
-        next.setHours(next.getHours() + hours);
+        next.setDate(next.getDate() + days);
         return next;
     }
 
-    function promote(word) {
-        const boxValue = word && typeof word.box !== 'undefined' ? Number(word.box) : MIN_BOX;
-        const nextBox = Math.min(MAX_BOX, (Number.isFinite(boxValue) ? boxValue : MIN_BOX) + 1);
-        const correctCountValue = word && typeof word.correctCount !== 'undefined' ? Number(word.correctCount) : 0;
-        const normalizedCount = Number.isFinite(correctCountValue) ? correctCountValue : 0;
+    /**
+     * 归一化词条数据
+     * @param {Object} word - 词条对象
+     * @returns {Object} 归一化后的词条
+     */
+    function normalizeWord(word) {
+        if (!word || typeof word !== 'object') {
+            return null;
+        }
+
+        // SM-2 字段
+        const easeFactor = typeof word.easeFactor === 'number' 
+            ? word.easeFactor 
+            : null; // 新词没有EF，将根据首次判断设置
+        
+        const interval = typeof word.interval === 'number' 
+            ? word.interval 
+            : SM2_CONSTANTS.INITIAL_INTERVAL_DAYS;
+        
+        const repetitions = typeof word.repetitions === 'number' 
+            ? word.repetitions 
+            : 0;
+
+        // 轮内循环状态
+        const intraCycles = typeof word.intraCycles === 'number'
+            ? word.intraCycles
+            : 0;
+
         return {
             ...word,
-            box: nextBox,
-            correctCount: normalizedCount + 1
+            easeFactor,
+            interval,
+            repetitions,
+            intraCycles
         };
     }
 
-    function demote(word) {
+    /**
+     * 设置新词的起始难度因子
+     * @param {Object} word - 词条对象
+     * @param {string} initialQuality - 首次认识质量 ('easy'|'good'|'hard')
+     * @returns {Object} 更新后的词条
+     */
+    function setInitialEaseFactor(word, initialQuality) {
+        const normalized = normalizeWord(word);
+        if (!normalized) {
+            return word;
+        }
+
+        const initialEF = INITIAL_EASE_FACTORS[initialQuality] || INITIAL_EASE_FACTORS.good;
+        
         return {
-            ...word,
-            box: MIN_BOX,
-            correctCount: 0
+            ...normalized,
+            easeFactor: initialEF,
+            intraCycles: initialQuality === 'easy' ? 0 : 1 // easy不进入轮内循环
         };
     }
 
-    function scheduleAfterResult(word, isCorrect, referenceTime = new Date()) {
-        const updated = isCorrect ? promote(word) : demote(word);
+    /**
+     * 轮内循环调整难度因子
+     * @param {Object} word - 词条对象
+     * @param {string} quality - 质量评分 ('easy'|'good'|'hard')
+     * @returns {Object} 更新后的词条
+     */
+    function adjustIntraCycleEF(word, quality) {
+        const normalized = normalizeWord(word);
+        if (!normalized) {
+            return word;
+        }
+
+        const adjustment = INTRA_EF_ADJUSTMENTS[quality] || 0;
+        const newEF = Math.max(
+            SM2_CONSTANTS.MIN_EASE_FACTOR,
+            Math.min(SM2_CONSTANTS.MAX_EASE_FACTOR, normalized.easeFactor + adjustment)
+        );
+
+        const newCycles = normalized.intraCycles + 1;
+
+        return {
+            ...normalized,
+            easeFactor: newEF,
+            intraCycles: newCycles
+        };
+    }
+
+    /**
+     * SM-2 算法：根据回忆质量更新词条
+     * @param {Object} word - 词条对象
+     * @param {string} quality - 质量评分 ('wrong'|'hard'|'good'|'easy')
+     * @param {Date|string} referenceTime - 基准时间
+     * @returns {Object} 更新后的词条
+     */
+    function scheduleAfterResult(word, quality, referenceTime = new Date()) {
+        const normalized = normalizeWord(word);
+        if (!normalized) {
+            return word;
+        }
+
+        // 如果是新词（没有EF），设置起始难度因子
+        if (normalized.easeFactor === null) {
+            return setInitialEaseFactor(normalized, quality);
+        }
+
+        const q = QUALITY_RATINGS[quality] !== undefined 
+            ? QUALITY_RATINGS[quality] 
+            : (quality === true || quality === 'correct' ? QUALITY_RATINGS.good : QUALITY_RATINGS.wrong);
+
         const reviewedAt = toDate(referenceTime, new Date()).toISOString();
-        const nextReview = calculateNextReview(updated.box, reviewedAt).toISOString();
+
+        // 质量评分 < 3 视为失败，重置进度
+        if (q < 3) {
+            return {
+                ...normalized,
+                easeFactor: Math.max(
+                    SM2_CONSTANTS.MIN_EASE_FACTOR,
+                    normalized.easeFactor - 0.2
+                ),
+                interval: SM2_CONSTANTS.INITIAL_INTERVAL_DAYS,
+                repetitions: 0,
+                intraCycles: 1, // 重新进入轮内循环
+                correctCount: 0,
+                lastReviewed: reviewedAt,
+                nextReview: calculateNextReview(SM2_CONSTANTS.INITIAL_INTERVAL_DAYS, reviewedAt).toISOString()
+            };
+        }
+
+        // 质量评分 >= 3，更新难度因子和间隔
+        const newEF = calculateEaseFactor(normalized.easeFactor, q);
+        const newReps = normalized.repetitions + 1;
+        const newInterval = calculateInterval(newReps, normalized.interval, newEF);
+        const nextReviewDate = calculateNextReview(newInterval, reviewedAt);
+
         return {
-            ...updated,
+            ...normalized,
+            easeFactor: newEF,
+            interval: newInterval,
+            repetitions: newReps,
+            intraCycles: 0, // 完成学习，退出轮内循环
+            correctCount: (normalized.correctCount || 0) + 1,
             lastReviewed: reviewedAt,
-            nextReview
+            nextReview: nextReviewDate.toISOString()
         };
+    }
+
+    /**
+     * 向后兼容：旧的 promote 函数（已废弃）
+     * @deprecated 使用 scheduleAfterResult(word, 'good') 替代
+     */
+    function promote(word) {
+        return scheduleAfterResult(word, 'good');
+    }
+
+    /**
+     * 向后兼容：旧的 demote 函数（已废弃）
+     * @deprecated 使用 scheduleAfterResult(word, 'wrong') 替代
+     */
+    function demote(word) {
+        return scheduleAfterResult(word, 'wrong');
     }
 
     function pickDailyTask(allWords, limit = 100, options = {}) {
@@ -127,14 +328,27 @@
     }
 
     const api = Object.freeze({
-        REVIEW_INTERVAL_HOURS,
-        MAX_BOX,
-        MIN_BOX,
+        // SM-2 算法核心
+        SM2_CONSTANTS,
+        QUALITY_RATINGS,
+        INITIAL_EASE_FACTORS,
+        INTRA_EF_ADJUSTMENTS,
+        calculateEaseFactor,
+        calculateInterval,
         calculateNextReview,
+        scheduleAfterResult,
+        normalizeWord,
+        setInitialEaseFactor,
+        adjustIntraCycleEF,
+        
+        // 任务生成
+        pickDailyTask,
+        
+        // 向后兼容（已废弃）
         promote,
         demote,
-        scheduleAfterResult,
-        pickDailyTask
+        MAX_BOX,
+        MIN_BOX
     });
 
     if (typeof module !== 'undefined' && module.exports) {

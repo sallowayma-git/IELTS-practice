@@ -70,8 +70,7 @@
             this.ensureDelegates();
 
             const fragment = document.createDocumentFragment();
-            // 临时隐藏套题模式入口
-            // fragment.appendChild(this.createSuiteCard());
+            fragment.appendChild(this.createSuiteCard());
             const readingSection = this.createSection({
                 title: '阅读',
                 icon: '📖',
