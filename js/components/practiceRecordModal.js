@@ -1,140 +1,159 @@
-/**
- * 练习记录详情弹窗组件
- * 用于显示单个练习记录的详细信息
- */
 class PracticeRecordModal {
     constructor() {
         this.modalId = 'practice-record-modal';
         this.isVisible = false;
+        this.modalElement = null;
+        this.boundBackdropHandler = null;
+        this.boundEscHandler = null;
 
-        // 全局引用，供事件委托使用
         window.practiceRecordModal = this;
     }
 
-    /**
-     * 显示练习记录详情
-     */
     show(record) {
         try {
-            // 使用数据一致性管理器确保数据完整性
             let processedRecord = record;
+
             if (window.DataConsistencyManager) {
                 const manager = new DataConsistencyManager();
                 processedRecord = manager.ensureConsistency(record);
-                console.log('[PracticeRecordModal] 数据一致性检查完成');
+                console.log('[PracticeRecordModal] \u6570\u636e\u4e00\u81f4\u6027\u68c0\u67e5\u5b8c\u6210');
             }
-            
-            // 创建弹窗HTML
+
+            processedRecord = this.prepareRecordForDisplay(processedRecord);
+
             const modalHtml = this.createModalHtml(processedRecord);
-            
-            // 移除已存在的弹窗
+
             this.hide();
-            
-            // 添加到页面
             document.body.insertAdjacentHTML('beforeend', modalHtml);
-            
-            // 设置事件监听器
-            this.setupEventListeners();
-            
-            // 显示弹窗
+
+            this.modalElement = document.getElementById(this.modalId);
+            this.setupEventListeners(this.modalElement);
             this.isVisible = true;
-            
-            // 添加显示动画
+
             setTimeout(() => {
-                const modal = document.getElementById(this.modalId);
-                if (modal) {
-                    modal.classList.add('show');
+                if (this.modalElement) {
+                    this.modalElement.classList.add('show');
                 }
             }, 10);
-            
         } catch (error) {
-            console.error('显示练习记录详情失败:', error);
-            if (window.showMessage) {
-                window.showMessage('无法显示练习记录详情', 'error');
+            console.error('[PracticeRecordModal] \u663e\u793a\u5931\u8d25:', error);
+            if (typeof window.showMessage === 'function') {
+                window.showMessage('\u65e0\u6cd5\u663e\u793a\u7ec3\u4e60\u8bb0\u5f55', 'error');
             }
         }
     }
 
-    /**
-     * 隐藏弹窗
-     */
     hide() {
-        const existingModal = document.getElementById(this.modalId);
-        if (existingModal) {
-            existingModal.remove();
+        this.teardownEventListeners();
+
+        if (this.modalElement && this.modalElement.parentNode) {
+            this.modalElement.parentNode.removeChild(this.modalElement);
         }
+
+        this.modalElement = null;
         this.isVisible = false;
     }
 
-    /**
-     * 创建弹窗HTML
-     */
-    createModalHtml(record) {
-        // 兼容：填充缺失的关键字段（不修改原对象）
-        const safeTitle = record.title || record.metadata?.examTitle || '未知题目';
-        const safeCategory = record.category || record.metadata?.category || 'Unknown';
-        const safeFrequency = record.frequency || record.metadata?.frequency || 'unknown';
-        const suiteEntries = this.getSuiteEntries(record);
-        const displayFrequency = suiteEntries.length > 0
-            ? '套题练习'
-            : (this.formatFrequencyLabel(safeFrequency) || safeFrequency || '未知频率');
-        const startTs = record.startTime || record.date;
-        const durationSec = (typeof record.duration === 'number' ? record.duration
-                            : (record.realData && typeof record.realData.duration === 'number' ? record.realData.duration
-                               : (startTs && record.endTime ? Math.max(0, Math.floor((new Date(record.endTime) - new Date(startTs)) / 1000)) : 0)));
-        const scoreNum = (typeof record.score === 'number') ? record.score
-                        : (typeof record.correctAnswers === 'number') ? record.correctAnswers
-                        : (record.scoreInfo && typeof record.scoreInfo.correct === 'number' ? record.scoreInfo.correct
-                           : (record.realData && record.realData.scoreInfo && typeof record.realData.scoreInfo.correct === 'number' ? record.realData.scoreInfo.correct : 0));
-        const totalQ = (typeof record.totalQuestions === 'number') ? record.totalQuestions
-                       : (record.scoreInfo && typeof record.scoreInfo.total === 'number' ? record.scoreInfo.total
-                          : (record.realData && record.realData.scoreInfo && typeof record.realData.scoreInfo.total === 'number' ? record.realData.scoreInfo.total
-                             : (record.answers ? Object.keys(record.answers).length
-                                : (record.realData && record.realData.answers ? Object.keys(record.realData.answers).length : 0))));
+    teardownEventListeners() {
+        if (this.modalElement && this.boundBackdropHandler) {
+            this.modalElement.removeEventListener('click', this.boundBackdropHandler);
+        }
 
-        // 格式化时间
-        const formattedDate = new Date(startTs).toLocaleString();
-        const formattedDuration = this.formatDuration(durationSec);
-        
-        // 生成答题详情表格
-        const answerTable = this.generateAnswerTable(record);
-        
+        if (this.boundEscHandler) {
+            document.removeEventListener('keydown', this.boundEscHandler);
+        }
+
+        this.boundBackdropHandler = null;
+        this.boundEscHandler = null;
+    }
+
+    setupEventListeners(modal) {
+        if (!modal) {
+            return;
+        }
+
+        const closeModal = () => this.hide();
+
+        this.boundBackdropHandler = (event) => {
+            if (event.target === modal) {
+                closeModal();
+            }
+        };
+        modal.addEventListener('click', this.boundBackdropHandler);
+
+        const closeButton = modal.querySelector('.modal-close');
+        if (closeButton) {
+            closeButton.addEventListener('click', closeModal, { once: true });
+        }
+
+        this.boundEscHandler = (event) => {
+            if (event.key === 'Escape') {
+                closeModal();
+            }
+        };
+        document.addEventListener('keydown', this.boundEscHandler);
+    }
+
+    createModalHtml(record) {
+        const metadata = record.metadata || {};
+        const examTitle = metadata.examTitle || record.title || record.examId || '\u672a\u77e5\u9898\u76ee';
+        const category = record.category || metadata.category || '\u672a\u77e5\u5206\u7c7b';
+        const frequencyLabel = this.getFrequencyLabel(record);
+        const startTimestamp = record.startTime || record.date;
+        const formattedStart = this.formatDate(startTimestamp);
+        const durationSeconds = this.resolveDuration(record);
+        const formattedDuration = this.formatDuration(durationSeconds);
+        const score = this.resolveScore(record);
+        const accuracy = this.resolveAccuracy(record);
+        const accuracyPercent = accuracy != null ? Math.round(accuracy * 100) : null;
+        const summaryCounts = this.getEntriesSummary(this.collectAllEntries(record));
+        const incorrectCount = summaryCounts.incorrect || 0;
+        const unansweredCount = summaryCounts.unanswered || 0;
+
+        const answerSection = this.generateAnswerTable(record);
+
         return `
             <div id="${this.modalId}" class="modal-overlay">
                 <div class="modal-container">
                     <div class="modal-header">
-                        <h3 class="modal-title">练习记录详情</h3>
-                        <button class="modal-close" onclick="window.practiceRecordModal.hide()">
+                        <h3 class="modal-title">\u7ec3\u4e60\u8bb0\u5f55\u8be6\u60c5</h3>
+                        <button class="modal-close" aria-label="\u5173\u95ed\u5f39\u7a97">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
-                    
                     <div class="modal-body">
                         <div class="record-summary">
-                            <h4>${safeCategory}-${displayFrequency}-${safeTitle}</h4>
+                            <h4>${this.escapeHtml(category)} - ${this.escapeHtml(frequencyLabel)} - ${this.escapeHtml(examTitle)}</h4>
                             <div class="record-meta">
                                 <div class="meta-item">
-                                    <span class="meta-label">练习时间:</span>
-                                    <span class="meta-value">${formattedDate}</span>
+                                    <span class="meta-label">\u7ec3\u4e60\u65f6\u95f4\uff1a</span>
+                                    <span class="meta-value">${this.escapeHtml(formattedStart)}</span>
                                 </div>
                                 <div class="meta-item">
-                                    <span class="meta-label">用时:</span>
-                                    <span class="meta-value">${formattedDuration}</span>
+                                    <span class="meta-label">\u7528\u65f6\uff1a</span>
+                                    <span class="meta-value">${this.escapeHtml(formattedDuration)}</span>
                                 </div>
                                 <div class="meta-item">
-                                    <span class="meta-label">分数:</span>
-                                    <span class="meta-value score-highlight">${scoreNum}/${totalQ}</span>
+                                    <span class="meta-label">\u5f97\u5206\uff1a</span>
+                                    <span class="meta-value score-highlight">${this.escapeHtml(score)}</span>
                                 </div>
                                 <div class="meta-item">
-                                    <span class="meta-label">准确率:</span>
-                                    <span class="meta-value">${Math.round((record.accuracy || 0) * 100)}%</span>
+                                    <span class="meta-label">\u51c6\u786e\u7387\uff1a</span>
+                                    <span class="meta-value">${accuracyPercent != null ? `${accuracyPercent}%` : '\u672a\u77e5'}</span>
+                                </div>
+                                <div class="meta-item">
+                                    <span class="meta-label">\u9519\u9898\u6570\uff1a</span>
+                                    <span class="meta-value error-count">${incorrectCount}</span>
+                                </div>
+                                <div class="meta-item">
+                                    <span class="meta-label">\u672a\u4f5c\u7b54\uff1a</span>
+                                    <span class="meta-value unanswered-count">${unansweredCount}</span>
                                 </div>
                             </div>
                         </div>
-                        
                         <div class="answer-details">
-                            <h5>答题详情</h5>
-                            ${answerTable}
+                            <h5>\u7b54\u9898\u8be6\u60c5</h5>
+                            ${answerSection}
                         </div>
                     </div>
                 </div>
@@ -142,578 +161,918 @@ class PracticeRecordModal {
         `;
     }
 
-    /**
-     * 生成答题详情表格
-     */
-    generateAnswerTable(record) {
+    prepareRecordForDisplay(record) {
+        if (!record) {
+            return record;
+        }
+        if (window.AnswerComparisonUtils && typeof window.AnswerComparisonUtils.withEnrichedMetadata === 'function') {
+            return window.AnswerComparisonUtils.withEnrichedMetadata(record);
+        }
+        return record;
+    }
+
+    getFrequencyLabel(record) {
+        const metadata = record.metadata || {};
+        const frequency = record.frequency || metadata.frequency || 'unknown';
         const suiteEntries = this.getSuiteEntries(record);
 
         if (suiteEntries.length > 0) {
-            const sections = suiteEntries.map((entry, index) => {
-                const title = this.formatSuiteEntryTitle(entry, index);
-                const table = this.generateAnswerTableForSingle(entry);
-                return `
-                    <section class="suite-entry">
-                        <h5>${title}</h5>
-                        ${table}
-                    </section>
-                `;
-            }).join('');
-
-            return sections || '<p class="no-details">暂无详细答题数据</p>';
+            return '\u5957\u9898\u7ec3\u4e60';
         }
-
-        return this.generateAnswerTableForSingle(record);
+        return this.formatFrequencyLabel(frequency);
     }
 
-    generateAnswerTableForSingle(record) {
-        if (!record) {
-            return '<p class="no-details">暂无详细答题数据</p>';
+    resolveDuration(record) {
+        if (typeof record.duration === 'number') {
+            return record.duration;
         }
-
-        if (record.answerComparison && Object.keys(record.answerComparison).length > 0) {
-            const merged = this.mergeComparisonWithCorrections(record);
-            return this.generateTableFromComparison(merged);
+        if (record.realData && typeof record.realData.duration === 'number') {
+            return record.realData.duration;
         }
-
-        if (!record.realData || !record.realData.answers) {
-            if (!record.answers) {
-                return '<p class="no-details">暂无详细答题数据</p>';
-            }
+        if (record.startTime && record.endTime) {
+            const start = new Date(record.startTime);
+            const end = new Date(record.endTime);
+            const diff = Math.floor((end - start) / 1000);
+            return Number.isFinite(diff) && diff > 0 ? diff : null;
         }
-
-        const answers = record.answers || record.realData?.answers || {};
-        const correctAnswers = this.getCorrectAnswers(record);
-        const questionNumbers = this.extractQuestionNumbers(answers, correctAnswers);
-
-        if (questionNumbers.length === 0) {
-            return '<p class="no-details">暂无答题数据</p>';
-        }
-
-        let table = `
-            <div class="answer-table-container">
-                <table class="answer-table">
-                    <thead>
-                        <tr>
-                            <th>Question</th>
-                            <th>Your Answer</th>
-                            <th>Correct Answer</th>
-                            <th>Result</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-        `;
-
-        questionNumbers.forEach(qNum => {
-            const userAnswer = this.getUserAnswer(answers, qNum);
-            const correctAnswer = this.getCorrectAnswer(correctAnswers, qNum);
-            const isCorrect = this.compareAnswers(userAnswer, correctAnswer);
-            const result = isCorrect ? '✓' : '✗';
-            const resultClass = isCorrect ? 'correct' : 'incorrect';
-
-            const truncateAnswer = (answer, maxLength = 50) => {
-                if (!answer) return 'No Answer';
-                if (answer.length <= maxLength) return answer;
-                return answer.substring(0, maxLength) + '...';
-            };
-
-            table += `
-                <tr class="answer-row ${resultClass}">
-                    <td class="question-num">${qNum}</td>
-                    <td class="user-answer" title="${userAnswer || ''}">${truncateAnswer(userAnswer)}</td>
-                    <td class="correct-answer" title="${correctAnswer || ''}">${truncateAnswer(correctAnswer)}</td>
-                    <td class="result ${resultClass}">${result}</td>
-                </tr>
-            `;
-        });
-
-        table += `
-                    </tbody>
-                </table>
-            </div>
-        `;
-
-        return table;
+        return null;
     }
 
-    /**
-     * 从answerComparison生成表格
-     */
-    generateTableFromComparison(answerComparison) {
-        // 在渲染前进行一次“字母题段 → 数字题号”的合并，避免重复行且补全用户答案
-        const normalized = (() => {
-            const comp = JSON.parse(JSON.stringify(answerComparison || {}));
-            const letterKeys = Object.keys(comp).filter(k => /^q[a-z]$/i.test(k)).sort();
-            const numericKeys = Object.keys(comp).filter(k => /q\d+$/i.test(k)).sort((a,b)=> (parseInt(a.replace(/\D/g,''))||0) - (parseInt(b.replace(/\D/g,''))||0));
-            if (letterKeys.length === 0 || numericKeys.length === 0) return comp;
-
-            // 尝试在 numericKeys 中找出与 letterKeys 数量相同的连续窗口，用于对齐映射
-            let windowStart = -1;
-            for (let i=0; i+letterKeys.length-1 < numericKeys.length; i++) {
-                const first = parseInt(numericKeys[i].replace(/\D/g,''));
-                const last  = parseInt(numericKeys[i+letterKeys.length-1].replace(/\D/g,''));
-                if (!isNaN(first) && !isNaN(last) && (last - first + 1) === letterKeys.length) {
-                    windowStart = i; break;
-                }
-            }
-            if (windowStart === -1) return comp; // 找不到合理窗口则保持原状
-
-            // 把字母题段的用户答案灌入对应的数字题号，并删除字母键，避免表格重复
-            for (let i=0; i<letterKeys.length; i++) {
-                const lk = letterKeys[i];
-                const nk = numericKeys[windowStart + i];
-                if (!nk) continue;
-                const lItem = comp[lk] || {};
-                const nItem = comp[nk] || {};
-
-                // 优先保留数字题号上的正确答案；若缺失再用字母题段的数据
-                const correctAnswer = (nItem.correctAnswer != null && String(nItem.correctAnswer).trim() !== '')
-                    ? nItem.correctAnswer
-                    : lItem.correctAnswer;
-                // 用户答案：若数字题号缺失，则取字母题段的答案（例如 Q1..Q8 显示 i/ii/…）
-                const userAnswer = (nItem.userAnswer != null && String(nItem.userAnswer).trim() !== '')
-                    ? nItem.userAnswer
-                    : lItem.userAnswer;
-                const isCorrect = (typeof lItem.isCorrect === 'boolean') ? lItem.isCorrect : nItem.isCorrect;
-
-                comp[nk] = { userAnswer: userAnswer || '', correctAnswer: correctAnswer || '', isCorrect: !!isCorrect };
-                delete comp[lk];
-            }
-            return comp;
-        })();
-
-        let table = `
-            <div class="answer-table-container">
-                <table class="answer-table">
-                    <thead>
-                        <tr>
-                            <th>Question</th>
-                            <th>Your Answer</th>
-                            <th>Correct Answer</th>
-                            <th>Result</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-        `;
-        
-        // 按问题编号排序（若无数字则按字母序）
-        const sortedKeys = Object.keys(normalized).sort((a, b) => {
-            const na = parseInt(a.replace(/\D/g, ''));
-            const nb = parseInt(b.replace(/\D/g, ''));
-            if (!isNaN(na) && !isNaN(nb)) return na - nb;
-            return a.localeCompare(b);
-        });
-        
-        sortedKeys.forEach(key => {
-            const comparison = normalized[key];
-            let questionNum = key.replace(/\D/g, '');
-            if (!questionNum) {
-                questionNum = key.replace(/^q/i, '');
-            }
-            const result = comparison.isCorrect ? '✓' : '✗';
-            const resultClass = comparison.isCorrect ? 'correct' : 'incorrect';
-            
-            // 截断过长的答案文本
-            const truncateAnswer = (answer, maxLength = 50) => {
-                if (!answer) return 'No Answer';
-                if (answer.length <= maxLength) return answer;
-                return answer.substring(0, maxLength) + '...';
-            };
-
-            table += `
-                <tr class="answer-row ${resultClass}">
-                    <td class="question-num">${questionNum}</td>
-                    <td class="user-answer" title="${comparison.userAnswer || ''}">${truncateAnswer(comparison.userAnswer)}</td>
-                    <td class="correct-answer" title="${comparison.correctAnswer || ''}">${truncateAnswer(comparison.correctAnswer)}</td>
-                    <td class="result ${resultClass}">${result}</td>
-                </tr>
-            `;
-        });
-        
-        table += `
-                    </tbody>
-                </table>
-            </div>
-        `;
-        
-        return table;
+    resolveScore(record) {
+        if (typeof record.correctAnswers === 'number' && typeof record.totalQuestions === 'number') {
+            return `${record.correctAnswers}/${record.totalQuestions}`;
+        }
+        if (record.scoreInfo && typeof record.scoreInfo.correct === 'number' && typeof record.scoreInfo.total === 'number') {
+            return `${record.scoreInfo.correct}/${record.scoreInfo.total}`;
+        }
+        if (record.realData && record.realData.scoreInfo && typeof record.realData.scoreInfo.correct === 'number' && typeof record.realData.scoreInfo.total === 'number') {
+            return `${record.realData.scoreInfo.correct}/${record.realData.scoreInfo.total}`;
+        }
+        if (typeof record.score === 'number' && typeof record.total === 'number') {
+            return `${record.score}/${record.total}`;
+        }
+        return '\u672a\u77e5';
     }
 
-    /**
-     * 将 answerComparison 与其他来源的正确答案合并，补全缺失 correctAnswer
-     */
-    mergeComparisonWithCorrections(record) {
-        // Deep clone to avoid mutating original
-        const comparison = JSON.parse(JSON.stringify(record.answerComparison || {}));
-        const sources = [
-            record.correctAnswers || {},
-            (record.realData && record.realData.correctAnswers) || {},
-        ];
-        // details sources
-        if (record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details) {
-            sources.push(Object.fromEntries(Object.entries(record.realData.scoreInfo.details).map(([k,v]) => [k, v && v.correctAnswer])));
+    resolveAccuracy(record) {
+        if (typeof record.accuracy === 'number') {
+            return record.accuracy;
         }
-        if (record.scoreInfo && record.scoreInfo.details) {
-            sources.push(Object.fromEntries(Object.entries(record.scoreInfo.details).map(([k,v]) => [k, v && v.correctAnswer])));
+        if (record.scoreInfo && typeof record.scoreInfo.accuracy === 'number') {
+            return record.scoreInfo.accuracy;
         }
-
-        const getFromSources = (key) => {
-            for (const src of sources) {
-                if (src && src[key] != null && String(src[key]).trim() !== '') return src[key];
-            }
-            return null;
-        };
-
-        // First pass: fill directly matching keys
-        Object.keys(comparison).forEach(key => {
-            const item = comparison[key] || {};
-            if (item.correctAnswer == null || String(item.correctAnswer).trim() === '') {
-                const fixed = getFromSources(key);
-                if (fixed != null) item.correctAnswer = fixed;
-            }
-            if (item.userAnswer == null) item.userAnswer = '';
-            if (item.correctAnswer == null) item.correctAnswer = '';
-            comparison[key] = item;
-        });
-
-        // Second pass: map lettered keys (qa, qb, ...) to numeric groups (e.g., q14..q20)
-        const letterKeys = Object.keys(comparison).filter(k => /^q[a-z]$/i.test(k));
-        if (letterKeys.length > 0) {
-            // Prefer numeric keys present in comparison; if none, gather from sources
-            let numericKeys = Object.keys(comparison).filter(k => /q\d+$/i.test(k));
-            if (numericKeys.length === 0) {
-                for (const src of sources) {
-                    if (!src) continue;
-                    numericKeys.push(...Object.keys(src).filter(k => /q\d+$/i.test(k)));
-                }
-                numericKeys = Array.from(new Set(numericKeys));
-            }
-            // Sort
-            letterKeys.sort();
-            numericKeys.sort((a,b) => (parseInt(a.replace(/\D/g,''))||0) - (parseInt(b.replace(/\D/g,''))||0));
-
-            // Optionally restrict numericKeys to same count as letterKeys and contiguous range by detecting the first block
-            if (numericKeys.length >= letterKeys.length) {
-                // Try to find a contiguous window with same length
-                let windowStart = 0;
-                let bestStart = 0;
-                let found = false;
-                for (let i=0; i+letterKeys.length-1 < numericKeys.length; i++) {
-                    const first = parseInt(numericKeys[i].replace(/\D/g,''));
-                    const last = parseInt(numericKeys[i+letterKeys.length-1].replace(/\D/g,''));
-                    if (!isNaN(first) && !isNaN(last) && (last - first + 1) === letterKeys.length) {
-                        bestStart = i; found = true; break;
-                    }
-                }
-                windowStart = found ? bestStart : 0;
-                const slice = numericKeys.slice(windowStart, windowStart + letterKeys.length);
-                for (let i=0; i<letterKeys.length; i++) {
-                    const lk = letterKeys[i];
-                    const nk = slice[i];
-                    if (!nk) continue;
-                    const item = comparison[lk] || {};
-                    if (!item.correctAnswer || String(item.correctAnswer).trim() === '') {
-                        // Prefer comparison numeric correctAnswer first
-                        const nkItem = comparison[nk];
-                        let val = nkItem && nkItem.correctAnswer;
-                        if (!val) val = getFromSources(nk);
-                        if (val != null) item.correctAnswer = val;
-                    }
-                    if (item.userAnswer == null) item.userAnswer = '';
-                    if (item.correctAnswer == null) item.correctAnswer = '';
-                    comparison[lk] = item;
-                }
-            }
+        if (record.realData && record.realData.scoreInfo && typeof record.realData.scoreInfo.accuracy === 'number') {
+            return record.realData.scoreInfo.accuracy;
         }
-        return comparison;
+        return null;
     }
-    /**
-     * 格式化持续时间
-     */
+
+    formatDate(value, format = 'YYYY-MM-DD HH:mm:ss') {
+        if (!value) {
+            return '\u672a\u77e5';
+        }
+        try {
+            if (window.Utils && typeof window.Utils.formatDate === 'function') {
+                return Utils.formatDate(value, format);
+            }
+            const parsed = new Date(value);
+            if (!Number.isNaN(parsed.getTime())) {
+                return parsed.toLocaleString();
+            }
+        } catch (error) {
+            console.warn('[PracticeRecordModal] \u65e5\u671f\u683c\u5f0f\u5316\u5931\u8d25:', error);
+        }
+        return '\u672a\u77e5';
+    }
+
     formatDuration(seconds) {
-        if (!seconds) return '未知';
-        
-        const minutes = Math.floor(seconds / 60);
+        if (!Number.isFinite(seconds) || seconds < 0) {
+            return '\u672a\u77e5';
+        }
+        const mins = Math.floor(seconds / 60);
         const remainingSeconds = seconds % 60;
-        
-        if (minutes > 0) {
-            return `${minutes}分${remainingSeconds}秒`;
-        } else {
-            return `${seconds}秒`;
+        if (mins > 0) {
+            return `${mins}\u5206${remainingSeconds}\u79d2`;
         }
-    }
-
-    /**
-     * 获取正确答案
-     */
-    getCorrectAnswers(record) {
-        // 优先使用顶级的correctAnswers
-        if (record.correctAnswers && Object.keys(record.correctAnswers).length > 0) {
-            return record.correctAnswers;
-        }
-        
-        // 其次使用realData中的correctAnswers
-        if (record.realData && record.realData.correctAnswers && Object.keys(record.realData.correctAnswers).length > 0) {
-            return record.realData.correctAnswers;
-        }
-        
-        // 尝试从answerComparison中提取
-        if (record.answerComparison) {
-            const correctAnswers = {};
-            Object.keys(record.answerComparison).forEach(key => {
-                const comparison = record.answerComparison[key];
-                if (comparison.correctAnswer) {
-                    correctAnswers[key] = comparison.correctAnswer;
-                }
-            });
-            if (Object.keys(correctAnswers).length > 0) {
-                return correctAnswers;
-            }
-        }
-        
-        // 尝试从 scoreInfo 的 details 中获取（优先 realData.scoreInfo，其次顶层 scoreInfo）
-        const detailsSources = [];
-        if (record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details) {
-            detailsSources.push(record.realData.scoreInfo.details);
-        }
-        if (record.scoreInfo && record.scoreInfo.details) {
-            detailsSources.push(record.scoreInfo.details);
-        }
-        for (const details of detailsSources) {
-            const correctAnswers = {};
-            Object.keys(details).forEach(key => {
-                const detail = details[key];
-                if (detail && detail.correctAnswer != null && String(detail.correctAnswer).trim() !== '') {
-                    correctAnswers[key] = detail.correctAnswer;
-                }
-            });
-            if (Object.keys(correctAnswers).length > 0) {
-                return correctAnswers;
-            }
-        }
-        
-        console.warn('[PracticeRecordModal] 未找到正确答案数据，记录ID:', record.id);
-        return {};
-    }
-
-    /**
-     * 提取题目编号
-     */
-    extractQuestionNumbers(userAnswers, correctAnswers) {
-        const allQuestions = new Set();
-        
-        // 从用户答案中提取
-        Object.keys(userAnswers).forEach(key => {
-            const num = this.extractNumber(key);
-            if (num) allQuestions.add(num);
-        });
-        
-        // 从正确答案中提取
-        Object.keys(correctAnswers).forEach(key => {
-            const num = this.extractNumber(key);
-            if (num) allQuestions.add(num);
-        });
-        
-        return Array.from(allQuestions).sort((a, b) => a - b);
-    }
-
-    /**
-     * 从键名中提取数字
-     */
-    extractNumber(key) {
-        const match = key.match(/(\d+)/);
-        return match ? parseInt(match[1]) : null;
-    }
-
-    /**
-     * 获取用户答案
-     */
-    getUserAnswer(answers, questionNum) {
-        const possibleKeys = [`q${questionNum}`, `question${questionNum}`, questionNum.toString()];
-        
-        for (const key of possibleKeys) {
-            if (answers[key] !== undefined) {
-                const answer = answers[key];
-                if (Array.isArray(answer)) {
-                    return answer[answer.length - 1]?.value || answer[answer.length - 1];
-                }
-                return answer;
-            }
-        }
-        
-        return null;
-    }
-
-    /**
-     * 获取正确答案
-     */
-    getCorrectAnswer(correctAnswers, questionNum) {
-        const possibleKeys = [`q${questionNum}`, `question${questionNum}`, questionNum.toString()];
-        
-        for (const key of possibleKeys) {
-            if (correctAnswers[key] !== undefined) {
-                return correctAnswers[key];
-            }
-        }
-        
-        return null;
-    }
-
-    /**
-     * 比较答案
-     */
-    compareAnswers(userAnswer, correctAnswer) {
-        if (!userAnswer || !correctAnswer) {
-            return false;
-        }
-
-        const normalize = (str) => String(str).trim().toLowerCase();
-        return normalize(userAnswer) === normalize(correctAnswer);
+        return `${remainingSeconds}\u79d2`;
     }
 
     getSuiteEntries(record) {
         if (!record || !Array.isArray(record.suiteEntries)) {
             return [];
         }
-        return record.suiteEntries.filter(entry => entry);
+        return record.suiteEntries.filter(Boolean);
     }
 
     formatSuiteEntryTitle(entry, index) {
         if (!entry) {
-            return `套题第${index + 1}篇`;
+            return `\u5957\u9898\u7b2c${index + 1}\u7bc7`;
         }
         const metadata = entry.metadata || {};
-        return metadata.examTitle
-            || entry.title
-            || entry.examTitle
-            || `套题第${index + 1}篇`;
+        return metadata.examTitle || entry.title || entry.examTitle || `\u5957\u9898\u7b2c${index + 1}\u7bc7`;
     }
 
     formatFrequencyLabel(frequency) {
-        const normalized = typeof frequency === 'string'
-            ? frequency.toLowerCase()
-            : '';
-
+        const normalized = typeof frequency === 'string' ? frequency.trim().toLowerCase() : '';
         if (normalized === 'suite') {
-            return '套题';
+            return '\u5957\u9898\u7ec3\u4e60';
         }
-
         if (normalized === 'high') {
-            return '高频';
+            return '\u9ad8\u9891';
         }
-
-        return '次高频';
+        if (normalized === 'mid' || normalized === 'medium') {
+            return '\u4e2d\u9891';
+        }
+        if (normalized === 'low') {
+            return '\u4f4e\u9891';
+        }
+        return '\u672a\u77e5\u9891\u7387';
     }
 
-    /**
-      * 导出单个记录
-      */
+    generateAnswerTable(record) {
+        const preparedRecord = this.prepareRecordForDisplay(record);
+        const suiteEntries = this.getSuiteEntries(preparedRecord);
+
+        if (suiteEntries.length > 0) {
+            const sections = suiteEntries
+                .map((entry, index) => {
+                    const entryRecord = this.prepareRecordForDisplay(entry);
+                    const title = this.formatSuiteEntryTitle(entryRecord, index);
+                    const normalizedEntries = this.getNormalizedEntries(entryRecord);
+                    let content = '';
+
+                    if (this.hasNormalizedEntries(normalizedEntries)) {
+                        content = this.renderAnswersSection(normalizedEntries, { wrap: false });
+                    } else {
+                        content = this.generateLegacyAnswerTableForSingle(entryRecord);
+                    }
+
+                    if (!content || !String(content).trim()) {
+                        content = '<div class="no-answers-message"><p>\u6682\u65e0\u8be6\u7ec6\u7b54\u9898\u6570\u636e</p></div>';
+                    }
+
+                    return `
+                        <section class="suite-entry">
+                            <h5>${this.escapeHtml(title)}</h5>
+                            ${content}
+                        </section>
+                    `;
+                })
+                .filter(Boolean)
+                .join('');
+
+            if (sections && sections.trim()) {
+                return sections;
+            }
+
+            return this.generateLegacyAnswerTableForSingle(preparedRecord);
+        }
+
+        const normalizedEntries = this.getNormalizedEntries(preparedRecord);
+        if (this.hasNormalizedEntries(normalizedEntries)) {
+            return this.renderAnswersSection(normalizedEntries, { wrap: true });
+        }
+
+        return this.generateLegacyAnswerTableForSingle(preparedRecord);
+    }
+
+    getNormalizedEntries(record) {
+        if (window.AnswerComparisonUtils && typeof window.AnswerComparisonUtils.getNormalizedEntries === 'function') {
+            const entries = window.AnswerComparisonUtils.getNormalizedEntries(record);
+            return Array.isArray(entries) ? entries : [];
+        }
+        return [];
+    }
+
+    hasNormalizedEntries(entries) {
+        return Array.isArray(entries) && entries.length > 0;
+    }
+
+    collectAllEntries(record) {
+        const utils = window.AnswerComparisonUtils;
+        if (!utils || !record) {
+            return [];
+        }
+
+        let entries = utils.getNormalizedEntries(record) || [];
+        const suites = this.getSuiteEntries(record);
+
+        if (Array.isArray(suites) && suites.length > 0) {
+            suites.forEach((entry) => {
+                const subset = utils.getNormalizedEntries(entry) || [];
+                if (subset.length > 0) {
+                    entries = entries.concat(subset);
+                }
+            });
+        }
+
+        return entries;
+    }
+
+    getEntriesSummary(entries) {
+        if (window.AnswerComparisonUtils && typeof window.AnswerComparisonUtils.summariseEntries === 'function') {
+            return window.AnswerComparisonUtils.summariseEntries(entries);
+        }
+        const total = entries.length;
+        const unanswered = entries.filter(entry => !entry.hasUserAnswer).length;
+        const correct = entries.filter(entry => entry.isCorrect === true).length;
+        const incorrect = entries.filter(entry => entry.isCorrect === false).length;
+        return { total, correct, incorrect, unanswered };
+    }
+
+    renderAnswersSection(entries, options = {}) {
+        const normalizedEntries = Array.isArray(entries) ? entries : [];
+        if (normalizedEntries.length === 0) {
+            return '<div class="no-answers-message"><p>\u6682\u65e0\u7b54\u9898\u6570\u636e</p></div>';
+        }
+
+        const tableHtml = this.renderEntriesTable(normalizedEntries);
+
+        if (options.wrap === false) {
+            return tableHtml;
+        }
+
+        return `
+            <div class="answers-section">
+                ${tableHtml}
+            </div>
+        `;
+    }
+
+    renderEntriesSummary() {
+        return '';
+    }
+
+    renderEntriesTable(entries) {
+        if (!Array.isArray(entries) || entries.length === 0) {
+            return '<div class="answers-table-container"><p class="no-details">\u6682\u65e0\u7b54\u9898\u6570\u636e</p></div>';
+        }
+
+        const rows = entries
+            .map((entry) => {
+                const questionLabel = this.escapeHtml(entry.displayNumber || '');
+                const userDisplay = this.escapeHtml(entry.userAnswer || '\u672a\u4f5c\u7b54');
+                const correctDisplay = this.escapeHtml(entry.correctAnswer || '\u65e0');
+
+                let resultIcon = '\u2753';
+                let resultClass = 'unknown';
+
+                if (entry.isCorrect === true) {
+                    resultIcon = '\u2705';
+                    resultClass = 'correct';
+                } else if (entry.isCorrect === false) {
+                    resultIcon = '\u274c';
+                    resultClass = 'incorrect';
+                }
+
+                return `
+                    <tr class="answer-row ${resultClass}">
+                        <td class="question-num">${questionLabel}</td>
+                        <td class="correct-answer">${correctDisplay}</td>
+                        <td class="user-answer">${userDisplay}</td>
+                        <td class="result-icon ${resultClass}">${resultIcon}</td>
+                    </tr>
+                `;
+            })
+            .join('');
+
+        return `
+            <div class="answers-table-container">
+                <table class="answer-table">
+                    <thead>
+                        <tr>
+                            <th>\u9898\u53f7</th>
+                            <th>\u6b63\u786e\u7b54\u6848</th>
+                            <th>\u6211\u7684\u7b54\u6848</th>
+                            <th>\u5bf9\u9519</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    generateLegacyAnswerTableForSingle(record) {
+        if (!record) {
+            return '<div class="no-answers-message"><p>\u6682\u65e0\u7b54\u9898\u6570\u636e</p></div>';
+        }
+
+        if (record.answerComparison && Object.keys(record.answerComparison).length > 0) {
+            const merged = this.mergeComparisonWithCorrections(record);
+            return this.generateLegacyTableFromComparison(merged);
+        }
+
+        const answers = record.answers || (record.realData && record.realData.answers) || {};
+        const correctAnswers = this.getLegacyCorrectAnswers(record);
+        const questionNumbers = this.extractLegacyQuestionNumbers(answers, correctAnswers);
+
+        if (questionNumbers.length === 0) {
+            return '<div class="no-answers-message"><p>\u6682\u65e0\u7b54\u9898\u6570\u636e</p></div>';
+        }
+
+        const rows = questionNumbers
+            .map((questionNumber) => {
+                const userAnswer = this.getLegacyUserAnswer(answers, questionNumber);
+                const correctAnswer = this.getLegacyCorrectAnswer(correctAnswers, questionNumber);
+                const isCorrect = this.compareLegacyAnswers(userAnswer, correctAnswer);
+                const resultClass = isCorrect ? 'correct' : 'incorrect';
+                const resultIcon = isCorrect ? '&#10003;' : '&#10005;';
+                const safeUser = userAnswer != null ? this.truncateAnswer(userAnswer) : '\u672a\u4f5c\u7b54';
+                const safeCorrect = correctAnswer != null ? this.truncateAnswer(correctAnswer) : '\u65e0';
+
+                return `
+                    <tr class="answer-row ${resultClass}">
+                        <td class="question-num">${this.escapeHtml(String(questionNumber))}</td>
+                        <td class="correct-answer" title="${this.escapeHtml(correctAnswer == null ? '' : String(correctAnswer))}">
+                            ${this.escapeHtml(safeCorrect)}
+                        </td>
+                        <td class="user-answer" title="${this.escapeHtml(userAnswer == null ? '' : String(userAnswer))}">
+                            ${this.escapeHtml(safeUser)}
+                        </td>
+                        <td class="result-icon ${resultClass}">${resultIcon}</td>
+                    </tr>
+                `;
+            })
+            .join('');
+
+        return `
+            <div class="answers-table-container">
+                <table class="answer-table">
+                    <thead>
+                        <tr>
+                            <th>\u9898\u53f7</th>
+                            <th>\u6b63\u786e\u7b54\u6848</th>
+                            <th>\u6211\u7684\u7b54\u6848</th>
+                            <th>\u5bf9\u9519</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    generateLegacyTableFromComparison(answerComparison) {
+        if (!answerComparison || Object.keys(answerComparison).length === 0) {
+            return '<div class="no-answers-message"><p>\u6682\u65e0\u7b54\u9898\u6570\u636e</p></div>';
+        }
+
+        const cloneDeep = (data) => JSON.parse(JSON.stringify(data || {}));
+        const normalized = (() => {
+            const comp = cloneDeep(answerComparison);
+            const letterKeys = Object.keys(comp).filter(key => /^q[a-z]$/i.test(key)).sort();
+            const numericKeys = Object.keys(comp)
+                .filter(key => /q\d+$/i.test(key))
+                .sort((a, b) => {
+                    const numA = parseInt(a.replace(/\D/g, ''), 10);
+                    const numB = parseInt(b.replace(/\D/g, ''), 10);
+                    return numA - numB;
+                });
+
+            if (letterKeys.length === 0 || numericKeys.length === 0) {
+                return comp;
+            }
+
+            let windowStart = -1;
+            for (let i = 0; i + letterKeys.length - 1 < numericKeys.length; i += 1) {
+                const first = parseInt(numericKeys[i].replace(/\D/g, ''), 10);
+                const last = parseInt(numericKeys[i + letterKeys.length - 1].replace(/\D/g, ''), 10);
+                if (!Number.isNaN(first) && !Number.isNaN(last) && (last - first + 1) === letterKeys.length) {
+                    windowStart = i;
+                    break;
+                }
+            }
+            if (windowStart === -1) {
+                return comp;
+            }
+
+            for (let i = 0; i < letterKeys.length; i += 1) {
+                const letterKey = letterKeys[i];
+                const numericKey = numericKeys[windowStart + i];
+                if (!numericKey) {
+                    continue;
+                }
+
+                const letterEntry = comp[letterKey] || {};
+                const numericEntry = comp[numericKey] || {};
+
+                const mergedCorrect = (numericEntry.correctAnswer != null && String(numericEntry.correctAnswer).trim() !== '')
+                    ? numericEntry.correctAnswer
+                    : letterEntry.correctAnswer;
+                const mergedUser = (numericEntry.userAnswer != null && String(numericEntry.userAnswer).trim() !== '')
+                    ? numericEntry.userAnswer
+                    : letterEntry.userAnswer;
+                const mergedIsCorrect = typeof letterEntry.isCorrect === 'boolean'
+                    ? letterEntry.isCorrect
+                    : numericEntry.isCorrect;
+
+                comp[numericKey] = {
+                    correctAnswer: mergedCorrect || '',
+                    userAnswer: mergedUser || '',
+                    isCorrect: typeof mergedIsCorrect === 'boolean' ? mergedIsCorrect : null
+                };
+                delete comp[letterKey];
+            }
+
+            return comp;
+        })();
+
+        const sortedKeys = Object.keys(normalized).sort((a, b) => {
+            const numA = parseInt(a.replace(/\D/g, ''), 10);
+            const numB = parseInt(b.replace(/\D/g, ''), 10);
+            if (!Number.isNaN(numA) && !Number.isNaN(numB)) {
+                return numA - numB;
+            }
+            return a.localeCompare(b);
+        });
+
+        const sanitizedRows = sortedKeys
+            .map((key) => {
+                const comparison = normalized[key] || {};
+                const questionLabel = key.replace(/^q/i, '');
+                const normalizedUser = this.normalizeAnswerDisplay(comparison.userAnswer);
+                const normalizedCorrect = this.normalizeAnswerDisplay(comparison.correctAnswer);
+                const hasUserAnswer = this.hasMeaningfulAnswer(normalizedUser);
+                const hasCorrectAnswer = this.hasMeaningfulAnswer(normalizedCorrect);
+
+                if (!hasUserAnswer && !hasCorrectAnswer) {
+                    return null;
+                }
+
+                return {
+                    key,
+                    questionLabel,
+                    userAnswer: hasUserAnswer ? normalizedUser : '',
+                    correctAnswer: hasCorrectAnswer ? normalizedCorrect : '',
+                    isCorrect: typeof comparison.isCorrect === 'boolean' ? comparison.isCorrect : null
+                };
+            })
+            .filter(Boolean);
+
+        if (sanitizedRows.length === 0) {
+            return '<div class="no-answers-message"><p>\u6682\u65e0\u7b54\u9898\u6570\u636e</p></div>';
+        }
+
+        const rows = sanitizedRows
+            .map((entry) => {
+                const resultFlag = entry.isCorrect;
+                const hasResult = typeof resultFlag === 'boolean';
+                const resultClass = hasResult ? (resultFlag ? 'correct' : 'incorrect') : 'unknown';
+                const resultIcon = hasResult ? (resultFlag ? '&#10003;' : '&#10005;') : '-';
+
+                const userDisplay = entry.userAnswer
+                    ? this.truncateAnswer(entry.userAnswer)
+                    : '\u672a\u4f5c\u7b54';
+                const correctDisplay = entry.correctAnswer
+                    ? this.truncateAnswer(entry.correctAnswer)
+                    : '\u65e0';
+
+                return `
+                    <tr class="answer-row ${resultClass}">
+                        <td class="question-num">${this.escapeHtml(entry.questionLabel)}</td>
+                        <td class="correct-answer" title="${this.escapeHtml(entry.correctAnswer)}">
+                            ${this.escapeHtml(correctDisplay)}
+                        </td>
+                        <td class="user-answer" title="${this.escapeHtml(entry.userAnswer)}">
+                            ${this.escapeHtml(userDisplay)}
+                        </td>
+                        <td class="result-icon ${resultClass}">${resultIcon}</td>
+                    </tr>
+                `;
+            })
+            .join('');
+
+        return `
+            <div class="answers-table-container">
+                <table class="answer-table">
+                    <thead>
+                        <tr>
+                            <th>\u9898\u53f7</th>
+                            <th>\u6b63\u786e\u7b54\u6848</th>
+                            <th>\u6211\u7684\u7b54\u6848</th>
+                            <th>\u5bf9\u9519</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    normalizeAnswerDisplay(value) {
+        if (value === undefined || value === null) {
+            return '';
+        }
+        if (typeof value === 'string') {
+            return value.trim();
+        }
+        if (typeof value === 'number' || typeof value === 'boolean') {
+            return String(value).trim();
+        }
+        if (Array.isArray(value)) {
+            return value
+                .map((item) => this.normalizeAnswerDisplay(item))
+                .filter(Boolean)
+                .join(',');
+        }
+        if (typeof value === 'object') {
+            const preferKeys = ['value', 'label', 'text', 'answer', 'content'];
+            for (const key of preferKeys) {
+                if (typeof value[key] === 'string') {
+                    return value[key].trim();
+                }
+            }
+            if (typeof value.innerText === 'string') {
+                return value.innerText.trim();
+            }
+            if (typeof value.textContent === 'string') {
+                return value.textContent.trim();
+            }
+            try {
+                return JSON.stringify(value);
+            } catch (_) {
+                return String(value);
+            }
+        }
+        return String(value).trim();
+    }
+
+    hasMeaningfulAnswer(value) {
+        if (value == null) {
+            return false;
+        }
+        const text = String(value).trim();
+        if (!text) {
+            return false;
+        }
+        const lowered = text.toLowerCase();
+        if (lowered === 'n/a' || lowered === 'no answer' || lowered === '未作答' || lowered === '无' || lowered === 'none') {
+            return false;
+        }
+        if (/^\[object\s[^\]]+\]$/i.test(text)) {
+            return false;
+        }
+        return true;
+    }
+
+    mergeComparisonWithCorrections(record) {
+        const comparison = JSON.parse(JSON.stringify(record.answerComparison || {}));
+        const sources = [
+            record.correctAnswers || {},
+            record.realData && record.realData.correctAnswers,
+            (record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details)
+                ? Object.fromEntries(Object.entries(record.realData.scoreInfo.details).map(([key, detail]) => [key, detail && detail.correctAnswer]))
+                : null,
+            (record.scoreInfo && record.scoreInfo.details)
+                ? Object.fromEntries(Object.entries(record.scoreInfo.details).map(([key, detail]) => [key, detail && detail.correctAnswer]))
+                : null
+        ].filter(Boolean);
+
+        const getFromSources = (key) => {
+            for (const source of sources) {
+                if (source && source[key] != null && String(source[key]).trim() !== '') {
+                    return source[key];
+                }
+            }
+            return null;
+        };
+
+        Object.keys(comparison).forEach((key) => {
+            const item = comparison[key] || {};
+            if (item.correctAnswer == null || String(item.correctAnswer).trim() === '') {
+                const fixed = getFromSources(key);
+                if (fixed != null) {
+                    item.correctAnswer = fixed;
+                }
+            }
+            if (item.userAnswer == null) {
+                item.userAnswer = '';
+            }
+            if (item.correctAnswer == null) {
+                item.correctAnswer = '';
+            }
+            comparison[key] = item;
+        });
+
+        const letterKeys = Object.keys(comparison).filter(key => /^q[a-z]$/i.test(key));
+        if (letterKeys.length > 0) {
+            let numericKeys = Object.keys(comparison).filter(key => /q\d+$/i.test(key));
+            if (numericKeys.length === 0) {
+                sources.forEach((source) => {
+                    if (!source) {
+                        return;
+                    }
+                    Object.keys(source).forEach((key) => {
+                        if (/q\d+$/i.test(key)) {
+                            numericKeys.push(key);
+                        }
+                    });
+                });
+                numericKeys = Array.from(new Set(numericKeys));
+            }
+            letterKeys.sort();
+            numericKeys.sort((a, b) => (parseInt(a.replace(/\D/g, ''), 10) || 0) - (parseInt(b.replace(/\D/g, ''), 10) || 0));
+
+            if (numericKeys.length >= letterKeys.length) {
+                let windowStart = 0;
+                let found = false;
+                for (let i = 0; i + letterKeys.length - 1 < numericKeys.length; i += 1) {
+                    const first = parseInt(numericKeys[i].replace(/\D/g, ''), 10);
+                    const last = parseInt(numericKeys[i + letterKeys.length - 1].replace(/\D/g, ''), 10);
+                    if (!Number.isNaN(first) && !Number.isNaN(last) && (last - first + 1) === letterKeys.length) {
+                        windowStart = i;
+                        found = true;
+                        break;
+                    }
+                }
+                const slice = numericKeys.slice(windowStart, windowStart + letterKeys.length);
+                if (found && slice.length === letterKeys.length) {
+                    for (let i = 0; i < letterKeys.length; i += 1) {
+                        const letterKey = letterKeys[i];
+                        const numericKey = slice[i];
+                        if (!numericKey) {
+                            continue;
+                        }
+                        const item = comparison[letterKey] || {};
+                        if (!item.correctAnswer || String(item.correctAnswer).trim() === '') {
+                            const numericItem = comparison[numericKey];
+                            let value = numericItem && numericItem.correctAnswer;
+                            if (!value) {
+                                value = getFromSources(numericKey);
+                            }
+                            if (value != null) {
+                                item.correctAnswer = value;
+                            }
+                        }
+                        if (item.userAnswer == null) {
+                            item.userAnswer = '';
+                        }
+                        if (item.correctAnswer == null) {
+                            item.correctAnswer = '';
+                        }
+                        comparison[letterKey] = item;
+                    }
+                }
+            }
+        }
+
+        return comparison;
+    }
+
+    getLegacyCorrectAnswers(record) {
+        if (record.correctAnswers && Object.keys(record.correctAnswers).length > 0) {
+            return record.correctAnswers;
+        }
+
+        if (record.realData && record.realData.correctAnswers && Object.keys(record.realData.correctAnswers).length > 0) {
+            return record.realData.correctAnswers;
+        }
+
+        if (record.answerComparison) {
+            const extracted = {};
+            Object.keys(record.answerComparison).forEach((key) => {
+                const comparison = record.answerComparison[key];
+                if (comparison && comparison.correctAnswer) {
+                    extracted[key] = comparison.correctAnswer;
+                }
+            });
+            if (Object.keys(extracted).length > 0) {
+                return extracted;
+            }
+        }
+
+        const detailSources = [];
+        if (record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details) {
+            detailSources.push(record.realData.scoreInfo.details);
+        }
+        if (record.scoreInfo && record.scoreInfo.details) {
+            detailSources.push(record.scoreInfo.details);
+        }
+        for (const details of detailSources) {
+            const extracted = {};
+            Object.keys(details || {}).forEach((key) => {
+                const detail = details[key];
+                if (detail && detail.correctAnswer != null && String(detail.correctAnswer).trim() !== '') {
+                    extracted[key] = detail.correctAnswer;
+                }
+            });
+            if (Object.keys(extracted).length > 0) {
+                return extracted;
+            }
+        }
+
+        return {};
+    }
+
+    extractLegacyQuestionNumbers(userAnswers, correctAnswers) {
+        const allQuestions = new Set();
+
+        Object.keys(userAnswers || {}).forEach((key) => {
+            const num = this.extractLegacyNumber(key);
+            if (num != null) {
+                allQuestions.add(num);
+            }
+        });
+
+        Object.keys(correctAnswers || {}).forEach((key) => {
+            const num = this.extractLegacyNumber(key);
+            if (num != null) {
+                allQuestions.add(num);
+            }
+        });
+
+        return Array.from(allQuestions).sort((a, b) => a - b);
+    }
+
+    extractLegacyNumber(key) {
+        const match = typeof key === 'string' ? key.match(/(\d+)/) : null;
+        if (!match) {
+            return null;
+        }
+        const parsed = parseInt(match[1], 10);
+        return Number.isNaN(parsed) ? null : parsed;
+    }
+
+    getLegacyUserAnswer(answers, questionNumber) {
+        const possibleKeys = [`q${questionNumber}`, `question${questionNumber}`, String(questionNumber)];
+        for (const key of possibleKeys) {
+            if (Object.prototype.hasOwnProperty.call(answers, key)) {
+                const answer = answers[key];
+                if (Array.isArray(answer) && answer.length > 0) {
+                    const lastItem = answer[answer.length - 1];
+                    if (lastItem && typeof lastItem === 'object' && lastItem.value != null) {
+                        return lastItem.value;
+                    }
+                    return lastItem;
+                }
+                return answer;
+            }
+        }
+        return null;
+    }
+
+    getLegacyCorrectAnswer(correctAnswers, questionNumber) {
+        const possibleKeys = [`q${questionNumber}`, `question${questionNumber}`, String(questionNumber)];
+        for (const key of possibleKeys) {
+            if (Object.prototype.hasOwnProperty.call(correctAnswers, key)) {
+                return correctAnswers[key];
+            }
+        }
+        return null;
+    }
+
+    compareLegacyAnswers(userAnswer, correctAnswer) {
+        if (userAnswer == null || correctAnswer == null) {
+            return false;
+        }
+        const normalize = (value) => String(value).trim().toLowerCase();
+        return normalize(userAnswer) === normalize(correctAnswer);
+    }
+
+    normalizeAnswerValue(value) {
+        if (value === null || value === undefined) {
+            return '';
+        }
+
+        if (typeof value === 'boolean') {
+            return value ? 'True' : 'False';
+        }
+
+        if (Array.isArray(value)) {
+            return value
+                .map(item => this.normalizeAnswerValue(item))
+                .filter(Boolean)
+                .join(', ');
+        }
+
+        if (typeof value === 'object') {
+            const preferKeys = ['value', 'label', 'text', 'answer', 'content'];
+            for (const key of preferKeys) {
+                const candidate = value[key];
+                if (typeof candidate === 'string' && candidate.trim()) {
+                    return candidate.trim();
+                }
+            }
+            if (typeof value.innerText === 'string' && value.innerText.trim()) {
+                return value.innerText.trim();
+            }
+            if (typeof value.textContent === 'string' && value.textContent.trim()) {
+                return value.textContent.trim();
+            }
+            try {
+                const json = JSON.stringify(value);
+                if (json && json !== '{}') {
+                    return json;
+                }
+            } catch (_) {
+                // ignore JSON errors and fallback
+            }
+            return String(value);
+        }
+
+        return String(value).trim();
+    }
+
+    truncateAnswer(value, maxLength = 50) {
+        const normalized = this.normalizeAnswerValue(value);
+        if (!normalized) {
+            return '';
+        }
+        if (/^\[object\s[^\]]+\]$/i.test(normalized)) {
+            return '';
+        }
+        if (normalized.length <= maxLength) {
+            return normalized;
+        }
+        return `${normalized.substring(0, Math.max(0, maxLength - 3))}...`;
+    }
+
+    escapeHtml(value) {
+        if (value == null) {
+            return '';
+        }
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     async exportSingle(recordId) {
         try {
             const practiceRecords = await window.storage.get('practice_records', []);
             const record = practiceRecords.find(r => r.id === recordId);
 
             if (!record) {
-                throw new Error('记录不存在');
+                throw new Error('\u8bb0\u5f55\u4e0d\u5b58\u5728');
             }
 
-            // 使用 MarkdownExporter 导出单个记录
             const exporter = new MarkdownExporter();
             const examIndex = await window.storage.get('exam_index', []);
+            const exam = Array.isArray(examIndex) ? examIndex.find(e => e.id === record.examId) : null;
 
-            // 增强记录信息
-            const exam = examIndex.find(e => e.id === record.examId);
-            const enhancedRecord = {
+            const enrichedRecord = this.prepareRecordForDisplay({
                 ...record,
                 examInfo: exam || {},
-                title: exam?.title || record.title || '未知题目',
-                category: exam?.category || record.category || 'Unknown',
-                frequency: exam?.frequency || record.frequency || 'unknown'
-            };
-            
-            // 生成单个记录的 Markdown
-            const markdown = exporter.generateRecordMarkdown(enhancedRecord);
-            
-            // 下载文件
+                title: exam?.title || record.title || record.examId || '\u672a\u77e5\u9898\u76ee',
+                category: exam?.category || record.category || '\u672a\u77e5\u5206\u7c7b',
+                frequency: exam?.frequency || record.frequency || '\u672a\u77e5\u9891\u7387'
+            });
+
+            const markdown = exporter.generateRecordMarkdown(enrichedRecord);
+
             const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
             const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            
-            a.href = url;
-            a.download = `practice_record_${recordId}_${new Date().toISOString().split('T')[0]}.md`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
+            const anchor = document.createElement('a');
+            anchor.href = url;
+            anchor.download = `practice_record_${recordId}_${new Date().toISOString().split('T')[0]}.md`;
+            document.body.appendChild(anchor);
+            anchor.click();
+            document.body.removeChild(anchor);
             URL.revokeObjectURL(url);
-            
-            window.showMessage('记录已导出', 'success');
-            
+
+            if (typeof window.showMessage === 'function') {
+                window.showMessage('\u7ec3\u4e60\u8bb0\u5f55\u5df2\u5bfc\u51fa', 'success');
+            }
         } catch (error) {
-            console.error('导出单个记录失败:', error);
-            window.showMessage('导出失败: ' + error.message, 'error');
-        }
-    }
-
-    /**
-     * 设置事件监听器
-     */
-    setupEventListeners() {
-        // 使用事件委托替换独立监听器
-        if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
-            // 模态框背景点击关闭
-            window.DOM.delegate('click', `#${this.modalId}`, function(e) {
-                if (e.target === this) {
-                    window.practiceRecordModal.hide();
-                }
-            });
-
-            // ESC键关闭弹窗
-            window.DOM.delegate('keydown', document, function(e) {
-                if (e.key === 'Escape' && window.practiceRecordModal.isVisible) {
-                    window.practiceRecordModal.hide();
-                }
-            });
-
-            console.log('[PracticeRecordModal] 使用事件委托设置监听器');
-        } else {
-            // 降级到传统监听器
-            const modal = document.getElementById(this.modalId);
-            if (!modal) return;
-
-            // 点击背景关闭弹窗
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) {
-                    this.hide();
-                }
-            });
-
-            // ESC键关闭弹窗
-            document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape' && this.isVisible) {
-                    this.hide();
-                }
-            });
+            console.error('[PracticeRecordModal] \u5bfc\u51fa\u5931\u8d25:', error);
+            if (typeof window.showMessage === 'function') {
+                window.showMessage(`\u5bfc\u51fa\u5931\u8d25\uff1a${error.message}`, 'error');
+            }
         }
     }
 }
 
-// 创建全局实例
 window.practiceRecordModal = new PracticeRecordModal();
 
-// 兼容方法：通过ID显示（用于主应用桥接和历史增强器）
 if (!window.practiceRecordModal.showById) {
-  window.practiceRecordModal.showById = async function(recordId) {
-    try {
-      const toIdStr = (v) => v == null ? '' : String(v);
-      const targetIdStr = toIdStr(recordId);
-      const records = (window.storage ? (await window.storage.get('practice_records', [])) : []) || [];
-      let record = records.find(r => r.id === recordId || toIdStr(r.id) === targetIdStr) ||
-                   records.find(r => toIdStr(r.sessionId) === targetIdStr);
-      if (!record) throw new Error('记录不存在');
-      this.show(record);
-    } catch (e) {
-      console.error('[PracticeRecordModal] showById 失败:', e);
-      if (window.showMessage) window.showMessage('无法显示记录详情: ' + e.message, 'error');
-    }
-  };
+    window.practiceRecordModal.showById = async function showById(recordId) {
+        try {
+            const normalise = (value) => (value == null ? '' : String(value));
+            const targetId = normalise(recordId);
+
+            const records = (window.storage ? (await window.storage.get('practice_records', [])) : []) || [];
+            let record = records.find(r => normalise(r.id) === targetId) ||
+                records.find(r => normalise(r.sessionId) === targetId);
+
+            if (!record) {
+                throw new Error('\u8bb0\u5f55\u4e0d\u5b58\u5728');
+            }
+
+            this.show(record);
+        } catch (error) {
+            console.error('[PracticeRecordModal] showById \u5931\u8d25:', error);
+            if (typeof window.showMessage === 'function') {
+                window.showMessage(`\u65e0\u6cd5\u663e\u793a\u7ec3\u4e60\u8bb0\u5f55\uff1a${error.message}`, 'error');
+            }
+        }
+    };
 }

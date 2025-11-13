@@ -403,15 +403,13 @@
 
       records.unshift(record);
 
-      const limited = records.slice(0, 200);
-
       if (window.hpCore && typeof window.hpCore._setRecords === 'function') {
-        window.hpCore._setRecords(limited);
+        window.hpCore._setRecords(records);
       }
 
       if (window.storage && typeof storage.set === 'function') {
         try {
-          const maybeSet = storage.set('practice_records', limited);
+          const maybeSet = storage.set('practice_records', records);
           if (maybeSet && typeof maybeSet.then === 'function') {
             maybeSet.catch(() => {});
           }

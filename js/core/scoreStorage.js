@@ -327,7 +327,21 @@ class ScoreStorage {
             this.validateRecord(standardizedRecord);
             
             // 获取现有记录
-            const records = await this.storage.get(this.storageKeys.practiceRecords, []);
+            let records = await this.storage.get(this.storageKeys.practiceRecords, []);
+            records = Array.isArray(records) ? records.slice() : [];
+
+            let legacyPatched = false;
+            records = records.map(record => {
+                if (record && typeof record === 'object' && record.type && record.metadata && record.metadata.type) {
+                    return record;
+                }
+                legacyPatched = true;
+                return this.normalizeLegacyRecord(record);
+            });
+
+            if (legacyPatched) {
+                console.log('[ScoreStorage] 已自动修复历史练习记录字段缺失问题');
+            }
 
             // 检查是否已存在相同ID的记录
             const existingIndex = records.findIndex(r => r.id === standardizedRecord.id);
@@ -362,6 +376,35 @@ class ScoreStorage {
         }
     }
 
+    normalizeLegacyRecord(record) {
+        if (!record || typeof record !== 'object') {
+            return record;
+        }
+        const patched = Object.assign({}, record);
+        const inferredType = this.inferPracticeType(patched);
+        if (!patched.type) {
+            patched.type = inferredType;
+        }
+        const normalizedMetadata = this.buildMetadata(
+            Object.assign({}, patched, { metadata: patched.metadata || {} }),
+            patched.type
+        );
+        patched.metadata = normalizedMetadata;
+        if (!Array.isArray(patched.answers)) {
+            patched.answers = this.standardizeAnswers(patched.answers || []);
+        }
+        if (!patched.startTime) {
+            patched.startTime = patched.date || patched.endTime || new Date().toISOString();
+        }
+        if (!patched.endTime) {
+            patched.endTime = patched.date || patched.startTime;
+        }
+        if (!patched.status) {
+            patched.status = 'completed';
+        }
+        return patched;
+    }
+
     /**
      * 标准化记录格式
      */
@@ -377,12 +420,19 @@ class ScoreStorage {
         const endTime = recordData.endTime && !Number.isNaN(new Date(recordData.endTime).getTime())
             ? new Date(recordData.endTime).toISOString()
             : recordDate;
+        const resolvedTitle = recordData.title
+            || metadata.examTitle
+            || metadata.title
+            || recordData.examTitle
+            || recordData.examId
+            || '未命名练习';
 
         return {
             // 基础信息
             id: recordData.id || this.generateRecordId(),
             examId: recordData.examId,
             sessionId: recordData.sessionId,
+            title: resolvedTitle,
             type,
 
             // 时间信息
@@ -399,11 +449,15 @@ class ScoreStorage {
             accuracy: this.ensureNumber(recordData.accuracy, 0),
 
             // 答题详情
-            answers: this.standardizeAnswers(recordData.answers || []),
+            answers: this.standardizeAnswers(recordData.answers || recordData.answerList || []),
+            answerDetails: recordData.answerDetails || null,
+            correctAnswerMap: recordData.correctAnswerMap || {},
             questionTypePerformance: recordData.questionTypePerformance || {},
 
             // 元数据
             metadata,
+            scoreInfo: recordData.scoreInfo || null,
+            realData: recordData.realData || null,
 
             // 系统信息
             version: this.currentVersion,
@@ -417,16 +471,65 @@ class ScoreStorage {
      */
     standardizeAnswers(answers) {
         if (!Array.isArray(answers)) {
-            answers = [];
+            if (answers && typeof answers === 'object') {
+                answers = Object.entries(answers).map(([questionId, value]) => ({
+                    questionId,
+                    answer: value
+                }));
+            } else {
+                answers = [];
+            }
         }
         return answers.map((answer, index) => ({
             questionId: answer.questionId || `q${index + 1}`,
             answer: answer.answer || '',
+            correctAnswer: answer.correctAnswer || '',
             correct: Boolean(answer.correct),
             timeSpent: answer.timeSpent || 0,
             questionType: answer.questionType || 'unknown',
             timestamp: answer.timestamp || new Date().toISOString()
         }));
+    }
+
+    deriveCorrectMapFromDetails(details) {
+        if (!details || typeof details !== 'object') {
+            return {};
+        }
+        const map = {};
+        Object.entries(details).forEach(([questionId, info]) => {
+            if (!info) {
+                return;
+            }
+            const correctAnswer = info.correctAnswer || info.answer || info.value;
+            if (correctAnswer != null) {
+                map[questionId] = (typeof correctAnswer === 'string')
+                    ? correctAnswer.trim()
+                    : String(correctAnswer);
+            }
+        });
+        return map;
+    }
+
+    buildAnswerDetailsFromMaps(answerMap = {}, correctMap = {}) {
+        const details = {};
+        const keys = new Set([
+            ...Object.keys(answerMap || {}),
+            ...Object.keys(correctMap || {})
+        ]);
+        keys.forEach((questionId) => {
+            const userAnswer = answerMap && answerMap[questionId] ? String(answerMap[questionId]) : '-';
+            const correctAnswer = correctMap && correctMap[questionId] ? String(correctMap[questionId]) : '-';
+            let isCorrect = null;
+            if (correctAnswer !== '-') {
+                isCorrect = userAnswer.toLowerCase() === correctAnswer.toLowerCase();
+            }
+            details[questionId] = {
+                userAnswer,
+                correctAnswer,
+                isCorrect
+            };
+        });
+        return details;
     }
 
     /**
@@ -807,6 +910,31 @@ class ScoreStorage {
             // answers 归一
             if (!r.answers && rd.answers) {
                 r.answers = rd.answers;
+            }
+            if (Array.isArray(r.answers)) {
+                const map = {};
+                r.answers.forEach((entry, idx) => {
+                    if (!entry) return;
+                    const key = entry.questionId || `q${idx + 1}`;
+                    map[key] = entry.answer || entry.userAnswer || '';
+                });
+                r.answerList = r.answers.slice();
+                r.answers = map;
+            }
+            if (Array.isArray(rd.answers)) {
+                const rdMap = {};
+                rd.answers.forEach((entry, idx) => {
+                    if (!entry) return;
+                    const key = entry.questionId || `q${idx + 1}`;
+                    rdMap[key] = entry.answer || entry.userAnswer || '';
+                });
+                rd.answers = rdMap;
+            }
+            if (!r.correctAnswerMap || Object.keys(r.correctAnswerMap || {}).length === 0) {
+                r.correctAnswerMap = this.deriveCorrectMapFromDetails(r.answerDetails || r.scoreInfo?.details || rd.scoreInfo?.details);
+            }
+            if (!r.answerDetails) {
+                r.answerDetails = r.scoreInfo?.details || this.buildAnswerDetailsFromMaps(r.answers, r.correctAnswerMap);
             }
 
             // 正确/总题数归一
