@@ -70,10 +70,11 @@ function getExamIndexState() {
 }
 
 function setExamIndexState(list) {
+    const normalized = Array.isArray(list) ? list.slice() : [];
+    assignExamSequenceNumbers(normalized);
     if (stateService) {
-        return stateService.setExamIndex(list);
+        return stateService.setExamIndex(normalized);
     }
-    const normalized = Array.isArray(list) ? list : [];
     try { window.examIndex = normalized; } catch (_) {}
     return normalized;
 }
@@ -85,13 +86,111 @@ function getPracticeRecordsState() {
     return Array.isArray(window.practiceRecords) ? window.practiceRecords : [];
 }
 
-function setPracticeRecordsState(records) {
-    if (stateService) {
-        return stateService.setPracticeRecords(records);
+function enrichPracticeRecordForUI(record) {
+    if (!record || typeof record !== 'object') {
+        return record;
     }
-    const normalized = Array.isArray(records) ? records : [];
-    try { window.practiceRecords = normalized; } catch (_) {}
-    return normalized;
+    if (typeof window !== 'undefined' && window.DataConsistencyManager) {
+        try {
+            const manager = new DataConsistencyManager();
+            return manager.enrichRecordData(record);
+        } catch (error) {
+            console.warn('[PracticeRecords] enrichRecordData 失败，返回原始记录:', error);
+        }
+    }
+    return record;
+}
+
+function setPracticeRecordsState(records) {
+    let normalized;
+    if (stateService) {
+        const enriched = Array.isArray(records) ? records.map(enrichPracticeRecordForUI) : [];
+        normalized = stateService.setPracticeRecords(enriched);
+    } else {
+        normalized = Array.isArray(records) ? records.map(enrichPracticeRecordForUI) : [];
+        try { window.practiceRecords = normalized; } catch (_) {}
+    }
+    const finalRecords = Array.isArray(normalized) ? normalized : [];
+    updateBrowseAnchorsFromRecords(finalRecords);
+    return finalRecords;
+}
+
+function assignExamSequenceNumbers(exams) {
+    if (!Array.isArray(exams)) {
+        return exams;
+    }
+    exams.forEach((exam, index) => {
+        if (!exam || typeof exam !== 'object') {
+            return;
+        }
+        exam.sequenceNumber = index + 1;
+    });
+    return exams;
+}
+
+function formatExamMetaText(exam) {
+    if (!exam || typeof exam !== 'object') {
+        return '';
+    }
+    const parts = [];
+    if (Number.isFinite(exam.sequenceNumber)) {
+        parts.push(String(exam.sequenceNumber));
+    }
+    if (exam.category) {
+        parts.push(exam.category);
+    }
+    if (exam.type) {
+        parts.push(exam.type);
+    }
+    return parts.join(' | ');
+}
+
+try {
+    if (typeof window !== 'undefined') {
+        window.formatExamMetaText = formatExamMetaText;
+    }
+} catch (_) {}
+
+function updateBrowseAnchorsFromRecords(records) {
+    const list = Array.isArray(records) ? records : [];
+    const examIndex = getExamIndexState();
+    const updates = {};
+    const seenKeys = new Set();
+
+    list.forEach((record) => {
+        const info = resolveRecordExamInfo(record, examIndex);
+        if (!info) {
+            return;
+        }
+        const key = buildBrowseFilterKey(info.category, info.type);
+        const timestamp = deriveRecordTimestamp(record);
+        if (!Number.isFinite(timestamp)) {
+            return;
+        }
+        const anchor = {
+            examId: info.examId || null,
+            title: info.title || null,
+            timestamp
+        };
+        const existing = updates[key];
+        if (!existing || timestamp > existing.timestamp) {
+            updates[key] = anchor;
+        }
+        seenKeys.add(key);
+    });
+
+    const currentAnchors = getBrowseViewPreferences().listAnchors || {};
+    Object.keys(currentAnchors || {}).forEach((key) => {
+        if (!seenKeys.has(key)) {
+            updates[key] = null;
+        }
+    });
+
+    if (Object.keys(updates).length === 0) {
+        return;
+    }
+
+    saveBrowseViewPreferences({ listAnchors: updates });
 }
 
 function getFilteredExamsState() {
@@ -124,9 +223,15 @@ function setBrowseFilterState(category = 'all', type = 'all') {
         type: typeof type === 'string' ? type : 'all'
     };
     if (stateService) {
-        return stateService.setBrowseFilter(normalized);
+        stateService.setBrowseFilter(normalized);
+        const latest = stateService.getBrowseFilter();
+        const nextCategory = typeof latest?.category === 'string' ? latest.category : normalized.category;
+        const nextType = typeof latest?.type === 'string' ? latest.type : normalized.type;
+        persistBrowseFilter(nextCategory, nextType);
+        return { category: nextCategory, type: nextType };
     }
     syncGlobalBrowseState(normalized.category, normalized.type);
+    persistBrowseFilter(normalized.category, normalized.type);
     return normalized;
 }
 
@@ -194,6 +299,725 @@ function clearSelectedRecordsState() {
 
 
 
+
+const BROWSE_VIEW_PREFERENCE_KEY = 'browse_view_preferences_v2';
+let browsePreferencesCache = null;
+let currentBrowseScrollElement = null;
+let removeBrowseScrollListener = null;
+let pendingBrowseAutoScroll = null;
+let browsePreferenceUiInitialized = false;
+let pendingBrowseScrollSnapshot = null;
+
+function normalizeCategoryKey(category) {
+    if (!category || typeof category !== 'string') {
+        return 'all';
+    }
+    const trimmed = category.trim();
+    if (!trimmed) {
+        return 'all';
+    }
+    const match = trimmed.match(/^(P\d)$/i);
+    if (match) {
+        return match[1].toUpperCase();
+    }
+    const embedded = trimmed.match(/\b(P[1-4])\b/i);
+    if (embedded) {
+        return embedded[1].toUpperCase();
+    }
+    return trimmed;
+}
+
+function normalizeExamType(type) {
+    if (!type || typeof type !== 'string') {
+        return 'all';
+    }
+    const lower = type.toLowerCase();
+    if (lower === 'reading' || lower === 'listening') {
+        return lower;
+    }
+    if (lower.includes('阅读')) {
+        return 'reading';
+    }
+    if (lower.includes('听力')) {
+        return 'listening';
+    }
+    return 'all';
+}
+
+function buildBrowseFilterKey(category, type) {
+    return `${normalizeCategoryKey(category)}|${normalizeExamType(type)}`;
+}
+
+function getDefaultBrowsePreferences() {
+    return {
+        scrollPositions: {},
+        listAnchors: {},
+        autoScrollEnabled: true,
+        lastFilter: null
+    };
+}
+
+function loadBrowsePreferencesFromStorage() {
+    try {
+        const raw = localStorage.getItem(BROWSE_VIEW_PREFERENCE_KEY);
+        if (!raw) {
+            return getDefaultBrowsePreferences();
+        }
+        const parsed = JSON.parse(raw);
+        const defaults = getDefaultBrowsePreferences();
+        const next = Object.assign({}, defaults, parsed || {});
+        if (!next.scrollPositions || typeof next.scrollPositions !== 'object') {
+            next.scrollPositions = {};
+        }
+        next.listAnchors = mergeBrowseAnchors({}, next.listAnchors);
+        return next;
+    } catch (error) {
+        console.warn('[BrowsePreferences] 无法读取浏览偏好，使用默认值', error);
+        return getDefaultBrowsePreferences();
+    }
+}
+
+function getBrowseViewPreferences() {
+    if (!browsePreferencesCache) {
+        browsePreferencesCache = loadBrowsePreferencesFromStorage();
+    }
+    return browsePreferencesCache;
+}
+
+function saveBrowseViewPreferences(partial = {}) {
+    const current = getBrowseViewPreferences();
+    const next = {
+        scrollPositions: Object.assign({}, current.scrollPositions, partial.scrollPositions || {}),
+        listAnchors: mergeBrowseAnchors(current.listAnchors, partial.listAnchors),
+        autoScrollEnabled: Object.prototype.hasOwnProperty.call(partial, 'autoScrollEnabled')
+            ? !!partial.autoScrollEnabled
+            : current.autoScrollEnabled,
+        lastFilter: Object.prototype.hasOwnProperty.call(partial, 'lastFilter')
+            ? (partial.lastFilter || null)
+            : current.lastFilter
+    };
+
+    try {
+        localStorage.setItem(BROWSE_VIEW_PREFERENCE_KEY, JSON.stringify(next));
+        browsePreferencesCache = next;
+    } catch (error) {
+        console.warn('[BrowsePreferences] 保存浏览偏好失败', error);
+        browsePreferencesCache = next;
+    }
+    return browsePreferencesCache;
+}
+
+function captureBrowseScrollSnapshot(category, type, scrollTop) {
+    const normalizedCategory = normalizeCategoryKey(category);
+    const normalizedType = normalizeExamType(type);
+    const sanitizedScrollTop = Math.max(0, Math.round(scrollTop || 0));
+    pendingBrowseScrollSnapshot = {
+        category: normalizedCategory,
+        type: normalizedType,
+        scrollTop: sanitizedScrollTop
+    };
+    return pendingBrowseScrollSnapshot;
+}
+
+function persistBrowseScrollSnapshot(snapshot) {
+    if (!snapshot) {
+        return;
+    }
+    const key = buildBrowseFilterKey(snapshot.category, snapshot.type);
+    saveBrowseViewPreferences({
+        scrollPositions: { [key]: snapshot.scrollTop }
+    });
+}
+
+function flushPendingBrowseScrollPosition() {
+    persistBrowseScrollSnapshot(pendingBrowseScrollSnapshot);
+}
+
+function updateBrowsePreferenceIndicator(enabled) {
+    const trigger = document.getElementById('browse-title-trigger');
+    if (!trigger) {
+        return;
+    }
+    const isEnabled = !!enabled;
+    trigger.classList.toggle('active', isEnabled);
+    trigger.setAttribute('aria-pressed', isEnabled ? 'true' : 'false');
+}
+
+function sanitizeScrollPositionMap(map) {
+    if (!map || typeof map !== 'object') {
+        return {};
+    }
+    const sanitized = {};
+    for (const [key, value] of Object.entries(map)) {
+        if (typeof key !== 'string' || !key) {
+            continue;
+        }
+        const numeric = Number(value);
+        if (Number.isFinite(numeric) && numeric >= 0) {
+            sanitized[key] = Math.round(numeric);
+        }
+    }
+    return sanitized;
+}
+
+function mergeBrowseAnchors(currentAnchors = {}, updates) {
+    const next = Object.assign({}, currentAnchors);
+    if (!updates || typeof updates !== 'object') {
+        return next;
+    }
+
+    for (const [key, value] of Object.entries(updates)) {
+        if (typeof key !== 'string' || !key) {
+            continue;
+        }
+        if (value === null) {
+            delete next[key];
+            continue;
+        }
+        if (!value || typeof value !== 'object') {
+            continue;
+        }
+
+        const normalized = {};
+        if (typeof value.examId === 'string' && value.examId.trim()) {
+            normalized.examId = value.examId.trim();
+        }
+        if (typeof value.title === 'string' && value.title.trim()) {
+            normalized.title = value.title.trim();
+        }
+        if (Number.isFinite(value.scrollTop) && value.scrollTop >= 0) {
+            normalized.scrollTop = Math.round(value.scrollTop);
+        }
+        const ts = Number(value.timestamp);
+        normalized.timestamp = Number.isFinite(ts) && ts > 0 ? Math.round(ts) : Date.now();
+
+        if (!normalized.examId && !normalized.title && typeof normalized.scrollTop !== 'number') {
+            delete next[key];
+            continue;
+        }
+
+        next[key] = normalized;
+    }
+
+    return next;
+}
+
+function getBrowseListAnchor(category, type) {
+    const prefs = getBrowseViewPreferences();
+    const key = buildBrowseFilterKey(category, type);
+    const anchor = prefs.listAnchors && prefs.listAnchors[key];
+    if (!anchor || typeof anchor !== 'object') {
+        return null;
+    }
+    const result = {};
+    if (typeof anchor.examId === 'string' && anchor.examId.trim()) {
+        result.examId = anchor.examId.trim();
+    }
+    if (typeof anchor.title === 'string' && anchor.title.trim()) {
+        result.title = anchor.title.trim();
+    }
+    if (Number.isFinite(anchor.timestamp) && anchor.timestamp > 0) {
+        result.timestamp = Math.round(anchor.timestamp);
+    }
+    if (!result.examId && !result.title) {
+        return null;
+    }
+    return result;
+}
+
+function persistBrowseFilter(category, type) {
+    const normalizedCategory = normalizeCategoryKey(category);
+    const normalizedType = normalizeExamType(type);
+    saveBrowseViewPreferences({
+        lastFilter: { category: normalizedCategory, type: normalizedType }
+    });
+}
+
+function getPersistedBrowseFilter() {
+    const prefs = getBrowseViewPreferences();
+    if (!prefs.lastFilter) {
+        return null;
+    }
+    return {
+        category: normalizeCategoryKey(prefs.lastFilter.category),
+        type: normalizeExamType(prefs.lastFilter.type)
+    };
+}
+
+function setBrowseTitle(text) {
+    const titleEl = document.getElementById('browse-title');
+    if (titleEl) {
+        titleEl.textContent = text;
+    }
+}
+
+if (typeof window !== 'undefined') {
+    window.setBrowseTitle = setBrowseTitle;
+}
+
+function formatBrowseTitle(category = 'all', type = 'all') {
+    const normalizedCategory = normalizeCategoryKey(category);
+    const normalizedType = normalizeExamType(type);
+    if (normalizedCategory === 'all' && normalizedType === 'all') {
+        return '题库浏览';
+    }
+
+    const parts = [];
+    if (normalizedCategory !== 'all') {
+        parts.push(normalizedCategory);
+    }
+    if (normalizedType !== 'all') {
+        parts.push(normalizedType === 'reading' ? '阅读' : '听力');
+    }
+    parts.push('题库浏览');
+    return parts.join(' ');
+}
+
+function debounce(fn, wait) {
+    let timer = null;
+    return function debounced(...args) {
+        if (timer) {
+            clearTimeout(timer);
+        }
+        timer = setTimeout(() => {
+            timer = null;
+            fn.apply(this, args);
+        }, wait);
+    };
+}
+
+function recordBrowseScrollPosition(category, type, scrollTop) {
+    const snapshot = captureBrowseScrollSnapshot(category, type, scrollTop);
+    persistBrowseScrollSnapshot(snapshot);
+}
+
+function ensureBrowseScrollListener(scrollEl) {
+    if (!scrollEl) {
+        return;
+    }
+    if (currentBrowseScrollElement === scrollEl) {
+        return;
+    }
+    if (typeof removeBrowseScrollListener === 'function') {
+        removeBrowseScrollListener();
+        removeBrowseScrollListener = null;
+    }
+
+    const persist = debounce(() => {
+        flushPendingBrowseScrollPosition();
+    }, 150);
+
+    const handleScroll = () => {
+        const category = getCurrentCategory();
+        const type = getCurrentExamType();
+        captureBrowseScrollSnapshot(category, type, scrollEl.scrollTop);
+        persist();
+    };
+
+    const initialCategory = getCurrentCategory();
+    const initialType = getCurrentExamType();
+    captureBrowseScrollSnapshot(initialCategory, initialType, scrollEl.scrollTop);
+
+    scrollEl.addEventListener('scroll', handleScroll, { passive: true });
+    currentBrowseScrollElement = scrollEl;
+    removeBrowseScrollListener = () => {
+        try { scrollEl.removeEventListener('scroll', handleScroll); } catch (_) {}
+        currentBrowseScrollElement = null;
+        flushPendingBrowseScrollPosition();
+    };
+}
+
+if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', flushPendingBrowseScrollPosition);
+    window.addEventListener('beforeunload', flushPendingBrowseScrollPosition);
+}
+
+if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            flushPendingBrowseScrollPosition();
+        }
+    });
+}
+
+function requestBrowseAutoScroll(category, type, source = 'category-card') {
+    pendingBrowseAutoScroll = {
+        category: normalizeCategoryKey(category),
+        type: normalizeExamType(type),
+        source,
+        timestamp: Date.now()
+    };
+}
+
+function clearPendingBrowseAutoScroll() {
+    pendingBrowseAutoScroll = null;
+}
+
+if (typeof window !== 'undefined') {
+    window.clearPendingBrowseAutoScroll = clearPendingBrowseAutoScroll;
+}
+
+function consumeBrowseAutoScroll(category, type) {
+    if (!pendingBrowseAutoScroll) {
+        return null;
+    }
+    const now = Date.now();
+    if (now - pendingBrowseAutoScroll.timestamp > 5000) {
+        pendingBrowseAutoScroll = null;
+        return null;
+    }
+    const normalizedCategory = normalizeCategoryKey(category);
+    const normalizedType = normalizeExamType(type);
+    const categoryMatch = pendingBrowseAutoScroll.category === normalizedCategory;
+    const typeMatch = pendingBrowseAutoScroll.type === 'all'
+        || pendingBrowseAutoScroll.type === normalizedType;
+    if (categoryMatch && typeMatch) {
+        const context = pendingBrowseAutoScroll;
+        pendingBrowseAutoScroll = null;
+        return context;
+    }
+    return null;
+}
+
+function escapeCssIdentifier(value) {
+    if (typeof value !== 'string') {
+        return '';
+    }
+    if (window.CSS && typeof window.CSS.escape === 'function') {
+        return window.CSS.escape(value);
+    }
+    return value.replace(/[^a-zA-Z0-9_-]/g, '\$&');
+}
+
+function deriveRecordTimestamp(record) {
+    if (!record || typeof record !== 'object') {
+        return Number.NaN;
+    }
+    const candidates = [];
+    if (record.date) candidates.push(record.date);
+    if (record.endTime) candidates.push(record.endTime);
+    if (record.completedAt) candidates.push(record.completedAt);
+    if (record.timestamp) candidates.push(record.timestamp);
+    if (record.startTime) candidates.push(record.startTime);
+    const realData = record.realData || {};
+    if (realData.completedAt) candidates.push(realData.completedAt);
+    if (realData.endTime) candidates.push(realData.endTime);
+    if (realData.date) candidates.push(realData.date);
+
+    for (const value of candidates) {
+        if (value == null) {
+            continue;
+        }
+        if (typeof value === 'number') {
+            if (Number.isFinite(value)) {
+                return value;
+            }
+            continue;
+        }
+        const parsed = Date.parse(value);
+        if (!Number.isNaN(parsed)) {
+            return parsed;
+        }
+    }
+    return Number.NaN;
+}
+
+function resolveRecordExamInfo(record, examIndex) {
+    if (!record || typeof record !== 'object') {
+        return null;
+    }
+    const examId = record.examId || record.id || null;
+    let category = normalizeCategoryKey(record.category || record.examCategory);
+    let type = normalizeExamType(record.type || record.examType);
+    let title = record.title || record.examTitle || null;
+
+    if (category === 'all' || !title || type === 'all') {
+        const list = Array.isArray(examIndex) ? examIndex : [];
+        let entry = null;
+        if (examId) {
+            entry = list.find((exam) => exam && exam.id === examId);
+        }
+        if (!entry && title) {
+            entry = list.find((exam) => exam && exam.title === title);
+        }
+        if (entry) {
+            if (category === 'all' && entry.category) {
+                category = normalizeCategoryKey(entry.category);
+            }
+            if (type === 'all' && entry.type) {
+                type = normalizeExamType(entry.type);
+            }
+            if (!title && entry.title) {
+                title = entry.title;
+            }
+        }
+    }
+
+    if (!examId && !title) {
+        return null;
+    }
+
+    return {
+        examId,
+        category,
+        type,
+        title: title || examId
+    };
+}
+
+function findLastPracticeExamEntry(exams, category, type) {
+    const normalizedCategory = normalizeCategoryKey(category);
+    const normalizedType = normalizeExamType(type);
+    const records = getPracticeRecordsState();
+    if (!Array.isArray(records) || records.length === 0) {
+        return null;
+    }
+
+    const examIndex = getExamIndexState();
+    let latest = null;
+    let latestTimestamp = Number.NEGATIVE_INFINITY;
+
+    records.forEach((record) => {
+        const info = resolveRecordExamInfo(record, examIndex);
+        if (!info) {
+            return;
+        }
+        if (normalizedCategory !== 'all' && info.category !== normalizedCategory) {
+            return;
+        }
+        if (normalizedType !== 'all' && info.type !== normalizedType) {
+            return;
+        }
+        const timestamp = deriveRecordTimestamp(record);
+        if (!Number.isFinite(timestamp)) {
+            return;
+        }
+        if (timestamp > latestTimestamp) {
+            latestTimestamp = timestamp;
+            latest = info;
+        }
+    });
+
+    if (!latest) {
+        return null;
+    }
+
+    const list = Array.isArray(exams) ? exams : [];
+    const index = list.findIndex((exam) => {
+        if (!exam) {
+            return false;
+        }
+        if (latest.examId && exam.id === latest.examId) {
+            return true;
+        }
+        if (latest.title && exam.title === latest.title) {
+            return true;
+        }
+        return false;
+    });
+
+    if (index === -1) {
+        return null;
+    }
+
+    return { index, exam: list[index] };
+}
+
+function findExamEntryByAnchor(exams, anchor) {
+    if (!anchor || typeof anchor !== 'object') {
+        return null;
+    }
+    const list = Array.isArray(exams) ? exams : [];
+    let index = -1;
+    if (anchor.examId) {
+        index = list.findIndex((exam) => exam && exam.id === anchor.examId);
+    }
+    if (index === -1 && anchor.title) {
+        index = list.findIndex((exam) => exam && exam.title === anchor.title);
+    }
+    if (index === -1) {
+        return null;
+    }
+    return { index, exam: list[index] };
+}
+
+function scrollExamListToEntry(scrollEl, entry) {
+    if (!scrollEl || !entry || entry.index == null || entry.index < 0) {
+        return false;
+    }
+    const exam = entry.exam || {};
+    let selector = null;
+    if (exam.id) {
+        selector = `[data-exam-id="${escapeCssIdentifier(exam.id)}"]`;
+    }
+
+    let element = selector ? scrollEl.querySelector(selector) : null;
+    if (!element) {
+        const items = scrollEl.querySelectorAll('.exam-item');
+        element = Array.from(items).find((item) => {
+            const titleNode = item.querySelector('h4');
+            return titleNode && titleNode.textContent && exam.title && titleNode.textContent.trim() === exam.title.trim();
+        }) || null;
+    }
+
+    if (!element) {
+        return false;
+    }
+
+    const targetTop = element.offsetTop - (scrollEl.clientHeight / 2) + (element.offsetHeight / 2);
+    scrollEl.scrollTop = Math.max(0, targetTop);
+    return true;
+}
+
+function restoreBrowseScrollPosition(scrollEl, category, type) {
+    const prefs = getBrowseViewPreferences();
+    const key = buildBrowseFilterKey(category, type);
+    const stored = prefs.scrollPositions[key];
+    if (typeof stored === 'number' && stored >= 0) {
+        scrollEl.scrollTop = stored;
+        return true;
+    }
+    return false;
+}
+
+function handlePostExamListRender(exams, { category, type } = {}) {
+    const scrollEl = document.querySelector('#exam-list-container .exam-list');
+    if (!scrollEl) {
+        return;
+    }
+
+    ensureBrowseScrollListener(scrollEl);
+
+    const normalizedCategory = normalizeCategoryKey(category || getCurrentCategory());
+    const normalizedType = normalizeExamType(type || getCurrentExamType());
+    const autoScrollContext = consumeBrowseAutoScroll(normalizedCategory, normalizedType);
+    const prefs = getBrowseViewPreferences();
+
+    const applyScroll = () => {
+        const performFallback = () => {
+            if (!restoreBrowseScrollPosition(scrollEl, normalizedCategory, normalizedType)) {
+                if (prefs.autoScrollEnabled) {
+                    scrollEl.scrollTop = 0;
+                }
+            }
+        };
+
+        const attemptScrollToEntry = (entry, remaining, onFail) => {
+            if (scrollExamListToEntry(scrollEl, entry)) {
+                recordBrowseScrollPosition(normalizedCategory, normalizedType, scrollEl.scrollTop);
+                return;
+            }
+            if (remaining > 0) {
+                setTimeout(() => attemptScrollToEntry(entry, remaining - 1, onFail), 80);
+                return;
+            }
+            if (typeof onFail === 'function') {
+                onFail();
+            }
+        };
+
+        if (prefs.autoScrollEnabled && normalizedCategory !== 'all') {
+            const entry = findLastPracticeExamEntry(exams, normalizedCategory, normalizedType);
+            if (entry) {
+                const retries = autoScrollContext ? 7 : 4;
+                attemptScrollToEntry(entry, retries, performFallback);
+                return;
+            }
+            const anchor = getBrowseListAnchor(normalizedCategory, normalizedType);
+            if (anchor) {
+                const entryFromAnchor = findExamEntryByAnchor(exams, anchor);
+                if (entryFromAnchor) {
+                    attemptScrollToEntry(entryFromAnchor, 3, performFallback);
+                    return;
+                }
+            }
+        }
+
+        performFallback();
+    };
+
+    if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(applyScroll);
+    } else {
+        applyScroll();
+    }
+}
+
+function setupBrowsePreferenceUI() {
+    const trigger = document.getElementById('browse-title-trigger');
+    const panel = document.getElementById('browse-preference-panel');
+    const checkbox = document.getElementById('browse-remember-position');
+
+    if (!trigger || !panel || !checkbox) {
+        return;
+    }
+
+    const prefs = getBrowseViewPreferences();
+    checkbox.checked = !!prefs.autoScrollEnabled;
+    updateBrowsePreferenceIndicator(prefs.autoScrollEnabled);
+
+    if (browsePreferenceUiInitialized) {
+        return;
+    }
+
+    browsePreferenceUiInitialized = true;
+
+    const closePanel = () => {
+        panel.hidden = true;
+        trigger.setAttribute('aria-expanded', 'false');
+    };
+
+    const togglePanel = () => {
+        const willOpen = panel.hidden;
+        panel.hidden = !willOpen;
+        trigger.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    };
+
+    trigger.addEventListener('click', (event) => {
+        event.preventDefault();
+        togglePanel();
+    });
+
+    trigger.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            togglePanel();
+        }
+    });
+
+    document.addEventListener('click', (event) => {
+        if (panel.hidden) {
+            return;
+        }
+        if (event.target === trigger || trigger.contains(event.target)) {
+            return;
+        }
+        if (panel.contains(event.target)) {
+            return;
+        }
+        closePanel();
+    });
+
+    checkbox.addEventListener('change', (event) => {
+        const enabled = !!event.target.checked;
+        const next = saveBrowseViewPreferences({ autoScrollEnabled: enabled });
+        updateBrowsePreferenceIndicator(next.autoScrollEnabled);
+        if (typeof showMessage === 'function') {
+            const message = enabled ? '已开启列表位置记录，将自动恢复到上次答题的位置' : '已关闭列表位置记录';
+            showMessage(message, 'info');
+        }
+        panel.hidden = true;
+        trigger.setAttribute('aria-expanded', 'false');
+    });
+}
+
+if (typeof window !== 'undefined') {
+    window.handlePostExamListRender = handlePostExamListRender;
+    window.requestBrowseAutoScroll = requestBrowseAutoScroll;
+    window.setupBrowsePreferenceUI = setupBrowsePreferenceUI;
+}
+
+
 const preferredFirstExamByCategory = {
   'P1_reading': { id: 'p1-09', title: 'Listening to the Ocean 海洋探测' },
   'P2_reading': { id: 'p2-high-12', title: 'The fascinating world of attine ants 切叶蚁' },
@@ -227,6 +1051,11 @@ function ensureExamListView() {
           containerSelector: '.main-nav',
           activeClass: 'active',
           syncOnNavigate: true,
+          onRepeatNavigate: function onRepeatNavigate(viewName) {
+              if (viewName === 'browse') {
+                  resetBrowseViewToAll();
+              }
+          },
           onNavigate: function onNavigate(viewName) {
               if (typeof window.showView === 'function') {
                   window.showView(viewName);
@@ -260,6 +1089,8 @@ async function initializeLegacyComponents() {
     } catch (error) {
         console.warn('[Navigation] 初始化导航控制器失败:', error);
     }
+
+    setupBrowsePreferenceUI();
 
     // Setup UI Listeners
     const folderPicker = document.getElementById('folder-picker');
@@ -438,6 +1269,147 @@ async function syncPracticeRecords() {
     updatePracticeView();
 }
 
+const completionNoticeState = {
+    lastSessionId: null,
+    lastShownAt: 0
+};
+
+function extractCompletionPayload(envelope) {
+    if (!envelope || typeof envelope !== 'object') {
+        return null;
+    }
+    const candidates = [envelope.data, envelope.payload, envelope.results, envelope.detail, envelope];
+    for (let i = 0; i < candidates.length; i += 1) {
+        const candidate = candidates[i];
+        if (candidate && typeof candidate === 'object') {
+            if (
+                candidate.scoreInfo ||
+                typeof candidate.correctAnswers !== 'undefined' ||
+                typeof candidate.totalQuestions !== 'undefined' ||
+                (candidate.answers && typeof candidate.answers === 'object')
+            ) {
+                return candidate;
+            }
+        }
+    }
+    return null;
+}
+
+function extractCompletionSessionId(envelope) {
+    if (!envelope || typeof envelope !== 'object') {
+        return null;
+    }
+    if (typeof envelope.sessionId === 'string' && envelope.sessionId.trim()) {
+        return envelope.sessionId.trim();
+    }
+    const payload = extractCompletionPayload(envelope);
+    if (payload && typeof payload.sessionId === 'string' && payload.sessionId.trim()) {
+        return payload.sessionId.trim();
+    }
+    return null;
+}
+
+function shouldAnnounceCompletion(sessionId) {
+    const now = Date.now();
+    if (sessionId && completionNoticeState.lastSessionId === sessionId) {
+        return false;
+    }
+    if (!sessionId && (now - completionNoticeState.lastShownAt) < 1500) {
+        return false;
+    }
+    completionNoticeState.lastSessionId = sessionId || null;
+    completionNoticeState.lastShownAt = now;
+    return true;
+}
+
+function pickNumericValue(values) {
+    for (let i = 0; i < values.length; i += 1) {
+        const value = values[i];
+        if (value === undefined || value === null) {
+            continue;
+        }
+        const num = Number(value);
+        if (Number.isFinite(num)) {
+            return num;
+        }
+    }
+    return null;
+}
+
+function extractCompletionStats(payload) {
+    if (!payload || typeof payload !== 'object') {
+        return null;
+    }
+    const scoreInfo = payload.scoreInfo || (payload.realData && payload.realData.scoreInfo) || {};
+    const correct = pickNumericValue([
+        scoreInfo.correct,
+        payload.correctAnswers,
+        payload.score,
+        payload.realData && payload.realData.correctAnswers
+    ]);
+    const total = pickNumericValue([
+        scoreInfo.total,
+        payload.totalQuestions,
+        payload.questionCount,
+        payload.realData && payload.realData.totalQuestions,
+        payload.answerComparison && typeof payload.answerComparison === 'object'
+            ? Object.keys(payload.answerComparison).length
+            : null,
+        payload.answers && typeof payload.answers === 'object'
+            ? Object.keys(payload.answers).length
+            : null
+    ]);
+    let percentage = pickNumericValue([
+        scoreInfo.percentage,
+        payload.percentage,
+        typeof scoreInfo.accuracy === 'number' ? scoreInfo.accuracy * 100 : null,
+        typeof payload.accuracy === 'number' ? payload.accuracy * 100 : null
+    ]);
+    if (!Number.isFinite(percentage) && Number.isFinite(correct) && Number.isFinite(total) && total > 0) {
+        percentage = (correct / total) * 100;
+    }
+
+    const hasScore = Number.isFinite(correct) && Number.isFinite(total) && total > 0;
+    const hasPercentage = Number.isFinite(percentage);
+    if (!hasPercentage && !hasScore) {
+        return null;
+    }
+
+    return {
+        percentage: hasPercentage ? percentage : null,
+        correct: hasScore ? correct : null,
+        total: hasScore ? total : null
+    };
+}
+
+function formatPercentageDisplay(value) {
+    if (!Number.isFinite(value)) {
+        return null;
+    }
+    const rounded = Math.round(value * 10) / 10;
+    return Number.isInteger(rounded) ? `${rounded}%` : `${rounded.toFixed(1)}%`;
+}
+
+function showCompletionSummary(envelope) {
+    const payload = extractCompletionPayload(envelope);
+    const stats = extractCompletionStats(payload);
+    if (!stats) {
+        return;
+    }
+    const parts = [];
+    const pctText = formatPercentageDisplay(stats.percentage);
+    if (pctText) {
+        parts.push(`本次正确率 ${pctText}`);
+    }
+    if (Number.isFinite(stats.correct) && Number.isFinite(stats.total)) {
+        parts.push(`得分 ${stats.correct}/${stats.total}`);
+    }
+    if (parts.length === 0) {
+        return;
+    }
+    showMessage(`📊 ${parts.join('，')}`, 'info');
+}
+
 function setupMessageListener() {
     window.addEventListener('message', (event) => {
         // 更兼容的安全检查：允许同源或file协议下的子窗口
@@ -461,19 +1433,27 @@ function setupMessageListener() {
                 }
             } catch (_) {}
         } else if (type === 'PRACTICE_COMPLETE' || type === 'practice_completed') {
-            const sessionId = (data && data.sessionId) || null;
+            const payload = extractCompletionPayload(data) || {};
+            const sessionId = extractCompletionSessionId(data);
             const rec = sessionId ? fallbackExamSessions.get(sessionId) : null;
+            const shouldNotify = shouldAnnounceCompletion(sessionId);
             if (rec) {
                 console.log('[Fallback] 收到练习完成（降级路径），保存真实数据');
-                savePracticeRecordFallback(rec.examId, data).finally(() => {
+                savePracticeRecordFallback(rec.examId, payload).finally(() => {
                     try { if (rec && rec.timer) clearInterval(rec.timer); } catch(_) {}
                     try { fallbackExamSessions.delete(sessionId); } catch(_) {}
-                    showMessage('练习已完成，正在更新记录...', 'success');
+                    if (shouldNotify) {
+                        showMessage('练习已完成，正在更新记录...', 'success');
+                        showCompletionSummary(payload);
+                    }
                     setTimeout(syncPracticeRecords, 300);
                 });
             } else {
                 console.log('[System] 收到练习完成消息，正在同步记录...');
-                showMessage('练习已完成，正在更新记录...', 'success');
+                if (shouldNotify) {
+                    showMessage('练习已完成，正在更新记录...', 'success');
+                    showCompletionSummary(payload);
+                }
                 setTimeout(syncPracticeRecords, 300);
             }
         }
@@ -490,33 +1470,234 @@ function setupStorageSyncListener() {
     });
 }
 
+function normalizeFallbackAnswerValue(value) {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  if (typeof value === 'boolean') {
+    return value ? 'True' : 'False';
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => normalizeFallbackAnswerValue(item))
+      .filter(Boolean)
+      .join(', ');
+  }
+  if (typeof value === 'object') {
+    const preferKeys = ['value', 'label', 'text', 'answer', 'content'];
+    for (const key of preferKeys) {
+      if (typeof value[key] === 'string' && value[key].trim()) {
+        return value[key].trim();
+      }
+    }
+    if (typeof value.innerText === 'string' && value.innerText.trim()) {
+      return value.innerText.trim();
+    }
+    if (typeof value.textContent === 'string' && value.textContent.trim()) {
+      return value.textContent.trim();
+    }
+    try {
+      const json = JSON.stringify(value);
+      if (json && json !== '{}' && json !== '[]') {
+        return json;
+      }
+    } catch (_) {}
+    return String(value);
+  }
+  return String(value).trim();
+}
+
+function normalizeFallbackAnswerMap(rawAnswers) {
+  const map = {};
+  if (!rawAnswers) {
+    return map;
+  }
+  if (Array.isArray(rawAnswers)) {
+    rawAnswers.forEach((entry, index) => {
+      if (!entry) return;
+      const key = entry.questionId || `q${index + 1}`;
+      map[key] = normalizeFallbackAnswerValue(entry.answer ?? entry.userAnswer ?? entry.value ?? entry);
+    });
+    return map;
+  }
+  Object.entries(rawAnswers).forEach(([rawKey, rawValue]) => {
+    if (!rawKey) return;
+    const key = rawKey.startsWith('q') ? rawKey : `q${rawKey}`;
+    map[key] = normalizeFallbackAnswerValue(
+      rawValue && typeof rawValue === 'object' && 'answer' in rawValue
+        ? rawValue.answer
+        : rawValue
+    );
+  });
+  return map;
+}
+
+function buildFallbackAnswerDetails(answerMap = {}, correctMap = {}) {
+  const details = {};
+  const keys = new Set([
+    ...Object.keys(answerMap || {}),
+    ...Object.keys(correctMap || {})
+  ]);
+  keys.forEach((key) => {
+    const userAnswer = normalizeFallbackAnswerValue(answerMap[key]);
+    const correctAnswer = normalizeFallbackAnswerValue(correctMap[key]);
+    let isCorrect = null;
+    if (correctAnswer) {
+      isCorrect = userAnswer && userAnswer.toLowerCase() === correctAnswer.toLowerCase();
+    }
+    details[key] = {
+      userAnswer: userAnswer || '-',
+      correctAnswer: correctAnswer || '-',
+      isCorrect
+    };
+  });
+  return details;
+}
+
+function normalizeFallbackAnswerComparison(existingComparison, answerMap, correctMap) {
+  const normalized = {};
+  const source = existingComparison && typeof existingComparison === 'object' ? existingComparison : {};
+  Object.entries(source).forEach(([questionId, entry]) => {
+    if (!entry || typeof entry !== 'object') return;
+    normalized[questionId] = {
+      questionId,
+      userAnswer: normalizeFallbackAnswerValue(entry.userAnswer ?? entry.user ?? entry.answer),
+      correctAnswer: normalizeFallbackAnswerValue(entry.correctAnswer ?? entry.correct),
+      isCorrect: typeof entry.isCorrect === 'boolean' ? entry.isCorrect : null
+    };
+  });
+
+  const mergedKeys = new Set([
+    ...Object.keys(answerMap || {}),
+    ...Object.keys(correctMap || {})
+  ]);
+  mergedKeys.forEach((key) => {
+    if (normalized[key]) return;
+    const userAnswer = normalizeFallbackAnswerValue(answerMap[key]);
+    const correctAnswer = normalizeFallbackAnswerValue(correctMap[key]);
+    let isCorrect = null;
+    if (correctAnswer) {
+      isCorrect = userAnswer && userAnswer.toLowerCase() === correctAnswer.toLowerCase();
+    }
+    normalized[key] = {
+      questionId: key,
+      userAnswer: userAnswer || '',
+      correctAnswer: correctAnswer || '',
+      isCorrect
+    };
+  });
+
+  return normalized;
+}
+
 // 降级保存：将 PRACTICE_COMPLETE 的真实数据写入 practice_records（与旧视图字段兼容）
 async function savePracticeRecordFallback(examId, realData) {
   try {
     const list = getExamIndexState();
-    const exam = list.find(e => e.id === examId) || {};
+    let exam = list.find(e => e.id === examId) || {};
+    
+    // 如果通过 examId 找不到，尝试通过 URL 或标题匹配
+    if (!exam.id && realData) {
+      // 尝试通过 URL 匹配
+      if (realData.url) {
+        const urlPath = realData.url.toLowerCase();
+        const urlMatch = list.find(e => {
+          if (!e.path) return false;
+          const itemPath = e.path.toLowerCase();
+          const urlParts = urlPath.split('/').filter(Boolean);
+          const pathParts = itemPath.split('/').filter(Boolean);
+          
+          // 检查最后几个路径段是否匹配
+          for (let i = 0; i < Math.min(urlParts.length, pathParts.length); i++) {
+            if (urlParts[urlParts.length - 1 - i] === pathParts[pathParts.length - 1 - i]) {
+              return true;
+            }
+          }
+          return false;
+        });
+        if (urlMatch) {
+          exam = urlMatch;
+          console.log('[Fallback] 通过 URL 匹配到题目:', exam.id, exam.title);
+        }
+      }
+      
+      // 尝试通过标题匹配
+      if (!exam.id && realData.title) {
+        const normalizeTitle = (str) => {
+          if (!str) return '';
+          return String(str).trim().toLowerCase()
+            .replace(/^\[.*?\]\s*/, '')  // 移除标签前缀
+            .replace(/[^\w\s]/g, '')
+            .replace(/\s+/g, ' ');
+        };
+        const targetTitle = normalizeTitle(realData.title);
+        const titleMatch = list.find(e => {
+          if (!e.title) return false;
+          const itemTitle = normalizeTitle(e.title);
+          return itemTitle === targetTitle || 
+                 (targetTitle.length > 5 && itemTitle.includes(targetTitle)) ||
+                 (itemTitle.length > 5 && targetTitle.includes(itemTitle));
+        });
+        if (titleMatch) {
+          exam = titleMatch;
+          console.log('[Fallback] 通过标题匹配到题目:', exam.id, exam.title);
+        }
+      }
+    }
 
     const sInfo = realData && realData.scoreInfo ? realData.scoreInfo : {};
     const correct = typeof sInfo.correct === 'number' ? sInfo.correct : 0;
-    const total = typeof sInfo.total === 'number' ? sInfo.total : (realData.answers ? Object.keys(realData.answers).length : 0);
+    const normalizedAnswers = normalizeFallbackAnswerMap(realData.answers);
+    const normalizedCorrectMap = normalizeFallbackAnswerMap(realData.correctAnswers);
+    const total = typeof sInfo.total === 'number' ? sInfo.total : Object.keys(normalizedCorrectMap).length || Object.keys(normalizedAnswers).length;
     const acc = typeof sInfo.accuracy === 'number' ? sInfo.accuracy : (total > 0 ? correct / total : 0);
     const pct = typeof sInfo.percentage === 'number' ? sInfo.percentage : Math.round(acc * 100);
+
+    const answerDetails = buildFallbackAnswerDetails(normalizedAnswers, normalizedCorrectMap);
+    const answerComparison = normalizeFallbackAnswerComparison(realData.answerComparison, normalizedAnswers, normalizedCorrectMap);
+    const scoreInfo = {
+      correct,
+      total,
+      accuracy: acc,
+      percentage: pct,
+      details: answerDetails,
+      source: sInfo.source || realData.source || 'fallback'
+    };
+    
+    // 从多个来源提取 category
+    let category = exam.category;
+    if (!category && realData.pageType) {
+      category = realData.pageType;  // 如 "P4"
+    }
+    if (!category && realData.url) {
+      const match = realData.url.match(/\b(P[1-4])\b/i);
+      if (match) category = match[1].toUpperCase();
+    }
+    if (!category && realData.title) {
+      const match = realData.title.match(/\b(P[1-4])\b/i);
+      if (match) category = match[1].toUpperCase();
+    }
+    if (!category) {
+      category = 'Unknown';
+    }
 
     const record = {
       id: Date.now(),
       examId: examId,
       title: exam.title || realData.title || '',
-      category: exam.category,
-      frequency: exam.frequency,
+      category: category,
+      frequency: exam.frequency || 'unknown',
       realData: {
         score: correct,
         totalQuestions: total,
         accuracy: acc,
         percentage: pct,
         duration: realData.duration,
-        answers: realData.answers || {},
-        correctAnswers: realData.correctAnswers || {},
+        answers: normalizedAnswers,
+        correctAnswers: normalizedCorrectMap,
         interactions: realData.interactions || [],
+        answerComparison,
+        scoreInfo,
         isRealData: true,
         source: sInfo.source || 'fallback'
       },
@@ -530,7 +1711,11 @@ async function savePracticeRecordFallback(examId, realData) {
       totalQuestions: total,
       accuracy: acc,
       percentage: pct,
-      answers: realData.answers || {},
+      answers: normalizedAnswers,
+      answerDetails,
+      correctAnswerMap: normalizedCorrectMap,
+      answerComparison,
+      scoreInfo,
       startTime: new Date((realData.startTime ?? (Date.now() - (realData.duration || 0) * 1000))).toISOString(),
       endTime: new Date((realData.endTime ?? Date.now())).toISOString()
     };
@@ -604,6 +1789,7 @@ async function loadLibrary(forceReload = false) {
         }
 
         const combined = [...readingExams, ...listeningExams];
+        assignExamSequenceNumbers(combined);
         const updatedIndex = setExamIndexState(combined);
 
         const metadata = {
@@ -1191,6 +2377,36 @@ function updatePracticeView() {
     refreshBulkDeleteButton();
 }
 
+let practiceSessionEventBound = false;
+function ensurePracticeSessionSyncListener() {
+    if (practiceSessionEventBound) {
+        return;
+    }
+    practiceSessionEventBound = true;
+    document.addEventListener('practiceSessionCompleted', (event) => {
+        try {
+            const detail = event && event.detail ? event.detail : {};
+            let record = detail.practiceRecord;
+            if (record && typeof record === 'object') {
+                record = enrichPracticeRecordForUI(record);
+                const current = getPracticeRecordsState();
+                const filtered = Array.isArray(current)
+                    ? current.filter((item) => item && item.id !== record.id)
+                    : [];
+                setPracticeRecordsState([record, ...filtered]);
+                updatePracticeView();
+            }
+        } catch (syncError) {
+            console.warn('[PracticeView] practiceSessionCompleted 事件处理失败:', syncError);
+        } finally {
+            // 仍然执行一次全面同步，确保 ScoreStorage/StorageRepo 状态一致
+            setTimeout(() => {
+                try { syncPracticeRecords(); } catch (_) {}
+            }, 200);
+        }
+    });
+}
+
 function computePracticeSummaryFallback(records) {
     const normalized = Array.isArray(records) ? records : [];
     const totalPracticed = normalized.length;
@@ -1281,6 +2497,7 @@ function applyPracticeSummaryFallback(summary) {
 
 function browseCategory(category, type = 'reading') {
 
+    requestBrowseAutoScroll(category, type);
     // 先设置筛选器，确保 App 路径也能获取到筛选参数
     try {
         setBrowseFilterState(category, type);
@@ -1311,11 +2528,7 @@ function browseCategory(category, type = 'reading') {
     // 降级路径：手动处理浏览筛选
     try {
         // 正确更新标题使用中文字符串
-        const typeText = type === 'listening' ? '听力' : '阅读';
-        const titleEl = document.getElementById('browse-title');
-        if (titleEl) {
-            titleEl.textContent = `📚 ${category} ${typeText}题库浏览`;
-        }
+        setBrowseTitle(formatBrowseTitle(category, type));
 
         // 导航到浏览视图
         if (window.app && typeof window.app.navigateToView === 'function') {
@@ -1341,7 +2554,7 @@ function browseCategory(category, type = 'reading') {
 
 function filterByType(type) {
     setBrowseFilterState('all', type);
-    document.getElementById('browse-title').textContent = '📚 题库浏览';
+    setBrowseTitle(formatBrowseTitle('all', type));
     loadExamList();
 }
 
@@ -1371,11 +2584,9 @@ function applyBrowseFilter(category = 'all', type = null) {
             } catch (_) { type = 'all'; }
         }
 
-        setBrowseFilterState(normalizedCategory, type);
-
-        // 保持标题简洁
-        const titleEl = document.getElementById('browse-title');
-        if (titleEl) titleEl.textContent = '📚 题库浏览';
+        const normalizedType = normalizeExamType(type);
+        setBrowseFilterState(normalizedCategory, normalizedType);
+        setBrowseTitle(formatBrowseTitle(normalizedCategory, normalizedType));
 
         // 若未在浏览视图，则尽力切换
         if (typeof window.showView === 'function' && !document.getElementById('browse-view')?.classList.contains('active')) {
@@ -1393,8 +2604,14 @@ function applyBrowseFilter(category = 'all', type = null) {
 // Initialize browse view when it's activated
 function initializeBrowseView() {
     console.log('[System] Initializing browse view...');
-    setBrowseFilterState('all', 'all');
-    document.getElementById('browse-title').textContent = '📚 题库浏览';
+    const persisted = getPersistedBrowseFilter();
+    if (persisted) {
+        setBrowseFilterState(persisted.category, persisted.type);
+        setBrowseTitle(formatBrowseTitle(persisted.category, persisted.type));
+    } else {
+        setBrowseFilterState('all', 'all');
+        setBrowseTitle(formatBrowseTitle('all', 'all'));
+    }
     loadExamList();
 }
 
@@ -1463,6 +2680,24 @@ function loadExamList() {
 
     const activeList = setFilteredExamsState(examsToShow);
     displayExams(activeList);
+    handlePostExamListRender(activeList, { category: activeCategory, type: activeExamType });
+    return activeList;
+}
+
+function resetBrowseViewToAll() {
+    clearPendingBrowseAutoScroll();
+    const currentCategory = getCurrentCategory();
+    const currentType = getCurrentExamType();
+
+    if (currentCategory === 'all' && currentType === 'all') {
+        setBrowseTitle(formatBrowseTitle('all', 'all'));
+        loadExamList();
+        return;
+    }
+
+    setBrowseFilterState('all', 'all');
+    setBrowseTitle(formatBrowseTitle('all', 'all'));
+    loadExamList();
 }
 
 function displayExams(exams) {
@@ -1528,7 +2763,8 @@ function displayExams(exams) {
         title.textContent = exam.title || '';
         const meta = document.createElement('div');
         meta.className = 'exam-meta';
-        meta.textContent = `${exam.category || ''} | ${exam.type || ''}`;
+        const metaText = formatExamMetaText(exam);
+        meta.textContent = metaText || `${exam.category || ''} | ${exam.type || ''}`;
         infoContent.appendChild(title);
         infoContent.appendChild(meta);
         info.appendChild(infoContent);
@@ -2130,37 +3366,6 @@ function openPDFSafely(pdfPath, examTitle = 'PDF') {
     }
 }
 
-// Export current exam index to a timestamped script file under assets/scripts (download)
-function exportExamIndexToScriptFile(fullIndex, noteLabel = '') {
-    try {
-        const reading = (fullIndex || []).filter(e => e.type === 'reading').map(e => {
-            const { type, ...rest } = e || {};
-            return rest;
-        });
-        const listening = (fullIndex || []).filter(e => e.type === 'listening');
-
-        const pad = (n) => String(n).padStart(2, '0');
-        const d = new Date();
-        const ts = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
-        const header = `// 题库配置导出 ${d.toLocaleString()}\n// 说明: 保存此文件到 assets/scripts/ 并在需要时手动在 index.html 引入以覆盖内置数据\n`;
-        const content = `${header}window.completeExamIndex = ${JSON.stringify(reading, null, 2)};\n\nwindow.listeningExamIndex = ${JSON.stringify(listening, null, 2)};\n`;
-
-        const blob = new Blob([content], { type: 'application/javascript; charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `exam-index-${ts}.js`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        try { showMessage(`题库配置已导出: exam-index-${ts}.js（请移动到 assets/scripts/）`, 'success'); } catch(_) {}
-    } catch (e) {
-        console.error('[LibraryExport] 题库配置导出失败:', e);
-        try { showMessage('题库配置导出失败: ' + (e && e.message || e), 'error'); } catch(_) {}
-    }
-}
-
 // --- Helper Functions ---
 function getViewName(viewName) {
     switch (viewName) {
@@ -2484,6 +3689,7 @@ async function handleLibraryUpload(options, files) {
             const dedupAdd = additions.filter(e => !existingKeys.has((e.path || '') + '|' + (e.filename || '') + '|' + e.title));
             newIndex = [...currentIndex, ...dedupAdd];
         }
+        assignExamSequenceNumbers(newIndex);
 
         // 对于全量重载，创建一个新的题库配置并自动切换
         if (mode === 'full') {
@@ -2504,10 +3710,14 @@ async function handleLibraryUpload(options, files) {
             await savePathMapForConfiguration(targetKey, newIndex, { overrideMap: derivedPathMap, setActive: true });
             await saveLibraryConfiguration(configName, targetKey, newIndex.length);
             await setActiveLibraryConfiguration(targetKey);
-            // 导出为时间命名脚本，便于统一管理
-            try { exportExamIndexToScriptFile(newIndex, configName); } catch(_) {}
-            showMessage('新的题库配置已创建并激活；正在重新加载...', 'success');
-            setTimeout(() => { location.reload(); }, 800);
+            try {
+                await applyLibraryConfiguration(targetKey, newIndex, { skipConfigRefresh: false });
+                showMessage('新的题库配置已创建并激活', 'success');
+            } catch (applyError) {
+                console.warn('[LibraryLoader] 自动应用新题库失败，回退为整页刷新', applyError);
+                showMessage('新的题库已保存，正在刷新界面...', 'warning');
+                setTimeout(() => { location.reload(); }, 500);
+            }
             return;
         }
 
@@ -2538,8 +3748,6 @@ async function handleLibraryUpload(options, files) {
         await saveLibraryConfiguration(incName, targetKey, newIndex.length);
         showMessage('索引已更新；正在刷新界面...', 'success');
         setExamIndexState(newIndex);
-        // 也导出一次，便于归档
-        try { exportExamIndexToScriptFile(newIndex, incName); } catch(_) {}
         updateOverview();
         if (document.getElementById('browse-view')?.classList.contains('active')) {
             loadExamList();
@@ -4783,10 +5991,43 @@ function handleVocabEntry(event) {
     if (event && typeof event.preventDefault === 'function') {
         event.preventDefault();
     }
+    const mountView = () => {
+        if (window.VocabSessionView && typeof window.VocabSessionView.mount === 'function') {
+            window.VocabSessionView.mount('#vocab-view');
+        }
+    };
+
+    const vocabView = document.getElementById('vocab-view');
+    if (vocabView) {
+        vocabView.removeAttribute('hidden');
+    }
+
+    if (app && typeof app.navigateToView === 'function') {
+        app.navigateToView('vocab');
+        const moreNavBtn = document.querySelector('.nav-btn[data-view="more"]');
+        if (moreNavBtn) {
+            moreNavBtn.classList.add('active');
+        }
+        mountView();
+        return;
+    }
+
+    const moreView = document.getElementById('more-view');
+    if (vocabView && moreView) {
+        moreView.classList.remove('active');
+        vocabView.classList.add('active');
+        const moreNavBtn = document.querySelector('.nav-btn[data-view="more"]');
+        if (moreNavBtn) {
+            moreNavBtn.classList.add('active');
+        }
+        mountView();
+        return;
+    }
+
     if (typeof window.showMessage === 'function') {
-        window.showMessage('单词背诵模块正在筹备中，敬请期待。', 'info');
+        window.showMessage('未能打开词汇视图，请检查页面结构。', 'warning');
     } else {
-        window.alert('单词背诵模块正在筹备中，敬请期待。');
+        window.alert('未能打开词汇视图，请检查页面结构。');
     }
 }
 
@@ -5688,3 +6929,4 @@ function setupExamActionHandlers() {
 }
 
 setupExamActionHandlers();
+ensurePracticeSessionSyncListener();
