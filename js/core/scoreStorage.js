@@ -491,6 +491,18 @@ class ScoreStorage {
             return record;
         }
         const patched = Object.assign({}, record);
+        if (Array.isArray(record.suiteEntries)) {
+            patched.suiteEntries = record.suiteEntries.map(entry => this.clonePlainObject(entry)).filter(Boolean);
+        }
+        if (record.suiteMode != null) {
+            patched.suiteMode = Boolean(record.suiteMode);
+        }
+        if (record.suiteSessionId) {
+            patched.suiteSessionId = record.suiteSessionId;
+        }
+        if (record.frequency) {
+            patched.frequency = record.frequency;
+        }
         const inferredType = this.inferPracticeType(patched);
         if (!patched.type) {
             patched.type = inferredType;
@@ -588,6 +600,16 @@ class ScoreStorage {
             }
             return map;
         }, {});
+        const suiteSessionId = recordData.suiteSessionId
+            || recordData.metadata?.suiteSessionId
+            || null;
+        if (suiteSessionId && !metadata.suiteSessionId) {
+            metadata.suiteSessionId = suiteSessionId;
+        }
+        const frequency = recordData.frequency || metadata.frequency || null;
+        if (frequency && !metadata.frequency) {
+            metadata.frequency = frequency;
+        }
         const normalizedCorrectMap = (
             recordData.correctAnswerMap && typeof recordData.correctAnswerMap === 'object'
         )
@@ -620,6 +642,10 @@ class ScoreStorage {
             || recordData.examTitle
             || recordData.examId
             || '未命名练习';
+        const normalizedSuiteEntries = this.standardizeSuiteEntries(recordData.suiteEntries || []);
+        const normalizedComparison = (recordData.answerComparison && typeof recordData.answerComparison === 'object')
+            ? this.clonePlainObject(recordData.answerComparison)
+            : null;
 
         return {
             // 基础信息
@@ -650,6 +676,10 @@ class ScoreStorage {
 
             // 元数据
             metadata,
+            frequency: frequency || metadata.frequency || null,
+            suiteMode: Boolean(recordData.suiteMode || (frequency && frequency.toLowerCase() === 'suite')),
+            suiteSessionId,
+            suiteEntries: normalizedSuiteEntries,
             scoreInfo: recordData.scoreInfo
                 ? Object.assign({}, recordData.scoreInfo, {
                     details: recordData.scoreInfo.details || detailSource || null
@@ -661,9 +691,13 @@ class ScoreStorage {
                     correctAnswers: recordData.realData.correctAnswers || normalizedCorrectMap,
                     scoreInfo: Object.assign({}, recordData.realData.scoreInfo || {}, {
                         details: recordData.realData.scoreInfo?.details || detailSource || null
-                    })
+                    }),
+                    answerComparison: recordData.realData.answerComparison
+                        ? this.clonePlainObject(recordData.realData.answerComparison)
+                        : (normalizedComparison || null)
                 })
-                : null,
+                : (normalizedComparison ? { answerComparison: normalizedComparison } : null),
+            answerComparison: normalizedComparison,
 
             // 系统信息
             version: this.currentVersion,
@@ -695,6 +729,63 @@ class ScoreStorage {
             questionType: answer.questionType || 'unknown',
             timestamp: answer.timestamp || new Date().toISOString()
         }));
+    }
+
+    clonePlainObject(value) {
+        if (value == null || typeof value !== 'object') {
+            return value ?? null;
+        }
+        if (Array.isArray(value)) {
+            return value.map(item => this.clonePlainObject(item)).filter(item => item !== undefined);
+        }
+        const clone = {};
+        Object.keys(value).forEach((key) => {
+            const entry = value[key];
+            clone[key] = (entry && typeof entry === 'object')
+                ? this.clonePlainObject(entry)
+                : entry;
+        });
+        return clone;
+    }
+
+    standardizeSuiteEntries(entries) {
+        if (!Array.isArray(entries)) {
+            return [];
+        }
+        return entries.map((entry, index) => {
+            if (!entry || typeof entry !== 'object') {
+                return null;
+            }
+            const normalizedAnswers = this.standardizeAnswers(entry.answers || entry.answerList || []);
+            const answerMap = normalizedAnswers.reduce((map, item) => {
+                if (item && item.questionId) {
+                    map[item.questionId] = item.answer || '';
+                }
+                return map;
+            }, {});
+            const normalizedScoreInfo = entry.scoreInfo
+                ? Object.assign({}, entry.scoreInfo, {
+                    details: entry.scoreInfo?.details
+                        ? this.clonePlainObject(entry.scoreInfo.details)
+                        : null
+                })
+                : null;
+            const answerComparisonSource = entry.answerComparison
+                || normalizedScoreInfo?.details
+                || entry.rawData?.answerComparison
+                || null;
+            return {
+                examId: entry.examId || null,
+                title: entry.title || entry.examTitle || `套题第${index + 1}篇`,
+                category: entry.category || entry.metadata?.category || '套题',
+                duration: this.ensureNumber(entry.duration, 0),
+                scoreInfo: normalizedScoreInfo,
+                answers: answerMap,
+                answerComparison: this.clonePlainObject(answerComparisonSource) || null,
+                metadata: entry.metadata ? Object.assign({}, entry.metadata) : {},
+                rawData: entry.rawData ? this.clonePlainObject(entry.rawData) : null
+            };
+        }).filter(Boolean);
     }
 
     deriveCorrectMapFromDetails(details) {
