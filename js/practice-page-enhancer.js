@@ -295,58 +295,81 @@ if (!window.practicePageEnhancer) {
         interactions: [],
         startTime: Date.now(),
         isInitialized: false,
+        initializationPromise: null,
 
         initialize: function () {
             if (this.isInitialized) {
                 console.log('[PracticeEnhancer] 已经初始化，跳过');
-                return;
+                return Promise.resolve();
             }
-            console.log('[PracticeEnhancer] 开始初始化');
 
+            if (this.initializationPromise) {
+                console.log('[PracticeEnhancer] 初始化进行中，直接复用');
+                return this.initializationPromise;
+            }
+
+            this.initializationPromise = (async () => {
+                console.log('[PracticeEnhancer] 开始初始化');
+
+                await this.prepareStorageNamespace();
+
+                this.setupCommunication();
+                this.setupAnswerListeners();
+                this.extractCorrectAnswers(); // 新增：提取正确答案
+                this.interceptSubmit();
+                this.setupInteractionTracking();
+                this.isInitialized = true;
+                console.log('[PracticeEnhancer] 初始化完成');
+
+                // 页面加载完成后进行一次初始收集
+                if (document.readyState === 'complete') {
+                    setTimeout(() => this.collectAllAnswers(), 1000);
+                } else {
+                    window.addEventListener('load', () => {
+                        setTimeout(() => this.collectAllAnswers(), 1000);
+                    });
+                }
+            })().catch((error) => {
+                this.initializationPromise = null;
+                throw error;
+            });
+
+            return this.initializationPromise;
+        },
+
+        prepareStorageNamespace: async function () {
             // 设置共享命名空间
-            if (window.storage && typeof window.storage.setNamespace === 'function') {
-                window.storage.setNamespace('exam_system');
-                console.log('[PracticeEnhancer] 已设置共享命名空间: exam_system');
+            try {
+                if (window.storage?.ready) {
+                    await window.storage.ready;
+                }
 
-                // 验证命名空间设置是否生效
-                setTimeout(() => {
-                    const testKey = 'namespace_test_enhancer';
-                    const testValue = 'test_value_enhancer_' + Date.now();
-                    window.storage.set(testKey, testValue).then(() => {
-                        window.storage.get(testKey).then((retrievedValue) => {
+                if (window.storage && typeof window.storage.setNamespace === 'function') {
+                    window.storage.setNamespace('exam_system');
+                    console.log('[PracticeEnhancer] 已设置共享命名空间: exam_system');
+
+                    // 验证命名空间设置是否生效
+                    setTimeout(async () => {
+                        const testKey = 'namespace_test_enhancer';
+                        const testValue = 'test_value_enhancer_' + Date.now();
+                        try {
+                            await window.storage.set(testKey, testValue);
+                            const retrievedValue = await window.storage.get(testKey);
                             if (retrievedValue === testValue) {
                                 console.log('✅ 增强器命名空间设置验证成功: 存储和读取正常');
                             } else {
                                 console.warn('❌ 增强器命名空间设置验证失败: 读取值不匹配');
                             }
-                            // 清理测试数据
-                            window.storage.remove(testKey);
-                        }).catch((error) => {
-                            console.error('❌ 增强器命名空间设置验证失败: 读取错误', error);
-                        });
-                    }).catch((error) => {
-                        console.error('❌ 增强器命名空间设置验证失败: 存储错误', error);
-                    });
-                }, 1000);
-            } else {
-                console.warn('[PracticeEnhancer] 存储管理器未加载或setNamespace方法不可用');
-            }
-
-            this.setupCommunication();
-            this.setupAnswerListeners();
-            this.extractCorrectAnswers(); // 新增：提取正确答案
-            this.interceptSubmit();
-            this.setupInteractionTracking();
-            this.isInitialized = true;
-            console.log('[PracticeEnhancer] 初始化完成');
-            
-            // 页面加载完成后进行一次初始收集
-            if (document.readyState === 'complete') {
-                setTimeout(() => this.collectAllAnswers(), 1000);
-            } else {
-                window.addEventListener('load', () => {
-                    setTimeout(() => this.collectAllAnswers(), 1000);
-                });
+                            await window.storage.remove(testKey);
+                        } catch (error) {
+                            console.error('❌ 增强器命名空间设置验证失败', error);
+                        }
+                    }, 1000);
+                } else {
+                    console.warn('[PracticeEnhancer] 存储管理器未加载或setNamespace方法不可用');
+                }
+            } catch (error) {
+                console.error('[PracticeEnhancer] 存储初始化失败，跳过命名空间设置', error);
             }
         },
 
@@ -1428,10 +1451,14 @@ if (!window.practicePageEnhancer) {
     // 自动初始化
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
-            window.practicePageEnhancer.initialize();
+            window.practicePageEnhancer.initialize().catch((error) => {
+                console.error('[PracticeEnhancer] 初始化失败', error);
+            });
         });
     } else {
-        window.practicePageEnhancer.initialize();
+        window.practicePageEnhancer.initialize().catch((error) => {
+            console.error('[PracticeEnhancer] 初始化失败', error);
+        });
     }
 
     // 调试函数

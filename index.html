@@ -412,33 +412,37 @@
 
     <!-- 设置共享命名空间 -->
     <script>
-      // 确保存储初始化完成后设置命名空间
-      if (window.storage && typeof window.storage.setNamespace === 'function') {
-        window.storage.setNamespace('exam_system');
-        console.log('主页面已设置共享命名空间: exam_system');
+      if (window.storage && window.storage.ready) {
+        window.storage.ready.then(() => {
+          if (typeof window.storage.setNamespace === 'function') {
+            window.storage.setNamespace('exam_system');
+            console.log('主页面已设置共享命名空间: exam_system');
 
-        // 验证命名空间设置是否生效
-        setTimeout(() => {
-          const testKey = 'namespace_test';
-          const testValue = 'test_value_' + Date.now();
-          window.storage.set(testKey, testValue).then(() => {
-            window.storage.get(testKey).then((retrievedValue) => {
-              if (retrievedValue === testValue) {
-                console.log('✅ 命名空间设置验证成功: 存储和读取正常');
-              } else {
-                console.warn('❌ 命名空间设置验证失败: 读取值不匹配');
+            // 验证命名空间设置是否生效
+            setTimeout(async () => {
+              const testKey = 'namespace_test';
+              const testValue = 'test_value_' + Date.now();
+              try {
+                await window.storage.set(testKey, testValue);
+                const retrievedValue = await window.storage.get(testKey);
+                if (retrievedValue === testValue) {
+                  console.log('✅ 命名空间设置验证成功: 存储和读取正常');
+                } else {
+                  console.warn('❌ 命名空间设置验证失败: 读取值不匹配');
+                }
+                await window.storage.remove(testKey);
+              } catch (error) {
+                console.error('❌ 命名空间设置验证失败', error);
               }
-              // 清理测试数据
-              window.storage.remove(testKey);
-            }).catch((error) => {
-              console.error('❌ 命名空间设置验证失败: 读取错误', error);
-            });
-          }).catch((error) => {
-            console.error('❌ 命名空间设置验证失败: 存储错误', error);
-          });
-        }, 1000);
+            }, 1000);
+          } else {
+            console.warn('存储管理器未加载或setNamespace方法不可用');
+          }
+        }).catch((error) => {
+          console.error('存储初始化失败，无法设置命名空间', error);
+        });
       } else {
-        console.warn('存储管理器未加载或setNamespace方法不可用');
+        console.warn('存储管理器未加载或未暴露初始化状态');
       }
     </script>
 
