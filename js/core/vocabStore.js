@@ -80,10 +80,28 @@
         const example = typeof entry.example === 'string' ? entry.example.trim() : '';
         const note = typeof entry.note === 'string' ? entry.note.trim() : '';
         const freq = typeof entry.freq === 'number' && Number.isFinite(entry.freq) ? Math.min(1, Math.max(0, entry.freq)) : null;
-        const boxValue = Number(entry.box);
-        const box = Number.isFinite(boxValue) ? Math.min(5, Math.max(1, Math.floor(boxValue))) : 1;
+        
+        // SM-2 字段
+        const easeFactor = typeof entry.easeFactor === 'number' && Number.isFinite(entry.easeFactor)
+            ? Math.min(3.0, Math.max(1.3, entry.easeFactor))
+            : null; // 新词没有EF
+        
+        const interval = typeof entry.interval === 'number' && Number.isFinite(entry.interval) && entry.interval >= 0
+            ? Math.floor(entry.interval)
+            : 1;
+        
+        const repetitions = typeof entry.repetitions === 'number' && Number.isFinite(entry.repetitions) && entry.repetitions >= 0
+            ? Math.floor(entry.repetitions)
+            : 0;
+
+        // 轮内循环次数
+        const intraCycles = typeof entry.intraCycles === 'number' && Number.isFinite(entry.intraCycles) && entry.intraCycles >= 0
+            ? Math.floor(entry.intraCycles)
+            : 0;
+
         const correctCountValue = Number(entry.correctCount);
         const correctCount = Number.isFinite(correctCountValue) && correctCountValue >= 0 ? Math.floor(correctCountValue) : 0;
+        
         const lastReviewed = entry.lastReviewed && !Number.isNaN(new Date(entry.lastReviewed).getTime())
             ? new Date(entry.lastReviewed).toISOString()
             : null;
@@ -103,8 +121,14 @@
             meaning: baseMeaning,
             example,
             note,
-            box,
+            
+            // SM-2 字段
+            easeFactor,
+            interval,
+            repetitions,
+            intraCycles,
             correctCount,
+            
             lastReviewed,
             nextReview,
             createdAt,
