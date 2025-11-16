@@ -778,6 +778,12 @@ class ScoreStorage {
         const duration = Number(practiceRecord.duration) || 0;
         const accuracy = Number(practiceRecord.accuracy) || 0;
         const normalizedRecord = { ...practiceRecord, duration, accuracy };
+        if (!stats.categoryStats || typeof stats.categoryStats !== 'object') {
+            stats.categoryStats = {};
+        }
+        if (!stats.questionTypeStats || typeof stats.questionTypeStats !== 'object') {
+            stats.questionTypeStats = {};
+        }
 
         // 更新基础统计
         stats.totalPractices += 1;
@@ -812,7 +818,15 @@ class ScoreStorage {
      * 更新分类统计
      */
     updateCategoryStats(stats, practiceRecord) {
-        const category = practiceRecord.metadata.category;
+        if (!stats || typeof stats !== 'object') {
+            return;
+        }
+
+        if (!stats.categoryStats || typeof stats.categoryStats !== 'object') {
+            stats.categoryStats = {};
+        }
+
+        const category = practiceRecord?.metadata?.category;
         if (!category) return;
         
         if (!stats.categoryStats[category]) {
@@ -842,6 +856,14 @@ class ScoreStorage {
      * 更新题型统计
      */
     updateQuestionTypeStats(stats, practiceRecord) {
+        if (!stats || typeof stats !== 'object') {
+            return;
+        }
+
+        if (!stats.questionTypeStats || typeof stats.questionTypeStats !== 'object') {
+            stats.questionTypeStats = {};
+        }
+
         if (!practiceRecord.questionTypePerformance) return;
         
         Object.entries(practiceRecord.questionTypePerformance).forEach(([type, performance]) => {
