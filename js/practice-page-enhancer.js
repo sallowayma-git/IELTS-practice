@@ -3,7 +3,16 @@
  * 整合了原有的practicePageManager功能，解决数据收集和正确答案提取问题
  */
 
-if (!window.practicePageEnhancer) {
+(function patchPracticeEnhancer() {
+    const previousEnhancer = window.practicePageEnhancer;
+    if (previousEnhancer && typeof previousEnhancer.cleanup === 'function') {
+        try {
+            previousEnhancer.cleanup();
+        } catch (error) {
+            console.warn('[PracticeEnhancer] 旧版本清理失败:', error);
+        }
+    }
+
     console.log('[PracticeEnhancer] 初始化增强器');
 
     // 内嵌CorrectAnswerExtractor功能，确保在练习页面中可用
@@ -295,6 +304,7 @@ if (!window.practicePageEnhancer) {
         interactions: [],
         startTime: Date.now(),
         isInitialized: false,
+        initRequestTimer: null,
 
         initialize: function () {
             if (this.isInitialized) {
@@ -356,6 +366,7 @@ if (!window.practicePageEnhancer) {
                 clearInterval(this.answerCollectionInterval);
                 this.answerCollectionInterval = null;
             }
+            this.stopInitRequestLoop();
         },
 
         setupCommunication: function () {
@@ -364,6 +375,7 @@ if (!window.practicePageEnhancer) {
                 console.warn('[PracticeEnhancer] 未检测到父窗口');
                 return;
             }
+            this.startInitRequestLoop();
             window.addEventListener('message', (event) => {
                 const payload = event && event.data ? event.data : null;
                 if (!payload || typeof payload.type !== 'string') {
@@ -377,9 +389,12 @@ if (!window.practicePageEnhancer) {
                     if (initData.suiteSessionId) {
                         this.enableSuiteMode(initData);
                     }
+                    this.stopInitRequestLoop();
                     console.log('[PracticeEnhancer] 收到会话初始化:', this.sessionId, 'Exam ID:', this.examId);
                     this.sendMessage('SESSION_READY', {
                         pageType: this.detectPageType(),
+                        sessionId: this.sessionId,
+                        suiteSessionId: this.suiteSessionId || null,
                         url: window.location.href,
                         title: document.title
                     });
@@ -400,6 +415,38 @@ if (!window.practicePageEnhancer) {
                 }
             });
             console.log('[PracticeEnhancer] 通信设置完成');
+        },
+
+        startInitRequestLoop: function() {
+            if (!this.parentWindow || this.parentWindow === window) {
+                return;
+            }
+            if (this.initRequestTimer) {
+                return;
+            }
+            const sendRequest = () => {
+                if (this.sessionId) {
+                    this.stopInitRequestLoop();
+                    return;
+                }
+                const derivedExamId = this.extractExamIdFromUrl();
+                this.sendMessage('REQUEST_INIT', {
+                    examId: this.examId || null,
+                    derivedExamId,
+                    url: window.location.href,
+                    title: document.title,
+                    timestamp: Date.now()
+                });
+            };
+            sendRequest();
+            this.initRequestTimer = setInterval(sendRequest, 2000);
+        },
+
+        stopInitRequestLoop: function() {
+            if (this.initRequestTimer) {
+                clearInterval(this.initRequestTimer);
+                this.initRequestTimer = null;
+            }
         },
 
         enableSuiteMode: function(initData = {}) {
@@ -568,6 +615,13 @@ if (!window.practicePageEnhancer) {
             
             // 最后的降级方案：返回页面类型
             return this.detectPageType();
+        },
+
+        generateFallbackSessionId: function(examId) {
+            const safeExamId = examId
+                ? String(examId).replace(/[^\w-]/g, '')
+                : 'session';
+            return `local_${safeExamId}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
         },
 
         extractCorrectAnswers: function () {
@@ -1169,11 +1223,13 @@ if (!window.practicePageEnhancer) {
         },
 
         handleSubmit: function () {
+            const derivedExamId = this.extractExamIdFromUrl();
             if (!this.sessionId) {
-                console.warn('[PracticeEnhancer] 无会话ID，无法发送数据');
-                return;
+                this.sessionId = this.generateFallbackSessionId(this.examId || derivedExamId);
+                console.warn('[PracticeEnhancer] 无会话ID，使用本地生成的回退ID:', this.sessionId);
             }
 
+            const resolvedExamId = this.examId || derivedExamId;
             const self = this;
             
             // 延迟发送数据，确保有足够时间提取正确答案
@@ -1194,9 +1250,6 @@ if (!window.practicePageEnhancer) {
                     // 生成答案比较数据
                     const answerComparison = self.generateAnswerComparison();
 
-                    const derivedExamId = self.extractExamIdFromUrl();
-                    const resolvedExamId = self.examId || derivedExamId;
-                    
                     const results = {
                         sessionId: self.sessionId,
                         examId: resolvedExamId,
@@ -1211,6 +1264,7 @@ if (!window.practicePageEnhancer) {
                         interactions: self.interactions,
                         scoreInfo: self.extractScore(),
                         pageType: self.detectPageType(),
+                        suiteSessionId: self.suiteSessionId || null,
                         url: window.location.href,
                         title: document.title
                     };
@@ -1447,4 +1501,4 @@ if (!window.practicePageEnhancer) {
         const scoreInfo = window.practicePageEnhancer.extractScore();
         console.log('成绩提取测试:', scoreInfo);
     };
-}
+})();
