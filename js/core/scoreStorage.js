@@ -434,17 +434,17 @@ class ScoreStorage {
             let records = await this.storage.get(this.storageKeys.practiceRecords, []);
             records = Array.isArray(records) ? records.slice() : [];
 
-            let legacyPatched = false;
+            let sanitizedCount = 0;
             records = records.map(record => {
-                if (record && typeof record === 'object' && record.type && record.metadata && record.metadata.type) {
+                if (!this.needsRecordSanitization(record)) {
                     return record;
                 }
-                legacyPatched = true;
+                sanitizedCount += 1;
                 return this.normalizeLegacyRecord(record);
             });
 
-            if (legacyPatched) {
-                console.log('[ScoreStorage] 已自动修复历史练习记录字段缺失问题');
+            if (sanitizedCount > 0) {
+                console.log(`[ScoreStorage] 已自动修复 ${sanitizedCount} 条历史练习记录字段缺失或格式问题`);
             }
 
             // 检查是否已存在相同ID的记录
@@ -555,6 +555,22 @@ class ScoreStorage {
             });
         }
         return patched;
+    }
+
+    needsRecordSanitization(record) {
+        if (!record || typeof record !== 'object') {
+            return true;
+        }
+        if (!record.type || !record.metadata || !record.metadata.type) {
+            return true;
+        }
+        const numericFields = ['score', 'totalQuestions', 'correctAnswers', 'accuracy', 'duration'];
+        return numericFields.some((field) => {
+            if (!Object.prototype.hasOwnProperty.call(record, field)) {
+                return false;
+            }
+            return typeof record[field] !== 'number' || Number.isNaN(record[field]);
+        });
     }
 
     /**
