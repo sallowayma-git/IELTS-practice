@@ -202,7 +202,7 @@ class PracticeRecorder {
      * 初始化练习记录器
      */
     async initialize() {
-        console.log('PracticeRecorder initialized');
+        console.log('[PracticeRecorder] 初始化完成');
 
         // 恢复活动会话
         await this.restoreActiveSessions();
@@ -1253,7 +1253,15 @@ class PracticeRecorder {
                 console.warn('[PracticeRecorder] ScoreStorage不可用，使用降级保存');
                 throw new Error('ScoreStorage not available');
             } catch (error) {
-                console.error(`[PracticeRecorder] ScoreStorage保存失败 (尝试 ${attempt}):`, error);
+                console.error(
+                    `[PracticeRecorder] ScoreStorage保存失败 (尝试 ${attempt}):`,
+                    {
+                        error: error?.message,
+                        validationErrors: error?.validationErrors || null,
+                        recordSummary: this.buildRecordLogSummary(storageReadyRecord)
+                    },
+                    error
+                );
 
                 if (attempt === maxRetries || this.isCriticalError(error)) {
                     return await this.fallbackSavePracticeRecord(record);
@@ -1309,7 +1317,11 @@ class PracticeRecorder {
             await this.updateUserStatsManually(standardizedRecord);
             return standardizedRecord;
         } catch (error) {
-            console.error('[PracticeRecorder] 降级保存失败:', error);
+            console.error('[PracticeRecorder] 降级保存失败:', {
+                error: error?.message,
+                validationErrors: error?.validationErrors || null,
+                recordSummary: this.buildRecordLogSummary(record)
+            }, error);
             await this.saveToTemporaryStorage(record);
             throw new Error(`All save methods failed: ${error.message}`);
         }
@@ -1442,6 +1454,21 @@ class PracticeRecorder {
 
     wait(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    buildRecordLogSummary(record) {
+        if (!record || typeof record !== 'object') {
+            return null;
+        }
+        return {
+            id: record.id,
+            examId: record.examId,
+            type: record.type || record.metadata?.type || null,
+            status: record.status,
+            totalQuestions: record.totalQuestions,
+            correctAnswers: record.correctAnswers,
+            correctAnswersType: typeof record.correctAnswers
+        };
     }
 
     prepareRecordForStorage(record) {
