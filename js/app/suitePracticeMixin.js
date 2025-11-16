@@ -270,8 +270,27 @@
                 const aggregatedAnswers = {};
                 const aggregatedComparison = {};
                 session.results.forEach(entry => {
-                    aggregatedAnswers[entry.examId] = entry.answers;
-                    aggregatedComparison[entry.examId] = entry.answerComparison;
+                    const prefix = entry.examId ? `${entry.examId}::` : '';
+                    const answersSource = entry.answers && typeof entry.answers === 'object'
+                        ? entry.answers
+                        : Array.isArray(entry.answers)
+                            ? entry.answers.reduce((map, item) => {
+                                if (item && item.questionId) {
+                                    map[item.questionId] = item.answer || item.userAnswer || '';
+                                }
+                                return map;
+                            }, {})
+                            : {};
+                    Object.keys(answersSource || {}).forEach(questionId => {
+                        aggregatedAnswers[`${prefix}${questionId}`] = answersSource[questionId];
+                    });
+
+                    const comparisonSource = entry.answerComparison && typeof entry.answerComparison === 'object'
+                        ? entry.answerComparison
+                        : {};
+                    Object.keys(comparisonSource).forEach(questionId => {
+                        aggregatedComparison[`${prefix}${questionId}`] = comparisonSource[questionId];
+                    });
                 });
 
                 const startTime = startTimestamp;
