@@ -942,6 +942,16 @@ class PracticeRecorder {
             examEntry,
             type
         );
+        const suiteSessionId = payload.suiteSessionId
+            || metadata?.suiteSessionId
+            || session?.metadata?.suiteSessionId
+            || null;
+        if (suiteSessionId && !metadata.suiteSessionId) {
+            metadata.suiteSessionId = suiteSessionId;
+        }
+        if (suiteSessionId && !metadata.practiceMode) {
+            metadata.practiceMode = 'suite';
+        }
 
         const answerMap = this.mergeAnswerSources(
             results?.answerMap,
@@ -995,6 +1005,7 @@ class PracticeRecorder {
             scoreInfo,
             questionTypePerformance: results?.questionTypePerformance || {},
             metadata,
+            suiteSessionId,
             createdAt: resolvedEndTime,
             realData: Object.assign({}, results?.realData || {}, {
                 answers: answerMap,
@@ -1009,6 +1020,14 @@ class PracticeRecorder {
         if (normalizedComparison && Object.keys(normalizedComparison).length > 0) {
             practiceRecord.answerComparison = normalizedComparison;
             practiceRecord.realData.answerComparison = normalizedComparison;
+        }
+
+        if (suiteSessionId) {
+            console.log(`[PracticeRecorder] 套题模式条目 ${resolvedExamId} 属于 ${suiteSessionId}，跳过单篇记录保存。`);
+            if (!syntheticSession && this.activeSessions.has(resolvedExamId)) {
+                this.endPracticeSession(resolvedExamId);
+            }
+            return practiceRecord;
         }
 
         try {
