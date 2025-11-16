@@ -525,6 +525,11 @@
 
         document.addEventListener('practiceResultsReady', (event) => {
             const detail = event && event.detail ? event.detail : {};
+            const status = detail.status || 'final';
+            if (status !== 'final' && status !== 'update') {
+                showResultsPending();
+                return;
+            }
             handleResultsReady(detail);
             revealTranscriptPane();
         });
@@ -536,6 +541,7 @@
 let practiceUIStylesInjected = false;
 let transcriptState = null;
 const NO_ANSWER_PLACEHOLDER = '-';
+let pendingResultsTimeout = null;
 
     function injectPracticeUIStyles() {
         if (practiceUIStylesInjected) return;
@@ -587,6 +593,14 @@ const NO_ANSWER_PLACEHOLDER = '-';
 .practice-results-summary tr.incorrect {
     background-color: #fef2f2;
 }
+.practice-results-pending {
+    opacity: 0.85;
+}
+.practice-results-loading {
+    margin: 12px 0;
+    color: #6b7280;
+    font-size: 0.95rem;
+}
 `;
         document.head.appendChild(style);
     }
@@ -595,9 +609,13 @@ const NO_ANSWER_PLACEHOLDER = '-';
         if (questionId === undefined || questionId === null) return null;
         const raw = String(questionId).trim();
         if (!raw) return null;
-        if (/^q[\w-]+/i.test(raw)) return raw.replace(/^Q/, 'q');
-        if (/^\d+/.test(raw)) return 'q' + raw.match(/^\d+/)[0];
-        return raw;
+        const cleaned = raw.replace(/[-_](anchor|nav)$/i, '');
+        if (/^q[\w-]+/i.test(cleaned)) return cleaned.replace(/^Q/, 'q');
+        const numeric = cleaned.match(/^\d+/);
+        if (numeric) return 'q' + numeric[0];
+        const questionMatch = cleaned.match(/^question[-_\s]*(\d+)/i);
+        if (questionMatch) return 'q' + questionMatch[1];
+        return cleaned;
     }
 
     function deriveQuestionId(element) {
@@ -734,13 +752,19 @@ const NO_ANSWER_PLACEHOLDER = '-';
         const answers = results.answers || {};
         const correctAnswers = results.correctAnswers || {};
         const comparison = results.answerComparison || {};
-        const fallbackSet = new Set([
-            ...Object.keys(answers),
-            ...Object.keys(correctAnswers),
-            ...Object.keys(comparison)
-        ]);
+        const fallbackSet = new Set();
+        const collectKeys = (source) => {
+            Object.keys(source || {}).forEach((key) => {
+                const normalized = normalizeQuestionId(key) || key;
+                if (normalized) {
+                    fallbackSet.add(normalized);
+                }
+            });
+        };
+        collectKeys(answers);
+        collectKeys(correctAnswers);
+        collectKeys(comparison);
         const fallbackKeys = Array.from(fallbackSet)
-            .map((key) => normalizeQuestionId(key) || key)
             .filter(Boolean)
             .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
@@ -776,11 +800,31 @@ const NO_ANSWER_PLACEHOLDER = '-';
         return numericMatch ? numericMatch[0] : trimmed || normalized;
     }
 
+    function showResultsPending() {
+        const container = document.getElementById('results');
+        if (!container) return;
+        container.style.display = 'block';
+        container.classList.add('practice-results-visible', 'practice-results-pending');
+        container.innerHTML = '<p class="practice-results-loading">正在收集中，请稍候...</p>';
+        if (pendingResultsTimeout) {
+            clearTimeout(pendingResultsTimeout);
+        }
+        pendingResultsTimeout = setTimeout(() => {
+            container.classList.remove('practice-results-pending');
+            pendingResultsTimeout = null;
+        }, 3000);
+    }
+
     function renderResultsSummary(results) {
         const container = document.getElementById('results');
         if (!container) return;
         container.style.display = 'block';
         container.classList.add('practice-results-visible');
+        container.classList.remove('practice-results-pending');
+        if (pendingResultsTimeout) {
+            clearTimeout(pendingResultsTimeout);
+            pendingResultsTimeout = null;
+        }
         const comparison = results.answerComparison || {};
         const answers = results.answers || {};
         const correctAnswers = results.correctAnswers || {};
@@ -839,7 +883,7 @@ const NO_ANSWER_PLACEHOLDER = '-';
 
             const resultText = isCorrect === null
                 ? '–'
-                : (isCorrect ? '✅ Correct' : '❌ Incorrect');
+                : (isCorrect ? '✅' : '❌');
 
             const columns = [
                 formatQuestionLabel(normalized),
