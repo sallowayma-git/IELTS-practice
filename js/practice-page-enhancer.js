@@ -73,6 +73,55 @@ if (!window.practicePageEnhancer) {
 
     const ANSWER_TAG_PATTERN = /\(Q(\d+)\s*:\s*([^)]+?)\)/gi;
 
+    function extractObjectLiteral(content, startIndex) {
+        if (!content || startIndex >= content.length) {
+            return null;
+        }
+        let i = startIndex;
+        while (i < content.length && /\s/.test(content[i])) {
+            i++;
+        }
+        if (i >= content.length || content[i] !== '{') {
+            return null;
+        }
+        let depth = 0;
+        let literal = '';
+        let inString = false;
+        let stringQuote = null;
+        for (; i < content.length; i++) {
+            const char = content[i];
+            literal += char;
+            if (inString) {
+                if (char === '\\') {
+                    i++;
+                    if (i < content.length) {
+                        literal += content[i];
+                    }
+                    continue;
+                }
+                if (char === stringQuote) {
+                    inString = false;
+                    stringQuote = null;
+                }
+                continue;
+            }
+            if (char === '"' || char === "'" || char === '`') {
+                inString = true;
+                stringQuote = char;
+                continue;
+            }
+            if (char === '{') {
+                depth++;
+            } else if (char === '}') {
+                depth--;
+                if (depth === 0) {
+                    return literal;
+                }
+            }
+        }
+        return null;
+    }
+
     function extractAnswersFromTextContent(text) {
         const results = {};
         if (!text) {
@@ -144,21 +193,29 @@ if (!window.practicePageEnhancer) {
 
             extractFromScriptVariables(document = window.document) {
                 const scripts = document.querySelectorAll('script');
-                
+                const candidateNames = ['correctAnswers', 'answerKey', 'answers'];
+
                 for (const script of scripts) {
-                    const content = script.textContent || script.innerHTML;
+                    const content = script.textContent || script.innerHTML || '';
                     
-                    const correctAnswersMatch = content.match(/(?:const|let|var)\s+correctAnswers\s*=\s*(\{[^}]+\})/s);
-                    if (correctAnswersMatch) {
-                        try {
-                            const answersStr = correctAnswersMatch[1];
-                            const answers = this.parseAnswersObject(answersStr);
-                            if (answers && Object.keys(answers).length > 0) {
-                                console.log('[CorrectAnswerExtractor] 从脚本变量提取答案:', answers);
-                                return answers;
+                    for (let i = 0; i < candidateNames.length; i++) {
+                        const name = candidateNames[i];
+                        const pattern = new RegExp(`(?:const|let|var)\\s+${name}\\s*=`, 'g');
+                        let match;
+                        while ((match = pattern.exec(content)) !== null) {
+                            const literal = extractObjectLiteral(content, match.index + match[0].length);
+                            if (!literal) {
+                                continue;
                             }
-                        } catch (error) {
-                            console.warn('[CorrectAnswerExtractor] 解析脚本变量失败:', error);
+                            try {
+                                const answers = this.parseAnswersObject(literal);
+                                if (answers && Object.keys(answers).length > 0) {
+                                    console.log('[CorrectAnswerExtractor] 从脚本变量提取答案:', answers);
+                                    return answers;
+                                }
+                            } catch (error) {
+                                console.warn('[CorrectAnswerExtractor] 解析脚本变量失败:', error);
+                            }
                         }
                     }
                 }
@@ -531,11 +588,19 @@ if (!window.practicePageEnhancer) {
             if (questionId === undefined || questionId === null) return null;
             const raw = String(questionId).trim();
             if (!raw) return null;
-            if (/^q[\w-]+/i.test(raw)) return raw;
-            if (/^\d+$/.test(raw)) {
-                return 'q' + raw;
+            const cleaned = raw.replace(/[-_](anchor|nav)$/i, '');
+            if (/^q[\w-]+/i.test(cleaned)) {
+                return cleaned.replace(/^Q/, 'q');
             }
-            return raw;
+            const digitsMatch = cleaned.match(/^\d+/);
+            if (digitsMatch) {
+                return 'q' + digitsMatch[0];
+            }
+            const questionPrefix = cleaned.match(/^question[-_\s]*(\d+)/i);
+            if (questionPrefix) {
+                return 'q' + questionPrefix[1];
+            }
+            return cleaned;
         },
 
         addAnswer: function(questionId, value) {
@@ -800,6 +865,21 @@ if (!window.practicePageEnhancer) {
             return this.detectPageType();
         },
 
+        normalizeAnswerMap: function (answersMap) {
+            const normalized = {};
+            if (!answersMap || typeof answersMap !== 'object') {
+                return normalized;
+            }
+            Object.entries(answersMap).forEach(([key, value]) => {
+                const normalizedKey = this.addCorrectAnswer(key, value);
+                if (normalizedKey) {
+                    normalized[normalizedKey] = this.correctAnswers[normalizedKey];
+                }
+            });
+            this.correctAnswers = normalized;
+            return normalized;
+        },
+
         extractCorrectAnswers: function () {
             console.log('[PracticeEnhancer] 开始提取正确答案');
             
@@ -810,7 +890,7 @@ if (!window.practicePageEnhancer) {
                     const extractedAnswers = extractor.extractFromPage(document);
                     
                     if (extractedAnswers && Object.keys(extractedAnswers).length > 0) {
-                        this.correctAnswers = extractedAnswers;
+                        this.normalizeAnswerMap(extractedAnswers);
                         console.log('[PracticeEnhancer] 使用提取器成功获得正确答案:', this.correctAnswers);
                     } else {
                         console.warn('[PracticeEnhancer] 提取器未找到答案，使用备用方法');
@@ -874,12 +954,15 @@ if (!window.practicePageEnhancer) {
                 const elements = document.querySelectorAll(selector);
                 for (let j = 0; j < elements.length; j++) {
                     const element = elements[j];
-                    const questionId = element.dataset.question || 
-                                     element.dataset.for || 
-                                     element.dataset.questionId;
-                    const correctAnswer = element.dataset.correctAnswer || 
-                                        element.dataset.answer || 
-                                        element.textContent.trim();
+                    const questionId =
+                        element.dataset.question ||
+                        element.dataset.for ||
+                        element.dataset.questionId ||
+                        this.extractQuestionId(element) ||
+                        element.id;
+                    const correctAnswer = element.dataset.correctAnswer ||
+                        element.dataset.answer ||
+                        element.textContent.trim();
                     
                     if (questionId && correctAnswer) {
                         self.addCorrectAnswer(questionId, correctAnswer);
@@ -1148,9 +1231,10 @@ if (!window.practicePageEnhancer) {
             for (let i = 0; i < matchZones.length; i++) {
                 const zone = matchZones[i];
                 const qName = zone.dataset.question;
-                const item = zone.querySelector('.drag-item-clone');
+                const item = zone.querySelector('.drag-item') || zone.querySelector('.drag-item-clone');
                 if (qName && item) {
-                    this.addAnswer(qName, item.dataset.country || item.textContent.trim());
+                    const answerValue = item.dataset.option || item.dataset.country || item.dataset.heading || item.textContent.trim();
+                    this.addAnswer(qName, answerValue);
                 }
             }
         },
@@ -1310,7 +1394,7 @@ if (!window.practicePageEnhancer) {
             this.collectDropzoneAnswers();
 
             // 3. 收集特殊格式的答案（通过data属性）
-            const answerElements = document.querySelectorAll('[data-answer], [data-user-answer], [data-value]');
+            const answerElements = document.querySelectorAll('[data-user-answer], [data-value]');
             console.log('[PracticeEnhancer] 找到data答案元素:', answerElements.length);
             
             answerElements.forEach(element => {
