@@ -889,12 +889,43 @@ if (!window.practicePageEnhancer) {
         startTime: Date.now(),
         isInitialized: false,
 
-        initialize: function () {
+        initialize: async function () {
             if (this.isInitialized) {
                 console.log('[PracticeEnhancer] 已经初始化，跳过');
                 return;
             }
             console.log('[PracticeEnhancer] 开始初始化');
+            try {
+                if (window.storage?.ready) {
+                    await window.storage.ready;
+                }
+
+                if (window.storage && typeof window.storage.setNamespace === 'function') {
+                    window.storage.setNamespace('exam_system');
+                    console.log('[PracticeEnhancer] 已设置共享命名空间: exam_system');
+
+                    setTimeout(async () => {
+                        const testKey = 'namespace_test_practice';
+                        const testValue = 'test_value_practice_' + Date.now();
+                        try {
+                            await window.storage.set(testKey, testValue);
+                            const retrievedValue = await window.storage.get(testKey);
+                            if (retrievedValue === testValue) {
+                                console.log('✅ 练习页面命名空间设置验证成功: 存储和读取正常');
+                            } else {
+                                console.warn('❌ 练习页面命名空间设置验证失败: 读取值不匹配');
+                            }
+                            await window.storage.remove(testKey);
+                        } catch (error) {
+                            console.error('❌ 练习页面命名空间设置验证失败', error);
+                        }
+                    }, 1000);
+                } else {
+                    console.warn('[PracticeEnhancer] 存储管理器未加载或setNamespace方法不可用');
+                }
+            } catch (error) {
+                console.error('[PracticeEnhancer] 存储初始化失败，跳过命名空间设置', error);
+            }
             this.setupCommunication();
             this.setupAnswerListeners();
             this.extractCorrectAnswers(); // 新增：提取正确答案
@@ -1781,12 +1812,16 @@ if (!window.practicePageEnhancer) {
     };
 
     // 自动初始化
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            window.practicePageEnhancer.initialize();
+    const startPracticeEnhancer = () => {
+        window.practicePageEnhancer.initialize().catch((error) => {
+            console.error('[PracticeEnhancer] 初始化失败', error);
         });
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', startPracticeEnhancer);
     } else {
-        window.practicePageEnhancer.initialize();
+        startPracticeEnhancer();
     }
 
     // 调试函数
