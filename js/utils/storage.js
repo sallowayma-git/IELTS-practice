@@ -478,8 +478,7 @@ class StorageManager {
             if (this.fallbackStorage) {
                 console.log('[Storage] 使用内存存储 (fallback)');
                 this.fallbackStorage.set(this.getKey(key), serializedValue);
-                // 派发事件，通知其他页面数据已更新
-                window.dispatchEvent(new CustomEvent('storage-sync', { detail: { key } }));
+                this.dispatchStorageSync(key);
                 return true;
             } else if (this.indexedDB) {
                 console.log('[Storage] 尝试使用 IndexedDB 存储');
@@ -487,8 +486,7 @@ class StorageManager {
                 try {
                     await this.setToIndexedDB(this.getKey(key), serializedValue);
                     console.log('[Storage] IndexedDB 存储成功');
-                    // 派发事件，通知其他页面数据已更新
-                    window.dispatchEvent(new CustomEvent('storage-sync', { detail: { key } }));
+                    this.dispatchStorageSync(key);
                     return true;
                 } catch (indexedDBError) {
                     console.warn('[Storage] IndexedDB存储失败，尝试localStorage:', indexedDBError);
@@ -509,8 +507,7 @@ class StorageManager {
 
                     console.log('[Storage] 使用 localStorage 存储 (IndexedDB fallback)');
                     localStorage.setItem(this.getKey(key), serializedValue);
-                    // 派发事件，通知其他页面数据已更新
-                    window.dispatchEvent(new CustomEvent('storage-sync', { detail: { key } }));
+                    this.dispatchStorageSync(key);
                     return true;
                 }
             } else {
@@ -530,8 +527,7 @@ class StorageManager {
                 }
 
                 localStorage.setItem(this.getKey(key), serializedValue);
-                // 派发事件，通知其他页面数据已更新
-                window.dispatchEvent(new CustomEvent('storage-sync', { detail: { key } }));
+                this.dispatchStorageSync(key);
                 return true;
             }
         } catch (error) {
@@ -924,7 +920,7 @@ class StorageManager {
 
             if (legacyKeys.length === 0) {
                 console.log('[Storage] 无遗留数据需要迁移');
-                await this.set('migration_completed', true);
+                await this.set('migration_completed', true, { skipReady });
             } else {
                 let migratedCount = 0;
                 for (const oldKey of legacyKeys) {
@@ -1328,6 +1324,24 @@ class StorageManager {
         });
     }
 }
+
+const STORAGE_SYNC_IGNORED_KEYS = new Set([
+    'namespace_test',
+    'namespace_test_practice',
+    'namespace_test_enhancer'
+]);
+
+StorageManager.prototype.dispatchStorageSync = function(key) {
+    try {
+        const normalizedKey = typeof key === 'string' ? key.replace(this.prefix, '') : key;
+        if (normalizedKey && STORAGE_SYNC_IGNORED_KEYS.has(normalizedKey)) {
+            return;
+        }
+    } catch (_) {
+        // ignore errors resolving key
+    }
+    window.dispatchEvent(new CustomEvent('storage-sync', { detail: { key } }));
+};
 
 // 创建全局存储实例
 const storageManager = new StorageManager();
