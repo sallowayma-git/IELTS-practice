@@ -1,5 +1,6 @@
 (function(global) {
     const MAX_LEGACY_PRACTICE_RECORDS = 1000;
+    const isFileProtocol = !!(global && global.location && global.location.protocol === 'file:');
 
     const mixin = {
         initializeSuiteMode() {
@@ -743,6 +744,10 @@
 
         _ensureSuiteWindowGuard(session, targetWindow) {
             if (!session || !targetWindow || targetWindow.closed) {
+                return;
+            }
+
+            if (isFileProtocol) {
                 return;
             }
 
