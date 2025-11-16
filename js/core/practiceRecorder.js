@@ -1027,6 +1027,9 @@ class PracticeRecorder {
         } catch (error) {
             console.error('[PracticeRecorder] 处理完成会话时出错:', error);
             await this.saveToTemporaryStorage(practiceRecord);
+            if (!syntheticSession && this.activeSessions.has(resolvedExamId)) {
+                this.endPracticeSession(resolvedExamId, 'save_failed');
+            }
             return practiceRecord;
         }
     }
