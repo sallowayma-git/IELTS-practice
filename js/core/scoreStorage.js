@@ -9,6 +9,9 @@ class ScoreStorage {
             throw new Error('数据仓库未初始化，无法构建 ScoreStorage');
         }
 
+        this.initializationError = null;
+        this.initializing = true;
+
         this.storageKeys = {
             practiceRecords: 'practice_records',
             userStats: 'user_stats',
@@ -20,7 +23,27 @@ class ScoreStorage {
         this.maxRecords = 1000;
         this.storage = this.createStorageAdapter();
 
-        this.initialize();
+        this.ready = this.initialize()
+            .catch((error) => {
+                this.initializationError = error;
+                return Promise.reject(error);
+            })
+            .finally(() => {
+                this.initializing = false;
+            });
+    }
+
+    async ensureReady(options = {}) {
+        const { allowDuringInit = false } = options;
+        if (this.initializationError) {
+            throw this.initializationError;
+        }
+        if (this.initializing && allowDuringInit) {
+            return;
+        }
+        if (this.ready) {
+            await this.ready;
+        }
     }
 
     normalizePracticeType(rawType) {
@@ -187,16 +210,22 @@ class ScoreStorage {
      * 初始化存储系统
      */
     async initialize() {
-        console.log('ScoreStorage initialized');
+        try {
+            console.log('ScoreStorage initialized');
 
-        // 检查存储版本并迁移数据
-        await this.checkStorageVersion();
+            // 检查存储版本并迁移数据
+            await this.checkStorageVersion();
 
-        // 初始化数据结构
-        await this.initializeDataStructures();
+            // 初始化数据结构
+            await this.initializeDataStructures();
 
-        // 暂时禁用清理过期数据，避免误删新记录
-        // await this.cleanupExpiredData();
+            // 暂时禁用清理过期数据，避免误删新记录
+            // await this.cleanupExpiredData();
+        } catch (error) {
+            this.initializationError = error;
+            console.error('[ScoreStorage] 初始化失败', error);
+            throw error;
+        }
     }
 
     /**
@@ -235,7 +264,7 @@ class ScoreStorage {
 
         try {
             // 备份当前数据
-            await this.createBackup('migration_backup');
+            await this.createBackup('migration_backup', { allowDuringInit: true });
 
             // 根据版本执行相应的迁移逻辑
             if (fromVersion < '1.0.0') {
@@ -250,7 +279,7 @@ class ScoreStorage {
             console.error('Data migration failed:', error);
             // 恢复备份数据
             try {
-                await this.restoreBackup('migration_backup');
+                await this.restoreBackup('migration_backup', { allowDuringInit: true });
             } catch (restoreError) {
                 console.error('Failed to restore backup:', restoreError);
             }
@@ -267,7 +296,7 @@ class ScoreStorage {
         await this.storage.set(this.storageKeys.practiceRecords, standardizedRecords);
 
         // 重新计算用户统计
-        await this.recalculateUserStats();
+        await this.recalculateUserStats({ allowDuringInit: true });
     }
 
     /**
@@ -320,6 +349,7 @@ class ScoreStorage {
      */
     async savePracticeRecord(recordData) {
         try {
+            await this.ensureReady();
             // 标准化记录格式
             const standardizedRecord = this.standardizeRecord(recordData);
             
@@ -566,7 +596,9 @@ class ScoreStorage {
     /**
      * 更新用户统计
      */
-    async updateUserStats(practiceRecord) {
+    async updateUserStats(practiceRecord, options = {}) {
+        const { allowDuringInit = false } = options;
+        await this.ensureReady({ allowDuringInit });
         const stats = await this.storage.get(this.storageKeys.userStats, this.getDefaultUserStats());
 
         const duration = Number(practiceRecord.duration) || 0;
@@ -775,6 +807,7 @@ class ScoreStorage {
      * 获取练习记录
      */
     async getPracticeRecords(filters = {}) {
+        await this.ensureReady();
         const raw = await this.storage.get(this.storageKeys.practiceRecords, []);
         const base = Array.isArray(raw) ? raw : [];
         // Normalize each record to ensure UI can rely on a stable shape
@@ -810,13 +843,16 @@ class ScoreStorage {
      * 获取用户统计
      */
     async getUserStats() {
+        await this.ensureReady();
         return await this.storage.get(this.storageKeys.userStats, this.getDefaultUserStats());
     }
 
     /**
      * 重新计算用户统计
      */
-    async recalculateUserStats() {
+    async recalculateUserStats(options = {}) {
+        const { allowDuringInit = false } = options;
+        await this.ensureReady({ allowDuringInit });
         console.log('Recalculating user stats...');
 
         const records = (await this.storage.get(this.storageKeys.practiceRecords, []) || []).map(r => this.normalizeRecordFields(r));
@@ -824,7 +860,7 @@ class ScoreStorage {
 
         // 重新计算所有统计数据
         for (const record of records) {
-            await this.updateUserStats(record);
+            await this.updateUserStats(record, { allowDuringInit });
         }
 
         console.log('User stats recalculated');
@@ -988,7 +1024,9 @@ class ScoreStorage {
     /**
      * 创建数据备份 - 使用DataBackupManager
      */
-    async createBackup(backupName = null) {
+    async createBackup(backupName = null, options = {}) {
+        const { allowDuringInit = false } = options;
+        await this.ensureReady({ allowDuringInit });
         if (window.DataBackupManager) {
             const backupManager = new DataBackupManager();
             const practiceRecords = await this.storage.get(this.storageKeys.practiceRecords, []);
@@ -1028,8 +1066,10 @@ class ScoreStorage {
     /**
      * 恢复数据备份 - 直接操作manual_backups存储
      */
-    async restoreBackup(backupId) {
+    async restoreBackup(backupId, options = {}) {
         try {
+            const { allowDuringInit = false } = options;
+            await this.ensureReady({ allowDuringInit });
             const backups = await this.storage.get('manual_backups', []);
             const backup = backups.find(b => b.id === backupId);
 
@@ -1058,6 +1098,7 @@ class ScoreStorage {
      */
     async getBackups() {
         try {
+            await this.ensureReady();
             const backups = await this.storage.get('manual_backups', []);
             // 只返回score_storage类型的备份，按时间倒序排列
             return backups
@@ -1073,6 +1114,7 @@ class ScoreStorage {
      * 导出数据
      */
     async exportData(format = 'json') {
+        await this.ensureReady();
         const exportData = {
             exportDate: new Date().toISOString(),
             version: this.currentVersion,
@@ -1129,6 +1171,7 @@ class ScoreStorage {
      */
     async importData(importData, options = {}) {
         try {
+            await this.ensureReady();
             const data = typeof importData === 'string' ? JSON.parse(importData) : importData;
             
             // 验证数据格式
@@ -1188,6 +1231,7 @@ class ScoreStorage {
      * 获取存储统计信息
      */
     async getStorageStats() {
+        await this.ensureReady();
         const records = await this.storage.get(this.storageKeys.practiceRecords, []);
         const backups = await this.storage.get(this.storageKeys.backupData, []);
 
@@ -1205,6 +1249,7 @@ class ScoreStorage {
      * 估算存储大小
      */
     async estimateStorageSize() {
+        await this.ensureReady();
         const data = {
             practiceRecords: await this.storage.get(this.storageKeys.practiceRecords, []),
             userStats: await this.storage.get(this.storageKeys.userStats, {}),
