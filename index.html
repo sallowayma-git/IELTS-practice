@@ -382,6 +382,7 @@
     </div>
 
     <!-- 环境探测 -->
+    <script src="js/utils/logger.js"></script>
     <script src="js/utils/environmentDetector.js"></script>
 
     <!-- 加载完整题库数据 -->
@@ -415,7 +416,7 @@
       // 确保存储初始化完成后设置命名空间
       if (window.storage && typeof window.storage.setNamespace === 'function') {
         window.storage.setNamespace('exam_system');
-        console.log('主页面已设置共享命名空间: exam_system');
+        console.log('[System] 主页面已设置共享命名空间: exam_system');
 
         // 验证命名空间设置是否生效
         setTimeout(() => {

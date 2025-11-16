@@ -1594,7 +1594,56 @@ function normalizeFallbackAnswerComparison(existingComparison, answerMap, correc
 async function savePracticeRecordFallback(examId, realData) {
   try {
     const list = getExamIndexState();
-    const exam = list.find(e => e.id === examId) || {};
+    let exam = list.find(e => e.id === examId) || {};
+    
+    // 如果通过 examId 找不到，尝试通过 URL 或标题匹配
+    if (!exam.id && realData) {
+      // 尝试通过 URL 匹配
+      if (realData.url) {
+        const urlPath = realData.url.toLowerCase();
+        const urlMatch = list.find(e => {
+          if (!e.path) return false;
+          const itemPath = e.path.toLowerCase();
+          const urlParts = urlPath.split('/').filter(Boolean);
+          const pathParts = itemPath.split('/').filter(Boolean);
+          
+          // 检查最后几个路径段是否匹配
+          for (let i = 0; i < Math.min(urlParts.length, pathParts.length); i++) {
+            if (urlParts[urlParts.length - 1 - i] === pathParts[pathParts.length - 1 - i]) {
+              return true;
+            }
+          }
+          return false;
+        });
+        if (urlMatch) {
+          exam = urlMatch;
+          console.log('[Fallback] 通过 URL 匹配到题目:', exam.id, exam.title);
+        }
+      }
+      
+      // 尝试通过标题匹配
+      if (!exam.id && realData.title) {
+        const normalizeTitle = (str) => {
+          if (!str) return '';
+          return String(str).trim().toLowerCase()
+            .replace(/^\[.*?\]\s*/, '')  // 移除标签前缀
+            .replace(/[^\w\s]/g, '')
+            .replace(/\s+/g, ' ');
+        };
+        const targetTitle = normalizeTitle(realData.title);
+        const titleMatch = list.find(e => {
+          if (!e.title) return false;
+          const itemTitle = normalizeTitle(e.title);
+          return itemTitle === targetTitle || 
+                 (targetTitle.length > 5 && itemTitle.includes(targetTitle)) ||
+                 (itemTitle.length > 5 && targetTitle.includes(itemTitle));
+        });
+        if (titleMatch) {
+          exam = titleMatch;
+          console.log('[Fallback] 通过标题匹配到题目:', exam.id, exam.title);
+        }
+      }
+    }
 
     const sInfo = realData && realData.scoreInfo ? realData.scoreInfo : {};
     const correct = typeof sInfo.correct === 'number' ? sInfo.correct : 0;
@@ -1614,13 +1663,30 @@ async function savePracticeRecordFallback(examId, realData) {
       details: answerDetails,
       source: sInfo.source || realData.source || 'fallback'
     };
+    
+    // 从多个来源提取 category
+    let category = exam.category;
+    if (!category && realData.pageType) {
+      category = realData.pageType;  // 如 "P4"
+    }
+    if (!category && realData.url) {
+      const match = realData.url.match(/\b(P[1-4])\b/i);
+      if (match) category = match[1].toUpperCase();
+    }
+    if (!category && realData.title) {
+      const match = realData.title.match(/\b(P[1-4])\b/i);
+      if (match) category = match[1].toUpperCase();
+    }
+    if (!category) {
+      category = 'Unknown';
+    }
 
     const record = {
       id: Date.now(),
       examId: examId,
       title: exam.title || realData.title || '',
-      category: exam.category,
-      frequency: exam.frequency,
+      category: category,
+      frequency: exam.frequency || 'unknown',
       realData: {
         score: correct,
         totalQuestions: total,

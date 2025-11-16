@@ -556,6 +556,7 @@
         const candidateIds = [
             record && record.examId,
             record && record.originalExamId,
+            record && record.derivedExamId,
             record && record.realData && record.realData.examId,
             metadata && metadata.examId,
             metadata && metadata.id
@@ -563,6 +564,7 @@
             .map(toStringKey)
             .filter(Boolean);
 
+        // 1. 精确 ID 匹配
         if (candidateIds.length > 0) {
             const idLookup = new Map();
             indexes.forEach(item => {
@@ -583,6 +585,31 @@
             }
         }
 
+        // 2. 通过 URL 路径匹配（针对全量题库）
+        if (record && record.url) {
+            const urlPath = record.url.toLowerCase();
+            const match = indexes.find(item => {
+                if (!item || !item.path) return false;
+                const itemPath = item.path.toLowerCase();
+                // 提取 URL 中的文件夹名称
+                const urlParts = urlPath.split('/').filter(Boolean);
+                const pathParts = itemPath.split('/').filter(Boolean);
+                
+                // 检查是否有共同的文件夹路径
+                for (let i = 0; i < Math.min(urlParts.length, pathParts.length); i++) {
+                    if (urlParts[urlParts.length - 1 - i] === pathParts[pathParts.length - 1 - i]) {
+                        return true;
+                    }
+                }
+                return false;
+            });
+            if (match) {
+                console.log('[AnswerComparisonUtils] 通过 URL 路径匹配到题目:', match.id, match.title);
+                return match;
+            }
+        }
+
+        // 3. 精确标题匹配
         const candidateTitles = [
             metadata && metadata.examTitle,
             metadata && metadata.title,
@@ -608,6 +635,24 @@
             for (const title of candidateTitles) {
                 if (titleLookup.has(title)) {
                     return titleLookup.get(title);
+                }
+            }
+            
+            // 4. 模糊标题匹配（移除标签前缀后比较）
+            for (const candidateTitle of candidateTitles) {
+                const match = indexes.find(item => {
+                    if (!item || !item.title) return false;
+                    const itemTitle = normalizeTitle(item.title);
+                    // 移除标签前缀，如 "[听力全量-...] City Development" vs "City Development"
+                    const cleanCandidate = candidateTitle.replace(/^\[.*?\]\s*/, '');
+                    const cleanItem = itemTitle.replace(/^\[.*?\]\s*/, '');
+                    return cleanCandidate === cleanItem || 
+                           (cleanCandidate.length > 5 && cleanItem.includes(cleanCandidate)) ||
+                           (cleanItem.length > 5 && cleanCandidate.includes(cleanItem));
+                });
+                if (match) {
+                    console.log('[AnswerComparisonUtils] 通过模糊标题匹配到题目:', match.id, match.title);
+                    return match;
                 }
             }
         }
