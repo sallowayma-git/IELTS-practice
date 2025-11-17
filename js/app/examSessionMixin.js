@@ -1803,11 +1803,11 @@
                         await this.components.practiceRecorder.savePracticeRecord(examId, normalizedData);
                     } catch (recErr) {
                         console.warn('[DataCollection] PracticeRecorder 保存失败，改用降级存储:', recErr);
-                        await this.saveRealPracticeData(examId, data);
+                        await this.saveRealPracticeData(examId, data, { savingAsFallback: true });
                     }
                 } else {
                     // 直接保存真实数据（采用旧版本的简单方式）
-                    await this.saveRealPracticeData(examId, data);
+                    await this.saveRealPracticeData(examId, data, { savingAsFallback: true });
                 }
 
                 // 刷新内存中的练习记录，确保无需手动刷新即可看到
