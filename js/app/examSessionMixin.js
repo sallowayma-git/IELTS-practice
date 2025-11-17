@@ -1768,6 +1768,9 @@
          * 处理练习完成（真实数据）
          */
         async handlePracticeComplete(examId, data) {
+            if (data && !data.sessionId) {
+                data.sessionId = `${examId}_${Date.now()}`;
+            }
 
             if (this.suiteExamMap && this.suiteExamMap.has(examId) && typeof this.handleSuitePracticeComplete === 'function') {
                 try {
@@ -1890,6 +1893,64 @@
          */
         async saveRealPracticeData(examId, realData, options = {}) {
             try {
+                const normalizeKey = (rawKey) => {
+                    if (rawKey == null) return null;
+                    const s = String(rawKey).trim();
+                    if (!s) return null;
+                    const range = s.match(/^q?(\d+)\s*-\s*(\d+)$/i);
+                    if (range) return `q${range[1]}-${range[2]}`;
+                    if (/^q\d+$/i.test(s)) return s.toLowerCase();
+                    if (/^\d+$/.test(s)) return `q${s}`;
+                    return s;
+                };
+
+                const normalizeValue = (value) => {
+                    if (value == null) return '';
+                    if (typeof value === 'boolean') {
+                        return value ? 'True' : 'False';
+                    }
+                    if (Array.isArray(value)) {
+                        const tokens = value
+                            .map(v => String(v).trim())
+                            .filter(Boolean)
+                            .map(v => v.toUpperCase());
+                        return Array.from(new Set(tokens)).sort().join(', ');
+                    }
+                    if (typeof value === 'object') {
+                        if (value.answer != null) return normalizeValue(value.answer);
+                        if (value.value != null) return normalizeValue(value.value);
+                        try {
+                            const json = JSON.stringify(value);
+                            return json === '{}' || json === '[]' ? '' : json;
+                        } catch (_) {
+                            return '';
+                        }
+                    }
+                    return String(value).trim();
+                };
+
+                const normalizeAnswerMap = (raw) => {
+                    const map = {};
+                    if (!raw) return map;
+                    if (Array.isArray(raw)) {
+                        raw.forEach((entry, idx) => {
+                            if (!entry) return;
+                            const k = normalizeKey(entry.questionId || `q${idx + 1}`);
+                            const v = normalizeValue(entry.answer ?? entry.userAnswer ?? entry.value ?? entry);
+                            if (k) map[k] = v;
+                        });
+                        return map;
+                    }
+                    Object.entries(raw).forEach(([rk, rv]) => {
+                        const k = normalizeKey(rk);
+                        const v = normalizeValue(rv && typeof rv === 'object' && 'answer' in rv ? rv.answer : rv);
+                        if (k) map[k] = v;
+                    });
+                    return map;
+                };
+
+                const normalizedAnswers = normalizeAnswerMap(realData?.answers);
+                const normalizedCorrectMap = normalizeAnswerMap(realData?.correctAnswers);
 
                 const forceIndividualSave = Boolean(options && options.forceIndividualSave);
                 const suiteSessionId = realData?.suiteSessionId
@@ -1938,8 +1999,8 @@
                        accuracy: realData.scoreInfo?.accuracy || 0,
                        percentage: realData.scoreInfo?.percentage || 0,
                        duration: realData.duration,
-                       answers: realData.answers,
-                       correctAnswers: realData.correctAnswers || {},
+                       answers: normalizedAnswers,
+                       correctAnswers: normalizedCorrectMap,
                        answerHistory: realData.answerHistory,
                        interactions: realData.interactions,
                        isRealData: true,
@@ -1967,7 +2028,7 @@
                     practiceRecord.totalQuestions = total;
                     practiceRecord.accuracy = acc;
                     practiceRecord.percentage = pct;
-                    practiceRecord.answers = realData.answers || {};
+                    practiceRecord.answers = normalizedAnswers;
                     practiceRecord.startTime = new Date((realData.startTime ?? (Date.now() - (realData.duration || 0) * 1000))).toISOString();
                     practiceRecord.endTime = new Date((realData.endTime ?? Date.now())).toISOString();
 

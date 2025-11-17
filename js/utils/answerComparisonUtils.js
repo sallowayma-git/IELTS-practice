@@ -73,6 +73,21 @@
         }
 
         const lowered = original.toLowerCase();
+
+        // 处理范围题号（如 q21-22 或 21-22），保留完整键用于展示
+        const rangeMatch = lowered.match(/^q?(\d+)\s*-\s*(\d+)$/);
+        if (rangeMatch) {
+            const start = parseInt(rangeMatch[1], 10);
+            const end = parseInt(rangeMatch[2], 10);
+            const canonicalKey = `q${start}-${end}`;
+            return {
+                canonicalKey,
+                questionNumber: Number.isFinite(start) ? start : null,
+                originalKey: original,
+                rangeLabel: `${start}-${end}`
+            };
+        }
+
         const digitMatch = lowered.match(/(\d{1,4})/);
         let questionNumber = null;
         let canonicalKey = lowered;
@@ -323,7 +338,9 @@
     }
 
     function finaliseEntry(entry) {
-        const displayNumber = entry.questionNumber != null
+        const displayNumber = entry.rangeLabel
+            ? entry.rangeLabel
+            : entry.questionNumber != null
             ? String(entry.questionNumber)
             : entry.canonicalKey ? entry.canonicalKey.replace(/^q/i, '').toUpperCase() : '';
 
@@ -397,6 +414,7 @@
                 entryMap[keyInfo.canonicalKey] = {
                     canonicalKey: keyInfo.canonicalKey,
                     questionNumber: keyInfo.questionNumber,
+                    rangeLabel: keyInfo.rangeLabel || null,
                     originalKeys: new Set(),
                     userAnswer: null,
                     correctAnswer: null,
@@ -412,6 +430,9 @@
 
             if (keyInfo.questionNumber != null && entry.questionNumber == null) {
                 entry.questionNumber = keyInfo.questionNumber;
+            }
+            if (keyInfo.rangeLabel && !entry.rangeLabel) {
+                entry.rangeLabel = keyInfo.rangeLabel;
             }
 
             const lookupKeys = [
