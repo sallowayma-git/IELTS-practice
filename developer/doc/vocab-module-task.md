@@ -301,7 +301,7 @@ IELTS-practice/
      - 在 `setupMoreViewInteractions` 中保留兼容逻辑，确保旧浏览器无 `app.navigateToView` 时也能手动切换 `data-view` 显隐。✅ 已完成
    - 若全局需要，注册 `window.vocabModule` 暴露基础 API（加载状态、刷新任务）。✅ 已完成
 
-### 阶段2｜数据持久化与仓库接入 ✅ 已完成
+### 阶段2｜数据持久化与仓库接入
 
 1. **MetaRepository 扩展** ✅
    - 在 `js/data/index.js` 注册 `vocab_words`、`vocab_user_config`、`vocab_review_queue` 键，指定默认值、校验函数与必要的迁移钩子。✅ 已完成
@@ -315,48 +315,26 @@ IELTS-practice/
    - 在 `js/utils/vocabDataIO.js` 实现 `importWordList`, `exportProgress`, `validateSchema`：
      - 解析 JSON/CSV（CSV 可复用 `FileReader` + 简单 split），校验字段并生成 `{ word, meaning, example, freq }`。✅ 已完成
      - `exportProgress` 需序列化 `VocabStore` 的当前状态，附带导出时间戳与版本号。✅ 已完成
-   - 与 `asyncExportHandler` 对齐，返回 `Blob` 供现有下载流程调用。✅ 已完成（使用轻量 Blob 下载流程）
+   - 与 `asyncExportHandler` 对齐，返回 `Blob` 供现有下载流程调用。⏳ 待与导出流程串联
 
-### 阶段3｜调度算法与任务生成 ✅ 已完成（SM-2 算法）
+### 阶段3｜调度算法与任务生成
 
-1. **调度模块** ✅ **已升级为 SuperMemo SM-2 算法**
+1. **调度模块** ✅
    - `js/core/vocabScheduler.js`：
-     - ✅ 实现 SM-2 核心算法：`calculateEaseFactor`（难度因子更新）、`calculateInterval`（间隔计算）
-     - ✅ 质量评分系统：wrong(0) / hard(3) / good(4) / easy(5)
-     - ✅ 间隔公式：新间隔 = 旧间隔 × 难度因子（指数增长）
-     - ✅ 难度因子范围：1.3-2.5，根据回忆质量动态调整
-     - ✅ 向后兼容：保留旧的 `promote/demote` 函数（已标记废弃）
-     - ✅ `pickDailyTask` 根据 `reviewLimit` 先选逾期词，再补充新词，保证不重复
-   
-2. **数据结构升级** ✅
-   - 新增字段：
-     - `easeFactor`（难度因子，1.3-2.5，默认 2.5）
-     - `interval`（当前间隔天数，默认 1）
-     - `repetitions`（连续正确次数，默认 0）
-   - 保留字段（向后兼容）：
-     - `box`（旧的 Leitner 箱号）
-     - `correctCount`（总正确次数）
-   - ✅ 自动迁移：从旧的 `box` 推断 `repetitions`
-
-3. **Store 集成** ✅
+     - 定义常量 `REVIEW_INTERVAL_HOURS`，实现 `calculateNextReview`、`promoteWord`, `resetWordBox`, `scheduleAfterResult`（综合更新 `box`, `correctCount`, `lastReviewed`, `nextReview`）。✅ 已完成
+     - `pickDailyTask` 根据 `reviewLimit` 先选逾期词，再补充新词，保证不重复。✅ 已完成
+2. **Store 集成** ✅
    - 在 `VocabStore.init()` 中加载默认词表（若 `vocab_words` 为空），使用 `vocabDataIO.validateSchema` 校验内置 JSON（`assets/wordlists/ielts_core.json`）。✅ 校验逻辑已接入
    - 生成词条唯一 ID（建议 `crypto.randomUUID()` 或手工 fallback）。✅ 已完成
-   - ✅ `normalizeWordRecord` 已更新，支持 SM-2 新字段
 
-4. **UI 集成** ✅
-   - ✅ 反馈页面显示：间隔天数、难度因子、连续正确次数
-   - ✅ 回忆质量评分按钮：困难 / 一般 / 简单（仅正确时显示）
-   - ✅ 用户可重新评分，实时更新调度
+### 阶段4｜UI 会话流
 
-### 阶段4｜UI 会话流 ✅ 已完成（样式已内联）
-
-1. **组件框架** ✅
-   - `js/components/vocabSessionView.js`（843 行）：
-     - 提供 `mount`, `startSession(mode)`, `renderCard`, `handleAnswer`, `showStats`, `refreshDashboard`。✅ 已完成
-     - UI 结构可参考 `js/components/practiceDashboard.js` 的 DOM 构造方式，保持无框架实现。✅ 已完成
-   - 处理键盘交互（Enter 提交、F 显示释义、Esc 关闭）、按钮状态与无词汇时的空态提示。✅ 已完成
+1. **组件框架** ⏳
+   - `js/components/vocabSessionView.js`：
+     - 提供 `mount`, `startSession(mode)`, `renderCard`, `handleAnswer`, `showStats`, `refreshDashboard`。⏳ 当前仅实现 `mount/refreshDashboard`，其余待补充
+     - UI 结构可参考 `js/components/practiceDashboard.js` 的 DOM 构造方式，保持无框架实现。⏳ 待完成
+   - 处理键盘交互（Enter 提交、空格翻面）、按钮状态与无词汇时的空态提示。⏳ 未开始
    - ✅ 已完成：会话视图骨架与仪表盘占位刷新
-   - ✅ 样式已内联至视图内（独立 CSS 方案已废弃）
 
 #### 2025-03-XX｜交互界面建设需求拆分
 
@@ -408,11 +386,10 @@ IELTS-practice/
   - [x] 移动端：输入框自带“完成”即提交；BottomBar 固定吸底，避免被软键盘遮挡。
   - [x] 可访问性：按钮最少 44px 高；aria-live 告知反馈；焦点先落输入框。
 
-- [x] 版式与样式复用 ✅ 样式已内联至视图内
+- [x] 版式与样式复用 ✅ 新样式遵循原主题变量
   - [x] 复用既有的卡片/按钮/主题类名（例如 .category-card, .btn, .badge 等），新增样式尽量以内联变量或极少量新类扩展。
   - [x] 高对比主题（仓库已有）默认兼容：文字/按钮边框基于主题 token 取值。
   - [x] 图标优先用现有 SVG；不要引新图标库。
-  - ❌ **废弃方案**：独立 `css/vocab.css` 文件（已删除，样式已内联至 `vocabSessionView.js` 的 DOM 构造中）
 
 - [x] 模块分区与组件 ✅ 各子组件 DOM 已落地
   - [x] VocabTopBar：标题、进度、菜单
@@ -459,7 +436,7 @@ IELTS-practice/
 2. **Dashboard（可选）** ✅
    - 若实现 `vocabDashboardCards.js`，在 `mount` 后插入统计卡片：学习进度、待复习、掌握率。✅ 仪表盘卡片渲染已上线，待与真实任务数据联动
 
-### 阶段5｜导入导出 & 配置 ✅ 已完成
+### 阶段5｜导入导出 & 配置
 
 1. **设置表单** ✅
    - 在会话视图中添加设置入口，允许修改 `dailyNew`, `reviewLimit`, `masteryCount`, `notify`，并立即写回 `VocabStore`。✅ 已上线
@@ -475,12 +452,12 @@ IELTS-practice/
      - [x] 导出：复用现有下载助手并验证 `Blob` 输出
      - [x] 完成 `asyncExportHandler` 对接及 DataIntegrity 备份流程联调（采用轻量 Blob 下载流程）
 
-### 阶段6｜测试与验证 ⏳ 进行中
+### 阶段6｜测试与验证
 
 1. **静态测试** ⏳
    - 每轮提交前运行 `python developer/tests/ci/run_static_suite.py`，确保基线 E2E 通过。⏳ 待修复现有失败用例（suiteModeFlow.test）
-2. **手动验证清单** ⏳ 准备开始
-   - 更多页入口 → 词汇视图 → 学习流程 → 复习流程。⏳ 待手动测试
+2. **手动验证清单** ⏳
+   - 更多页入口 → 词汇视图 → 学习流程 → 复习流程。⏳ 学习流程待实现
    - 导入空文件/格式错误时弹出警告但不崩溃。✅ UI 已补充
    - 切换视图后返回保持进度（`VocabStore` 状态持久）。✅ 核心数据层已支持，待完成交互验证
 

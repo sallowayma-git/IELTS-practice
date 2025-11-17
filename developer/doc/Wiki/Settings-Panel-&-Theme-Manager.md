@@ -367,26 +367,8 @@ end
 
 **Event Delegation Registration**:
 
-```sql
-// Settings button click
-window.DOM.delegate('click', '.settings-button', function(e) {
-    window.settingsPanel.show();
-});
+```
 
-// Modal close
-window.DOM.delegate('click', '.modal-close', function(e) {
-    window.settingsPanel.hide();
-});
-
-// Tab switching
-window.DOM.delegate('click', '.settings-tab', function(e) {
-    window.settingsPanel.switchTab(this.dataset.tab);
-});
-
-// Theme selection
-window.DOM.delegate('change', '#theme-select', function(e) {
-    window.settingsPanel.updateSetting('theme', this.value);
-});
 ```
 
 **Implementation Details**:
@@ -514,11 +496,8 @@ sequenceDiagram
 
 **CSS Variable Application**:
 
-```javascript
-const root = document.documentElement;
-Object.entries(theme.variables).forEach(([property, value]) => {
-    root.style.setProperty(property, value);
-});
+```
+
 ```
 
 [js/utils/themeManager.js L217-L219](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/utils/themeManager.js#L217-L219)
@@ -585,25 +564,8 @@ end
 
 **Implementation**:
 
-```javascript
-setupSystemThemeDetection() {
-    const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const reduceMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-    
-    // Listen for system theme changes
-    darkModeQuery.addEventListener('change', (e) => {
-        if (this.settings.autoTheme) {
-            this.setTheme(e.matches ? 'dark' : 'light');
-        }
-    });
-    
-    // Listen for reduce motion preference
-    reduceMotionQuery.addEventListener('change', (e) => {
-        this.settings.reduceMotion = e.matches;
-        this.applyMotionSettings();
-        this.saveSettings();
-    });
-}
+```
+
 ```
 
 [js/utils/themeManager.js L164-L192](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/utils/themeManager.js#L164-L192)
@@ -631,27 +593,16 @@ Settings are persisted to `StorageManager` with specific key names.
 
 **`theme_settings` Object Structure**:
 
-```yaml
-{
-    fontSize: 'normal',        // 'small' | 'normal' | 'large' | 'extra-large'
-    reduceMotion: false,       // boolean
-    highContrast: false,       // boolean
-    autoTheme: true           // boolean
-}
+```
+
 ```
 
 [js/utils/themeManager.js L123-L128](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/utils/themeManager.js#L123-L128)
 
 **Settings Load Flow**:
 
-```javascript
-async loadSettings() {
-    const savedSettings = await window.storage?.get('theme_settings', {});
-    this.settings = { ...this.settings, ...savedSettings };
-    
-    const savedTheme = await window.storage?.get('current_theme', 'light');
-    this.currentTheme = savedTheme;
-}
+```
+
 ```
 
 [js/utils/themeManager.js L143-L149](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/utils/themeManager.js#L143-L149)
@@ -659,12 +610,7 @@ async loadSettings() {
 **Settings Save Flow**:
 
 ```
-async saveSettings() {
-    if (window.storage) {
-        await window.storage.set('theme_settings', this.settings);
-        await window.storage.set('current_theme', this.currentTheme);
-    }
-}
+
 ```
 
 [js/utils/themeManager.js L154-L159](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/utils/themeManager.js#L154-L159)
@@ -739,20 +685,16 @@ Event handlers in `setupSettingsEvents()` directly call `ThemeManager` methods [
 
 **Example - Theme Selection**:
 
-```sql
-case 'theme-select':
-    themeManager?.setTheme(target.value);
-    break;
+```
+
 ```
 
 [js/components/settingsPanel.js L643-L645](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/components/settingsPanel.js#L643-L645)
 
 **Example - Font Size**:
 
-```sql
-case 'font-size-select':
-    themeManager?.setFontSize(target.value);
-    break;
+```
+
 ```
 
 [js/components/settingsPanel.js L649-L651](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/components/settingsPanel.js#L649-L651)
@@ -774,29 +716,15 @@ case 'font-size-select':
 **Settings Panel Shortcuts**:
 
 ```
-document.addEventListener('keydown', function(e) {
-    if (e.ctrlKey && e.shiftKey && e.key === 'S') {
-        e.preventDefault();
-        window.settingsPanel.toggle();
-    }
-    
-    if (e.key === 'Escape' && window.settingsPanel.isVisible) {
-        window.settingsPanel.hide();
-    }
-});
+
 ```
 
 [js/components/settingsPanel.js L138-L147](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/components/settingsPanel.js#L138-L147)
 
 **ThemeManager Shortcuts**:
 
-```javascript
-document.addEventListener('keydown', (e) => {
-    if (e.ctrlKey && e.shiftKey && e.key === 'T') {
-        e.preventDefault();
-        this.toggleTheme();
-    }
-});
+```
+
 ```
 
 [js/utils/themeManager.js L199-L204](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/utils/themeManager.js#L199-L204)
@@ -854,18 +782,7 @@ ClearData --> Clear
 Tutorial-related buttons in Advanced Settings:
 
 ```
-case 'reset-tutorials-btn':
-    if (window.app?.tutorialSystem) {
-        window.app.tutorialSystem.resetTutorialProgress();
-    }
-    break;
 
-case 'show-tutorials-btn':
-    if (window.app?.tutorialSystem) {
-        this.hide();
-        window.app.tutorialSystem.showTutorialSelector();
-    }
-    break;
 ```
 
 [js/components/settingsPanel.js L709-L719](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/components/settingsPanel.js#L709-L719)
@@ -887,19 +804,8 @@ When enabled, high contrast mode:
 
 **Toggle Implementation**:
 
-```javascript
-async toggleHighContrast() {
-    this.settings.highContrast = !this.settings.highContrast;
-    
-    if (this.settings.highContrast) {
-        await window.storage?.set('previous_theme', this.currentTheme);
-        this.setTheme('highContrast');
-    } else {
-        const previousTheme = await window.storage?.get('previous_theme', 'light');
-        this.setTheme(previousTheme);
-    }
-    await this.saveSettings();
-}
+```
+
 ```
 
 [js/utils/themeManager.js L335-L347](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/utils/themeManager.js#L335-L347)
@@ -918,13 +824,8 @@ When enabled, reduced motion:
 
 **System Preference Detection**:
 
-```javascript
-const reduceMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-reduceMotionQuery.addEventListener('change', (e) => {
-    this.settings.reduceMotion = e.matches;
-    this.applyMotionSettings();
-    this.saveSettings();
-});
+```
+
 ```
 
 [js/utils/themeManager.js L167-L183](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/utils/themeManager.js#L167-L183)
@@ -950,15 +851,8 @@ Supports four font size levels via body classes:
 
 **Application Method**:
 
-```javascript
-applyFontSize() {
-    const fontSizeClasses = ['font-small', 'font-normal', 'font-large', 'font-extra-large'];
-    fontSizeClasses.forEach(cls => document.body.classList.remove(cls));
-    
-    if (this.settings.fontSize !== 'normal') {
-        document.body.classList.add(`font-${this.settings.fontSize.replace('-', '-')}`);
-    }
-}
+```
+
 ```
 
 [js/utils/themeManager.js L241-L248](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/utils/themeManager.js#L241-L248)
@@ -975,21 +869,8 @@ applyFontSize() {
 
 The `getDomBuilder()` method provides a three-tier fallback:
 
-```javascript
-getDomBuilder() {
-    if (window.DOMBuilder && typeof window.DOMBuilder.create === 'function') {
-        return window.DOMBuilder;
-    } else if (window.DOM && window.DOM.builder) {
-        return window.DOM.builder;
-    } else {
-        // Fallback implementation
-        return {
-            create: (tag, attributes = {}, children = []) => {
-                // Manual element creation
-            }
-        };
-    }
-}
+```
+
 ```
 
 [js/components/settingsPanel.js L286-L322](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/components/settingsPanel.js#L286-L322)
@@ -1010,14 +891,8 @@ Both components handle `window.storage` unavailability:
 
 **SettingsPanel**:
 
-```javascript
-async loadSettings() {
-    const themeSettings = await window.storage?.get('theme_settings', {});
-    return {
-        theme: await window.storage?.get('current_theme', 'light'),
-        // Optional chaining prevents errors if storage unavailable
-    };
-}
+```
+
 ```
 
 [js/components/settingsPanel.js L25-L38](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/components/settingsPanel.js#L25-L38)
@@ -1025,12 +900,7 @@ async loadSettings() {
 **ThemeManager**:
 
 ```
-async saveSettings() {
-    if (window.storage) {  // Guard check
-        await window.storage.set('theme_settings', this.settings);
-        await window.storage.set('current_theme', this.currentTheme);
-    }
-}
+
 ```
 
 [js/utils/themeManager.js L154-L159](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/utils/themeManager.js#L154-L159)
@@ -1047,23 +917,8 @@ async saveSettings() {
 
 Exports all settings as JSON file:
 
-```javascript
-async exportSettings() {
-    const allSettings = {
-        theme: await window.storage?.get('current_theme'),
-        themeSettings: await window.storage?.get('theme_settings'),
-        appSettings: this.settings,
-        exportDate: new Date().toISOString()
-    };
-    
-    const dataStr = JSON.stringify(allSettings, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json; charset=utf-8' });
-    
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(dataBlob);
-    link.download = `exam-system-settings-${new Date().toISOString().split('T')[0]}.json`;
-    link.click();
-}
+```
+
 ```
 
 [js/components/settingsPanel.js L871-L890](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/components/settingsPanel.js#L871-L890)
@@ -1071,17 +926,7 @@ async exportSettings() {
 **Export Structure**:
 
 ```
-{
-    "theme": "xiaodaidai",
-    "themeSettings": {
-        "fontSize": "normal",
-        "reduceMotion": false,
-        "highContrast": false,
-        "autoTheme": true
-    },
-    "appSettings": { ... },
-    "exportDate": "2024-01-15T10:30:00.000Z"
-}
+
 ```
 
 **Sources**: [js/components/settingsPanel.js L869-L890](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/components/settingsPanel.js#L869-L890)
@@ -1094,45 +939,16 @@ Resets all theme and accessibility settings:
 
 **SettingsPanel Reset**:
 
-```yaml
-resetToDefaults() {
-    if (window.app?.themeManager) {
-        window.app.themeManager.resetToDefaults();
-    }
-    
-    this.settings = {
-        theme: 'light',
-        fontSize: 'normal',
-        reduceMotion: false,
-        highContrast: false,
-        autoTheme: true,
-        keyboardShortcuts: true,
-        soundEffects: false,
-        autoSave: true,
-        notifications: true
-    };
-    
-    this.saveSettings();
-}
+```
+
 ```
 
 [js/components/settingsPanel.js L805-L833](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/components/settingsPanel.js#L805-L833)
 
 **ThemeManager Reset**:
 
-```yaml
-async resetToDefaults() {
-    this.currentTheme = 'light';
-    this.settings = {
-        fontSize: 'normal',
-        reduceMotion: false,
-        highContrast: false,
-        autoTheme: true
-    };
-    
-    this.applyCurrentTheme();
-    await this.saveSettings();
-}
+```
+
 ```
 
 [js/utils/themeManager.js L392-L407](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/utils/themeManager.js#L392-L407)
@@ -1147,35 +963,8 @@ async resetToDefaults() {
 
 Calculates total storage usage across all keys:
 
-```javascript
-async calculateStorageUsage() {
-    const usageElement = document.querySelector('#storage-usage');
-    if (usageElement) {
-        try {
-            let totalSize = 0;
-            if (window.storage && typeof window.storage.keys === 'function') {
-                const keys = await window.storage.keys();
-                for (const key of keys) {
-                    const value = await window.storage.get(key);
-                    totalSize += JSON.stringify(value).length;
-                }
-            } else {
-                // Fallback to localStorage
-                for (let i = 0; i < localStorage.length; i++) {
-                    const key = localStorage.key(i);
-                    if (key) {
-                        totalSize += localStorage.getItem(key).length;
-                    }
-                }
-            }
-            
-            const sizeInKB = (totalSize / 1024).toFixed(2);
-            usageElement.textContent = `${sizeInKB} KB`;
-        } catch (error) {
-            usageElement.textContent = '无法计算';
-        }
-    }
-}
+```
+
 ```
 
 [js/components/settingsPanel.js L838-L867](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/components/settingsPanel.js#L838-L867)

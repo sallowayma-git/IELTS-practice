@@ -1,4 +1,4 @@
-# Suite-Practice-Mode-sallowayma-git-IELTS-practice---DeepWiki
+# sallowayma-git-IELTS-practice-DeepWiki
 
 ## Content Index
 
@@ -6,23 +6,23 @@
 - [Getting-Started](Getting-Started.md)
 - [Core-Application-Architecture](Core-Application-Architecture.md)
 - [ExamSystemApp-&-State-Management](ExamSystemApp-&-State-Management.md)
-- [Application-Initialization-&-Bootstrap](Application-Initialization-&-Bootstrap.md)
+- [Application-Initialization-&-Lifecycle](Application-Initialization-&-Lifecycle.md)
 - [View-Management-&-Navigation](View-Management-&-Navigation.md)
 - [Mixins-&-Component-Architecture](Mixins-&-Component-Architecture.md)
 - [Data-Management-System](Data-Management-System.md)
-- [Repository-Architecture-&-Data-Layer](Repository-Architecture-&-Data-Layer.md)
+- [Storage-Architecture-&-Repositories](Storage-Architecture-&-Repositories.md)
 - [Data-Backup-&-Import/Export](Data-Backup-&-Import/Export.md)
-- [Data-Integrity-&-Quality-Management](Data-Integrity-&-Quality-Management.md)
+- [Data-Normalization-&-Quality](Data-Normalization-&-Quality.md)
 - [Legacy-Compatibility-&-State-Bridges](Legacy-Compatibility-&-State-Bridges.md)
 - [Practice-Session-System](Practice-Session-System.md)
-- [Practice-Recorder-&-Score-Storage](Practice-Recorder-&-Score-Storage.md)
+- [PracticeRecorder-&-ScoreStorage](PracticeRecorder-&-ScoreStorage.md)
 - [Practice-Page-Enhancement-&-Data-Collection](Practice-Page-Enhancement-&-Data-Collection.md)
 - [Cross-Window-Communication-Protocol](Cross-Window-Communication-Protocol.md)
 - [Suite-Practice-Mode](Suite-Practice-Mode.md)
+- [Vocabulary-Learning-System](Vocabulary-Learning-System.md)
+- [Vocabulary-Session-&-Learning-Flow](Vocabulary-Session-&-Learning-Flow.md)
+- [Spaced-Repetition-Algorithm-(SM-2)](Spaced-Repetition-Algorithm-(SM-2).md)
 - [Exam-Content-&-Data-System](Exam-Content-&-Data-System.md)
-- [Exam-Index-&-Metadata-Structure](Exam-Index-&-Metadata-Structure.md)
-- [Path-Resolution-&-Resource-Management](Path-Resolution-&-Resource-Management.md)
-- [Theme-System-&-Visual-Design](Theme-System-&-Visual-Design.md)
 - [Theme-Management-&-Controller](Theme-Management-&-Controller.md)
 - [Theme-Portals-(Academic,-Melody,-Bloom)](Theme-Portals-(Academic,-Melody,-Bloom).md)
 - [In-App-Theme-Variants-&-CSS](In-App-Theme-Variants-&-CSS.md)

@@ -1,26 +1,13 @@
 # Repository Architecture & Data Layer
 
 > **Relevant source files**
-> * [assets/developer wiki/hp-overview-usage-todo.md](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/assets/developer wiki/hp-overview-usage-todo.md)
-> * [css/main.css](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/css/main.css)
-> * [developer/docs/10-06 log.md](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/developer/docs/10-06 log.md)
-> * [developer/docs/optimization-task-tracker.md](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/developer/docs/optimization-task-tracker.md)
-> * [developer/tests/js/e2e/appE2ETest.js](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/developer/tests/js/e2e/appE2ETest.js)
-> * [index.html](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/index.html)
-> * [js/app.js](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/app.js)
-> * [js/components/DataIntegrityManager.js](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/components/DataIntegrityManager.js)
-> * [js/components/practiceHistoryEnhancer.js](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/components/practiceHistoryEnhancer.js)
-> * [js/core/goalManager.js](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/goalManager.js)
-> * [js/data/index.js](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/data/index.js)
-> * [js/main.js](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/main.js)
-> * [js/script.js](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/script.js)
-> * [js/utils/dom.js](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/utils/dom.js)
-> * [js/utils/simpleStorageWrapper.js](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/utils/simpleStorageWrapper.js)
-> * [js/views/legacyViewBundle.js](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/views/legacyViewBundle.js)
+> * [js/core/practiceRecorder.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/practiceRecorder.js)
+> * [js/core/scoreStorage.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/scoreStorage.js)
+> * [js/utils/logger.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/logger.js)
 
 This document covers the repository pattern implementation that abstracts data persistence operations. The repository layer sits between application components and the storage backend, providing a unified API for practice records, settings, backups, and metadata management with transaction support and consistency validation.
 
-For information about data backup and import/export operations, see [Data Backup & Import/Export](/sallowayma-git/IELTS-practice/4.2-data-backup-and-importexport). For details about data validation and integrity checking, see [Data Integrity & Quality Management](/sallowayma-git/IELTS-practice/4.3-data-integrity-and-quality-management). For information about the underlying storage backend, see the StorageManager implementation in `js/utils/storage.js`.
+For information about data backup and import/export operations, see [Data Backup & Import/Export](/sallowayma-git/IELTS-practice/4.2-data-backup-and-importexport). For details about data validation and integrity checking, see [Data Integrity & Quality Management](/sallowayma-git/IELTS-practice/4.3-data-normalization-and-quality). For information about the underlying storage backend, see the StorageManager implementation in `js/utils/storage.js`.
 
 ## Repository Pattern Architecture
 
@@ -96,13 +83,13 @@ subgraph subGraph0 ["Application Components"]
 end
 ```
 
-Sources: [js/data/index.js L1-L119](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/data/index.js#L1-L119)
+Sources: [js/data/index.js L1-L119](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/data/index.js#L1-L119)
 
- [js/data/repositories/dataRepositoryRegistry.js L1-L150](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/data/repositories/dataRepositoryRegistry.js#L1-L150)
+ [js/data/repositories/dataRepositoryRegistry.js L1-L150](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/data/repositories/dataRepositoryRegistry.js#L1-L150)
 
- [js/data/dataSources/storageDataSource.js L1-L80](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/data/dataSources/storageDataSource.js#L1-L80)
+ [js/data/dataSources/storageDataSource.js L1-L80](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/data/dataSources/storageDataSource.js#L1-L80)
 
- [js/utils/simpleStorageWrapper.js L1-L65](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/utils/simpleStorageWrapper.js#L1-L65)
+ [js/utils/simpleStorageWrapper.js L1-L65](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/simpleStorageWrapper.js#L1-L65)
 
 ## DataRepositoryRegistry
 
@@ -169,11 +156,11 @@ subgraph subGraph0 ["Bootstrap Process"]
 end
 ```
 
-Sources: [js/data/index.js L20-L118](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/data/index.js#L20-L118)
+Sources: [js/data/index.js L20-L118](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/data/index.js#L20-L118)
 
- [js/data/repositories/dataRepositoryRegistry.js L1-L150](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/data/repositories/dataRepositoryRegistry.js#L1-L150)
+ [js/data/repositories/dataRepositoryRegistry.js L1-L150](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/data/repositories/dataRepositoryRegistry.js#L1-L150)
 
- [js/core/storageProviderRegistry.js L1-L71](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/core/storageProviderRegistry.js#L1-L71)
+ [js/core/storageProviderRegistry.js L1-L71](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/storageProviderRegistry.js#L1-L71)
 
 ### Registry API
 
@@ -184,7 +171,7 @@ Sources: [js/data/index.js L20-L118](https://github.com/sallowayma-git/IELTS-pra
 | `transaction(names, handler)` | Execute operations atomically | Promise<any> |
 | `runConsistencyChecks(names)` | Validate data integrity across repositories | Promise<Report> |
 
-Sources: [js/data/repositories/dataRepositoryRegistry.js L15-L80](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/data/repositories/dataRepositoryRegistry.js#L15-L80)
+Sources: [js/data/repositories/dataRepositoryRegistry.js L15-L80](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/data/repositories/dataRepositoryRegistry.js#L15-L80)
 
 ## StorageDataSource
 
@@ -233,7 +220,7 @@ subgraph subGraph0 ["Repository Layer"]
 end
 ```
 
-Sources: [js/data/dataSources/storageDataSource.js L1-L80](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/data/dataSources/storageDataSource.js#L1-L80)
+Sources: [js/data/dataSources/storageDataSource.js L1-L80](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/data/dataSources/storageDataSource.js#L1-L80)
 
 ### Storage Operations
 
@@ -246,7 +233,7 @@ Sources: [js/data/dataSources/storageDataSource.js L1-L80](https://github.com/sa
 
 All operations return Promises and handle storage errors gracefully by falling back to in-memory storage when necessary.
 
-Sources: [js/data/dataSources/storageDataSource.js L15-L75](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/data/dataSources/storageDataSource.js#L15-L75)
+Sources: [js/data/dataSources/storageDataSource.js L15-L75](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/data/dataSources/storageDataSource.js#L15-L75)
 
 ## Individual Repositories
 
@@ -300,7 +287,7 @@ subgraph subGraph0 ["Core Operations"]
 end
 ```
 
-Sources: [js/data/repositories/baseRepository.js L1-L200](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/data/repositories/baseRepository.js#L1-L200)
+Sources: [js/data/repositories/baseRepository.js L1-L200](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/data/repositories/baseRepository.js#L1-L200)
 
 ### PracticeRepository
 
@@ -360,7 +347,7 @@ Key configuration:
 * Automatic pruning of oldest records
 * Maintains sorted date index for efficient queries
 
-Sources: [js/data/repositories/practiceRepository.js L1-L250](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/data/repositories/practiceRepository.js#L1-L250)
+Sources: [js/data/repositories/practiceRepository.js L1-L250](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/data/repositories/practiceRepository.js#L1-L250)
 
 ### SettingsRepository
 
@@ -410,7 +397,7 @@ subgraph subGraph0 ["Setting Operations"]
 end
 ```
 
-Sources: [js/data/repositories/settingsRepository.js L1-L150](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/data/repositories/settingsRepository.js#L1-L150)
+Sources: [js/data/repositories/settingsRepository.js L1-L150](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/data/repositories/settingsRepository.js#L1-L150)
 
 ### BackupRepository
 
@@ -471,7 +458,7 @@ Key features:
 * Automatic pruning of oldest backups
 * Supports manual and automatic backup types
 
-Sources: [js/data/repositories/backupRepository.js L1-L180](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/data/repositories/backupRepository.js#L1-L180)
+Sources: [js/data/repositories/backupRepository.js L1-L180](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/data/repositories/backupRepository.js#L1-L180)
 
 ### MetaRepository
 
@@ -535,7 +522,7 @@ subgraph subGraph0 ["Schema Definition"]
 end
 ```
 
-Predefined schemas (from [js/data/index.js L36-L82](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/data/index.js#L36-L82)
+Predefined schemas (from [js/data/index.js L36-L82](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/data/index.js#L36-L82)
 
 ):
 
@@ -549,9 +536,9 @@ Predefined schemas (from [js/data/index.js L36-L82](https://github.com/sallowaym
 | `interrupted_records` | `[]` | Must be array | Yes |
 | `exam_index` | `[]` | Must be array | Yes |
 
-Sources: [js/data/repositories/metaRepository.js L1-L200](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/data/repositories/metaRepository.js#L1-L200)
+Sources: [js/data/repositories/metaRepository.js L1-L200](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/data/repositories/metaRepository.js#L1-L200)
 
- [js/data/index.js L3-L82](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/data/index.js#L3-L82)
+ [js/data/index.js L3-L82](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/data/index.js#L3-L82)
 
 ## Transaction Support
 
@@ -615,7 +602,7 @@ await registry.transaction(['practice', 'settings'], async (repos, tx) => {
 });
 ```
 
-Sources: [js/data/repositories/dataRepositoryRegistry.js L85-L130](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/data/repositories/dataRepositoryRegistry.js#L85-L130)
+Sources: [js/data/repositories/dataRepositoryRegistry.js L85-L130](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/data/repositories/dataRepositoryRegistry.js#L85-L130)
 
 ## Consistency Checking
 
@@ -696,9 +683,9 @@ Consistency report structure:
 }
 ```
 
-Sources: [js/data/repositories/dataRepositoryRegistry.js L135-L150](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/data/repositories/dataRepositoryRegistry.js#L135-L150)
+Sources: [js/data/repositories/dataRepositoryRegistry.js L135-L150](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/data/repositories/dataRepositoryRegistry.js#L135-L150)
 
- [js/components/DataIntegrityManager.js L66-L87](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/components/DataIntegrityManager.js#L66-L87)
+ [js/components/DataIntegrityManager.js L66-L87](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/components/DataIntegrityManager.js#L66-L87)
 
 ## SimpleStorageWrapper: Legacy Adapter
 
@@ -756,7 +743,7 @@ Key method mappings:
 | `get(key, default)` | `metaRepo.get(key, default)` | MetaRepository |
 | `set(key, value)` | `metaRepo.set(key, value)` | MetaRepository |
 
-Sources: [js/utils/simpleStorageWrapper.js L1-L65](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/utils/simpleStorageWrapper.js#L1-L65)
+Sources: [js/utils/simpleStorageWrapper.js L1-L65](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/simpleStorageWrapper.js#L1-L65)
 
 ## Error Handling and Recovery
 
@@ -797,6 +784,6 @@ subgraph subGraph0 ["Error Types"]
 end
 ```
 
-Sources: [js/utils/storage.js L1036-L1070](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/utils/storage.js#L1036-L1070)
+Sources: [js/utils/storage.js L1036-L1070](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/storage.js#L1036-L1070)
 
- [js/utils/storage.js L1053-L1070](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/utils/storage.js#L1053-L1070)
+ [js/utils/storage.js L1053-L1070](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/storage.js#L1053-L1070)
