@@ -1788,13 +1788,18 @@
                 && this.components.practiceRecorder
                 && typeof this.components.practiceRecorder.savePracticeRecord === 'function';
 
-            if (recorderAvailable) {
-                return;
-            }
-
             try {
-                // 直接保存真实数据（采用旧版本的简单方式）
-                await this.saveRealPracticeData(examId, data);
+                if (recorderAvailable) {
+                    try {
+                        await this.components.practiceRecorder.savePracticeRecord(examId, data);
+                    } catch (recErr) {
+                        console.warn('[DataCollection] PracticeRecorder 保存失败，改用降级存储:', recErr);
+                        await this.saveRealPracticeData(examId, data);
+                    }
+                } else {
+                    // 直接保存真实数据（采用旧版本的简单方式）
+                    await this.saveRealPracticeData(examId, data);
+                }
 
                 // 刷新内存中的练习记录，确保无需手动刷新即可看到
                 try {
