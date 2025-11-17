@@ -1799,13 +1799,46 @@
         },
 
         compareAnswers: function (userAnswer, correctAnswer) {
-            if (!userAnswer || !correctAnswer) {
+            if (userAnswer == null || correctAnswer == null) {
                 return false;
             }
-            
-            // 标准化答案进行比较
-            const normalize = (str) => String(str).trim().toLowerCase();
-            return normalize(userAnswer) === normalize(correctAnswer);
+
+            const normalizeItem = (value) => String(value).trim().toLowerCase();
+            const toNormalizedSet = (value) => {
+                if (Array.isArray(value)) {
+                    return Array.from(new Set(value.map(normalizeItem).filter(Boolean))).sort();
+                }
+
+                const str = normalizeItem(value);
+                if (!str) return [];
+
+                // 以逗号/分号作为多选分隔符；若无分隔符则按单值处理
+                const parts = str.split(/[;,]/).map(part => part.trim()).filter(Boolean);
+                if (parts.length <= 1) {
+                    return [str];
+                }
+
+                return Array.from(new Set(parts)).sort();
+            };
+
+            const userSet = toNormalizedSet(userAnswer);
+            const correctSet = toNormalizedSet(correctAnswer);
+
+            if (userSet.length === 0 || correctSet.length === 0) {
+                return false;
+            }
+
+            if (userSet.length !== correctSet.length) {
+                return false;
+            }
+
+            for (let i = 0; i < userSet.length; i++) {
+                if (userSet[i] !== correctSet[i]) {
+                    return false;
+                }
+            }
+
+            return true;
         },
 
         extractScore: function () {
