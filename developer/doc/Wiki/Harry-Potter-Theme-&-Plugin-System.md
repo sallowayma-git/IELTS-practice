@@ -44,8 +44,42 @@ The HP theme portal is structured as a modular, plugin-driven system. It consist
 
 ### Diagram: "HP Theme System - Code Entity Overview"
 
-```
+```mermaid
+flowchart TD
 
+HP_WELCOME[".superdesign/design_iterations/HP/Welcome.html"]
+HP_PORTAL["js/plugins/hp/hp-portal.js"]
+HP_CORE_BRIDGE["js/plugins/hp/hp-core-bridge.js"]
+HP_PATH["js/plugins/hp/hp-path.js"]
+MAIN_JS["js/main.js"]
+APP_JS["js/app.js"]
+PRACTICE_HISTORY_ENHANCER["js/components/practiceHistoryEnhancer.js"]
+THEME_SWITCHER["js/theme-switcher.js"]
+
+HP_WELCOME --> PRACTICE_HISTORY_ENHANCER
+HP_WELCOME --> THEME_SWITCHER
+HP_WELCOME --> MAIN_JS
+HP_WELCOME --> APP_JS
+
+subgraph subGraph1 ["Core Application"]
+    MAIN_JS
+    APP_JS
+    PRACTICE_HISTORY_ENHANCER
+    THEME_SWITCHER
+end
+
+subgraph subGraph0 ["HP Theme Portal"]
+    HP_WELCOME
+    HP_PORTAL
+    HP_CORE_BRIDGE
+    HP_PATH
+    HP_WELCOME --> HP_PATH
+    HP_WELCOME --> HP_CORE_BRIDGE
+    HP_WELCOME --> HP_PORTAL
+    HP_PATH --> HP_CORE_BRIDGE
+    HP_CORE_BRIDGE --> HP_PORTAL
+    HP_PORTAL --> HP_WELCOME
+end
 ```
 
 **Sources:**  
@@ -96,8 +130,25 @@ The HP theme portal loads its plugins in a specific order to ensure correct init
 
 ### Diagram: "HP Theme Plugin Loading Sequence"
 
-```
+```mermaid
+sequenceDiagram
+  participant Browser
+  participant .superdesign/design_iterations/HP/Welcome.html
+  participant js/plugins/hp/hp-path.js
+  participant js/plugins/hp/hp-core-bridge.js
+  participant js/plugins/hp/hp-portal.js
+  participant js/main.js / js/app.js
+  participant js/theme-switcher.js
 
+  Browser->>.superdesign/design_iterations/HP/Welcome.html: Load HTML
+  .superdesign/design_iterations/HP/Welcome.html->>js/plugins/hp/hp-path.js: Load & Initialize
+  .superdesign/design_iterations/HP/Welcome.html->>js/plugins/hp/hp-core-bridge.js: Load & Initialize
+  .superdesign/design_iterations/HP/Welcome.html->>js/plugins/hp/hp-portal.js: Load & Initialize
+  .superdesign/design_iterations/HP/Welcome.html->>js/theme-switcher.js: Load
+  .superdesign/design_iterations/HP/Welcome.html->>js/main.js / js/app.js: Load core scripts
+  js/plugins/hp/hp-path.js->>js/plugins/hp/hp-core-bridge.js: Provide path resolution
+  js/plugins/hp/hp-core-bridge.js->>js/plugins/hp/hp-portal.js: Expose core app services
+  js/plugins/hp/hp-portal.js->>.superdesign/design_iterations/HP/Welcome.html: Render views, handle navigation
 ```
 
 **Sources:**  
@@ -119,8 +170,21 @@ Each section is implemented as a `<section>` with a unique `id` and `data-view-s
 
 ### Diagram: "HP Theme View Routing Entities"
 
-```
+```mermaid
+flowchart TD
 
+HP_PORTAL["js/plugins/hp/hp-portal.js"]
+HP_WELCOME[".superdesign/design_iterations/HP/Welcome.html"]
+OVERVIEW["section#overview"]
+PRACTICE["section#practice"]
+HISTORY["section#history"]
+SETTINGS["section#settings"]
+
+HP_PORTAL --> OVERVIEW
+HP_PORTAL --> PRACTICE
+HP_PORTAL --> HISTORY
+HP_PORTAL --> SETTINGS
+HP_WELCOME --> HP_PORTAL
 ```
 
 **Sources:**  

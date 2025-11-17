@@ -223,11 +223,8 @@ The script handles dynamic UI elements like dialogs and popups through event han
 
 **Test Setup and Cleanup**
 
-```javascript
-# Clear theme preferences before tests
-await context.add_init_script(
-    "(() => { try { localStorage.removeItem('preferred_theme_portal'); sessionStorage.removeItem('preferred_theme_skip_session'); } catch (_) {} })();"
-)
+```
+
 ```
 
 This ensures consistent test environment by removing cached theme selections.
@@ -361,37 +358,16 @@ end
 
 The `AppE2ETestSuite` class provides comprehensive in-browser testing with direct DOM and JavaScript access:
 
-```python
-class AppE2ETestSuite {
-    constructor(frame, { statusEl, statusTextEl, resultsTable }) {
-        this.frame = frame;                    // iframe containing app
-        this.win = null;                       // iframe.contentWindow
-        this.doc = null;                       // iframe.contentWindow.document
-        this.results = [];                     // test results array
-        this.originalPracticeRecords = null;   // backup for teardown
-    }
-}
+```
+
 ```
 
 **Test Configuration Pattern**
 
 The `SETTINGS_BUTTON_TESTS` object defines test behavior for each settings button:
 
-```javascript
-const SETTINGS_BUTTON_TESTS = {
-    'load-library-btn': {
-        name: '设置 - 加载题库按钮',
-        stubbed: ['showLibraryLoaderModal', 'loadLibrary'],
-        stubImplementation: () => Promise.resolve('loaded')
-    },
-    'backup-list-btn': {
-        name: '设置 - 查看备份列表按钮',
-        expectInvocation: false,
-        waitForSelector: '.backup-list-container',
-        waitDescription: '备份列表渲染',
-        cleanupSelector: '.backup-list-container'
-    }
-}
+```
+
 ```
 
 This configuration-driven approach allows declarative test definitions with either stub expectations or DOM selector waits.
@@ -477,28 +453,14 @@ end
 
 Each test result is stored with detailed information:
 
-```yaml
-{
-    name: "应用初始化状态",           // Test name
-    passed: true,                    // Pass/fail status
-    details: {                       // Additional details
-        activeView: "overview-view",
-        activeNav: "overview",
-        appInitialized: true
-    }
-}
+```
+
 ```
 
 The final summary object exposed to Playwright:
 
-```yaml
-window.__E2E_TEST_RESULTS__ = {
-    total: 15,                       // Total test count
-    passed: 14,                      // Passed count
-    failed: 1,                       // Failed count
-    proxyConfig: {...},              // Test configuration
-    results: [...]                   // Full results array
-}
+```
+
 ```
 
 This structure allows Playwright to programmatically validate test outcomes and fail the CI pipeline if any E2E tests fail.
@@ -620,21 +582,8 @@ end
 
 The static suite parses `index.html` to extract button definitions:
 
-```sql
-# Extract navigation buttons
-nav_buttons = soup.select('nav.main-nav button[data-view]')
-found_views = {btn['data-view'] for btn in nav_buttons}
+```
 
-# Extract settings buttons
-settings_buttons = soup.select('#settings-view button[id]')
-found_button_ids = {btn['id'] for btn in settings_buttons}
-
-# Compare with test configuration
-expected_views = set(interaction_targets['mainNavigationViews'])
-expected_buttons = set(interaction_targets['settingsButtonIds'])
-
-missing_views = expected_views - found_views
-extra_views = found_views - expected_views
 ```
 
 This ensures that test configuration stays synchronized with actual HTML structure, preventing test coverage gaps.
@@ -643,15 +592,8 @@ This ensures that test configuration stays synchronized with actual HTML structu
 
 The suite uses AST parsing to detect anti-patterns:
 
-```css
-# Check for forbidden confirm() dialogs
-if re.search(r'\bconfirm\s*\(', function_body):
-    violations.append({
-        'file': file_path,
-        'function': function_name,
-        'pattern': 'confirm() dialog',
-        'recommendation': 'Use modal component instead'
-    })
+```
+
 ```
 
 This catches usability issues (browser-native dialogs) that should use custom UI components.
@@ -660,12 +602,8 @@ This catches usability issues (browser-native dialogs) that should use custom UI
 
 The `exam_app_method_contract.json` file defines required methods for each mixin:
 
-```json
-{
-    "stateMixin": ["getState", "setState", "loadPersistedState"],
-    "navigationMixin": ["navigateToView", "showView"],
-    "examSessionMixin": ["openExam", "startPracticeSession"]
-}
+```
+
 ```
 
 The static suite validates that these methods exist in the corresponding mixin files, ensuring architectural contracts are maintained during refactoring.
@@ -746,33 +684,8 @@ end
 
 The `analysis-of-fear.html` fixture provides a complete practice exam template:
 
-```typescript
-<!-- Practice page with data collection -->
-<script src="../../js/practice-page-enhancer.js"></script>
+```
 
-<!-- Exam content -->
-<form id="exam-form">
-    <!-- Questions and answers -->
-</form>
-
-<!-- Data collection integration -->
-<script>
-    // Listen for INIT_SESSION from parent window
-    window.addEventListener('message', function(event) {
-        if (event.data.type === 'INIT_SESSION') {
-            // Initialize session
-            window.postMessage({ type: 'SESSION_READY', data: {...} }, '*');
-        }
-    });
-    
-    // On submission, send PRACTICE_COMPLETE
-    function submitExam() {
-        window.postMessage({ 
-            type: 'PRACTICE_COMPLETE', 
-            data: { answers: {...}, duration: 300 } 
-        }, '*');
-    }
-</script>
 ```
 
 This template enables testing the complete practice submission pipeline including cross-window messaging and data collection.
@@ -781,17 +694,8 @@ This template enables testing the complete practice submission pipeline includin
 
 The `indexSnapshot.js` file contains a complete copy of `index.html` as a JavaScript string:
 
-```html
-window.__APP_INDEX_HTML_SNAPSHOT__ = `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <base href="../../">
-    <!-- Complete index.html content -->
-</head>
-<body>
-    <!-- Full application structure -->
-</body>
-</html>`;
+```
+
 ```
 
 This allows E2E tests to load a known-good version of the application structure without external dependencies, ensuring test stability even as `index.html` evolves.

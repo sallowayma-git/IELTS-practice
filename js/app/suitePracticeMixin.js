@@ -1,5 +1,6 @@
 (function(global) {
     const MAX_LEGACY_PRACTICE_RECORDS = 1000;
+    const isFileProtocol = !!(global && global.location && global.location.protocol === 'file:');
 
     const mixin = {
         initializeSuiteMode() {
@@ -269,8 +270,27 @@
                 const aggregatedAnswers = {};
                 const aggregatedComparison = {};
                 session.results.forEach(entry => {
-                    aggregatedAnswers[entry.examId] = entry.answers;
-                    aggregatedComparison[entry.examId] = entry.answerComparison;
+                    const prefix = entry.examId ? `${entry.examId}::` : '';
+                    const answersSource = entry.answers && typeof entry.answers === 'object'
+                        ? entry.answers
+                        : Array.isArray(entry.answers)
+                            ? entry.answers.reduce((map, item) => {
+                                if (item && item.questionId) {
+                                    map[item.questionId] = item.answer || item.userAnswer || '';
+                                }
+                                return map;
+                            }, {})
+                            : {};
+                    Object.keys(answersSource || {}).forEach(questionId => {
+                        aggregatedAnswers[`${prefix}${questionId}`] = answersSource[questionId];
+                    });
+
+                    const comparisonSource = entry.answerComparison && typeof entry.answerComparison === 'object'
+                        ? entry.answerComparison
+                        : {};
+                    Object.keys(comparisonSource).forEach(questionId => {
+                        aggregatedComparison[`${prefix}${questionId}`] = comparisonSource[questionId];
+                    });
                 });
 
                 const startTime = startTimestamp;
@@ -441,11 +461,26 @@
         },
 
         async _saveSuitePracticeRecord(record) {
-            if (this.components && this.components.practiceRecorder && typeof this.components.practiceRecorder.savePracticeRecord === 'function') {
-                await this.components.practiceRecorder.savePracticeRecord(record);
-                return;
+            const recorderAvailable = this.components
+                && this.components.practiceRecorder
+                && typeof this.components.practiceRecorder.savePracticeRecord === 'function';
+
+            if (recorderAvailable) {
+                try {
+                    await this.components.practiceRecorder.savePracticeRecord(record);
+                    await this._cleanupSuiteEntryRecords(record).catch(error => {
+                        console.warn('[SuitePractice] 清理套题子记录失败:', error);
+                    });
+                    return;
+                } catch (error) {
+                    console.warn('[SuitePractice] PracticeRecorder 保存套题记录失败，改用降级存储:', error);
+                }
             }
 
+            await this._saveSuitePracticeRecordFallback(record);
+        },
+
+        async _saveSuitePracticeRecordFallback(record) {
             let practiceRecords = await storage.get('practice_records', []);
             if (!Array.isArray(practiceRecords)) {
                 practiceRecords = [];
@@ -457,6 +492,102 @@
             }
 
             await storage.set('practice_records', practiceRecords);
+            await this._cleanupSuiteEntryRecords(record).catch(error => {
+                console.warn('[SuitePractice] 清理套题子记录失败:', error);
+            });
+        },
+
+        async _cleanupSuiteEntryRecords(record) {
+            if (!record || !Array.isArray(record.suiteEntries) || record.suiteEntries.length === 0) {
+                return;
+            }
+
+            let practiceRecords = await storage.get('practice_records', []);
+            if (!Array.isArray(practiceRecords) || practiceRecords.length === 0) {
+                return;
+            }
+
+            const entrySessionIds = new Set();
+            const entryExamIds = new Set();
+            const entryTimestamps = [];
+
+            record.suiteEntries.forEach((entry) => {
+                if (!entry || typeof entry !== 'object') {
+                    return;
+                }
+                if (entry.examId) {
+                    entryExamIds.add(entry.examId);
+                }
+                const raw = entry.rawData || {};
+                if (raw.sessionId) {
+                    entrySessionIds.add(raw.sessionId);
+                }
+                const ts = raw.completedAt || raw.endTime || raw.timestamp;
+                if (ts) {
+                    const parsed = new Date(ts).getTime();
+                    if (Number.isFinite(parsed)) {
+                        entryTimestamps.push(parsed);
+                    }
+                }
+            });
+
+            if (entrySessionIds.size === 0 && entryExamIds.size === 0) {
+                return;
+            }
+
+            const referenceTime = (() => {
+                if (entryTimestamps.length) {
+                    const sum = entryTimestamps.reduce((acc, value) => acc + value, 0);
+                    return sum / entryTimestamps.length;
+                }
+                const fallbackTs = new Date(record.endTime || record.date || record.createdAt || Date.now()).getTime();
+                return Number.isFinite(fallbackTs) ? fallbackTs : Date.now();
+            })();
+            const tolerance = 10 * 60 * 1000; // 10分钟
+
+            const isSuiteRecord = (rec) => {
+                if (!rec || typeof rec !== 'object') {
+                    return false;
+                }
+                if (rec.suiteMode) {
+                    return true;
+                }
+                const freq = String(rec.frequency || '').toLowerCase();
+                const metaFreq = String(rec.metadata && rec.metadata.frequency || '').toLowerCase();
+                return freq === 'suite' || metaFreq === 'suite';
+            };
+
+            const before = practiceRecords.length;
+            practiceRecords = practiceRecords.filter((rec) => {
+                if (!rec || typeof rec !== 'object') {
+                    return true;
+                }
+                if (rec.sessionId === record.sessionId) {
+                    return true; // 保留聚合记录
+                }
+                const sessionMatch = rec.sessionId && entrySessionIds.has(rec.sessionId);
+                if (sessionMatch) {
+                    return false;
+                }
+                if (isSuiteRecord(rec)) {
+                    return true;
+                }
+                const examMatch = rec.examId && entryExamIds.has(rec.examId);
+                if (!examMatch) {
+                    return true;
+                }
+                const recTime = new Date(rec.endTime || rec.date || rec.timestamp || rec.createdAt || Date.now()).getTime();
+                if (!Number.isFinite(recTime)) {
+                    return true;
+                }
+                const withinWindow = Math.abs(recTime - referenceTime) <= tolerance;
+                return !withinWindow;
+            });
+
+            if (practiceRecords.length !== before) {
+                await storage.set('practice_records', practiceRecords);
+                console.log(`[SuitePractice] 已清理 ${before - practiceRecords.length} 条套题子记录`);
+            }
         },
 
         async _updatePracticeRecordsState() {
@@ -593,7 +724,7 @@
 
             for (const entry of session.results) {
                 try {
-                    await this.saveRealPracticeData(entry.examId, entry.rawData);
+                    await this.saveRealPracticeData(entry.examId, entry.rawData, { forceIndividualSave: true });
                     this.updateExamStatus && this.updateExamStatus(entry.examId, 'completed');
                 } catch (error) {
                     console.error('[SuitePractice] 保存单篇记录失败:', error);
@@ -694,7 +825,7 @@
                         continue;
                     }
                     try {
-                        await this.saveRealPracticeData(entry.examId, entry.rawData);
+                        await this.saveRealPracticeData(entry.examId, entry.rawData, { forceIndividualSave: true });
                         this.updateExamStatus && this.updateExamStatus(entry.examId, 'completed');
                     } catch (error) {
                         console.error('[SuitePractice] 套题中断时保存记录失败:', error);
@@ -743,6 +874,10 @@
 
         _ensureSuiteWindowGuard(session, targetWindow) {
             if (!session || !targetWindow || targetWindow.closed) {
+                return;
+            }
+
+            if (isFileProtocol) {
                 return;
             }
 

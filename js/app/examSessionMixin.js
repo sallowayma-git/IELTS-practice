@@ -1,5 +1,6 @@
 (function(global) {
     const MAX_LEGACY_PRACTICE_RECORDS = 1000;
+    const isFileProtocol = !!(global && global.location && global.location.protocol === 'file:');
 
     async function getActiveExamIndexSnapshot() {
         const stateGetters = [
@@ -939,7 +940,8 @@
                 startTime: Date.now(),
                 status: 'active',
                 expectedSessionId: null,
-                origin: (typeof window !== 'undefined' && window.location) ? window.location.origin : ''
+                origin: (typeof window !== 'undefined' && window.location) ? window.location.origin : '',
+                suiteSessionId: (options && options.suiteSessionId) ? options.suiteSessionId : null
             });
 
             // 监听窗口关闭事件
@@ -974,31 +976,7 @@
                 console.warn('[App] 启动握手失败:', e);
             }
 
-            // 在部分浏览器中，跨源窗口不允许直接访问 addEventListener
-            try {
-                examWindow.addEventListener('load', () => {
-                    const windowInfo = this.ensureExamWindowSession(examId, examWindow);
-                    const suiteSessionId = typeof this._resolveSuiteSessionId === 'function'
-                        ? this._resolveSuiteSessionId(examId, windowInfo)
-                        : null;
-                    const initPayload = {
-                        examId: examId,
-                        parentOrigin: window.location.origin,
-                        sessionId: windowInfo.expectedSessionId,
-                        suiteSessionId: suiteSessionId
-                    };
-                    try {
-                        // 首选 0.2 的大写事件名，保证 practicePageEnhancer 能收到并设置 sessionId
-                        examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
-                        // 同时发一份旧事件名，兼容历史实现
-                        examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
-                    } catch (e) {
-                        console.warn('[App] 发送初始化消息失败:', e);
-                    }
-                });
-            } catch (error) {
-                // 跨域场景下直接访问 window.addEventListener 会抛出异常
-                // 退化为立即发送初始化消息，并依赖握手轮询维持同步
+            const emitInitEnvelope = () => {
                 const windowInfo = this.ensureExamWindowSession(examId, examWindow);
                 const suiteSessionId = typeof this._resolveSuiteSessionId === 'function'
                     ? this._resolveSuiteSessionId(examId, windowInfo)
@@ -1015,6 +993,17 @@
                 } catch (postError) {
                     console.warn('[App] 跨源初始化题目窗口失败:', postError);
                 }
+            };
+
+            if (!isFileProtocol) {
+                try {
+                    examWindow.addEventListener('load', emitInitEnvelope);
+                } catch (error) {
+                    console.warn('[App] 监听题目窗口 load 事件失败:', error);
+                    emitInitEnvelope();
+                }
+            } else {
+                emitInitEnvelope();
             }
 
             // 更新UI状态
@@ -1059,7 +1048,10 @@
                     'practice_progress': 'PROGRESS_UPDATE',
                     'SESSION_ERROR': 'ERROR_OCCURRED',
                     'session_error': 'ERROR_OCCURRED',
-                    'practice_error': 'ERROR_OCCURRED'
+                    'practice_error': 'ERROR_OCCURRED',
+                    'REQUEST_INIT': 'REQUEST_INIT',
+                    'request_init': 'REQUEST_INIT',
+                    'REQUEST_SESSION_INIT': 'REQUEST_INIT'
                 };
 
                 const allowedTypes = new Set([
@@ -1069,7 +1061,8 @@
                     'SESSION_READY',
                     'PROGRESS_UPDATE',
                     'PRACTICE_COMPLETE',
-                    'ERROR_OCCURRED'
+                    'ERROR_OCCURRED',
+                    'REQUEST_INIT'
                 ]);
 
                 const baseKeys = new Set(['type', 'messageType', 'action', 'event', 'data', 'payload', 'detail', 'args', 'source', 'message', 'messageData']);
@@ -1239,10 +1232,17 @@
                         this.handleProgressUpdate(examId, data);
                         break;
                     case 'PRACTICE_COMPLETE':
+                        if (data && data.suiteSessionId && windowInfo) {
+                            windowInfo.suiteSessionId = data.suiteSessionId;
+                            this.examWindows && this.examWindows.set(examId, windowInfo);
+                        }
                         await this.handlePracticeComplete(examId, data);
                         break;
                     case 'ERROR_OCCURRED':
                         this.handleDataCollectionError(examId, data);
+                        break;
+                    case 'REQUEST_INIT':
+                        sendInitEnvelope(event.source || examWindow);
                         break;
                     case 'SUITE_CLOSE_ATTEMPT':
                         console.warn('[SuitePractice] 练习页尝试关闭套题窗口:', data);
@@ -1280,7 +1280,7 @@
             };
 
             const tryAttachInitHandler = (targetWindow) => {
-                if (!targetWindow) {
+                if (!targetWindow || isFileProtocol) {
                     return false;
                 }
                 try {
@@ -1683,13 +1683,28 @@
             const payload = data && typeof data === 'object' ? data : {};
 
             // 更新会话状态
+            let windowInfo = null;
             if (this.examWindows && this.examWindows.has(examId)) {
-                const windowInfo = this.examWindows.get(examId);
+                windowInfo = this.examWindows.get(examId);
+            } else {
+                windowInfo = this.ensureExamWindowSession(examId);
+            }
+
+            if (windowInfo) {
                 windowInfo.dataCollectorReady = true;
                 if (payload.pageType) {
                     windowInfo.pageType = payload.pageType;
                 }
-                this.examWindows.set(examId, windowInfo);
+                if (payload.sessionId && windowInfo.expectedSessionId !== payload.sessionId) {
+                    windowInfo.expectedSessionId = payload.sessionId;
+                }
+                if (payload.suiteSessionId && !windowInfo.suiteSessionId) {
+                    windowInfo.suiteSessionId = payload.suiteSessionId;
+                }
+                if (payload.url) {
+                    windowInfo.latestUrl = payload.url;
+                }
+                this.examWindows && this.examWindows.set(examId, windowInfo);
             }
 
             if (this.suiteExamMap && this.suiteExamMap.has(examId) && typeof this._handleSuiteSessionReady === 'function') {
@@ -1697,6 +1712,26 @@
                     this._handleSuiteSessionReady(examId);
                 } catch (suiteReadyError) {
                     console.warn('[SuitePractice] 标记套题页面就绪失败:', suiteReadyError);
+                }
+            }
+
+            if (this.components
+                && this.components.practiceRecorder
+                && typeof this.components.practiceRecorder.handleSessionStarted === 'function') {
+                const recorderSessionId = (windowInfo && windowInfo.expectedSessionId) || payload.sessionId || this.generateSessionId(examId);
+                try {
+                    this.components.practiceRecorder.handleSessionStarted({
+                        examId,
+                        sessionId: recorderSessionId,
+                        metadata: {
+                            pageType: payload.pageType || null,
+                            url: payload.url || null,
+                            title: payload.title || null,
+                            suiteSessionId: payload.suiteSessionId || null
+                        }
+                    });
+                } catch (recorderError) {
+                    console.warn('[PracticeRecorder] 无法同步会话状态:', recorderError);
                 }
             }
 
@@ -1733,16 +1768,22 @@
          * 处理练习完成（真实数据）
          */
         async handlePracticeComplete(examId, data) {
+            if (data && !data.sessionId) {
+                data.sessionId = `${examId}_${Date.now()}`;
+            }
 
+            let suiteHandlerDeclined = false;
             if (this.suiteExamMap && this.suiteExamMap.has(examId) && typeof this.handleSuitePracticeComplete === 'function') {
                 try {
                     const handled = await this.handleSuitePracticeComplete(examId, data);
                     if (handled) {
                         return;
                     }
+                    suiteHandlerDeclined = true;
                 } catch (suiteError) {
                     console.error('[SuitePractice] 处理套题结果失败，回退至普通流程:', suiteError);
                     window.showMessage && window.showMessage('套题模式出现异常，记录将以单篇形式保存。', 'warning');
+                    suiteHandlerDeclined = true;
                 }
             }
 
@@ -1750,13 +1791,24 @@
                 && this.components.practiceRecorder
                 && typeof this.components.practiceRecorder.savePracticeRecord === 'function';
 
-            if (recorderAvailable) {
-                return;
-            }
-
             try {
-                // 直接保存真实数据（采用旧版本的简单方式）
-                await this.saveRealPracticeData(examId, data);
+                if (recorderAvailable) {
+                    try {
+                        const normalizedData = suiteHandlerDeclined
+                            ? Object.assign({}, data, {
+                                allowStandaloneSave: true,
+                                metadata: Object.assign({}, data?.metadata || {}, { allowStandaloneSave: true, suiteFallback: true })
+                            })
+                            : data;
+                        await this.components.practiceRecorder.savePracticeRecord(examId, normalizedData);
+                    } catch (recErr) {
+                        console.warn('[DataCollection] PracticeRecorder 保存失败，改用降级存储:', recErr);
+                        await this.saveRealPracticeData(examId, data, { savingAsFallback: true });
+                    }
+                } else {
+                    // 直接保存真实数据（采用旧版本的简单方式）
+                    await this.saveRealPracticeData(examId, data, { savingAsFallback: true });
+                }
 
                 // 刷新内存中的练习记录，确保无需手动刷新即可看到
                 try {
@@ -1853,8 +1905,95 @@
         /**
          * 保存真实练习数据（采用旧版本的简单直接方式）
          */
-        async saveRealPracticeData(examId, realData) {
+        async saveRealPracticeData(examId, realData, options = {}) {
             try {
+                const normalizeKey = (rawKey) => {
+                    if (rawKey == null) return null;
+                    const s = String(rawKey).trim();
+                    if (!s) return null;
+                    const range = s.match(/^q?(\d+)\s*-\s*(\d+)$/i);
+                    if (range) return `q${range[1]}-${range[2]}`;
+                    if (/^q\d+$/i.test(s)) return s.toLowerCase();
+                    if (/^\d+$/.test(s)) return `q${s}`;
+                    return s;
+                };
+
+                const normalizeValue = (value) => {
+                    if (value == null) return '';
+                    if (typeof value === 'boolean') {
+                        return value ? 'True' : 'False';
+                    }
+                    if (Array.isArray(value)) {
+                        const tokens = value
+                            .map(v => String(v).trim())
+                            .filter(Boolean)
+                            .map(v => v.toUpperCase());
+                        return Array.from(new Set(tokens)).sort().join(', ');
+                    }
+                    if (typeof value === 'object') {
+                        if (value.answer != null) return normalizeValue(value.answer);
+                        if (value.value != null) return normalizeValue(value.value);
+                        try {
+                            const json = JSON.stringify(value);
+                            return json === '{}' || json === '[]' ? '' : json;
+                        } catch (_) {
+                            return '';
+                        }
+                    }
+                    return String(value).trim();
+                };
+
+                const normalizeAnswerMap = (raw) => {
+                    const map = {};
+                    if (!raw) return map;
+                    if (Array.isArray(raw)) {
+                        raw.forEach((entry, idx) => {
+                            if (!entry) return;
+                            const k = normalizeKey(entry.questionId || `q${idx + 1}`);
+                            const v = normalizeValue(entry.answer ?? entry.userAnswer ?? entry.value ?? entry);
+                            if (k) map[k] = v;
+                        });
+                        return map;
+                    }
+                    Object.entries(raw).forEach(([rk, rv]) => {
+                        const k = normalizeKey(rk);
+                        const v = normalizeValue(rv && typeof rv === 'object' && 'answer' in rv ? rv.answer : rv);
+                        if (k) map[k] = v;
+                    });
+                    return map;
+                };
+
+                const normalizedAnswers = normalizeAnswerMap(realData?.answers);
+                const normalizedCorrectMap = normalizeAnswerMap(realData?.correctAnswers);
+
+                const forceIndividualSave = Boolean(options && options.forceIndividualSave);
+                const suiteSessionId = realData?.suiteSessionId
+                    || realData?.metadata?.suiteSessionId
+                    || realData?.scoreInfo?.suiteSessionId
+                    || null;
+                const normalizedPracticeMode = String(realData?.practiceMode || realData?.metadata?.practiceMode || '').toLowerCase();
+                const normalizedFrequency = String(realData?.frequency || realData?.metadata?.frequency || '').toLowerCase();
+                const hasSuiteMapping = Boolean(this.suiteExamMap && this.suiteExamMap.has(examId));
+                const hasSuiteEntries = Array.isArray(realData?.suiteEntries) && realData.suiteEntries.length > 0;
+                const aggregatePayload = hasSuiteEntries || Array.isArray(realData?.metadata?.suiteEntries);
+                const isSuiteFlow = Boolean(
+                    suiteSessionId
+                    || realData?.suiteMode
+                    || normalizedPracticeMode === 'suite'
+                    || normalizedFrequency === 'suite'
+                    || hasSuiteMapping
+                );
+                const savingAsFallback = Boolean(options && options.savingAsFallback);
+
+                if (!savingAsFallback) {
+                    if (isSuiteFlow && !aggregatePayload && !forceIndividualSave) {
+                        console.log('[DataCollection] 套题模式结果由套题流程接管，跳过单篇降级保存:', {
+                            examId,
+                            suiteSessionId: suiteSessionId || null
+                        });
+                        return;
+                    }
+                }
 
                 const exam = await findExamDefinition(examId);
 
@@ -1878,8 +2017,8 @@
                        accuracy: realData.scoreInfo?.accuracy || 0,
                        percentage: realData.scoreInfo?.percentage || 0,
                        duration: realData.duration,
-                       answers: realData.answers,
-                       correctAnswers: realData.correctAnswers || {},
+                       answers: normalizedAnswers,
+                       correctAnswers: normalizedCorrectMap,
                        answerHistory: realData.answerHistory,
                        interactions: realData.interactions,
                        isRealData: true,
@@ -1907,7 +2046,7 @@
                     practiceRecord.totalQuestions = total;
                     practiceRecord.accuracy = acc;
                     practiceRecord.percentage = pct;
-                    practiceRecord.answers = realData.answers || {};
+                    practiceRecord.answers = normalizedAnswers;
                     practiceRecord.startTime = new Date((realData.startTime ?? (Date.now() - (realData.duration || 0) * 1000))).toISOString();
                     practiceRecord.endTime = new Date((realData.endTime ?? Date.now())).toISOString();
 

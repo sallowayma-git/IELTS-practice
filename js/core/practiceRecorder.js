@@ -207,7 +207,7 @@ class PracticeRecorder {
      * 初始化练习记录器
      */
     async initialize() {
-        console.log('PracticeRecorder initialized');
+        console.log('[PracticeRecorder] 初始化完成');
 
         // 恢复活动会话
         await this.restoreActiveSessions();
@@ -942,11 +942,24 @@ class PracticeRecorder {
             || this.lookupExamIndexEntry(payload.derivedExamId);
         const type = this.resolvePracticeType({ ...session, examId: resolvedExamId }, examEntry);
         const recordDate = this.resolveRecordDate({ ...session, endTime: resolvedEndTime }, resolvedEndTime);
-        const metadata = this.buildRecordMetadata(
+        let metadata = this.buildRecordMetadata(
             { ...session, examId: resolvedExamId, metadata: Object.assign({}, session.metadata, results?.metadata || {}) },
             examEntry,
             type
         );
+        let suiteSessionId = payload.suiteSessionId
+            || metadata?.suiteSessionId
+            || session?.metadata?.suiteSessionId
+            || null;
+        if (!suiteSessionId) {
+            suiteSessionId = this.resolveSuiteSessionFromApp(resolvedExamId);
+        }
+        if (suiteSessionId && !metadata.suiteSessionId) {
+            metadata = Object.assign({}, metadata, { suiteSessionId });
+        }
+        if (suiteSessionId && !metadata.practiceMode) {
+            metadata = Object.assign({}, metadata, { practiceMode: 'suite' });
+        }
 
         const answerMap = this.mergeAnswerSources(
             results?.answerMap,
@@ -1000,6 +1013,7 @@ class PracticeRecorder {
             scoreInfo,
             questionTypePerformance: results?.questionTypePerformance || {},
             metadata,
+            suiteSessionId,
             createdAt: resolvedEndTime,
             realData: Object.assign({}, results?.realData || {}, {
                 answers: answerMap,
@@ -1014,6 +1028,23 @@ class PracticeRecorder {
         if (normalizedComparison && Object.keys(normalizedComparison).length > 0) {
             practiceRecord.answerComparison = normalizedComparison;
             practiceRecord.realData.answerComparison = normalizedComparison;
+        }
+
+        const allowSuiteStandaloneSave = payload?.allowStandaloneSave
+            || results?.allowStandaloneSave
+            || metadata?.allowStandaloneSave;
+
+        if (suiteSessionId && !allowSuiteStandaloneSave) {
+            console.log(`[PracticeRecorder] 套题模式条目 ${resolvedExamId} 属于 ${suiteSessionId}，跳过单篇记录保存。`);
+            if (!syntheticSession && this.activeSessions.has(resolvedExamId)) {
+                this.endPracticeSession(resolvedExamId);
+            }
+            return practiceRecord;
+        }
+
+        if (suiteSessionId && allowSuiteStandaloneSave && metadata && !metadata.suiteFallback) {
+            metadata = Object.assign({}, metadata, { suiteFallback: true });
+            practiceRecord.metadata = metadata;
         }
 
         try {
@@ -1032,8 +1063,46 @@ class PracticeRecorder {
         } catch (error) {
             console.error('[PracticeRecorder] 处理完成会话时出错:', error);
             await this.saveToTemporaryStorage(practiceRecord);
+            if (!syntheticSession && this.activeSessions.has(resolvedExamId)) {
+                this.endPracticeSession(resolvedExamId, 'save_failed');
+            }
             return practiceRecord;
         }
+    }
+
+    resolveSuiteSessionFromApp(examId) {
+        if (!examId) {
+            return null;
+        }
+        try {
+            const appInstance = typeof window !== 'undefined' ? window.app : null;
+            if (!appInstance) {
+                return null;
+            }
+            if (appInstance.suiteExamMap && typeof appInstance.suiteExamMap.get === 'function') {
+                const mappedId = appInstance.suiteExamMap.get(examId);
+                if (mappedId) {
+                    return mappedId;
+                }
+            }
+            const currentSession = appInstance.currentSuiteSession;
+            if (currentSession && Array.isArray(currentSession.sequence)) {
+                const match = currentSession.sequence.find(entry => entry && entry.examId === examId);
+                if (match && currentSession.id) {
+                    return currentSession.id;
+                }
+            }
+            const stateSuite = appInstance.state && appInstance.state.suite;
+            if (stateSuite && Array.isArray(stateSuite.sequence)) {
+                const match = stateSuite.sequence.find(entry => entry && entry.examId === examId);
+                if (match && stateSuite.sessionId) {
+                    return stateSuite.sessionId;
+                }
+            }
+        } catch (error) {
+            console.warn('[PracticeRecorder] 无法从应用状态解析套题会话:', error);
+        }
+        return null;
     }
 
     /**
@@ -1258,7 +1327,15 @@ class PracticeRecorder {
                 console.warn('[PracticeRecorder] ScoreStorage不可用，使用降级保存');
                 throw new Error('ScoreStorage not available');
             } catch (error) {
-                console.error(`[PracticeRecorder] ScoreStorage保存失败 (尝试 ${attempt}):`, error);
+                console.error(
+                    `[PracticeRecorder] ScoreStorage保存失败 (尝试 ${attempt}):`,
+                    {
+                        error: error?.message,
+                        validationErrors: error?.validationErrors || null,
+                        recordSummary: this.buildRecordLogSummary(storageReadyRecord)
+                    },
+                    error
+                );
 
                 if (attempt === maxRetries || this.isCriticalError(error)) {
                     return await this.fallbackSavePracticeRecord(record);
@@ -1314,7 +1391,11 @@ class PracticeRecorder {
             await this.updateUserStatsManually(standardizedRecord);
             return standardizedRecord;
         } catch (error) {
-            console.error('[PracticeRecorder] 降级保存失败:', error);
+            console.error('[PracticeRecorder] 降级保存失败:', {
+                error: error?.message,
+                validationErrors: error?.validationErrors || null,
+                recordSummary: this.buildRecordLogSummary(record)
+            }, error);
             await this.saveToTemporaryStorage(record);
             throw new Error(`All save methods failed: ${error.message}`);
         }
@@ -1447,6 +1528,21 @@ class PracticeRecorder {
 
     wait(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    buildRecordLogSummary(record) {
+        if (!record || typeof record !== 'object') {
+            return null;
+        }
+        return {
+            id: record.id,
+            examId: record.examId,
+            type: record.type || record.metadata?.type || null,
+            status: record.status,
+            totalQuestions: record.totalQuestions,
+            correctAnswers: record.correctAnswers,
+            correctAnswersType: typeof record.correctAnswers
+        };
     }
 
     prepareRecordForStorage(record) {
