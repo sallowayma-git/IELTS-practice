@@ -559,6 +559,36 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("套题模式内联注入测试", False, "测试脚本缺失"))
         all_passed = False
 
+    # Full library record matching test
+    full_library_test = REPO_ROOT / "developer" / "tests" / "js" / "fullLibraryRecordMatching.test.js"
+    if full_library_test.exists():
+        try:
+            completed_full_lib = subprocess.run(
+                ["node", str(full_library_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            full_lib_passed = False
+            full_lib_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_full_lib_output = completed_full_lib.stdout.strip() or completed_full_lib.stderr.strip()
+            try:
+                full_lib_payload = json.loads(raw_full_lib_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                full_lib_passed = False
+                full_lib_detail = f"输出解析失败: {parse_error}"
+            else:
+                full_lib_passed = full_lib_payload.get("status") == "pass"
+                full_lib_detail = full_lib_payload.get("detail", full_lib_payload)
+        results.append(_format_result("全量题库记录匹配测试", full_lib_passed, full_lib_detail))
+        all_passed &= full_lib_passed
+    else:
+        results.append(_format_result("全量题库记录匹配测试", False, "测试脚本缺失"))
+        all_passed = False
+
     return results, all_passed
 
 
