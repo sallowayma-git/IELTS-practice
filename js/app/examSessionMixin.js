@@ -1974,12 +1974,16 @@
                     || normalizedFrequency === 'suite'
                     || hasSuiteMapping
                 );
-                if (isSuiteFlow && !aggregatePayload && !forceIndividualSave) {
-                    console.log('[DataCollection] 套题模式结果由套题流程接管，跳过单篇降级保存:', {
-                        examId,
-                        suiteSessionId: suiteSessionId || null
-                    });
-                    return;
+                const savingAsFallback = Boolean(options && options.savingAsFallback);
+
+                if (!savingAsFallback) {
+                    if (isSuiteFlow && !aggregatePayload && !forceIndividualSave) {
+                        console.log('[DataCollection] 套题模式结果由套题流程接管，跳过单篇降级保存:', {
+                            examId,
+                            suiteSessionId: suiteSessionId || null
+                        });
+                        return;
+                    }
                 }
 
                 const exam = await findExamDefinition(examId);
