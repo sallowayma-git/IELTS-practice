@@ -467,7 +467,7 @@
 
             if (recorderAvailable) {
                 try {
-                    await this.components.practiceRecorder.savePracticeRecord(record.examId, record);
+                    await this.components.practiceRecorder.savePracticeRecord(record);
                     await this._cleanupSuiteEntryRecords(record).catch(error => {
                         console.warn('[SuitePractice] 清理套题子记录失败:', error);
                     });
