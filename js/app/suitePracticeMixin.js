@@ -461,6 +461,26 @@
         },
 
         async _saveSuitePracticeRecord(record) {
+            const recorderAvailable = this.components
+                && this.components.practiceRecorder
+                && typeof this.components.practiceRecorder.savePracticeRecord === 'function';
+
+            if (recorderAvailable) {
+                try {
+                    await this.components.practiceRecorder.savePracticeRecord(record.examId, record);
+                    await this._cleanupSuiteEntryRecords(record).catch(error => {
+                        console.warn('[SuitePractice] 清理套题子记录失败:', error);
+                    });
+                    return;
+                } catch (error) {
+                    console.warn('[SuitePractice] PracticeRecorder 保存套题记录失败，改用降级存储:', error);
+                }
+            }
+
+            await this._saveSuitePracticeRecordFallback(record);
+        },
+
+        async _saveSuitePracticeRecordFallback(record) {
             let practiceRecords = await storage.get('practice_records', []);
             if (!Array.isArray(practiceRecords)) {
                 practiceRecords = [];
