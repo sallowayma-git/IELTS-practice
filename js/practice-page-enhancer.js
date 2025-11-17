@@ -306,6 +306,46 @@
         isInitialized: false,
         initRequestTimer: null,
 
+        normalizeQuestionKey: function(rawKey) {
+            if (rawKey == null) return null;
+            const str = String(rawKey).trim();
+            if (!str) return null;
+
+            const rangeMatch = str.match(/^q?(\d+)\s*-\s*(\d+)$/i);
+            if (rangeMatch) {
+                return `q${rangeMatch[1]}-${rangeMatch[2]}`;
+            }
+
+            if (/^q\d+$/i.test(str)) return str.toLowerCase();
+            if (/^\d+$/.test(str)) return `q${str}`;
+            return str;
+        },
+
+        normalizeAnswerTokens: function(value) {
+            if (value == null) return null;
+
+            const tokens = [];
+            const pushToken = (token) => {
+                const normalized = String(token).trim().toLowerCase();
+                if (normalized) tokens.push(normalized);
+            };
+
+            const handleItem = (item) => {
+                if (item == null) return;
+                if (Array.isArray(item)) {
+                    item.forEach(handleItem);
+                    return;
+                }
+                const str = String(item);
+                str.split(/[,，|]/).forEach(part => {
+                    part.split(/\s+/).forEach(sub => pushToken(sub));
+                });
+            };
+
+            handleItem(value);
+            return tokens.length > 0 ? Array.from(new Set(tokens)).sort() : null;
+        },
+
         initialize: function () {
             if (this.isInitialized) {
                 console.log('[PracticeEnhancer] 已经初始化，跳过');
@@ -634,7 +674,12 @@
                     const extractedAnswers = extractor.extractFromPage(document);
                     
                     if (extractedAnswers && Object.keys(extractedAnswers).length > 0) {
-                        this.correctAnswers = extractedAnswers;
+                        const normalized = {};
+                        Object.keys(extractedAnswers).forEach((key) => {
+                            const normalizedKey = this.normalizeQuestionKey(key) || key;
+                            normalized[normalizedKey] = extractedAnswers[key];
+                        });
+                        this.correctAnswers = normalized;
                         console.log('[PracticeEnhancer] 使用提取器成功获得正确答案:', this.correctAnswers);
                     } else {
                         console.warn('[PracticeEnhancer] 提取器未找到答案，使用备用方法');
@@ -667,10 +712,7 @@
                     Object.keys(window[source]).forEach(key => {
                         const value = window[source][key];
                         if (value !== undefined && value !== null) {
-                            let normalizedKey = key;
-                            if (!normalizedKey.startsWith('q') && /^\d+$/.test(normalizedKey)) {
-                                normalizedKey = 'q' + normalizedKey;
-                            }
+                            const normalizedKey = this.normalizeQuestionKey(key) || key;
                             this.correctAnswers[normalizedKey] = String(value).trim();
                         }
                     });
@@ -706,7 +748,8 @@
                                         element.textContent.trim();
                     
                     if (questionId && correctAnswer) {
-                        self.correctAnswers[questionId] = correctAnswer;
+                        const normalizedKey = self.normalizeQuestionKey(questionId) || questionId;
+                        self.correctAnswers[normalizedKey] = correctAnswer;
                     }
                 }
             }
@@ -747,10 +790,9 @@
                         console.log('[PracticeEnhancer] 处理行:', questionText, userAnswer, correctAnswer);
                         
                         // 提取问题编号
-                        const questionMatch = questionText.match(/(\d+)/);
+                        const questionMatch = questionText.match(/(\d+\s*-\s*\d+|\d+)/);
                         if (questionMatch && correctAnswer && correctAnswer !== 'N/A' && correctAnswer !== '') {
-                            const questionNum = questionMatch[1];
-                            const questionKey = 'q' + questionNum;
+                            const questionKey = this.normalizeQuestionKey(questionMatch[1]) || questionMatch[1];
                             this.correctAnswers[questionKey] = correctAnswer;
                             
                             // 同时更新用户答案，确保数据一致性
@@ -870,13 +912,27 @@
 
             // 记录答案
             if (questionId && value !== null && value !== '') {
-                this.answers[questionId] = value;
-                console.log('[PracticeEnhancer] 记录答案:', questionId, '=', value);
+                const normalizedKey = this.normalizeQuestionKey(questionId) || questionId;
+                if (element.type === 'checkbox') {
+                    const siblings = Array.from(document.querySelectorAll(`input[type="checkbox"][name="${element.name}"]`));
+                    const selections = siblings
+                        .filter(cb => cb.checked)
+                        .map(cb => String(cb.value).trim().toUpperCase())
+                        .filter(Boolean);
+                    if (selections.length > 0) {
+                        const uniq = Array.from(new Set(selections)).sort();
+                        this.answers[normalizedKey] = uniq;
+                        console.log('[PracticeEnhancer] 记录多选答案:', normalizedKey, '=', uniq.join(','));
+                    }
+                } else {
+                    this.answers[normalizedKey] = value;
+                    console.log('[PracticeEnhancer] 记录答案:', normalizedKey, '=', value);
+                }
                 
                 // 记录交互
                 this.interactions.push({
                     type: 'answer',
-                    questionId: questionId,
+                    questionId: normalizedKey,
                     value: value,
                     timestamp: Date.now(),
                     elementType: element.type || element.tagName.toLowerCase()
@@ -1056,7 +1112,20 @@
                 .filter(el => !this.isExcludedControl(el));
             console.log('[PracticeEnhancer] 找到输入元素总数:', allInputs.length);
             
+            const checkboxGroups = {};
+
             allInputs.forEach((input, index) => {
+                if (input.type === 'checkbox' && input.name) {
+                    const key = this.normalizeQuestionKey(input.name) || input.name;
+                    if (!checkboxGroups[key]) {
+                        checkboxGroups[key] = [];
+                    }
+                    if (input.checked) {
+                        checkboxGroups[key].push(input.value);
+                    }
+                    return;
+                }
+
                 const questionId = this.getQuestionId(input);
                 const value = this.getInputValue(input);
 
@@ -1067,8 +1136,17 @@
                 console.log(`[PracticeEnhancer] 输入元素 ${index}: type=${input.type}, name=${input.name}, id=${input.id}, value=${value}, questionId=${questionId}`);
                 
                 if (questionId && value !== null && value !== '') {
-                    this.answers[questionId] = value;
-                    console.log(`[PracticeEnhancer] 记录答案: ${questionId} = ${value}`);
+                    const normalizedKey = this.normalizeQuestionKey(questionId) || questionId;
+                    this.answers[normalizedKey] = value;
+                    console.log(`[PracticeEnhancer] 记录答案: ${normalizedKey} = ${value}`);
+                }
+            });
+
+            Object.keys(checkboxGroups).forEach(key => {
+                const normalizedSelections = this.normalizeAnswerTokens(checkboxGroups[key]);
+                if (normalizedSelections && normalizedSelections.length > 0) {
+                    this.answers[key] = normalizedSelections;
+                    console.log(`[PracticeEnhancer] 汇总多选答案: ${key} = ${normalizedSelections.join(',')}`);
                 }
             });
 
@@ -1083,8 +1161,9 @@
                 const questionId = element.dataset.question || element.dataset.for || element.id;
                 const answer = element.dataset.answer || element.dataset.userAnswer || element.dataset.value;
                 if (questionId && answer) {
-                    this.answers[questionId] = answer;
-                    console.log(`[PracticeEnhancer] 记录data答案: ${questionId} = ${answer}`);
+                    const normalizedKey = this.normalizeQuestionKey(questionId) || questionId;
+                    this.answers[normalizedKey] = answer;
+                    console.log(`[PracticeEnhancer] 记录data答案: ${normalizedKey} = ${answer}`);
                 }
             });
 
@@ -1157,8 +1236,9 @@
                     const value = this.getInputValue(input);
                     
                     if (value !== null && value !== '') {
-                        this.answers[questionId] = value;
-                        console.log(`[PracticeEnhancer] 从容器收集答案: ${questionId} = ${value}`);
+                        const normalizedKey = this.normalizeQuestionKey(questionId) || questionId;
+                        this.answers[normalizedKey] = value;
+                        console.log(`[PracticeEnhancer] 从容器收集答案: ${normalizedKey} = ${value}`);
                     }
                 });
             });
@@ -1193,7 +1273,7 @@
                 });
                 
                 if (orderedAnswers.length > 0) {
-                    const questionId = container.dataset.question || 'ordering';
+                    const questionId = this.normalizeQuestionKey(container.dataset.question) || container.dataset.question || 'ordering';
                     this.answers[questionId] = orderedAnswers.join(',');
                 }
             });
@@ -1309,13 +1389,25 @@
         },
 
         compareAnswers: function (userAnswer, correctAnswer) {
-            if (!userAnswer || !correctAnswer) {
+            const userTokens = this.normalizeAnswerTokens(userAnswer);
+            const correctTokens = this.normalizeAnswerTokens(correctAnswer);
+
+            if (!userTokens || !correctTokens) {
                 return false;
             }
-            
-            // 标准化答案进行比较
-            const normalize = (str) => String(str).trim().toLowerCase();
-            return normalize(userAnswer) === normalize(correctAnswer);
+
+            if (userTokens.length !== correctTokens.length) {
+                return false;
+            }
+
+            const correctSet = new Set(correctTokens);
+            for (const token of userTokens) {
+                if (!correctSet.has(token)) {
+                    return false;
+                }
+            }
+
+            return true;
         },
 
         extractScore: function () {
