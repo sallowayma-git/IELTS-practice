@@ -39,8 +39,15 @@
         <!-- 题库浏览页面 -->
         <div id="browse-view" class="view">
 
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <h2 id="browse-title">📚 题库浏览</h2>
+            <div class="browse-title-bar">
+                <button class="browse-title-trigger" id="browse-title-trigger" type="button" aria-haspopup="true" aria-expanded="false" title="列表偏好">📚</button>
+                <h2 id="browse-title">题库浏览</h2>
+                <div class="browse-preference-panel" id="browse-preference-panel" hidden>
+                    <label class="browse-preference-option">
+                        <input type="checkbox" id="browse-remember-position">
+                        <span class="browse-preference-text">列表位置记录</span>
+                    </label>
+                </div>
                 <div id="type-filter-buttons">
                     <button class="btn btn-sm" onclick="filterByType('all')">全部</button>
                     <button class="btn btn-sm" onclick="filterByType('reading')">阅读</button>
@@ -180,12 +187,15 @@
                 <div class="tool-card-icon">🧠</div>
                 <div class="tool-card-content">
                     <h3>单词背诵</h3>
-                    <p>即将上线的核心词汇练习入口，敬请期待更多记忆工具。</p>
+                    <p>本地 Leitner 分箱 + 艾宾浩斯复习节奏，随时继续你的词汇任务。</p>
                 </div>
-                <div class="tool-card-arrow">预告</div>
+                <div class="tool-card-arrow">进入</div>
             </button>
         </div>
     </div>
+    <section id="vocab-view" class="view" data-view="vocab" hidden>
+        <div class="vocab-view-shell" data-vocab-role="root"></div>
+    </section>
     </div>
 
     <div id="fullscreen-clock-overlay" class="clock-overlay is-hidden" role="dialog" aria-modal="true"
@@ -371,6 +381,10 @@
         </div>
     </div>
 
+    <!-- 环境探测 -->
+    <script src="js/utils/logger.js"></script>
+    <script src="js/utils/environmentDetector.js"></script>
+
     <!-- 加载完整题库数据 -->
     <script src="assets/scripts/complete-exam-data.js"></script>
     <script src="assets/scripts/listening-exam-data.js"></script>
@@ -389,6 +403,11 @@
     <script src="js/data/index.js"></script>
     <script src="js/utils/stateSerializer.js"></script>
     <script src="js/utils/simpleStorageWrapper.js"></script>
+    <script src="js/utils/vocabDataIO.js"></script>
+    <script src="js/core/vocabScheduler.js"></script>
+    <script src="js/core/vocabStore.js"></script>
+    <script src="js/components/vocabDashboardCards.js"></script>
+    <script src="js/components/vocabSessionView.js"></script>
     <script src="js/utils/dataBackupManager.js"></script>
     <script src="js/components/dataManagementPanel.js"></script>
 
@@ -397,7 +416,7 @@
       // 确保存储初始化完成后设置命名空间
       if (window.storage && typeof window.storage.setNamespace === 'function') {
         window.storage.setNamespace('exam_system');
-        console.log('主页面已设置共享命名空间: exam_system');
+        console.log('[System] 主页面已设置共享命名空间: exam_system');
 
         // 验证命名空间设置是否生效
         setTimeout(() => {
@@ -426,6 +445,7 @@
 
     <!-- 加载核心组件 -->
     <script src="js/core/scoreStorage.js"></script>
+    <script src="js/utils/answerSanitizer.js"></script>
     <script src="js/core/practiceRecorder.js"></script>
     <script src="js/core/legacyStateBridge.js"></script>
     <script src="js/utils/legacyStateAdapter.js"></script>
@@ -437,13 +457,13 @@
     <script src="js/components/DataIntegrityManager.js"></script>
     <script src="js/components/BrowseStateManager.js"></script>
 
-    <!-- 新增的 Markdown 导出和记录详情功能 -->
+    <!-- Markdown 导出和记录详情功能 -->
     <!--  -->
     <script src="js/utils/dataConsistencyManager.js"></script>
+    <script src="js/utils/answerComparisonUtils.js"></script>
     <script src="js/utils/markdownExporter.js"></script>
     <script src="js/components/practiceRecordModal.js"></script>
     <script src="js/components/practiceHistoryEnhancer.js"></script>
-    <!-- componentChecker.js 已集成到 app.js -->
     <script src="js/theme-switcher.js"></script>
     <script src="js/utils/themeManager.js"></script>
 

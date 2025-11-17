@@ -490,7 +490,23 @@
         title.appendChild(document.createTextNode(exam.title || ''));
 
         var meta = this._createElement('div', { className: 'exam-meta' });
-        meta.textContent = (exam.category || '') + ' | ' + (exam.type || '');
+        var metaText;
+        if (typeof window !== 'undefined' && typeof window.formatExamMetaText === 'function') {
+            metaText = window.formatExamMetaText(exam);
+        } else {
+            var fallbackParts = [];
+            if (exam && typeof exam.sequenceNumber === 'number') {
+                fallbackParts.push(String(exam.sequenceNumber));
+            }
+            if (exam && exam.category) {
+                fallbackParts.push(exam.category);
+            }
+            if (exam && exam.type) {
+                fallbackParts.push(exam.type);
+            }
+            metaText = fallbackParts.join(' | ');
+        }
+        meta.textContent = metaText;
 
         infoContent.appendChild(title);
         infoContent.appendChild(meta);
@@ -818,7 +834,8 @@
             navButtonSelector: options.navButtonSelector || '.nav-btn[data-view]',
             activeClass: options.activeClass || 'active',
             syncOnNavigate: options.syncOnNavigate !== false,
-            onNavigate: typeof options.onNavigate === 'function' ? options.onNavigate : null
+            onNavigate: typeof options.onNavigate === 'function' ? options.onNavigate : null,
+            onRepeatNavigate: typeof options.onRepeatNavigate === 'function' ? options.onRepeatNavigate : null
         };
         this.container = options.container || null;
         this._boundClickHandler = this._handleClick.bind(this);
@@ -834,7 +851,8 @@
             navButtonSelector: options.navButtonSelector || this.options.navButtonSelector,
             activeClass: options.activeClass || this.options.activeClass,
             syncOnNavigate: options.syncOnNavigate === undefined ? this.options.syncOnNavigate : options.syncOnNavigate,
-            onNavigate: typeof options.onNavigate === 'function' ? options.onNavigate : this.options.onNavigate
+            onNavigate: typeof options.onNavigate === 'function' ? options.onNavigate : this.options.onNavigate,
+            onRepeatNavigate: typeof options.onRepeatNavigate === 'function' ? options.onRepeatNavigate : this.options.onRepeatNavigate
         });
         if (options.container) {
             this.container = options.container;
@@ -946,8 +964,23 @@
             return;
         }
 
+        var activeClass = this.options.activeClass || 'active';
+        var alreadyActive = false;
+        if (target.classList && target.classList.contains(activeClass)) {
+            alreadyActive = true;
+        } else if (typeof target.className === 'string') {
+            alreadyActive = new RegExp('(?:^|\\s)' + activeClass + '(?:$|\\s)').test(target.className);
+        }
+
         event.preventDefault();
         this.navigate(viewName, event);
+        if (alreadyActive && typeof this.options.onRepeatNavigate === 'function') {
+            try {
+                this.options.onRepeatNavigate(viewName, event);
+            } catch (repeatError) {
+                console.warn('[LegacyNavigationController] onRepeatNavigate 执行失败', repeatError);
+            }
+        }
         if (this.options.syncOnNavigate !== false) {
             this.syncActive(viewName);
         }
