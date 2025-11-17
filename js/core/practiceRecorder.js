@@ -1406,19 +1406,20 @@ class PracticeRecorder {
      */
     standardizeRecordForFallback(recordData) {
         const now = new Date().toISOString();
+        const resolvedExamId = this.inferExamId(recordData);
         const endTime = recordData.endTime && !Number.isNaN(new Date(recordData.endTime).getTime())
             ? new Date(recordData.endTime).toISOString()
             : now;
-        const examEntry = this.lookupExamIndexEntry(recordData.examId);
+        const examEntry = this.lookupExamIndexEntry(resolvedExamId);
         const inferredType = this.normalizePracticeType(
             recordData.type
             || recordData.metadata?.type
             || examEntry?.type
-            || (recordData.examId && String(recordData.examId).toLowerCase().includes('listening') ? 'listening' : null)
+            || (resolvedExamId && String(resolvedExamId).toLowerCase().includes('listening') ? 'listening' : null)
         ) || 'reading';
         const metadata = this.buildRecordMetadata(
             {
-                examId: recordData.examId,
+                examId: resolvedExamId,
                 metadata: recordData.metadata
             },
             examEntry,
@@ -1427,7 +1428,7 @@ class PracticeRecorder {
         const recordDate = recordData.date
             || this.resolveRecordDate(
                 {
-                    examId: recordData.examId,
+                    examId: resolvedExamId,
                     startTime: recordData.startTime,
                     endTime,
                     metadata: recordData.metadata
@@ -1452,7 +1453,7 @@ class PracticeRecorder {
         return {
             // 基础信息
             id: recordData.id || this.generateRecordId(),
-            examId: recordData.examId,
+            examId: resolvedExamId,
             sessionId: recordData.sessionId,
             title: resolvedTitle,
 
@@ -1550,6 +1551,13 @@ class PracticeRecorder {
             return record;
         }
         const clone = Object.assign({}, record);
+        if (!clone.examId) {
+            const inferredExamId = this.inferExamId(record);
+            if (inferredExamId) {
+                clone.examId = inferredExamId;
+                clone.metadata = Object.assign({}, clone.metadata || {}, { examId: inferredExamId });
+            }
+        }
         // normalizeAnswerMap 已经自动过滤噪声键和无效值
         const answerMap = (record.answers && typeof record.answers === 'object' && !Array.isArray(record.answers))
             ? this.normalizeAnswerMap(record.answers)
@@ -1900,11 +1908,35 @@ class PracticeRecorder {
         }
     }
 
+    generateRecordId() {
+        if (this.scoreStorage && typeof this.scoreStorage.generateRecordId === 'function') {
+            return this.scoreStorage.generateRecordId();
+        }
+        return `record_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
+
     /**
      * 生成会话ID
      */
     generateSessionId() {
         return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
+
+    extractExamIdFromRecordId(recordId) {
+        if (typeof recordId !== 'string') return null;
+        const match = recordId.match(/^record_([^_]+)_/);
+        return match && match[1] ? match[1] : null;
+    }
+
+    inferExamId(record = {}) {
+        if (!record || typeof record !== 'object') return null;
+        if (record.examId) return record.examId;
+        if (record.metadata?.examId) return record.metadata.examId;
+        if (Array.isArray(record.suiteEntries)) {
+            const suiteExam = record.suiteEntries.find(entry => entry && entry.examId);
+            if (suiteExam) return suiteExam.examId;
+        }
+        return this.extractExamIdFromRecordId(record.id);
     }
 
     /**
@@ -2291,12 +2323,17 @@ class PracticeRecorder {
                 try {
                     // 移除临时标识
                     const { tempSavedAt, needsRecovery, ...cleanRecord } = tempRecord;
+                    const sanitized = this.sanitizeRecoveredRecord(cleanRecord);
+                    if (!sanitized) {
+                        console.warn('[PracticeRecorder] 跳过无法修正的临时记录（缺少 examId 或字段无效）', cleanRecord?.id);
+                        continue;
+                    }
 
                     // 尝试正常保存
-                    await this.savePracticeRecord(cleanRecord);
+                    await this.savePracticeRecord(sanitized);
                     recoveredCount++;
 
-                    console.log(`[PracticeRecorder] 恢复记录成功: ${cleanRecord.id}`);
+                    console.log(`[PracticeRecorder] 恢复记录成功: ${sanitized.id}`);
 
                 } catch (error) {
                     console.error(`[PracticeRecorder] 恢复记录失败: ${tempRecord.id}`, error);
@@ -2316,6 +2353,31 @@ class PracticeRecorder {
         } catch (error) {
             console.error('[PracticeRecorder] 恢复临时记录时出错', error);
         }
+    }
+
+    sanitizeRecoveredRecord(record) {
+        if (!record || typeof record !== 'object') return null;
+        const clone = Object.assign({}, record);
+        const inferredExamId = this.inferExamId(clone);
+        if (!inferredExamId) return null;
+        clone.examId = inferredExamId;
+        clone.metadata = Object.assign({}, clone.metadata || {}, { examId: inferredExamId });
+
+        const numericFields = ['score', 'totalQuestions', 'correctAnswers', 'accuracy', 'duration'];
+        numericFields.forEach((field) => {
+            if (clone[field] !== undefined && clone[field] !== null) {
+                const num = Number(clone[field]);
+                if (Number.isFinite(num)) {
+                    clone[field] = num;
+                } else {
+                    delete clone[field];
+                }
+            }
+        });
+        if (clone.accuracy > 1 && clone.accuracy <= 100) {
+            clone.accuracy = clone.accuracy / 100;
+        }
+        return clone;
     }
 
     /**

@@ -85,6 +85,32 @@ class ScoreStorage {
         return now;
     }
 
+    inferExamId(recordData = {}) {
+        if (!recordData || typeof recordData !== 'object') {
+            return null;
+        }
+        if (recordData.examId) {
+            return recordData.examId;
+        }
+        if (recordData.metadata?.examId) {
+            return recordData.metadata.examId;
+        }
+        if (Array.isArray(recordData.suiteEntries)) {
+            const suiteExam = recordData.suiteEntries.find(entry => entry && entry.examId);
+            if (suiteExam) {
+                return suiteExam.examId;
+            }
+        }
+        const recordId = recordData.id;
+        if (typeof recordId === 'string') {
+            const match = recordId.match(/^record_([^_]+)_/);
+            if (match && match[1]) {
+                return match[1];
+            }
+        }
+        return null;
+    }
+
     buildMetadata(recordData = {}, type) {
         const metadata = { ...(recordData.metadata || {}) };
         const examId = recordData.examId;
@@ -631,7 +657,11 @@ class ScoreStorage {
         const now = new Date().toISOString();
         const type = this.inferPracticeType(recordData);
         const recordDate = this.resolveRecordDate(recordData, now);
-        const metadata = this.buildMetadata(recordData, type);
+        const resolvedExamId = this.inferExamId(recordData);
+        const metadata = this.buildMetadata(
+            Object.assign({}, recordData, { examId: resolvedExamId }),
+            type
+        );
         const normalizedAnswers = this.standardizeAnswers(recordData.answers || recordData.answerList || []);
         const answerMap = normalizedAnswers.reduce((map, item) => {
             if (item && item.questionId) {
@@ -689,7 +719,7 @@ class ScoreStorage {
         return {
             // 基础信息
             id: recordData.id || this.generateRecordId(),
-            examId: recordData.examId,
+            examId: resolvedExamId,
             sessionId: recordData.sessionId,
             title: resolvedTitle,
             type,
@@ -911,6 +941,13 @@ class ScoreStorage {
         const accuracy = Number(practiceRecord.accuracy) || 0;
         const normalizedRecord = { ...practiceRecord, duration, accuracy };
 
+        if (!stats.categoryStats || typeof stats.categoryStats !== 'object') {
+            stats.categoryStats = {};
+        }
+        if (!stats.questionTypeStats || typeof stats.questionTypeStats !== 'object') {
+            stats.questionTypeStats = {};
+        }
+
         // 更新基础统计
         stats.totalPractices += 1;
         stats.totalTimeSpent += duration;
@@ -944,7 +981,7 @@ class ScoreStorage {
      * 更新分类统计
      */
     updateCategoryStats(stats, practiceRecord) {
-        const category = practiceRecord.metadata.category;
+        const category = practiceRecord?.metadata?.category;
         if (!category) return;
         
         if (!stats.categoryStats[category]) {

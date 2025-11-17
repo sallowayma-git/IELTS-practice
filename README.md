@@ -220,7 +220,7 @@
 
 ## 更新日志
 
-### v1.0.0 (当前版本)
+### v0.5.0 (当前版本)
 - ✅ 题库管理：动态扫描/加载（147 篇，阅读/听力过滤）
 - ✅ 练习记录：自动采集（realData + fallback 模拟）、统计（avg/streak）、导出 Markdown/JSON
 - ✅ 跨窗口通信：postMessage 注入 enhancer.js，握手/进度/完成
