@@ -6,7 +6,16 @@ class StorageManager {
     constructor() {
         this.prefix = 'exam_system_';
         this.version = '1.0.0';
-        this.initializeStorage();
+        this.ready = this.initializeStorage().catch(error => {
+            console.error('[Storage] 初始化失败:', error);
+            throw error;
+        });
+    }
+
+    async waitForInitialization(skipReady = false) {
+        if (!skipReady) {
+            await this.ready;
+        }
     }
 
     /**
@@ -26,25 +35,25 @@ class StorageManager {
             await this.initializeIndexedDBStorage();
 
             // 初始化版本信息
-            const currentVersion = await this.get('system_version');
+            const currentVersion = await this.get('system_version', null, { skipReady: true });
             console.log(`[Storage] 当前版本: ${currentVersion}, 目标版本: ${this.version}`);
 
             if (!currentVersion) {
                 // 首次安装
                 console.log('[Storage] 首次安装，初始化默认数据');
-                this.handleVersionUpgrade(null);
+                await this.handleVersionUpgrade(null, { skipReady: true });
             } else if (currentVersion !== this.version) {
                 // 版本升级
                 console.log('[Storage] 版本升级，迁移数据');
-                this.handleVersionUpgrade(currentVersion);
+                await this.handleVersionUpgrade(currentVersion, { skipReady: true });
             } else {
                 console.log('[Storage] 版本匹配，跳过初始化');
             }
 
             // 添加恢复逻辑
-            if ((await this.get('practice_records') || []).length === 0 && !(await this.get('data_restored'))) {
-                await this.restoreFromBackup();
-                await this.set('data_restored', true);
+            if ((await this.get('practice_records', null, { skipReady: true }) || []).length === 0 && !(await this.get('data_restored', null, { skipReady: true }))) {
+                await this.restoreFromBackup({ skipReady: true });
+                await this.set('data_restored', true, { skipReady: true });
             }
 
         } catch (error) {
@@ -240,21 +249,23 @@ class StorageManager {
     /**
      * 处理版本升级
      */
-    async handleVersionUpgrade(oldVersion) {
+    async handleVersionUpgrade(oldVersion, options = {}) {
+        const { skipReady = false } = options;
+        await this.waitForInitialization(skipReady);
         console.log(`Upgrading storage from ${oldVersion || 'unknown'} to ${this.version}`);
 
         // 在这里处理数据迁移逻辑
         if (!oldVersion) {
             // 首次安装，初始化默认数据
-            this.initializeDefaultData();
+            await this.initializeDefaultData({ skipReady });
         }
 
-        await this.set('system_version', this.version);
+        await this.set('system_version', this.version, { skipReady });
 
         // 执行遗留数据迁移（只运行一次）
-        if (!await this.get('migration_completed')) {
+        if (!await this.get('migration_completed', null, { skipReady })) {
             console.log('[Storage] 检测到未完成迁移，开始执行...');
-            await this.migrateLegacyData();
+            await this.migrateLegacyData({ skipReady });
         } else {
             console.log('[Storage] 迁移已完成，跳过');
         }
@@ -263,7 +274,9 @@ class StorageManager {
     /**
      * 初始化默认数据
      */
-    async initializeDefaultData() {
+    async initializeDefaultData(options = {}) {
+        const { skipReady = false } = options;
+        await this.waitForInitialization(skipReady);
         const defaultData = {
             user_stats: {
                 totalPractices: 0,
@@ -287,10 +300,10 @@ class StorageManager {
         };
 
         for (const [key, value] of Object.entries(defaultData)) {
-            const existingValue = await this.get(key);
+            const existingValue = await this.get(key, null, { skipReady });
             if (existingValue === null || existingValue === undefined) {
                 console.log(`[Storage] 初始化默认数据: ${key}`);
-                await this.set(key, value);
+                await this.set(key, value, { skipReady });
             } else {
                 console.log(`[Storage] 保留现有数据: ${key} (${Array.isArray(existingValue) ? existingValue.length + ' 项' : typeof existingValue})`);
             }
@@ -443,7 +456,9 @@ class StorageManager {
     /**
      * 存储数据
      */
-    async set(key, value) {
+    async set(key, value, options = {}) {
+        const { skipReady = false } = options;
+        await this.waitForInitialization(skipReady);
         try {
             await this.ensureIndexedDBReady();
             console.log(`[Storage] 开始设置键: ${key}`);
@@ -463,8 +478,7 @@ class StorageManager {
             if (this.fallbackStorage) {
                 console.log('[Storage] 使用内存存储 (fallback)');
                 this.fallbackStorage.set(this.getKey(key), serializedValue);
-                // 派发事件，通知其他页面数据已更新
-                window.dispatchEvent(new CustomEvent('storage-sync', { detail: { key } }));
+                this.dispatchStorageSync(key);
                 return true;
             } else if (this.indexedDB) {
                 console.log('[Storage] 尝试使用 IndexedDB 存储');
@@ -472,19 +486,18 @@ class StorageManager {
                 try {
                     await this.setToIndexedDB(this.getKey(key), serializedValue);
                     console.log('[Storage] IndexedDB 存储成功');
-                    // 派发事件，通知其他页面数据已更新
-                    window.dispatchEvent(new CustomEvent('storage-sync', { detail: { key } }));
+                    this.dispatchStorageSync(key);
                     return true;
                 } catch (indexedDBError) {
                     console.warn('[Storage] IndexedDB存储失败，尝试localStorage:', indexedDBError);
 
                     // 降级到localStorage
-                    const quotaCheck = await this.checkStorageQuota(serializedValue.length);
+                    const quotaCheck = await this.checkStorageQuota(serializedValue.length, { skipReady });
                     if (!quotaCheck) {
                         console.warn('[Storage] 存储空间不足，尝试清理旧数据');
-                        this.cleanupOldData();
+                        await this.cleanupOldData({ skipReady });
 
-                        const quotaCheckAfterCleanup = await this.checkStorageQuota(serializedValue.length);
+                        const quotaCheckAfterCleanup = await this.checkStorageQuota(serializedValue.length, { skipReady });
                         if (!quotaCheckAfterCleanup) {
                             console.error('[Storage] 存储空间仍然不足，无法保存数据');
                             this.handleStorageQuotaExceeded(key, value);
@@ -494,19 +507,18 @@ class StorageManager {
 
                     console.log('[Storage] 使用 localStorage 存储 (IndexedDB fallback)');
                     localStorage.setItem(this.getKey(key), serializedValue);
-                    // 派发事件，通知其他页面数据已更新
-                    window.dispatchEvent(new CustomEvent('storage-sync', { detail: { key } }));
+                    this.dispatchStorageSync(key);
                     return true;
                 }
             } else {
                 console.log('[Storage] 使用 localStorage 存储 (主要存储)');
                 // 使用localStorage存储
-                const quotaCheck = await this.checkStorageQuota(serializedValue.length);
+                const quotaCheck = await this.checkStorageQuota(serializedValue.length, { skipReady });
                 if (!quotaCheck) {
                     console.warn('[Storage] 存储空间不足，尝试清理旧数据');
-                    this.cleanupOldData();
+                    await this.cleanupOldData({ skipReady });
 
-                    const quotaCheckAfterCleanup = await this.checkStorageQuota(serializedValue.length);
+                    const quotaCheckAfterCleanup = await this.checkStorageQuota(serializedValue.length, { skipReady });
                     if (!quotaCheckAfterCleanup) {
                         console.error('[Storage] 存储空间仍然不足，无法保存数据');
                         this.handleStorageQuotaExceeded(key, value);
@@ -515,8 +527,7 @@ class StorageManager {
                 }
 
                 localStorage.setItem(this.getKey(key), serializedValue);
-                // 派发事件，通知其他页面数据已更新
-                window.dispatchEvent(new CustomEvent('storage-sync', { detail: { key } }));
+                this.dispatchStorageSync(key);
                 return true;
             }
         } catch (error) {
@@ -532,10 +543,12 @@ class StorageManager {
      * @param {*} value - 要追加的项
      * @returns {Promise<boolean>} 成功返回 true，失败返回 false
      */
-    async append(key, value) {
+    async append(key, value, options = {}) {
+        const { skipReady = false } = options;
+        await this.waitForInitialization(skipReady);
         try {
             await this.ensureIndexedDBReady();
-            let existing = await this.get(key) || [];
+            let existing = await this.get(key, null, { skipReady }) || [];
             if (!Array.isArray(existing)) {
                 console.warn(`[Storage] Key ${key} 不是数组，创建新数组`);
                 existing = [];
@@ -551,11 +564,11 @@ class StorageManager {
                 compressed: false
             }).length;
 
-            let quotaOk = await this.checkStorageQuota(estimatedSize);
+            let quotaOk = await this.checkStorageQuota(estimatedSize, { skipReady });
             if (!quotaOk) {
                 console.warn('[Storage] 存储空间不足，尝试清理旧数据');
-                await this.cleanupOldData();
-                quotaOk = await this.checkStorageQuota(estimatedSize);
+                await this.cleanupOldData({ skipReady });
+                quotaOk = await this.checkStorageQuota(estimatedSize, { skipReady });
                 if (!quotaOk) {
                     console.error('[Storage] 存储空间仍然不足，无法追加数据');
                     this.handleStorageQuotaExceeded(key, newArray);
@@ -563,7 +576,7 @@ class StorageManager {
                 }
             }
 
-            const success = await this.set(key, newArray);
+            const success = await this.set(key, newArray, { skipReady });
             return success;
         } catch (error) {
             console.error('[Storage] Append error:', error);
@@ -572,7 +585,9 @@ class StorageManager {
         }
     }
 
-    async get(key, defaultValue = null) {
+    async get(key, defaultValue = null, options = {}) {
+        const { skipReady = false } = options;
+        await this.waitForInitialization(skipReady);
         try {
             await this.ensureIndexedDBReady();
             let serializedValue;
@@ -606,7 +621,9 @@ class StorageManager {
     /**
      * 删除数据
      */
-    async remove(key) {
+    async remove(key, options = {}) {
+        const { skipReady = false } = options;
+        await this.waitForInitialization(skipReady);
         try {
             await this.ensureIndexedDBReady();
             if (this.fallbackStorage) {
@@ -635,7 +652,9 @@ class StorageManager {
     /**
      * 清空所有数据
      */
-    async clear() {
+    async clear(options = {}) {
+        const { skipReady = false } = options;
+        await this.waitForInitialization(skipReady);
         try {
             await this.ensureIndexedDBReady();
             // 清空内存存储
@@ -679,7 +698,9 @@ class StorageManager {
     /**
      * 检查存储配额是否充足
      */
-    async checkStorageQuota(dataSize) {
+    async checkStorageQuota(dataSize, options = {}) {
+        const { skipReady = false } = options;
+        await this.waitForInitialization(skipReady);
         try {
             console.log(`[Storage] 检查存储配额，需要空间: ${dataSize} 字节`);
             if (this.fallbackStorage) {
@@ -687,7 +708,7 @@ class StorageManager {
                 return true; // 内存存储没有配额限制
             }
 
-            const storageInfo = await this.getStorageInfo();
+            const storageInfo = await this.getStorageInfo({ skipReady });
             if (!storageInfo) {
                 console.warn('[Storage] 无法获取存储信息，拒绝操作');
                 return false;
@@ -727,7 +748,9 @@ class StorageManager {
     /**
      * 获取存储使用情况
      */
-    async getStorageInfo() {
+    async getStorageInfo(options = {}) {
+        const { skipReady = false } = options;
+        await this.waitForInitialization(skipReady);
         try {
             if (this.fallbackStorage) {
                 return {
@@ -831,35 +854,37 @@ class StorageManager {
     /**
      * 清理旧数据
      */
-    async cleanupOldData() {
+    async cleanupOldData(options = {}) {
+        const { skipReady = false } = options;
+        await this.waitForInitialization(skipReady);
         try {
             console.log('[Storage] 开始清理旧数据...');
 
-            const practiceRecords = await this.get('practice_records', []);
+            const practiceRecords = await this.get('practice_records', [], { skipReady });
             if (practiceRecords.length > 0) {
                 // 压缩练习记录数据，但保留所有记录
                 const compressedRecords = practiceRecords.map(record => this.compressObject(record));
-                await this.set('practice_records', compressedRecords);
+                await this.set('practice_records', compressedRecords, { skipReady });
                 console.log(`[Storage] 已压缩练习记录数据，保留${practiceRecords.length}条记录`);
             }
 
             // 清理错误日志
-            const errorLogs = await this.get('injection_errors', []);
+            const errorLogs = await this.get('injection_errors', [], { skipReady });
             if (errorLogs.length > 20) {
                 const logsToKeep = errorLogs.slice(-20); // 保留最近20条
-                await this.set('injection_errors', logsToKeep);
+                await this.set('injection_errors', logsToKeep, { skipReady });
                 console.log(`[Storage] 已清理错误日志，从${errorLogs.length}条减少到${logsToKeep.length}条`);
             }
 
-            const collectionErrors = await this.get('collection_errors', []);
+            const collectionErrors = await this.get('collection_errors', [], { skipReady });
             if (collectionErrors.length > 20) {
                 const logsToKeep = collectionErrors.slice(-20);
-                await this.set('collection_errors', logsToKeep);
+                await this.set('collection_errors', logsToKeep, { skipReady });
                 console.log(`[Storage] 已清理数据收集错误日志，从${collectionErrors.length}条减少到${logsToKeep.length}条`);
             }
 
             // 清理活动会话（保留最近的）
-            const activeSessions = await this.get('active_sessions', []);
+            const activeSessions = await this.get('active_sessions', [], { skipReady });
             const now = Date.now();
             const recentSessions = activeSessions.filter(session => {
                 const sessionTime = new Date(session.startTime).getTime();
@@ -868,7 +893,7 @@ class StorageManager {
             });
 
             if (recentSessions.length !== activeSessions.length) {
-                await this.set('active_sessions', recentSessions);
+                await this.set('active_sessions', recentSessions, { skipReady });
                 console.log(`[Storage] 已清理过期会话，从${activeSessions.length}个减少到${recentSessions.length}个`);
             }
 
@@ -881,7 +906,9 @@ class StorageManager {
      * 迁移遗留数据到新命名空间
      * 只运行一次
      */
-    async migrateLegacyData() {
+    async migrateLegacyData(options = {}) {
+        const { skipReady = false } = options;
+        await this.waitForInitialization(skipReady);
         console.log('[Storage] 开始迁移遗留数据');
         try {
             const legacyKeys = Object.keys(localStorage).filter(k =>
@@ -893,7 +920,7 @@ class StorageManager {
 
             if (legacyKeys.length === 0) {
                 console.log('[Storage] 无遗留数据需要迁移');
-                await this.set('migration_completed', true);
+                await this.set('migration_completed', true, { skipReady });
             } else {
                 let migratedCount = 0;
                 for (const oldKey of legacyKeys) {
@@ -921,7 +948,7 @@ class StorageManager {
 
                         // 对应新键（去除 old_prefix_ 如果存在）
                         let newKey = oldKey.replace(/^old_prefix_/, '');
-                        const current = await this.get(newKey, []);
+                        const current = await this.get(newKey, [], { skipReady });
 
                         // 对于关键键额外检查
                         const criticalKeys = ['practice_records'];
@@ -931,7 +958,7 @@ class StorageManager {
                         }
 
                         const merged = this.mergeRecords(current, legacyData);
-                        await this.set(newKey, merged);
+                        await this.set(newKey, merged, { skipReady });
 
                         // 删除旧键
                         localStorage.removeItem(oldKey);
@@ -943,11 +970,11 @@ class StorageManager {
                 }
 
                 console.log(`[Storage] 数据迁移完成: ${migratedCount} 个键成功迁移`);
-                await this.set('migration_completed', true);
+                await this.set('migration_completed', true, { skipReady });
             }
 
             // 迁移 MyMelody 遗留键（IndexedDB 中的旧键）
-            if (!await this.get('my_melody_migration_completed')) {
+            if (!await this.get('my_melody_migration_completed', null, { skipReady })) {
                 console.log('[Storage] 检查 MyMelody 遗留键迁移...');
                 const oldMyMelodyKey = this.getKey('practice_records'); // 'exam_system_practice_records'
                 try {
@@ -959,25 +986,25 @@ class StorageManager {
                             legacyData = parsed.data || parsed;
                         } catch (parseError) {
                             console.warn('[Storage] 解析 MyMelody 遗留数据失败', parseError);
-                            await this.set('my_melody_migration_completed', true);
+                            await this.set('my_melody_migration_completed', true, { skipReady });
                             return;
                         }
 
                         if (!Array.isArray(legacyData)) {
                             console.warn('[Storage] MyMelody 遗留数据非数组，跳过');
-                            await this.set('my_melody_migration_completed', true);
+                            await this.set('my_melody_migration_completed', true, { skipReady });
                             return;
                         }
 
                         if (legacyData.length === 0) {
                             console.log('[Storage] MyMelody 旧数据为空，跳过迁移');
-                            await this.set('my_melody_migration_completed', true);
+                            await this.set('my_melody_migration_completed', true, { skipReady });
                             return;
                         }
 
-                        const currentPracticeRecords = await this.get('practice_records', []);
+                        const currentPracticeRecords = await this.get('practice_records', [], { skipReady });
                         const merged = this.mergeRecords(currentPracticeRecords, legacyData);
-                        await this.set('practice_records', merged);
+                        await this.set('practice_records', merged, { skipReady });
 
                         // 删除旧键
                         await this.removeFromIndexedDB(oldMyMelodyKey);
@@ -985,10 +1012,10 @@ class StorageManager {
                     } else {
                         console.log('[Storage] 无 MyMelody 遗留数据需要迁移');
                     }
-                    await this.set('my_melody_migration_completed', true);
+                    await this.set('my_melody_migration_completed', true, { skipReady });
                 } catch (migrateError) {
                     console.error('[Storage] MyMelody 迁移失败:', migrateError);
-                    await this.set('my_melody_migration_completed', true); // 避免无限重试
+                    await this.set('my_melody_migration_completed', true, { skipReady }); // 避免无限重试
                 }
             } else {
                 console.log('[Storage] MyMelody 迁移已完成，跳过');
@@ -997,15 +1024,17 @@ class StorageManager {
         } catch (error) {
             console.error('[Storage] 迁移遗留数据失败:', error);
             // 即使失败也设置标志，避免无限重试
-            await this.set('migration_completed', true);
-            await this.set('my_melody_migration_completed', true);
+            await this.set('migration_completed', true, { skipReady });
+            await this.set('my_melody_migration_completed', true, { skipReady });
         }
     }
 
     /**
      * 从备份文件恢复数据
      */
-    async restoreFromBackup() {
+    async restoreFromBackup(options = {}) {
+        const { skipReady = false } = options;
+        await this.waitForInitialization(skipReady);
         console.log('[Storage] 开始从备份恢复数据');
         try {
             const backupPath = 'assets/data/backup-practice-records.json';
@@ -1020,7 +1049,7 @@ class StorageManager {
                 return false;
             }
             // 恢复 practice_records
-            await this.set('practice_records', backupData.practice_records);
+            await this.set('practice_records', backupData.practice_records, { skipReady });
             console.log('[Storage] 从备份恢复 practice_records 成功');
             return true;
         } catch (error) {
@@ -1072,7 +1101,9 @@ class StorageManager {
     /**
      * 导出数据
      */
-    async exportData() {
+    async exportData(options = {}) {
+        const { skipReady = false } = options;
+        await this.waitForInitialization(skipReady);
         try {
             const data = {};
 
@@ -1165,22 +1196,24 @@ class StorageManager {
     /**
      * 导入数据
      */
-    async importData(importedData) {
+    async importData(importedData, options = {}) {
+        const { skipReady = false } = options;
+        await this.waitForInitialization(skipReady);
         try {
             if (!importedData || !importedData.data) {
                 throw new Error('Invalid import data format');
             }
 
             // 备份当前数据
-            const backup = await this.exportData();
+            const backup = await this.exportData({ skipReady });
 
             try {
                 // 清空现有数据
-                await this.clear();
+                await this.clear({ skipReady });
 
                 // 导入新数据
                 const importPromises = Object.entries(importedData.data).map(([key, value]) => {
-                    return this.set(key, value.data);
+                    return this.set(key, value.data, { skipReady });
                 });
 
                 await Promise.all(importPromises);
@@ -1189,11 +1222,11 @@ class StorageManager {
             } catch (importError) {
                 // 恢复备份
                 console.error('Import failed, restoring backup:', importError);
-                await this.clear();
+                await this.clear({ skipReady });
 
                 if (backup && backup.data) {
                     const restorePromises = Object.entries(backup.data).map(([key, value]) => {
-                        return this.set(key, value.data);
+                        return this.set(key, value.data, { skipReady });
                     });
                     await Promise.all(restorePromises);
                 }
@@ -1233,7 +1266,8 @@ class StorageManager {
     /**
      * 启动存储监控
      */
-    startStorageMonitoring() {
+    async startStorageMonitoring() {
+        await this.waitForInitialization();
         console.log('[Storage] 启动存储监控...');
 
         // 定期检查存储使用情况
@@ -1257,7 +1291,7 @@ class StorageManager {
                     // 当使用率超过80%时，自动清理
                     if (usagePercent > 80) {
                         console.warn('[Storage] 存储使用率过高，自动清理旧数据');
-                        this.cleanupOldData();
+                        await this.cleanupOldData();
 
                         // 清理后再次检查
                         const newStorageInfo = await this.getStorageInfo();
@@ -1291,8 +1325,31 @@ class StorageManager {
     }
 }
 
+const STORAGE_SYNC_IGNORED_KEYS = new Set([
+    'namespace_test',
+    'namespace_test_practice',
+    'namespace_test_enhancer'
+]);
+
+StorageManager.prototype.dispatchStorageSync = function(key) {
+    try {
+        const normalizedKey = typeof key === 'string' ? key.replace(this.prefix, '') : key;
+        if (normalizedKey && STORAGE_SYNC_IGNORED_KEYS.has(normalizedKey)) {
+            return;
+        }
+    } catch (_) {
+        // ignore errors resolving key
+    }
+    window.dispatchEvent(new CustomEvent('storage-sync', { detail: { key } }));
+};
+
 // 创建全局存储实例
-window.storage = new StorageManager();
+const storageManager = new StorageManager();
+window.storage = storageManager;
 
 // 启动存储监控
-window.storage.startStorageMonitoring();
+storageManager.ready
+    .then(() => storageManager.startStorageMonitoring())
+    .catch(error => {
+        console.error('[Storage] 存储初始化失败，监控未启动:', error);
+    });
