@@ -1030,12 +1030,21 @@ class PracticeRecorder {
             practiceRecord.realData.answerComparison = normalizedComparison;
         }
 
-        if (suiteSessionId) {
+        const allowSuiteStandaloneSave = payload?.allowStandaloneSave
+            || results?.allowStandaloneSave
+            || metadata?.allowStandaloneSave;
+
+        if (suiteSessionId && !allowSuiteStandaloneSave) {
             console.log(`[PracticeRecorder] 套题模式条目 ${resolvedExamId} 属于 ${suiteSessionId}，跳过单篇记录保存。`);
             if (!syntheticSession && this.activeSessions.has(resolvedExamId)) {
                 this.endPracticeSession(resolvedExamId);
             }
             return practiceRecord;
+        }
+
+        if (suiteSessionId && allowSuiteStandaloneSave && metadata && !metadata.suiteFallback) {
+            metadata = Object.assign({}, metadata, { suiteFallback: true });
+            practiceRecord.metadata = metadata;
         }
 
         try {
