@@ -6,7 +6,7 @@
 - **`css/`** – theme and layout styles for all public pages.
 - **`templates/`** – HTML shells for alternative themes and experimental layouts.
 - **`assets/`** – static data and media resources.
-  - **`assets/developer wiki/wiki/`** – curated wiki pages describing feature specs and historical decisions.
+  - **`developer/doc/Wiki/`** – curated wiki pages describing feature specs and historical decisions.
 - **`developer/`** – engineering-only material separated from production assets.
   - **`developer/docs/`** – optimization logs and design memos.
   - **`developer/tests/`** – static regression suites, E2E harnesses, and prototype tooling.
