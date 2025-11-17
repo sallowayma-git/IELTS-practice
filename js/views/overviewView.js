@@ -70,13 +70,12 @@
             this.ensureDelegates();
 
             const fragment = document.createDocumentFragment();
-            // 临时隐藏套题模式入口
-            // fragment.appendChild(this.createSuiteCard());
             const readingSection = this.createSection({
                 title: '阅读',
                 icon: '📖',
                 entries: stats?.reading || [],
-                style: { gridColumn: '1 / -1' }
+                style: { gridColumn: '1 / -1' },
+                rightButton: this.createSuiteModeButton()
             });
 
             fragment.appendChild(readingSection);
@@ -94,12 +93,30 @@
             this.dom.replaceContent(container, fragment);
         }
 
-        createSection({ title, icon, entries, style }) {
+        createSection({ title, icon, entries, style, rightButton }) {
             const sectionFragment = document.createDocumentFragment();
-            sectionFragment.appendChild(this.dom.create('h3', {
+            
+            // 创建标题容器，支持右侧按钮
+            const titleContainer = this.dom.create('div', {
+                style: {
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '20px',
+                    ...style
+                }
+            });
+            
+            titleContainer.appendChild(this.dom.create('h3', {
                 className: 'overview-section-title',
-                style
+                style: { margin: 0 }
             }, title));
+            
+            if (rightButton) {
+                titleContainer.appendChild(rightButton);
+            }
+            
+            sectionFragment.appendChild(titleContainer);
 
             entries.forEach((entry) => {
                 sectionFragment.appendChild(this.createCategoryCard({
@@ -159,35 +176,30 @@
             }, [browseButton, randomButton]);
         }
 
-        createSuiteCard() {
-            const startButton = this.dom.create('button', {
+        createSuiteModeButton() {
+            return this.dom.create('button', {
                 className: 'btn btn-primary',
                 type: 'button',
                 dataset: {
                     action: 'start-suite-mode',
                     overviewAction: 'suite'
+                },
+                style: {
+                    padding: '8px 16px',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    borderRadius: '6px',
+                    backgroundColor: '#646b20ff',
+                    border: '1px solid #646b20ff',
+                    color: 'white',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px'
                 }
             }, [
-                this.dom.create('span', { className: 'category-action-icon', ariaHidden: 'true' }, '🚀'),
-                this.dom.create('span', { className: 'category-action-label' }, '开启套题模式')
-            ]);
-
-            return this.dom.create('div', { className: 'category-card' }, [
-                this.dom.create('div', { className: 'category-header' }, [
-                    this.dom.create('div', { className: 'category-icon' }, '🔄'),
-                    this.dom.create('div', {}, [
-                        this.dom.create('div', { className: 'category-title' }, '套题模式'),
-                        this.dom.create('div', { className: 'category-meta' }, '三篇阅读一键串联')
-                    ])
-                ]),
-                this.dom.create('div', {
-                    className: 'category-actions',
-                    style: {
-                        display: 'flex',
-                        justifyContent: 'center',
-                        alignItems: 'center'
-                    }
-                }, [startButton])
+                this.dom.create('span', { ariaHidden: 'true' }, '🚀'),
+                this.dom.create('span', {}, '套题模式')
             ]);
         }
     }
