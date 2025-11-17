@@ -6,6 +6,143 @@
 if (!window.practicePageEnhancer) {
     console.log('[PracticeEnhancer] 初始化增强器');
 
+    const DEFAULT_ENHANCER_CONFIG = {
+        autoInitialize: true,
+        excludedSelectors: [
+            '#volume-slider',
+            '#playback-speed',
+            '#notes-panel textarea',
+            '#notes-panel input',
+            '#settings-panel input',
+            '#settings-panel select',
+            '[data-answer-ignore="true"]'
+        ],
+        excludedAncestors: [
+            '#speed-control',
+            '#volume-container',
+            '#notes-panel',
+            '#settings-panel'
+        ],
+        excludedNames: ['timer', 'notes', 'note'],
+        questionIdAttributes: [
+            'name',
+            'id',
+            'data-question',
+            'data-question-id',
+            'data-qid',
+            'data-for'
+        ],
+        datasetExcludeAttribute: 'enhancerExclude'
+    };
+
+    const mergeConfig = (baseConfig, overrideConfig) => {
+        const result = { ...(baseConfig || {}) };
+        if (!overrideConfig || typeof overrideConfig !== 'object') {
+            return result;
+        }
+
+        Object.entries(overrideConfig).forEach(([key, value]) => {
+            if (value === undefined || value === null) {
+                return;
+            }
+
+            if (Array.isArray(value)) {
+                const existing = Array.isArray(result[key]) ? result[key] : [];
+                result[key] = Array.from(new Set([...existing, ...value]));
+                return;
+            }
+
+            if (typeof value === 'object') {
+                const existing = (result[key] && typeof result[key] === 'object' && !Array.isArray(result[key]))
+                    ? result[key]
+                    : {};
+                result[key] = mergeConfig(existing, value);
+                return;
+            }
+
+            result[key] = value;
+        });
+
+        return result;
+    };
+
+    const initialConfig = mergeConfig(
+        DEFAULT_ENHANCER_CONFIG,
+        window.practicePageEnhancerConfig || {}
+    );
+
+    const ANSWER_TAG_PATTERN = /\(Q(\d+)\s*:\s*([^)]+?)\)/gi;
+
+    function extractObjectLiteral(content, startIndex) {
+        if (!content || startIndex >= content.length) {
+            return null;
+        }
+        let i = startIndex;
+        while (i < content.length && /\s/.test(content[i])) {
+            i++;
+        }
+        if (i >= content.length || content[i] !== '{') {
+            return null;
+        }
+        let depth = 0;
+        let literal = '';
+        let inString = false;
+        let stringQuote = null;
+        for (; i < content.length; i++) {
+            const char = content[i];
+            literal += char;
+            if (inString) {
+                if (char === '\\') {
+                    i++;
+                    if (i < content.length) {
+                        literal += content[i];
+                    }
+                    continue;
+                }
+                if (char === stringQuote) {
+                    inString = false;
+                    stringQuote = null;
+                }
+                continue;
+            }
+            if (char === '"' || char === "'" || char === '`') {
+                inString = true;
+                stringQuote = char;
+                continue;
+            }
+            if (char === '{') {
+                depth++;
+            } else if (char === '}') {
+                depth--;
+                if (depth === 0) {
+                    return literal;
+                }
+            }
+        }
+        return null;
+    }
+
+    function extractAnswersFromTextContent(text) {
+        const results = {};
+        if (!text) {
+            return results;
+        }
+        let match;
+        while ((match = ANSWER_TAG_PATTERN.exec(text)) !== null) {
+            const questionNumber = match[1];
+            const rawAnswer = match[2] ? match[2].trim() : '';
+            if (!questionNumber || !rawAnswer) {
+                continue;
+            }
+            const cleanedAnswer = rawAnswer.replace(/[\s.)]+$/g, '').trim();
+            if (!cleanedAnswer) {
+                continue;
+            }
+            results['q' + questionNumber] = cleanedAnswer;
+        }
+        return results;
+    }
+
     // 内嵌CorrectAnswerExtractor功能，确保在练习页面中可用
     if (!window.CorrectAnswerExtractor) {
         window.CorrectAnswerExtractor = class {
@@ -56,21 +193,29 @@ if (!window.practicePageEnhancer) {
 
             extractFromScriptVariables(document = window.document) {
                 const scripts = document.querySelectorAll('script');
-                
+                const candidateNames = ['correctAnswers', 'answerKey', 'answers'];
+
                 for (const script of scripts) {
-                    const content = script.textContent || script.innerHTML;
+                    const content = script.textContent || script.innerHTML || '';
                     
-                    const correctAnswersMatch = content.match(/(?:const|let|var)\s+correctAnswers\s*=\s*(\{[^}]+\})/s);
-                    if (correctAnswersMatch) {
-                        try {
-                            const answersStr = correctAnswersMatch[1];
-                            const answers = this.parseAnswersObject(answersStr);
-                            if (answers && Object.keys(answers).length > 0) {
-                                console.log('[CorrectAnswerExtractor] 从脚本变量提取答案:', answers);
-                                return answers;
+                    for (let i = 0; i < candidateNames.length; i++) {
+                        const name = candidateNames[i];
+                        const pattern = new RegExp(`(?:const|let|var)\\s+${name}\\s*=`, 'g');
+                        let match;
+                        while ((match = pattern.exec(content)) !== null) {
+                            const literal = extractObjectLiteral(content, match.index + match[0].length);
+                            if (!literal) {
+                                continue;
                             }
-                        } catch (error) {
-                            console.warn('[CorrectAnswerExtractor] 解析脚本变量失败:', error);
+                            try {
+                                const answers = this.parseAnswersObject(literal);
+                                if (answers && Object.keys(answers).length > 0) {
+                                    console.log('[CorrectAnswerExtractor] 从脚本变量提取答案:', answers);
+                                    return answers;
+                                }
+                            } catch (error) {
+                                console.warn('[CorrectAnswerExtractor] 解析脚本变量失败:', error);
+                            }
                         }
                     }
                 }
@@ -141,6 +286,16 @@ if (!window.practicePageEnhancer) {
                         const answer = this.extractAnswerFromElement(el);
                         if (answer) {
                             answers[questionId] = answer;
+                        }
+                    });
+                }
+
+                const transcript = document.getElementById('transcript-content');
+                if (transcript) {
+                    const transcriptAnswers = extractAnswersFromTextContent(transcript.textContent || '');
+                    Object.keys(transcriptAnswers).forEach((key) => {
+                        if (transcriptAnswers[key]) {
+                            answers[key] = transcriptAnswers[key];
                         }
                     });
                 }
@@ -293,9 +448,12 @@ if (!window.practicePageEnhancer) {
         answers: {},
         correctAnswers: {},
         interactions: [],
+        allQuestionIds: [],
         startTime: Date.now(),
         isInitialized: false,
         initializationPromise: null,
+        config: initialConfig,
+        customCollectors: [],
 
         initialize: function () {
             if (this.isInitialized) {
@@ -315,6 +473,7 @@ if (!window.practicePageEnhancer) {
 
                 this.setupCommunication();
                 this.setupAnswerListeners();
+                this.captureQuestionSet();
                 this.extractCorrectAnswers(); // 新增：提取正确答案
                 this.interceptSubmit();
                 this.setupInteractionTracking();
@@ -379,6 +538,119 @@ if (!window.practicePageEnhancer) {
                 clearInterval(this.answerCollectionInterval);
                 this.answerCollectionInterval = null;
             }
+        },
+
+        configure: function(options = {}) {
+            if (!options || typeof options !== 'object') {
+                console.warn('[PracticeEnhancer] configure: 传入的配置无效');
+                return;
+            }
+            this.config = mergeConfig(this.config || DEFAULT_ENHANCER_CONFIG, options);
+            console.log('[PracticeEnhancer] 配置已更新:', this.config);
+            if (this.isInitialized) {
+                this.collectAllAnswers();
+            }
+        },
+
+        registerCollector: function(collector) {
+            if (typeof collector !== 'function') {
+                console.warn('[PracticeEnhancer] registerCollector: collector必须为函数');
+                return;
+            }
+            this.customCollectors.push(collector);
+            if (this.isInitialized) {
+                try {
+                    collector({
+                        addAnswer: (questionId, value) => this.addAnswer(questionId, value),
+                        enhancer: this
+                    });
+                } catch (error) {
+                    console.error('[PracticeEnhancer] 自定义收集器执行失败:', error);
+                }
+            }
+        },
+
+        runCustomCollectors: function() {
+            if (!this.customCollectors.length) return;
+            this.customCollectors.forEach(collector => {
+                try {
+                    collector({
+                        addAnswer: (questionId, value) => this.addAnswer(questionId, value),
+                        enhancer: this
+                    });
+                } catch (error) {
+                    console.error('[PracticeEnhancer] 自定义收集器执行失败:', error);
+                }
+            });
+        },
+
+        normalizeQuestionId: function(questionId) {
+            if (questionId === undefined || questionId === null) return null;
+            const raw = String(questionId).trim();
+            if (!raw) return null;
+            const cleaned = raw.replace(/[-_](anchor|nav)$/i, '');
+            if (/^q[\w-]+/i.test(cleaned)) {
+                return cleaned.replace(/^Q/, 'q');
+            }
+            const digitsMatch = cleaned.match(/^\d+/);
+            if (digitsMatch) {
+                return 'q' + digitsMatch[0];
+            }
+            const questionPrefix = cleaned.match(/^question[-_\s]*(\d+)/i);
+            if (questionPrefix) {
+                return 'q' + questionPrefix[1];
+            }
+            return cleaned;
+        },
+
+        addAnswer: function(questionId, value) {
+            if (value === undefined || value === null) return null;
+            const normalizedId = this.normalizeQuestionId(questionId);
+            if (!normalizedId) return null;
+            if (typeof value === 'string' && value.trim() === '') return null;
+            this.answers[normalizedId] = value;
+            return normalizedId;
+        },
+
+        addCorrectAnswer: function(questionId, value) {
+            if (value === undefined || value === null) return null;
+            const normalizedId = this.normalizeQuestionId(questionId);
+            if (!normalizedId) return null;
+            this.correctAnswers[normalizedId] = Array.isArray(value) ? value : String(value).trim();
+            return normalizedId;
+        },
+
+        captureQuestionSet: function () {
+            const idSet = new Set(Array.isArray(this.allQuestionIds) ? this.allQuestionIds : []);
+            const addCandidate = (candidate) => {
+                const normalized = this.normalizeQuestionId(candidate);
+                if (normalized) {
+                    idSet.add(normalized);
+                }
+            };
+
+            const navItems = document.querySelectorAll('.practice-nav .q-item');
+            navItems.forEach((item) => {
+                addCandidate(item.dataset.question || item.textContent || item.getAttribute('data-index'));
+            });
+
+            const questionHolders = document.querySelectorAll('[data-question], [data-question-id], [data-qid]');
+            questionHolders.forEach((element) => {
+                addCandidate(
+                    element.dataset.question ||
+                    element.dataset.questionId ||
+                    element.dataset.qid
+                );
+            });
+
+            const inputs = document.querySelectorAll('input[name], textarea[name], select[name]');
+            inputs.forEach((element) => {
+                addCandidate(element.name || element.id);
+            });
+
+            const sorted = Array.from(idSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+            this.allQuestionIds = sorted;
+            return sorted;
         },
 
         setupCommunication: function () {
@@ -593,6 +865,21 @@ if (!window.practicePageEnhancer) {
             return this.detectPageType();
         },
 
+        normalizeAnswerMap: function (answersMap) {
+            const normalized = {};
+            if (!answersMap || typeof answersMap !== 'object') {
+                return normalized;
+            }
+            Object.entries(answersMap).forEach(([key, value]) => {
+                const normalizedKey = this.addCorrectAnswer(key, value);
+                if (normalizedKey) {
+                    normalized[normalizedKey] = this.correctAnswers[normalizedKey];
+                }
+            });
+            this.correctAnswers = normalized;
+            return normalized;
+        },
+
         extractCorrectAnswers: function () {
             console.log('[PracticeEnhancer] 开始提取正确答案');
             
@@ -603,7 +890,7 @@ if (!window.practicePageEnhancer) {
                     const extractedAnswers = extractor.extractFromPage(document);
                     
                     if (extractedAnswers && Object.keys(extractedAnswers).length > 0) {
-                        this.correctAnswers = extractedAnswers;
+                        this.normalizeAnswerMap(extractedAnswers);
                         console.log('[PracticeEnhancer] 使用提取器成功获得正确答案:', this.correctAnswers);
                     } else {
                         console.warn('[PracticeEnhancer] 提取器未找到答案，使用备用方法');
@@ -640,7 +927,7 @@ if (!window.practicePageEnhancer) {
                             if (!normalizedKey.startsWith('q') && /^\d+$/.test(normalizedKey)) {
                                 normalizedKey = 'q' + normalizedKey;
                             }
-                            this.correctAnswers[normalizedKey] = String(value).trim();
+                            this.addCorrectAnswer(normalizedKey, value);
                         }
                     });
                 }
@@ -667,22 +954,44 @@ if (!window.practicePageEnhancer) {
                 const elements = document.querySelectorAll(selector);
                 for (let j = 0; j < elements.length; j++) {
                     const element = elements[j];
-                    const questionId = element.dataset.question || 
-                                     element.dataset.for || 
-                                     element.dataset.questionId;
-                    const correctAnswer = element.dataset.correctAnswer || 
-                                        element.dataset.answer || 
-                                        element.textContent.trim();
+                    const questionId =
+                        element.dataset.question ||
+                        element.dataset.for ||
+                        element.dataset.questionId ||
+                        this.extractQuestionId(element) ||
+                        element.id;
+                    const correctAnswer = element.dataset.correctAnswer ||
+                        element.dataset.answer ||
+                        element.textContent.trim();
                     
                     if (questionId && correctAnswer) {
-                        self.correctAnswers[questionId] = correctAnswer;
+                        self.addCorrectAnswer(questionId, correctAnswer);
                     }
                 }
+            }
+
+            this.extractFromTranscript();
+        },
+
+        extractFromTranscript: function () {
+            const transcript = document.getElementById('transcript-content');
+            if (!transcript) {
+                return;
+            }
+            const beforeCount = Object.keys(this.correctAnswers).length;
+            const parsed = extractAnswersFromTextContent(transcript.textContent || '');
+            Object.keys(parsed).forEach((key) => {
+                this.addCorrectAnswer(key, parsed[key]);
+            });
+            const afterCount = Object.keys(this.correctAnswers).length;
+            if (afterCount > beforeCount) {
+                console.log('[PracticeEnhancer] 已从听力原文提取正确答案:', parsed);
             }
         },
 
         extractFromResultsTable: function () {
             console.log('[PracticeEnhancer] 尝试从结果表格提取正确答案');
+            const beforeCount = Object.keys(this.correctAnswers).length;
             
             // 查找结果显示区域
             const resultsEl = document.getElementById('results');
@@ -720,14 +1029,14 @@ if (!window.practicePageEnhancer) {
                         if (questionMatch && correctAnswer && correctAnswer !== 'N/A' && correctAnswer !== '') {
                             const questionNum = questionMatch[1];
                             const questionKey = 'q' + questionNum;
-                            this.correctAnswers[questionKey] = correctAnswer;
+                            const normalizedKey = this.addCorrectAnswer(questionKey, correctAnswer) || questionKey;
                             
                             // 同时更新用户答案，确保数据一致性
                             if (userAnswer && userAnswer !== 'No Answer') {
-                                this.answers[questionKey] = userAnswer;
+                                this.addAnswer(normalizedKey, userAnswer);
                             }
                             
-                            console.log('[PracticeEnhancer] 从表格提取:', questionKey, '用户答案:', userAnswer, '正确答案:', correctAnswer);
+                            console.log('[PracticeEnhancer] 从表格提取:', normalizedKey, '用户答案:', userAnswer, '正确答案:', correctAnswer);
                         }
                     }
                 }
@@ -735,6 +1044,11 @@ if (!window.practicePageEnhancer) {
             
             console.log('[PracticeEnhancer] 表格提取完成，正确答案:', this.correctAnswers);
             console.log('[PracticeEnhancer] 表格提取完成，用户答案:', this.answers);
+            const afterCount = Object.keys(this.correctAnswers).length;
+            if (afterCount > beforeCount) {
+                this.broadcastResultsUpdate();
+            }
+            return afterCount > beforeCount;
         },
 
         setupAnswerListeners: function () {
@@ -799,16 +1113,46 @@ if (!window.practicePageEnhancer) {
 
         // 判断是否为应当排除的非答题控件（如播放速度、音量滑条等）
         isExcludedControl: function(element) {
+            if (!element) return false;
+            const config = this.config || {};
+
             try {
-                if (!element) return false;
-                // 明确排除的控件ID与区域
-                if (element.matches && (element.matches('#volume-slider') || element.matches('#playback-speed'))) {
+                const datasetFlag = config.datasetExcludeAttribute || 'enhancerExclude';
+                if (element.dataset && (element.dataset[datasetFlag] === 'true' || element.dataset[datasetFlag] === '1')) {
                     return true;
                 }
-                if (element.closest && (element.closest('#speed-control') || element.closest('#volume-container'))) {
+
+                if (element.dataset && element.dataset.practiceExclude === 'true') {
                     return true;
                 }
-            } catch (_) { /* no-op */ }
+
+                const excludedNames = config.excludedNames || [];
+                if (excludedNames.length) {
+                    if ((element.name && excludedNames.includes(element.name)) ||
+                        (element.id && excludedNames.includes(element.id))) {
+                        return true;
+                    }
+                }
+
+                const selectors = config.excludedSelectors || [];
+                for (let i = 0; i < selectors.length; i++) {
+                    const selector = selectors[i];
+                    if (element.matches && element.matches(selector)) {
+                        return true;
+                    }
+                }
+
+                const ancestorSelectors = config.excludedAncestors || [];
+                for (let i = 0; i < ancestorSelectors.length; i++) {
+                    const selector = ancestorSelectors[i];
+                    if (element.closest && element.closest(selector)) {
+                        return true;
+                    }
+                }
+            } catch (error) {
+                console.warn('[PracticeEnhancer] 判断是否排除控件失败:', error);
+            }
+
             return false;
         },
 
@@ -839,13 +1183,14 @@ if (!window.practicePageEnhancer) {
 
             // 记录答案
             if (questionId && value !== null && value !== '') {
-                this.answers[questionId] = value;
-                console.log('[PracticeEnhancer] 记录答案:', questionId, '=', value);
+                const normalizedId = this.addAnswer(questionId, value);
+                if (!normalizedId) return;
+                console.log('[PracticeEnhancer] 记录答案:', normalizedId, '=', value);
                 
                 // 记录交互
                 this.interactions.push({
                     type: 'answer',
-                    questionId: questionId,
+                    questionId: normalizedId,
                     value: value,
                     timestamp: Date.now(),
                     elementType: element.type || element.tagName.toLowerCase()
@@ -861,7 +1206,7 @@ if (!window.practicePageEnhancer) {
                 const qName = zone.dataset.target;
                 const card = zone.querySelector('.card');
                 if (qName && card) {
-                    this.answers[qName] = card.dataset.value || card.textContent.trim();
+                    this.addAnswer(qName, card.dataset.value || card.textContent.trim());
                 }
             }
 
@@ -877,7 +1222,7 @@ if (!window.practicePageEnhancer) {
                         const item = items[j];
                         itemTexts.push(item.dataset.heading || item.textContent.trim());
                     }
-                    this.answers['q' + paragraph.toLowerCase()] = itemTexts.join(',');
+                    this.addAnswer('q' + paragraph.toLowerCase(), itemTexts.join(','));
                 }
             }
 
@@ -886,9 +1231,10 @@ if (!window.practicePageEnhancer) {
             for (let i = 0; i < matchZones.length; i++) {
                 const zone = matchZones[i];
                 const qName = zone.dataset.question;
-                const item = zone.querySelector('.drag-item-clone');
+                const item = zone.querySelector('.drag-item') || zone.querySelector('.drag-item-clone');
                 if (qName && item) {
-                    this.answers[qName] = item.dataset.country || item.textContent.trim();
+                    const answerValue = item.dataset.option || item.dataset.country || item.dataset.heading || item.textContent.trim();
+                    this.addAnswer(qName, answerValue);
                 }
             }
         },
@@ -1017,6 +1363,7 @@ if (!window.practicePageEnhancer) {
 
         collectAllAnswers: function () {
             console.log('[PracticeEnhancer] 开始全面收集答案...');
+            this.captureQuestionSet();
             
             const beforeCount = Object.keys(this.answers).length;
 
@@ -1036,8 +1383,10 @@ if (!window.practicePageEnhancer) {
                 console.log(`[PracticeEnhancer] 输入元素 ${index}: type=${input.type}, name=${input.name}, id=${input.id}, value=${value}, questionId=${questionId}`);
                 
                 if (questionId && value !== null && value !== '') {
-                    this.answers[questionId] = value;
-                    console.log(`[PracticeEnhancer] 记录答案: ${questionId} = ${value}`);
+                    const normalizedId = this.addAnswer(questionId, value);
+                    if (normalizedId) {
+                        console.log(`[PracticeEnhancer] 记录答案: ${normalizedId} = ${value}`);
+                    }
                 }
             });
 
@@ -1045,15 +1394,17 @@ if (!window.practicePageEnhancer) {
             this.collectDropzoneAnswers();
 
             // 3. 收集特殊格式的答案（通过data属性）
-            const answerElements = document.querySelectorAll('[data-answer], [data-user-answer], [data-value]');
+            const answerElements = document.querySelectorAll('[data-user-answer], [data-value]');
             console.log('[PracticeEnhancer] 找到data答案元素:', answerElements.length);
             
             answerElements.forEach(element => {
                 const questionId = element.dataset.question || element.dataset.for || element.id;
                 const answer = element.dataset.answer || element.dataset.userAnswer || element.dataset.value;
                 if (questionId && answer) {
-                    this.answers[questionId] = answer;
-                    console.log(`[PracticeEnhancer] 记录data答案: ${questionId} = ${answer}`);
+                    const normalizedId = this.addAnswer(questionId, answer);
+                    if (normalizedId) {
+                        console.log(`[PracticeEnhancer] 记录data答案: ${normalizedId} = ${answer}`);
+                    }
                 }
             });
 
@@ -1066,21 +1417,47 @@ if (!window.practicePageEnhancer) {
             // 6. 尝试从页面特定结构收集答案
             this.collectFromPageStructure();
 
+            // 7. 运行自定义收集器
+            this.runCustomCollectors();
+
             const afterCount = Object.keys(this.answers).length;
             console.log(`[PracticeEnhancer] 全面收集完成，答案数量从 ${beforeCount} 增加到 ${afterCount}`);
             console.log('[PracticeEnhancer] 收集到的所有答案:', this.answers);
         },
 
         getQuestionId: function(input) {
-            // 尝试多种方式获取问题ID
-            // 先过滤排除控件
             if (this.isExcludedControl(input)) return null;
-            if (input.name) return input.name;
-            if (input.id) return input.id.replace(/_input$|-input$|_answer$/, '');
-            if (input.dataset.question) return input.dataset.question;
-            if (input.dataset.for) return input.dataset.for;
+            const config = this.config || {};
+            const attributes = config.questionIdAttributes || [];
+
+            const tryReadAttribute = (key) => {
+                if (key === 'name') {
+                    return input.name || null;
+                }
+                if (key === 'id') {
+                    return input.id ? input.id.replace(/_input$|-input$|_answer$/, '') : null;
+                }
+                if (key.startsWith('data-')) {
+                    const dataKey = key.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+                    if (input.dataset && input.dataset[dataKey]) {
+                        return input.dataset[dataKey];
+                    }
+                    return input.getAttribute(key);
+                }
+                if (input.dataset && input.dataset[key]) {
+                    return input.dataset[key];
+                }
+                return input.getAttribute ? input.getAttribute(key) : null;
+            };
+
+            for (let i = 0; i < attributes.length; i++) {
+                const value = tryReadAttribute(attributes[i]);
+                if (value) return value;
+            }
+
+            if (input.dataset && input.dataset.question) return input.dataset.question;
+            if (input.dataset && input.dataset.for) return input.dataset.for;
             
-            // 尝试从父元素获取
             let parent = input.parentElement;
             while (parent && parent !== document.body) {
                 if (parent.dataset.question) return parent.dataset.question;
@@ -1088,8 +1465,7 @@ if (!window.practicePageEnhancer) {
                 parent = parent.parentElement;
             }
             
-            // 尝试从相邻元素获取
-            const label = document.querySelector(`label[for="${input.id}"]`);
+            const label = input.id ? document.querySelector(`label[for="${input.id}"]`) : null;
             if (label && label.textContent) {
                 const match = label.textContent.match(/(\d+)/);
                 if (match) return 'q' + match[1];
@@ -1126,8 +1502,10 @@ if (!window.practicePageEnhancer) {
                     const value = this.getInputValue(input);
                     
                     if (value !== null && value !== '') {
-                        this.answers[questionId] = value;
-                        console.log(`[PracticeEnhancer] 从容器收集答案: ${questionId} = ${value}`);
+                        const normalizedId = this.addAnswer(questionId, value);
+                        if (normalizedId) {
+                            console.log(`[PracticeEnhancer] 从容器收集答案: ${normalizedId} = ${value}`);
+                        }
                     }
                 });
             });
@@ -1142,7 +1520,7 @@ if (!window.practicePageEnhancer) {
                     const questionId = pair.dataset.question || pair.dataset.left;
                     const answer = pair.dataset.answer || pair.dataset.right;
                     if (questionId && answer) {
-                        this.answers[questionId] = answer;
+                        this.addAnswer(questionId, answer);
                     }
                 });
             });
@@ -1163,7 +1541,7 @@ if (!window.practicePageEnhancer) {
                 
                 if (orderedAnswers.length > 0) {
                     const questionId = container.dataset.question || 'ordering';
-                    this.answers[questionId] = orderedAnswers.join(',');
+                    this.addAnswer(questionId, orderedAnswers.join(','));
                 }
             });
         },
@@ -1197,51 +1575,138 @@ if (!window.practicePageEnhancer) {
                 return;
             }
 
+            this.collectAllAnswers();
+            this.extractFromTranscript();
+
+            const preliminary = this.buildResultsPayload({
+                includeComparison: true,
+                includeScore: false
+            });
+            preliminary.status = 'preliminary';
+            this.dispatchPracticeResultsEvent(preliminary);
+
             const self = this;
-            
-            // 延迟发送数据，确保有足够时间提取正确答案
-            setTimeout(function() {
-                // 最后一次尝试提取正确答案
+            this.waitForResultsRender(1500).then(function () {
                 self.extractFromResultsTable();
-                
-                // 再次延迟，等待异步提取完成
-                setTimeout(function() {
-                    // 如果仍然没有正确答案，尝试其他方法
-                    if (Object.keys(self.correctAnswers).length === 0) {
-                        self.extractCorrectAnswersBackup();
+                self.extractFromTranscript();
+                if (Object.keys(self.correctAnswers).length === 0) {
+                    self.extractCorrectAnswersBackup();
+                }
+
+                const finalResults = self.buildResultsPayload({
+                    includeComparison: true,
+                    includeScore: true
+                });
+                finalResults.status = 'final';
+                self.dispatchPracticeResultsEvent(finalResults);
+
+                const pushResults = function () {
+                    console.log('[PracticeEnhancer] 发送练习完成数据:', finalResults);
+                    self.sendMessage('PRACTICE_COMPLETE', finalResults);
+                };
+
+                if (typeof window.requestIdleCallback === 'function') {
+                    window.requestIdleCallback(pushResults, { timeout: 1200 });
+                } else {
+                    setTimeout(pushResults, 0);
+                }
+            });
+        },
+
+        hasRenderableResults: function () {
+            const resultsEl = document.getElementById('results');
+            if (!resultsEl || resultsEl.style.display === 'none') {
+                return false;
+            }
+            const table = resultsEl.querySelector('table');
+            if (table && table.querySelectorAll('tr').length > 1) {
+                return true;
+            }
+            return (resultsEl.textContent || '').trim().length > 0;
+        },
+
+        waitForResultsRender: function (timeoutMs) {
+            const self = this;
+            const limit = typeof timeoutMs === 'number' ? timeoutMs : 1500;
+            return new Promise(function (resolve) {
+                let resolved = false;
+                let observer = null;
+                const finish = function () {
+                    if (resolved) return;
+                    resolved = true;
+                    if (observer) {
+                        observer.disconnect();
                     }
+                    resolve();
+                };
 
-                    const endTime = Date.now();
-                    const duration = Math.round((endTime - self.startTime) / 1000);
+                if (self.hasRenderableResults()) {
+                    finish();
+                    return;
+                }
 
-                    // 生成答案比较数据
-                    const answerComparison = self.generateAnswerComparison();
+                observer = new MutationObserver(function () {
+                    if (self.hasRenderableResults()) {
+                        finish();
+                    }
+                });
 
-                    const derivedExamId = self.extractExamIdFromUrl();
-                    const resolvedExamId = self.examId || derivedExamId;
-                    
-                    const results = {
-                        sessionId: self.sessionId,
-                        examId: resolvedExamId,
-                        derivedExamId,
-                        originalExamId: self.examId,
-                        startTime: self.startTime,
-                        endTime: endTime,
-                        duration: duration,
-                        answers: self.answers,
-                        correctAnswers: self.correctAnswers, // 新增：正确答案
-                        answerComparison: answerComparison, // 新增：答案比较
-                        interactions: self.interactions,
-                        scoreInfo: self.extractScore(),
-                        pageType: self.detectPageType(),
-                        url: window.location.href,
-                        title: document.title
-                    };
+                observer.observe(document.body, {
+                    childList: true,
+                    subtree: true,
+                    attributes: true
+                });
 
-                    console.log('[PracticeEnhancer] 发送练习完成数据:', results);
-                    self.sendMessage('PRACTICE_COMPLETE', results);
-                }, 1000); // 再等1秒确保异步提取完成
-            }, 500); // 先等0.5秒让结果表格完全显示
+                setTimeout(finish, limit);
+            });
+        },
+
+        dispatchPracticeResultsEvent: function (results) {
+            try {
+                document.dispatchEvent(new CustomEvent('practiceResultsReady', {
+                    detail: results
+                }));
+            } catch (eventError) {
+                console.warn('[PracticeEnhancer] 触发practiceResultsReady事件失败:', eventError);
+            }
+        },
+
+        broadcastResultsUpdate: function () {
+            const results = this.buildResultsPayload({
+                includeComparison: true,
+                includeScore: false
+            });
+            results.status = 'update';
+            this.dispatchPracticeResultsEvent(results);
+        },
+
+        buildResultsPayload: function (options) {
+            const endTime = Date.now();
+            const derivedExamId = this.extractExamIdFromUrl();
+            const resolvedExamId = this.examId || derivedExamId;
+            const includeComparison = options && options.includeComparison;
+            const includeScore = options && options.includeScore;
+
+            return {
+                sessionId: this.sessionId,
+                examId: resolvedExamId,
+                derivedExamId,
+                originalExamId: this.examId,
+                startTime: this.startTime,
+                endTime: endTime,
+                duration: this.startTime ? Math.round((endTime - this.startTime) / 1000) : 0,
+                answers: Object.assign({}, this.answers),
+                correctAnswers: Object.assign({}, this.correctAnswers),
+                answerComparison: includeComparison
+                    ? this.generateAnswerComparison()
+                    : {},
+                interactions: Array.isArray(this.interactions) ? this.interactions.slice() : [],
+                scoreInfo: includeScore ? this.extractScore() : null,
+                pageType: this.detectPageType(),
+                url: window.location.href,
+                title: document.title,
+                allQuestionIds: this.captureQuestionSet().slice()
+            };
         },
 
         generateAnswerComparison: function () {
@@ -1278,54 +1743,13 @@ if (!window.practicePageEnhancer) {
         },
 
         compareAnswers: function (userAnswer, correctAnswer) {
-            const parseAnswer = (value) => {
-                if (value == null) return { kind: 'empty' };
-
-                // 显式列表：数组直接视为无序集合
-                if (Array.isArray(value)) {
-                    const tokens = this.normalizeAnswerTokens(value);
-                    return tokens ? { kind: 'list', tokens } : { kind: 'empty' };
-                }
-
-                const str = String(value).trim();
-                if (!str) return { kind: 'empty' };
-
-                // 包含常见分隔符 => 列表无序比较
-                if (/[;,，|]/.test(str)) {
-                    const tokens = this.normalizeAnswerTokens(str.split(/[;,，|]/));
-                    return tokens ? { kind: 'list', tokens } : { kind: 'empty' };
-                }
-
-                // 默认按文本顺序比较：压缩空格 + 小写
-                const normalized = str.replace(/\s+/g, ' ').trim().toLowerCase();
-                return { kind: 'text', text: normalized };
-            };
-
-            const userParsed = parseAnswer(userAnswer);
-            const correctParsed = parseAnswer(correctAnswer);
-
-            if (userParsed.kind === 'empty' || correctParsed.kind === 'empty') {
+            if (!userAnswer || !correctAnswer) {
                 return false;
             }
-
-            if (userParsed.kind === 'list' && correctParsed.kind === 'list') {
-                if (userParsed.tokens.length !== correctParsed.tokens.length) {
-                    return false;
-                }
-                const correctSet = new Set(correctParsed.tokens);
-                for (const token of userParsed.tokens) {
-                    if (!correctSet.has(token)) {
-                        return false;
-                    }
-                }
-                return true;
-            }
-
-            if (userParsed.kind === 'text' && correctParsed.kind === 'text') {
-                return userParsed.text === correctParsed.text;
-            }
-
-            return false;
+            
+            // 标准化答案进行比较
+            const normalize = (str) => String(str).trim().toLowerCase();
+            return normalize(userAnswer) === normalize(correctAnswer);
         },
 
         extractScore: function () {
@@ -1490,16 +1914,21 @@ if (!window.practicePageEnhancer) {
     };
 
     // 自动初始化
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            window.practicePageEnhancer.initialize().catch((error) => {
-                console.error('[PracticeEnhancer] 初始化失败', error);
-            });
-        });
-    } else {
+    const shouldAutoInitialize = window.practicePageEnhancer.config.autoInitialize !== false;
+    const kickOffInitialization = () => {
         window.practicePageEnhancer.initialize().catch((error) => {
             console.error('[PracticeEnhancer] 初始化失败', error);
         });
+    };
+
+    if (shouldAutoInitialize) {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', kickOffInitialization);
+        } else {
+            kickOffInitialization();
+        }
+    } else {
+        console.log('[PracticeEnhancer] 自动初始化已关闭，等待手动调用initialize()');
     }
 
     // 调试函数
