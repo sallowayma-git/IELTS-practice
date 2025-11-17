@@ -1,22 +1,16 @@
 # ExamSystemApp & State Management
 
 > **Relevant source files**
-> * [assets/developer wiki/hp-overview-usage-todo.md](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/assets/developer wiki/hp-overview-usage-todo.md)
-> * [css/main.css](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/css/main.css)
-> * [index.html](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/index.html)
-> * [js/app.js](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/app.js)
-> * [js/components/DataIntegrityManager.js](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/components/DataIntegrityManager.js)
-> * [js/data/index.js](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/data/index.js)
-> * [js/main.js](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/main.js)
-> * [js/script.js](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/script.js)
-> * [js/utils/simpleStorageWrapper.js](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/utils/simpleStorageWrapper.js)
-> * [js/views/legacyViewBundle.js](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/views/legacyViewBundle.js)
+> * [css/main.css](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/css/main.css)
+> * [index.html](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/index.html)
+> * [js/app.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app.js)
+> * [js/main.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js)
 
 ## Purpose and Scope
 
 This document covers the `ExamSystemApp` class, which serves as the central orchestrator of the application, and the state management architecture that provides unified access to application data. The state system bridges modern service-based state management with legacy global variable patterns to enable progressive refactoring.
 
-For information about application initialization and bootstrap sequence, see [3.2](/sallowayma-git/IELTS-practice/3.2-application-initialization-and-bootstrap). For details on view rendering and navigation, see [3.3](/sallowayma-git/IELTS-practice/3.3-view-management-and-navigation). For mixin architecture, see [3.4](/sallowayma-git/IELTS-practice/3.4-mixins-and-component-architecture).
+For information about application initialization and bootstrap sequence, see [3.2](/sallowayma-git/IELTS-practice/3.2-application-initialization-and-lifecycle). For details on view rendering and navigation, see [3.3](/sallowayma-git/IELTS-practice/3.3-view-management-and-navigation). For mixin architecture, see [3.4](/sallowayma-git/IELTS-practice/3.4-mixins-and-component-architecture).
 
 ---
 
@@ -36,7 +30,7 @@ The application maintains a hierarchical internal state object organized into lo
 | `components` | Component instances | `dataIntegrityManager`, `pdfHandler`, `browseStateManager`, `practiceListScroller` |
 | `system` | System-level tracking | `processedSessions`, `fallbackExamSessions`, `failedScripts` |
 
-**Sources:** [js/app.js L6-L62](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/app.js#L6-L62)
+**Sources:** [js/app.js L6-L62](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app.js#L6-L62)
 
 ### Mixin-Based Composition
 
@@ -79,9 +73,9 @@ fallbackMixin --> methods7
 
 The application function that applies mixins is globally accessible and re-applicable:
 
-**Sources:** [js/app.js L64-L81](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/app.js#L64-L81)
+**Sources:** [js/app.js L64-L81](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app.js#L64-L81)
 
- [index.html L397-L404](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/index.html#L397-L404)
+ [index.html L397-L404](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/index.html#L397-L404)
 
 ---
 
@@ -116,7 +110,7 @@ Singleton --> Adapter
 Adapter --> LegacyGlobals
 ```
 
-**Sources:** [js/main.js L48-L59](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/main.js#L48-L59)
+**Sources:** [js/main.js L48-L59](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L48-L59)
 
 ### State Accessor Functions
 
@@ -152,7 +146,7 @@ function setExamIndexState(list) {
 }
 ```
 
-**Sources:** [js/main.js L65-L79](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/main.js#L65-L79)
+**Sources:** [js/main.js L65-L79](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L65-L79)
 
 #### Practice Records State
 
@@ -174,7 +168,7 @@ function setPracticeRecordsState(records) {
 }
 ```
 
-**Sources:** [js/main.js L81-L95](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/main.js#L81-L95)
+**Sources:** [js/main.js L81-L95](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L81-L95)
 
 #### Browse Filter State
 
@@ -203,7 +197,7 @@ function setBrowseFilterState(category = 'all', type = 'all') {
 }
 ```
 
-**Sources:** [js/main.js L112-L131](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/main.js#L112-L131)
+**Sources:** [js/main.js L112-L131](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L112-L131)
 
 #### Bulk Delete Mode State
 
@@ -224,7 +218,7 @@ function setBulkDeleteModeState(value) {
 }
 ```
 
-**Sources:** [js/main.js L141-L154](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/main.js#L141-L154)
+**Sources:** [js/main.js L141-L154](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L141-L154)
 
 #### Selected Records State (Set-Based)
 
@@ -247,7 +241,7 @@ function addSelectedRecordState(id) {
 }
 ```
 
-**Sources:** [js/main.js L160-L175](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/main.js#L160-L175)
+**Sources:** [js/main.js L160-L175](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L160-L175)
 
 ---
 
@@ -304,7 +298,7 @@ subgraph subGraph1 ["Tier 2: Local Fallback"]
 end
 ```
 
-**Sources:** [js/main.js L42-L59](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/main.js#L42-L59)
+**Sources:** [js/main.js L42-L59](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L42-L59)
 
  Diagram 3 from high-level architecture
 
@@ -322,7 +316,7 @@ const localFallbackState = {
 
 This provides basic functionality without persistence, ensuring the application can render even if storage systems fail.
 
-**Sources:** [js/main.js L42-L46](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/main.js#L42-L46)
+**Sources:** [js/main.js L42-L46](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L42-L46)
 
 ### Global Variable Synchronization
 
@@ -346,7 +340,7 @@ function syncGlobalBrowseState(category, type) {
 
 This function checks for property descriptors to avoid overwriting if a setter has been installed by `AppStateService` or `LegacyStateAdapter`.
 
-**Sources:** [js/main.js L28-L40](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/main.js#L28-L40)
+**Sources:** [js/main.js L28-L40](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L28-L40)
 
 ### LegacyStateAdapter Integration
 
@@ -369,9 +363,9 @@ const stateService = (function resolveStateService() {
 
 The adapter ensures that writes to the service are automatically synchronized to legacy global variables, maintaining backward compatibility.
 
-**Sources:** [js/main.js L48-L59](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/main.js#L48-L59)
+**Sources:** [js/main.js L48-L59](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L48-L59)
 
- [js/main.js L4](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/main.js#L4-L4)
+ [js/main.js L4](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L4-L4)
 
 ---
 
@@ -399,7 +393,7 @@ sequenceDiagram
   end
 ```
 
-**Sources:** [js/main.js L48-L59](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/main.js#L48-L59)
+**Sources:** [js/main.js L48-L59](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L48-L59)
 
 ### Initialization Timing
 
@@ -417,9 +411,9 @@ const initialBrowseFilter = stateService
     : (legacyStateAdapter ? legacyStateAdapter.getBrowseFilter() : { category: 'all', type: 'all' });
 ```
 
-**Sources:** [js/main.js L61-L63](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/main.js#L61-L63)
+**Sources:** [js/main.js L61-L63](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L61-L63)
 
- [js/app.js L86-L92](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/app.js#L86-L92)
+ [js/app.js L86-L92](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app.js#L86-L92)
 
 ---
 
@@ -454,9 +448,9 @@ sequenceDiagram
   main.js->>State Service: getPracticeRecordsState()
 ```
 
-**Sources:** [js/app.js L86-L92](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/app.js#L86-L92)
+**Sources:** [js/app.js L86-L92](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app.js#L86-L92)
 
- [js/main.js L255-L323](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/main.js#L255-L323)
+ [js/main.js L255-L323](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L255-L323)
 
 ### Component Registration
 
@@ -493,9 +487,9 @@ function initializeLegacyComponents() {
 }
 ```
 
-**Sources:** [js/app.js L42-L56](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/app.js#L42-L56)
+**Sources:** [js/app.js L42-L56](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app.js#L42-L56)
 
- [js/main.js L271-L292](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/main.js#L271-L292)
+ [js/main.js L271-L292](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L271-L292)
 
 ---
 
@@ -521,7 +515,7 @@ StateService --> LegacyGlobal
 StateAccessor --> LegacyGlobal
 ```
 
-**Sources:** [js/main.js L81-L95](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/main.js#L81-L95)
+**Sources:** [js/main.js L81-L95](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L81-L95)
 
  Diagram 3 from high-level architecture
 
@@ -538,7 +532,7 @@ function setupStorageSyncListener() {
 }
 ```
 
-**Sources:** [js/main.js L487-L495](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/main.js#L487-L495)
+**Sources:** [js/main.js L487-L495](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L487-L495)
 
 ### Practice Record Synchronization
 
@@ -583,7 +577,7 @@ This function demonstrates:
 * State update via accessor function
 * UI refresh trigger
 
-**Sources:** [js/main.js L341-L443](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/main.js#L341-L443)
+**Sources:** [js/main.js L341-L443](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L341-L443)
 
 ---
 
@@ -600,7 +594,7 @@ All state domains follow a consistent getter/setter pattern:
 | Collection operations | Set-based state | `addSelectedRecordState()`, `removeSelectedRecordState()`, `clearSelectedRecordsState()` |
 | Normalization | Defensive type coercion | All setters normalize inputs (arrays, strings, booleans) |
 
-**Sources:** [js/main.js L133-L193](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/main.js#L133-L193)
+**Sources:** [js/main.js L133-L193](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L133-L193)
 
 ### Defensive Programming
 
@@ -634,7 +628,7 @@ Key defensive techniques:
 * Try-catch blocks for global variable writes (strict mode compatibility)
 * Normalization before persistence
 
-**Sources:** [js/main.js L65-L79](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/main.js#L65-L79)
+**Sources:** [js/main.js L65-L79](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L65-L79)
 
 ---
 
@@ -669,7 +663,7 @@ FallbackRender --> RenderStats
 FallbackRender --> SmokeReport
 ```
 
-**Sources:** [js/script.js L1-L149](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/script.js#L1-L149)
+**Sources:** [js/script.js L1-L149](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/script.js#L1-L149)
 
 ### Smoke Check Reporting
 
@@ -699,7 +693,7 @@ This report is accessible via `window.__legacySmokeReport` for debugging and con
 * **hasService**: Whether state service is available
 * **examCount** / **recordCount**: Current data counts
 
-**Sources:** [js/script.js L91-L105](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/script.js#L91-L105)
+**Sources:** [js/script.js L91-L105](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/script.js#L91-L105)
 
 ---
 
@@ -725,7 +719,7 @@ function finishLibraryLoading(startTime) {
 }
 ```
 
-**Sources:** [js/main.js L552-L614](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/main.js#L552-L614)
+**Sources:** [js/main.js L552-L614](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L552-L614)
 
 ### Practice View Update
 
@@ -749,7 +743,7 @@ This pattern separates:
 2. **Data transformation** (filtering, sorting)
 3. **View rendering** (DOM manipulation)
 
-**Sources:** [js/main.js L1145-L1233](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/main.js#L1145-L1233)
+**Sources:** [js/main.js L1145-L1233](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L1145-L1233)
 
  (inferred from pattern in codebase)
 

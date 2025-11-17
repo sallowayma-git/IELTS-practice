@@ -185,30 +185,16 @@ The component uses two rendering strategies based on the number of records and a
 
 Used when `window.performanceOptimizer` is available and more than 10 records need rendering:
 
-```javascript
-// Creates virtual scroller instance
-this.virtualScroller = window.performanceOptimizer.createVirtualScroller(
-    historyList,
-    pageRecords,
-    (record, index) => this.createRecordElement(record, index),
-    {
-        itemHeight: 120,
-        bufferSize: 3,
-        containerHeight: 600
-    }
-);
+```
+
 ```
 
 #### Strategy 2: DocumentFragment (Standard Lists)
 
 Used for smaller lists or when virtual scrolling is unavailable:
 
-```javascript
-const fragment = document.createDocumentFragment();
-pageRecords.forEach(record => {
-    fragment.appendChild(this.createRecordElement(record));
-});
-historyList.appendChild(fragment);
+```
+
 ```
 
 Both strategies maintain compatibility with `practiceHistoryEnhancer` by checking if the `createRecordItem()` method has been modified and falling back to HTML string parsing if needed.
@@ -408,21 +394,8 @@ The normalization step is crucial for handling exams that use letter-based quest
 
 When `answerComparison` is unavailable, the modal constructs the table from answers and correct answers:
 
-```javascript
-// Extract answers from multiple possible locations
-const answers = record.answers || record.realData?.answers || {};
-const correctAnswers = this.getCorrectAnswers(record);
+```
 
-// Extract question numbers from both sources
-const questionNumbers = this.extractQuestionNumbers(answers, correctAnswers);
-
-// Compare answers and determine correctness
-questionNumbers.forEach(qNum => {
-    const userAnswer = this.getUserAnswer(answers, qNum);
-    const correctAnswer = this.getCorrectAnswer(correctAnswers, qNum);
-    const isCorrect = this.compareAnswers(userAnswer, correctAnswer);
-    // ... render table row
-});
 ```
 
 **Sources:** [js/components/practiceRecordModal.js L169-L237](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/components/practiceRecordModal.js#L169-L237)
@@ -492,10 +465,8 @@ TIME --> FORMAT
 
 The time formatting includes fallback logic when `window.Utils` is unavailable:
 
-```javascript
-const formattedTime = (window.Utils && typeof window.Utils.formatDuration === 'function') 
-    ? Utils.formatDuration(totalTime)
-    : this.formatDurationFallback(totalTime);
+```
+
 ```
 
 **Sources:** [js/components/practiceHistory.js L684-L713](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/components/practiceHistory.js#L684-L713)
@@ -590,25 +561,8 @@ The `PracticeRecordModal` includes a `exportSingle()` method (referenced but not
 
 Both components implement event delegation patterns for performance and compatibility:
 
-```javascript
-// PracticeHistory uses document-level click delegation
-document.addEventListener('click', (e) => {
-    // Handle checkbox clicks
-    const checkbox = e.target.closest('input[type="checkbox"][data-record-id]');
-    if (checkbox) { /* ... */ }
-    
-    // Handle title clicks for details
-    const recordTitle = e.target.closest('.record-title');
-    if (recordTitle) { /* ... */ }
-    
-    // Handle action buttons
-    const actionBtn = e.target.closest('[data-history-action]');
-    if (actionBtn) { /* ... */ }
-    
-    // Handle pagination
-    const pageBtn = e.target.closest('.page-btn');
-    if (pageBtn) { /* ... */ }
-});
+```
+
 ```
 
 **Sources:** [js/components/practiceHistory.js L164-L202](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/components/practiceHistory.js#L164-L202)
@@ -618,15 +572,7 @@ document.addEventListener('click', (e) => {
 Filter controls use both event delegation (when available) and direct event binding with fallback logic:
 
 ```
-if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
-    // Use event delegation
-    window.DOM.delegate('input', '#history-search', handleSearch);
-    window.DOM.delegate('change', '#date-range-filter', handleDateRange);
-} else {
-    // Fallback to direct binding
-    searchInput.addEventListener('input', debounceFunc(handleSearch, 300));
-    dateRangeFilter.addEventListener('change', handleDateRange);
-}
+
 ```
 
 The search input uses debouncing (300ms) to avoid excessive filtering during typing.
@@ -638,21 +584,7 @@ The search input uses debouncing (300ms) to avoid excessive filtering during typ
 The `PracticeRecordModal` uses similar delegation patterns with fallback support:
 
 ```
-if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
-    // Click outside modal to close
-    window.DOM.delegate('click', `#${this.modalId}`, function(e) {
-        if (e.target === this) {
-            window.practiceRecordModal.hide();
-        }
-    });
-    
-    // ESC key to close
-    window.DOM.delegate('keydown', document, function(e) {
-        if (e.key === 'Escape' && window.practiceRecordModal.isVisible) {
-            window.practiceRecordModal.hide();
-        }
-    });
-}
+
 ```
 
 **Sources:** [js/components/practiceRecordModal.js L660-L697](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/components/practiceRecordModal.js#L660-L697)
@@ -665,19 +597,8 @@ if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
 
 When rendering more than 10 records, the component can leverage `window.performanceOptimizer.createVirtualScroller()`:
 
-```javascript
-this.virtualScroller = window.performanceOptimizer.createVirtualScroller(
-    historyList,           // Container element
-    pageRecords,           // Data array
-    (record, index) => {   // Item renderer function
-        return this.createRecordElement(record, index);
-    },
-    {
-        itemHeight: 120,        // Fixed height per item
-        bufferSize: 3,          // Number of extra items to render
-        containerHeight: 600    // Visible container height
-    }
-);
+```
+
 ```
 
 This approach only renders visible items plus a buffer, significantly improving performance for large record sets.
@@ -692,24 +613,16 @@ The component provides two DOM creation methods:
 
 Returns an HTML string for legacy compatibility and enhancer integration:
 
-```html
-createRecordItem(record) {
-    return `<div class="history-record-item" data-record-id="${recordIdStr}">...</div>`;
-}
+```
+
 ```
 
 #### createRecordElement() - Direct DOM Method
 
 Creates DOM elements directly for better performance:
 
-```javascript
-createRecordElement(record, index = null) {
-    const recordItem = document.createElement('div');
-    recordItem.className = 'history-record-item';
-    recordItem.dataset.recordId = recordIdStr;
-    // ... build element tree
-    return recordItem;
-}
+```
+
 ```
 
 The rendering logic detects if `practiceHistoryEnhancer` has modified `createRecordItem()` and chooses the appropriate method to maintain compatibility.
@@ -751,10 +664,7 @@ These fallbacks ensure the components function even when utility libraries are u
 After modifications, components trigger synchronization:
 
 ```
-// After deleting records
-if (typeof window.syncPracticeRecords === 'function') {
-    window.syncPracticeRecords();
-}
+
 ```
 
 This ensures global state variables like `window.practiceRecords` remain synchronized with storage.
@@ -766,11 +676,7 @@ This ensures global state variables like `window.practiceRecords` remain synchro
 Both components expose global references for cross-component communication:
 
 ```
-// PracticeHistory (via app)
-window.app.components.practiceHistory = new PracticeHistory();
 
-// PracticeRecordModal (direct)
-window.practiceRecordModal = new PracticeRecordModal();
 ```
 
 **Sources:** [js/components/practiceRecordModal.js L11](https://github.com/sallowayma-git/IELTS-practice/blob/df0c9b8f/js/components/practiceRecordModal.js#L11-L11)
@@ -798,16 +704,8 @@ The components don't directly interact with `ThemeManager` but rely on CSS class
 
 The modal includes optional data consistency validation on display:
 
-```javascript
-show(record) {
-    let processedRecord = record;
-    if (window.DataConsistencyManager) {
-        const manager = new DataConsistencyManager();
-        processedRecord = manager.ensureConsistency(record);
-        console.log('[PracticeRecordModal] 数据一致性检查完成');
-    }
-    // ... continue with processed record
-}
+```
+
 ```
 
 This ensures records have all required fields with proper default values before rendering.
@@ -818,17 +716,8 @@ This ensures records have all required fields with proper default values before 
 
 The modal includes extensive compatibility logic to handle records with varying field structures:
 
-```javascript
-// Title from multiple sources
-const safeTitle = record.title || record.metadata?.examTitle || '未知题目';
+```
 
-// Category with fallback
-const safeCategory = record.category || record.metadata?.category || 'Unknown';
-
-// Duration calculation with multiple fallbacks
-const durationSec = (typeof record.duration === 'number' ? record.duration
-    : (record.realData && typeof record.realData.duration === 'number' ? record.realData.duration
-       : (startTs && record.endTime ? Math.max(0, Math.floor((new Date(record.endTime) - new Date(startTs)) / 1000)) : 0)));
 ```
 
 This approach ensures compatibility with records created by different versions of the practice recorder.
@@ -843,26 +732,8 @@ This approach ensures compatibility with records created by different versions o
 
 The `PracticeHistory` component centralizes action handling:
 
-```javascript
-async handleRecordAction(action, recordId) {
-    const record = this.filteredRecords.find(r => String(r.id) === recordIdStr);
-    if (!record) return;
-    
-    switch (action) {
-        case 'retry':
-            this.retryExam(record);
-            break;
-        case 'details':
-            this.showRecordDetails(recordIdStr);
-            break;
-        case 'delete':
-            await this.deleteRecord(recordIdStr);
-            break;
-        case 'bulkDelete':
-            await this.bulkDeleteSelected();
-            break;
-    }
-}
+```
+
 ```
 
 Actions are identified by `data-history-action` attributes on buttons.
@@ -874,13 +745,7 @@ Actions are identified by `data-history-action` attributes on buttons.
 The retry action delegates to the main application:
 
 ```
-retryExam(record) {
-    if (window.app && typeof window.app.openExam === 'function') {
-        window.app.openExam(record.examId);
-    } else {
-        window.showMessage('无法重新打开题目', 'error');
-    }
-}
+
 ```
 
 This maintains separation of concerns by letting the application core handle exam opening.
