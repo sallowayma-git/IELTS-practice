@@ -1593,6 +1593,29 @@ function normalizeFallbackAnswerComparison(existingComparison, answerMap, correc
 // 降级保存：将 PRACTICE_COMPLETE 的真实数据写入 practice_records（与旧视图字段兼容）
 async function savePracticeRecordFallback(examId, realData) {
   try {
+    const suiteSessionId = realData?.suiteSessionId
+      || realData?.metadata?.suiteSessionId
+      || realData?.scoreInfo?.suiteSessionId
+      || null;
+    const normalizedPracticeMode = String(realData?.practiceMode || realData?.metadata?.practiceMode || '').toLowerCase();
+    const normalizedFrequency = String(realData?.frequency || realData?.metadata?.frequency || '').toLowerCase();
+    const hasSuiteEntries = Array.isArray(realData?.suiteEntries) && realData.suiteEntries.length > 0;
+    const isSuiteAggregatePayload = hasSuiteEntries
+      || Array.isArray(realData?.metadata?.suiteEntries);
+    const isSuiteFlow = Boolean(
+      suiteSessionId
+      || realData?.suiteMode
+      || normalizedPracticeMode === 'suite'
+      || normalizedFrequency === 'suite'
+    );
+    if (isSuiteFlow && !isSuiteAggregatePayload) {
+      console.log('[Fallback] 检测到套题模式子结果，降级路径跳过单篇保存:', {
+        examId,
+        suiteSessionId: suiteSessionId || null
+      });
+      return null;
+    }
+
     const list = getExamIndexState();
     let exam = list.find(e => e.id === examId) || {};
     
