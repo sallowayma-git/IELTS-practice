@@ -164,7 +164,24 @@ class ScoreStorage {
             typeof recordData.correctAnswers === 'object' &&
             !Array.isArray(recordData.correctAnswers)
         ) {
-            return Object.keys(recordData.correctAnswers).length;
+            let hasBooleanFlag = false;
+            const correctCount = Object.values(recordData.correctAnswers).reduce((count, value) => {
+                if (typeof value === 'boolean') {
+                    hasBooleanFlag = true;
+                    return value ? count + 1 : count;
+                }
+                if (value && typeof value === 'object') {
+                    const flag = value.isCorrect ?? value.correct;
+                    if (typeof flag === 'boolean') {
+                        hasBooleanFlag = true;
+                        return flag ? count + 1 : count;
+                    }
+                }
+                return count;
+            }, 0);
+            if (hasBooleanFlag) {
+                return correctCount;
+            }
         }
 
         if (Array.isArray(answers) && answers.length > 0) {
