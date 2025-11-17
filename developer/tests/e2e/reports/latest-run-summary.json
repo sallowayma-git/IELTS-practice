@@ -1,0 +1,9 @@
+{
+  "generatedAt": "2025-10-08T14:05:49Z",
+  "targetUrl": "http://127.0.0.1:8000/developer/tests/e2e/app-e2e-runner.html",
+  "summary": {
+    "total": 17,
+    "passed": 17,
+    "failed": 0
+  }
+}
