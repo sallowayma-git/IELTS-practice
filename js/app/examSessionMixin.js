@@ -1772,15 +1772,18 @@
                 data.sessionId = `${examId}_${Date.now()}`;
             }
 
+            let suiteHandlerDeclined = false;
             if (this.suiteExamMap && this.suiteExamMap.has(examId) && typeof this.handleSuitePracticeComplete === 'function') {
                 try {
                     const handled = await this.handleSuitePracticeComplete(examId, data);
                     if (handled) {
                         return;
                     }
+                    suiteHandlerDeclined = true;
                 } catch (suiteError) {
                     console.error('[SuitePractice] 处理套题结果失败，回退至普通流程:', suiteError);
                     window.showMessage && window.showMessage('套题模式出现异常，记录将以单篇形式保存。', 'warning');
+                    suiteHandlerDeclined = true;
                 }
             }
 
@@ -1791,7 +1794,13 @@
             try {
                 if (recorderAvailable) {
                     try {
-                        await this.components.practiceRecorder.savePracticeRecord(examId, data);
+                        const normalizedData = suiteHandlerDeclined
+                            ? Object.assign({}, data, {
+                                allowStandaloneSave: true,
+                                metadata: Object.assign({}, data?.metadata || {}, { allowStandaloneSave: true, suiteFallback: true })
+                            })
+                            : data;
+                        await this.components.practiceRecorder.savePracticeRecord(examId, normalizedData);
                     } catch (recErr) {
                         console.warn('[DataCollection] PracticeRecorder 保存失败，改用降级存储:', recErr);
                         await this.saveRealPracticeData(examId, data);
