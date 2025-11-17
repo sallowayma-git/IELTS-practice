@@ -1888,8 +1888,33 @@
         /**
          * 保存真实练习数据（采用旧版本的简单直接方式）
          */
-        async saveRealPracticeData(examId, realData) {
+        async saveRealPracticeData(examId, realData, options = {}) {
             try {
+
+                const forceIndividualSave = Boolean(options && options.forceIndividualSave);
+                const suiteSessionId = realData?.suiteSessionId
+                    || realData?.metadata?.suiteSessionId
+                    || realData?.scoreInfo?.suiteSessionId
+                    || null;
+                const normalizedPracticeMode = String(realData?.practiceMode || realData?.metadata?.practiceMode || '').toLowerCase();
+                const normalizedFrequency = String(realData?.frequency || realData?.metadata?.frequency || '').toLowerCase();
+                const hasSuiteMapping = Boolean(this.suiteExamMap && this.suiteExamMap.has(examId));
+                const hasSuiteEntries = Array.isArray(realData?.suiteEntries) && realData.suiteEntries.length > 0;
+                const aggregatePayload = hasSuiteEntries || Array.isArray(realData?.metadata?.suiteEntries);
+                const isSuiteFlow = Boolean(
+                    suiteSessionId
+                    || realData?.suiteMode
+                    || normalizedPracticeMode === 'suite'
+                    || normalizedFrequency === 'suite'
+                    || hasSuiteMapping
+                );
+                if (isSuiteFlow && !aggregatePayload && !forceIndividualSave) {
+                    console.log('[DataCollection] 套题模式结果由套题流程接管，跳过单篇降级保存:', {
+                        examId,
+                        suiteSessionId: suiteSessionId || null
+                    });
+                    return;
+                }
 
                 const exam = await findExamDefinition(examId);
 

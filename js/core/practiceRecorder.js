@@ -937,20 +937,23 @@ class PracticeRecorder {
             || this.lookupExamIndexEntry(payload.derivedExamId);
         const type = this.resolvePracticeType({ ...session, examId: resolvedExamId }, examEntry);
         const recordDate = this.resolveRecordDate({ ...session, endTime: resolvedEndTime }, resolvedEndTime);
-        const metadata = this.buildRecordMetadata(
+        let metadata = this.buildRecordMetadata(
             { ...session, examId: resolvedExamId, metadata: Object.assign({}, session.metadata, results?.metadata || {}) },
             examEntry,
             type
         );
-        const suiteSessionId = payload.suiteSessionId
+        let suiteSessionId = payload.suiteSessionId
             || metadata?.suiteSessionId
             || session?.metadata?.suiteSessionId
             || null;
+        if (!suiteSessionId) {
+            suiteSessionId = this.resolveSuiteSessionFromApp(resolvedExamId);
+        }
         if (suiteSessionId && !metadata.suiteSessionId) {
-            metadata.suiteSessionId = suiteSessionId;
+            metadata = Object.assign({}, metadata, { suiteSessionId });
         }
         if (suiteSessionId && !metadata.practiceMode) {
-            metadata.practiceMode = 'suite';
+            metadata = Object.assign({}, metadata, { practiceMode: 'suite' });
         }
 
         const answerMap = this.mergeAnswerSources(
@@ -1051,6 +1054,41 @@ class PracticeRecorder {
             }
             return practiceRecord;
         }
+    }
+
+    resolveSuiteSessionFromApp(examId) {
+        if (!examId) {
+            return null;
+        }
+        try {
+            const appInstance = typeof window !== 'undefined' ? window.app : null;
+            if (!appInstance) {
+                return null;
+            }
+            if (appInstance.suiteExamMap && typeof appInstance.suiteExamMap.get === 'function') {
+                const mappedId = appInstance.suiteExamMap.get(examId);
+                if (mappedId) {
+                    return mappedId;
+                }
+            }
+            const currentSession = appInstance.currentSuiteSession;
+            if (currentSession && Array.isArray(currentSession.sequence)) {
+                const match = currentSession.sequence.find(entry => entry && entry.examId === examId);
+                if (match && currentSession.id) {
+                    return currentSession.id;
+                }
+            }
+            const stateSuite = appInstance.state && appInstance.state.suite;
+            if (stateSuite && Array.isArray(stateSuite.sequence)) {
+                const match = stateSuite.sequence.find(entry => entry && entry.examId === examId);
+                if (match && stateSuite.sessionId) {
+                    return stateSuite.sessionId;
+                }
+            }
+        } catch (error) {
+            console.warn('[PracticeRecorder] 无法从应用状态解析套题会话:', error);
+        }
+        return null;
     }
 
     /**
