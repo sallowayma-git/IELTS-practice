@@ -106,109 +106,6 @@ class ScoreStorage {
         return Number.isFinite(num) ? num : fallback;
     }
 
-    deriveTotalQuestionCount(recordData = {}, fallbackLength = 0) {
-        const candidates = [
-            recordData.totalQuestions,
-            recordData.questionCount,
-            recordData.scoreInfo?.total,
-            recordData.scoreInfo?.totalQuestions,
-            recordData.realData?.scoreInfo?.totalQuestions,
-            recordData.realData?.scoreInfo?.total
-        ];
-        for (const candidate of candidates) {
-            const num = Number(candidate);
-            if (Number.isFinite(num) && num >= 0) {
-                return num;
-            }
-        }
-
-        if (Array.isArray(recordData.answers)) {
-            return recordData.answers.length;
-        }
-        if (Array.isArray(recordData.answerList)) {
-            return recordData.answerList.length;
-        }
-
-        const detailSources = [
-            recordData.answerDetails,
-            recordData.scoreInfo?.details,
-            recordData.realData?.scoreInfo?.details
-        ];
-        for (const details of detailSources) {
-            if (details && typeof details === 'object') {
-                return Object.keys(details).length;
-            }
-        }
-        return fallbackLength || 0;
-    }
-
-    deriveCorrectAnswerCount(recordData = {}, answers = []) {
-        const numericCandidates = [
-            recordData.correctAnswers,
-            recordData.correct,
-            recordData.score,
-            recordData.scoreInfo?.correct,
-            recordData.scoreInfo?.score,
-            recordData.realData?.scoreInfo?.correct,
-            recordData.realData?.scoreInfo?.score
-        ];
-        for (const candidate of numericCandidates) {
-            const num = Number(candidate);
-            if (Number.isFinite(num) && num >= 0) {
-                return num;
-            }
-        }
-
-        if (
-            recordData.correctAnswers &&
-            typeof recordData.correctAnswers === 'object' &&
-            !Array.isArray(recordData.correctAnswers)
-        ) {
-            return Object.keys(recordData.correctAnswers).length;
-        }
-
-        if (Array.isArray(answers) && answers.length > 0) {
-            const computed = answers.reduce((sum, answer) => {
-                if (!answer || typeof answer !== 'object') {
-                    return sum;
-                }
-                if (answer.correct === true || answer.isCorrect === true) {
-                    return sum + 1;
-                }
-                return sum;
-            }, 0);
-            if (computed > 0) {
-                return computed;
-            }
-        }
-
-        const detailSources = [
-            recordData.answerDetails,
-            recordData.scoreInfo?.details,
-            recordData.realData?.scoreInfo?.details
-        ];
-        for (const details of detailSources) {
-            if (!details || typeof details !== 'object') {
-                continue;
-            }
-            let hasFlag = false;
-            let correct = 0;
-            Object.values(details).forEach(detail => {
-                if (!detail || typeof detail !== 'object') {
-                    return;
-                }
-                if (detail.isCorrect === true || detail.correct === true) {
-                    correct += 1;
-                }
-                hasFlag = hasFlag || typeof detail.isCorrect === 'boolean' || typeof detail.correct === 'boolean';
-            });
-            if (hasFlag) {
-                return correct;
-            }
-        }
-        return 0;
-    }
-
     getDateOnlyIso(value) {
         if (!value) return null;
         if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
@@ -313,12 +210,8 @@ class ScoreStorage {
      * 初始化存储系统
      */
     async initialize() {
-<<<<<<< HEAD
-        console.log('[ScoreStorage] 初始化完成');
-=======
         try {
             console.log('ScoreStorage initialized');
->>>>>>> origin/improved-version
 
             // 检查存储版本并迁移数据
             await this.checkStorageVersion();
@@ -455,11 +348,10 @@ class ScoreStorage {
      * 保存练习记录
      */
     async savePracticeRecord(recordData) {
-        let standardizedRecord;
         try {
             await this.ensureReady();
             // 标准化记录格式
-            standardizedRecord = this.standardizeRecord(recordData);
+            const standardizedRecord = this.standardizeRecord(recordData);
             
             // 验证记录数据
             this.validateRecord(standardizedRecord);
@@ -468,17 +360,17 @@ class ScoreStorage {
             let records = await this.storage.get(this.storageKeys.practiceRecords, []);
             records = Array.isArray(records) ? records.slice() : [];
 
-            let sanitizedCount = 0;
+            let legacyPatched = false;
             records = records.map(record => {
-                if (!this.needsRecordSanitization(record)) {
+                if (record && typeof record === 'object' && record.type && record.metadata && record.metadata.type) {
                     return record;
                 }
-                sanitizedCount += 1;
+                legacyPatched = true;
                 return this.normalizeLegacyRecord(record);
             });
 
-            if (sanitizedCount > 0) {
-                console.log(`[ScoreStorage] 已自动修复 ${sanitizedCount} 条历史练习记录字段缺失或格式问题`);
+            if (legacyPatched) {
+                console.log('[ScoreStorage] 已自动修复历史练习记录字段缺失问题');
             }
 
             // 检查是否已存在相同ID的记录
@@ -509,13 +401,7 @@ class ScoreStorage {
             return standardizedRecord;
             
         } catch (error) {
-            console.error('Failed to save practice record:', {
-                recordId: recordData?.id || standardizedRecord?.id,
-                examId: recordData?.examId || standardizedRecord?.examId,
-                type: recordData?.type || standardizedRecord?.type,
-                correctAnswers: recordData?.correctAnswers,
-                validationErrors: error?.validationErrors || null
-            }, error);
+            console.error('Failed to save practice record:', error);
             throw error;
         }
     }
@@ -525,18 +411,6 @@ class ScoreStorage {
             return record;
         }
         const patched = Object.assign({}, record);
-        if (Array.isArray(record.suiteEntries)) {
-            patched.suiteEntries = record.suiteEntries.map(entry => this.clonePlainObject(entry)).filter(Boolean);
-        }
-        if (record.suiteMode != null) {
-            patched.suiteMode = Boolean(record.suiteMode);
-        }
-        if (record.suiteSessionId) {
-            patched.suiteSessionId = record.suiteSessionId;
-        }
-        if (record.frequency) {
-            patched.frequency = record.frequency;
-        }
         const inferredType = this.inferPracticeType(patched);
         if (!patched.type) {
             patched.type = inferredType;
@@ -546,36 +420,9 @@ class ScoreStorage {
             patched.type
         );
         patched.metadata = normalizedMetadata;
-
-        const normalizedAnswers = this.standardizeAnswers(patched.answers || patched.answerList || []);
-        patched.answers = normalizedAnswers;
-        patched.answerList = normalizedAnswers;
-        const answerMap = normalizedAnswers.reduce((map, item) => {
-            if (item && item.questionId) {
-                map[item.questionId] = item.answer || '';
-            }
-            return map;
-        }, {});
-        const normalizedCorrectMap = (
-            patched.correctAnswerMap && typeof patched.correctAnswerMap === 'object'
-        )
-            ? patched.correctAnswerMap
-            : this.deriveCorrectMapFromDetails(
-                patched.scoreInfo?.details || patched.realData?.scoreInfo?.details || patched.answerDetails
-            );
-        patched.correctAnswerMap = normalizedCorrectMap || {};
-        if (!patched.answerDetails || typeof patched.answerDetails !== 'object') {
-            patched.answerDetails = this.buildAnswerDetailsFromMaps(answerMap, patched.correctAnswerMap);
+        if (!Array.isArray(patched.answers)) {
+            patched.answers = this.standardizeAnswers(patched.answers || []);
         }
-        const derivedTotals = this.deriveTotalQuestionCount(patched, normalizedAnswers.length);
-        const derivedCorrect = this.deriveCorrectAnswerCount(patched, normalizedAnswers);
-        patched.totalQuestions = this.ensureNumber(patched.totalQuestions, derivedTotals);
-        patched.correctAnswers = this.ensureNumber(patched.correctAnswers, derivedCorrect);
-        patched.score = this.ensureNumber(patched.score, patched.correctAnswers);
-        patched.accuracy = this.ensureNumber(
-            patched.accuracy,
-            patched.totalQuestions > 0 ? patched.correctAnswers / patched.totalQuestions : 0
-        );
         if (!patched.startTime) {
             patched.startTime = patched.date || patched.endTime || new Date().toISOString();
         }
@@ -585,38 +432,7 @@ class ScoreStorage {
         if (!patched.status) {
             patched.status = 'completed';
         }
-        if (!patched.scoreInfo) {
-            patched.scoreInfo = {};
-        }
-        if (!patched.scoreInfo.details && patched.answerDetails) {
-            patched.scoreInfo.details = patched.answerDetails;
-        }
-        if (patched.realData) {
-            patched.realData = Object.assign({}, patched.realData, {
-                answers: patched.realData.answers || answerMap,
-                correctAnswers: patched.realData.correctAnswers || patched.correctAnswerMap,
-                scoreInfo: Object.assign({}, patched.realData.scoreInfo || {}, {
-                    details: patched.realData.scoreInfo?.details || patched.answerDetails || null
-                })
-            });
-        }
         return patched;
-    }
-
-    needsRecordSanitization(record) {
-        if (!record || typeof record !== 'object') {
-            return true;
-        }
-        if (!record.type || !record.metadata || !record.metadata.type) {
-            return true;
-        }
-        const numericFields = ['score', 'totalQuestions', 'correctAnswers', 'accuracy', 'duration'];
-        return numericFields.some((field) => {
-            if (!Object.prototype.hasOwnProperty.call(record, field)) {
-                return false;
-            }
-            return typeof record[field] !== 'number' || Number.isNaN(record[field]);
-        });
     }
 
     /**
@@ -627,42 +443,6 @@ class ScoreStorage {
         const type = this.inferPracticeType(recordData);
         const recordDate = this.resolveRecordDate(recordData, now);
         const metadata = this.buildMetadata(recordData, type);
-        const normalizedAnswers = this.standardizeAnswers(recordData.answers || recordData.answerList || []);
-        const answerMap = normalizedAnswers.reduce((map, item) => {
-            if (item && item.questionId) {
-                map[item.questionId] = item.answer || '';
-            }
-            return map;
-        }, {});
-        const suiteSessionId = recordData.suiteSessionId
-            || recordData.metadata?.suiteSessionId
-            || null;
-        if (suiteSessionId && !metadata.suiteSessionId) {
-            metadata.suiteSessionId = suiteSessionId;
-        }
-        const frequency = recordData.frequency || metadata.frequency || null;
-        if (frequency && !metadata.frequency) {
-            metadata.frequency = frequency;
-        }
-        const normalizedCorrectMap = (
-            recordData.correctAnswerMap && typeof recordData.correctAnswerMap === 'object'
-        )
-            ? recordData.correctAnswerMap
-            : (recordData.realData?.correctAnswers && typeof recordData.realData.correctAnswers === 'object'
-                ? recordData.realData.correctAnswers
-                : {});
-        const derivedTotalQuestions = this.deriveTotalQuestionCount(recordData, normalizedAnswers.length);
-        const derivedCorrectAnswers = this.deriveCorrectAnswerCount(recordData, normalizedAnswers);
-        const totalQuestions = this.ensureNumber(recordData.totalQuestions, derivedTotalQuestions);
-        const correctAnswers = this.ensureNumber(recordData.correctAnswers, derivedCorrectAnswers);
-        const accuracy = this.ensureNumber(
-            recordData.accuracy,
-            totalQuestions > 0 ? correctAnswers / totalQuestions : 0
-        );
-        const detailSource = recordData.answerDetails
-            || recordData.scoreInfo?.details
-            || recordData.realData?.scoreInfo?.details
-            || this.buildAnswerDetailsFromMaps(answerMap, normalizedCorrectMap);
 
         const startTime = recordData.startTime && !Number.isNaN(new Date(recordData.startTime).getTime())
             ? new Date(recordData.startTime).toISOString()
@@ -676,10 +456,6 @@ class ScoreStorage {
             || recordData.examTitle
             || recordData.examId
             || '未命名练习';
-        const normalizedSuiteEntries = this.standardizeSuiteEntries(recordData.suiteEntries || []);
-        const normalizedComparison = (recordData.answerComparison && typeof recordData.answerComparison === 'object')
-            ? this.clonePlainObject(recordData.answerComparison)
-            : null;
 
         return {
             // 基础信息
@@ -698,40 +474,20 @@ class ScoreStorage {
             // 成绩信息
             status: recordData.status || 'completed',
             score: this.ensureNumber(recordData.score, 0),
-            totalQuestions,
-            correctAnswers,
-            accuracy,
+            totalQuestions: this.ensureNumber(recordData.totalQuestions, 0),
+            correctAnswers: this.ensureNumber(recordData.correctAnswers, 0),
+            accuracy: this.ensureNumber(recordData.accuracy, 0),
 
             // 答题详情
-            answers: normalizedAnswers,
-            answerDetails: detailSource || null,
-            correctAnswerMap: normalizedCorrectMap || {},
+            answers: this.standardizeAnswers(recordData.answers || recordData.answerList || []),
+            answerDetails: recordData.answerDetails || null,
+            correctAnswerMap: recordData.correctAnswerMap || {},
             questionTypePerformance: recordData.questionTypePerformance || {},
 
             // 元数据
             metadata,
-            frequency: frequency || metadata.frequency || null,
-            suiteMode: Boolean(recordData.suiteMode || (frequency && frequency.toLowerCase() === 'suite')),
-            suiteSessionId,
-            suiteEntries: normalizedSuiteEntries,
-            scoreInfo: recordData.scoreInfo
-                ? Object.assign({}, recordData.scoreInfo, {
-                    details: recordData.scoreInfo.details || detailSource || null
-                })
-                : (detailSource ? { details: detailSource } : null),
-            realData: recordData.realData
-                ? Object.assign({}, recordData.realData, {
-                    answers: recordData.realData.answers || answerMap,
-                    correctAnswers: recordData.realData.correctAnswers || normalizedCorrectMap,
-                    scoreInfo: Object.assign({}, recordData.realData.scoreInfo || {}, {
-                        details: recordData.realData.scoreInfo?.details || detailSource || null
-                    }),
-                    answerComparison: recordData.realData.answerComparison
-                        ? this.clonePlainObject(recordData.realData.answerComparison)
-                        : (normalizedComparison || null)
-                })
-                : (normalizedComparison ? { answerComparison: normalizedComparison } : null),
-            answerComparison: normalizedComparison,
+            scoreInfo: recordData.scoreInfo || null,
+            realData: recordData.realData || null,
 
             // 系统信息
             version: this.currentVersion,
@@ -763,63 +519,6 @@ class ScoreStorage {
             questionType: answer.questionType || 'unknown',
             timestamp: answer.timestamp || new Date().toISOString()
         }));
-    }
-
-    clonePlainObject(value) {
-        if (value == null || typeof value !== 'object') {
-            return value ?? null;
-        }
-        if (Array.isArray(value)) {
-            return value.map(item => this.clonePlainObject(item)).filter(item => item !== undefined);
-        }
-        const clone = {};
-        Object.keys(value).forEach((key) => {
-            const entry = value[key];
-            clone[key] = (entry && typeof entry === 'object')
-                ? this.clonePlainObject(entry)
-                : entry;
-        });
-        return clone;
-    }
-
-    standardizeSuiteEntries(entries) {
-        if (!Array.isArray(entries)) {
-            return [];
-        }
-        return entries.map((entry, index) => {
-            if (!entry || typeof entry !== 'object') {
-                return null;
-            }
-            const normalizedAnswers = this.standardizeAnswers(entry.answers || entry.answerList || []);
-            const answerMap = normalizedAnswers.reduce((map, item) => {
-                if (item && item.questionId) {
-                    map[item.questionId] = item.answer || '';
-                }
-                return map;
-            }, {});
-            const normalizedScoreInfo = entry.scoreInfo
-                ? Object.assign({}, entry.scoreInfo, {
-                    details: entry.scoreInfo?.details
-                        ? this.clonePlainObject(entry.scoreInfo.details)
-                        : null
-                })
-                : null;
-            const answerComparisonSource = entry.answerComparison
-                || normalizedScoreInfo?.details
-                || entry.rawData?.answerComparison
-                || null;
-            return {
-                examId: entry.examId || null,
-                title: entry.title || entry.examTitle || `套题第${index + 1}篇`,
-                category: entry.category || entry.metadata?.category || '套题',
-                duration: this.ensureNumber(entry.duration, 0),
-                scoreInfo: normalizedScoreInfo,
-                answers: answerMap,
-                answerComparison: this.clonePlainObject(answerComparisonSource) || null,
-                metadata: entry.metadata ? Object.assign({}, entry.metadata) : {},
-                rawData: entry.rawData ? this.clonePlainObject(entry.rawData) : null
-            };
-        }).filter(Boolean);
     }
 
     deriveCorrectMapFromDetails(details) {
@@ -905,12 +604,6 @@ class ScoreStorage {
         const duration = Number(practiceRecord.duration) || 0;
         const accuracy = Number(practiceRecord.accuracy) || 0;
         const normalizedRecord = { ...practiceRecord, duration, accuracy };
-        if (!stats.categoryStats || typeof stats.categoryStats !== 'object') {
-            stats.categoryStats = {};
-        }
-        if (!stats.questionTypeStats || typeof stats.questionTypeStats !== 'object') {
-            stats.questionTypeStats = {};
-        }
 
         // 更新基础统计
         stats.totalPractices += 1;
@@ -945,15 +638,7 @@ class ScoreStorage {
      * 更新分类统计
      */
     updateCategoryStats(stats, practiceRecord) {
-        if (!stats || typeof stats !== 'object') {
-            return;
-        }
-
-        if (!stats.categoryStats || typeof stats.categoryStats !== 'object') {
-            stats.categoryStats = {};
-        }
-
-        const category = practiceRecord?.metadata?.category;
+        const category = practiceRecord.metadata.category;
         if (!category) return;
         
         if (!stats.categoryStats[category]) {
@@ -983,14 +668,6 @@ class ScoreStorage {
      * 更新题型统计
      */
     updateQuestionTypeStats(stats, practiceRecord) {
-        if (!stats || typeof stats !== 'object') {
-            return;
-        }
-
-        if (!stats.questionTypeStats || typeof stats.questionTypeStats !== 'object') {
-            stats.questionTypeStats = {};
-        }
-
         if (!practiceRecord.questionTypePerformance) return;
         
         Object.entries(practiceRecord.questionTypePerformance).forEach(([type, performance]) => {

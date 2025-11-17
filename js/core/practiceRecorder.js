@@ -25,7 +25,12 @@ class PracticeRecorder {
         this.practiceTypeCache = new Map();
 
         // 异步初始化
-        this.initialize().catch(error => {
+        this.ready = (async () => {
+            await this.scoreStorage.ready;
+            await this.initialize();
+        })();
+
+        this.ready.catch(error => {
             console.error('[PracticeRecorder] 初始化失败', error);
         });
     }
