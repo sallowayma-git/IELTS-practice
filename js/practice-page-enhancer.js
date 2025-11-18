@@ -618,8 +618,38 @@
             if (value === undefined || value === null) return null;
             const normalizedId = this.normalizeQuestionId(questionId);
             if (!normalizedId) return null;
-            if (typeof value === 'string' && value.trim() === '') return null;
-            this.answers[normalizedId] = value;
+            const normalizeSingle = (val) => {
+                if (val === undefined || val === null) return null;
+                if (typeof val === 'string') {
+                    const trimmed = val.trim();
+                    return trimmed || null;
+                }
+                return String(val).trim();
+            };
+
+            const normalizedValue = Array.isArray(value)
+                ? value.map(normalizeSingle).filter(Boolean)
+                : normalizeSingle(value);
+
+            if (normalizedValue === null || (Array.isArray(normalizedValue) && !normalizedValue.length)) {
+                return null;
+            }
+
+            const existing = this.answers[normalizedId];
+            if (existing !== undefined) {
+                const bucket = Array.isArray(existing)
+                    ? existing.slice()
+                    : [normalizeSingle(existing)].filter(Boolean);
+                const incoming = Array.isArray(normalizedValue) ? normalizedValue : [normalizedValue];
+                incoming.forEach((item) => {
+                    if (item && !bucket.includes(item)) {
+                        bucket.push(item);
+                    }
+                });
+                this.answers[normalizedId] = bucket.length === 1 ? bucket[0] : bucket;
+            } else {
+                this.answers[normalizedId] = normalizedValue;
+            }
             return normalizedId;
         },
 
@@ -725,6 +755,9 @@
                     return;
                 }
                 const derivedExamId = this.extractExamIdFromUrl();
+                if (!this.examId && derivedExamId) {
+                    this.examId = derivedExamId;
+                }
                 this.sendMessage('REQUEST_INIT', {
                     examId: this.examId || null,
                     derivedExamId,
@@ -879,37 +912,107 @@
 
         // 新增：从URL中提取真实的examId
         extractExamIdFromUrl: function() {
+            // 优先读取显式配置/参数
+            const doc = document;
+            const metaExamId = doc.querySelector('meta[name="exam-id"], meta[name="examId"]');
+            if (metaExamId && metaExamId.content) {
+                return metaExamId.content.trim();
+            }
+            if (doc.body && doc.body.dataset) {
+                if (doc.body.dataset.examId) {
+                    return doc.body.dataset.examId.trim();
+                }
+                if (doc.body.dataset.examid) {
+                    return doc.body.dataset.examid.trim();
+                }
+            }
+            try {
+                const urlParams = new URLSearchParams(window.location.search || '');
+                if (urlParams.has('examId')) {
+                    const qp = urlParams.get('examId');
+                    if (qp) {
+                        return qp.trim();
+                    }
+                }
+            } catch (_) {}
+
             const url = window.location.href || '';
             const title = document.title || '';
-            
-            // 尝试从URL路径中提取题目编号
-            const pathParts = url.split('/');
-            
-            // 查找包含题目编号的路径部分，格式如 "97. P3 - The value of literary prizes 文学奖项的价值"
+            const pathParts = (window.location.pathname || url).split('/').map((part) => decodeURIComponent(part || '').trim()).filter(Boolean);
+            let foundNumber = null;
+            let foundPart = null;
+            let foundSlug = null;
+            let isListening = pathParts.some((part) => /listening/i.test(part));
+
+            const normalizeSlug = (text) => {
+                return text
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/gi, '-')
+                    .replace(/^-+|-+$/g, '');
+            };
+
+            // 尝试从路径中提取编号与 part
             for (let part of pathParts) {
-                const decodedPart = decodeURIComponent(part);
-                const match = decodedPart.match(/^(\d+)\.\s*P([123])\s*-\s*(.+)/);
-                if (match) {
-                    const [, number, level, titlePart] = match;
-                    // 根据题目编号和级别生成examId
-                    // 这里需要根据实际的ID格式调整
-                    return `p${level.toLowerCase()}-${number}`;
+                if (foundNumber === null) {
+                    const numMatch = part.match(/^(\d+)[\.\-\s]?/);
+                    if (numMatch) {
+                        foundNumber = numMatch[1];
+                    }
+                }
+                if (foundPart === null) {
+                    const pMatch = part.match(/p(?:art)?\s*([1-4])/i);
+                    if (pMatch) {
+                        foundPart = pMatch[1];
+                    }
+                }
+                if (!foundSlug && part.length > 6 && /[a-z]/i.test(part)) {
+                    foundSlug = normalizeSlug(part);
                 }
             }
-            
-            // 如果无法从URL提取，尝试从标题提取
-            if (title) {
-                const titleMatch = title.match(/P([123])\s*-\s*(.+)/);
+
+            // 如果标题包含part/编号也纳入
+            if (!foundPart || !foundNumber) {
+                const titleMatch = title.match(/p(?:art)?\s*([1-4])[^0-9]*?(\d+)?/i);
                 if (titleMatch) {
-                    const [, level, titlePart] = titleMatch;
-                    // 生成一个基于标题的ID
-                    const cleanTitle = titlePart.replace(/[^\w\s]/g, '').replace(/\s+/g, '-').toLowerCase();
-                    return `p${level.toLowerCase()}-${cleanTitle}`;
+                    if (!foundPart && titleMatch[1]) {
+                        foundPart = titleMatch[1];
+                    }
+                    if (!foundNumber && titleMatch[2]) {
+                        foundNumber = titleMatch[2];
+                    }
                 }
             }
-            
+
+            // 生成ID优先使用编号
+            if (foundNumber) {
+                if (foundPart) {
+                    const prefix = isListening ? 'listening' : 'p';
+                    return `${prefix}${isListening ? '' : foundPart.toLowerCase()}-${foundNumber}`;
+                }
+                return `${isListening ? 'listening' : 'practice'}-${foundNumber}`;
+            }
+
+            if (foundPart && foundSlug) {
+                const prefix = isListening ? 'listening' : 'p';
+                return `${prefix}${isListening ? '' : foundPart.toLowerCase()}-${foundSlug}`;
+            }
+
+            if (foundSlug) {
+                return foundSlug;
+            }
+
             // 最后的降级方案：返回页面类型
             return this.detectPageType();
+        },
+
+        resolveExamId: function() {
+            const derived = this.examId || this.extractExamIdFromUrl();
+            const sessionPrefix = this.sessionId ? String(this.sessionId).split('_')[0] : null;
+            const pageType = this.detectPageType();
+            const fallbackBase = derived || sessionPrefix || (pageType ? `practice-${pageType.toLowerCase()}` : null) || `practice-${Date.now()}`;
+            const safe = String(fallbackBase || 'practice-unknown').replace(/[^a-zA-Z0-9_-]/g, '-').replace(/--+/g, '-');
+            this.examId = safe;
+            return safe;
         },
 
         normalizeAnswerMap: function (answersMap) {
@@ -1525,6 +1628,12 @@
             if (input.type === 'radio' || input.type === 'checkbox') {
                 return input.checked ? input.value : null;
             }
+            if (input.tagName === 'SELECT' && input.multiple) {
+                const selected = Array.from(input.selectedOptions || [])
+                    .map((opt) => (opt.value || opt.textContent || '').trim())
+                    .filter(Boolean);
+                return selected.length ? selected : null;
+            }
             return input.value;
         },
 
@@ -1619,9 +1728,11 @@
         handleSubmit: function () {
             const derivedExamId = this.extractExamIdFromUrl();
             if (!this.sessionId) {
+                this.examId = this.examId || derivedExamId;
                 this.sessionId = this.generateFallbackSessionId(this.examId || derivedExamId);
                 console.warn('[PracticeEnhancer] 无会话ID，使用本地生成的回退ID:', this.sessionId);
             }
+            this.examId = this.examId || derivedExamId;
 
             this.collectAllAnswers();
             this.extractFromTranscript();
@@ -1737,8 +1848,7 @@
 
         buildResultsPayload: function (options) {
             const endTime = Date.now();
-            const derivedExamId = this.extractExamIdFromUrl();
-            const resolvedExamId = this.examId || derivedExamId;
+            const resolvedExamId = this.resolveExamId();
             const includeComparison = options && options.includeComparison;
             const includeScore = options && options.includeScore;
 
@@ -1746,7 +1856,7 @@
                 sessionId: this.sessionId,
                 suiteSessionId: this.suiteSessionId || null,
                 examId: resolvedExamId,
-                derivedExamId,
+                derivedExamId: resolvedExamId,
                 originalExamId: this.examId,
                 startTime: this.startTime,
                 endTime: endTime,
