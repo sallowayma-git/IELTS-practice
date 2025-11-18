@@ -408,9 +408,14 @@
             const container = resolveDropContainer(event.target);
             if (!container || !dragState.item) return;
             event.preventDefault();
+            const previousContainer = dragState.item.parentElement;
             container.classList.remove('drag-over');
             moveItemToContainer(dragState.item, container);
             dragState.item = null;
+            if (previousContainer) {
+                handleAnswerInteraction(previousContainer);
+            }
+            handleAnswerInteraction(container);
         }
 
         document.addEventListener('dragstart', handleDragStart);
@@ -673,10 +678,11 @@ let pendingResultsTimeout = null;
     function handleAnswerInteraction(element) {
         const questionId = deriveQuestionId(element);
         if (!questionId) return;
-        setNavStatus(questionId, 'answered');
+        const hasValue = questionHasValue(questionId);
+        setNavStatus(questionId, hasValue ? 'answered' : null);
     }
 
-    function findAnswerElements(questionId) {
+    function findAnswerElements(questionId, includeDropZones = false) {
         const normalized = normalizeQuestionId(questionId);
         if (!normalized) return [];
         const matches = [];
@@ -686,11 +692,69 @@ let pendingResultsTimeout = null;
                 matches.push(element);
             }
         });
-        return matches;
+        if (includeDropZones) {
+            const candidateSelectors = [
+                `.match-dropzone[data-question="${normalized}"]`,
+                `.match-dropzone[data-question-id="${normalized}"]`,
+                `.dropzone[data-question="${normalized}"]`,
+                `.dropzone[data-target="${normalized}"]`,
+                `.paragraph-dropzone[data-question="${normalized}"]`,
+                `[data-question="${normalized}"] .dropped-items`,
+                `#${normalized}-anchor .dropped-items`,
+                `#${normalized} .dropped-items`
+            ];
+            candidateSelectors.forEach((selector) => {
+                document.querySelectorAll(selector).forEach((el) => matches.push(el));
+            });
+        }
+        return Array.from(new Set(matches));
+    }
+
+    function questionHasValue(questionId) {
+        const elements = findAnswerElements(questionId, true);
+        return elements.some((element) => {
+            if (!element) return false;
+            if (element.matches('input[type="radio"]')) {
+                const name = element.name;
+                if (name) {
+                    return Array.from(document.querySelectorAll(`input[type="radio"][name="${name}"]`)).some(
+                        (item) => item.checked
+                    );
+                }
+                return element.checked;
+            }
+            if (element.matches('input[type="checkbox"]')) {
+                const name = element.name;
+                if (name) {
+                    return Array.from(document.querySelectorAll(`input[type="checkbox"][name="${name}"]`)).some(
+                        (item) => item.checked
+                    );
+                }
+                return element.checked;
+            }
+            if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
+                return String(element.value || '').trim() !== '';
+            }
+            if (element.tagName === 'SELECT') {
+                if (element.multiple) {
+                    return Array.from(element.selectedOptions || []).length > 0;
+                }
+                return String(element.value || '').trim() !== '';
+            }
+            if (
+                element.classList.contains('match-dropzone') ||
+                element.classList.contains('dropzone') ||
+                element.classList.contains('paragraph-dropzone') ||
+                element.classList.contains('dropped-items')
+            ) {
+                return !!element.querySelector('.drag-item, .drag-item-clone');
+            }
+            return false;
+        });
     }
 
     function highlightAnswerFields(questionId, state) {
-        const elements = findAnswerElements(questionId);
+        const elements = findAnswerElements(questionId, true);
         const className = state === null ? null : state ? 'answer-correct' : 'answer-wrong';
         elements.forEach((element) => {
             element.classList.remove('answer-correct', 'answer-wrong');
