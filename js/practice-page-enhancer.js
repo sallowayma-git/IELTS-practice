@@ -75,6 +75,118 @@
         return result;
     };
 
+    const enhancerMixinRegistry = [];
+
+    const registerPracticeEnhancerMixin = (definition) => {
+        if (!definition || typeof definition.apply !== 'function') {
+            return;
+        }
+        enhancerMixinRegistry.push(definition);
+    };
+
+    const applyMixinsToEnhancer = (instance) => {
+        if (!instance || typeof instance.getPageContext !== 'function') {
+            return [];
+        }
+
+        const context = instance.getPageContext();
+        const sorted = enhancerMixinRegistry
+            .slice()
+            .sort((a, b) => ((b && b.priority) || 0) - ((a && a.priority) || 0));
+        const applied = [];
+
+        sorted.forEach((mixin) => {
+            if (!mixin || typeof mixin.apply !== 'function') {
+                return;
+            }
+            try {
+                const shouldApply = typeof mixin.shouldActivate === 'function'
+                    ? mixin.shouldActivate(context, instance)
+                    : true;
+                if (shouldApply) {
+                    mixin.apply(instance, context);
+                    applied.push(mixin.name || 'anonymous-mixin');
+                }
+            } catch (mixinError) {
+                console.warn('[PracticeEnhancer] mixin apply failed:', mixin && mixin.name, mixinError);
+            }
+        });
+
+        return applied;
+    };
+
+    function createStandardInlineMixin() {
+        return {
+            name: 'standard-inline-practice',
+            priority: 5,
+            shouldActivate() {
+                return true;
+            },
+            apply(enhancer, context) {
+                if (!enhancer || typeof enhancer.registerHook !== 'function') {
+                    return;
+                }
+                enhancer.registerHook('afterBuildPayload', (payload) => {
+                    if (!payload) {
+                        return;
+                    }
+                    payload.metadata = payload.metadata || {};
+                    if (!payload.metadata.practiceMode) {
+                        payload.metadata.practiceMode = 'single';
+                    }
+                    if (!payload.metadata.variant) {
+                        payload.metadata.variant = context && context.isListening
+                            ? 'listening-inline'
+                            : 'reading-inline';
+                    }
+                });
+            }
+        };
+    }
+
+    function createListeningSuiteMixin() {
+        return {
+            name: 'listening-suite-practice',
+            priority: 30,
+            shouldActivate() {
+                return !!(document.querySelector('[data-submit-suite]')
+                    || document.querySelector('.suite-submit-btn'));
+            },
+            apply(enhancer) {
+                if (!enhancer || typeof enhancer.registerHook !== 'function') {
+                    return;
+                }
+                const suiteButtons = document.querySelectorAll('[data-submit-suite], .suite-submit-btn');
+                const suiteContainers = document.querySelectorAll('[data-suite-id], .test-page');
+                const suiteCount = Math.max(suiteButtons.length, suiteContainers.length) || 0;
+
+                const ensureSuiteMetadata = (target) => {
+                    if (!target) {
+                        return;
+                    }
+                    target.metadata = target.metadata || {};
+                    target.metadata.practiceMode = target.metadata.practiceMode || 'suite';
+                    target.metadata.variant = target.metadata.variant || 'listening-inline';
+                    if (suiteCount && !target.metadata.totalSuites) {
+                        target.metadata.totalSuites = suiteCount;
+                    }
+                    target.practiceMode = target.practiceMode || 'suite';
+                };
+
+                enhancer.registerHook('afterBuildPayload', ensureSuiteMetadata);
+                enhancer.registerHook('afterSuiteMessageBuilt', ensureSuiteMetadata);
+                enhancer.registerHook('beforeSendMessage', (type, data) => {
+                    if (type === 'PRACTICE_COMPLETE') {
+                        ensureSuiteMetadata(data);
+                    }
+                });
+            }
+        };
+    }
+
+    registerPracticeEnhancerMixin(createListeningSuiteMixin());
+    registerPracticeEnhancerMixin(createStandardInlineMixin());
+
     const cssEscape = (value) => {
         if (window.CSS && typeof window.CSS.escape === 'function') {
             try {
@@ -683,6 +795,47 @@
         currentSuiteId: null, // 新增：当前激活的套题ID
         submittedSuites: new Set(), // 新增：已提交的套题ID集合
         isSubmitting: false, // 新增：提交状态标志，防止并发提交
+        mixinsApplied: false,
+        activeMixins: [],
+        hookHandlers: {},
+
+        registerHook: function(hookName, handler) {
+            if (!hookName || typeof handler !== 'function') {
+                return;
+            }
+            if (!this.hookHandlers[hookName]) {
+                this.hookHandlers[hookName] = [];
+            }
+            this.hookHandlers[hookName].push(handler);
+        },
+
+        runHooks: function(hookName, ...args) {
+            const handlers = this.hookHandlers && this.hookHandlers[hookName];
+            if (!handlers || handlers.length === 0) {
+                return;
+            }
+            handlers.forEach((handler) => {
+                try {
+                    handler.apply(this, args);
+                } catch (hookError) {
+                    console.warn(`[PracticeEnhancer] hook ${hookName} 执行失败:`, hookError);
+                }
+            });
+        },
+
+        activateMixins: function() {
+            if (this.mixinsApplied) {
+                return;
+            }
+            if (!this.hookHandlers) {
+                this.hookHandlers = {};
+            }
+            this.activeMixins = applyMixinsToEnhancer(this) || [];
+            if (this.activeMixins.length) {
+                console.log('[PracticeEnhancer] 已启用 mixin:', this.activeMixins.join(', '));
+            }
+            this.mixinsApplied = true;
+        },
 
         initialize: function () {
             if (this.isInitialized) {
@@ -700,6 +853,7 @@
                 this.hasDispatchedFinalResults = false;
                 this.submitInProgress = false;
                 this.pageContext = this.getPageContext(true);
+                this.activateMixins();
 
                 await this.prepareStorageNamespace();
 
@@ -2374,7 +2528,8 @@
                 url: window.location.href,
                 title: document.title
             };
-            
+
+            this.runHooks('afterSuiteMessageBuilt', message, suiteId);
             console.log('[PracticeEnhancer] 发送套题完成消息（标准格式）:', message);
             this.sendMessage('PRACTICE_COMPLETE', message);
         },
@@ -3117,10 +3272,12 @@
             if (this.isMultiSuite && this.currentSuiteId) {
                 payload.suiteId = this.currentSuiteId;
             }
-            
+
             // 新增：添加spellingErrors字段（初始为空数组，后续任务会实现）
             payload.spellingErrors = [];
-            
+
+            this.runHooks('afterBuildPayload', payload);
+
             return payload;
         },
 
@@ -3330,6 +3487,7 @@
                 return;
             }
 
+            this.runHooks('beforeSendMessage', type, data);
             const message = {
                 type: type,
                 data: data,

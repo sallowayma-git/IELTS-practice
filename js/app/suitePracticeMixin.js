@@ -282,7 +282,14 @@
                 metadata: {
                     sessionId: suiteData.sessionId,
                     completedAt: new Date().toISOString()
-                }
+                },
+                rawData: (() => {
+                    try {
+                        return JSON.parse(JSON.stringify(suiteData));
+                    } catch (_) {
+                        return suiteData ? { ...suiteData } : null;
+                    }
+                })()
             };
 
             session.suiteResults.push(suiteResult);
@@ -414,7 +421,8 @@
                         answerComparison: result.answerComparison,
                         spellingErrors: result.spellingErrors || [],
                         duration: result.duration || 0,
-                        timestamp: result.timestamp
+                        timestamp: result.timestamp,
+                        rawData: result.rawData || null
                     })),
                     
                     // 拼写错误汇总

@@ -1,6 +1,8 @@
 (function(global) {
     const MAX_LEGACY_PRACTICE_RECORDS = 1000;
     const isFileProtocol = !!(global && global.location && global.location.protocol === 'file:');
+    const PRACTICE_ENHANCER_SCRIPT_PATH = './js/practice-page-enhancer.js';
+    const PRACTICE_ENHANCER_BUILD_ID = '20250105';
 
     async function getActiveExamIndexSnapshot() {
         const stateGetters = [
@@ -458,78 +460,91 @@
           * 注入数据采集脚本到练习页面
           */
         injectDataCollectionScript(examWindow, examId) {
+            const ensureScriptUrl = () => {
+                const resolved = this._ensureAbsoluteUrl(PRACTICE_ENHANCER_SCRIPT_PATH);
+                if (!resolved) {
+                    return PRACTICE_ENHANCER_SCRIPT_PATH;
+                }
+                if (!PRACTICE_ENHANCER_BUILD_ID) {
+                    return resolved;
+                }
+                return resolved.includes('?')
+                    ? `${resolved}&v=${PRACTICE_ENHANCER_BUILD_ID}`
+                    : `${resolved}?v=${PRACTICE_ENHANCER_BUILD_ID}`;
+            };
 
-            // 新增修复3E：修复await语法错误 - 将内部injectScript改为async
-            const injectScript = async () => {
+            const injectScript = () => {
                 try {
-                    // 检查窗口是否仍然存在
-                    if (examWindow.closed) {
-                        console.warn('[DataInjection] 窗口已关闭');
+                    if (!examWindow || examWindow.closed) {
+                        console.warn('[DataInjection] 目标窗口已关闭');
                         return;
                     }
 
-                    // 尝试访问文档，处理跨域情况
+                    if (examWindow.practicePageEnhancer && typeof examWindow.practicePageEnhancer.initialize === 'function') {
+                        this.initializePracticeSession(examWindow, examId);
+                        return;
+                    }
+
                     let doc;
                     try {
                         doc = examWindow.document;
-                        if (!doc) {
-                            console.warn('[DataInjection] 无法访问窗口文档');
-                            return;
-                        }
-                    } catch (e) {
-                        console.warn('[DataInjection] 跨域限制，无法注入脚本');
-                        // 对于跨域情况，只能等待页面主动通信
+                    } catch (accessError) {
+                        console.warn('[DataInjection] 无法访问题目页文档:', accessError);
                         return;
                     }
 
-                    // 检查是否已经注入过脚本
-                    if (examWindow.practiceDataCollector) {
-                        this.initializePracticeSession(examWindow, examId);
+                    if (!doc || (!doc.head && !doc.body)) {
+                        console.warn('[DataInjection] 题目页尚未准备好');
                         return;
                     }
 
+                    const host = doc.head || doc.body;
+                    const scriptEl = doc.createElement('script');
+                    scriptEl.type = 'text/javascript';
+                    scriptEl.defer = true;
+                    scriptEl.src = ensureScriptUrl();
 
-                    // 加载练习页面增强脚本
-                    const enhancerScript = await fetch('./js/practice-page-enhancer.js').then(r => r.text());
+                    scriptEl.onload = () => {
+                        setTimeout(() => {
+                            try {
+                                this.initializePracticeSession(examWindow, examId);
+                            } catch (sessionError) {
+                                console.warn('[DataInjection] 初始化练习会话失败:', sessionError);
+                            }
+                        }, 80);
+                    };
 
-                    // 注入练习页面增强脚本
-                    const enhancerScriptEl = doc.createElement('script');
-                    enhancerScriptEl.type = 'text/javascript';
-                    enhancerScriptEl.textContent = enhancerScript;
-                    doc.head.appendChild(enhancerScriptEl);
+                    scriptEl.onerror = (loadError) => {
+                        console.warn('[DataInjection] 加载增强器失败，回退到内联脚本:', loadError);
+                        scriptEl.remove();
+                        this.injectInlineScript(examWindow, examId);
+                    };
 
-
-                    // 等待脚本初始化完成后发送会话信息
-                    setTimeout(() => {
-                        this.initializePracticeSession(examWindow, examId);
-                    }, 1500); // 增加等待时间确保脚本完全初始化
-
+                    host.appendChild(scriptEl);
                 } catch (error) {
-                    console.error('[DataInjection] 脚本注入失败:', error);
-                    // 降级到内联脚本注入
+                    console.error('[DataInjection] 注入增强器脚本时出错:', error);
                     this.injectInlineScript(examWindow, examId);
                 }
             };
 
-            // 更可靠的页面加载检测
-            const checkAndInject = async () => {
+            const checkAndInject = () => {
                 try {
-                    if (examWindow.closed) return;
+                    if (!examWindow || examWindow.closed) {
+                        return;
+                    }
 
                     const doc = examWindow.document;
-                    if (doc && (doc.readyState === 'complete' || doc.readyState === 'interactive')) {
-                        await injectScript();
+                    if (doc && (doc.readyState === 'interactive' || doc.readyState === 'complete')) {
+                        injectScript();
                     } else {
-                        // 继续等待
                         setTimeout(checkAndInject, 200);
                     }
-                } catch (e) {
-                    // 跨域情况，无法注入脚本
+                } catch (error) {
+                    console.warn('[DataInjection] 检测题目页面就绪状态失败:', error);
                 }
             };
 
-            // 开始检测，给页面一些加载时间
-            setTimeout(checkAndInject, 500);
+            setTimeout(checkAndInject, 300);
         },
 
         /**
