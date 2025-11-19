@@ -11,6 +11,23 @@
 
 const assert = require('assert');
 
+const originalConsoleLog = (console && typeof console.log === 'function')
+    ? console.log.bind(console)
+    : null;
+
+function emitResult(payload) {
+    const text = JSON.stringify(payload, null, 2);
+    try {
+        if (process && process.stdout && typeof process.stdout.write === 'function') {
+            process.stdout.write(text + '\n');
+            return;
+        }
+    } catch (_) {}
+    if (typeof originalConsoleLog === 'function') {
+        originalConsoleLog(text);
+    }
+}
+
 // Mock浏览器环境
 global.window = global;
 global.document = {
@@ -341,18 +358,18 @@ async function runTests() {
         detail: allPassed ? '所有测试通过' : '部分测试失败'
     };
     
-    console.log(JSON.stringify(output, null, 2));
+    emitResult(output);
     return allPassed ? 0 : 1;
 }
 
 // 运行测试
 if (require.main === module) {
     runTests().then(code => process.exit(code)).catch(err => {
-        console.error(JSON.stringify({
+        emitResult({
             status: 'fail',
             error: err.message,
             stack: err.stack
-        }, null, 2));
+        });
         process.exit(1);
     });
 }

@@ -45,6 +45,12 @@ const localFallbackState = {
     bulkDeleteMode: false
 };
 
+if (typeof window !== 'undefined' && typeof window.__browseFilterMode === 'undefined') {
+    try {
+        window.__browseFilterMode = 'default';
+    } catch (_) {}
+}
+
 const stateService = (function resolveStateService() {
     if (window.appStateService && typeof window.appStateService.getExamIndex === 'function') {
         return window.appStateService;
@@ -2115,6 +2121,8 @@ function setupOverviewInteractions() {
 
         const category = target.dataset.category;
         const type = target.dataset.examType || 'reading';
+        const filterMode = target.dataset.filterMode || null;
+        const path = target.dataset.path || null;
 
         if (!category) {
             return;
@@ -2122,15 +2130,15 @@ function setupOverviewInteractions() {
 
         if (action === 'browse') {
             if (typeof browseCategory === 'function') {
-                browseCategory(category, type);
+                browseCategory(category, type, filterMode, path);
             } else {
-                try { applyBrowseFilter(category, type); } catch (_) {}
+                try { applyBrowseFilter(category, type, filterMode, path); } catch (_) {}
             }
             return;
         }
 
         if (action === 'random' && typeof startRandomPractice === 'function') {
-            startRandomPractice(category, type);
+            startRandomPractice(category, type, filterMode, path);
         }
     };
 
@@ -2541,8 +2549,10 @@ function browseCategory(category, type = 'reading', filterMode = null, path = nu
         try {
             window.app.browseCategory(category, type, filterMode, path);
             console.log('[browseCategory] Called app.browseCategory with filterMode:', filterMode);
-            // 确保过滤应用，即使 app 处理
-            setTimeout(() => loadExamList(), 100);
+            // 常规模式仍需刷新题库；频率模式由 browseController 接管
+            if (!filterMode) {
+                setTimeout(() => loadExamList(), 100);
+            }
             return;
         } catch (error) {
             console.warn('[browseCategory] window.app.browseCategory 调用失败，使用降级路径:', error);
@@ -2567,8 +2577,12 @@ function browseCategory(category, type = 'reading', filterMode = null, path = nu
             } catch(_) {}
         }
 
-        // 确保题目列表被加载
-        loadExamList();
+        // 尽量沿用统一筛选逻辑
+        if (typeof applyBrowseFilter === 'function') {
+            applyBrowseFilter(category, type, filterMode, path);
+        } else {
+            loadExamList();
+        }
 
     } catch (error) {
         console.error('[browseCategory] 处理浏览类别时出错:', error);
@@ -2610,19 +2624,31 @@ function applyBrowseFilter(category = 'all', type = null, filterMode = null, pat
 
         const normalizedType = normalizeExamType(type);
         setBrowseFilterState(normalizedCategory, normalizedType);
+
+        const normalizedPath = (typeof path === 'string' && path.trim()) ? path.trim() : null;
         
-        // 新增：如果有 filterMode，切换到对应的浏览模式
-        if (filterMode && window.browseController) {
-            try {
-                window.__browseFilterMode = filterMode;
-                window.__browsePath = path;
-                window.browseController.setMode(filterMode);
-            } catch (error) {
-                console.warn('[Browse] 切换浏览模式失败:', error);
+        // 新增：根据 filterMode 切换或重置浏览模式
+        if (filterMode) {
+            const modeConfig = window.BROWSE_MODES && window.BROWSE_MODES[filterMode];
+            const basePath = normalizedPath || (modeConfig && modeConfig.basePath) || null;
+            window.__browsePath = basePath;
+            window.__browseFilterMode = filterMode;
+            if (window.browseController) {
+                try {
+                    if (!window.browseController.buttonContainer) {
+                        window.browseController.initialize('type-filter-buttons');
+                    }
+                    window.browseController.setMode(filterMode);
+                } catch (error) {
+                    console.warn('[Browse] 切换浏览模式失败:', error);
+                }
             }
-        } else if (!filterMode && window.browseController) {
-            // 没有 filterMode，重置为默认模式
-            window.browseController.resetToDefault();
+        } else if (!filterMode) {
+            window.__browseFilterMode = 'default';
+            window.__browsePath = normalizedPath;
+            if (window.browseController) {
+                window.browseController.resetToDefault();
+            }
         }
         
         setBrowseTitle(formatBrowseTitle(normalizedCategory, normalizedType));
@@ -2675,8 +2701,10 @@ if (typeof window.browseCategory !== 'function') {
                 return;
             }
         } catch (_) {}
-        // 回退：直接应用筛选
-        try { applyBrowseFilter(category, type); } catch (_) {}
+        // 回退：直接应用筛选（保持 filterMode/path 兼容）
+        try {
+            applyBrowseFilter(category, type, filterMode, path);
+        } catch (_) {}
     };
 }
 
@@ -2687,6 +2715,23 @@ function filterRecordsByType(type) {
 
 
 function loadExamList() {
+    if (window.__browseFilterMode && window.__browseFilterMode !== 'default' && window.browseController) {
+        try {
+            if (!window.browseController.buttonContainer) {
+                window.browseController.initialize('type-filter-buttons');
+            }
+            if (window.browseController.currentMode !== window.__browseFilterMode) {
+                window.browseController.setMode(window.__browseFilterMode);
+            } else {
+                const activeFilter = window.browseController.activeFilter || 'all';
+                window.browseController.applyFilter(activeFilter);
+            }
+            return;
+        } catch (error) {
+            console.warn('[Browse] 频率模式刷新失败，回退到默认逻辑:', error);
+        }
+    }
+
     // 使用 Array.from() 创建副本，避免污染全局 examIndex
     const examIndexSnapshot = getExamIndexState();
     let examsToShow = Array.from(examIndexSnapshot);
@@ -2694,12 +2739,23 @@ function loadExamList() {
     // 先过滤
     const activeExamType = getCurrentExamType();
     const activeCategory = getCurrentCategory();
+    const basePathFilter = (typeof window.__browsePath === 'string' && window.__browsePath.trim())
+        ? window.__browsePath.trim()
+        : null;
 
     if (activeExamType !== 'all') {
         examsToShow = examsToShow.filter(exam => exam.type === activeExamType);
     }
     if (activeCategory !== 'all') {
-        examsToShow = examsToShow.filter(exam => exam.category === activeCategory);
+        const filteredByCategory = examsToShow.filter(exam => exam.category === activeCategory);
+        if (filteredByCategory.length > 0 || !basePathFilter) {
+            examsToShow = filteredByCategory;
+        }
+    }
+    if (basePathFilter) {
+        examsToShow = examsToShow.filter((exam) => {
+            return typeof exam?.path === 'string' && exam.path.includes(basePathFilter);
+        });
     }
 
     // 然后置顶过滤后的数组
@@ -5154,17 +5210,43 @@ function openExamWithFallback(exam, delay = 600) {
     }
 }
 
-function startRandomPractice(category, type = 'reading') {
+function startRandomPractice(category, type = 'reading', filterMode = null, path = null) {
     const list = getExamIndexState();
-    const categoryExams = list.filter((exam) => exam.category === category && exam.type === type);
-    if (categoryExams.length === 0) {
+    const normalizedType = (!type || type === 'all') ? null : type;
+    const normalizedPath = (typeof path === 'string' && path.trim()) ? path.trim() : null;
+
+    let pool = Array.from(list);
+    if (normalizedType) {
+        pool = pool.filter((exam) => exam.type === normalizedType);
+    }
+
+    if (category && category !== 'all') {
+        const filteredByCategory = pool.filter((exam) => exam.category === category);
+        if (filteredByCategory.length > 0 || !normalizedPath) {
+            pool = filteredByCategory;
+        }
+    }
+
+    if (normalizedPath) {
+        pool = pool.filter((exam) => typeof exam?.path === 'string' && exam.path.includes(normalizedPath));
+    } else if (filterMode && window.BROWSE_MODES && window.BROWSE_MODES[filterMode]) {
+        const modeConfig = window.BROWSE_MODES[filterMode];
+        if (modeConfig?.basePath) {
+            pool = pool.filter((exam) => typeof exam?.path === 'string' && exam.path.includes(modeConfig.basePath));
+        }
+    }
+
+    if (pool.length === 0) {
         if (typeof showMessage === 'function') {
-            showMessage(`${category} ${type === 'reading' ? '阅读' : '听力'} 分类暂无可用题目`, 'error');
+            const typeLabel = normalizedType === 'listening'
+                ? '听力'
+                : (normalizedType === 'reading' ? '阅读' : '题库');
+            showMessage(`${category} ${typeLabel} 分类暂无可用题目`, 'error');
         }
         return;
     }
 
-    const randomExam = categoryExams[Math.floor(Math.random() * categoryExams.length)];
+    const randomExam = pool[Math.floor(Math.random() * pool.length)];
     if (typeof showMessage === 'function') {
         showMessage(`随机选择: ${randomExam.title}`, 'info');
     }
