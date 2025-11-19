@@ -506,6 +506,42 @@ class ScoreStorage {
             let records = await this.storage.get(this.storageKeys.practiceRecords, []);
             records = Array.isArray(records) ? records.slice() : [];
 
+            const extractSessionId = (record) => {
+                if (!record || typeof record !== 'object') {
+                    return null;
+                }
+                const rawId =
+                    record.sessionId ||
+                    record.realData?.sessionId ||
+                    record.metadata?.sessionId ||
+                    null;
+                if (!rawId) {
+                    return null;
+                }
+                return String(rawId).trim() || null;
+            };
+
+            const dedupeBySession = (list, contextLabel) => {
+                const seen = new Set();
+                const cleaned = [];
+                list.forEach((item) => {
+                    const sessionId = extractSessionId(item);
+                    if (!sessionId) {
+                        cleaned.push(item);
+                        return;
+                    }
+                    if (seen.has(sessionId)) {
+                        try {
+                            console.warn(`[ScoreStorage] 移除了重复的练习记录 (sessionId=${sessionId}, id=${item?.id || 'unknown'})${contextLabel ? ' during ' + contextLabel : ''}`);
+                        } catch (_) {}
+                        return;
+                    }
+                    seen.add(sessionId);
+                    cleaned.push(item);
+                });
+                return cleaned;
+            };
+
             let legacyPatched = false;
             records = records.map(record => {
                 if (!this.needsRecordSanitization(record)) {
@@ -519,6 +555,8 @@ class ScoreStorage {
                 console.log('[ScoreStorage] 已自动修复历史练习记录字段缺失问题');
             }
 
+            records = dedupeBySession(records, 'initial-pass');
+
             // 检查是否已存在相同ID的记录
             const existingIndex = records.findIndex(r => r.id === standardizedRecord.id);
             if (existingIndex !== -1) {
@@ -528,6 +566,25 @@ class ScoreStorage {
                 // 添加新记录到开头（保持最新记录在前）
                 records.unshift(standardizedRecord);
             }
+
+            const newSessionId = extractSessionId(standardizedRecord);
+            if (newSessionId) {
+                records = records.filter((record, index) => {
+                    if (index === 0) {
+                        return true;
+                    }
+                    const sessionId = extractSessionId(record);
+                    if (sessionId && sessionId === newSessionId && record.id !== standardizedRecord.id) {
+                        try {
+                            console.warn(`[ScoreStorage] 移除了旧的 session 记录 (sessionId=${sessionId}, id=${record?.id || 'unknown'}) 以保留最新结果`);
+                        } catch (_) {}
+                        return false;
+                    }
+                    return true;
+                });
+            }
+
+            records = dedupeBySession(records, 'post-insert');
 
             // 维护记录数量限制
             if (records.length > this.maxRecords) {

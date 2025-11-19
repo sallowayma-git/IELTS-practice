@@ -9,6 +9,7 @@
         let timerRunning = true;
         let seconds = 0;
         let timer;
+        let submissionLocked = false;
         let isResizing = false;
         const selbar = document.getElementById('selbar');
         let lastRange = null;
@@ -21,6 +22,9 @@
         const notesPanel = document.getElementById('notes-panel');
         const headerControls = document.querySelector('.header-controls');
         const timerEl = document.getElementById('timer');
+        const submitBtn = document.getElementById('submit-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const pauseBtn = document.getElementById('pause-btn');
 
         function startTimer() {
             if (!timerEl) return;
@@ -41,13 +45,28 @@
             if (overlay) overlay.style.display = 'none';
         }
 
-        window.scrollToElement = function (id) {
-            const element = document.getElementById(id);
-            if (!element) return;
+        window.scrollToElement = function (target) {
+            const element = typeof target === 'string'
+                ? document.getElementById(target)
+                : target instanceof HTMLElement
+                ? target
+                : null;
+            if (!element) return false;
             const pane = element.closest('.pane');
-            if (!pane) return;
-            const top = element.offsetTop - 20;
-            pane.scrollTo({ top, behavior: 'smooth' });
+            if (pane && typeof pane.scrollTo === 'function') {
+                const offsetTop = element.offsetTop - 20;
+                pane.scrollTo({ top: offsetTop < 0 ? 0 : offsetTop, behavior: 'smooth' });
+            } else if (typeof element.scrollIntoView === 'function') {
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            if (typeof element.focus === 'function') {
+                try {
+                    element.focus({ preventScroll: true });
+                } catch (_) {
+                    element.focus();
+                }
+            }
+            return true;
         };
 
         function positionSelbarForRect(rect) {
@@ -307,6 +326,114 @@
 
         ensurePoolIds();
 
+        function focusQuestionById(questionId) {
+            const normalized = normalizeQuestionId(questionId) || questionId;
+            if (!normalized) return false;
+            const elements = findAnswerElements(normalized, true);
+            if (elements.length) {
+                const focusTarget =
+                    elements.find((element) =>
+                        element.tagName === 'INPUT' || element.tagName === 'TEXTAREA' || element.tagName === 'SELECT'
+                    ) || elements[0];
+                if (focusTarget) {
+                    if (!window.scrollToElement(focusTarget)) {
+                        focusTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                    if (typeof focusTarget.focus === 'function') {
+                        try {
+                            focusTarget.focus({ preventScroll: true });
+                        } catch (_) {
+                            focusTarget.focus();
+                        }
+                    }
+                    return true;
+                }
+            }
+            const anchor =
+                document.getElementById(`${normalized}-anchor`) ||
+                document.getElementById(normalized);
+            if (anchor) {
+                window.scrollToElement(anchor);
+                return true;
+            }
+            return false;
+        }
+
+        const navContainer = document.querySelector('.practice-nav');
+        if (navContainer) {
+            navContainer.addEventListener('click', (event) => {
+                const item = event.target.closest('.q-item');
+                if (!item) {
+                    return;
+                }
+                const explicitTarget = item.dataset.target || item.getAttribute('data-scroll-target');
+                if (explicitTarget && window.scrollToElement(explicitTarget)) {
+                    event.preventDefault();
+                    return;
+                }
+                const match = item.id && item.id.match(/^q(\d+)-nav$/i);
+                const fallback =
+                    item.dataset.question ||
+                    item.dataset.questionId ||
+                    (match ? `q${match[1]}` : item.textContent?.trim());
+                if (fallback && focusQuestionById(fallback)) {
+                    event.preventDefault();
+                    return;
+                }
+                if (fallback && window.scrollToElement(`${fallback}-anchor`)) {
+                    event.preventDefault();
+                }
+            });
+        }
+
+        function disableAnswerInputs() {
+            const root = document.getElementById('questions-container') || document;
+            root.querySelectorAll('input, textarea, select').forEach((element) => {
+                if (!element || ['button', 'submit', 'reset'].includes((element.type || '').toLowerCase())) {
+                    return;
+                }
+                if (element.disabled) {
+                    return;
+                }
+                element.disabled = true;
+                element.dataset.practiceLocked = 'true';
+            });
+            document.querySelectorAll('.drag-item, .drag-item-clone').forEach((item) => {
+                item.setAttribute('draggable', 'false');
+                item.classList.add('drag-item-locked');
+            });
+        }
+
+        function lockPracticeAfterSubmit() {
+            if (submissionLocked) {
+                return;
+            }
+            submissionLocked = true;
+            if (timer) {
+                clearInterval(timer);
+                timer = null;
+            }
+            timerRunning = false;
+            const audio = document.getElementById('listening-audio');
+            if (audio) {
+                try {
+                    audio.pause();
+                } catch (_) {}
+                const playPauseBtn = document.getElementById('play-pause-btn');
+                if (playPauseBtn) {
+                    playPauseBtn.innerHTML = '&#9658;';
+                    playPauseBtn.disabled = true;
+                }
+            }
+            if (submitBtn) {
+                submitBtn.disabled = true;
+            }
+            if (resetBtn) {
+                resetBtn.disabled = true;
+            }
+            disableAnswerInputs();
+        }
+
         function returnItemToPool(item) {
             if (!item) return;
             const originId = item.dataset.originPool;
@@ -425,6 +552,9 @@
         document.addEventListener('drop', handleDrop);
 
         function resetPracticePage() {
+            if (submissionLocked) {
+                return;
+            }
             // 清空输入
             document.querySelectorAll('input').forEach((input) => {
                 if (input.type === 'radio' || input.type === 'checkbox') {
@@ -462,6 +592,8 @@
                 if (container && (container.classList.contains('dropped-items') || container.classList.contains('match-dropzone') || container.classList.contains('dropzone'))) {
                     returnItemToPool(item);
                 }
+                item.setAttribute('draggable', 'true');
+                item.classList.remove('drag-item-locked');
             });
 
             document.querySelectorAll('.answer-correct, .answer-wrong').forEach((el) => {
@@ -488,12 +620,16 @@
             }
         }
 
-        const resetBtn = document.getElementById('reset-btn');
         if (resetBtn) {
             resetBtn.addEventListener('click', resetPracticePage);
         }
 
-        const pauseBtn = document.getElementById('pause-btn');
+        if (submitBtn) {
+            submitBtn.addEventListener('click', () => {
+                lockPracticeAfterSubmit();
+            });
+        }
+
         if (pauseBtn) {
             pauseBtn.addEventListener('click', () => {
                 timerRunning = !timerRunning;
@@ -537,6 +673,7 @@
             }
             handleResultsReady(detail);
             revealTranscriptPane();
+            lockPracticeAfterSubmit();
         });
 
         setupAudioPlayer();
@@ -605,6 +742,10 @@ let pendingResultsTimeout = null;
     margin: 12px 0;
     color: #6b7280;
     font-size: 0.95rem;
+}
+.drag-item-locked {
+    opacity: 0.55;
+    pointer-events: none;
 }
 `;
         document.head.appendChild(style);
