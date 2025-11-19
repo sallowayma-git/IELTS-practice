@@ -1323,6 +1323,1087 @@ class StorageManager {
             }
         });
     }
+
+    // ==================== 词表存储专用方法 ====================
+
+    /**
+     * 词表存储键常量
+     */
+    getVocabStorageKeys() {
+        return {
+            P1_ERRORS: 'vocab_list_p1_errors',
+            P4_ERRORS: 'vocab_list_p4_errors',
+            MASTER_ERRORS: 'vocab_list_master_errors',
+            CUSTOM: 'vocab_list_custom',
+            ACTIVE_LIST: 'vocab_active_list'
+        };
+    }
+
+    /**
+     * 验证词表数据结构
+     */
+    validateVocabList(vocabList) {
+        if (!vocabList || typeof vocabList !== 'object') {
+            return { valid: false, error: '词表数据无效' };
+        }
+
+        const requiredFields = ['id', 'name', 'source', 'words', 'createdAt', 'updatedAt'];
+        for (const field of requiredFields) {
+            if (!(field in vocabList)) {
+                return { valid: false, error: `缺少必需字段: ${field}` };
+            }
+        }
+
+        if (!Array.isArray(vocabList.words)) {
+            return { valid: false, error: 'words 字段必须是数组' };
+        }
+
+        // 验证每个单词条目
+        for (const word of vocabList.words) {
+            if (!word.word || typeof word.word !== 'string') {
+                return { valid: false, error: '单词条目缺少有效的 word 字段' };
+            }
+            if (!word.timestamp || typeof word.timestamp !== 'number') {
+                return { valid: false, error: '单词条目缺少有效的 timestamp 字段' };
+            }
+        }
+
+        return { valid: true };
+    }
+
+    /**
+     * 清理词表数据
+     * 移除重复单词，保留最新的记录
+     */
+    cleanVocabList(vocabList) {
+        if (!vocabList || !Array.isArray(vocabList.words)) {
+            return vocabList;
+        }
+
+        const wordMap = new Map();
+        
+        // 按时间戳排序，保留最新的
+        vocabList.words.forEach(word => {
+            const key = word.word.toLowerCase().trim();
+            const existing = wordMap.get(key);
+            
+            if (!existing || word.timestamp > existing.timestamp) {
+                wordMap.set(key, word);
+            }
+        });
+
+        vocabList.words = Array.from(wordMap.values());
+        vocabList.updatedAt = Date.now();
+
+        return vocabList;
+    }
+
+    /**
+     * 保存词表数据
+     */
+    async saveVocabList(vocabList, options = {}) {
+        const { skipReady = false } = options;
+        
+        try {
+            // 验证数据
+            const validation = this.validateVocabList(vocabList);
+            if (!validation.valid) {
+                console.error('[Storage] 词表数据验证失败:', validation.error);
+                return false;
+            }
+
+            // 清理数据
+            const cleanedList = this.cleanVocabList(vocabList);
+
+            // 确定存储键
+            const keys = this.getVocabStorageKeys();
+            let storageKey;
+
+            switch (cleanedList.source) {
+                case 'p1':
+                    storageKey = keys.P1_ERRORS;
+                    break;
+                case 'p4':
+                    storageKey = keys.P4_ERRORS;
+                    break;
+                case 'all':
+                    storageKey = keys.MASTER_ERRORS;
+                    break;
+                case 'user':
+                    storageKey = keys.CUSTOM;
+                    break;
+                default:
+                    storageKey = cleanedList.id;
+            }
+
+            console.log(`[Storage] 保存词表: ${storageKey}, 单词数: ${cleanedList.words.length}`);
+
+            // 保存到存储
+            const success = await this.set(storageKey, cleanedList, { skipReady });
+
+            if (success) {
+                console.log(`[Storage] 词表保存成功: ${storageKey}`);
+            }
+
+            return success;
+        } catch (error) {
+            console.error('[Storage] 保存词表失败:', error);
+            return false;
+        }
+    }
+
+    /**
+     * 加载词表数据
+     */
+    async loadVocabList(listId, options = {}) {
+        const { skipReady = false } = options;
+        
+        try {
+            const keys = this.getVocabStorageKeys();
+            let storageKey;
+
+            // 根据 listId 确定存储键
+            if (listId === 'spelling-errors-p1') {
+                storageKey = keys.P1_ERRORS;
+            } else if (listId === 'spelling-errors-p4') {
+                storageKey = keys.P4_ERRORS;
+            } else if (listId === 'spelling-errors-master') {
+                storageKey = keys.MASTER_ERRORS;
+            } else if (listId === 'custom') {
+                storageKey = keys.CUSTOM;
+            } else {
+                storageKey = listId;
+            }
+
+            console.log(`[Storage] 加载词表: ${storageKey}`);
+
+            const vocabList = await this.get(storageKey, null, { skipReady });
+
+            if (!vocabList) {
+                console.log(`[Storage] 词表不存在: ${storageKey}`);
+                return null;
+            }
+
+            // 验证加载的数据
+            const validation = this.validateVocabList(vocabList);
+            if (!validation.valid) {
+                console.error('[Storage] 加载的词表数据无效:', validation.error);
+                return null;
+            }
+
+            console.log(`[Storage] 词表加载成功: ${storageKey}, 单词数: ${vocabList.words.length}`);
+            return vocabList;
+        } catch (error) {
+            console.error('[Storage] 加载词表失败:', error);
+            return null;
+        }
+    }
+
+    /**
+     * 获取词表单词数量
+     */
+    async getVocabListWordCount(listId, options = {}) {
+        const { skipReady = false } = options;
+        
+        try {
+            const vocabList = await this.loadVocabList(listId, { skipReady });
+            return vocabList ? vocabList.words.length : 0;
+        } catch (error) {
+            console.error('[Storage] 获取词表单词数量失败:', error);
+            return 0;
+        }
+    }
+
+    /**
+     * 添加单词到词表
+     */
+    async addWordToVocabList(listId, word, options = {}) {
+        const { skipReady = false } = options;
+        
+        try {
+            let vocabList = await this.loadVocabList(listId, { skipReady });
+
+            if (!vocabList) {
+                // 创建新词表
+                vocabList = {
+                    id: listId,
+                    name: this.getVocabListName(listId),
+                    source: this.getVocabListSource(listId),
+                    words: [],
+                    createdAt: Date.now(),
+                    updatedAt: Date.now()
+                };
+            }
+
+            // 检查单词是否已存在
+            const existingIndex = vocabList.words.findIndex(w => 
+                w.word.toLowerCase() === word.word.toLowerCase()
+            );
+
+            if (existingIndex >= 0) {
+                // 更新现有单词
+                vocabList.words[existingIndex] = {
+                    ...vocabList.words[existingIndex],
+                    ...word,
+                    errorCount: (vocabList.words[existingIndex].errorCount || 0) + 1,
+                    timestamp: Date.now()
+                };
+            } else {
+                // 添加新单词
+                vocabList.words.push({
+                    ...word,
+                    errorCount: word.errorCount || 1,
+                    timestamp: word.timestamp || Date.now()
+                });
+            }
+
+            vocabList.updatedAt = Date.now();
+
+            return await this.saveVocabList(vocabList, { skipReady });
+        } catch (error) {
+            console.error('[Storage] 添加单词到词表失败:', error);
+            return false;
+        }
+    }
+
+    /**
+     * 从词表中移除单词
+     */
+    async removeWordFromVocabList(listId, word, options = {}) {
+        const { skipReady = false } = options;
+        
+        try {
+            const vocabList = await this.loadVocabList(listId, { skipReady });
+
+            if (!vocabList) {
+                return false;
+            }
+
+            const normalizedWord = word.toLowerCase().trim();
+            vocabList.words = vocabList.words.filter(w => 
+                w.word.toLowerCase().trim() !== normalizedWord
+            );
+
+            vocabList.updatedAt = Date.now();
+
+            return await this.saveVocabList(vocabList, { skipReady });
+        } catch (error) {
+            console.error('[Storage] 从词表移除单词失败:', error);
+            return false;
+        }
+    }
+
+    /**
+     * 获取词表名称
+     */
+    getVocabListName(listId) {
+        const names = {
+            'spelling-errors-p1': 'P1 拼写错误',
+            'spelling-errors-p4': 'P4 拼写错误',
+            'spelling-errors-master': '综合错误词表',
+            'custom': '自定义词表'
+        };
+        return names[listId] || listId;
+    }
+
+    /**
+     * 获取词表来源
+     */
+    getVocabListSource(listId) {
+        if (listId.includes('p1')) return 'p1';
+        if (listId.includes('p4')) return 'p4';
+        if (listId.includes('master')) return 'all';
+        return 'user';
+    }
+
+    /**
+     * 获取所有词表的元数据
+     */
+    async getAllVocabListsMetadata(options = {}) {
+        const { skipReady = false } = options;
+        
+        const keys = this.getVocabStorageKeys();
+        const listIds = [
+            'spelling-errors-p1',
+            'spelling-errors-p4',
+            'spelling-errors-master',
+            'custom'
+        ];
+
+        const metadata = [];
+
+        for (const listId of listIds) {
+            const count = await this.getVocabListWordCount(listId, { skipReady });
+            metadata.push({
+                id: listId,
+                name: this.getVocabListName(listId),
+                source: this.getVocabListSource(listId),
+                wordCount: count
+            });
+        }
+
+        return metadata;
+    }
+
+    // ==================== 数据同步逻辑 ====================
+
+    /**
+     * 同步词表数据（跨会话）
+     * 处理数据冲突，使用最新时间戳
+     */
+    async syncVocabList(listId, newData, options = {}) {
+        const { skipReady = false } = options;
+        
+        try {
+            console.log(`[Storage] 开始同步词表: ${listId}`);
+
+            // 加载现有数据
+            const existingList = await this.loadVocabList(listId, { skipReady });
+
+            if (!existingList) {
+                // 没有现有数据，直接保存新数据
+                console.log(`[Storage] 无现有数据，直接保存新词表`);
+                return await this.saveVocabList(newData, { skipReady });
+            }
+
+            // 合并数据，解决冲突
+            const mergedList = this.mergeVocabLists(existingList, newData);
+
+            console.log(`[Storage] 词表合并完成，单词数: ${mergedList.words.length}`);
+
+            // 保存合并后的数据
+            return await this.saveVocabList(mergedList, { skipReady });
+        } catch (error) {
+            console.error('[Storage] 同步词表失败:', error);
+            return false;
+        }
+    }
+
+    /**
+     * 合并两个词表，解决冲突
+     * 使用最新时间戳的数据
+     */
+    mergeVocabLists(existing, incoming) {
+        // 使用最新的元数据
+        const merged = {
+            id: existing.id,
+            name: existing.name,
+            source: existing.source,
+            words: [],
+            createdAt: existing.createdAt,
+            updatedAt: Math.max(existing.updatedAt, incoming.updatedAt)
+        };
+
+        // 创建单词映射
+        const wordMap = new Map();
+
+        // 先添加现有单词
+        existing.words.forEach(word => {
+            const key = word.word.toLowerCase().trim();
+            wordMap.set(key, word);
+        });
+
+        // 合并新单词，使用最新时间戳
+        incoming.words.forEach(word => {
+            const key = word.word.toLowerCase().trim();
+            const existingWord = wordMap.get(key);
+
+            if (!existingWord || word.timestamp > existingWord.timestamp) {
+                // 新单词或更新的单词
+                wordMap.set(key, {
+                    ...existingWord,
+                    ...word,
+                    errorCount: (existingWord?.errorCount || 0) + (word.errorCount || 1)
+                });
+            }
+        });
+
+        merged.words = Array.from(wordMap.values());
+
+        return merged;
+    }
+
+    /**
+     * 批量同步所有词表
+     */
+    async syncAllVocabLists(options = {}) {
+        const { skipReady = false } = options;
+        
+        try {
+            console.log('[Storage] 开始批量同步所有词表');
+
+            const listIds = [
+                'spelling-errors-p1',
+                'spelling-errors-p4',
+                'spelling-errors-master',
+                'custom'
+            ];
+
+            const results = [];
+
+            for (const listId of listIds) {
+                const list = await this.loadVocabList(listId, { skipReady });
+                if (list) {
+                    const success = await this.syncVocabList(listId, list, { skipReady });
+                    results.push({ listId, success });
+                }
+            }
+
+            console.log('[Storage] 批量同步完成:', results);
+            return results;
+        } catch (error) {
+            console.error('[Storage] 批量同步失败:', error);
+            return [];
+        }
+    }
+
+    /**
+     * 确保数据持久化（页面关闭前）
+     */
+    async ensureDataPersisted(options = {}) {
+        const { skipReady = false } = options;
+        
+        try {
+            console.log('[Storage] 确保数据持久化');
+
+            // 强制刷新所有待写入的数据
+            if (this.indexedDB) {
+                // IndexedDB 事务会自动提交，无需额外操作
+                console.log('[Storage] IndexedDB 数据已自动持久化');
+            }
+
+            // 同步所有词表
+            await this.syncAllVocabLists({ skipReady });
+
+            console.log('[Storage] 数据持久化完成');
+            return true;
+        } catch (error) {
+            console.error('[Storage] 数据持久化失败:', error);
+            return false;
+        }
+    }
+
+    /**
+     * 监听页面卸载事件，确保数据持久化
+     */
+    setupBeforeUnloadHandler() {
+        // 使用 beforeunload 事件确保数据保存
+        window.addEventListener('beforeunload', async (event) => {
+            try {
+                console.log('[Storage] 页面即将关闭，确保数据持久化');
+                
+                // 同步保存所有待写入的数据
+                await this.ensureDataPersisted({ skipReady: true });
+                
+                console.log('[Storage] 数据持久化完成');
+            } catch (error) {
+                console.error('[Storage] beforeunload 数据持久化失败:', error);
+            }
+        });
+
+        console.log('[Storage] beforeunload 处理器已设置');
+    }
+
+    /**
+     * 检测数据冲突
+     */
+    detectVocabListConflict(list1, list2) {
+        if (!list1 || !list2) return false;
+
+        // 检查是否有相同单词但不同内容
+        const conflicts = [];
+
+        const map1 = new Map(list1.words.map(w => [w.word.toLowerCase(), w]));
+        const map2 = new Map(list2.words.map(w => [w.word.toLowerCase(), w]));
+
+        for (const [word, data1] of map1) {
+            const data2 = map2.get(word);
+            if (data2 && data1.timestamp !== data2.timestamp) {
+                conflicts.push({
+                    word,
+                    data1,
+                    data2,
+                    resolution: data1.timestamp > data2.timestamp ? 'use_list1' : 'use_list2'
+                });
+            }
+        }
+
+        return conflicts.length > 0 ? conflicts : false;
+    }
+
+    /**
+     * 解决词表冲突
+     */
+    resolveVocabListConflict(list1, list2, strategy = 'latest') {
+        if (strategy === 'latest') {
+            return this.mergeVocabLists(list1, list2);
+        } else if (strategy === 'keep_list1') {
+            return list1;
+        } else if (strategy === 'keep_list2') {
+            return list2;
+        }
+
+        return this.mergeVocabLists(list1, list2);
+    }
+
+    // ==================== 降级存储方案 ====================
+
+    /**
+     * 检测 IndexedDB 可用性
+     */
+    isIndexedDBAvailable() {
+        try {
+            // 检查浏览器是否支持 IndexedDB
+            if (!window.indexedDB) {
+                console.log('[Storage] IndexedDB 不支持');
+                return false;
+            }
+
+            // 检查是否已成功初始化
+            if (this.indexedDB) {
+                console.log('[Storage] IndexedDB 可用');
+                return true;
+            }
+
+            console.log('[Storage] IndexedDB 未初始化');
+            return false;
+        } catch (error) {
+            console.error('[Storage] IndexedDB 可用性检测失败:', error);
+            return false;
+        }
+    }
+
+    /**
+     * 检测 localStorage 可用性
+     */
+    isLocalStorageAvailable() {
+        try {
+            const testKey = '__storage_test__';
+            localStorage.setItem(testKey, 'test');
+            localStorage.removeItem(testKey);
+            console.log('[Storage] localStorage 可用');
+            return true;
+        } catch (error) {
+            console.error('[Storage] localStorage 不可用:', error);
+            return false;
+        }
+    }
+
+    /**
+     * 获取当前存储类型
+     */
+    getCurrentStorageType() {
+        if (this.fallbackStorage) {
+            return 'memory';
+        } else if (this.indexedDB) {
+            return 'indexedDB';
+        } else if (this.isLocalStorageAvailable()) {
+            return 'localStorage';
+        }
+        return 'none';
+    }
+
+    /**
+     * 处理存储空间不足
+     */
+    async handleStorageQuotaExceeded(key, value) {
+        console.warn('[Storage] 存储空间不足，尝试清理');
+
+        try {
+            // 1. 清理旧数据
+            await this.cleanupOldData({ skipReady: true });
+
+            // 2. 再次尝试保存
+            const retrySuccess = await this.set(key, value, { skipReady: true });
+            if (retrySuccess) {
+                console.log('[Storage] 清理后保存成功');
+                return true;
+            }
+
+            // 3. 如果仍然失败，尝试降级存储
+            console.warn('[Storage] 清理后仍然失败，尝试降级存储');
+            
+            const storageType = this.getCurrentStorageType();
+            
+            if (storageType === 'indexedDB') {
+                // 降级到 localStorage
+                console.log('[Storage] 从 IndexedDB 降级到 localStorage');
+                try {
+                    const serializedValue = JSON.stringify({
+                        data: value,
+                        timestamp: Date.now(),
+                        version: this.version
+                    });
+                    localStorage.setItem(this.getKey(key), serializedValue);
+                    console.log('[Storage] localStorage 保存成功');
+                    return true;
+                } catch (localStorageError) {
+                    console.error('[Storage] localStorage 保存失败:', localStorageError);
+                }
+            }
+
+            // 4. 最后降级到内存存储
+            console.warn('[Storage] 降级到内存存储');
+            if (!this.fallbackStorage) {
+                this.fallbackStorage = new Map();
+            }
+            const serializedValue = JSON.stringify({
+                data: value,
+                timestamp: Date.now(),
+                version: this.version
+            });
+            this.fallbackStorage.set(this.getKey(key), serializedValue);
+            
+            // 提示用户
+            if (window.showMessage) {
+                window.showMessage('存储空间不足，数据已保存到临时存储，请导出备份', 'warning');
+            }
+
+            return true;
+        } catch (error) {
+            console.error('[Storage] 处理存储空间不足失败:', error);
+            
+            // 最终失败，提示用户
+            if (window.showMessage) {
+                window.showMessage('存储空间严重不足，无法保存数据，请清理旧数据', 'error');
+            }
+            
+            return false;
+        }
+    }
+
+    /**
+     * 词表专用降级保存
+     */
+    async saveVocabListWithFallback(vocabList, options = {}) {
+        const { skipReady = false } = options;
+        
+        try {
+            // 首先尝试正常保存
+            const success = await this.saveVocabList(vocabList, { skipReady });
+            
+            if (success) {
+                return true;
+            }
+
+            // 如果失败，尝试降级保存
+            console.warn('[Storage] 词表保存失败，尝试降级保存');
+
+            // 压缩词表数据
+            const compressedList = this.compressVocabList(vocabList);
+
+            // 再次尝试保存压缩后的数据
+            const compressedSuccess = await this.saveVocabList(compressedList, { skipReady });
+
+            if (compressedSuccess) {
+                console.log('[Storage] 压缩后保存成功');
+                return true;
+            }
+
+            // 如果仍然失败，使用降级存储
+            return await this.handleStorageQuotaExceeded(
+                this.getVocabStorageKey(vocabList.id),
+                compressedList
+            );
+        } catch (error) {
+            console.error('[Storage] 词表降级保存失败:', error);
+            return false;
+        }
+    }
+
+    /**
+     * 压缩词表数据
+     */
+    compressVocabList(vocabList) {
+        return {
+            id: vocabList.id,
+            name: vocabList.name,
+            source: vocabList.source,
+            words: vocabList.words.map(word => ({
+                word: word.word,
+                userInput: word.userInput,
+                timestamp: word.timestamp,
+                errorCount: word.errorCount
+                // 移除其他非必要字段
+            })),
+            createdAt: vocabList.createdAt,
+            updatedAt: vocabList.updatedAt
+        };
+    }
+
+    /**
+     * 获取词表存储键
+     */
+    getVocabStorageKey(listId) {
+        const keys = this.getVocabStorageKeys();
+        
+        if (listId === 'spelling-errors-p1') return keys.P1_ERRORS;
+        if (listId === 'spelling-errors-p4') return keys.P4_ERRORS;
+        if (listId === 'spelling-errors-master') return keys.MASTER_ERRORS;
+        if (listId === 'custom') return keys.CUSTOM;
+        
+        return listId;
+    }
+
+    /**
+     * 检查存储健康状态
+     */
+    async checkStorageHealth(options = {}) {
+        const { skipReady = false } = options;
+        
+        try {
+            const health = {
+                indexedDB: this.isIndexedDBAvailable(),
+                localStorage: this.isLocalStorageAvailable(),
+                currentType: this.getCurrentStorageType(),
+                quotaStatus: 'unknown'
+            };
+
+            // 检查配额状态
+            const storageInfo = await this.getStorageInfo({ skipReady });
+            if (storageInfo) {
+                const usagePercent = storageInfo.type === 'localStorage'
+                    ? (storageInfo.used / (5 * 1024 * 1024)) * 100
+                    : (storageInfo.used / (105 * 1024 * 1024)) * 100;
+
+                if (usagePercent < 70) {
+                    health.quotaStatus = 'healthy';
+                } else if (usagePercent < 90) {
+                    health.quotaStatus = 'warning';
+                } else {
+                    health.quotaStatus = 'critical';
+                }
+
+                health.usagePercent = usagePercent;
+                health.used = storageInfo.used;
+            }
+
+            console.log('[Storage] 存储健康状态:', health);
+            return health;
+        } catch (error) {
+            console.error('[Storage] 检查存储健康状态失败:', error);
+            return {
+                indexedDB: false,
+                localStorage: false,
+                currentType: 'none',
+                quotaStatus: 'error'
+            };
+        }
+    }
+
+    // ==================== 数据导出功能 ====================
+
+    /**
+     * 导出练习记录
+     */
+    async exportPracticeRecords(options = {}) {
+        const { skipReady = false, format = 'json' } = options;
+        
+        try {
+            console.log('[Storage] 开始导出练习记录');
+
+            // 加载练习记录
+            const records = await this.get('practice_records', [], { skipReady });
+
+            const exportData = {
+                type: 'practice_records',
+                version: this.version,
+                exportDate: new Date().toISOString(),
+                recordCount: records.length,
+                records: records
+            };
+
+            console.log(`[Storage] 练习记录导出完成，共 ${records.length} 条`);
+
+            if (format === 'json') {
+                return JSON.stringify(exportData, null, 2);
+            }
+
+            return exportData;
+        } catch (error) {
+            console.error('[Storage] 导出练习记录失败:', error);
+            return null;
+        }
+    }
+
+    /**
+     * 导出词表数据
+     */
+    async exportVocabLists(options = {}) {
+        const { skipReady = false, format = 'json', listIds = null } = options;
+        
+        try {
+            console.log('[Storage] 开始导出词表数据');
+
+            const vocabLists = [];
+            const targetListIds = listIds || [
+                'spelling-errors-p1',
+                'spelling-errors-p4',
+                'spelling-errors-master',
+                'custom'
+            ];
+
+            for (const listId of targetListIds) {
+                const list = await this.loadVocabList(listId, { skipReady });
+                if (list && list.words.length > 0) {
+                    vocabLists.push(list);
+                }
+            }
+
+            const exportData = {
+                type: 'vocabulary_lists',
+                version: this.version,
+                exportDate: new Date().toISOString(),
+                listCount: vocabLists.length,
+                totalWords: vocabLists.reduce((sum, list) => sum + list.words.length, 0),
+                lists: vocabLists
+            };
+
+            console.log(`[Storage] 词表导出完成，共 ${vocabLists.length} 个词表，${exportData.totalWords} 个单词`);
+
+            if (format === 'json') {
+                return JSON.stringify(exportData, null, 2);
+            }
+
+            return exportData;
+        } catch (error) {
+            console.error('[Storage] 导出词表数据失败:', error);
+            return null;
+        }
+    }
+
+    /**
+     * 导出单个词表
+     */
+    async exportSingleVocabList(listId, options = {}) {
+        const { skipReady = false, format = 'json' } = options;
+        
+        try {
+            console.log(`[Storage] 开始导出词表: ${listId}`);
+
+            const list = await this.loadVocabList(listId, { skipReady });
+
+            if (!list) {
+                console.warn(`[Storage] 词表不存在: ${listId}`);
+                return null;
+            }
+
+            const exportData = {
+                type: 'vocabulary_list',
+                version: this.version,
+                exportDate: new Date().toISOString(),
+                list: list
+            };
+
+            console.log(`[Storage] 词表导出完成: ${listId}, ${list.words.length} 个单词`);
+
+            if (format === 'json') {
+                return JSON.stringify(exportData, null, 2);
+            }
+
+            return exportData;
+        } catch (error) {
+            console.error('[Storage] 导出词表失败:', error);
+            return null;
+        }
+    }
+
+    /**
+     * 导出完整数据（包括练习记录和词表）
+     */
+    async exportCompleteData(options = {}) {
+        const { skipReady = false, format = 'json' } = options;
+        
+        try {
+            console.log('[Storage] 开始导出完整数据');
+
+            // 导出所有数据
+            const allData = await this.exportData({ skipReady });
+
+            // 导出练习记录
+            const practiceRecords = await this.exportPracticeRecords({ 
+                skipReady, 
+                format: 'object' 
+            });
+
+            // 导出词表
+            const vocabLists = await this.exportVocabLists({ 
+                skipReady, 
+                format: 'object' 
+            });
+
+            const exportData = {
+                type: 'complete_export',
+                version: this.version,
+                exportDate: new Date().toISOString(),
+                summary: {
+                    totalRecords: allData?.storageInfo?.totalRecords || 0,
+                    practiceRecords: practiceRecords?.recordCount || 0,
+                    vocabLists: vocabLists?.listCount || 0,
+                    totalWords: vocabLists?.totalWords || 0
+                },
+                data: {
+                    all: allData,
+                    practiceRecords: practiceRecords,
+                    vocabLists: vocabLists
+                }
+            };
+
+            console.log('[Storage] 完整数据导出完成');
+
+            if (format === 'json') {
+                return JSON.stringify(exportData, null, 2);
+            }
+
+            return exportData;
+        } catch (error) {
+            console.error('[Storage] 导出完整数据失败:', error);
+            return null;
+        }
+    }
+
+    /**
+     * 下载导出数据为文件
+     */
+    downloadExportData(data, filename = null) {
+        try {
+            if (!data) {
+                console.error('[Storage] 无数据可导出');
+                return false;
+            }
+
+            // 确保数据是字符串格式
+            const jsonString = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+
+            // 创建 Blob
+            const blob = new Blob([jsonString], { type: 'application/json' });
+
+            // 生成文件名
+            const defaultFilename = `ielts-practice-export-${new Date().toISOString().split('T')[0]}.json`;
+            const finalFilename = filename || defaultFilename;
+
+            // 创建下载链接
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = finalFilename;
+
+            // 触发下载
+            document.body.appendChild(link);
+            link.click();
+
+            // 清理
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            console.log(`[Storage] 数据已下载: ${finalFilename}`);
+            return true;
+        } catch (error) {
+            console.error('[Storage] 下载导出数据失败:', error);
+            return false;
+        }
+    }
+
+    /**
+     * 导出并下载练习记录
+     */
+    async exportAndDownloadPracticeRecords(filename = null) {
+        try {
+            const data = await this.exportPracticeRecords({ format: 'json' });
+            if (data) {
+                const defaultFilename = `practice-records-${new Date().toISOString().split('T')[0]}.json`;
+                return this.downloadExportData(data, filename || defaultFilename);
+            }
+            return false;
+        } catch (error) {
+            console.error('[Storage] 导出并下载练习记录失败:', error);
+            return false;
+        }
+    }
+
+    /**
+     * 导出并下载词表数据
+     */
+    async exportAndDownloadVocabLists(filename = null) {
+        try {
+            const data = await this.exportVocabLists({ format: 'json' });
+            if (data) {
+                const defaultFilename = `vocab-lists-${new Date().toISOString().split('T')[0]}.json`;
+                return this.downloadExportData(data, filename || defaultFilename);
+            }
+            return false;
+        } catch (error) {
+            console.error('[Storage] 导出并下载词表数据失败:', error);
+            return false;
+        }
+    }
+
+    /**
+     * 导出并下载完整数据
+     */
+    async exportAndDownloadCompleteData(filename = null) {
+        try {
+            const data = await this.exportCompleteData({ format: 'json' });
+            if (data) {
+                const defaultFilename = `complete-data-${new Date().toISOString().split('T')[0]}.json`;
+                return this.downloadExportData(data, filename || defaultFilename);
+            }
+            return false;
+        } catch (error) {
+            console.error('[Storage] 导出并下载完整数据失败:', error);
+            return false;
+        }
+    }
+
+    /**
+     * 导入词表数据
+     */
+    async importVocabLists(importData, options = {}) {
+        const { skipReady = false, merge = true } = options;
+        
+        try {
+            console.log('[Storage] 开始导入词表数据');
+
+            if (!importData || !importData.lists) {
+                console.error('[Storage] 导入数据格式无效');
+                return false;
+            }
+
+            let successCount = 0;
+            let failCount = 0;
+
+            for (const list of importData.lists) {
+                try {
+                    if (merge) {
+                        // 合并模式：与现有数据合并
+                        const success = await this.syncVocabList(list.id, list, { skipReady });
+                        if (success) {
+                            successCount++;
+                        } else {
+                            failCount++;
+                        }
+                    } else {
+                        // 覆盖模式：直接保存
+                        const success = await this.saveVocabList(list, { skipReady });
+                        if (success) {
+                            successCount++;
+                        } else {
+                            failCount++;
+                        }
+                    }
+                } catch (error) {
+                    console.error(`[Storage] 导入词表失败: ${list.id}`, error);
+                    failCount++;
+                }
+            }
+
+            console.log(`[Storage] 词表导入完成: ${successCount} 成功, ${failCount} 失败`);
+            return { successCount, failCount };
+        } catch (error) {
+            console.error('[Storage] 导入词表数据失败:', error);
+            return false;
+        }
+    }
 }
 
 const STORAGE_SYNC_IGNORED_KEYS = new Set([
@@ -1347,9 +2428,12 @@ StorageManager.prototype.dispatchStorageSync = function(key) {
 const storageManager = new StorageManager();
 window.storage = storageManager;
 
-// 启动存储监控
+// 启动存储监控和数据同步
 storageManager.ready
-    .then(() => storageManager.startStorageMonitoring())
+    .then(() => {
+        storageManager.startStorageMonitoring();
+        storageManager.setupBeforeUnloadHandler();
+    })
     .catch(error => {
         console.error('[Storage] 存储初始化失败，监控未启动:', error);
     });
