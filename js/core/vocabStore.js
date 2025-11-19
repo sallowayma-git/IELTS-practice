@@ -1,8 +1,48 @@
 (function(window) {
+    // 词表元数据配置
+    const VOCAB_LISTS = Object.freeze({
+        'default': {
+            id: 'default',
+            name: '默认词表',
+            icon: '📚',
+            source: 'builtin',
+            storageKey: 'vocab_words'
+        },
+        'spelling-errors-p1': {
+            id: 'spelling-errors-p1',
+            name: 'P1 拼写错误',
+            icon: '📝',
+            source: 'p1',
+            storageKey: 'vocab_list_p1_errors'
+        },
+        'spelling-errors-p4': {
+            id: 'spelling-errors-p4',
+            name: 'P4 拼写错误',
+            icon: '📝',
+            source: 'p4',
+            storageKey: 'vocab_list_p4_errors'
+        },
+        'spelling-errors-master': {
+            id: 'spelling-errors-master',
+            name: '综合错误词表',
+            icon: '📚',
+            source: 'all',
+            storageKey: 'vocab_list_master_errors'
+        },
+        'custom': {
+            id: 'custom',
+            name: '自定义词表',
+            icon: '✏️',
+            source: 'user',
+            storageKey: 'vocab_list_custom'
+        }
+    });
+
     const STORAGE_KEYS = Object.freeze({
         WORDS: 'vocab_words',
         CONFIG: 'vocab_user_config',
-        REVIEW_QUEUE: 'vocab_review_queue'
+        REVIEW_QUEUE: 'vocab_review_queue',
+        ACTIVE_LIST: 'vocab_active_list_id'
     });
 
     const DEFAULT_CONFIG = Object.freeze({
@@ -28,7 +68,9 @@
         readyResolvers: [],
         loadingPromise: null,
         registryUnsubscribe: null,
-        lastLoadSource: 'init'
+        lastLoadSource: 'init',
+        activeListId: 'default',
+        listCache: new Map()
     };
 
     function emitReady(value) {
@@ -224,10 +266,11 @@
             return state.loadingPromise;
         }
         state.loadingPromise = (async () => {
-            const [storedWords, storedConfig, storedQueue] = await Promise.all([
+            const [storedWords, storedConfig, storedQueue, storedActiveList] = await Promise.all([
                 read(STORAGE_KEYS.WORDS, []),
                 read(STORAGE_KEYS.CONFIG, { ...DEFAULT_CONFIG }),
-                read(STORAGE_KEYS.REVIEW_QUEUE, DEFAULT_REVIEW_QUEUE.slice())
+                read(STORAGE_KEYS.REVIEW_QUEUE, DEFAULT_REVIEW_QUEUE.slice()),
+                read(STORAGE_KEYS.ACTIVE_LIST, 'default')
             ]);
 
             const normalizedWords = Array.isArray(storedWords)
@@ -240,6 +283,9 @@
 
             state.config = mergeConfig(storedConfig);
             state.reviewQueue = Array.isArray(storedQueue) ? storedQueue.map((id) => String(id)) : [];
+            state.activeListId = typeof storedActiveList === 'string' && VOCAB_LISTS[storedActiveList] 
+                ? storedActiveList 
+                : 'default';
         })()
             .catch((error) => {
                 console.error('[VocabStore] 初始化加载失败:', error);
@@ -415,6 +461,234 @@
         return fresh.slice(0, target).map((word) => ({ ...word }));
     }
 
+    function convertSpellingErrorToWord(error) {
+        if (!error || typeof error !== 'object') {
+            return null;
+        }
+
+        // 拼写错误词表格式: { word, userInput, questionId, examId, timestamp, errorCount, source }
+        // VocabStore 格式: { id, word, meaning, example, note, easeFactor, interval, repetitions, ... }
+        
+        const word = typeof error.word === 'string' ? error.word.trim() : '';
+        if (!word) {
+            return null;
+        }
+
+        // 生成含义：显示用户的错误拼写和题目来源
+        const userInput = error.userInput || '(未记录)';
+        const examId = error.examId || '';
+        const questionId = error.questionId || '';
+        const errorCount = error.errorCount || 1;
+        
+        let meaning = `你曾拼写为: ${userInput}`;
+        if (errorCount > 1) {
+            meaning += ` (错误${errorCount}次)`;
+        }
+        
+        // 生成例句：显示题目来源
+        let example = '';
+        if (examId) {
+            example = `来源: ${examId}`;
+            if (questionId) {
+                example += ` - 题目 ${questionId}`;
+            }
+        }
+
+        // 生成ID
+        const id = generateId(word);
+
+        // 生成来源标签
+        const sourceLabels = {
+            'p1': 'P1 听力练习',
+            'p4': 'P4 听力练习',
+            'all': '综合练习',
+            'other': '听力练习'
+        };
+        const source = sourceLabels[error.source] || '听力练习';
+
+        return normalizeWordRecord({
+            id,
+            word,
+            meaning,
+            example,
+            note: '',
+            source,
+            // 新词，没有复习记录
+            easeFactor: null,
+            interval: 1,
+            repetitions: 0,
+            intraCycles: 0,
+            correctCount: 0,
+            lastReviewed: null,
+            nextReview: null,
+            createdAt: error.timestamp ? new Date(error.timestamp).toISOString() : getNow(),
+            updatedAt: getNow()
+        });
+    }
+
+    async function loadList(listId) {
+        if (!listId || typeof listId !== 'string') {
+            console.warn('[VocabStore] loadList: 无效的 listId');
+            return null;
+        }
+
+        const listConfig = VOCAB_LISTS[listId];
+        if (!listConfig) {
+            console.warn('[VocabStore] loadList: 未知的词表 ID:', listId);
+            return null;
+        }
+
+        // 检查缓存（带TTL）
+        const cached = state.listCache.get(listId);
+        if (cached && cached.timestamp && (Date.now() - cached.timestamp) < 5 * 60 * 1000) {
+            console.log(`[VocabStore] 从缓存加载词表: ${listId}`);
+            return cached.data;
+        }
+
+        try {
+            const storageKey = listConfig.storageKey;
+            const storedData = await read(storageKey, null);
+            
+            let normalizedWords = [];
+
+            // 检查是否为拼写错误词表格式
+            if (storedData && typeof storedData === 'object' && Array.isArray(storedData.words)) {
+                // SpellingErrorCollector 格式: { id, name, source, words: [...], createdAt, updatedAt }
+                console.log(`[VocabStore] 检测到拼写错误词表格式: ${listId}`);
+                normalizedWords = storedData.words
+                    .map(convertSpellingErrorToWord)
+                    .filter(Boolean);
+            } else if (Array.isArray(storedData)) {
+                // 标准词表格式: [{ word, meaning, ... }, ...]
+                normalizedWords = storedData
+                    .map(normalizeWordRecord)
+                    .filter(Boolean);
+            } else {
+                console.log(`[VocabStore] 词表为空或格式未知: ${listId}`);
+            }
+
+            const listData = {
+                id: listConfig.id,
+                name: listConfig.name,
+                icon: listConfig.icon,
+                source: listConfig.source,
+                words: normalizedWords,
+                stats: {
+                    totalWords: normalizedWords.length,
+                    masteredWords: normalizedWords.filter(w => (w.correctCount || 0) >= (state.config.masteryCount || 4)).length,
+                    reviewingWords: normalizedWords.filter(w => w.lastReviewed && !w.nextReview).length
+                }
+            };
+
+            // 缓存词表数据（带时间戳）
+            state.listCache.set(listId, {
+                data: listData,
+                timestamp: Date.now()
+            });
+            console.log(`[VocabStore] 加载词表成功: ${listId}, 单词数: ${normalizedWords.length}`);
+            return listData;
+        } catch (error) {
+            console.error('[VocabStore] loadList 失败:', error);
+            return null;
+        }
+    }
+
+    async function setActiveList(listIdOrData) {
+        let listId;
+        let listData;
+
+        if (typeof listIdOrData === 'string') {
+            listId = listIdOrData;
+            listData = await loadList(listId);
+        } else if (listIdOrData && typeof listIdOrData === 'object' && listIdOrData.id) {
+            listData = listIdOrData;
+            listId = listData.id;
+        } else {
+            console.warn('[VocabStore] setActiveList: 无效的参数');
+            return false;
+        }
+
+        if (!listData || !VOCAB_LISTS[listId]) {
+            console.warn('[VocabStore] setActiveList: 词表不存在:', listId);
+            return false;
+        }
+
+        try {
+            // 保存当前词表到存储（如果有修改）
+            if (state.activeListId && state.words.length > 0) {
+                const currentConfig = VOCAB_LISTS[state.activeListId];
+                if (currentConfig) {
+                    await persist(currentConfig.storageKey, state.words);
+                }
+            }
+
+            // 切换到新词表
+            state.activeListId = listId;
+            setWordsInternal(listData.words || []);
+            
+            // 保存激活的词表 ID
+            await persist(STORAGE_KEYS.ACTIVE_LIST, listId);
+
+            // 清空复习队列（新词表需要重新生成队列）
+            state.reviewQueue = [];
+            await persist(STORAGE_KEYS.REVIEW_QUEUE, []);
+
+            return true;
+        } catch (error) {
+            console.error('[VocabStore] setActiveList 失败:', error);
+            return false;
+        }
+    }
+
+    async function getListWordCount(listId) {
+        if (!listId || !VOCAB_LISTS[listId]) {
+            return 0;
+        }
+
+        // 如果是当前激活的词表，直接返回
+        if (listId === state.activeListId) {
+            return state.words.length;
+        }
+
+        // 尝试从缓存获取
+        if (state.listCache.has(listId)) {
+            const cached = state.listCache.get(listId);
+            const data = cached.data || cached;
+            return data.words ? data.words.length : 0;
+        }
+
+        // 从存储读取
+        try {
+            const listConfig = VOCAB_LISTS[listId];
+            const storedData = await read(listConfig.storageKey, null);
+            
+            // 检查是否为拼写错误词表格式
+            if (storedData && typeof storedData === 'object' && Array.isArray(storedData.words)) {
+                return storedData.words.length;
+            } else if (Array.isArray(storedData)) {
+                return storedData.length;
+            }
+            
+            return 0;
+        } catch (error) {
+            console.error('[VocabStore] getListWordCount 失败:', error);
+            return 0;
+        }
+    }
+
+    function getAvailableLists() {
+        return Object.values(VOCAB_LISTS).map(list => ({
+            id: list.id,
+            name: list.name,
+            icon: list.icon,
+            source: list.source
+        }));
+    }
+
+    function getActiveListId() {
+        return state.activeListId;
+    }
+
     async function init() {
         ensureReadyPromise();
         connectToProviders();
@@ -435,10 +709,19 @@
         setReviewQueue,
         getDueWords,
         getNewWords,
+        loadList,
+        setActiveList,
+        getListWordCount,
+        getAvailableLists,
+        getActiveListId,
+        get VOCAB_LISTS() {
+            return VOCAB_LISTS;
+        },
         get state() {
             return {
                 ready: state.ready,
-                lastLoadSource: state.lastLoadSource
+                lastLoadSource: state.lastLoadSource,
+                activeListId: state.activeListId
             };
         }
     };

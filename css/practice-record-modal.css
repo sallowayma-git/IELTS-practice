@@ -410,3 +410,84 @@
         font-size: 0.8rem;
     }
 }
+
+
+/* 多套题模式样式 */
+.multi-suite-entry {
+    margin-bottom: 24px;
+    padding: 16px;
+    background: #f8fafc;
+    border-radius: 8px;
+    border-left: 4px solid #3b82f6;
+}
+
+.multi-suite-entry h5 {
+    color: #1e40af;
+    font-size: 1.1rem;
+    margin-bottom: 8px;
+}
+
+.suite-score-info {
+    font-size: 0.9rem;
+    color: #64748b;
+    margin-bottom: 12px;
+    padding: 8px 12px;
+    background: white;
+    border-radius: 6px;
+    display: inline-block;
+}
+
+.suite-score-info strong {
+    color: #059669;
+    font-weight: 600;
+}
+
+/* 套题入口样式优化 */
+.suite-entry {
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.suite-entry:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.suite-entry h5 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+/* 错误计数样式 */
+.error-count {
+    color: #dc2626 !important;
+    font-weight: 600;
+}
+
+.unanswered-count {
+    color: #f59e0b !important;
+    font-weight: 600;
+}
+
+/* 结果图标样式增强 */
+.result-icon {
+    text-align: center;
+    font-size: 1.2em;
+}
+
+.result-icon.correct {
+    color: #059669;
+}
+
+.result-icon.incorrect {
+    color: #dc2626;
+}
+
+.result-icon.unknown {
+    color: #94a3b8;
+}

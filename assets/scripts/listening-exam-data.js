@@ -1707,6 +1707,440 @@ window.listeningExamIndex = [
         hasPdf: true,
         pdfFilename: 'PART4 The influence of the carter family on american music.pdf',
         mp3Filename: 'audio.mp3'
+    },
+
+    // 100 P1 - 频率分类套题（多套题HTML，每个文件包含一组套题）
+    {
+        id: 'listening-p1-100-p1-48-1-10',
+        type: 'listening',
+        title: 'P1 中频(48) 1-10',
+        category: 'P1',
+        path: 'ListeningPractice/100 P1/P1 中频(48)/1-10/',
+        filename: '套题T1-10.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p1-100-p1-48-11-20',
+        type: 'listening',
+        title: 'P1 中频(48) 11-20',
+        category: 'P1',
+        path: 'ListeningPractice/100 P1/P1 中频(48)/11-20/',
+        filename: '套题T11-20.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p1-100-p1-48-21-30',
+        type: 'listening',
+        title: 'P1 中频(48) 21-30',
+        category: 'P1',
+        path: 'ListeningPractice/100 P1/P1 中频(48)/21-30/',
+        filename: '套题T21-30.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p1-100-p1-48-31-40',
+        type: 'listening',
+        title: 'P1 中频(48) 31-40',
+        category: 'P1',
+        path: 'ListeningPractice/100 P1/P1 中频(48)/31-40/',
+        filename: '套题T31-40.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p1-100-p1-48-41-48',
+        type: 'listening',
+        title: 'P1 中频(48) 41-48',
+        category: 'P1',
+        path: 'ListeningPractice/100 P1/P1 中频(48)/41-48/',
+        filename: '套题T41-48.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p1-100-p1-43-1-8',
+        type: 'listening',
+        title: 'P1 超高频（43） 1-8',
+        category: 'P1',
+        path: 'ListeningPractice/100 P1/P1 超高频（43）/1-8/',
+        filename: '套题T1-8.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p1-100-p1-43-17-24',
+        type: 'listening',
+        title: 'P1 超高频（43） 17-24',
+        category: 'P1',
+        path: 'ListeningPractice/100 P1/P1 超高频（43）/17-24/',
+        filename: '套题T17-24.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p1-100-p1-43-25-32',
+        type: 'listening',
+        title: 'P1 超高频（43） 25-32',
+        category: 'P1',
+        path: 'ListeningPractice/100 P1/P1 超高频（43）/25-32/',
+        filename: '套题T25-32.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p1-100-p1-43-33-43',
+        type: 'listening',
+        title: 'P1 超高频（43） 33-43',
+        category: 'P1',
+        path: 'ListeningPractice/100 P1/P1 超高频（43）/33-43/',
+        filename: '套题T33-43.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p1-100-p1-43-9-16',
+        type: 'listening',
+        title: 'P1 超高频（43） 9-16',
+        category: 'P1',
+        path: 'ListeningPractice/100 P1/P1 超高频（43）/9-16/',
+        filename: '套题T9-16.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p1-100-p1-35-1-7',
+        type: 'listening',
+        title: 'P1 高频（35） 1-7',
+        category: 'P1',
+        path: 'ListeningPractice/100 P1/P1 高频（35）/1-7/',
+        filename: '套题T1-7.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p1-100-p1-35-15-21',
+        type: 'listening',
+        title: 'P1 高频（35） 15-21',
+        category: 'P1',
+        path: 'ListeningPractice/100 P1/P1 高频（35）/15-21/',
+        filename: '套题T15-21.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p1-100-p1-35-22-28',
+        type: 'listening',
+        title: 'P1 高频（35） 22-28',
+        category: 'P1',
+        path: 'ListeningPractice/100 P1/P1 高频（35）/22-28/',
+        filename: '套题T22-28.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p1-100-p1-35-29-35',
+        type: 'listening',
+        title: 'P1 高频（35） 29-35',
+        category: 'P1',
+        path: 'ListeningPractice/100 P1/P1 高频（35）/29-35/',
+        filename: '套题T29-35.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p1-100-p1-35-8-14',
+        type: 'listening',
+        title: 'P1 高频（35） 8-14',
+        category: 'P1',
+        path: 'ListeningPractice/100 P1/P1 高频（35）/8-14/',
+        filename: '套题T8-14.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+
+    // 100 P4 - 全部题目与频率分层套题
+    {
+        id: 'listening-p4-100-1-10',
+        type: 'listening',
+        title: '1-10',
+        category: 'P4',
+        path: 'ListeningPractice/100 P4/1-10/',
+        filename: '1 套题 T1-10.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p4-100-11-20',
+        type: 'listening',
+        title: '11-20',
+        category: 'P4',
+        path: 'ListeningPractice/100 P4/11-20/',
+        filename: '1 套题T11-20.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p4-100-21-30',
+        type: 'listening',
+        title: '21-30',
+        category: 'P4',
+        path: 'ListeningPractice/100 P4/21-30/',
+        filename: '1 套题T21-30.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p4-100-31-40',
+        type: 'listening',
+        title: '31-40',
+        category: 'P4',
+        path: 'ListeningPractice/100 P4/31-40/',
+        filename: '1 套题T31-40.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p4-100-41-50',
+        type: 'listening',
+        title: '41-50',
+        category: 'P4',
+        path: 'ListeningPractice/100 P4/41-50/',
+        filename: '1 套题T41-50.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p4-100-51-60',
+        type: 'listening',
+        title: '51-60',
+        category: 'P4',
+        path: 'ListeningPractice/100 P4/51-60/',
+        filename: '1 套题T51-60.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p4-100-61-70',
+        type: 'listening',
+        title: '61-70',
+        category: 'P4',
+        path: 'ListeningPractice/100 P4/61-70/',
+        filename: '1 套题T61-70.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p4-100-71-80',
+        type: 'listening',
+        title: '71-80',
+        category: 'P4',
+        path: 'ListeningPractice/100 P4/71-80/',
+        filename: '1 套题T71-80.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p4-100-81-90',
+        type: 'listening',
+        title: '81-90',
+        category: 'P4',
+        path: 'ListeningPractice/100 P4/81-90/',
+        filename: '1 套题T81-90.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p4-100-91-100',
+        type: 'listening',
+        title: '91-100',
+        category: 'P4',
+        path: 'ListeningPractice/100 P4/91-100/',
+        filename: '1 套题T91-100.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p4-100-p4-64-1-8',
+        type: 'listening',
+        title: 'P4 中频(64) 1-8',
+        category: 'P4',
+        path: 'ListeningPractice/100 P4/P4 中频(64)/1-8/',
+        filename: '套题T1-8.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p4-100-p4-64-17-24',
+        type: 'listening',
+        title: 'P4 中频(64) 17-24',
+        category: 'P4',
+        path: 'ListeningPractice/100 P4/P4 中频(64)/17-24/',
+        filename: '套题T17-24.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p4-100-p4-64-25-32',
+        type: 'listening',
+        title: 'P4 中频(64) 25-32',
+        category: 'P4',
+        path: 'ListeningPractice/100 P4/P4 中频(64)/25-32/',
+        filename: '套题T25-32.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p4-100-p4-64-33-40',
+        type: 'listening',
+        title: 'P4 中频(64) 33-40',
+        category: 'P4',
+        path: 'ListeningPractice/100 P4/P4 中频(64)/33-40/',
+        filename: '套题T33-40.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p4-100-p4-64-41-48',
+        type: 'listening',
+        title: 'P4 中频(64) 41-48',
+        category: 'P4',
+        path: 'ListeningPractice/100 P4/P4 中频(64)/41-48/',
+        filename: '套题T41-48.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p4-100-p4-64-49-56',
+        type: 'listening',
+        title: 'P4 中频(64) 49-56',
+        category: 'P4',
+        path: 'ListeningPractice/100 P4/P4 中频(64)/49-56/',
+        filename: '套题T49-56.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p4-100-p4-64-57-64',
+        type: 'listening',
+        title: 'P4 中频(64) 57-64',
+        category: 'P4',
+        path: 'ListeningPractice/100 P4/P4 中频(64)/57-64/',
+        filename: '套题T57-64.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p4-100-p4-64-9-16',
+        type: 'listening',
+        title: 'P4 中频(64) 9-16',
+        category: 'P4',
+        path: 'ListeningPractice/100 P4/P4 中频(64)/9-16/',
+        filename: '套题T9-16.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p4-100-p4-51-1-10',
+        type: 'listening',
+        title: 'P4 超高频(51) 1-10',
+        category: 'P4',
+        path: 'ListeningPractice/100 P4/P4 超高频(51)/1-10/',
+        filename: '套题T1-10.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p4-100-p4-51-11-20',
+        type: 'listening',
+        title: 'P4 超高频(51) 11-20',
+        category: 'P4',
+        path: 'ListeningPractice/100 P4/P4 超高频(51)/11-20/',
+        filename: '套题T11-20.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p4-100-p4-51-21-30',
+        type: 'listening',
+        title: 'P4 超高频(51) 21-30',
+        category: 'P4',
+        path: 'ListeningPractice/100 P4/P4 超高频(51)/21-30/',
+        filename: '套题T21-30.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p4-100-p4-51-31-40',
+        type: 'listening',
+        title: 'P4 超高频(51) 31-40',
+        category: 'P4',
+        path: 'ListeningPractice/100 P4/P4 超高频(51)/31-40/',
+        filename: '套题T31-40.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p4-100-p4-51-41-51',
+        type: 'listening',
+        title: 'P4 超高频(51) 41-51',
+        category: 'P4',
+        path: 'ListeningPractice/100 P4/P4 超高频(51)/41-51/',
+        filename: '套题T41-51.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p4-100-p4-52-1-10',
+        type: 'listening',
+        title: 'P4 高频(52) 1-10',
+        category: 'P4',
+        path: 'ListeningPractice/100 P4/P4 高频(52)/1-10/',
+        filename: '套题T1-10.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p4-100-p4-52-11-20',
+        type: 'listening',
+        title: 'P4 高频(52) 11-20',
+        category: 'P4',
+        path: 'ListeningPractice/100 P4/P4 高频(52)/11-20/',
+        filename: '套题T11-20.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p4-100-p4-52-21-30',
+        type: 'listening',
+        title: 'P4 高频(52) 21-30',
+        category: 'P4',
+        path: 'ListeningPractice/100 P4/P4 高频(52)/21-30/',
+        filename: '套题T21-30.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p4-100-p4-52-31-40',
+        type: 'listening',
+        title: 'P4 高频(52) 31-40',
+        category: 'P4',
+        path: 'ListeningPractice/100 P4/P4 高频(52)/31-40/',
+        filename: '套题T31-40.html',
+        hasHtml: true,
+        hasPdf: false
+    },
+    {
+        id: 'listening-p4-100-p4-52-41-52',
+        type: 'listening',
+        title: 'P4 高频(52) 41-52',
+        category: 'P4',
+        path: 'ListeningPractice/100 P4/P4 高频(52)/41-52/',
+        filename: '套题T41-52.html',
+        hasHtml: true,
+        hasPdf: false
     }
 ];
 window.listeningExamIndex.pathRoot = 'ListeningPractice/';

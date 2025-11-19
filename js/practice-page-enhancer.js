@@ -679,6 +679,10 @@
         config: initialConfig,
         customCollectors: [],
         pageContext: null,
+        isMultiSuite: false, // 新增：标识是否为多套题模式
+        currentSuiteId: null, // 新增：当前激活的套题ID
+        submittedSuites: new Set(), // 新增：已提交的套题ID集合
+        isSubmitting: false, // 新增：提交状态标志，防止并发提交
 
         initialize: function () {
             if (this.isInitialized) {
@@ -698,6 +702,10 @@
                 this.pageContext = this.getPageContext(true);
 
                 await this.prepareStorageNamespace();
+
+                // 检测多套题结构
+                this.isMultiSuite = this.detectMultiSuiteStructure();
+                console.log('[PracticeEnhancer] 多套题模式:', this.isMultiSuite);
 
                 this.setupCommunication();
                 this.setupAnswerListeners();
@@ -722,6 +730,104 @@
             });
 
             return this.initializationPromise;
+        },
+
+        /**
+         * 检测页面是否包含多套题结构
+         * @returns {boolean} 如果页面包含多套题返回true，否则返回false
+         */
+        detectMultiSuiteStructure: function() {
+            console.log('[PracticeEnhancer] 开始检测多套题结构');
+            
+            // 方法1: 检测是否有多个带data-suite-id属性的元素
+            const suiteElements = document.querySelectorAll('[data-suite-id]');
+            if (suiteElements.length > 1) {
+                console.log('[PracticeEnhancer] 检测到多个data-suite-id元素:', suiteElements.length);
+                return true;
+            }
+            
+            // 方法2: 检测是否有多个.suite-container元素
+            const suiteContainers = document.querySelectorAll('.suite-container');
+            if (suiteContainers.length > 1) {
+                console.log('[PracticeEnhancer] 检测到多个suite-container元素:', suiteContainers.length);
+                return true;
+            }
+            
+            // 方法3: 检测是否有多个.test-page元素（针对100 P1/P4的HTML结构）
+            const testPages = document.querySelectorAll('.test-page');
+            if (testPages.length > 1) {
+                console.log('[PracticeEnhancer] 检测到多个test-page元素:', testPages.length);
+                return true;
+            }
+            
+            // 方法4: 检测是否有套题切换按钮（pills）
+            const pills = document.querySelectorAll('.pill[data-target^="page-test"]');
+            if (pills.length > 1) {
+                console.log('[PracticeEnhancer] 检测到多个套题切换按钮:', pills.length);
+                return true;
+            }
+            
+            console.log('[PracticeEnhancer] 未检测到多套题结构，使用单套题模式');
+            return false;
+        },
+
+        /**
+         * 从DOM元素中提取套题标识
+         * @param {HTMLElement} element - 要提取套题ID的元素
+         * @returns {string|null} 套题ID，如果无法提取则返回null
+         */
+        extractSuiteId: function(element) {
+            if (!element) {
+                return null;
+            }
+            
+            // 方法1: 直接从data-suite-id属性读取
+            if (element.dataset && element.dataset.suiteId) {
+                return element.dataset.suiteId;
+            }
+            
+            // 方法2: 从最近的带data-suite-id的祖先元素读取
+            const suiteContainer = element.closest('[data-suite-id]');
+            if (suiteContainer && suiteContainer.dataset.suiteId) {
+                return suiteContainer.dataset.suiteId;
+            }
+            
+            // 方法3: 从.test-page元素的ID提取（针对100 P1/P4结构）
+            const testPage = element.closest('.test-page');
+            if (testPage && testPage.id) {
+                // 从 "page-test1" 提取 "set1"
+                const match = testPage.id.match(/page-test(\d+)/);
+                if (match) {
+                    return 'set' + match[1];
+                }
+                // 或者直接使用ID
+                return testPage.id;
+            }
+            
+            // 方法4: 从当前激活的test-page提取
+            const activePage = document.querySelector('.test-page.active');
+            if (activePage && activePage.id) {
+                const match = activePage.id.match(/page-test(\d+)/);
+                if (match) {
+                    return 'set' + match[1];
+                }
+                return activePage.id;
+            }
+            
+            // 方法5: 从.suite-container元素提取
+            const suiteContainerByClass = element.closest('.suite-container');
+            if (suiteContainerByClass) {
+                // 尝试从ID或其他属性提取
+                if (suiteContainerByClass.id) {
+                    return suiteContainerByClass.id;
+                }
+                if (suiteContainerByClass.dataset.suite) {
+                    return suiteContainerByClass.dataset.suite;
+                }
+            }
+            
+            // 默认返回null（单套题模式）
+            return null;
         },
 
         prepareStorageNamespace: async function () {
@@ -1297,6 +1403,14 @@
         extractCorrectAnswers: function () {
             console.log('[PracticeEnhancer] 开始提取正确答案');
             
+            // 如果是多套题模式，需要为每个套题提取答案
+            if (this.isMultiSuite) {
+                console.log('[PracticeEnhancer] 多套题模式：为每个套题提取正确答案');
+                this.extractMultiSuiteCorrectAnswers();
+                return;
+            }
+            
+            // 单套题模式：使用原有逻辑
             // 使用CorrectAnswerExtractor如果可用
             if (window.CorrectAnswerExtractor) {
                 try {
@@ -1326,6 +1440,228 @@
             
             // 定期检查是否有新的正确答案数据
             this.startCorrectAnswerMonitoring();
+        },
+
+        /**
+         * 多套题模式：提取所有套题的正确答案
+         */
+        extractMultiSuiteCorrectAnswers: function() {
+            console.log('[PracticeEnhancer] 开始提取多套题正确答案');
+            
+            // 查找所有套题容器
+            let suiteContainers = document.querySelectorAll('[data-suite-id]');
+            
+            if (suiteContainers.length === 0) {
+                suiteContainers = document.querySelectorAll('.test-page');
+            }
+            
+            if (suiteContainers.length === 0) {
+                suiteContainers = document.querySelectorAll('.suite-container');
+            }
+            
+            console.log('[PracticeEnhancer] 找到套题容器数量:', suiteContainers.length);
+            
+            // 为每个套题提取正确答案
+            suiteContainers.forEach((container, index) => {
+                const suiteId = this.extractSuiteId(container);
+                console.log(`[PracticeEnhancer] 提取套题 ${index + 1}/${suiteContainers.length} 正确答案, ID: ${suiteId}`);
+                
+                if (suiteId) {
+                    this.extractSuiteCorrectAnswers(suiteId, container);
+                }
+            });
+            
+            console.log('[PracticeEnhancer] 多套题正确答案提取完成:', this.correctAnswers);
+        },
+
+        /**
+         * 提取单个套题的正确答案
+         * @param {string} suiteId - 套题ID
+         * @param {HTMLElement} suiteContainer - 套题容器元素（可选）
+         */
+        extractSuiteCorrectAnswers: function(suiteId, suiteContainer) {
+            if (!suiteId) {
+                console.warn('[PracticeEnhancer] extractSuiteCorrectAnswers: 套题ID为空');
+                return;
+            }
+            
+            // 如果没有提供容器，尝试获取
+            if (!suiteContainer) {
+                suiteContainer = this.getSuiteContainer(suiteId);
+            }
+            
+            if (!suiteContainer) {
+                console.warn(`[PracticeEnhancer] extractSuiteCorrectAnswers: 未找到套题容器 ${suiteId}`);
+                return;
+            }
+            
+            console.log(`[PracticeEnhancer] 提取套题 ${suiteId} 的正确答案`);
+            
+            // 方法1: 从套题容器内的全局变量提取（如果页面使用了独立的答案对象）
+            // 注意：100 P1/P4的HTML可能在App对象中存储答案
+            if (window.App && window.App.answerKey) {
+                console.log('[PracticeEnhancer] 从App.answerKey提取答案');
+                this.extractFromAppAnswerKey(suiteId);
+            }
+            
+            // 方法2: 从套题容器内的data属性提取
+            this.extractSuiteAnswersFromDOM(suiteId, suiteContainer);
+            
+            // 方法3: 从套题的结果表格提取（如果已经显示结果）
+            this.extractSuiteAnswersFromResultsTable(suiteId, suiteContainer);
+            
+            // 方法4: 从套题的听力原文提取（针对听力题）
+            this.extractSuiteAnswersFromTranscript(suiteId, suiteContainer);
+        },
+
+        /**
+         * 从App.answerKey提取答案（针对100 P1/P4的HTML结构）
+         * @param {string} suiteId - 套题ID
+         */
+        extractFromAppAnswerKey: function(suiteId) {
+            if (!window.App || !window.App.answerKey) {
+                return;
+            }
+            
+            const answerKey = window.App.answerKey;
+            
+            // 从suiteId提取测试编号（如"set1" -> "1"）
+            let testNum = null;
+            if (suiteId.startsWith('set')) {
+                testNum = suiteId.replace('set', '');
+            } else if (suiteId.startsWith('page-test')) {
+                testNum = suiteId.replace('page-test', '');
+            }
+            
+            if (!testNum) {
+                console.warn('[PracticeEnhancer] 无法从suiteId提取测试编号:', suiteId);
+                return;
+            }
+            
+            // 查找对应测试的答案（answerKey可能是对象或数组）
+            let testAnswers = null;
+            
+            if (Array.isArray(answerKey)) {
+                // 如果是数组，按索引查找
+                const index = parseInt(testNum) - 1;
+                if (index >= 0 && index < answerKey.length) {
+                    testAnswers = answerKey[index];
+                }
+            } else if (typeof answerKey === 'object') {
+                // 如果是对象，尝试多种键名
+                testAnswers = answerKey[`test${testNum}`] || 
+                             answerKey[`t${testNum}`] || 
+                             answerKey[testNum];
+            }
+            
+            if (!testAnswers) {
+                console.warn(`[PracticeEnhancer] 未找到测试 ${testNum} 的答案`);
+                return;
+            }
+            
+            // 将答案添加到correctAnswers，带套题前缀
+            for (const [key, value] of Object.entries(testAnswers)) {
+                const prefixedKey = `${suiteId}::${key}`;
+                this.addCorrectAnswer(prefixedKey, value);
+                console.log(`[PracticeEnhancer] 添加正确答案: ${prefixedKey} = ${value}`);
+            }
+        },
+
+        /**
+         * 从套题容器的DOM中提取正确答案
+         * @param {string} suiteId - 套题ID
+         * @param {HTMLElement} suiteContainer - 套题容器
+         */
+        extractSuiteAnswersFromDOM: function(suiteId, suiteContainer) {
+            const selectors = [
+                '[data-correct-answer]',
+                '.correct-answer',
+                '.answer-key',
+                '[data-answer]'
+            ];
+            
+            for (const selector of selectors) {
+                const elements = suiteContainer.querySelectorAll(selector);
+                elements.forEach(element => {
+                    const questionId = element.dataset.question || 
+                                     element.dataset.for || 
+                                     element.dataset.questionId || 
+                                     element.id;
+                    const correctAnswer = element.dataset.correctAnswer || 
+                                        element.dataset.answer || 
+                                        element.textContent.trim();
+                    
+                    if (questionId && correctAnswer) {
+                        const prefixedKey = `${suiteId}::${questionId}`;
+                        this.addCorrectAnswer(prefixedKey, correctAnswer);
+                    }
+                });
+            }
+        },
+
+        /**
+         * 从套题的结果表格中提取正确答案
+         * @param {string} suiteId - 套题ID
+         * @param {HTMLElement} suiteContainer - 套题容器
+         */
+        extractSuiteAnswersFromResultsTable: function(suiteId, suiteContainer) {
+            // 查找结果表格
+            const tables = suiteContainer.querySelectorAll('table.results-table, .results-in-page table');
+            
+            tables.forEach(table => {
+                const rows = table.querySelectorAll('tr');
+                
+                for (let i = 1; i < rows.length; i++) { // 跳过表头
+                    const row = rows[i];
+                    const cells = row.querySelectorAll('td');
+                    
+                    if (cells.length >= 3) {
+                        const questionText = cells[0].textContent.trim();
+                        const correctAnswer = cells[2].textContent.trim();
+                        
+                        // 提取问题编号
+                        const questionMatch = questionText.match(/(\d+)/);
+                        if (questionMatch && correctAnswer && correctAnswer !== 'N/A' && correctAnswer !== '') {
+                            const questionNum = questionMatch[1];
+                            const questionKey = 'q' + questionNum;
+                            const prefixedKey = `${suiteId}::${questionKey}`;
+                            this.addCorrectAnswer(prefixedKey, correctAnswer);
+                        }
+                    }
+                }
+            });
+        },
+
+        /**
+         * 从套题的听力原文中提取正确答案
+         * @param {string} suiteId - 套题ID
+         * @param {HTMLElement} suiteContainer - 套题容器
+         */
+        extractSuiteAnswersFromTranscript: function(suiteId, suiteContainer) {
+            // 查找听力原文容器
+            let transcriptContainer = suiteContainer.querySelector('#transcript-content');
+            
+            // 如果在套题容器内没找到，尝试在对应的transcript-page中查找
+            if (!transcriptContainer) {
+                const transcriptPageId = `transcript-${suiteContainer.id}`;
+                const transcriptPage = document.getElementById(transcriptPageId);
+                if (transcriptPage) {
+                    transcriptContainer = transcriptPage;
+                }
+            }
+            
+            if (!transcriptContainer) {
+                return;
+            }
+            
+            // 使用ANSWER_TAG_PATTERN提取答案
+            const text = transcriptContainer.textContent || '';
+            const parsed = extractAnswersFromTextContent(text);
+            
+            for (const [key, value] of Object.entries(parsed)) {
+                const prefixedKey = `${suiteId}::${key}`;
+                this.addCorrectAnswer(prefixedKey, value);
+            }
         },
 
         extractCorrectAnswersBackup: function () {
@@ -1656,6 +1992,18 @@
                     const self = this;
                     window.gradeAnswers = function() {
                         console.log('[PracticeEnhancer] 拦截到gradeAnswers调用');
+                        
+                        // 多套题模式：提取当前套题ID
+                        if (self.isMultiSuite) {
+                            const activePage = document.querySelector('.test-page.active');
+                            const suiteId = self.extractSuiteId(activePage);
+                            if (suiteId) {
+                                self.handleSuiteSubmit(suiteId);
+                                return;
+                            }
+                        }
+                        
+                        // 单套题模式：使用原有逻辑
                         self.collectAllAnswers();
                         const result = originalGradeAnswers();
                         self.handleSubmit();
@@ -1672,6 +2020,18 @@
                     const self = this;
                     window.grade = function() {
                         console.log('[PracticeEnhancer] 拦截到grade调用');
+                        
+                        // 多套题模式：提取当前套题ID
+                        if (self.isMultiSuite) {
+                            const activePage = document.querySelector('.test-page.active');
+                            const suiteId = self.extractSuiteId(activePage);
+                            if (suiteId) {
+                                self.handleSuiteSubmit(suiteId);
+                                return;
+                            }
+                        }
+                        
+                        // 单套题模式：使用原有逻辑
                         self.collectAllAnswers();
                         const result = originalGrade();
                         self.handleSubmit();
@@ -1684,6 +2044,19 @@
             // 监听表单提交
             document.addEventListener('submit', (e) => {
                 console.log('[PracticeEnhancer] 拦截到表单提交');
+                
+                // 多套题模式：提取当前套题ID
+                if (this.isMultiSuite) {
+                    const form = e.target;
+                    const suiteId = this.extractSuiteId(form);
+                    if (suiteId) {
+                        e.preventDefault();
+                        this.handleSuiteSubmit(suiteId);
+                        return;
+                    }
+                }
+                
+                // 单套题模式
                 this.collectAllAnswers();
                 this.handleSubmit();
             });
@@ -1691,26 +2064,319 @@
             // 监听提交按钮点击 - 增强版
             const self = this;
             document.addEventListener('click', function(e) {
-                console.log('[PracticeEnhancer] 点击事件:', e.target.tagName, e.target.id, e.target.className);
-
-                if (e.target.tagName === 'BUTTON' &&
-                    (e.target.textContent.includes('Submit') ||
-                        e.target.textContent.includes('提交') ||
-                        e.target.textContent.includes('完成') ||
-                        e.target.textContent.includes('Check') ||
-                        e.target.classList.contains('primary') ||
-                        e.target.id === 'submit-btn' ||
-                        (e.target.onclick && e.target.onclick.toString().includes('grade')))) {
-                    console.log('[PracticeEnhancer] 检测到提交按钮点击:', e.target);
-                    self.collectAllAnswers();
-                    self.handleSubmit();
+                const target = e.target;
+                
+                // 检查是否为提交按钮
+                const isSubmitButton = target.tagName === 'BUTTON' &&
+                    (target.textContent.includes('Submit') ||
+                        target.textContent.includes('提交') ||
+                        target.textContent.includes('完成') ||
+                        target.textContent.includes('Check') ||
+                        target.classList.contains('primary') ||
+                        target.id === 'submit-btn' ||
+                        target.dataset.submitSuite || // 新增：支持data-submit-suite属性
+                        (target.onclick && target.onclick.toString().includes('grade')));
+                
+                if (!isSubmitButton) {
+                    return;
                 }
+                
+                console.log('[PracticeEnhancer] 检测到提交按钮点击:', target);
+                
+                // 多套题模式：提取套题ID
+                if (self.isMultiSuite) {
+                    // 优先从按钮的data-submit-suite属性读取
+                    let suiteId = target.dataset.submitSuite;
+                    
+                    // 如果没有，从按钮所在的套题容器提取
+                    if (!suiteId) {
+                        suiteId = self.extractSuiteId(target);
+                    }
+                    
+                    // 如果还是没有，从当前激活的页面提取
+                    if (!suiteId) {
+                        const activePage = document.querySelector('.test-page.active');
+                        suiteId = self.extractSuiteId(activePage);
+                    }
+                    
+                    if (suiteId) {
+                        console.log('[PracticeEnhancer] 提交套题:', suiteId);
+                        self.handleSuiteSubmit(suiteId);
+                        return;
+                    }
+                }
+                
+                // 单套题模式
+                self.collectAllAnswers();
+                self.handleSubmit();
             });
 
             // 定期检查结果是否出现
             this.startResultsMonitoring();
 
             console.log('[PracticeEnhancer] 提交拦截设置完成');
+        },
+
+        /**
+         * 处理单个套题的提交
+         * @param {string} suiteId - 套题ID
+         */
+        handleSuiteSubmit: function(suiteId) {
+            if (!suiteId) {
+                console.warn('[PracticeEnhancer] handleSuiteSubmit: 套题ID为空');
+                return;
+            }
+            
+            // 检查是否正在提交
+            if (this.isSubmitting) {
+                console.warn('[PracticeEnhancer] 正在提交中，阻止并发提交');
+                return;
+            }
+            
+            // 检查该套题是否已提交
+            if (this.submittedSuites.has(suiteId)) {
+                console.warn(`[PracticeEnhancer] 套题 ${suiteId} 已经提交过，阻止重复提交`);
+                return;
+            }
+            
+            console.log(`[PracticeEnhancer] 开始处理套题提交: ${suiteId}`);
+            
+            // 设置提交状态
+            this.isSubmitting = true;
+            this.currentSuiteId = suiteId;
+            
+            try {
+                // 1. 收集该套题的答案
+                const suiteContainer = this.getSuiteContainer(suiteId);
+                if (!suiteContainer) {
+                    console.error(`[PracticeEnhancer] 未找到套题容器: ${suiteId}`);
+                    return;
+                }
+                
+                this.collectSuiteAnswers(suiteContainer, suiteId);
+                
+                // 2. 提取该套题的正确答案
+                this.extractSuiteCorrectAnswers(suiteId, suiteContainer);
+                
+                // 3. 生成答案比较
+                const comparison = this.generateSuiteAnswerComparison(suiteId);
+                
+                // 4. 计算分数
+                const scoreInfo = this.calculateSuiteScore(comparison);
+                
+                // 5. 检测拼写错误（如果需要）
+                const spellingErrors = this.detectSuiteSpellingErrors(comparison, suiteId);
+                
+                // 6. 构建并发送消息
+                this.sendSuiteCompleteMessage(suiteId, comparison, scoreInfo, spellingErrors);
+                
+                // 7. 标记该套题已提交
+                this.submittedSuites.add(suiteId);
+                
+                console.log(`[PracticeEnhancer] 套题 ${suiteId} 提交完成`);
+                
+            } catch (error) {
+                console.error(`[PracticeEnhancer] 套题 ${suiteId} 提交失败:`, error);
+            } finally {
+                // 重置提交状态
+                this.isSubmitting = false;
+                this.currentSuiteId = null;
+            }
+        },
+
+        /**
+         * 获取套题容器元素
+         * @param {string} suiteId - 套题ID
+         * @returns {HTMLElement|null} 套题容器元素
+         */
+        getSuiteContainer: function(suiteId) {
+            // 方法1: 通过data-suite-id查找
+            let container = document.querySelector(`[data-suite-id="${suiteId}"]`);
+            if (container) return container;
+            
+            // 方法2: 通过ID查找（如果suiteId是"set1"，查找"page-test1"）
+            if (suiteId.startsWith('set')) {
+                const pageNum = suiteId.replace('set', '');
+                container = document.getElementById(`page-test${pageNum}`);
+                if (container) return container;
+            }
+            
+            // 方法3: 直接通过ID查找
+            container = document.getElementById(suiteId);
+            if (container) return container;
+            
+            // 方法4: 查找当前激活的test-page
+            container = document.querySelector('.test-page.active');
+            if (container) {
+                const extractedId = this.extractSuiteId(container);
+                if (extractedId === suiteId) {
+                    return container;
+                }
+            }
+            
+            return null;
+        },
+
+        /**
+         * 生成套题的答案比较
+         * @param {string} suiteId - 套题ID
+         * @returns {Object} 答案比较对象
+         */
+        generateSuiteAnswerComparison: function(suiteId) {
+            const comparison = {};
+            const prefix = `${suiteId}::`;
+            
+            // 遍历所有答案，找出属于该套题的答案
+            for (const [key, userAnswer] of Object.entries(this.answers)) {
+                if (key.startsWith(prefix)) {
+                    const questionId = key.substring(prefix.length);
+                    const correctAnswer = this.correctAnswers[key] || this.correctAnswers[questionId];
+                    
+                    comparison[questionId] = {
+                        userAnswer: userAnswer,
+                        correctAnswer: correctAnswer,
+                        isCorrect: this.compareAnswers(userAnswer, correctAnswer)
+                    };
+                }
+            }
+            
+            return comparison;
+        },
+
+        /**
+         * 计算套题分数
+         * @param {Object} comparison - 答案比较对象
+         * @returns {Object} 分数信息
+         */
+        calculateSuiteScore: function(comparison) {
+            let correct = 0;
+            let total = 0;
+            
+            for (const [questionId, comp] of Object.entries(comparison)) {
+                total++;
+                if (comp.isCorrect) {
+                    correct++;
+                }
+            }
+            
+            const accuracy = total > 0 ? (correct / total) : 0;
+            const percentage = Math.round(accuracy * 100);
+            
+            return {
+                correct: correct,
+                total: total,
+                accuracy: accuracy,
+                percentage: percentage
+            };
+        },
+
+        /**
+         * 检测套题中的拼写错误
+         * 集成SpellingErrorCollector进行错误检测
+         * @param {Object} comparison - 答案比较对象
+         * @param {string} suiteId - 套题ID
+         * @returns {Array} 拼写错误数组
+         */
+        detectSuiteSpellingErrors: function(comparison, suiteId) {
+            console.log('[PracticeEnhancer] 开始检测套题拼写错误:', suiteId);
+            
+            // 检查SpellingErrorCollector是否可用
+            if (!window.spellingErrorCollector) {
+                console.warn('[PracticeEnhancer] SpellingErrorCollector未初始化，跳过拼写错误检测');
+                return [];
+            }
+            
+            // 检查输入参数
+            if (!comparison || typeof comparison !== 'object') {
+                console.warn('[PracticeEnhancer] 无效的答案比较对象');
+                return [];
+            }
+            
+            try {
+                // 调用SpellingErrorCollector的detectErrors方法
+                // 参数: (answerComparison, suiteId, examId)
+                const examId = this.examId || 'unknown';
+                const errors = window.spellingErrorCollector.detectErrors(
+                    comparison,
+                    suiteId,
+                    examId
+                );
+                
+                console.log(`[PracticeEnhancer] 检测到 ${errors.length} 个拼写错误`);
+                
+                // 返回错误数组
+                return errors || [];
+                
+            } catch (error) {
+                console.error('[PracticeEnhancer] 拼写错误检测失败:', error);
+                // 发生错误时返回空数组，不影响主流程
+                return [];
+            }
+        },
+
+        /**
+         * 发送套题完成消息
+         * 消息格式符合Requirements 9.1-9.7的标准
+         * @param {string} suiteId - 套题ID
+         * @param {Object} comparison - 答案比较对象
+         * @param {Object} scoreInfo - 分数信息
+         * @param {Array} spellingErrors - 拼写错误数组
+         */
+        sendSuiteCompleteMessage: function(suiteId, comparison, scoreInfo, spellingErrors) {
+            const prefix = `${suiteId}::`;
+            
+            // 提取该套题的答案（使用"套题ID::问题ID"格式的键）
+            const suiteAnswers = {};
+            const suiteCorrectAnswers = {};
+            
+            for (const [key, value] of Object.entries(this.answers)) {
+                if (key.startsWith(prefix)) {
+                    suiteAnswers[key] = value;
+                }
+            }
+            
+            for (const [key, value] of Object.entries(this.correctAnswers)) {
+                if (key.startsWith(prefix)) {
+                    suiteCorrectAnswers[key] = value;
+                }
+            }
+            
+            // 构建标准化消息格式
+            // 符合Requirements 9.1-9.7
+            const message = {
+                // Requirement 9.1: 必须包含的基本字段
+                examId: `${this.examId}_${suiteId}`,  // Requirement 9.2: examId包含套题标识
+                sessionId: this.sessionId,
+                answers: suiteAnswers,                 // Requirement 9.3: 答案键使用"套题ID::问题ID"格式
+                correctAnswers: suiteCorrectAnswers,
+                
+                // Requirement 9.4: scoreInfo包含必需字段
+                scoreInfo: {
+                    correct: scoreInfo.correct,
+                    total: scoreInfo.total,
+                    accuracy: scoreInfo.accuracy,
+                    percentage: scoreInfo.percentage
+                },
+                
+                // Requirement 9.5: answerComparison包含每个问题的详细信息
+                answerComparison: comparison,
+                
+                // Requirement 9.6, 9.7: spellingErrors数组
+                spellingErrors: spellingErrors || [],
+                
+                // 额外字段
+                suiteId: suiteId,
+                timestamp: Date.now(),
+                startTime: this.startTime,
+                endTime: Date.now(),
+                duration: this.startTime ? Math.round((Date.now() - this.startTime) / 1000) : 0,
+                pageType: this.detectPageType(),
+                url: window.location.href,
+                title: document.title
+            };
+            
+            console.log('[PracticeEnhancer] 发送套题完成消息（标准格式）:', message);
+            this.sendMessage('PRACTICE_COMPLETE', message);
         },
 
         startCorrectAnswerMonitoring: function() {
@@ -1773,6 +2439,14 @@
             console.log('[PracticeEnhancer] 开始全面收集答案...');
             this.captureQuestionSet();
             
+            // 如果是多套题模式，按套题分组收集
+            if (this.isMultiSuite) {
+                console.log('[PracticeEnhancer] 多套题模式：按套题分组收集答案');
+                this.collectMultiSuiteAnswers();
+                return;
+            }
+            
+            // 单套题模式：使用原有逻辑
             const beforeCount = Object.keys(this.answers).length;
 
             // 1. 收集所有输入元素（更广泛的选择器），同时过滤非答题控件
@@ -1855,6 +2529,174 @@
             const afterCount = Object.keys(this.answers).length;
             console.log(`[PracticeEnhancer] 全面收集完成，答案数量从 ${beforeCount} 增加到 ${afterCount}`);
             console.log('[PracticeEnhancer] 收集到的所有答案:', this.answers);
+        },
+
+        /**
+         * 多套题模式：收集所有套题的答案
+         */
+        collectMultiSuiteAnswers: function() {
+            console.log('[PracticeEnhancer] 开始收集多套题答案');
+            
+            // 查找所有套题容器
+            let suiteContainers = document.querySelectorAll('[data-suite-id]');
+            
+            // 如果没有data-suite-id，尝试查找.test-page元素
+            if (suiteContainers.length === 0) {
+                suiteContainers = document.querySelectorAll('.test-page');
+            }
+            
+            // 如果还是没有，尝试查找.suite-container元素
+            if (suiteContainers.length === 0) {
+                suiteContainers = document.querySelectorAll('.suite-container');
+            }
+            
+            console.log('[PracticeEnhancer] 找到套题容器数量:', suiteContainers.length);
+            
+            if (suiteContainers.length === 0) {
+                console.warn('[PracticeEnhancer] 未找到套题容器，回退到单套题模式');
+                this.isMultiSuite = false;
+                return;
+            }
+            
+            // 为每个套题收集答案
+            suiteContainers.forEach((container, index) => {
+                const suiteId = this.extractSuiteId(container);
+                console.log(`[PracticeEnhancer] 收集套题 ${index + 1}/${suiteContainers.length}, ID: ${suiteId}`);
+                
+                if (suiteId) {
+                    this.collectSuiteAnswers(container, suiteId);
+                }
+            });
+            
+            console.log('[PracticeEnhancer] 多套题答案收集完成:', this.answers);
+        },
+
+        /**
+         * 收集单个套题的答案
+         * @param {HTMLElement} suiteContainer - 套题容器元素
+         * @param {string} suiteId - 套题ID（可选，如果不提供则自动提取）
+         */
+        collectSuiteAnswers: function(suiteContainer, suiteId) {
+            if (!suiteContainer) {
+                console.warn('[PracticeEnhancer] collectSuiteAnswers: 套题容器为空');
+                return;
+            }
+            
+            // 如果没有提供suiteId，尝试提取
+            if (!suiteId) {
+                suiteId = this.extractSuiteId(suiteContainer);
+            }
+            
+            if (!suiteId) {
+                console.warn('[PracticeEnhancer] collectSuiteAnswers: 无法提取套题ID');
+                return;
+            }
+            
+            console.log(`[PracticeEnhancer] 收集套题答案: ${suiteId}`);
+            
+            // 1. 收集该套题内的所有输入元素
+            const inputs = Array.from(suiteContainer.querySelectorAll('input, textarea, select'))
+                .filter(el => !this.isExcludedControl(el));
+            
+            console.log(`[PracticeEnhancer] 套题 ${suiteId} 找到输入元素:`, inputs.length);
+            
+            inputs.forEach((input) => {
+                const questionId = this.getQuestionId(input);
+                const value = this.getInputValue(input);
+                
+                if (questionId && value !== null && value !== '') {
+                    // 为答案添加套题前缀
+                    const prefixedId = `${suiteId}::${questionId}`;
+                    const normalizedId = this.addAnswer(prefixedId, value);
+                    if (normalizedId) {
+                        console.log(`[PracticeEnhancer] 记录套题答案: ${normalizedId} = ${value}`);
+                    }
+                }
+            });
+            
+            // 2. 收集该套题内的拖拽答案
+            this.collectSuiteDropzoneAnswers(suiteContainer, suiteId);
+            
+            // 3. 收集该套题内的data属性答案
+            const answerElements = suiteContainer.querySelectorAll('[data-user-answer], [data-value]');
+            answerElements.forEach(element => {
+                const questionId = element.dataset.question || element.dataset.for || element.id;
+                const answer = element.dataset.answer || element.dataset.userAnswer || element.dataset.value;
+                if (questionId && answer) {
+                    const prefixedId = `${suiteId}::${questionId}`;
+                    const normalizedId = this.addAnswer(prefixedId, answer);
+                    if (normalizedId) {
+                        console.log(`[PracticeEnhancer] 记录套题data答案: ${normalizedId} = ${answer}`);
+                    }
+                }
+            });
+            
+            // 4. 收集该套题内的匹配题和排序题答案
+            this.collectSuiteMatchingAnswers(suiteContainer, suiteId);
+            this.collectSuiteOrderingAnswers(suiteContainer, suiteId);
+        },
+
+        /**
+         * 收集套题内的拖拽答案
+         */
+        collectSuiteDropzoneAnswers: function(suiteContainer, suiteId) {
+            // 收集拖拽填空题答案
+            const dropzones = suiteContainer.querySelectorAll('.dropzone');
+            for (let i = 0; i < dropzones.length; i++) {
+                const zone = dropzones[i];
+                const qName = zone.dataset.target;
+                const card = zone.querySelector('.card');
+                if (qName && card) {
+                    const prefixedId = `${suiteId}::${qName}`;
+                    this.addAnswer(prefixedId, card.dataset.value || card.textContent.trim());
+                }
+            }
+
+            // 收集段落匹配题答案
+            const paragraphZones = suiteContainer.querySelectorAll('.paragraph-dropzone');
+            for (let i = 0; i < paragraphZones.length; i++) {
+                const zone = paragraphZones[i];
+                const paragraph = zone.dataset.paragraph;
+                const items = zone.querySelectorAll('.drag-item');
+                if (paragraph && items.length > 0) {
+                    const itemTexts = [];
+                    for (let j = 0; j < items.length; j++) {
+                        const item = items[j];
+                        itemTexts.push(item.dataset.heading || item.textContent.trim());
+                    }
+                    const prefixedId = `${suiteId}::q${paragraph.toLowerCase()}`;
+                    this.addAnswer(prefixedId, itemTexts.join(','));
+                }
+            }
+
+            // 收集匹配题答案
+            const matchZones = suiteContainer.querySelectorAll('.match-dropzone');
+            for (let i = 0; i < matchZones.length; i++) {
+                const zone = matchZones[i];
+                const qName = zone.dataset.question;
+                const item = zone.querySelector('.drag-item') || zone.querySelector('.drag-item-clone');
+                if (qName && item) {
+                    const answerValue = item.dataset.option || item.dataset.country || item.dataset.heading || item.textContent.trim();
+                    const prefixedId = `${suiteId}::${qName}`;
+                    this.addAnswer(prefixedId, answerValue);
+                }
+            }
+        },
+
+        /**
+         * 收集套题内的匹配题答案
+         */
+        collectSuiteMatchingAnswers: function(suiteContainer, suiteId) {
+            // 实现与collectMatchingAnswers类似，但添加套题前缀
+            // 这里简化处理，实际实现可以参考原有的collectMatchingAnswers方法
+        },
+
+        /**
+         * 收集套题内的排序题答案
+         */
+        collectSuiteOrderingAnswers: function(suiteContainer, suiteId) {
+            // 实现与collectOrderingAnswers类似，但添加套题前缀
+            // 这里简化处理，实际实现可以参考原有的collectOrderingAnswers方法
         },
 
         getQuestionId: function(input) {
@@ -2246,7 +3088,7 @@
             }
             const resolvedTitle = metadataPayload.examTitle || metadataPayload.title || derivedTitle;
 
-            return {
+            const payload = {
                 sessionId: this.sessionId,
                 suiteSessionId: this.suiteSessionId || null,
                 examId: resolvedExamId,
@@ -2270,6 +3112,16 @@
                 allQuestionIds: this.captureQuestionSet().slice(),
                 metadata: metadataPayload
             };
+            
+            // 新增：添加suiteId字段（如果是多套题模式）
+            if (this.isMultiSuite && this.currentSuiteId) {
+                payload.suiteId = this.currentSuiteId;
+            }
+            
+            // 新增：添加spellingErrors字段（初始为空数组，后续任务会实现）
+            payload.spellingErrors = [];
+            
+            return payload;
         },
 
         generateAnswerComparison: function () {
@@ -2292,7 +3144,17 @@
             for (let i = 0; i < questionKeys.length; i++) {
                 const questionKey = questionKeys[i];
                 const userAnswer = this.answers[questionKey];
-                const correctAnswer = this.correctAnswers[questionKey];
+                let correctAnswer = this.correctAnswers[questionKey];
+                
+                // 如果是多套题模式，且答案键包含"::"分隔符
+                // 尝试匹配不带前缀的正确答案
+                if (!correctAnswer && questionKey.includes('::')) {
+                    const parts = questionKey.split('::');
+                    if (parts.length === 2) {
+                        const questionIdOnly = parts[1];
+                        correctAnswer = this.correctAnswers[questionIdOnly];
+                    }
+                }
                 
                 comparison[questionKey] = {
                     userAnswer: userAnswer || null,

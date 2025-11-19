@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Storage Vocabulary Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+        }
+        button {
+            margin: 5px;
+            padding: 8px 15px;
+            cursor: pointer;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 3px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>Storage Vocabulary Test</h1>
+    <p>测试词表存储、同步和导出功能</p>
+
+    <div class="test-section">
+        <h3>1. 词表存储测试</h3>
+        <button onclick="testSaveVocabList()">保存测试词表</button>
+        <button onclick="testLoadVocabList()">加载测试词表</button>
+        <button onclick="testAddWord()">添加单词</button>
+        <button onclick="testRemoveWord()">移除单词</button>
+        <div id="vocab-storage-result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>2. 数据同步测试</h3>
+        <button onclick="testSyncVocabList()">同步词表</button>
+        <button onclick="testMergeConflict()">测试冲突合并</button>
+        <button onclick="testBeforeUnload()">测试页面关闭持久化</button>
+        <div id="sync-result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>3. 降级存储测试</h3>
+        <button onclick="testStorageHealth()">检查存储健康</button>
+        <button onclick="testFallbackSave()">测试降级保存</button>
+        <div id="fallback-result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>4. 数据导出测试</h3>
+        <button onclick="testExportVocabLists()">导出词表</button>
+        <button onclick="testExportPracticeRecords()">导出练习记录</button>
+        <button onclick="testExportComplete()">导出完整数据</button>
+        <button onclick="testDownloadVocabLists()">下载词表</button>
+        <div id="export-result" class="result"></div>
+    </div>
+
+    <script src="../../js/utils/storage.js"></script>
+    <script>
+        // 等待 storage 初始化
+        async function waitForStorage() {
+            if (window.storage && window.storage.ready) {
+                await window.storage.ready;
+                return true;
+            }
+            return false;
+        }
+
+        // 测试保存词表
+        async function testSaveVocabList() {
+            const result = document.getElementById('vocab-storage-result');
+            try {
+                await waitForStorage();
+                
+                const testList = {
+                    id: 'spelling-errors-p1',
+                    name: 'P1 拼写错误测试',
+                    source: 'p1',
+                    words: [
+                        {
+                            word: 'accommodation',
+                            userInput: 'accomodation',
+                            questionId: 'q1',
+                            timestamp: Date.now(),
+                            errorCount: 1
+                        },
+                        {
+                            word: 'restaurant',
+                            userInput: 'resturant',
+                            questionId: 'q2',
+                            timestamp: Date.now(),
+                            errorCount: 1
+                        }
+                    ],
+                    createdAt: Date.now(),
+                    updatedAt: Date.now()
+                };
+
+                const success = await window.storage.saveVocabList(testList);
+                result.innerHTML = success 
+                    ? '<span class="success">✓ 词表保存成功</span>\n' + JSON.stringify(testList, null, 2)
+                    : '<span class="error">✗ 词表保存失败</span>';
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ 错误: ' + error.message + '</span>';
+            }
+        }
+
+        // 测试加载词表
+        async function testLoadVocabList() {
+            const result = document.getElementById('vocab-storage-result');
+            try {
+                await waitForStorage();
+                
+                const list = await window.storage.loadVocabList('spelling-errors-p1');
+                result.innerHTML = list 
+                    ? '<span class="success">✓ 词表加载成功</span>\n' + JSON.stringify(list, null, 2)
+                    : '<span class="error">✗ 词表不存在</span>';
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ 错误: ' + error.message + '</span>';
+            }
+        }
+
+        // 测试添加单词
+        async function testAddWord() {
+            const result = document.getElementById('vocab-storage-result');
+            try {
+                await waitForStorage();
+                
+                const newWord = {
+                    word: 'environment',
+                    userInput: 'enviroment',
+                    questionId: 'q3',
+                    timestamp: Date.now(),
+                    errorCount: 1
+                };
+
+                const success = await window.storage.addWordToVocabList('spelling-errors-p1', newWord);
+                result.innerHTML = success 
+                    ? '<span class="success">✓ 单词添加成功</span>\n' + JSON.stringify(newWord, null, 2)
+                    : '<span class="error">✗ 单词添加失败</span>';
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ 错误: ' + error.message + '</span>';
+            }
+        }
+
+        // 测试移除单词
+        async function testRemoveWord() {
+            const result = document.getElementById('vocab-storage-result');
+            try {
+                await waitForStorage();
+                
+                const success = await window.storage.removeWordFromVocabList('spelling-errors-p1', 'environment');
+                result.innerHTML = success 
+                    ? '<span class="success">✓ 单词移除成功</span>'
+                    : '<span class="error">✗ 单词移除失败</span>';
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ 错误: ' + error.message + '</span>';
+            }
+        }
+
+        // 测试同步词表
+        async function testSyncVocabList() {
+            const result = document.getElementById('sync-result');
+            try {
+                await waitForStorage();
+                
+                const newData = {
+                    id: 'spelling-errors-p1',
+                    name: 'P1 拼写错误',
+                    source: 'p1',
+                    words: [
+                        {
+                            word: 'accommodation',
+                            userInput: 'acomodation',
+                            questionId: 'q1',
+                            timestamp: Date.now() + 1000,
+                            errorCount: 2
+                        }
+                    ],
+                    createdAt: Date.now() - 10000,
+                    updatedAt: Date.now()
+                };
+
+                const success = await window.storage.syncVocabList('spelling-errors-p1', newData);
+                result.innerHTML = success 
+                    ? '<span class="success">✓ 词表同步成功</span>'
+                    : '<span class="error">✗ 词表同步失败</span>';
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ 错误: ' + error.message + '</span>';
+            }
+        }
+
+        // 测试冲突合并
+        async function testMergeConflict() {
+            const result = document.getElementById('sync-result');
+            try {
+                await waitForStorage();
+                
+                const list1 = {
+                    id: 'test',
+                    name: 'Test',
+                    source: 'p1',
+                    words: [
+                        { word: 'test1', timestamp: 1000, errorCount: 1 },
+                        { word: 'test2', timestamp: 2000, errorCount: 1 }
+                    ],
+                    createdAt: 1000,
+                    updatedAt: 2000
+                };
+
+                const list2 = {
+                    id: 'test',
+                    name: 'Test',
+                    source: 'p1',
+                    words: [
+                        { word: 'test1', timestamp: 3000, errorCount: 2 },
+                        { word: 'test3', timestamp: 4000, errorCount: 1 }
+                    ],
+                    createdAt: 1000,
+                    updatedAt: 4000
+                };
+
+                const merged = window.storage.mergeVocabLists(list1, list2);
+                result.innerHTML = '<span class="success">✓ 冲突合并完成</span>\n' + 
+                    '合并后单词数: ' + merged.words.length + '\n' +
+                    JSON.stringify(merged, null, 2);
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ 错误: ' + error.message + '</span>';
+            }
+        }
+
+        // 测试页面关闭持久化
+        async function testBeforeUnload() {
+            const result = document.getElementById('sync-result');
+            try {
+                await waitForStorage();
+                
+                const success = await window.storage.ensureDataPersisted();
+                result.innerHTML = success 
+                    ? '<span class="success">✓ 数据持久化成功</span>'
+                    : '<span class="error">✗ 数据持久化失败</span>';
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ 错误: ' + error.message + '</span>';
+            }
+        }
+
+        // 测试存储健康
+        async function testStorageHealth() {
+            const result = document.getElementById('fallback-result');
+            try {
+                await waitForStorage();
+                
+                const health = await window.storage.checkStorageHealth();
+                result.innerHTML = '<span class="success">✓ 存储健康检查完成</span>\n' + 
+                    JSON.stringify(health, null, 2);
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ 错误: ' + error.message + '</span>';
+            }
+        }
+
+        // 测试降级保存
+        async function testFallbackSave() {
+            const result = document.getElementById('fallback-result');
+            try {
+                await waitForStorage();
+                
+                const testList = {
+                    id: 'spelling-errors-p4',
+                    name: 'P4 拼写错误',
+                    source: 'p4',
+                    words: [
+                        {
+                            word: 'university',
+                            userInput: 'univercity',
+                            questionId: 'q1',
+                            timestamp: Date.now(),
+                            errorCount: 1
+                        }
+                    ],
+                    createdAt: Date.now(),
+                    updatedAt: Date.now()
+                };
+
+                const success = await window.storage.saveVocabListWithFallback(testList);
+                result.innerHTML = success 
+                    ? '<span class="success">✓ 降级保存成功</span>'
+                    : '<span class="error">✗ 降级保存失败</span>';
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ 错误: ' + error.message + '</span>';
+            }
+        }
+
+        // 测试导出词表
+        async function testExportVocabLists() {
+            const result = document.getElementById('export-result');
+            try {
+                await waitForStorage();
+                
+                const data = await window.storage.exportVocabLists({ format: 'object' });
+                result.innerHTML = data 
+                    ? '<span class="success">✓ 词表导出成功</span>\n' + 
+                      '词表数: ' + data.listCount + ', 总单词数: ' + data.totalWords + '\n' +
+                      JSON.stringify(data, null, 2).substring(0, 500) + '...'
+                    : '<span class="error">✗ 词表导出失败</span>';
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ 错误: ' + error.message + '</span>';
+            }
+        }
+
+        // 测试导出练习记录
+        async function testExportPracticeRecords() {
+            const result = document.getElementById('export-result');
+            try {
+                await waitForStorage();
+                
+                const data = await window.storage.exportPracticeRecords({ format: 'object' });
+                result.innerHTML = data 
+                    ? '<span class="success">✓ 练习记录导出成功</span>\n' + 
+                      '记录数: ' + data.recordCount + '\n' +
+                      JSON.stringify(data, null, 2).substring(0, 500) + '...'
+                    : '<span class="error">✗ 练习记录导出失败</span>';
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ 错误: ' + error.message + '</span>';
+            }
+        }
+
+        // 测试导出完整数据
+        async function testExportComplete() {
+            const result = document.getElementById('export-result');
+            try {
+                await waitForStorage();
+                
+                const data = await window.storage.exportCompleteData({ format: 'object' });
+                result.innerHTML = data 
+                    ? '<span class="success">✓ 完整数据导出成功</span>\n' + 
+                      JSON.stringify(data.summary, null, 2)
+                    : '<span class="error">✗ 完整数据导出失败</span>';
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ 错误: ' + error.message + '</span>';
+            }
+        }
+
+        // 测试下载词表
+        async function testDownloadVocabLists() {
+            const result = document.getElementById('export-result');
+            try {
+                await waitForStorage();
+                
+                const success = await window.storage.exportAndDownloadVocabLists();
+                result.innerHTML = success 
+                    ? '<span class="success">✓ 词表下载成功</span>'
+                    : '<span class="error">✗ 词表下载失败</span>';
+            } catch (error) {
+                result.innerHTML = '<span class="error">✗ 错误: ' + error.message + '</span>';
+            }
+        }
+
+        // 页面加载时显示存储状态
+        window.addEventListener('load', async () => {
+            await waitForStorage();
+            console.log('Storage initialized:', window.storage);
+            console.log('Storage type:', window.storage.getCurrentStorageType());
+        });
+    </script>
+</body>
+</html>
