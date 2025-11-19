@@ -5653,3 +5653,194 @@ Practice History Styles */
         padding: var(--spacing-md) var(--spacing-xl);
     }
 }
+
+/* ====
+====================================
+   VocabListSwitcher 组件样式
+   ======================================== */
+
+.vocab-list-switcher {
+    position: relative;
+    display: inline-block;
+}
+
+.vocab-list-switcher .switcher-btn {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm, 8px);
+    padding: var(--spacing-sm, 8px) var(--spacing-md, 12px);
+    background: var(--bg-primary, #ffffff);
+    color: var(--text-primary, #333333);
+    border: 1px solid var(--border-color, #e0e0e0);
+    border-radius: var(--border-radius, 4px);
+    cursor: pointer;
+    font-size: var(--font-size-base, 14px);
+    transition: all 0.2s ease;
+    min-width: 160px;
+}
+
+.vocab-list-switcher .switcher-btn:hover {
+    background: var(--bg-tertiary, #f5f5f5);
+    border-color: var(--primary-color, #1976d2);
+}
+
+.vocab-list-switcher .switcher-btn:focus {
+    outline: 2px solid var(--primary-color, #1976d2);
+    outline-offset: 2px;
+}
+
+.vocab-list-switcher .current-list-icon {
+    font-size: 18px;
+    line-height: 1;
+}
+
+.vocab-list-switcher .current-list-name {
+    flex: 1;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.vocab-list-switcher .dropdown-icon {
+    font-size: 12px;
+    color: var(--text-secondary, #666666);
+    transition: transform 0.2s ease;
+}
+
+.vocab-list-switcher .switcher-btn:hover .dropdown-icon {
+    color: var(--text-primary, #333333);
+}
+
+/* 下拉菜单 */
+.vocab-list-switcher .switcher-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    min-width: 240px;
+    background: var(--bg-primary, #ffffff);
+    border: 1px solid var(--border-color, #e0e0e0);
+    border-radius: var(--border-radius, 4px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    overflow: hidden;
+}
+
+.vocab-list-switcher .dropdown-content {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+/* 词表选项 */
+.vocab-list-switcher .list-option {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm, 8px);
+    padding: var(--spacing-md, 12px) var(--spacing-md, 12px);
+    cursor: pointer;
+    transition: background 0.2s ease;
+    border-bottom: 1px solid var(--border-color-light, #f0f0f0);
+}
+
+.vocab-list-switcher .list-option:last-child {
+    border-bottom: none;
+}
+
+.vocab-list-switcher .list-option:hover {
+    background: var(--bg-tertiary, #f5f5f5);
+}
+
+.vocab-list-switcher .list-option.active {
+    background: var(--primary-color-light, #e3f2fd);
+}
+
+.vocab-list-switcher .list-option.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.vocab-list-switcher .list-icon {
+    font-size: 20px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.vocab-list-switcher .list-name {
+    flex: 1;
+    font-size: var(--font-size-base, 14px);
+    color: var(--text-primary, #333333);
+}
+
+.vocab-list-switcher .list-count {
+    font-size: var(--font-size-sm, 12px);
+    color: var(--text-secondary, #666666);
+    background: var(--bg-secondary, #f5f5f5);
+    padding: 2px 8px;
+    border-radius: 12px;
+    min-width: 32px;
+    text-align: center;
+}
+
+.vocab-list-switcher .list-option.active .list-count {
+    background: var(--primary-color, #1976d2);
+    color: white;
+}
+
+.vocab-list-switcher .active-indicator {
+    font-size: 16px;
+    color: var(--primary-color, #1976d2);
+    font-weight: bold;
+}
+
+.vocab-list-switcher .count-loading {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* 空状态 */
+.vocab-list-switcher .list-option-empty {
+    padding: var(--spacing-lg, 16px);
+    text-align: center;
+    color: var(--text-secondary, #666666);
+    font-size: var(--font-size-sm, 12px);
+}
+
+/* Toast 动画 */
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOutRight {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .vocab-list-switcher .switcher-dropdown {
+        right: auto;
+        left: 0;
+        min-width: 200px;
+    }
+    
+    .vocab-list-switcher .switcher-btn {
+        min-width: 140px;
+    }
+}

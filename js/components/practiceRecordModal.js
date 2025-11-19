@@ -110,6 +110,19 @@ class PracticeRecordModal {
         const incorrectCount = summaryCounts.incorrect || 0;
         const unansweredCount = summaryCounts.unanswered || 0;
 
+        // 多套题模式的额外信息
+        let multiSuiteInfo = '';
+        if (record.multiSuite === true && record.suiteEntries && record.suiteEntries.length > 0) {
+            const suiteCount = record.suiteEntries.length;
+            const expectedCount = record.metadata?.expectedSuiteCount || suiteCount;
+            multiSuiteInfo = `
+                <div class="meta-item">
+                    <span class="meta-label">\u5b8c\u6210\u5957\u9898\uff1a</span>
+                    <span class="meta-value">${suiteCount}/${expectedCount}</span>
+                </div>
+            `;
+        }
+
         const answerSection = this.generateAnswerTable(record);
 
         return `
@@ -149,6 +162,7 @@ class PracticeRecordModal {
                                     <span class="meta-label">\u672a\u4f5c\u7b54\uff1a</span>
                                     <span class="meta-value unanswered-count">${unansweredCount}</span>
                                 </div>
+                                ${multiSuiteInfo}
                             </div>
                         </div>
                         <div class="answer-details">
@@ -175,6 +189,13 @@ class PracticeRecordModal {
         const metadata = record.metadata || {};
         const frequency = record.frequency || metadata.frequency || 'unknown';
         const suiteEntries = this.getSuiteEntries(record);
+
+        // 检查是否为多套题模式
+        if (record.multiSuite === true) {
+            const source = metadata.source || 'listening';
+            const sourceLabel = source.toUpperCase();
+            return `${sourceLabel} 多套题练习`;
+        }
 
         if (suiteEntries.length > 0) {
             return '\u5957\u9898\u7ec3\u4e60';
@@ -268,6 +289,13 @@ class PracticeRecordModal {
         if (!entry) {
             return `\u5957\u9898\u7b2c${index + 1}\u7bc7`;
         }
+        
+        // 优先使用 suiteId 作为标题（对于多套题模式）
+        if (entry.suiteId) {
+            const suiteId = String(entry.suiteId).replace(/^(set|suite)/i, '');
+            return `套题 ${suiteId}`;
+        }
+        
         const metadata = entry.metadata || {};
         return metadata.examTitle || entry.title || entry.examTitle || `\u5957\u9898\u7b2c${index + 1}\u7bc7`;
     }
@@ -298,6 +326,16 @@ class PracticeRecordModal {
                 .map((entry, index) => {
                     const entryRecord = this.prepareRecordForDisplay(entry);
                     const title = this.formatSuiteEntryTitle(entryRecord, index);
+                    
+                    // 为多套题模式添加套题得分信息
+                    let scoreInfo = '';
+                    if (record.multiSuite === true && entry.scoreInfo) {
+                        const correct = entry.scoreInfo.correct || 0;
+                        const total = entry.scoreInfo.total || 0;
+                        const percentage = entry.scoreInfo.percentage || 0;
+                        scoreInfo = `<div class="suite-score-info">得分: ${correct}/${total} (${percentage}%)</div>`;
+                    }
+                    
                     const normalizedEntries = this.getNormalizedEntries(entryRecord);
                     let content = '';
 
@@ -312,8 +350,9 @@ class PracticeRecordModal {
                     }
 
                     return `
-                        <section class="suite-entry">
+                        <section class="suite-entry ${record.multiSuite ? 'multi-suite-entry' : ''}">
                             <h5>${this.escapeHtml(title)}</h5>
+                            ${scoreInfo}
                             ${content}
                         </section>
                     `;

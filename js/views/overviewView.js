@@ -34,14 +34,25 @@
             this.events.delegate('click', `${this.containerSelector} [data-action="browse-category"]`, function (event) {
                 event.preventDefault();
                 if (typeof view.actions.onBrowseCategory === 'function') {
-                    view.actions.onBrowseCategory(this.dataset.category, this.dataset.type);
+                    // 传递 filterMode 和 path 参数（如果存在）
+                    view.actions.onBrowseCategory(
+                        this.dataset.category, 
+                        this.dataset.type,
+                        this.dataset.filterMode,
+                        this.dataset.path
+                    );
                 }
             });
 
             this.events.delegate('click', `${this.containerSelector} [data-action="start-random-practice"]`, function (event) {
                 event.preventDefault();
                 if (typeof view.actions.onRandomPractice === 'function') {
-                    view.actions.onRandomPractice(this.dataset.category, this.dataset.type);
+                    view.actions.onRandomPractice(
+                        this.dataset.category, 
+                        this.dataset.type,
+                        this.dataset.filterMode,
+                        this.dataset.path
+                    );
                 }
             });
 
@@ -89,11 +100,23 @@
                     style: { gridColumn: '1 / -1', marginTop: '40px' }
                 }));
             }
+            
+            // 新增：渲染特殊听力分类（100 P1 和 100 P4）
+            const specialListeningEntries = (stats?.specialListening || []).filter((entry) => entry.total > 0);
+            if (specialListeningEntries.length > 0) {
+                fragment.appendChild(this.createSection({
+                    title: '听力练习 - 频率分类',
+                    icon: '🎧',
+                    entries: specialListeningEntries,
+                    style: { gridColumn: '1 / -1', marginTop: '40px' },
+                    isSpecial: true
+                }));
+            }
 
             this.dom.replaceContent(container, fragment);
         }
 
-        createSection({ title, icon, entries, style, rightButton }) {
+        createSection({ title, icon, entries, style, rightButton, isSpecial = false }) {
             const sectionFragment = document.createDocumentFragment();
             
             // 创建标题容器，支持右侧按钮
@@ -121,20 +144,27 @@
             entries.forEach((entry) => {
                 sectionFragment.appendChild(this.createCategoryCard({
                     icon,
-                    entry
+                    entry,
+                    isSpecial
                 }));
             });
 
             return sectionFragment;
         }
 
-        createCategoryCard({ icon, entry }) {
-            const actions = this.createCardActions(entry);
+        createCategoryCard({ icon, entry, isSpecial = false }) {
+            const actions = this.createCardActions(entry, isSpecial);
+            
+            // 特殊卡片使用不同的标题格式
+            const titleText = isSpecial 
+                ? entry.category 
+                : `${entry.category} ${entry.type === 'reading' ? '阅读' : '听力'}`;
+            
             const content = [
                 this.dom.create('div', { className: 'category-header' }, [
                     this.dom.create('div', { className: 'category-icon' }, icon),
                     this.dom.create('div', {}, [
-                        this.dom.create('div', { className: 'category-title' }, `${entry.category} ${entry.type === 'reading' ? '阅读' : '听力'}`),
+                        this.dom.create('div', { className: 'category-title' }, titleText),
                         this.dom.create('div', { className: 'category-meta' }, `${entry.total} 篇`)
                     ])
                 ]),
@@ -144,25 +174,42 @@
             return this.dom.create('div', { className: 'category-card' }, content);
         }
 
-        createCardActions(entry) {
+        createCardActions(entry, isSpecial = false) {
+            // 特殊卡片需要传递 filterMode 参数
+            const browseDataset = isSpecial ? {
+                action: 'browse-category',
+                category: entry.category,
+                type: entry.type,
+                filterMode: entry.filterMode,
+                path: entry.path
+            } : {
+                action: 'browse-category',
+                category: entry.category,
+                type: entry.type
+            };
+            
             const browseButton = this.dom.create('button', {
                 className: 'btn',
                 type: 'button',
-                dataset: {
-                    action: 'browse-category',
-                    category: entry.category,
-                    type: entry.type
-                }
+                dataset: browseDataset
             }, '📚 浏览题库');
+
+            const randomDataset = isSpecial ? {
+                action: 'start-random-practice',
+                category: entry.category,
+                type: entry.type,
+                filterMode: entry.filterMode,
+                path: entry.path
+            } : {
+                action: 'start-random-practice',
+                category: entry.category,
+                type: entry.type
+            };
 
             const randomButton = this.dom.create('button', {
                 className: 'btn btn-secondary',
                 type: 'button',
-                dataset: {
-                    action: 'start-random-practice',
-                    category: entry.category,
-                    type: entry.type
-                }
+                dataset: randomDataset
             }, '🎲 随机练习');
 
             return this.dom.create('div', {
