@@ -30,12 +30,12 @@ function syncGlobalBrowseState(category, type) {
     if (!browseDescriptor || typeof browseDescriptor.set !== 'function') {
         try {
             window.__browseFilter = { category, type };
-        } catch (_) {}
+        } catch (_) { }
     }
 
     const legacyTypeDescriptor = Object.getOwnPropertyDescriptor(window, '__legacyBrowseType');
     if (!legacyTypeDescriptor || typeof legacyTypeDescriptor.set !== 'function') {
-        try { window.__legacyBrowseType = type; } catch (_) {}
+        try { window.__legacyBrowseType = type; } catch (_) { }
     }
 }
 
@@ -48,7 +48,7 @@ const localFallbackState = {
 if (typeof window !== 'undefined' && typeof window.__browseFilterMode === 'undefined') {
     try {
         window.__browseFilterMode = 'default';
-    } catch (_) {}
+    } catch (_) { }
 }
 
 const stateService = (function resolveStateService() {
@@ -81,7 +81,7 @@ function setExamIndexState(list) {
     if (stateService) {
         return stateService.setExamIndex(normalized);
     }
-    try { window.examIndex = normalized; } catch (_) {}
+    try { window.examIndex = normalized; } catch (_) { }
     return normalized;
 }
 
@@ -114,7 +114,7 @@ function setPracticeRecordsState(records) {
         normalized = stateService.setPracticeRecords(enriched);
     } else {
         normalized = Array.isArray(records) ? records.map(enrichPracticeRecordForUI) : [];
-        try { window.practiceRecords = normalized; } catch (_) {}
+        try { window.practiceRecords = normalized; } catch (_) { }
     }
     const finalRecords = Array.isArray(normalized) ? normalized : [];
     updateBrowseAnchorsFromRecords(finalRecords);
@@ -155,7 +155,7 @@ try {
     if (typeof window !== 'undefined') {
         window.formatExamMetaText = formatExamMetaText;
     }
-} catch (_) {}
+} catch (_) { }
 
 function updateBrowseAnchorsFromRecords(records) {
     const list = Array.isArray(records) ? records : [];
@@ -627,7 +627,7 @@ function ensureBrowseScrollListener(scrollEl) {
     scrollEl.addEventListener('scroll', handleScroll, { passive: true });
     currentBrowseScrollElement = scrollEl;
     removeBrowseScrollListener = () => {
-        try { scrollEl.removeEventListener('scroll', handleScroll); } catch (_) {}
+        try { scrollEl.removeEventListener('scroll', handleScroll); } catch (_) { }
         currentBrowseScrollElement = null;
         flushPendingBrowseScrollPosition();
     };
@@ -1025,11 +1025,11 @@ if (typeof window !== 'undefined') {
 
 
 const preferredFirstExamByCategory = {
-  'P1_reading': { id: 'p1-09', title: 'Listening to the Ocean 海洋探测' },
-  'P2_reading': { id: 'p2-high-12', title: 'The fascinating world of attine ants 切叶蚁' },
-  'P3_reading': { id: 'p3-high-11', title: 'The Fruit Book 果实之书' },
-  'P1_listening': { id: 'listening-p3-01', title: 'Julia and Bob’s science project is due' },
-  'P3_listening': { id: 'listening-p3-02', title: 'Climate change and allergies' }
+    'P1_reading': { id: 'p1-09', title: 'Listening to the Ocean 海洋探测' },
+    'P2_reading': { id: 'p2-high-12', title: 'The fascinating world of attine ants 切叶蚁' },
+    'P3_reading': { id: 'p3-high-11', title: 'The Fruit Book 果实之书' },
+    'P1_listening': { id: 'listening-p3-01', title: 'Julia and Bob’s science project is due' },
+    'P3_listening': { id: 'listening-p3-02', title: 'Climate change and allergies' }
 };
 
 
@@ -1043,52 +1043,52 @@ function ensureExamListView() {
     return examListViewInstance;
 }
 
-  function ensurePracticeDashboardView() {
-      if (!practiceDashboardViewInstance && window.PracticeDashboardView) {
-          practiceDashboardViewInstance = new window.PracticeDashboardView({
-              domAdapter: window.DOMAdapter
-          });
-      }
-      return practiceDashboardViewInstance;
-  }
+function ensurePracticeDashboardView() {
+    if (!practiceDashboardViewInstance && window.PracticeDashboardView) {
+        practiceDashboardViewInstance = new window.PracticeDashboardView({
+            domAdapter: window.DOMAdapter
+        });
+    }
+    return practiceDashboardViewInstance;
+}
 
-  function ensureLegacyNavigation(options) {
-      var mergedOptions = Object.assign({
-          containerSelector: '.main-nav',
-          activeClass: 'active',
-          syncOnNavigate: true,
-          onRepeatNavigate: function onRepeatNavigate(viewName) {
-              if (viewName === 'browse') {
-                  resetBrowseViewToAll();
-              }
-          },
-          onNavigate: function onNavigate(viewName) {
-              if (typeof window.showView === 'function') {
-                  window.showView(viewName);
-                  return;
-              }
-              if (window.app && typeof window.app.navigateToView === 'function') {
-                  window.app.navigateToView(viewName);
-              }
-          }
-      }, options || {});
+function ensureLegacyNavigation(options) {
+    var mergedOptions = Object.assign({
+        containerSelector: '.main-nav',
+        activeClass: 'active',
+        syncOnNavigate: true,
+        onRepeatNavigate: function onRepeatNavigate(viewName) {
+            if (viewName === 'browse') {
+                resetBrowseViewToAll();
+            }
+        },
+        onNavigate: function onNavigate(viewName) {
+            if (typeof window.showView === 'function') {
+                window.showView(viewName);
+                return;
+            }
+            if (window.app && typeof window.app.navigateToView === 'function') {
+                window.app.navigateToView(viewName);
+            }
+        }
+    }, options || {});
 
-      if (window.NavigationController && typeof window.NavigationController.ensure === 'function') {
-          legacyNavigationController = window.NavigationController.ensure(mergedOptions);
-          return legacyNavigationController;
-      }
+    if (window.NavigationController && typeof window.NavigationController.ensure === 'function') {
+        legacyNavigationController = window.NavigationController.ensure(mergedOptions);
+        return legacyNavigationController;
+    }
 
-      if (typeof window.ensureLegacyNavigationController === 'function') {
-          legacyNavigationController = window.ensureLegacyNavigationController(mergedOptions);
-          return legacyNavigationController;
-      }
+    if (typeof window.ensureLegacyNavigationController === 'function') {
+        legacyNavigationController = window.ensureLegacyNavigationController(mergedOptions);
+        return legacyNavigationController;
+    }
 
-      return null;
-  }
+    return null;
+}
 
-  // --- Initialization ---
+// --- Initialization ---
 async function initializeLegacyComponents() {
-    try { showMessage('系统准备就绪', 'success'); } catch(_) {}
+    try { showMessage('系统准备就绪', 'success'); } catch (_) { }
 
     try {
         ensureLegacyNavigation({ initialView: 'overview' });
@@ -1142,7 +1142,7 @@ async function initializeLegacyComponents() {
         try {
             await cleanupOldCache();
         } finally {
-            try { localStorage.setItem('upgrade_v1_1_0_cleanup_done','1'); } catch(_) {}
+            try { localStorage.setItem('upgrade_v1_1_0_cleanup_done', '1'); } catch (_) { }
         }
     } else {
         console.log('[System] 升级清理已完成，跳过重复清理');
@@ -1201,7 +1201,7 @@ async function syncPracticeRecords() {
                         const s = r.startTime ? new Date(r.startTime).getTime() : NaN;
                         const e = r.endTime ? new Date(r.endTime).getTime() : NaN;
                         if (Number.isFinite(s) && Number.isFinite(e) && e > s) {
-                            dur = Math.round((e - s)/1000);
+                            dur = Math.round((e - s) / 1000);
                         } else {
                             dur = 0;
                         }
@@ -1247,7 +1247,7 @@ async function syncPracticeRecords() {
                             const span = Math.max(...ts) - Math.min(...ts);
                             if (Number.isFinite(span) && span > 0) duration = Math.floor(span / 1000);
                         }
-                    } catch(_) {}
+                    } catch (_) { }
                 }
             }
             if (!Number.isFinite(duration)) duration = 0;
@@ -1423,7 +1423,7 @@ function setupMessageListener() {
             if (event.origin && event.origin !== 'null' && event.origin !== window.location.origin) {
                 return;
             }
-        } catch (_) {}
+        } catch (_) { }
 
         const data = event.data || {};
         const type = data.type;
@@ -1437,7 +1437,7 @@ function setupMessageListener() {
                         break;
                     }
                 }
-            } catch (_) {}
+            } catch (_) { }
         } else if (type === 'PRACTICE_COMPLETE' || type === 'practice_completed') {
             const payload = extractCompletionPayload(data) || {};
             const sessionId = extractCompletionSessionId(data);
@@ -1446,8 +1446,8 @@ function setupMessageListener() {
             if (rec) {
                 console.log('[Fallback] 收到练习完成（降级路径），保存真实数据');
                 savePracticeRecordFallback(rec.examId, payload).finally(() => {
-                    try { if (rec && rec.timer) clearInterval(rec.timer); } catch(_) {}
-                    try { fallbackExamSessions.delete(sessionId); } catch(_) {}
+                    try { if (rec && rec.timer) clearInterval(rec.timer); } catch (_) { }
+                    try { fallbackExamSessions.delete(sessionId); } catch (_) { }
                     if (shouldNotify) {
                         showMessage('练习已完成，正在更新记录...', 'success');
                         showCompletionSummary(payload);
@@ -1471,292 +1471,292 @@ function setupStorageSyncListener() {
         console.log('[System] 收到存储同步事件，正在更新练习记录...', event.detail);
         //可以选择性地只更新受影响的key，但为了简单起见，我们直接同步所有记录
         // if (event.detail && event.detail.key === 'practice_records') {
-            syncPracticeRecords();
+        syncPracticeRecords();
         // }
     });
 }
 
 function normalizeFallbackAnswerValue(value) {
-  if (value === null || value === undefined) {
-    return '';
-  }
-  if (typeof value === 'boolean') {
-    return value ? 'True' : 'False';
-  }
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => normalizeFallbackAnswerValue(item))
-      .filter(Boolean)
-      .join(', ');
-  }
-  if (typeof value === 'object') {
-    const preferKeys = ['value', 'label', 'text', 'answer', 'content'];
-    for (const key of preferKeys) {
-      if (typeof value[key] === 'string' && value[key].trim()) {
-        return value[key].trim();
-      }
+    if (value === null || value === undefined) {
+        return '';
     }
-    if (typeof value.innerText === 'string' && value.innerText.trim()) {
-      return value.innerText.trim();
+    if (typeof value === 'boolean') {
+        return value ? 'True' : 'False';
     }
-    if (typeof value.textContent === 'string' && value.textContent.trim()) {
-      return value.textContent.trim();
+    if (Array.isArray(value)) {
+        return value
+            .map((item) => normalizeFallbackAnswerValue(item))
+            .filter(Boolean)
+            .join(', ');
     }
-    try {
-      const json = JSON.stringify(value);
-      if (json && json !== '{}' && json !== '[]') {
-        return json;
-      }
-    } catch (_) {}
-    return String(value);
-  }
-  return String(value).trim();
+    if (typeof value === 'object') {
+        const preferKeys = ['value', 'label', 'text', 'answer', 'content'];
+        for (const key of preferKeys) {
+            if (typeof value[key] === 'string' && value[key].trim()) {
+                return value[key].trim();
+            }
+        }
+        if (typeof value.innerText === 'string' && value.innerText.trim()) {
+            return value.innerText.trim();
+        }
+        if (typeof value.textContent === 'string' && value.textContent.trim()) {
+            return value.textContent.trim();
+        }
+        try {
+            const json = JSON.stringify(value);
+            if (json && json !== '{}' && json !== '[]') {
+                return json;
+            }
+        } catch (_) { }
+        return String(value);
+    }
+    return String(value).trim();
 }
 
 function normalizeFallbackAnswerMap(rawAnswers) {
-  const map = {};
-  if (!rawAnswers) {
-    return map;
-  }
-  if (Array.isArray(rawAnswers)) {
-    rawAnswers.forEach((entry, index) => {
-      if (!entry) return;
-      const key = entry.questionId || `q${index + 1}`;
-      map[key] = normalizeFallbackAnswerValue(entry.answer ?? entry.userAnswer ?? entry.value ?? entry);
+    const map = {};
+    if (!rawAnswers) {
+        return map;
+    }
+    if (Array.isArray(rawAnswers)) {
+        rawAnswers.forEach((entry, index) => {
+            if (!entry) return;
+            const key = entry.questionId || `q${index + 1}`;
+            map[key] = normalizeFallbackAnswerValue(entry.answer ?? entry.userAnswer ?? entry.value ?? entry);
+        });
+        return map;
+    }
+    Object.entries(rawAnswers).forEach(([rawKey, rawValue]) => {
+        if (!rawKey) return;
+        const key = rawKey.startsWith('q') ? rawKey : `q${rawKey}`;
+        map[key] = normalizeFallbackAnswerValue(
+            rawValue && typeof rawValue === 'object' && 'answer' in rawValue
+                ? rawValue.answer
+                : rawValue
+        );
     });
     return map;
-  }
-  Object.entries(rawAnswers).forEach(([rawKey, rawValue]) => {
-    if (!rawKey) return;
-    const key = rawKey.startsWith('q') ? rawKey : `q${rawKey}`;
-    map[key] = normalizeFallbackAnswerValue(
-      rawValue && typeof rawValue === 'object' && 'answer' in rawValue
-        ? rawValue.answer
-        : rawValue
-    );
-  });
-  return map;
 }
 
 function buildFallbackAnswerDetails(answerMap = {}, correctMap = {}) {
-  const details = {};
-  const keys = new Set([
-    ...Object.keys(answerMap || {}),
-    ...Object.keys(correctMap || {})
-  ]);
-  keys.forEach((key) => {
-    const userAnswer = normalizeFallbackAnswerValue(answerMap[key]);
-    const correctAnswer = normalizeFallbackAnswerValue(correctMap[key]);
-    let isCorrect = null;
-    if (correctAnswer) {
-      isCorrect = userAnswer && userAnswer.toLowerCase() === correctAnswer.toLowerCase();
-    }
-    details[key] = {
-      userAnswer: userAnswer || '-',
-      correctAnswer: correctAnswer || '-',
-      isCorrect
-    };
-  });
-  return details;
+    const details = {};
+    const keys = new Set([
+        ...Object.keys(answerMap || {}),
+        ...Object.keys(correctMap || {})
+    ]);
+    keys.forEach((key) => {
+        const userAnswer = normalizeFallbackAnswerValue(answerMap[key]);
+        const correctAnswer = normalizeFallbackAnswerValue(correctMap[key]);
+        let isCorrect = null;
+        if (correctAnswer) {
+            isCorrect = userAnswer && userAnswer.toLowerCase() === correctAnswer.toLowerCase();
+        }
+        details[key] = {
+            userAnswer: userAnswer || '-',
+            correctAnswer: correctAnswer || '-',
+            isCorrect
+        };
+    });
+    return details;
 }
 
 function normalizeFallbackAnswerComparison(existingComparison, answerMap, correctMap) {
-  const normalized = {};
-  const source = existingComparison && typeof existingComparison === 'object' ? existingComparison : {};
-  Object.entries(source).forEach(([questionId, entry]) => {
-    if (!entry || typeof entry !== 'object') return;
-    normalized[questionId] = {
-      questionId,
-      userAnswer: normalizeFallbackAnswerValue(entry.userAnswer ?? entry.user ?? entry.answer),
-      correctAnswer: normalizeFallbackAnswerValue(entry.correctAnswer ?? entry.correct),
-      isCorrect: typeof entry.isCorrect === 'boolean' ? entry.isCorrect : null
-    };
-  });
+    const normalized = {};
+    const source = existingComparison && typeof existingComparison === 'object' ? existingComparison : {};
+    Object.entries(source).forEach(([questionId, entry]) => {
+        if (!entry || typeof entry !== 'object') return;
+        normalized[questionId] = {
+            questionId,
+            userAnswer: normalizeFallbackAnswerValue(entry.userAnswer ?? entry.user ?? entry.answer),
+            correctAnswer: normalizeFallbackAnswerValue(entry.correctAnswer ?? entry.correct),
+            isCorrect: typeof entry.isCorrect === 'boolean' ? entry.isCorrect : null
+        };
+    });
 
-  const mergedKeys = new Set([
-    ...Object.keys(answerMap || {}),
-    ...Object.keys(correctMap || {})
-  ]);
-  mergedKeys.forEach((key) => {
-    if (normalized[key]) return;
-    const userAnswer = normalizeFallbackAnswerValue(answerMap[key]);
-    const correctAnswer = normalizeFallbackAnswerValue(correctMap[key]);
-    let isCorrect = null;
-    if (correctAnswer) {
-      isCorrect = userAnswer && userAnswer.toLowerCase() === correctAnswer.toLowerCase();
-    }
-    normalized[key] = {
-      questionId: key,
-      userAnswer: userAnswer || '',
-      correctAnswer: correctAnswer || '',
-      isCorrect
-    };
-  });
+    const mergedKeys = new Set([
+        ...Object.keys(answerMap || {}),
+        ...Object.keys(correctMap || {})
+    ]);
+    mergedKeys.forEach((key) => {
+        if (normalized[key]) return;
+        const userAnswer = normalizeFallbackAnswerValue(answerMap[key]);
+        const correctAnswer = normalizeFallbackAnswerValue(correctMap[key]);
+        let isCorrect = null;
+        if (correctAnswer) {
+            isCorrect = userAnswer && userAnswer.toLowerCase() === correctAnswer.toLowerCase();
+        }
+        normalized[key] = {
+            questionId: key,
+            userAnswer: userAnswer || '',
+            correctAnswer: correctAnswer || '',
+            isCorrect
+        };
+    });
 
-  return normalized;
+    return normalized;
 }
 
 // 降级保存：将 PRACTICE_COMPLETE 的真实数据写入 practice_records（与旧视图字段兼容）
 async function savePracticeRecordFallback(examId, realData) {
-  try {
-    const suiteSessionId = realData?.suiteSessionId
-      || realData?.metadata?.suiteSessionId
-      || realData?.scoreInfo?.suiteSessionId
-      || null;
-    const normalizedPracticeMode = String(realData?.practiceMode || realData?.metadata?.practiceMode || '').toLowerCase();
-    const normalizedFrequency = String(realData?.frequency || realData?.metadata?.frequency || '').toLowerCase();
-    const hasSuiteEntries = Array.isArray(realData?.suiteEntries) && realData.suiteEntries.length > 0;
-    const isSuiteAggregatePayload = hasSuiteEntries
-      || Array.isArray(realData?.metadata?.suiteEntries);
-    const isSuiteFlow = Boolean(
-      suiteSessionId
-      || realData?.suiteMode
-      || normalizedPracticeMode === 'suite'
-      || normalizedFrequency === 'suite'
-    );
-    if (isSuiteFlow && !isSuiteAggregatePayload) {
-      console.log('[Fallback] 检测到套题模式子结果，降级路径跳过单篇保存:', {
-        examId,
-        suiteSessionId: suiteSessionId || null
-      });
-      return null;
-    }
+    try {
+        const suiteSessionId = realData?.suiteSessionId
+            || realData?.metadata?.suiteSessionId
+            || realData?.scoreInfo?.suiteSessionId
+            || null;
+        const normalizedPracticeMode = String(realData?.practiceMode || realData?.metadata?.practiceMode || '').toLowerCase();
+        const normalizedFrequency = String(realData?.frequency || realData?.metadata?.frequency || '').toLowerCase();
+        const hasSuiteEntries = Array.isArray(realData?.suiteEntries) && realData.suiteEntries.length > 0;
+        const isSuiteAggregatePayload = hasSuiteEntries
+            || Array.isArray(realData?.metadata?.suiteEntries);
+        const isSuiteFlow = Boolean(
+            suiteSessionId
+            || realData?.suiteMode
+            || normalizedPracticeMode === 'suite'
+            || normalizedFrequency === 'suite'
+        );
+        if (isSuiteFlow && !isSuiteAggregatePayload) {
+            console.log('[Fallback] 检测到套题模式子结果，降级路径跳过单篇保存:', {
+                examId,
+                suiteSessionId: suiteSessionId || null
+            });
+            return null;
+        }
 
-    const list = getExamIndexState();
-    let exam = list.find(e => e.id === examId) || {};
-    
-    // 如果通过 examId 找不到，尝试通过 URL 或标题匹配
-    if (!exam.id && realData) {
-      // 尝试通过 URL 匹配
-      if (realData.url) {
-        const urlPath = realData.url.toLowerCase();
-        const urlMatch = list.find(e => {
-          if (!e.path) return false;
-          const itemPath = e.path.toLowerCase();
-          const urlParts = urlPath.split('/').filter(Boolean);
-          const pathParts = itemPath.split('/').filter(Boolean);
-          
-          // 检查最后几个路径段是否匹配
-          for (let i = 0; i < Math.min(urlParts.length, pathParts.length); i++) {
-            if (urlParts[urlParts.length - 1 - i] === pathParts[pathParts.length - 1 - i]) {
-              return true;
+        const list = getExamIndexState();
+        let exam = list.find(e => e.id === examId) || {};
+
+        // 如果通过 examId 找不到，尝试通过 URL 或标题匹配
+        if (!exam.id && realData) {
+            // 尝试通过 URL 匹配
+            if (realData.url) {
+                const urlPath = realData.url.toLowerCase();
+                const urlMatch = list.find(e => {
+                    if (!e.path) return false;
+                    const itemPath = e.path.toLowerCase();
+                    const urlParts = urlPath.split('/').filter(Boolean);
+                    const pathParts = itemPath.split('/').filter(Boolean);
+
+                    // 检查最后几个路径段是否匹配
+                    for (let i = 0; i < Math.min(urlParts.length, pathParts.length); i++) {
+                        if (urlParts[urlParts.length - 1 - i] === pathParts[pathParts.length - 1 - i]) {
+                            return true;
+                        }
+                    }
+                    return false;
+                });
+                if (urlMatch) {
+                    exam = urlMatch;
+                    console.log('[Fallback] 通过 URL 匹配到题目:', exam.id, exam.title);
+                }
             }
-          }
-          return false;
-        });
-        if (urlMatch) {
-          exam = urlMatch;
-          console.log('[Fallback] 通过 URL 匹配到题目:', exam.id, exam.title);
+
+            // 尝试通过标题匹配
+            if (!exam.id && realData.title) {
+                const normalizeTitle = (str) => {
+                    if (!str) return '';
+                    return String(str).trim().toLowerCase()
+                        .replace(/^\[.*?\]\s*/, '')  // 移除标签前缀
+                        .replace(/[^\w\s]/g, '')
+                        .replace(/\s+/g, ' ');
+                };
+                const targetTitle = normalizeTitle(realData.title);
+                const titleMatch = list.find(e => {
+                    if (!e.title) return false;
+                    const itemTitle = normalizeTitle(e.title);
+                    return itemTitle === targetTitle ||
+                        (targetTitle.length > 5 && itemTitle.includes(targetTitle)) ||
+                        (itemTitle.length > 5 && targetTitle.includes(itemTitle));
+                });
+                if (titleMatch) {
+                    exam = titleMatch;
+                    console.log('[Fallback] 通过标题匹配到题目:', exam.id, exam.title);
+                }
+            }
         }
-      }
-      
-      // 尝试通过标题匹配
-      if (!exam.id && realData.title) {
-        const normalizeTitle = (str) => {
-          if (!str) return '';
-          return String(str).trim().toLowerCase()
-            .replace(/^\[.*?\]\s*/, '')  // 移除标签前缀
-            .replace(/[^\w\s]/g, '')
-            .replace(/\s+/g, ' ');
+
+        const sInfo = realData && realData.scoreInfo ? realData.scoreInfo : {};
+        const correct = typeof sInfo.correct === 'number' ? sInfo.correct : 0;
+        const normalizedAnswers = normalizeFallbackAnswerMap(realData.answers);
+        const normalizedCorrectMap = normalizeFallbackAnswerMap(realData.correctAnswers);
+        const total = typeof sInfo.total === 'number' ? sInfo.total : Object.keys(normalizedCorrectMap).length || Object.keys(normalizedAnswers).length;
+        const acc = typeof sInfo.accuracy === 'number' ? sInfo.accuracy : (total > 0 ? correct / total : 0);
+        const pct = typeof sInfo.percentage === 'number' ? sInfo.percentage : Math.round(acc * 100);
+
+        const answerDetails = buildFallbackAnswerDetails(normalizedAnswers, normalizedCorrectMap);
+        const answerComparison = normalizeFallbackAnswerComparison(realData.answerComparison, normalizedAnswers, normalizedCorrectMap);
+        const scoreInfo = {
+            correct,
+            total,
+            accuracy: acc,
+            percentage: pct,
+            details: answerDetails,
+            source: sInfo.source || realData.source || 'fallback'
         };
-        const targetTitle = normalizeTitle(realData.title);
-        const titleMatch = list.find(e => {
-          if (!e.title) return false;
-          const itemTitle = normalizeTitle(e.title);
-          return itemTitle === targetTitle || 
-                 (targetTitle.length > 5 && itemTitle.includes(targetTitle)) ||
-                 (itemTitle.length > 5 && targetTitle.includes(itemTitle));
-        });
-        if (titleMatch) {
-          exam = titleMatch;
-          console.log('[Fallback] 通过标题匹配到题目:', exam.id, exam.title);
+
+        // 从多个来源提取 category
+        let category = exam.category;
+        if (!category && realData.pageType) {
+            category = realData.pageType;  // 如 "P4"
         }
-      }
-    }
+        if (!category && realData.url) {
+            const match = realData.url.match(/\b(P[1-4])\b/i);
+            if (match) category = match[1].toUpperCase();
+        }
+        if (!category && realData.title) {
+            const match = realData.title.match(/\b(P[1-4])\b/i);
+            if (match) category = match[1].toUpperCase();
+        }
+        if (!category) {
+            category = 'Unknown';
+        }
 
-    const sInfo = realData && realData.scoreInfo ? realData.scoreInfo : {};
-    const correct = typeof sInfo.correct === 'number' ? sInfo.correct : 0;
-    const normalizedAnswers = normalizeFallbackAnswerMap(realData.answers);
-    const normalizedCorrectMap = normalizeFallbackAnswerMap(realData.correctAnswers);
-    const total = typeof sInfo.total === 'number' ? sInfo.total : Object.keys(normalizedCorrectMap).length || Object.keys(normalizedAnswers).length;
-    const acc = typeof sInfo.accuracy === 'number' ? sInfo.accuracy : (total > 0 ? correct / total : 0);
-    const pct = typeof sInfo.percentage === 'number' ? sInfo.percentage : Math.round(acc * 100);
+        const record = {
+            id: Date.now(),
+            examId: examId,
+            title: exam.title || realData.title || '',
+            category: category,
+            frequency: exam.frequency || 'unknown',
+            realData: {
+                score: correct,
+                totalQuestions: total,
+                accuracy: acc,
+                percentage: pct,
+                duration: realData.duration,
+                answers: normalizedAnswers,
+                correctAnswers: normalizedCorrectMap,
+                interactions: realData.interactions || [],
+                answerComparison,
+                scoreInfo,
+                isRealData: true,
+                source: sInfo.source || 'fallback'
+            },
+            dataSource: 'real',
+            date: new Date().toISOString(),
+            sessionId: realData.sessionId,
+            timestamp: Date.now(),
+            // 兼容旧视图字段
+            score: correct,
+            correctAnswers: correct,
+            totalQuestions: total,
+            accuracy: acc,
+            percentage: pct,
+            answers: normalizedAnswers,
+            answerDetails,
+            correctAnswerMap: normalizedCorrectMap,
+            answerComparison,
+            scoreInfo,
+            startTime: new Date((realData.startTime ?? (Date.now() - (realData.duration || 0) * 1000))).toISOString(),
+            endTime: new Date((realData.endTime ?? Date.now())).toISOString()
+        };
 
-    const answerDetails = buildFallbackAnswerDetails(normalizedAnswers, normalizedCorrectMap);
-    const answerComparison = normalizeFallbackAnswerComparison(realData.answerComparison, normalizedAnswers, normalizedCorrectMap);
-    const scoreInfo = {
-      correct,
-      total,
-      accuracy: acc,
-      percentage: pct,
-      details: answerDetails,
-      source: sInfo.source || realData.source || 'fallback'
-    };
-    
-    // 从多个来源提取 category
-    let category = exam.category;
-    if (!category && realData.pageType) {
-      category = realData.pageType;  // 如 "P4"
+        const records = await storage.get('practice_records', []);
+        const arr = Array.isArray(records) ? records : [];
+        arr.push(record);
+        await storage.set('practice_records', arr);
+        console.log('[Fallback] 真实数据已保存到 practice_records');
+    } catch (e) {
+        console.error('[Fallback] 保存练习记录失败:', e);
     }
-    if (!category && realData.url) {
-      const match = realData.url.match(/\b(P[1-4])\b/i);
-      if (match) category = match[1].toUpperCase();
-    }
-    if (!category && realData.title) {
-      const match = realData.title.match(/\b(P[1-4])\b/i);
-      if (match) category = match[1].toUpperCase();
-    }
-    if (!category) {
-      category = 'Unknown';
-    }
-
-    const record = {
-      id: Date.now(),
-      examId: examId,
-      title: exam.title || realData.title || '',
-      category: category,
-      frequency: exam.frequency || 'unknown',
-      realData: {
-        score: correct,
-        totalQuestions: total,
-        accuracy: acc,
-        percentage: pct,
-        duration: realData.duration,
-        answers: normalizedAnswers,
-        correctAnswers: normalizedCorrectMap,
-        interactions: realData.interactions || [],
-        answerComparison,
-        scoreInfo,
-        isRealData: true,
-        source: sInfo.source || 'fallback'
-      },
-      dataSource: 'real',
-      date: new Date().toISOString(),
-      sessionId: realData.sessionId,
-      timestamp: Date.now(),
-      // 兼容旧视图字段
-      score: correct,
-      correctAnswers: correct,
-      totalQuestions: total,
-      accuracy: acc,
-      percentage: pct,
-      answers: normalizedAnswers,
-      answerDetails,
-      correctAnswerMap: normalizedCorrectMap,
-      answerComparison,
-      scoreInfo,
-      startTime: new Date((realData.startTime ?? (Date.now() - (realData.duration || 0) * 1000))).toISOString(),
-      endTime: new Date((realData.endTime ?? Date.now())).toISOString()
-    };
-
-    const records = await storage.get('practice_records', []);
-    const arr = Array.isArray(records) ? records : [];
-    arr.push(record);
-    await storage.set('practice_records', arr);
-    console.log('[Fallback] 真实数据已保存到 practice_records');
-  } catch (e) {
-    console.error('[Fallback] 保存练习记录失败:', e);
-  }
 }
 
 async function loadLibrary(forceReload = false) {
@@ -1834,7 +1834,7 @@ async function loadLibrary(forceReload = false) {
                 listening: resolveScriptPathRoot('listening')
             }
         };
-        try { window.examIndexMetadata = metadata; } catch (_) {}
+        try { window.examIndexMetadata = metadata; } catch (_) { }
 
         const overrideMap = {
             reading: {
@@ -1887,7 +1887,7 @@ function resolveScriptPathRoot(type) {
                 return completeRoot.listening.trim();
             }
         }
-    } catch (_) {}
+    } catch (_) { }
     return defaultRoot;
 }
 
@@ -2132,7 +2132,7 @@ function setupOverviewInteractions() {
             if (typeof browseCategory === 'function') {
                 browseCategory(category, type, filterMode, path);
             } else {
-                try { applyBrowseFilter(category, type, filterMode, path); } catch (_) {}
+                try { applyBrowseFilter(category, type, filterMode, path); } catch (_) { }
             }
             return;
         }
@@ -2147,7 +2147,7 @@ function setupOverviewInteractions() {
         && typeof window.DOM.delegate === 'function';
 
     if (hasDomDelegate) {
-        window.DOM.delegate('click', '#category-overview [data-overview-action]', function(event) {
+        window.DOM.delegate('click', '#category-overview [data-overview-action]', function (event) {
             invokeAction(this, event);
         });
     } else {
@@ -2284,15 +2284,15 @@ function setupPracticeHistoryInteractions() {
     const hasDomDelegate = typeof window !== 'undefined' && window.DOM && typeof window.DOM.delegate === 'function';
 
     if (hasDomDelegate) {
-        window.DOM.delegate('click', '.practice-history-list [data-record-action="details"], #history-list [data-record-action="details"]', function(event) {
+        window.DOM.delegate('click', '.practice-history-list [data-record-action="details"], #history-list [data-record-action="details"]', function (event) {
             handleDetails(this.dataset.recordId, event);
         });
 
-        window.DOM.delegate('click', '.practice-history-list [data-record-action="delete"], #history-list [data-record-action="delete"]', function(event) {
+        window.DOM.delegate('click', '.practice-history-list [data-record-action="delete"], #history-list [data-record-action="delete"]', function (event) {
             handleDelete(this.dataset.recordId, event);
         });
 
-        window.DOM.delegate('click', '.practice-history-list .history-item, #history-list .history-item', function(event) {
+        window.DOM.delegate('click', '.practice-history-list .history-item, #history-list .history-item', function (event) {
             const actionTarget = event.target.closest('[data-record-action]');
             if (actionTarget) return;
             if (event.target && event.target.matches('input[data-record-id]')) {
@@ -2301,7 +2301,7 @@ function setupPracticeHistoryInteractions() {
             handleSelection(this.dataset.recordId, event);
         });
 
-        window.DOM.delegate('change', '.practice-history-list input[data-record-id], #history-list input[data-record-id]', function(event) {
+        window.DOM.delegate('change', '.practice-history-list input[data-record-id], #history-list input[data-record-id]', function (event) {
             handleCheckbox(this.dataset.recordId, event);
         });
     } else {
@@ -2432,7 +2432,7 @@ function ensurePracticeSessionSyncListener() {
         } finally {
             // 仍然执行一次全面同步，确保 ScoreStorage/StorageRepo 状态一致
             setTimeout(() => {
-                try { syncPracticeRecords(); } catch (_) {}
+                try { syncPracticeRecords(); } catch (_) { }
             }, 200);
         }
     });
@@ -2574,7 +2574,7 @@ function browseCategory(category, type = 'reading', filterMode = null, path = nu
                 document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
                 const target = document.getElementById('browse-view');
                 if (target) target.classList.add('active');
-            } catch(_) {}
+            } catch (_) { }
         }
 
         // 尽量沿用统一筛选逻辑
@@ -2591,8 +2591,24 @@ function browseCategory(category, type = 'reading', filterMode = null, path = nu
 }
 
 function filterByType(type) {
+    // 重置筛选器状态
     setBrowseFilterState('all', type);
     setBrowseTitle(formatBrowseTitle('all', type));
+
+    // 重置浏览模式和路径（清除频率模式残留）
+    window.__browseFilterMode = 'default';
+    window.__browsePath = null;
+
+    // 重置 browseController 到默认模式
+    // 关键修复：仅在当前不是默认模式时才调用 resetToDefault，防止死循环
+    // (resetToDefault -> setMode -> applyFilter -> filterByType -> global.filterByType)
+    if (window.browseController &&
+        window.browseController.currentMode !== 'default' &&
+        typeof window.browseController.resetToDefault === 'function') {
+        window.browseController.resetToDefault();
+    }
+
+    // 刷新题库列表
     loadExamList();
 }
 
@@ -2623,11 +2639,9 @@ function applyBrowseFilter(category = 'all', type = null, filterMode = null, pat
         }
 
         const normalizedType = normalizeExamType(type);
-        setBrowseFilterState(normalizedCategory, normalizedType);
-
         const normalizedPath = (typeof path === 'string' && path.trim()) ? path.trim() : null;
-        
-        // 新增：根据 filterMode 切换或重置浏览模式
+
+        // 1. 先处理模式切换/重置
         if (filterMode) {
             const modeConfig = window.BROWSE_MODES && window.BROWSE_MODES[filterMode];
             const basePath = normalizedPath || (modeConfig && modeConfig.basePath) || null;
@@ -2643,44 +2657,56 @@ function applyBrowseFilter(category = 'all', type = null, filterMode = null, pat
                     console.warn('[Browse] 切换浏览模式失败:', error);
                 }
             }
-        } else if (!filterMode) {
+        } else {
+            // 默认模式：清除频率模式状态
             window.__browseFilterMode = 'default';
             window.__browsePath = normalizedPath;
-            if (window.browseController) {
+            if (window.browseController &&
+                window.browseController.currentMode !== 'default' &&
+                typeof window.browseController.resetToDefault === 'function') {
                 window.browseController.resetToDefault();
             }
         }
-        
+
+        // 2. 再应用具体的分类和类型筛选（确保不被重置覆盖）
+        setBrowseFilterState(normalizedCategory, normalizedType);
+
+
         setBrowseTitle(formatBrowseTitle(normalizedCategory, normalizedType));
+
+        // 3. 刷新题库列表
+        // 如果是频率模式，setMode 已经处理了刷新，不需要再次调用 loadExamList
+        // 只有在默认模式下才显式调用
+        if (!filterMode) {
+            loadExamList();
+        }
 
         // 若未在浏览视图，则尽力切换
         if (typeof window.showView === 'function' && !document.getElementById('browse-view')?.classList.contains('active')) {
             window.showView('browse', false);
         }
-
-        // 如果是频率模式，不调用 loadExamList，让 browseController 处理
-        if (!filterMode) {
-            loadExamList();
-        }
     } catch (e) {
         console.warn('[Browse] 应用筛选失败，回退到默认列表:', e);
         setBrowseFilterState('all', 'all');
-        if (window.browseController) {
+        if (window.browseController && typeof window.browseController.resetToDefault === 'function') {
             window.browseController.resetToDefault();
         }
-        loadExamList();
+        // 避免在错误处理中再次同步调用可能导致错误的 loadExamList，使用 setTimeout 打断调用栈
+        setTimeout(() => {
+            try { loadExamList(); } catch (_) { }
+        }, 0);
     }
 }
 
 // Initialize browse view when it's activated
 function initializeBrowseView() {
     console.log('[System] Initializing browse view...');
-    
+
     // 初始化 browseController
     if (window.browseController && !window.browseController.buttonContainer) {
         window.browseController.initialize('type-filter-buttons');
     }
-    
+
     const persisted = getPersistedBrowseFilter();
     if (persisted) {
         setBrowseFilterState(persisted.category, persisted.type);
@@ -2694,17 +2720,17 @@ function initializeBrowseView() {
 
 // 全局桥接：HTML 按钮 onclick="browseCategory('P1','reading')"
 if (typeof window.browseCategory !== 'function') {
-    window.browseCategory = function(category, type, filterMode, path) {
+    window.browseCategory = function (category, type, filterMode, path) {
         try {
             if (window.app && typeof window.app.browseCategory === 'function') {
                 window.app.browseCategory(category, type, filterMode, path);
                 return;
             }
-        } catch (_) {}
+        } catch (_) { }
         // 回退：直接应用筛选（保持 filterMode/path 兼容）
         try {
             applyBrowseFilter(category, type, filterMode, path);
-        } catch (_) {}
+        } catch (_) { }
     };
 }
 
@@ -2739,7 +2765,10 @@ function loadExamList() {
     // 先过滤
     const activeExamType = getCurrentExamType();
     const activeCategory = getCurrentCategory();
-    const basePathFilter = (typeof window.__browsePath === 'string' && window.__browsePath.trim())
+
+    // 仅在频率模式下使用 basePath 过滤
+    const isFrequencyMode = window.__browseFilterMode && window.__browseFilterMode !== 'default';
+    const basePathFilter = isFrequencyMode && (typeof window.__browsePath === 'string' && window.__browsePath.trim())
         ? window.__browsePath.trim()
         : null;
 
@@ -2748,10 +2777,12 @@ function loadExamList() {
     }
     if (activeCategory !== 'all') {
         const filteredByCategory = examsToShow.filter(exam => exam.category === activeCategory);
+        // 只有在有筛选结果或不是频率模式时才应用分类过滤
         if (filteredByCategory.length > 0 || !basePathFilter) {
             examsToShow = filteredByCategory;
         }
     }
+    // 只有在频率模式下才应用路径过滤
     if (basePathFilter) {
         examsToShow = examsToShow.filter((exam) => {
             return typeof exam?.path === 'string' && exam.path.includes(basePathFilter);
@@ -2919,319 +2950,319 @@ const ABSOLUTE_URL_RE = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//;
 const WINDOWS_ABSOLUTE_RE = /^[a-zA-Z]:[\\/]/;
 
 function isAbsolutePath(value) {
-  if (!value) {
-    return false;
-  }
-  const normalized = String(value).trim();
-  return ABSOLUTE_URL_RE.test(normalized)
-    || WINDOWS_ABSOLUTE_RE.test(normalized)
-    || normalized.startsWith('\\\\')
-    || normalized.startsWith('//')
-    || normalized.startsWith('/');
+    if (!value) {
+        return false;
+    }
+    const normalized = String(value).trim();
+    return ABSOLUTE_URL_RE.test(normalized)
+        || WINDOWS_ABSOLUTE_RE.test(normalized)
+        || normalized.startsWith('\\\\')
+        || normalized.startsWith('//')
+        || normalized.startsWith('/');
 }
 
 function ensureTrailingSlash(value) {
-  if (!value) {
-    return '';
-  }
-  return value.endsWith('/') ? value : value + '/';
+    if (!value) {
+        return '';
+    }
+    return value.endsWith('/') ? value : value + '/';
 }
 
 function joinAbsoluteResource(base, file) {
-  const basePart = base ? String(base).replace(/\\/g, '/') : '';
-  const filePart = file ? String(file).replace(/\\/g, '/').replace(/^\/+/, '') : '';
-  if (!basePart) {
-    return encodeURI(filePart);
-  }
-  if (!filePart) {
-    return encodeURI(basePart);
-  }
-  const baseWithSlash = basePart.endsWith('/') ? basePart : basePart + '/';
-  return encodeURI(baseWithSlash + filePart);
+    const basePart = base ? String(base).replace(/\\/g, '/') : '';
+    const filePart = file ? String(file).replace(/\\/g, '/').replace(/^\/+/, '') : '';
+    if (!basePart) {
+        return encodeURI(filePart);
+    }
+    if (!filePart) {
+        return encodeURI(basePart);
+    }
+    const baseWithSlash = basePart.endsWith('/') ? basePart : basePart + '/';
+    return encodeURI(baseWithSlash + filePart);
 }
 
 function encodePathSegments(path) {
-  if (!path) {
-    return '';
-  }
+    if (!path) {
+        return '';
+    }
 
-  const segments = String(path).split('/');
-  return segments.map((segment) => {
-    if (!segment) {
-      return segment;
-    }
-    try {
-      return encodeURIComponent(decodeURIComponent(segment));
-    } catch (error) {
-      return encodeURIComponent(segment);
-    }
-  }).join('/');
+    const segments = String(path).split('/');
+    return segments.map((segment) => {
+        if (!segment) {
+            return segment;
+        }
+        try {
+            return encodeURIComponent(decodeURIComponent(segment));
+        } catch (error) {
+            return encodeURIComponent(segment);
+        }
+    }).join('/');
 }
 
 function resolveExamBasePath(exam) {
-  const relativePath = exam && exam.path ? String(exam.path) : "";
-  const normalizedRelative = relativePath.replace(/\\/g, '/').trim();
-  if (normalizedRelative && isAbsolutePath(normalizedRelative)) {
-    return ensureTrailingSlash(normalizedRelative);
-  }
-
-  let combined = normalizedRelative;
-  try {
-    const pathMap = getPathMap() || {};
-    const type = exam && exam.type;
-    const mapped = type && pathMap[type] ? pathMap[type] : {};
-    const fallback = type && DEFAULT_PATH_MAP[type] ? DEFAULT_PATH_MAP[type] : {};
-    const root = mergeRootWithFallback(mapped.root, fallback.root);
-    const normalizedRoot = root.replace(/\\/g, '/');
-    if (normalizedRoot) {
-      if (normalizedRelative && normalizedRelative.startsWith(normalizedRoot)) {
-        combined = normalizedRelative;
-      } else {
-        combined = normalizedRoot + normalizedRelative;
-      }
-    } else {
-      combined = normalizedRelative;
+    const relativePath = exam && exam.path ? String(exam.path) : "";
+    const normalizedRelative = relativePath.replace(/\\/g, '/').trim();
+    if (normalizedRelative && isAbsolutePath(normalizedRelative)) {
+        return ensureTrailingSlash(normalizedRelative);
     }
 
-    const fallbackTopRoot = extractTopLevelRootSegment(fallback.root);
-    if (fallbackTopRoot && !combined.replace(/\\/g, '/').startsWith(fallbackTopRoot)) {
-      const normalizedCombined = combined.replace(/\\/g, '/').replace(/^\/+/, '');
-      combined = fallbackTopRoot + normalizedCombined;
-    }
-  } catch (_) {}
+    let combined = normalizedRelative;
+    try {
+        const pathMap = getPathMap() || {};
+        const type = exam && exam.type;
+        const mapped = type && pathMap[type] ? pathMap[type] : {};
+        const fallback = type && DEFAULT_PATH_MAP[type] ? DEFAULT_PATH_MAP[type] : {};
+        const root = mergeRootWithFallback(mapped.root, fallback.root);
+        const normalizedRoot = root.replace(/\\/g, '/');
+        if (normalizedRoot) {
+            if (normalizedRelative && normalizedRelative.startsWith(normalizedRoot)) {
+                combined = normalizedRelative;
+            } else {
+                combined = normalizedRoot + normalizedRelative;
+            }
+        } else {
+            combined = normalizedRelative;
+        }
 
-  combined = combined.replace(/\\/g, '/');
-  combined = combined.replace(/\/{2,}/g, '/');
-  return ensureTrailingSlash(combined);
+        const fallbackTopRoot = extractTopLevelRootSegment(fallback.root);
+        if (fallbackTopRoot && !combined.replace(/\\/g, '/').startsWith(fallbackTopRoot)) {
+            const normalizedCombined = combined.replace(/\\/g, '/').replace(/^\/+/, '');
+            combined = fallbackTopRoot + normalizedCombined;
+        }
+    } catch (_) { }
+
+    combined = combined.replace(/\\/g, '/');
+    combined = combined.replace(/\/{2,}/g, '/');
+    return ensureTrailingSlash(combined);
 }
 
 function extractTopLevelRootSegment(root) {
-  if (!root) {
-    return '';
-  }
-  const normalized = normalizePathRoot(root).replace(/^\/+/, '');
-  const segments = normalized.split('/').filter(Boolean);
-  if (!segments.length) {
-    return '';
-  }
-  return segments[0] + '/';
+    if (!root) {
+        return '';
+    }
+    const normalized = normalizePathRoot(root).replace(/^\/+/, '');
+    const segments = normalized.split('/').filter(Boolean);
+    if (!segments.length) {
+        return '';
+    }
+    return segments[0] + '/';
 }
 
 const RAW_DEFAULT_PATH_MAP = {
-  reading: {
-    root: '睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/',
-    exceptions: {}
-  },
-  listening: {
-    root: 'ListeningPractice/',
-    exceptions: {}
-  }
+    reading: {
+        root: '睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/',
+        exceptions: {}
+    },
+    listening: {
+        root: 'ListeningPractice/',
+        exceptions: {}
+    }
 };
 
 function clonePathMap(map, fallback = RAW_DEFAULT_PATH_MAP) {
-  const source = map && typeof map === 'object' ? map : fallback;
-  const cloneCategory = (category) => {
-    const segment = source[category] && typeof source[category] === 'object' ? source[category] : {};
-    return {
-      root: typeof segment.root === 'string' ? segment.root : '',
-      exceptions: segment.exceptions && typeof segment.exceptions === 'object'
-        ? Object.assign({}, segment.exceptions)
-        : {}
+    const source = map && typeof map === 'object' ? map : fallback;
+    const cloneCategory = (category) => {
+        const segment = source[category] && typeof source[category] === 'object' ? source[category] : {};
+        return {
+            root: typeof segment.root === 'string' ? segment.root : '',
+            exceptions: segment.exceptions && typeof segment.exceptions === 'object'
+                ? Object.assign({}, segment.exceptions)
+                : {}
+        };
     };
-  };
-  return {
-    reading: cloneCategory('reading'),
-    listening: cloneCategory('listening')
-  };
+    return {
+        reading: cloneCategory('reading'),
+        listening: cloneCategory('listening')
+    };
 }
 
 function normalizePathRoot(value) {
-  if (!value) {
-    return '';
-  }
-  let root = String(value).replace(/\\/g, '/');
-  root = root.replace(/\/+$/, '') + '/';
-  if (root.startsWith('./')) {
-    root = root.slice(2);
-  }
-  return root;
+    if (!value) {
+        return '';
+    }
+    let root = String(value).replace(/\\/g, '/');
+    root = root.replace(/\/+$/, '') + '/';
+    if (root.startsWith('./')) {
+        root = root.slice(2);
+    }
+    return root;
 }
 
 function mergeRootWithFallback(root, fallbackRoot) {
-  const normalizedPrimary = normalizePathRoot(root || '');
-  if (normalizedPrimary) {
-    return normalizedPrimary;
-  }
-  return normalizePathRoot(fallbackRoot || '');
+    const normalizedPrimary = normalizePathRoot(root || '');
+    if (normalizedPrimary) {
+        return normalizedPrimary;
+    }
+    return normalizePathRoot(fallbackRoot || '');
 }
 
 function buildOverridePathMap(metadata, fallback = RAW_DEFAULT_PATH_MAP) {
-  const base = clonePathMap(fallback);
-  if (!metadata || typeof metadata !== 'object') {
+    const base = clonePathMap(fallback);
+    if (!metadata || typeof metadata !== 'object') {
+        return base;
+    }
+
+    const rootMeta = metadata.pathRoot;
+    if (rootMeta && typeof rootMeta === 'object') {
+        if (rootMeta.reading) {
+            base.reading.root = normalizePathRoot(rootMeta.reading);
+        }
+        if (rootMeta.listening) {
+            base.listening.root = normalizePathRoot(rootMeta.listening);
+        }
+    }
+
     return base;
-  }
-
-  const rootMeta = metadata.pathRoot;
-  if (rootMeta && typeof rootMeta === 'object') {
-    if (rootMeta.reading) {
-      base.reading.root = normalizePathRoot(rootMeta.reading);
-    }
-    if (rootMeta.listening) {
-      base.listening.root = normalizePathRoot(rootMeta.listening);
-    }
-  }
-
-  return base;
 }
 
 const DEFAULT_PATH_MAP = buildOverridePathMap(
-  typeof window !== 'undefined' ? window.examIndexMetadata : null,
-  RAW_DEFAULT_PATH_MAP
+    typeof window !== 'undefined' ? window.examIndexMetadata : null,
+    RAW_DEFAULT_PATH_MAP
 );
 
 const PATH_MAP_STORAGE_PREFIX = 'exam_path_map__';
 
 function normalizePathMap(map, fallback = DEFAULT_PATH_MAP) {
-  const base = clonePathMap(fallback);
-  const incoming = clonePathMap(map);
-  if (incoming.reading.root) {
-    base.reading.root = normalizePathRoot(incoming.reading.root);
-  }
-  if (incoming.listening.root) {
-    base.listening.root = normalizePathRoot(incoming.listening.root);
-  }
-  if (Object.keys(incoming.reading.exceptions).length) {
-    base.reading.exceptions = incoming.reading.exceptions;
-  }
-  if (Object.keys(incoming.listening.exceptions).length) {
-    base.listening.exceptions = incoming.listening.exceptions;
-  }
-  return base;
+    const base = clonePathMap(fallback);
+    const incoming = clonePathMap(map);
+    if (incoming.reading.root) {
+        base.reading.root = normalizePathRoot(incoming.reading.root);
+    }
+    if (incoming.listening.root) {
+        base.listening.root = normalizePathRoot(incoming.listening.root);
+    }
+    if (Object.keys(incoming.reading.exceptions).length) {
+        base.reading.exceptions = incoming.reading.exceptions;
+    }
+    if (Object.keys(incoming.listening.exceptions).length) {
+        base.listening.exceptions = incoming.listening.exceptions;
+    }
+    return base;
 }
 
 function getPathMapStorageKey(key) {
-  return PATH_MAP_STORAGE_PREFIX + key;
+    return PATH_MAP_STORAGE_PREFIX + key;
 }
 
 function computeCommonRoot(paths) {
-  if (!paths || !paths.length) {
-    return '';
-  }
-  const segmentsList = paths.map((rawPath) => {
-    if (typeof rawPath !== 'string') {
-      return [];
+    if (!paths || !paths.length) {
+        return '';
     }
-    const normalized = rawPath.replace(/\\/g, '/').replace(/\/+$/g, '');
-    return normalized ? normalized.split('/') : [];
-  }).filter((segments) => segments.length);
+    const segmentsList = paths.map((rawPath) => {
+        if (typeof rawPath !== 'string') {
+            return [];
+        }
+        const normalized = rawPath.replace(/\\/g, '/').replace(/\/+$/g, '');
+        return normalized ? normalized.split('/') : [];
+    }).filter((segments) => segments.length);
 
-  if (!segmentsList.length) {
-    return '';
-  }
-
-  let prefix = segmentsList[0].slice();
-  for (let i = 1; i < segmentsList.length; i += 1) {
-    const segments = segmentsList[i];
-    let j = 0;
-    while (j < prefix.length && j < segments.length && prefix[j] === segments[j]) {
-      j += 1;
+    if (!segmentsList.length) {
+        return '';
     }
-    if (j === 0) {
-      return '';
-    }
-    prefix = prefix.slice(0, j);
-  }
 
-  return prefix.length ? prefix.join('/') + '/' : '';
+    let prefix = segmentsList[0].slice();
+    for (let i = 1; i < segmentsList.length; i += 1) {
+        const segments = segmentsList[i];
+        let j = 0;
+        while (j < prefix.length && j < segments.length && prefix[j] === segments[j]) {
+            j += 1;
+        }
+        if (j === 0) {
+            return '';
+        }
+        prefix = prefix.slice(0, j);
+    }
+
+    return prefix.length ? prefix.join('/') + '/' : '';
 }
 
 function derivePathMapFromIndex(exams, fallbackMap = DEFAULT_PATH_MAP) {
-  const fallback = normalizePathMap(fallbackMap);
-  const result = clonePathMap(fallback);
+    const fallback = normalizePathMap(fallbackMap);
+    const result = clonePathMap(fallback);
 
-  if (!Array.isArray(exams)) {
+    if (!Array.isArray(exams)) {
+        return result;
+    }
+
+    const pathsByType = { reading: [], listening: [] };
+
+    exams.forEach((exam) => {
+        if (!exam || typeof exam.path !== 'string' || !exam.type) {
+            return;
+        }
+        const normalized = exam.path.replace(/\\/g, '/');
+        if (exam.type === 'reading') {
+            pathsByType.reading.push(normalized);
+        } else if (exam.type === 'listening') {
+            pathsByType.listening.push(normalized);
+        }
+    });
+
+    const readingRoot = computeCommonRoot(pathsByType.reading);
+    if (pathsByType.reading.length && readingRoot) {
+        result.reading.root = normalizePathRoot(readingRoot);
+    }
+
+    const listeningRoot = computeCommonRoot(pathsByType.listening);
+    if (pathsByType.listening.length && listeningRoot) {
+        result.listening.root = normalizePathRoot(listeningRoot);
+    }
+
     return result;
-  }
-
-  const pathsByType = { reading: [], listening: [] };
-
-  exams.forEach((exam) => {
-    if (!exam || typeof exam.path !== 'string' || !exam.type) {
-      return;
-    }
-    const normalized = exam.path.replace(/\\/g, '/');
-    if (exam.type === 'reading') {
-      pathsByType.reading.push(normalized);
-    } else if (exam.type === 'listening') {
-      pathsByType.listening.push(normalized);
-    }
-  });
-
-  const readingRoot = computeCommonRoot(pathsByType.reading);
-  if (pathsByType.reading.length && readingRoot) {
-    result.reading.root = normalizePathRoot(readingRoot);
-  }
-
-  const listeningRoot = computeCommonRoot(pathsByType.listening);
-  if (pathsByType.listening.length && listeningRoot) {
-    result.listening.root = normalizePathRoot(listeningRoot);
-  }
-
-  return result;
 }
 
 async function loadPathMapForConfiguration(key) {
-  if (!key) {
-    return clonePathMap(DEFAULT_PATH_MAP);
-  }
-  try {
-    const stored = await storage.get(getPathMapStorageKey(key));
-    if (stored && typeof stored === 'object') {
-      return normalizePathMap(stored);
+    if (!key) {
+        return clonePathMap(DEFAULT_PATH_MAP);
     }
-  } catch (error) {
-    console.warn('[LibraryConfig] 读取路径映射失败:', error);
-  }
-  return clonePathMap(DEFAULT_PATH_MAP);
+    try {
+        const stored = await storage.get(getPathMapStorageKey(key));
+        if (stored && typeof stored === 'object') {
+            return normalizePathMap(stored);
+        }
+    } catch (error) {
+        console.warn('[LibraryConfig] 读取路径映射失败:', error);
+    }
+    return clonePathMap(DEFAULT_PATH_MAP);
 }
 
 function setActivePathMap(map) {
-  const normalized = normalizePathMap(map);
-  window.__activeLibraryPathMap = normalized;
-  window.pathMap = normalized;
+    const normalized = normalizePathMap(map);
+    window.__activeLibraryPathMap = normalized;
+    window.pathMap = normalized;
 }
 
 async function savePathMapForConfiguration(key, examIndex, options = {}) {
-  if (!key || !Array.isArray(examIndex)) {
-    return null;
-  }
-  const fallback = options.fallbackMap || DEFAULT_PATH_MAP;
-  const overrideMap = options.overrideMap;
-  const derived = overrideMap ? normalizePathMap(overrideMap, fallback) : derivePathMapFromIndex(examIndex, fallback);
-  try {
-    await storage.set(getPathMapStorageKey(key), derived);
-  } catch (error) {
-    console.warn('[LibraryConfig] 写入路径映射失败:', error);
-  }
-  if (options.setActive) {
-    setActivePathMap(derived);
-  }
-  return derived;
+    if (!key || !Array.isArray(examIndex)) {
+        return null;
+    }
+    const fallback = options.fallbackMap || DEFAULT_PATH_MAP;
+    const overrideMap = options.overrideMap;
+    const derived = overrideMap ? normalizePathMap(overrideMap, fallback) : derivePathMapFromIndex(examIndex, fallback);
+    try {
+        await storage.set(getPathMapStorageKey(key), derived);
+    } catch (error) {
+        console.warn('[LibraryConfig] 写入路径映射失败:', error);
+    }
+    if (options.setActive) {
+        setActivePathMap(derived);
+    }
+    return derived;
 }
 
 function getPathMap() {
-  try {
-    if (window.__activeLibraryPathMap) {
-      return window.__activeLibraryPathMap;
+    try {
+        if (window.__activeLibraryPathMap) {
+            return window.__activeLibraryPathMap;
+        }
+        if (window.pathMap) {
+            return window.pathMap;
+        }
+        return DEFAULT_PATH_MAP;
+    } catch (error) {
+        console.warn('[PathNormalization] Failed to load path map:', error);
+        return {};
     }
-    if (window.pathMap) {
-      return window.pathMap;
-    }
-    return DEFAULT_PATH_MAP;
-  } catch (error) {
-    console.warn('[PathNormalization] Failed to load path map:', error);
-    return {};
-  }
 }
 
 function normalizeThemeBasePrefix(prefix) {
@@ -3293,7 +3324,7 @@ function detectScriptBasePrefix() {
     } catch (error) {
         try {
             console.warn('[PathDetection] detectScriptBasePrefix failed:', error);
-        } catch (_) {}
+        } catch (_) { }
     }
 
     return null;
@@ -3309,7 +3340,7 @@ function resolveThemeBasePrefix() {
     if (detected && detected !== './') {
         try {
             window.HP_BASE_PREFIX = detected;
-        } catch (_) {}
+        } catch (_) { }
         return detected;
     }
 
@@ -3361,66 +3392,66 @@ window.resolveExamBasePath = resolveExamBasePath;
 window.buildResourcePath = buildResourcePath;
 
 function openExam(examId) {
-  // 优先使用App流程（带会话与通信）
-  if (window.app && typeof window.app.openExam === 'function') {
-    try {
-      window.app.openExam(examId);
-      return;
-    } catch (e) {
-      console.warn('[Main] app.openExam 调用失败，启用降级握手路径:', e);
+    // 优先使用App流程（带会话与通信）
+    if (window.app && typeof window.app.openExam === 'function') {
+        try {
+            window.app.openExam(examId);
+            return;
+        } catch (e) {
+            console.warn('[Main] app.openExam 调用失败，启用降级握手路径:', e);
+        }
     }
-  }
 
-  // 降级：本地完成打开 + 握手重试，确保 sessionId 下发
-  const list = getExamIndexState();
-  const exam = list.find(e => e.id === examId);
-  if (!exam) return showMessage('未找到题目', 'error');
-  if (!exam.hasHtml) return viewPDF(examId);
+    // 降级：本地完成打开 + 握手重试，确保 sessionId 下发
+    const list = getExamIndexState();
+    const exam = list.find(e => e.id === examId);
+    if (!exam) return showMessage('未找到题目', 'error');
+    if (!exam.hasHtml) return viewPDF(examId);
 
-  const fullPath = buildResourcePath(exam, 'html');
-  const examWindow = window.open(fullPath, `exam_${exam.id}`, 'width=1200,height=800,scrollbars=yes,resizable=yes');
-  if (!examWindow) {
-    return showMessage('无法打开窗口，请检查弹窗设置', 'error');
-  }
-  showMessage('正在打开: ' + exam.title, 'success');
+    const fullPath = buildResourcePath(exam, 'html');
+    const examWindow = window.open(fullPath, `exam_${exam.id}`, 'width=1200,height=800,scrollbars=yes,resizable=yes');
+    if (!examWindow) {
+        return showMessage('无法打开窗口，请检查弹窗设置', 'error');
+    }
+    showMessage('正在打开: ' + exam.title, 'success');
 
-  startHandshakeFallback(examWindow, examId);
+    startHandshakeFallback(examWindow, examId);
 }
 
 // 降级握手：循环发送 INIT_SESSION，直至收到 SESSION_READY
 function startHandshakeFallback(examWindow, examId) {
-  try {
-    const sessionId = `${examId}_${Date.now()}`;
-    const initPayload = { examId, parentOrigin: window.location.origin, sessionId };
-    fallbackExamSessions.set(sessionId, { examId, timer: null, win: examWindow });
+    try {
+        const sessionId = `${examId}_${Date.now()}`;
+        const initPayload = { examId, parentOrigin: window.location.origin, sessionId };
+        fallbackExamSessions.set(sessionId, { examId, timer: null, win: examWindow });
 
-    let attempts = 0;
-    const maxAttempts = 30; // ~9s
-    const tick = () => {
-      if (examWindow && !examWindow.closed) {
-        try {
-          if (attempts === 0) {
-            console.log('[Fallback] 发送初始化消息到练习页面:', { type: 'INIT_SESSION', data: initPayload });
-          }
-          examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
-          examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
-        } catch (_) {}
-      }
-      attempts++;
-      if (attempts >= maxAttempts) {
+        let attempts = 0;
+        const maxAttempts = 30; // ~9s
+        const tick = () => {
+            if (examWindow && !examWindow.closed) {
+                try {
+                    if (attempts === 0) {
+                        console.log('[Fallback] 发送初始化消息到练习页面:', { type: 'INIT_SESSION', data: initPayload });
+                    }
+                    examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
+                    examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
+                } catch (_) { }
+            }
+            attempts++;
+            if (attempts >= maxAttempts) {
+                const rec = fallbackExamSessions.get(sessionId);
+                if (rec && rec.timer) clearInterval(rec.timer);
+                fallbackExamSessions.delete(sessionId);
+                console.warn('[Fallback] 握手超时，练习页可能未加载增强器');
+            }
+        };
+        const timer = setInterval(tick, 300);
         const rec = fallbackExamSessions.get(sessionId);
-        if (rec && rec.timer) clearInterval(rec.timer);
-        fallbackExamSessions.delete(sessionId);
-        console.warn('[Fallback] 握手超时，练习页可能未加载增强器');
-      }
-    };
-    const timer = setInterval(tick, 300);
-    const rec = fallbackExamSessions.get(sessionId);
-    if (rec) rec.timer = timer;
-    tick();
-  } catch (e) {
-    console.warn('[Fallback] 启动握手失败:', e);
-  }
+        if (rec) rec.timer = timer;
+        tick();
+    } catch (e) {
+        console.warn('[Fallback] 启动握手失败:', e);
+    }
 }
 
 function viewPDF(examId) {
@@ -3428,7 +3459,7 @@ function viewPDF(examId) {
     const list = getExamIndexState();
     const exam = list.find(e => e.id === examId);
     if (!exam || !exam.pdfFilename) return showMessage('未找到PDF文件', 'error');
-    
+
     const fullPath = buildResourcePath(exam, 'pdf');
     openPDFSafely(fullPath, exam.title);
 }
@@ -3453,7 +3484,7 @@ function openPDFSafely(pdfPath, examTitle = 'PDF') {
         let pdfWindow = null;
         try {
             pdfWindow = window.open(pdfPath, `pdf_${Date.now()}`, 'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes');
-        } catch (_) {}
+        } catch (_) { }
         if (!pdfWindow) {
             try {
                 // 降级：当前窗口打开
@@ -3706,7 +3737,7 @@ function showLibraryLoaderModal() {
         overlay.remove();
     };
 
-    const handleAction = function(event) {
+    const handleAction = function (event) {
         if (!overlay.contains(this)) return;
         const action = this.dataset.libraryAction;
         if (action === 'close') {
@@ -3725,7 +3756,7 @@ function showLibraryLoaderModal() {
         }
     };
 
-    const handleChange = async function(event) {
+    const handleChange = async function (event) {
         if (!overlay.contains(this)) return;
         const files = Array.from(this.files || []);
         if (files.length === 0) return;
@@ -3758,14 +3789,14 @@ function showLibraryLoaderModal() {
 }
 
 // expose modal launcher globally for SettingsPanel button
-try { window.showLibraryLoaderModal = showLibraryLoaderModal; } catch(_) {}
+try { window.showLibraryLoaderModal = showLibraryLoaderModal; } catch (_) { }
 
 async function handleLibraryUpload(options, files) {
     const { type, mode } = options;
     try {
         let label = '';
         if (mode === 'incremental') {
-            label = prompt('为此次增量更新输入一个文件夹标签', '增量-' + new Date().toISOString().slice(0,10)) || '';
+            label = prompt('为此次增量更新输入一个文件夹标签', '增量-' + new Date().toISOString().slice(0, 10)) || '';
             if (label) {
                 showMessage('使用标签: ' + label, 'info');
             }
@@ -3807,7 +3838,7 @@ async function handleLibraryUpload(options, files) {
             const hasOther = newIndex.some(e => e.type === otherType);
             if (!hasOther) {
                 let fallback = [];
-                if (otherType === 'reading' && window.completeExamIndex) fallback = window.completeExamIndex.map(e => ({...e, type:'reading'}));
+                if (otherType === 'reading' && window.completeExamIndex) fallback = window.completeExamIndex.map(e => ({ ...e, type: 'reading' }));
                 if (otherType === 'listening' && window.listeningExamIndex) fallback = window.listeningExamIndex;
                 newIndex = [...newIndex, ...fallback];
             }
@@ -3963,19 +3994,19 @@ async function importData() {
                 try {
                     const base = { ...r };
                     // 统一 id 类型
-                    if (base.id == null) base.id = Date.now() + Math.random().toString(36).slice(2,9);
+                    if (base.id == null) base.id = Date.now() + Math.random().toString(36).slice(2, 9);
                     // 时间与时长
                     if (!base.startTime && base.date) base.startTime = base.date;
                     if (!base.endTime && base.startTime && typeof base.duration === 'number') {
-                        base.endTime = new Date(new Date(base.startTime).getTime() + (base.duration*1000)).toISOString();
+                        base.endTime = new Date(new Date(base.startTime).getTime() + (base.duration * 1000)).toISOString();
                     }
                     // 统计字段
                     const rd = base.realData || {};
                     const sInfo = base.scoreInfo || rd.scoreInfo || {};
                     const correct = typeof base.correctAnswers === 'number' ? base.correctAnswers : (typeof base.score === 'number' ? base.score : (typeof sInfo.correct === 'number' ? sInfo.correct : 0));
                     const total = typeof base.totalQuestions === 'number' ? base.totalQuestions : (typeof sInfo.total === 'number' ? sInfo.total : (rd.answers ? Object.keys(rd.answers).length : 0));
-                    const acc = typeof base.accuracy === 'number' ? base.accuracy : (total > 0 ? (correct/total) : 0);
-                    const pct = typeof base.percentage === 'number' ? base.percentage : Math.round(acc*100);
+                    const acc = typeof base.accuracy === 'number' ? base.accuracy : (total > 0 ? (correct / total) : 0);
+                    const pct = typeof base.percentage === 'number' ? base.percentage : Math.round(acc * 100);
                     base.score = correct;
                     base.correctAnswers = correct;
                     base.totalQuestions = total;
@@ -3996,11 +4027,11 @@ async function importData() {
             let existing = await storage.get('practice_records', []);
             existing = Array.isArray(existing) ? existing : [];
             const byId = new Map(existing.map(x => [String(x.id), true]));
-            const bySession = new Map(existing.map(x => [String(x.sessionId||''), true]));
+            const bySession = new Map(existing.map(x => [String(x.sessionId || ''), true]));
             const merged = existing.slice();
             for (const r of normalized) {
                 const idKey = String(r.id);
-                const sidKey = String(r.sessionId||'');
+                const sidKey = String(r.sessionId || '');
                 if (byId.has(idKey) || (sidKey && bySession.has(sidKey))) continue;
                 merged.push(r);
             }
@@ -4047,9 +4078,9 @@ function performSearch(query) {
         }
         // Fallback 匹配
         return (exam.title && exam.title.toLowerCase().includes(normalizedQuery)) ||
-               (exam.category && exam.category.toLowerCase().includes(normalizedQuery));
+            (exam.category && exam.category.toLowerCase().includes(normalizedQuery));
     });
-    
+
     console.log('[Search] 搜索结果数量:', searchResults.length);
     displayExams(searchResults);
 }
@@ -4233,12 +4264,12 @@ async function clearCache() {
             if (window.storage && typeof storage.set === 'function') {
                 await storage.set('practice_records', []);
             } else {
-                try { localStorage.removeItem('exam_system_practice_records'); } catch(_) {}
+                try { localStorage.removeItem('exam_system_practice_records'); } catch (_) { }
             }
         } catch (e) { console.warn('[clearCache] failed to clear practice_records:', e); }
 
-        try { localStorage.clear(); } catch(_) {}
-        try { sessionStorage.clear(); } catch(_) {}
+        try { localStorage.clear(); } catch (_) { }
+        try { sessionStorage.clear(); } catch (_) { }
 
         setPracticeRecordsState([]);
         if (window.performanceOptimizer) {
@@ -4873,7 +4904,7 @@ function createManualBackup() {
                 showMessage(`备份创建成功: ${backup.id}`, 'success');
             }
             // 刷新备份列表（如果用户打开了设置页）
-            try { showBackupList(); } catch (_) {}
+            try { showBackupList(); } catch (_) { }
         } catch (error) {
             if (isQuotaExceeded(error)) {
                 try {
@@ -4883,7 +4914,7 @@ function createManualBackup() {
                     showMessage('备份失败且导出失败: ' + (e2 && e2.message ? e2.message : e2), 'error');
                 }
             } else {
-                
+
                 showMessage('备份创建失败: ' + (error && error.message ? error.message : error), 'error');
             }
         }
@@ -5099,7 +5130,7 @@ function setupBackupListInteractions() {
         && typeof window.DOM.delegate === 'function';
 
     if (hasDomDelegate) {
-        window.DOM.delegate('click', '[data-backup-action]', function(event) {
+        window.DOM.delegate('click', '[data-backup-action]', function (event) {
             handle(this, event);
         });
     } else {
@@ -5297,10 +5328,10 @@ async function exportPracticeData() {
     try {
         if (window.dataIntegrityManager && typeof window.dataIntegrityManager.exportData === 'function') {
             window.dataIntegrityManager.exportData();
-            try { showMessage('导出完成', 'success'); } catch(_) {}
+            try { showMessage('导出完成', 'success'); } catch (_) { }
             return;
         }
-    } catch(_) {}
+    } catch (_) { }
     try {
         var records = (window.storage && storage.get) ? (await storage.get('practice_records', [])) : getPracticeRecordsState();
         var blob = new Blob([JSON.stringify(records, null, 2)], { type: 'application/json; charset=utf-8' });
@@ -5308,9 +5339,9 @@ async function exportPracticeData() {
         var a = document.createElement('a'); a.href = url; a.download = 'practice-records.json';
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        try { showMessage('导出完成', 'success'); } catch(_) {}
-    } catch(e) {
-        try { showMessage('导出失败: ' + (e && e.message || e), 'error'); } catch(_) {}
+        try { showMessage('导出完成', 'success'); } catch (_) { }
+    } catch (e) {
+        try { showMessage('导出失败: ' + (e && e.message || e), 'error'); } catch (_) { }
         console.error('[Export] failed', e);
     }
 }
@@ -5956,7 +5987,7 @@ function initializeIndexInteractions() {
     setupMoreViewInteractions();
 }
 
-try { window.launchMiniGame = launchMiniGame; } catch (_) {}
+try { window.launchMiniGame = launchMiniGame; } catch (_) { }
 
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initializeIndexInteractions);
@@ -5976,7 +6007,7 @@ window.addEventListener('examIndexLoaded', () => {
         if (typeof loadExamList === 'function') loadExamList();
         const loading = document.querySelector('#browse-view .loading');
         if (loading) loading.style.display = 'none';
-    } catch (_) {}
+    } catch (_) { }
 });
 
 let examActionHandlersConfigured = false;
@@ -6867,13 +6898,13 @@ function requestClockFullscreen() {
     try {
         const result = request.call(overlay, { navigationUI: 'hide' });
         if (result && typeof result.catch === 'function') {
-            result.catch(() => {});
+            result.catch(() => { });
         }
     } catch (error) {
         try {
             const fallback = request.call(overlay);
             if (fallback && typeof fallback.catch === 'function') {
-                fallback.catch(() => {});
+                fallback.catch(() => { });
             }
         } catch (_) {
             // ignore unsupported fullscreen options
@@ -6899,7 +6930,7 @@ function exitClockFullscreen() {
     try {
         const result = exit.call(document);
         if (result && typeof result.catch === 'function') {
-            result.catch(() => {});
+            result.catch(() => { });
         }
     } catch (_) {
         // ignore errors from exiting fullscreen
@@ -7032,13 +7063,13 @@ function setupExamActionHandlers() {
         && typeof window.DOM.delegate === 'function';
 
     if (hasDomDelegate) {
-        window.DOM.delegate('click', '[data-action="start"]', function(event) {
+        window.DOM.delegate('click', '[data-action="start"]', function (event) {
             invoke(this, event);
         });
-        window.DOM.delegate('click', '[data-action="pdf"]', function(event) {
+        window.DOM.delegate('click', '[data-action="pdf"]', function (event) {
             invoke(this, event);
         });
-        window.DOM.delegate('click', '[data-action="generate"]', function(event) {
+        window.DOM.delegate('click', '[data-action="generate"]', function (event) {
             invoke(this, event);
         });
     } else {
