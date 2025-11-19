@@ -61,8 +61,12 @@
                 case 'browse':
                     // 如果存在待应用的筛选，则优先应用而不重置
                     if (window.__pendingBrowseFilter && typeof window.applyBrowseFilter === 'function') {
-                        const { category, type } = window.__pendingBrowseFilter;
-                        try { window.applyBrowseFilter(category, type); } finally { delete window.__pendingBrowseFilter; }
+                        const { category, type, filterMode, path } = window.__pendingBrowseFilter;
+                        try {
+                            window.applyBrowseFilter(category, type, filterMode, path);
+                        } finally {
+                            delete window.__pendingBrowseFilter;
+                        }
                     } else if (typeof window.initializeBrowseView === 'function') {
                         window.initializeBrowseView();
                     }

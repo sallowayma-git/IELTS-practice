@@ -237,6 +237,7 @@
         filterByFolder(filterId) {
             const config = this.getCurrentModeConfig();
             const folders = config.folderMap[filterId];
+            const basePath = config.basePath || null;
             
             if (!folders) {
                 console.warn('[BrowseController] 未找到文件夹映射:', filterId);
@@ -249,6 +250,10 @@
             // 筛选题目
             const filtered = examIndex.filter(exam => {
                 if (!exam || !exam.path) {
+                    return false;
+                }
+
+                if (basePath && !exam.path.includes(basePath)) {
                     return false;
                 }
 

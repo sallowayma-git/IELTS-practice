@@ -426,6 +426,29 @@
                 return true;
             }
             
+            // 处理常见的相邻字符互换（如 recieve ↔ receive）
+            if (inputNorm.length === correctNorm.length) {
+                const diffIndices = [];
+                for (let i = 0; i < inputNorm.length; i++) {
+                    if (inputNorm[i] !== correctNorm[i]) {
+                        diffIndices.push(i);
+                        if (diffIndices.length > 2) {
+                            break;
+                        }
+                    }
+                }
+
+                if (diffIndices.length === 2) {
+                    const [i, j] = diffIndices;
+                    const isTransposed = inputNorm[i] === correctNorm[j]
+                        && inputNorm[j] === correctNorm[i];
+                    if (isTransposed) {
+                        console.log(`[SpellingErrorCollector] 检测到相邻字符置换: "${input}" ↔ "${correct}"`);
+                        return true;
+                    }
+                }
+            }
+
             // 计算编辑距离
             const distance = this.levenshteinDistance(inputNorm, correctNorm);
             
