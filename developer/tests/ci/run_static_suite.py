@@ -589,6 +589,52 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("全量题库记录匹配测试", False, "测试脚本缺失"))
         all_passed = False
 
+    # Integration tests
+    integration_tests = [
+        ("多套题提交流程集成测试", REPO_ROOT / "developer" / "tests" / "js" / "integration" / "multiSuiteSubmission.test.js"),
+        ("拼写错误收集流程集成测试", REPO_ROOT / "developer" / "tests" / "js" / "integration" / "spellingErrorCollection.test.js"),
+        ("词表切换流程集成测试", REPO_ROOT / "developer" / "tests" / "js" / "integration" / "vocabListSwitching.test.js"),
+    ]
+
+    for test_name, test_path in integration_tests:
+        if test_path.exists():
+            try:
+                completed_integration = subprocess.run(
+                    ["node", str(test_path)],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+            except subprocess.TimeoutExpired:
+                integration_passed = False
+                integration_detail = "执行超时（30秒）"
+            except subprocess.CalledProcessError as exc:
+                output_text = exc.stdout or exc.stderr or str(exc)
+                integration_passed = False
+                integration_detail = f"执行失败: {output_text.strip()}"
+            else:
+                raw_integration_output = completed_integration.stdout.strip() or completed_integration.stderr.strip()
+                try:
+                    integration_payload = json.loads(raw_integration_output or "{}")
+                except json.JSONDecodeError as parse_error:
+                    integration_passed = False
+                    integration_detail = f"输出解析失败: {parse_error}"
+                else:
+                    integration_passed = integration_payload.get("status") == "pass"
+                    passed_count = integration_payload.get("passed", 0)
+                    total_count = integration_payload.get("total", 0)
+                    integration_detail = {
+                        "passed": passed_count,
+                        "total": total_count,
+                        "detail": integration_payload.get("detail", "")
+                    }
+            results.append(_format_result(test_name, integration_passed, integration_detail))
+            all_passed &= integration_passed
+        else:
+            results.append(_format_result(test_name, False, "测试脚本缺失"))
+            all_passed = False
+
     return results, all_passed
 
 

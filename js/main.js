@@ -1936,14 +1936,14 @@ function updateOverview() {
         view.render(stats, {
             container: categoryContainer,
             actions: {
-                onBrowseCategory: (category, type) => {
+                onBrowseCategory: (category, type, filterMode, path) => {
                     if (typeof browseCategory === 'function') {
-                        browseCategory(category, type);
+                        browseCategory(category, type, filterMode, path);
                     }
                 },
-                onRandomPractice: (category, type) => {
+                onRandomPractice: (category, type, filterMode, path) => {
                     if (typeof startRandomPractice === 'function') {
-                        startRandomPractice(category, type);
+                        startRandomPractice(category, type, filterMode, path);
                     }
                 },
                 onStartSuite: () => {
@@ -2518,7 +2518,7 @@ function applyPracticeSummaryFallback(summary) {
 // --- Event Handlers & Navigation ---
 
 
-function browseCategory(category, type = 'reading') {
+function browseCategory(category, type = 'reading', filterMode = null, path = null) {
 
     requestBrowseAutoScroll(category, type);
     // 先设置筛选器，确保 App 路径也能获取到筛选参数
@@ -2526,8 +2526,9 @@ function browseCategory(category, type = 'reading') {
         setBrowseFilterState(category, type);
 
         // 设置待处理筛选器，确保组件未初始化时筛选不会丢失
+        // 新增：包含 filterMode 和 path 参数
         try {
-            window.__pendingBrowseFilter = { category, type };
+            window.__pendingBrowseFilter = { category, type, filterMode, path };
         } catch (_) {
             // 如果全局变量设置失败，继续执行
         }
@@ -2535,11 +2536,11 @@ function browseCategory(category, type = 'reading') {
         console.warn('[browseCategory] 设置筛选器失败:', error);
     }
 
-    // 优先调用 window.app.browseCategory(category, type)
+    // 优先调用 window.app.browseCategory(category, type, filterMode, path)
     if (window.app && typeof window.app.browseCategory === 'function') {
         try {
-            window.app.browseCategory(category, type);
-            console.log('[browseCategory] Called app.browseCategory');
+            window.app.browseCategory(category, type, filterMode, path);
+            console.log('[browseCategory] Called app.browseCategory with filterMode:', filterMode);
             // 确保过滤应用，即使 app 处理
             setTimeout(() => loadExamList(), 100);
             return;
@@ -2582,7 +2583,7 @@ function filterByType(type) {
 }
 
 // 应用分类筛选（供 App/总览调用）
-function applyBrowseFilter(category = 'all', type = null) {
+function applyBrowseFilter(category = 'all', type = null, filterMode = null, path = null) {
     try {
         // 归一化输入：兼容 "P1 阅读"/"P2 听力" 这类文案
         const raw = String(category || 'all');
@@ -2609,6 +2610,21 @@ function applyBrowseFilter(category = 'all', type = null) {
 
         const normalizedType = normalizeExamType(type);
         setBrowseFilterState(normalizedCategory, normalizedType);
+        
+        // 新增：如果有 filterMode，切换到对应的浏览模式
+        if (filterMode && window.browseController) {
+            try {
+                window.__browseFilterMode = filterMode;
+                window.__browsePath = path;
+                window.browseController.setMode(filterMode);
+            } catch (error) {
+                console.warn('[Browse] 切换浏览模式失败:', error);
+            }
+        } else if (!filterMode && window.browseController) {
+            // 没有 filterMode，重置为默认模式
+            window.browseController.resetToDefault();
+        }
+        
         setBrowseTitle(formatBrowseTitle(normalizedCategory, normalizedType));
 
         // 若未在浏览视图，则尽力切换
@@ -2616,10 +2632,16 @@ function applyBrowseFilter(category = 'all', type = null) {
             window.showView('browse', false);
         }
 
-        loadExamList();
+        // 如果是频率模式，不调用 loadExamList，让 browseController 处理
+        if (!filterMode) {
+            loadExamList();
+        }
     } catch (e) {
         console.warn('[Browse] 应用筛选失败，回退到默认列表:', e);
         setBrowseFilterState('all', 'all');
+        if (window.browseController) {
+            window.browseController.resetToDefault();
+        }
         loadExamList();
     }
 }
@@ -2627,6 +2649,12 @@ function applyBrowseFilter(category = 'all', type = null) {
 // Initialize browse view when it's activated
 function initializeBrowseView() {
     console.log('[System] Initializing browse view...');
+    
+    // 初始化 browseController
+    if (window.browseController && !window.browseController.buttonContainer) {
+        window.browseController.initialize('type-filter-buttons');
+    }
+    
     const persisted = getPersistedBrowseFilter();
     if (persisted) {
         setBrowseFilterState(persisted.category, persisted.type);
@@ -2640,10 +2668,10 @@ function initializeBrowseView() {
 
 // 全局桥接：HTML 按钮 onclick="browseCategory('P1','reading')"
 if (typeof window.browseCategory !== 'function') {
-    window.browseCategory = function(category, type) {
+    window.browseCategory = function(category, type, filterMode, path) {
         try {
             if (window.app && typeof window.app.browseCategory === 'function') {
-                window.app.browseCategory(category, type);
+                window.app.browseCategory(category, type, filterMode, path);
                 return;
             }
         } catch (_) {}
