@@ -75,12 +75,114 @@
         return result;
     };
 
+    const cssEscape = (value) => {
+        if (window.CSS && typeof window.CSS.escape === 'function') {
+            try {
+                return window.CSS.escape(value);
+            } catch (_) {
+                // ignore and fallback
+            }
+        }
+        return String(value == null ? '' : value).replace(/["\\]/g, '\\$&');
+    };
+
     const initialConfig = mergeConfig(
         DEFAULT_ENHANCER_CONFIG,
         window.practicePageEnhancerConfig || {}
     );
 
     const ANSWER_TAG_PATTERN = /\(Q(\d+)\s*:\s*([^)]+?)\)/gi;
+    let cachedPracticePageContext = null;
+
+    const cleanTitleCandidate = (raw) => {
+        if (!raw) return '';
+        let text = String(raw).replace(/\s+/g, ' ').trim();
+        if (!text) return '';
+        text = text
+            .replace(/^[\d]+[\.\-、\s]+/, '')
+            .replace(/^PART\s*\d+/i, '')
+            .replace(/^P\s*\d+/i, '')
+            .replace(/IELTS\s+Listening\s+Practice\s*-?\s*/i, '')
+            .replace(/^-+/, '')
+            .replace(/^\s*[-:]\s*/, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+        return text;
+    };
+
+    const extractLeadingNumber = (text) => {
+        if (!text) return null;
+        const match = String(text).trim().match(/^(\d{1,4})[\s.\-、_]/);
+        return match ? parseInt(match[1], 10) : null;
+    };
+
+    const extractPartFromText = (text) => {
+        if (!text) return null;
+        const match = String(text).match(/P(?:ART)?\s*([1-4])/i) || String(text).match(/PART\s*([1-4])/i);
+        if (match) {
+            return match[1];
+        }
+        const partWord = String(text).match(/Part\s*([1-4])/i);
+        return partWord ? partWord[1] : null;
+    };
+
+    const detectFrequencyLabel = (text) => {
+        if (!text) return '未知频率';
+        if (/高频/.test(text)) return '高频';
+        if (/次高频/.test(text)) return '次高频';
+        if (/低频/.test(text)) return '低频';
+        return '未知频率';
+    };
+
+    const computePracticePageContext = () => {
+        const pathname = decodeURIComponent(window.location.pathname || '').replace(/\\/g, '/');
+        const segments = pathname.split('/').filter(Boolean);
+        const filenameWithExt = segments[segments.length - 1] || '';
+        const filename = filenameWithExt.replace(/\.[^.]+$/, '');
+        const folderName = segments[segments.length - 2] || '';
+        const docTitle = document.title || '';
+        const headerTitle = document.querySelector('.header h1, header .header-title')?.textContent || '';
+        const pathSignature = [folderName, filename, docTitle, headerTitle].filter(Boolean).join(' || ');
+        const part = extractPartFromText(pathSignature);
+        const examNumber = extractLeadingNumber(folderName) || extractLeadingNumber(filename);
+        const isListening = /listeningpractice/i.test(pathname) || /listening/i.test(docTitle);
+        const categoryCode = part ? `P${part}` : 'unknown';
+        const categoryLabel = part
+            ? (isListening ? `Part ${part}` : `P${part}`)
+            : 'unknown';
+        const titleCandidates = [headerTitle, folderName, filename, docTitle];
+        const cleanedTitles = [];
+        titleCandidates.forEach(candidate => {
+            const cleaned = cleanTitleCandidate(candidate);
+            if (cleaned && !cleanedTitles.includes(cleaned)) {
+                cleanedTitles.push(cleaned);
+            }
+        });
+        const title = cleanedTitles[0] || (docTitle || '').trim();
+        let examId = null;
+        if (isListening && part && examNumber != null) {
+            const paddedNumber = String(examNumber).padStart(2, '0');
+            examId = `listening-p${part}-${paddedNumber}`;
+        }
+        const frequencyLabel = detectFrequencyLabel(`${pathname} ${docTitle}`);
+        return {
+            isListening,
+            part,
+            examNumber,
+            examId,
+            title,
+            categoryCode,
+            categoryLabel,
+            frequencyLabel
+        };
+    };
+
+    const getPracticePageContext = (forceRefresh = false) => {
+        if (forceRefresh || !cachedPracticePageContext) {
+            cachedPracticePageContext = computePracticePageContext();
+        }
+        return cachedPracticePageContext;
+    };
 
     function extractObjectLiteral(content, startIndex) {
         if (!content || startIndex >= content.length) {
@@ -149,6 +251,116 @@
             }
             results['q' + questionNumber] = cleanedAnswer;
         }
+        return results;
+    }
+
+    const normalizeQuestionKey = (value) => {
+        if (value === undefined || value === null) return null;
+        const raw = String(value).trim();
+        if (!raw) return null;
+        const cleaned = raw.replace(/[-_](anchor|nav)$/i, '');
+        if (/^q[\w-]+/i.test(cleaned)) {
+            return cleaned.replace(/^Q/, 'q');
+        }
+        const digitsMatch = cleaned.match(/^\d+/);
+        if (digitsMatch) {
+            return 'q' + digitsMatch[0];
+        }
+        const questionPrefix = cleaned.match(/^question[-_\s]*(\d+)/i);
+        if (questionPrefix) {
+            return 'q' + questionPrefix[1];
+        }
+        return cleaned;
+    };
+
+    const extractQuestionNumbersFromText = (text) => {
+        const numbers = [];
+        if (!text) {
+            return numbers;
+        }
+        const pattern = /\(Q\s*([^)]+)\)/gi;
+        let match;
+        while ((match = pattern.exec(text)) !== null) {
+            const group = match[1] || '';
+            group.split(/[^0-9]+/).forEach((segment) => {
+                if (!segment) return;
+                numbers.push(segment);
+            });
+        }
+        return numbers;
+    };
+
+    const cleanupAnswerText = (text) => {
+        if (!text) {
+            return '';
+        }
+        let cleaned = String(text).replace(/\(Q[^\)]+\)/gi, '');
+        cleaned = cleaned.replace(/\s+/g, ' ').trim();
+        cleaned = cleaned.replace(/[.,;:!?]+$/g, '').trim();
+        return cleaned;
+    };
+
+    const buildQuestionQueue = (orderCandidates, fallbackText) => {
+        const queue = [];
+        const seen = new Set();
+        const addId = (candidate) => {
+            const normalized = normalizeQuestionKey(candidate);
+            if (!normalized || seen.has(normalized)) {
+                return;
+            }
+            seen.add(normalized);
+            queue.push(normalized);
+        };
+        if (Array.isArray(orderCandidates) && orderCandidates.length) {
+            orderCandidates.forEach(addId);
+        }
+        if (!queue.length) {
+            extractQuestionNumbersFromText(fallbackText).forEach((num) => addId(`q${num}`));
+        }
+        return queue;
+    };
+
+    function extractAnswersFromTranscriptElement(transcriptEl, questionOrder = []) {
+        const results = {};
+        if (!transcriptEl || typeof transcriptEl !== 'object') {
+            return results;
+        }
+        const allHighlights = Array.from(transcriptEl.querySelectorAll('.answer-highlight'));
+        if (!allHighlights.length) {
+            return results;
+        }
+        const pendingQueue = buildQuestionQueue(questionOrder, transcriptEl.textContent || '');
+        const assignAnswer = (questionId, value) => {
+            const normalized = normalizeQuestionKey(questionId);
+            if (!normalized || results[normalized]) {
+                return;
+            }
+            results[normalized] = value;
+            const idx = pendingQueue.indexOf(normalized);
+            if (idx !== -1) {
+                pendingQueue.splice(idx, 1);
+            }
+        };
+
+        allHighlights.forEach((element) => {
+            const rawText = element.textContent || '';
+            const cleanedValue = cleanupAnswerText(rawText);
+            if (!cleanedValue) {
+                return;
+            }
+            const explicitNumbers = extractQuestionNumbersFromText(rawText);
+            if (explicitNumbers.length) {
+                explicitNumbers.forEach((num) => assignAnswer(`q${num}`, cleanedValue));
+                return;
+            }
+            while (pendingQueue.length && results[pendingQueue[0]]) {
+                pendingQueue.shift();
+            }
+            const fallbackId = pendingQueue.shift();
+            if (fallbackId) {
+                results[fallbackId] = cleanedValue;
+            }
+        });
         return results;
     }
 
@@ -462,8 +674,11 @@
         isInitialized: false,
         initRequestTimer: null,
         initializationPromise: null,
+        submitInProgress: false,
+        hasDispatchedFinalResults: false,
         config: initialConfig,
         customCollectors: [],
+        pageContext: null,
 
         initialize: function () {
             if (this.isInitialized) {
@@ -478,6 +693,9 @@
 
             this.initializationPromise = (async () => {
                 console.log('[PracticeEnhancer] 开始初始化');
+                this.hasDispatchedFinalResults = false;
+                this.submitInProgress = false;
+                this.pageContext = this.getPageContext(true);
 
                 await this.prepareStorageNamespace();
 
@@ -596,60 +814,57 @@
         },
 
         normalizeQuestionId: function(questionId) {
-            if (questionId === undefined || questionId === null) return null;
-            const raw = String(questionId).trim();
-            if (!raw) return null;
-            const cleaned = raw.replace(/[-_](anchor|nav)$/i, '');
-            if (/^q[\w-]+/i.test(cleaned)) {
-                return cleaned.replace(/^Q/, 'q');
-            }
-            const digitsMatch = cleaned.match(/^\d+/);
-            if (digitsMatch) {
-                return 'q' + digitsMatch[0];
-            }
-            const questionPrefix = cleaned.match(/^question[-_\s]*(\d+)/i);
-            if (questionPrefix) {
-                return 'q' + questionPrefix[1];
-            }
-            return cleaned;
+            return normalizeQuestionKey(questionId);
         },
 
         addAnswer: function(questionId, value) {
             if (value === undefined || value === null) return null;
             const normalizedId = this.normalizeQuestionId(questionId);
             if (!normalizedId) return null;
+
             const normalizeSingle = (val) => {
                 if (val === undefined || val === null) return null;
                 if (typeof val === 'string') {
                     const trimmed = val.trim();
-                    return trimmed || null;
+                    return trimmed.length ? trimmed : null;
                 }
-                return String(val).trim();
+                if (typeof val === 'number' || typeof val === 'boolean') {
+                    return String(val).trim();
+                }
+                if (typeof val === 'object' && val !== null) {
+                    if (typeof val.value === 'string') {
+                        return val.value.trim() || null;
+                    }
+                    if (typeof val.text === 'string') {
+                        return val.text.trim() || null;
+                    }
+                }
+                const str = String(val).trim();
+                return str.length ? str : null;
             };
 
-            const normalizedValue = Array.isArray(value)
-                ? value.map(normalizeSingle).filter(Boolean)
-                : normalizeSingle(value);
-
-            if (normalizedValue === null || (Array.isArray(normalizedValue) && !normalizedValue.length)) {
-                return null;
-            }
-
-            const existing = this.answers[normalizedId];
-            if (existing !== undefined) {
-                const bucket = Array.isArray(existing)
-                    ? existing.slice()
-                    : [normalizeSingle(existing)].filter(Boolean);
-                const incoming = Array.isArray(normalizedValue) ? normalizedValue : [normalizedValue];
-                incoming.forEach((item) => {
-                    if (item && !bucket.includes(item)) {
-                        bucket.push(item);
+            if (Array.isArray(value)) {
+                const normalizedArray = value
+                    .map((item) => normalizeSingle(item))
+                    .filter(Boolean);
+                if (!normalizedArray.length) {
+                    return null;
+                }
+                const deduped = [];
+                normalizedArray.forEach((item) => {
+                    if (!deduped.includes(item)) {
+                        deduped.push(item);
                     }
                 });
-                this.answers[normalizedId] = bucket.length === 1 ? bucket[0] : bucket;
-            } else {
-                this.answers[normalizedId] = normalizedValue;
+                this.answers[normalizedId] = deduped;
+                return normalizedId;
             }
+
+            const normalizedValue = normalizeSingle(value);
+            if (normalizedValue === null) {
+                return null;
+            }
+            this.answers[normalizedId] = normalizedValue;
             return normalizedId;
         },
 
@@ -896,18 +1111,63 @@
         },
 
         detectPageType: function () {
+            const context = this.getPageContext();
+            if (context && context.categoryCode && context.categoryCode !== 'unknown') {
+                return context.categoryCode;
+            }
             const title = document.title || '';
             const url = window.location.href || '';
             if (title.includes('P1') || url.includes('P1')) return 'P1';
             if (title.includes('P2') || url.includes('P2')) return 'P2';
             if (title.includes('P3') || url.includes('P3')) return 'P3';
+            if (/Part\s*4/i.test(title) || /Part\s*4/i.test(url) || title.includes('P4') || url.includes('P4')) return 'P4';
             const pathParts = url.split('/');
             for (let part of pathParts) {
                 if (part.match(/^P[123]$/i)) {
                     return part.toUpperCase();
                 }
+                if (part.match(/^P4$/i)) {
+                    return 'P4';
+                }
             }
             return 'unknown';
+        },
+
+        getPageContext: function(forceRefresh = false) {
+            const context = getPracticePageContext(forceRefresh);
+            this.pageContext = context;
+            return context;
+        },
+
+        detectPracticeType: function () {
+            const context = this.getPageContext();
+            if (context && context.categoryCode && context.categoryCode !== 'unknown') {
+                return context.categoryCode;
+            }
+            const doc = document;
+            const fromBody = doc.body && doc.body.dataset
+                ? [
+                    doc.body.dataset.practiceType,
+                    doc.body.dataset.examType,
+                    doc.body.dataset.type
+                ]
+                : [];
+            const meta = doc.querySelector('meta[name="practice-type"], meta[name="exam-type"]');
+            const hints = [
+                ...fromBody,
+                meta ? meta.content : null,
+                doc.title || ''
+            ];
+            const url = (window.location.href || '').toLowerCase();
+            const bodyClass = doc.body ? doc.body.className.toLowerCase() : '';
+            const joined = hints
+                .filter(Boolean)
+                .map((hint) => hint.toLowerCase())
+                .concat([url, bodyClass]);
+            const isListening = joined.some((hint) => /listen|audio|hearing/.test(hint))
+                || url.includes('listeningpractice')
+                || url.includes('/listening/');
+            return isListening ? 'listening' : 'reading';
         },
 
         // 新增：从URL中提取真实的examId
@@ -925,6 +1185,10 @@
                 if (doc.body.dataset.examid) {
                     return doc.body.dataset.examid.trim();
                 }
+            }
+            const context = this.getPageContext();
+            if (context && context.examId) {
+                return context.examId;
             }
             try {
                 const urlParams = new URLSearchParams(window.location.search || '');
@@ -1129,13 +1393,22 @@
                 return;
             }
             const beforeCount = Object.keys(this.correctAnswers).length;
-            const parsed = extractAnswersFromTextContent(transcript.textContent || '');
-            Object.keys(parsed).forEach((key) => {
-                this.addCorrectAnswer(key, parsed[key]);
+            const questionOrder = Array.isArray(this.allQuestionIds) && this.allQuestionIds.length
+                ? this.allQuestionIds.slice()
+                : this.captureQuestionSet().slice();
+            const highlightAnswers = extractAnswersFromTranscriptElement(transcript, questionOrder);
+            Object.keys(highlightAnswers).forEach((key) => {
+                this.addCorrectAnswer(key, highlightAnswers[key]);
+            });
+            const textAnswers = extractAnswersFromTextContent(transcript.textContent || '');
+            Object.keys(textAnswers).forEach((key) => {
+                if (!this.correctAnswers[key]) {
+                    this.addCorrectAnswer(key, textAnswers[key]);
+                }
             });
             const afterCount = Object.keys(this.correctAnswers).length;
             if (afterCount > beforeCount) {
-                console.log('[PracticeEnhancer] 已从听力原文提取正确答案:', parsed);
+                console.log('[PracticeEnhancer] 已从听力原文提取正确答案:', this.correctAnswers);
             }
         },
 
@@ -1307,45 +1580,30 @@
         },
 
         recordAnswer: function(element) {
-            if (!element) return;
-            if (this.isExcludedControl(element)) return;
+            if (!element || this.isExcludedControl(element)) return;
 
-            let questionId = null;
-            let value = null;
-
-            // 获取问题ID
-            if (element.name) {
-                questionId = element.name;
-            } else if (element.id) {
-                questionId = element.id.replace(/_input$|-input$|_answer$/, '');
-            } else if (element.dataset.question) {
-                questionId = element.dataset.question;
+            const questionId = this.getQuestionId(element);
+            if (!questionId) {
+                return;
             }
 
-            // 获取答案值
-            if (element.type === 'radio' || element.type === 'checkbox') {
-                if (element.checked) {
-                    value = element.value;
-                }
-            } else {
-                value = element.value;
+            const value = this.getInputValue(element);
+            const hasValue = Array.isArray(value) ? value.length > 0 : (value !== null && value !== undefined && value !== '');
+            if (!hasValue) {
+                return;
             }
 
-            // 记录答案
-            if (questionId && value !== null && value !== '') {
-                const normalizedId = this.addAnswer(questionId, value);
-                if (!normalizedId) return;
-                console.log('[PracticeEnhancer] 记录答案:', normalizedId, '=', value);
-                
-                // 记录交互
-                this.interactions.push({
-                    type: 'answer',
-                    questionId: normalizedId,
-                    value: value,
-                    timestamp: Date.now(),
-                    elementType: element.type || element.tagName.toLowerCase()
-                });
-            }
+            const normalizedId = this.addAnswer(questionId, value);
+            if (!normalizedId) return;
+            console.log('[PracticeEnhancer] 记录答案:', normalizedId, '=', value);
+
+            this.interactions.push({
+                type: 'answer',
+                questionId: normalizedId,
+                value: value,
+                timestamp: Date.now(),
+                elementType: element.type || element.tagName.toLowerCase()
+            });
         },
 
         collectDropzoneAnswers: function () {
@@ -1521,9 +1779,32 @@
             const allInputs = Array.from(document.querySelectorAll('input, textarea, select'))
                 .filter(el => !this.isExcludedControl(el));
             console.log('[PracticeEnhancer] 找到输入元素总数:', allInputs.length);
+
+            const processedGroups = {
+                checkbox: new Set(),
+                radio: new Set()
+            };
             
             allInputs.forEach((input, index) => {
                 const questionId = this.getQuestionId(input);
+                if (!questionId) {
+                    return;
+                }
+
+                if (input.type === 'checkbox') {
+                    const groupKey = `${questionId}::checkbox::${input.name || input.id || index}`;
+                    if (processedGroups.checkbox.has(groupKey)) {
+                        return;
+                    }
+                    processedGroups.checkbox.add(groupKey);
+                } else if (input.type === 'radio') {
+                    const groupKey = `${questionId}::radio::${input.name || input.id || index}`;
+                    if (processedGroups.radio.has(groupKey)) {
+                        return;
+                    }
+                    processedGroups.radio.add(groupKey);
+                }
+
                 const value = this.getInputValue(input);
 
                 if (input.type === 'text') {
@@ -1532,7 +1813,8 @@
                 
                 console.log(`[PracticeEnhancer] 输入元素 ${index}: type=${input.type}, name=${input.name}, id=${input.id}, value=${value}, questionId=${questionId}`);
                 
-                if (questionId && value !== null && value !== '') {
+                const hasValue = Array.isArray(value) ? value.length > 0 : (value !== null && value !== undefined && value !== '');
+                if (hasValue) {
                     const normalizedId = this.addAnswer(questionId, value);
                     if (normalizedId) {
                         console.log(`[PracticeEnhancer] 记录答案: ${normalizedId} = ${value}`);
@@ -1625,8 +1907,13 @@
         },
 
         getInputValue: function(input) {
-            if (input.type === 'radio' || input.type === 'checkbox') {
-                return input.checked ? input.value : null;
+            if (!input) return null;
+            if (input.type === 'checkbox') {
+                const values = this.getCheckboxGroupValues(input);
+                return values.length ? values : null;
+            }
+            if (input.type === 'radio') {
+                return this.getRadioGroupValue(input);
             }
             if (input.tagName === 'SELECT' && input.multiple) {
                 const selected = Array.from(input.selectedOptions || [])
@@ -1634,7 +1921,58 @@
                     .filter(Boolean);
                 return selected.length ? selected : null;
             }
-            return input.value;
+            if (typeof input.value === 'string') {
+                const trimmed = input.value.trim();
+                return trimmed.length ? trimmed : null;
+            }
+            if (typeof input.value !== 'undefined') {
+                return input.value;
+            }
+            const fallback = (input.textContent || '').trim();
+            return fallback.length ? fallback : null;
+        },
+
+        getGroupElements: function(input, type) {
+            if (!input) {
+                return [];
+            }
+            if (!input.name) {
+                return [input];
+            }
+            const scope = input.form || document;
+            const selector = `input[type="${type}"][name="${cssEscape(input.name)}"]`;
+            try {
+                return Array.from(scope.querySelectorAll(selector));
+            } catch (error) {
+                console.warn('[PracticeEnhancer] 查询分组元素失败:', error);
+                return [input];
+            }
+        },
+
+        getCheckboxGroupValues: function(input) {
+            const elements = this.getGroupElements(input, 'checkbox');
+            const values = [];
+            elements.forEach((element) => {
+                if (!element || this.isExcludedControl(element) || !element.checked) {
+                    return;
+                }
+                const resolved = (element.value || element.textContent || '').trim();
+                if (resolved) {
+                    values.push(resolved);
+                }
+            });
+            return values;
+        },
+
+        getRadioGroupValue: function(input) {
+            if (!input) return null;
+            const elements = input.name ? this.getGroupElements(input, 'radio') : [input];
+            const selected = elements.find((element) => element && element.checked);
+            if (!selected) {
+                return null;
+            }
+            const resolved = (selected.value || selected.textContent || '').trim();
+            return resolved || null;
         },
 
         collectFromPageStructure: function() {
@@ -1726,6 +2064,16 @@
         },
 
         handleSubmit: function () {
+            if (this.hasDispatchedFinalResults) {
+                console.log('[PracticeEnhancer] 最终结果已发送，忽略重复提交');
+                return;
+            }
+            if (this.submitInProgress) {
+                console.log('[PracticeEnhancer] 提交处理中，跳过重复触发');
+                return;
+            }
+            this.submitInProgress = true;
+
             const derivedExamId = this.extractExamIdFromUrl();
             if (!this.sessionId) {
                 this.examId = this.examId || derivedExamId;
@@ -1745,7 +2093,7 @@
             this.dispatchPracticeResultsEvent(preliminary);
 
             const self = this;
-            this.waitForResultsRender(1500).then(function () {
+            const finalizeSubmission = function () {
                 self.extractFromResultsTable();
                 self.extractFromTranscript();
                 if (Object.keys(self.correctAnswers).length === 0) {
@@ -1762,6 +2110,8 @@
                 const pushResults = function () {
                     console.log('[PracticeEnhancer] 发送练习完成数据:', finalResults);
                     self.sendMessage('PRACTICE_COMPLETE', finalResults);
+                    self.hasDispatchedFinalResults = true;
+                    self.submitInProgress = false;
                 };
 
                 if (typeof window.requestIdleCallback === 'function') {
@@ -1769,7 +2119,14 @@
                 } else {
                     setTimeout(pushResults, 0);
                 }
-            });
+            };
+
+            this.waitForResultsRender(5000)
+                .then(finalizeSubmission)
+                .catch(function(error) {
+                    console.warn('[PracticeEnhancer] 等待结果渲染时出错，直接完成提交流程:', error);
+                    finalizeSubmission();
+                });
         },
 
         generateFallbackSessionId: function(examId) {
@@ -1851,6 +2208,43 @@
             const resolvedExamId = this.resolveExamId();
             const includeComparison = options && options.includeComparison;
             const includeScore = options && options.includeScore;
+            const context = this.getPageContext();
+            const practiceType = this.detectPracticeType();
+            const pageType = this.detectPageType();
+            const baseMetadata = (window.practicePageMetadata && typeof window.practicePageMetadata === 'object')
+                ? window.practicePageMetadata
+                : {};
+            const metadataPayload = Object.assign({}, baseMetadata);
+            const derivedTitle = document.title || resolvedExamId;
+            if (context && context.title) {
+                metadataPayload.examTitle = metadataPayload.examTitle || context.title;
+                metadataPayload.title = metadataPayload.title || context.title;
+            }
+            if (!metadataPayload.examTitle) {
+                metadataPayload.examTitle = derivedTitle;
+            }
+            if (!metadataPayload.title) {
+                metadataPayload.title = metadataPayload.examTitle;
+            }
+            if (!metadataPayload.type) {
+                metadataPayload.type = practiceType;
+            }
+            if (!metadataPayload.examType) {
+                metadataPayload.examType = practiceType;
+            }
+            if (context && context.frequencyLabel) {
+                metadataPayload.frequency = metadataPayload.frequency || context.frequencyLabel;
+            }
+            if (!metadataPayload.frequency) {
+                metadataPayload.frequency = '未知频率';
+            }
+            if (context && context.categoryLabel && context.categoryLabel !== 'unknown') {
+                metadataPayload.category = metadataPayload.category || context.categoryLabel;
+            }
+            if (!metadataPayload.category && pageType) {
+                metadataPayload.category = pageType;
+            }
+            const resolvedTitle = metadataPayload.examTitle || metadataPayload.title || derivedTitle;
 
             return {
                 sessionId: this.sessionId,
@@ -1868,10 +2262,13 @@
                     : {},
                 interactions: Array.isArray(this.interactions) ? this.interactions.slice() : [],
                 scoreInfo: includeScore ? this.extractScore() : null,
-                pageType: this.detectPageType(),
+                practiceType: practiceType,
+                type: practiceType,
+                pageType: pageType,
                 url: window.location.href,
-                title: document.title,
-                allQuestionIds: this.captureQuestionSet().slice()
+                title: resolvedTitle,
+                allQuestionIds: this.captureQuestionSet().slice(),
+                metadata: metadataPayload
             };
         },
 

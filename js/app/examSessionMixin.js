@@ -1800,7 +1800,7 @@
                                 metadata: Object.assign({}, data?.metadata || {}, { allowStandaloneSave: true, suiteFallback: true })
                             })
                             : data;
-                        await this.components.practiceRecorder.savePracticeRecord(examId, normalizedData);
+                        await this.components.practiceRecorder.savePracticeRecord(normalizedData);
                     } catch (recErr) {
                         console.warn('[DataCollection] PracticeRecorder 保存失败，改用降级存储:', recErr);
                         await this.saveRealPracticeData(examId, data, { savingAsFallback: true });
