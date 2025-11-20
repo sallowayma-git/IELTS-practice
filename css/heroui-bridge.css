@@ -24,15 +24,19 @@
 body.hero-body {
     color: var(--shui-text-strong);
     position: relative;
-    background: linear-gradient(var(--body-gradient-angle), var(--shui-gradient-start) 0%, var(--shui-gradient-end) 100%);
-    animation: bodyGradientRotation 120s ease-in-out infinite;
-}
-
-body.hero-body.shui-bg-active {
     background: transparent;
     animation: none;
 }
 
+body.hero-body.shui-bg-active {
+    animation: none;
+    background: transparent !important;
+}
+
+body.hero-body.shui-bg-static {
+    animation: none;
+    background: linear-gradient(135deg, var(--shui-gradient-start) 0%, var(--shui-gradient-end) 100%);
+}
 #shui-bg-canvas {
     position: fixed;
     inset: 0;
@@ -40,15 +44,12 @@ body.hero-body.shui-bg-active {
     height: 100%;
     z-index: -1;
     pointer-events: none;
+    mix-blend-mode: normal;
+    opacity: 1;
 }
 
 body.hero-body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    z-index: -2;
-    background: radial-gradient(circle at top, rgba(255, 255, 255, 0.08), transparent 60%);
-    pointer-events: none;
+    display: none;
 }
 
 .hero-shell {
@@ -330,15 +331,16 @@ body.hero-body::before {
 }
 
 #browse-view .exam-item-action-btn[data-action="start"] {
-    background-image: linear-gradient(135deg, var(--shui-gradient-start), var(--shui-gradient-end));
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    box-shadow: 0 18px 32px rgba(0, 0, 0, 0.18);
-    backdrop-filter: blur(18px);
+    background-image: linear-gradient(135deg, rgba(255, 216, 155, 0.55), rgba(106, 204, 199, 0.45));
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.12);
+    backdrop-filter: blur(14px);
+    transform: translateY(0);
 }
 
 #browse-view .exam-item-action-btn[data-action="start"]:hover,
 #browse-view .exam-item-action-btn[data-action="start"]:focus-visible {
-    box-shadow: 0 22px 42px rgba(0, 0, 0, 0.22);
+    box-shadow: 0 16px 28px rgba(0, 0, 0, 0.18);
     transform: translateY(-1px);
 }
 
@@ -383,7 +385,7 @@ body.hero-body::before {
 .category-grid .category-card {
     border-radius: var(--shui-radius-lg);
     border: 1px solid rgba(255, 255, 255, 0.35);
-    box-shadow: 0 30px 60px rgba(15, 23, 42, 0.2);
+    box-shadow: 0 24px 50px rgba(15, 23, 42, 0.18);
     backdrop-filter: blur(24px);
     position: relative;
     overflow: hidden;
@@ -394,7 +396,7 @@ body.hero-body::before {
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(145deg, rgba(255, 216, 155, 0.12), rgba(106, 204, 199, 0.12));
+    background: linear-gradient(145deg, rgba(255, 216, 155, 0.08), rgba(106, 204, 199, 0.08));
     pointer-events: none;
     mix-blend-mode: screen;
 }
@@ -410,6 +412,28 @@ body.hero-body::before {
     border: 1px solid var(--shui-surface-border);
     padding: 20px;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+#more-view .more-tools-grid {
+    display: grid;
+    gap: 18px;
+}
+
+#more-view .tool-card {
+    border-radius: var(--shui-radius-lg);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.28);
+    backdrop-filter: blur(18px);
+    box-shadow: 0 22px 44px rgba(0, 0, 0, 0.18);
+    transition: transform var(--transition-normal), box-shadow var(--transition-normal), background var(--transition-normal);
+    color: var(--shui-text-strong);
+}
+
+#more-view .tool-card:hover,
+#more-view .tool-card:focus-visible {
+    transform: translateY(-2px);
+    box-shadow: 0 28px 52px rgba(0, 0, 0, 0.22);
+    background: rgba(255, 255, 255, 0.38);
 }
 
 #boot-overlay {
