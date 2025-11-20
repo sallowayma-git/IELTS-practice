@@ -187,8 +187,10 @@
     </div>
 
     <!-- 更多页面 -->
-    <div id="more-view" class="view">
-        <h2>✨ 更多工具</h2>
+    <div id="more-view" class="view hero-panel hero-section">
+        <div class="hero-panel__header">
+            <h2 class="hero-panel__title">✨ 更多工具</h2>
+        </div>
         <p class="more-view-subtitle">探索额外的学习辅助功能，助你高效备考。</p>
         <div class="more-tools-grid">
             <button class="tool-card" type="button" data-action="open-clock">
@@ -331,6 +333,9 @@
                 <div class="developer-card">
                     <div class="developer-name">哈希海</div>
                 </div>
+                <div class="developer-card">
+                    <div class="developer-name">阿橙</div>
+                </div>
             </div>
 
             <button class="modal-close-btn" onclick="hideDeveloperTeam()">
@@ -398,6 +403,7 @@
     </div>
 
     <!-- 启动与懒加载工具 -->
+    <script src="js/presentation/shuiBackground.js" defer></script>
     <script src="js/runtime/bootScreen.js" defer></script>
     <script src="js/runtime/lazyLoader.js" defer></script>
     <script src="js/presentation/app-actions.js" defer></script>
