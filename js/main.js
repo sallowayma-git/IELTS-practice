@@ -25,6 +25,33 @@ let examListViewInstance = null;
 let practiceDashboardViewInstance = null;
 let legacyNavigationController = null;
 
+function reportBootStage(message, progress) {
+    if (window.AppBootScreen && typeof window.AppBootScreen.setStage === 'function') {
+        try {
+            window.AppBootScreen.setStage(message, progress);
+        } catch (error) {
+            console.warn('[BootStage] 更新失败:', error);
+        }
+    }
+}
+
+function ensureExamDataScripts() {
+    if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
+        return window.AppLazyLoader.ensureGroup('exam-data');
+    }
+    return Promise.resolve();
+}
+
+function ensurePracticeSuiteReady() {
+    if (window.AppActions && typeof window.AppActions.ensurePracticeSuite === 'function') {
+        return window.AppActions.ensurePracticeSuite();
+    }
+    if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
+        return window.AppLazyLoader.ensureGroup('practice-suite');
+    }
+    return Promise.resolve();
+}
+
 function syncGlobalBrowseState(category, type) {
     const browseDescriptor = Object.getOwnPropertyDescriptor(window, '__browseFilter');
     if (!browseDescriptor || typeof browseDescriptor.set !== 'function') {
@@ -1761,6 +1788,7 @@ async function savePracticeRecordFallback(examId, realData) {
 
 async function loadLibrary(forceReload = false) {
     const startTime = performance.now();
+    reportBootStage('加载题库索引', 35);
     const rawKey = await getActiveLibraryConfigurationKey();
     const activeConfigKey = typeof rawKey === 'string' && rawKey.trim()
         ? rawKey.trim()
@@ -1803,6 +1831,8 @@ async function loadLibrary(forceReload = false) {
     }
 
     try {
+        await ensureExamDataScripts();
+        reportBootStage('解析题库数据', 55);
         const readingExams = Array.isArray(window.completeExamIndex)
             ? window.completeExamIndex.map((exam) => Object.assign({}, exam, { type: 'reading' }))
             : [];
@@ -1893,6 +1923,7 @@ function resolveScriptPathRoot(type) {
 
 function finishLibraryLoading(startTime) {
     const loadTime = performance.now() - startTime;
+    reportBootStage('题库装载完成', 75);
     // 修复题库索引加载链路问题：顺序为设置window.examIndex → updateOverview() → dispatchEvent('examIndexLoaded')
     updateOverview();
     window.dispatchEvent(new CustomEvent('examIndexLoaded'));
@@ -3466,13 +3497,24 @@ function viewPDF(examId) {
 
 // Bridge for record details to existing enhancer/modal if present
 function showRecordDetails(recordId) {
-    if (window.practiceHistoryEnhancer && typeof window.practiceHistoryEnhancer.showRecordDetails === 'function') {
-        window.practiceHistoryEnhancer.showRecordDetails(recordId);
-    } else if (window.practiceRecordModal && typeof window.practiceRecordModal.showById === 'function') {
-        window.practiceRecordModal.showById(recordId);
-    } else {
+    ensurePracticeSuiteReady().then(() => {
+        if (window.practiceHistoryEnhancer && typeof window.practiceHistoryEnhancer.showRecordDetails === 'function') {
+            window.practiceHistoryEnhancer.showRecordDetails(recordId);
+            return;
+        }
+        if (window.practiceRecordModal && typeof window.practiceRecordModal.showById === 'function') {
+            window.practiceRecordModal.showById(recordId);
+            return;
+        }
         alert('无法显示记录详情：组件未加载');
-    }
+    }).catch((error) => {
+        console.error('[Practice] 记录详情组件加载失败:', error);
+        if (typeof showMessage === 'function') {
+            showMessage('记录详情模块加载失败', 'error');
+        } else {
+            alert('记录详情模块加载失败');
+        }
+    });
 }
 
 // Provide a local implementation to avoid dependency on legacy js/script.js
@@ -6004,9 +6046,13 @@ window.addEventListener('examIndexLoaded', () => {
             }
             window.__forceLibraryRefreshInProgress = false;
         }
+        reportBootStage('首屏视图渲染', 90);
         if (typeof loadExamList === 'function') loadExamList();
         const loading = document.querySelector('#browse-view .loading');
         if (loading) loading.style.display = 'none';
+        if (window.AppBootScreen && typeof window.AppBootScreen.complete === 'function') {
+            window.AppBootScreen.complete();
+        }
     } catch (_) { }
 });
 

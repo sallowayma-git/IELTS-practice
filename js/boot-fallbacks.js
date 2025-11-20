@@ -51,6 +51,9 @@
         var t=document.getElementById('browse-title'); if (t) t.textContent='题库浏览';
       }
       if (normalized==='browse' && typeof window.loadExamList==='function') window.loadExamList();
+      if (normalized==='practice' && window.AppActions && typeof window.AppActions.ensurePracticeSuite === 'function') {
+        window.AppActions.ensurePracticeSuite();
+      }
       if (normalized==='practice' && typeof window.updatePracticeView==='function') window.updatePracticeView();
     };
   }
