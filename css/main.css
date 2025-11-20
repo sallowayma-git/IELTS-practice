@@ -152,7 +152,7 @@
 
 body {
     font-family: var(--font-family-primary);
-    background: linear-gradient(var(--body-gradient-angle), #ffd89b 0%, #19547b 100%);
+    background: linear-gradient(var(--body-gradient-angle), #ffd89b 0%, #6accc7 100%);
     animation: bodyGradientRotation 120s ease-in-out infinite;
     min-height: 100vh;
     color: var(--color-gray-900);
