@@ -96,6 +96,16 @@
         async checkComponents() {
             console.log('=== 组件加载检查 ===');
 
+            try {
+                if (window.AppActions && typeof window.AppActions.ensurePracticeSuite === 'function') {
+                    await window.AppActions.ensurePracticeSuite();
+                } else if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
+                    await window.AppLazyLoader.ensureGroup('practice-suite');
+                }
+            } catch (error) {
+                console.warn('[App] 练习组件预加载失败:', error);
+            }
+
             const components = {
                 'SystemDiagnostics': window.SystemDiagnostics,
                 'MarkdownExporter': window.MarkdownExporter,

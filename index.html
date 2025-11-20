@@ -7,28 +7,39 @@
     <title>考试总览系统</title>
     <link rel="icon" type="image/svg+xml" href="assets/images/favicon.svg">
     <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/heroui-bridge.css">
 </head>
 
-<body>
+<body class="hero-body boot-active" data-theme="heroui">
+    <div id="boot-overlay" role="status" aria-live="polite">
+        <div class="boot-panel">
+            <div class="boot-logo">SHUI · IELTS</div>
+            <p class="boot-status" id="boot-status-text">正在唤醒考试总览系统...</p>
+            <div class="boot-progress">
+                <span class="boot-progress__bar" id="boot-progress-bar"></span>
+            </div>
+            <span class="boot-progress__text" id="boot-progress-text">初始化资源...</span>
+        </div>
+    </div>
     <input type="file" id="folder-picker" webkitdirectory style="display: none;">
     <div class="message-container" id="message-container"></div>
 
-    <div class="container">
-        <div class="header">
-            <h1>📚 考试总览系统</h1>
+    <div class="container hero-shell">
+        <div class="hero-header">
+            <h1>📚 考试总览系统 <span class="hero-badge">SHUI</span></h1>
             <p>IELTS练习管理平台 - <a href="#" onclick="showDeveloperTeam(); return false;" style="color: rgba(102, 126, 234, 0.8); text-decoration: none; font-weight: 600; transition: color 0.3s ease;">睡着过呈现</a></p>
         </div>
 
-        <nav class="main-nav" data-nav-controller="legacy">
-            <button class="nav-btn active" type="button" data-view="overview">📊 总览</button>
-            <button class="nav-btn" type="button" data-view="browse">📚 题库浏览</button>
-            <button class="nav-btn" type="button" data-view="practice">📝 练习记录</button>
-            <button class="nav-btn" type="button" data-view="more">✨ 更多</button>
-            <button class="nav-btn" type="button" data-view="settings">⚙️ 设置</button>    
+        <nav class="main-nav hero-nav" data-nav-controller="legacy">
+            <button class="nav-btn hero-nav__btn active" type="button" data-view="overview">📊 总览</button>
+            <button class="nav-btn hero-nav__btn" type="button" data-view="browse">📚 题库浏览</button>
+            <button class="nav-btn hero-nav__btn" type="button" data-view="practice">📝 练习记录</button>
+            <button class="nav-btn hero-nav__btn" type="button" data-view="more">✨ 更多</button>
+            <button class="nav-btn hero-nav__btn" type="button" data-view="settings">⚙️ 设置</button>    
         </nav>
 
         <!-- 总览页面 -->
-        <div id="overview-view" class="view active">
+        <div id="overview-view" class="view active hero-panel hero-section">
             <h2>📊 学习总览</h2>
 
             <div class="category-grid" id="category-overview">
@@ -37,9 +48,8 @@
         </div>
 
         <!-- 题库浏览页面 -->
-        <div id="browse-view" class="view">
-
-            <div class="browse-title-bar">
+        <div id="browse-view" class="view hero-panel hero-section">
+            <div class="browse-title-bar hero-panel__header">
                 <button class="browse-title-trigger" id="browse-title-trigger" type="button" aria-haspopup="true" aria-expanded="false" title="列表偏好">📚</button>
                 <h2 id="browse-title">题库浏览</h2>
                 <div class="browse-preference-panel" id="browse-preference-panel" hidden>
@@ -48,14 +58,14 @@
                         <span class="browse-preference-text">列表位置记录</span>
                     </label>
                 </div>
-                <div id="type-filter-buttons">
+                <div id="type-filter-buttons" class="hero-panel__actions">
                     <button class="btn btn-sm" onclick="filterByType('all')">全部</button>
                     <button class="btn btn-sm" onclick="filterByType('reading')">阅读</button>
                     <button class="btn btn-sm" onclick="filterByType('listening')">听力</button>
                 </div>
             </div>
 
-            <div class="search-box">
+            <div class="search-box hero-surface">
                 <input type="text" class="search-input" placeholder="搜索题目..." onkeyup="searchExams(this.value)">
             </div>
 
@@ -67,41 +77,44 @@
         </div>
 
         <!-- 练习记录页面 -->
-    <div id="practice-view" class="view">
+    <div id="practice-view" class="view hero-panel hero-section">
         <h2>📝 练习记录</h2>
 
-        <div class="practice-stats">
-            <div class="stat-card">
-                <div class="stat-number" id="total-practiced">0</div>
-                <div class="stat-label">已练习题目</div>
+        <div class="practice-stats hero-grid hero-grid--stats">
+            <div class="hero-card hero-card--stat">
+                <div class="hero-card__label">已练习题目</div>
+                <div class="hero-card__value" id="total-practiced">0</div>
+                <div class="hero-card__meta">累计巩固练习</div>
             </div>
-            <div class="stat-card">
-                <div class="stat-number" id="avg-score">0%</div>
-                <div class="stat-label">平均正确率</div>
+            <div class="hero-card hero-card--stat">
+                <div class="hero-card__label">平均正确率</div>
+                <div class="hero-card__value" id="avg-score">0%</div>
+                <div class="hero-card__meta">近期待练表现</div>
             </div>
-            <div class="stat-card">
-                <div class="stat-number" id="study-time">0</div>
-                <div class="stat-label">学习时长(分钟)</div>
+            <div class="hero-card hero-card--stat">
+                <div class="hero-card__label">学习时长(分钟)</div>
+                <div class="hero-card__value" id="study-time">0</div>
+                <div class="hero-card__meta">聚焦沉浸时长</div>
             </div>
-            <div class="stat-card">
-                <div class="stat-number" id="streak-days">0</div>
-                <div class="stat-label">连续学习天数</div>
+            <div class="hero-card hero-card--stat">
+                <div class="hero-card__label">连续学习天数</div>
+                <div class="hero-card__value" id="streak-days">0</div>
+                <div class="hero-card__meta">坚持天数</div>
             </div>
         </div>
 
-        <div class="practice-history">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3>📈 练习历史</h3>
-                <div id="record-type-filter-buttons">
+        <div class="practice-history hero-panel hero-section">
+            <div class="hero-panel__header">
+                <h3 class="hero-panel__title">📈 练习历史 <span class="hero-tag">SHUI Timeline</span></h3>
+                <div id="record-type-filter-buttons" class="hero-panel__actions">
                     <button class="btn btn-sm" onclick="filterRecordsByType('all')">全部</button>
                     <button class="btn btn-sm" onclick="filterRecordsByType('reading')">阅读</button>
                     <button class="btn btn-sm" onclick="filterRecordsByType('listening')">听力</button>
                 </div>
-                <div>
-                    <button class="btn btn-secondary" onclick="(window.markdownExporter||(window.markdownExporter=new MarkdownExporter())).exportToMarkdown()" style="margin-right: 10px;">📄 导出Markdown</button>
-                    <button class="btn btn-info" onclick="toggleBulkDelete()" id="bulk-delete-btn"
-                        style="margin-right: 10px;">📝 批量删除</button>
-                    <button class="btn btn-warning" onclick="clearPracticeData()">🗑️ 清除记录</button>
+                <div class="hero-panel__actions">
+                    <button class="btn btn-secondary hero-btn hero-btn--ghost" onclick="window.AppActions && window.AppActions.exportPracticeMarkdown()">📄 导出Markdown</button>
+                    <button class="btn btn-info hero-btn" onclick="toggleBulkDelete()" id="bulk-delete-btn">📝 批量删除</button>
+                    <button class="btn btn-warning hero-btn hero-btn--warn" onclick="clearPracticeData()">🗑️ 清除记录</button>
                 </div>
             </div>
 
@@ -116,34 +129,34 @@
     </div>
 
     <!-- 设置页面 -->
-    <div id="settings-view" class="view">
+    <div id="settings-view" class="view hero-panel hero-section">
         <h2>⚙️ 系统设置</h2>
-        <div style="background: rgba(255, 255, 255, 0.1); padding: 20px; border-radius: 10px;">
-            <div style="margin-bottom: 30px;">
+        <div class="hero-settings-group">
+            <div class="hero-panel hero-section">
                 <h3>🔧 系统管理</h3>
-                <p style="margin: 15px 0; opacity: 0.9;">系统工具和设置选项</p>
-                <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
-                    <button class="btn btn-warning" id="clear-cache-btn">🗑️ 清除缓存</button>
-                    <button class="btn" id="load-library-btn">📂 加载题库</button>
-                    <button class="btn btn-info" id="library-config-btn">⚙️ 题库配置切换</button>
-                    <button class="btn btn-warning" id="force-refresh-btn">🔄 强制刷新题库</button>
+                <p class="hero-panel__muted">系统工具和设置选项</p>
+                <div class="hero-settings-actions">
+                    <button class="btn btn-warning hero-btn hero-btn--warn" id="clear-cache-btn">🗑️ 清除缓存</button>
+                    <button class="btn hero-btn" id="load-library-btn">📂 加载题库</button>
+                    <button class="btn btn-info hero-btn" id="library-config-btn">⚙️ 题库配置切换</button>
+                    <button class="btn btn-warning hero-btn hero-btn--warn" id="force-refresh-btn">🔄 强制刷新题库</button>
                 </div>
             </div>
 
-            <div style="margin-bottom: 30px;">
+            <div class="hero-panel hero-section">
                 <h3>💾 数据管理</h3>
-                <p style="margin: 15px 0; opacity: 0.9;">数据备份、导入导出和完整性检查</p>
-                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button class="btn" id="create-backup-btn">💾 创建备份</button>
-                    <button class="btn btn-secondary" id="backup-list-btn">📋 备份列表</button>
-                    <button class="btn btn-info" id="export-data-btn">📤 导出数据</button>
-                    <button class="btn btn-warning" id="import-data-btn">📥 导入数据</button>
+                <p class="hero-panel__muted">数据备份、导入导出和完整性检查</p>
+                <div class="hero-settings-actions">
+                    <button class="btn hero-btn" id="create-backup-btn">💾 创建备份</button>
+                    <button class="btn btn-secondary hero-btn hero-btn--ghost" id="backup-list-btn">📋 备份列表</button>
+                    <button class="btn btn-info hero-btn" id="export-data-btn">📤 导出数据</button>
+                    <button class="btn btn-warning hero-btn hero-btn--warn" id="import-data-btn">📥 导入数据</button>
                 </div>
             </div>
 
-            <div>
+            <div class="hero-panel hero-section">
                 <h3>📊 系统信息</h3>
-                <div style="margin-top: 15px; line-height: 1.8; font-weight: bold;">
+                <div class="hero-surface" style="margin-top: 15px; line-height: 1.8; font-weight: bold;">
                     <div style="color: #10b981;">题库状态: 已加载完整索引</div>
                     <div>题目总数: <span id="total-exams">147</span></div>
                     <div>HTML题目: <span id="html-exams">147</span></div>
@@ -153,7 +166,7 @@
 
                 <!-- 主题切换按钮 -->
                 <div style="margin-top: 25px;">
-                    <button class="btn btn-secondary" onclick="showThemeSwitcherModal()">
+                    <button class="btn btn-secondary hero-btn hero-btn--ghost" onclick="showThemeSwitcherModal()">
                         🎨 主题切换
                     </button>
                 </div>
@@ -381,15 +394,16 @@
         </div>
     </div>
 
+    <!-- 启动与懒加载工具 -->
+    <script src="js/runtime/bootScreen.js" defer></script>
+    <script src="js/runtime/lazyLoader.js" defer></script>
+    <script src="js/presentation/app-actions.js" defer></script>
+
     <!-- 环境探测 -->
     <script src="js/utils/environmentDetector.js"></script>
 
     <!-- 日志系统 -->
     <script src="js/utils/logger.js"></script>
-
-    <!-- 加载完整题库数据 -->
-    <script src="assets/scripts/complete-exam-data.js"></script>
-    <script src="assets/scripts/listening-exam-data.js"></script>
 
     <!-- 加载工具函数 -->
     
@@ -467,9 +481,6 @@
     <!--  -->
     <script src="js/utils/dataConsistencyManager.js"></script>
     <script src="js/utils/answerComparisonUtils.js"></script>
-    <script src="js/utils/markdownExporter.js"></script>
-    <script src="js/components/practiceRecordModal.js"></script>
-    <script src="js/components/practiceHistoryEnhancer.js"></script>
     <script src="js/theme-switcher.js"></script>
     <script src="js/utils/themeManager.js"></script>
 
