@@ -73,6 +73,23 @@ body.hero-body::before {
     color: var(--color-white);
 }
 
+.hero-badge--cta {
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 12px 30px rgba(102, 126, 234, 0.35);
+    transition: transform var(--transition-normal), box-shadow var(--transition-normal);
+}
+
+.hero-badge--cta:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.75);
+    outline-offset: 2px;
+}
+
+.hero-badge--cta:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 18px 36px rgba(118, 75, 162, 0.4);
+}
+
 .hero-header p {
     color: var(--shui-text-muted);
     font-size: 1.05rem;
@@ -200,6 +217,28 @@ body.hero-body::before {
     justify-content: flex-end;
 }
 
+.shui-filter-group {
+    justify-content: flex-start;
+    gap: 8px;
+}
+
+.shui-filter-btn {
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.45);
+    background: rgba(255, 255, 255, 0.4);
+    color: var(--shui-text-strong);
+    font-weight: 600;
+    padding: 8px 16px;
+    transition: background var(--transition-normal), color var(--transition-normal), box-shadow var(--transition-normal);
+}
+
+.shui-filter-btn:hover,
+.shui-filter-btn:focus-visible {
+    background: rgba(255, 255, 255, 0.85);
+    color: var(--shui-accent);
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.15);
+}
+
 .hero-panel__muted {
     color: var(--shui-text-muted);
     margin-top: 6px;
@@ -258,6 +297,42 @@ body.hero-body::before {
     display: flex;
     flex-wrap: wrap;
     gap: 12px;
+}
+
+.hero-panel .btn:not(.hero-btn) {
+    border-radius: var(--shui-radius-sm);
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    background: rgba(255, 255, 255, 0.8);
+    color: var(--shui-text-strong);
+    padding: 10px 16px;
+    font-weight: 600;
+    transition: transform var(--transition-normal), box-shadow var(--transition-normal), background var(--transition-normal);
+    backdrop-filter: blur(16px);
+}
+
+.hero-panel .btn:not(.hero-btn):hover,
+.hero-panel .btn:not(.hero-btn):focus-visible {
+    transform: translateY(-1px);
+    background: var(--shui-panel-bg);
+    box-shadow: 0 12px 22px rgba(15, 23, 42, 0.12);
+}
+
+.category-grid .category-card,
+.category-grid .category-card::before {
+    background: var(--shui-panel-bg);
+}
+
+.category-grid .category-card {
+    border-radius: var(--shui-radius-lg);
+    border: 1px solid var(--shui-panel-border);
+    box-shadow: var(--shui-panel-shadow);
+    backdrop-filter: blur(var(--shui-blur));
+    transition: transform var(--transition-normal), box-shadow var(--transition-normal);
+}
+
+.category-grid .category-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 35px 60px rgba(15, 23, 42, 0.25);
 }
 
 .hero-surface {

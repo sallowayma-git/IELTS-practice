@@ -26,8 +26,11 @@
 
     <div class="container hero-shell">
         <div class="hero-header">
-            <h1>📚 考试总览系统 <span class="hero-badge">SHUI</span></h1>
-            <p>IELTS练习管理平台 - <a href="#" onclick="showDeveloperTeam(); return false;" style="color: rgba(102, 126, 234, 0.8); text-decoration: none; font-weight: 600; transition: color 0.3s ease;">睡着过呈现</a></p>
+            <h1>📚 考试总览系统 
+                <button type="button" class="hero-badge hero-badge--cta" onclick="showDeveloperTeam(); return false;" aria-label="睡着过开发团队">
+                    SHUI
+                </button>
+            </h1>
         </div>
 
         <nav class="main-nav hero-nav" data-nav-controller="legacy">
@@ -58,10 +61,10 @@
                         <span class="browse-preference-text">列表位置记录</span>
                     </label>
                 </div>
-                <div id="type-filter-buttons" class="hero-panel__actions">
-                    <button class="btn btn-sm" onclick="filterByType('all')">全部</button>
-                    <button class="btn btn-sm" onclick="filterByType('reading')">阅读</button>
-                    <button class="btn btn-sm" onclick="filterByType('listening')">听力</button>
+                <div id="type-filter-buttons" class="hero-panel__actions shui-filter-group">
+                    <button class="btn btn-sm shui-filter-btn" onclick="filterByType('all')">全部</button>
+                    <button class="btn btn-sm shui-filter-btn" onclick="filterByType('reading')">阅读</button>
+                    <button class="btn btn-sm shui-filter-btn" onclick="filterByType('listening')">听力</button>
                 </div>
             </div>
 
@@ -106,10 +109,10 @@
         <div class="practice-history hero-panel hero-section">
             <div class="hero-panel__header">
                 <h3 class="hero-panel__title">📈 练习历史 <span class="hero-tag">SHUI Timeline</span></h3>
-                <div id="record-type-filter-buttons" class="hero-panel__actions">
-                    <button class="btn btn-sm" onclick="filterRecordsByType('all')">全部</button>
-                    <button class="btn btn-sm" onclick="filterRecordsByType('reading')">阅读</button>
-                    <button class="btn btn-sm" onclick="filterRecordsByType('listening')">听力</button>
+                <div id="record-type-filter-buttons" class="hero-panel__actions shui-filter-group">
+                    <button class="btn btn-sm shui-filter-btn" onclick="filterRecordsByType('all')">全部</button>
+                    <button class="btn btn-sm shui-filter-btn" onclick="filterRecordsByType('reading')">阅读</button>
+                    <button class="btn btn-sm shui-filter-btn" onclick="filterRecordsByType('listening')">听力</button>
                 </div>
                 <div class="hero-panel__actions">
                     <button class="btn btn-secondary hero-btn hero-btn--ghost" onclick="window.AppActions && window.AppActions.exportPracticeMarkdown()">📄 导出Markdown</button>
