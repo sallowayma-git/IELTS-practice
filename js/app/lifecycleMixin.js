@@ -1,4 +1,4 @@
-(function(global) {
+(function (global) {
     const mixin = {
         /**
          * 初始化应用
@@ -61,7 +61,7 @@
                 this.isInitialized = true;
                 this.showLoading(false);
 
-                  this.showUserMessage('系统初始化完成', 'success');
+                this.showUserMessage('系统初始化完成', 'success');
 
             } catch (error) {
                 this.showLoading(false);
@@ -120,7 +120,7 @@
                 this.handleGlobalError(event.error, 'JavaScript错误');
             });
 
-          },
+        },
 
         /**
          * 处理全局错误
@@ -170,6 +170,11 @@
          * 更新加载消息
          */
         updateLoadingMessage(message) {
+            if (this.loadingOverlay) {
+                this.loadingOverlay.show(message);
+                return;
+            }
+
             const loadingText = document.querySelector('.loading-text');
             if (loadingText) {
                 loadingText.textContent = message;
@@ -184,7 +189,7 @@
             if (window.showMessage) {
                 window.showMessage(message, type);
             } else {
-              }
+            }
         },
 
         /**

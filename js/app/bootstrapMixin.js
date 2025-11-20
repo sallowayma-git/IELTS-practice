@@ -1,4 +1,4 @@
-(function(global) {
+(function (global) {
     const mixin = {
         /**
          * 检查必要的依赖
@@ -26,6 +26,32 @@
             ]; // 只加载真正需要且存在的组件
 
             try {
+                // Initialize UI Components
+                if (window.LoadingOverlay) {
+                    this.loadingOverlay = new window.LoadingOverlay();
+                }
+                if (window.ViewManager) {
+                    this.viewManager = new window.ViewManager();
+
+                    // Register loaders
+                    this.viewManager.registerLoader('browse-view', async () => {
+                        if (!window.LegacyExamListView) {
+                            await this.loadScript('js/views/browseView.js');
+                        }
+                        // Initialize view if needed
+                        if (typeof window.initializeBrowseView === 'function') {
+                            window.initializeBrowseView();
+                        }
+                    });
+
+                    this.viewManager.registerLoader('practice-view', async () => {
+                        if (!window.PracticeDashboardView) {
+                            await this.loadScript('js/views/practiceView.js');
+                        }
+                        // Initialize view if needed
+                    });
+                }
+
                 await this.initializeCoreComponents();
 
                 if (optionalComponents.length > 0) {
@@ -42,6 +68,19 @@
                 console.error('[App] 核心组件加载失败:', error);
                 throw error;
             }
+        },
+
+        /**
+         * Load a script dynamically
+         */
+        loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
         },
 
         /**

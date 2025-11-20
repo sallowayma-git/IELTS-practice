@@ -10,13 +10,23 @@
 </head>
 
 <body>
+    <!-- Initial Loading Overlay -->
+    <div id="global-loading-overlay" class="loading-overlay active">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <p class="loading-message">正在初始化系统...</p>
+        </div>
+    </div>
+
     <input type="file" id="folder-picker" webkitdirectory style="display: none;">
     <div class="message-container" id="message-container"></div>
 
     <div class="container">
         <div class="header">
             <h1>📚 考试总览系统</h1>
-            <p>IELTS练习管理平台 - <a href="#" onclick="showDeveloperTeam(); return false;" style="color: rgba(102, 126, 234, 0.8); text-decoration: none; font-weight: 600; transition: color 0.3s ease;">睡着过呈现</a></p>
+            <p>IELTS练习管理平台 - <a href="#" onclick="showDeveloperTeam(); return false;"
+                    style="color: rgba(102, 126, 234, 0.8); text-decoration: none; font-weight: 600; transition: color 0.3s ease;">睡着过呈现</a>
+            </p>
         </div>
 
         <nav class="main-nav" data-nav-controller="legacy">
@@ -24,7 +34,7 @@
             <button class="nav-btn" type="button" data-view="browse">📚 题库浏览</button>
             <button class="nav-btn" type="button" data-view="practice">📝 练习记录</button>
             <button class="nav-btn" type="button" data-view="more">✨ 更多</button>
-            <button class="nav-btn" type="button" data-view="settings">⚙️ 设置</button>    
+            <button class="nav-btn" type="button" data-view="settings">⚙️ 设置</button>
         </nav>
 
         <!-- 总览页面 -->
@@ -40,7 +50,8 @@
         <div id="browse-view" class="view">
 
             <div class="browse-title-bar">
-                <button class="browse-title-trigger" id="browse-title-trigger" type="button" aria-haspopup="true" aria-expanded="false" title="列表偏好">📚</button>
+                <button class="browse-title-trigger" id="browse-title-trigger" type="button" aria-haspopup="true"
+                    aria-expanded="false" title="列表偏好">📚</button>
                 <h2 id="browse-title">题库浏览</h2>
                 <div class="browse-preference-panel" id="browse-preference-panel" hidden>
                     <label class="browse-preference-option">
@@ -67,135 +78,137 @@
         </div>
 
         <!-- 练习记录页面 -->
-    <div id="practice-view" class="view">
-        <h2>📝 练习记录</h2>
+        <div id="practice-view" class="view">
+            <h2>📝 练习记录</h2>
 
-        <div class="practice-stats">
-            <div class="stat-card">
-                <div class="stat-number" id="total-practiced">0</div>
-                <div class="stat-label">已练习题目</div>
+            <div class="practice-stats">
+                <div class="stat-card">
+                    <div class="stat-number" id="total-practiced">0</div>
+                    <div class="stat-label">已练习题目</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="avg-score">0%</div>
+                    <div class="stat-label">平均正确率</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="study-time">0</div>
+                    <div class="stat-label">学习时长(分钟)</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="streak-days">0</div>
+                    <div class="stat-label">连续学习天数</div>
+                </div>
             </div>
-            <div class="stat-card">
-                <div class="stat-number" id="avg-score">0%</div>
-                <div class="stat-label">平均正确率</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" id="study-time">0</div>
-                <div class="stat-label">学习时长(分钟)</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" id="streak-days">0</div>
-                <div class="stat-label">连续学习天数</div>
+
+            <div class="practice-history">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3>📈 练习历史</h3>
+                    <div id="record-type-filter-buttons">
+                        <button class="btn btn-sm" onclick="filterRecordsByType('all')">全部</button>
+                        <button class="btn btn-sm" onclick="filterRecordsByType('reading')">阅读</button>
+                        <button class="btn btn-sm" onclick="filterRecordsByType('listening')">听力</button>
+                    </div>
+                    <div>
+                        <button class="btn btn-secondary"
+                            onclick="(window.markdownExporter||(window.markdownExporter=new MarkdownExporter())).exportToMarkdown()"
+                            style="margin-right: 10px;">📄 导出Markdown</button>
+                        <button class="btn btn-info" onclick="toggleBulkDelete()" id="bulk-delete-btn"
+                            style="margin-right: 10px;">📝 批量删除</button>
+                        <button class="btn btn-warning" onclick="clearPracticeData()">🗑️ 清除记录</button>
+                    </div>
+                </div>
+
+                <div id="history-list" class="practice-history-list">
+                    <div style="text-align: center; padding: 40px; opacity: 0.7;">
+                        <div style="font-size: 3em; margin-bottom: 15px;">📋</div>
+                        <p>暂无练习记录</p>
+                        <p style="font-size: 0.9em; margin-top: 10px;">开始练习后，记录将自动保存在这里</p>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div class="practice-history">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3>📈 练习历史</h3>
-                <div id="record-type-filter-buttons">
-                    <button class="btn btn-sm" onclick="filterRecordsByType('all')">全部</button>
-                    <button class="btn btn-sm" onclick="filterRecordsByType('reading')">阅读</button>
-                    <button class="btn btn-sm" onclick="filterRecordsByType('listening')">听力</button>
+        <!-- 设置页面 -->
+        <div id="settings-view" class="view">
+            <h2>⚙️ 系统设置</h2>
+            <div style="background: rgba(255, 255, 255, 0.1); padding: 20px; border-radius: 10px;">
+                <div style="margin-bottom: 30px;">
+                    <h3>🔧 系统管理</h3>
+                    <p style="margin: 15px 0; opacity: 0.9;">系统工具和设置选项</p>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
+                        <button class="btn btn-warning" id="clear-cache-btn">🗑️ 清除缓存</button>
+                        <button class="btn" id="load-library-btn">📂 加载题库</button>
+                        <button class="btn btn-info" id="library-config-btn">⚙️ 题库配置切换</button>
+                        <button class="btn btn-warning" id="force-refresh-btn">🔄 强制刷新题库</button>
+                    </div>
                 </div>
+
+                <div style="margin-bottom: 30px;">
+                    <h3>💾 数据管理</h3>
+                    <p style="margin: 15px 0; opacity: 0.9;">数据备份、导入导出和完整性检查</p>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="btn" id="create-backup-btn">💾 创建备份</button>
+                        <button class="btn btn-secondary" id="backup-list-btn">📋 备份列表</button>
+                        <button class="btn btn-info" id="export-data-btn">📤 导出数据</button>
+                        <button class="btn btn-warning" id="import-data-btn">📥 导入数据</button>
+                    </div>
+                </div>
+
                 <div>
-                    <button class="btn btn-secondary" onclick="(window.markdownExporter||(window.markdownExporter=new MarkdownExporter())).exportToMarkdown()" style="margin-right: 10px;">📄 导出Markdown</button>
-                    <button class="btn btn-info" onclick="toggleBulkDelete()" id="bulk-delete-btn"
-                        style="margin-right: 10px;">📝 批量删除</button>
-                    <button class="btn btn-warning" onclick="clearPracticeData()">🗑️ 清除记录</button>
-                </div>
-            </div>
+                    <h3>📊 系统信息</h3>
+                    <div style="margin-top: 15px; line-height: 1.8; font-weight: bold;">
+                        <div style="color: #10b981;">题库状态: 已加载完整索引</div>
+                        <div>题目总数: <span id="total-exams">147</span></div>
+                        <div>HTML题目: <span id="html-exams">147</span></div>
+                        <div>PDF题目: <span id="pdf-exams">147</span></div>
+                        <div>最后更新: <span id="last-update">2025/9/16 14:47:09</span></div>
+                    </div>
 
-            <div id="history-list" class="practice-history-list">
-                <div style="text-align: center; padding: 40px; opacity: 0.7;">
-                    <div style="font-size: 3em; margin-bottom: 15px;">📋</div>
-                    <p>暂无练习记录</p>
-                    <p style="font-size: 0.9em; margin-top: 10px;">开始练习后，记录将自动保存在这里</p>
-                </div>
-            </div>
-        </div>
-    </div>
+                    <!-- 主题切换按钮 -->
+                    <div style="margin-top: 25px;">
+                        <button class="btn btn-secondary" onclick="showThemeSwitcherModal()">
+                            🎨 主题切换
+                        </button>
+                    </div>
 
-    <!-- 设置页面 -->
-    <div id="settings-view" class="view">
-        <h2>⚙️ 系统设置</h2>
-        <div style="background: rgba(255, 255, 255, 0.1); padding: 20px; border-radius: 10px;">
-            <div style="margin-bottom: 30px;">
-                <h3>🔧 系统管理</h3>
-                <p style="margin: 15px 0; opacity: 0.9;">系统工具和设置选项</p>
-                <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
-                    <button class="btn btn-warning" id="clear-cache-btn">🗑️ 清除缓存</button>
-                    <button class="btn" id="load-library-btn">📂 加载题库</button>
-                    <button class="btn btn-info" id="library-config-btn">⚙️ 题库配置切换</button>
-                    <button class="btn btn-warning" id="force-refresh-btn">🔄 强制刷新题库</button>
-                </div>
-            </div>
-
-            <div style="margin-bottom: 30px;">
-                <h3>💾 数据管理</h3>
-                <p style="margin: 15px 0; opacity: 0.9;">数据备份、导入导出和完整性检查</p>
-                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button class="btn" id="create-backup-btn">💾 创建备份</button>
-                    <button class="btn btn-secondary" id="backup-list-btn">📋 备份列表</button>
-                    <button class="btn btn-info" id="export-data-btn">📤 导出数据</button>
-                    <button class="btn btn-warning" id="import-data-btn">📥 导入数据</button>
-                </div>
-            </div>
-
-            <div>
-                <h3>📊 系统信息</h3>
-                <div style="margin-top: 15px; line-height: 1.8; font-weight: bold;">
-                    <div style="color: #10b981;">题库状态: 已加载完整索引</div>
-                    <div>题目总数: <span id="total-exams">147</span></div>
-                    <div>HTML题目: <span id="html-exams">147</span></div>
-                    <div>PDF题目: <span id="pdf-exams">147</span></div>
-                    <div>最后更新: <span id="last-update">2025/9/16 14:47:09</span></div>
-                </div>
-
-                <!-- 主题切换按钮 -->
-                <div style="margin-top: 25px;">
-                    <button class="btn btn-secondary" onclick="showThemeSwitcherModal()">
-                        🎨 主题切换
-                    </button>
-                </div>
-
-                <!-- 开发团队链接 -->
-                <div
-                    style="margin-top: 30px; text-align: center; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.2);">
-                    <a href="#" onclick="showDeveloperTeam()"
-                        style="color: rgba(255, 255, 255, 0.7); text-decoration: none; font-size: 0.9em; transition: color 0.3s ease;">
-                        睡着过开发团队
-                    </a>
+                    <!-- 开发团队链接 -->
+                    <div
+                        style="margin-top: 30px; text-align: center; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.2);">
+                        <a href="#" onclick="showDeveloperTeam()"
+                            style="color: rgba(255, 255, 255, 0.7); text-decoration: none; font-size: 0.9em; transition: color 0.3s ease;">
+                            睡着过开发团队
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- 更多页面 -->
-    <div id="more-view" class="view">
-        <h2>✨ 更多工具</h2>
-        <p class="more-view-subtitle">探索额外的学习辅助功能，助你高效备考。</p>
-        <div class="more-tools-grid">
-            <button class="tool-card" type="button" data-action="open-clock">
-                <div class="tool-card-icon">🕒</div>
-                <div class="tool-card-content">
-                    <h3>全屏时钟</h3>
-                    <p>沉浸式模拟指针时钟，实时同步系统时间，陪伴你的专注时刻。</p>
-                </div>
-                <div class="tool-card-arrow">进入</div>
-            </button>
-            <button class="tool-card" type="button" data-action="open-vocab">
-                <div class="tool-card-icon">🧠</div>
-                <div class="tool-card-content">
-                    <h3>单词背诵</h3>
-                    <p>本地 Leitner 分箱 + 艾宾浩斯复习节奏，随时继续你的词汇任务。</p>
-                </div>
-                <div class="tool-card-arrow">进入</div>
-            </button>
+        <!-- 更多页面 -->
+        <div id="more-view" class="view">
+            <h2>✨ 更多工具</h2>
+            <p class="more-view-subtitle">探索额外的学习辅助功能，助你高效备考。</p>
+            <div class="more-tools-grid">
+                <button class="tool-card" type="button" data-action="open-clock">
+                    <div class="tool-card-icon">🕒</div>
+                    <div class="tool-card-content">
+                        <h3>全屏时钟</h3>
+                        <p>沉浸式模拟指针时钟，实时同步系统时间，陪伴你的专注时刻。</p>
+                    </div>
+                    <div class="tool-card-arrow">进入</div>
+                </button>
+                <button class="tool-card" type="button" data-action="open-vocab">
+                    <div class="tool-card-icon">🧠</div>
+                    <div class="tool-card-content">
+                        <h3>单词背诵</h3>
+                        <p>本地 Leitner 分箱 + 艾宾浩斯复习节奏，随时继续你的词汇任务。</p>
+                    </div>
+                    <div class="tool-card-arrow">进入</div>
+                </button>
+            </div>
         </div>
-    </div>
-    <section id="vocab-view" class="view" data-view="vocab" hidden>
-        <div class="vocab-view-shell" data-vocab-role="root"></div>
-    </section>
+        <section id="vocab-view" class="view" data-view="vocab" hidden>
+            <div class="vocab-view-shell" data-vocab-role="root"></div>
+        </section>
     </div>
 
     <div id="fullscreen-clock-overlay" class="clock-overlay is-hidden" role="dialog" aria-modal="true"
@@ -241,7 +254,8 @@
                 </section>
             </div>
             <div class="clock-pagination" data-clock-role="pagination" aria-hidden="true">
-                <button class="clock-dot is-active" type="button" data-target-view="analog" aria-label="切换到模拟指针时钟"></button>
+                <button class="clock-dot is-active" type="button" data-target-view="analog"
+                    aria-label="切换到模拟指针时钟"></button>
                 <button class="clock-dot" type="button" data-target-view="flip" aria-label="切换到翻页时钟"></button>
                 <button class="clock-dot" type="button" data-target-view="digital" aria-label="切换到数字时钟"></button>
                 <button class="clock-dot" type="button" data-target-view="ambient" aria-label="切换到低对比度数字时钟"></button>
@@ -338,7 +352,8 @@
                                 <div class="theme-name">📚 Academic</div>
                                 <div class="theme-desc">专业 高效 可靠</div>
                             </div>
-                            <button class="btn btn-sm" onclick="navigateToThemePortal('.superdesign/design_iterations/ielts_academic_functional_2.html', { label: 'Academic' })">切换</button>
+                            <button class="btn btn-sm"
+                                onclick="navigateToThemePortal('.superdesign/design_iterations/ielts_academic_functional_2.html', { label: 'Academic' })">切换</button>
                         </div>
                         <div class="theme-option">
                             <div class="theme-info">
@@ -352,28 +367,35 @@
                                 <div class="theme-name" style="color: #0554F2;">🔵 Blue</div>
                                 <div class="theme-desc" style="color: #0788D9;">冷静 清爽 专注</div>
                             </div>
-                            <button id="blue-theme-btn" class="btn btn-sm" style="background: #0554F2; border-color: #1154D9;" onclick="applyTheme('blue')">切换</button>
+                            <button id="blue-theme-btn" class="btn btn-sm"
+                                style="background: #0554F2; border-color: #1154D9;"
+                                onclick="applyTheme('blue')">切换</button>
                         </div>
                         <div class="theme-option">
                             <div class="theme-info">
                                 <div class="theme-name" style="color: #ec4899;">🎀 Melody</div>
                                 <div class="theme-desc" style="color: #ec4899;">美乐蒂</div>
                             </div>
-                            <button class="btn btn-sm" style="background: #ec4899; border-color: #ec4899;" onclick="navigateToThemePortal('.superdesign/design_iterations/my_melody_ielts_1.html', { label: 'MyMelody', theme: 'mymelody' })">切换</button>
+                            <button class="btn btn-sm" style="background: #ec4899; border-color: #ec4899;"
+                                onclick="navigateToThemePortal('.superdesign/design_iterations/my_melody_ielts_1.html', { label: 'MyMelody', theme: 'mymelody' })">切换</button>
                         </div>
                         <div class="theme-option">
                             <div class="theme-info">
                                 <div class="theme-name" style="color: #6a2bbf;">🧙 HarryPotter</div>
                                 <div class="theme-desc" style="color: #6a2bbf;">哈利波特</div>
                             </div>
-                            <button class="btn btn-sm" style="background: #6a2bbf; border-color: #6a2bbf;" aria-label="哈利波特主题（冒险）" onclick="navigateToThemePortal('.superdesign/design_iterations/HarryPoter.html', { label: 'HarryPotter', theme: 'harry' })">切换</button>
+                            <button class="btn btn-sm" style="background: #6a2bbf; border-color: #6a2bbf;"
+                                aria-label="哈利波特主题（冒险）"
+                                onclick="navigateToThemePortal('.superdesign/design_iterations/HarryPoter.html', { label: 'HarryPotter', theme: 'harry' })">切换</button>
                         </div>
                         <div class="theme-option">
                             <div class="theme-info">
                                 <div class="theme-name" style="color: #ffc83d;">🐷 小呆呆</div>
                                 <div class="theme-desc" style="color: #f59e0b;">小呆呆控制台</div>
                             </div>
-                            <button class="btn btn-sm" style="background: linear-gradient(120deg, #ffe08a, #ffc83d); border-color: #fbbf24; color: #3b2400;" onclick="navigateToThemePortal('.superdesign/design_iterations/xiaodaidai_dashboard_1.html', { label: 'XiaoDaiDai', theme: 'xiaodaidai' })">切换</button>
+                            <button class="btn btn-sm"
+                                style="background: linear-gradient(120deg, #ffe08a, #ffc83d); border-color: #fbbf24; color: #3b2400;"
+                                onclick="navigateToThemePortal('.superdesign/design_iterations/xiaodaidai_dashboard_1.html', { label: 'XiaoDaiDai', theme: 'xiaodaidai' })">切换</button>
                         </div>
                     </div>
                 </div>
@@ -392,7 +414,7 @@
     <script src="assets/scripts/listening-exam-data.js"></script>
 
     <!-- 加载工具函数 -->
-    
+
     <script src="js/utils/storage.js"></script>
     <script src="js/core/storageProviderRegistry.js"></script>
     <script src="js/data/dataSources/storageDataSource.js"></script>
@@ -410,43 +432,47 @@
     <script src="js/core/vocabStore.js"></script>
     <script src="js/components/vocabDashboardCards.js"></script>
     <script src="js/components/vocabSessionView.js"></script>
-    <script src="js/utils/dataBackupManager.js"></script>
-    <script src="js/components/dataManagementPanel.js"></script>
+    <script src="js/utils/dataBackupManager.js" defer></script>
+    <script src="js/components/dataManagementPanel.js" defer></script>
+
+    <!-- UI Components -->
+    <script src="js/components/LoadingOverlay.js"></script>
+    <script src="js/components/ViewManager.js"></script>
 
     <!-- 设置共享命名空间 -->
     <script>
-      if (window.storage && window.storage.ready) {
-        window.storage.ready.then(() => {
-          if (typeof window.storage.setNamespace === 'function') {
-            window.storage.setNamespace('exam_system');
-            console.log('主页面已设置共享命名空间: exam_system');
+        if (window.storage && window.storage.ready) {
+            window.storage.ready.then(() => {
+                if (typeof window.storage.setNamespace === 'function') {
+                    window.storage.setNamespace('exam_system');
+                    console.log('主页面已设置共享命名空间: exam_system');
 
-            // 验证命名空间设置是否生效
-            setTimeout(async () => {
-              const testKey = 'namespace_test';
-              const testValue = 'test_value_' + Date.now();
-              try {
-                await window.storage.set(testKey, testValue);
-                const retrievedValue = await window.storage.get(testKey);
-                if (retrievedValue === testValue) {
-                  console.log('✅ 命名空间设置验证成功: 存储和读取正常');
+                    // 验证命名空间设置是否生效
+                    setTimeout(async () => {
+                        const testKey = 'namespace_test';
+                        const testValue = 'test_value_' + Date.now();
+                        try {
+                            await window.storage.set(testKey, testValue);
+                            const retrievedValue = await window.storage.get(testKey);
+                            if (retrievedValue === testValue) {
+                                console.log('✅ 命名空间设置验证成功: 存储和读取正常');
+                            } else {
+                                console.warn('❌ 命名空间设置验证失败: 读取值不匹配');
+                            }
+                            await window.storage.remove(testKey);
+                        } catch (error) {
+                            console.error('❌ 命名空间设置验证失败', error);
+                        }
+                    }, 1000);
                 } else {
-                  console.warn('❌ 命名空间设置验证失败: 读取值不匹配');
+                    console.warn('存储管理器未加载或setNamespace方法不可用');
                 }
-                await window.storage.remove(testKey);
-              } catch (error) {
-                console.error('❌ 命名空间设置验证失败', error);
-              }
-            }, 1000);
-          } else {
-            console.warn('存储管理器未加载或setNamespace方法不可用');
-          }
-        }).catch((error) => {
-          console.error('存储初始化失败，无法设置命名空间', error);
-        });
-      } else {
-        console.warn('存储管理器未加载或未暴露初始化状态');
-      }
+            }).catch((error) => {
+                console.error('存储初始化失败，无法设置命名空间', error);
+            });
+        } else {
+            console.warn('存储管理器未加载或未暴露初始化状态');
+        }
     </script>
 
     <!-- 加载核心组件 -->
@@ -475,7 +501,9 @@
 
     <!-- 加载工具库 -->
     <script src="js/utils/dom.js"></script>
-    <script src="js/views/legacyViewBundle.js"></script>
+    <!-- <script src="js/views/legacyViewBundle.js"></script> -->
+    <script src="js/controllers/LegacyNavigationController.js"></script>
+    <script src="js/views/LibraryConfigView.js"></script>
     <script src="js/utils/performance.js"></script>
     <script src="js/utils/typeChecker.js"></script>
     <script src="js/utils/codeStandards.js"></script>
@@ -494,8 +522,8 @@
     <script src="js/boot-fallbacks.js"></script>
     <!-- 运行时修复补丁（异步存储/恢复兼容、本地file环境增强） -->
     <script src="js/patches/runtime-fixes.js"></script>
-    
-    
+
+
     <!-- 加载主应用（最后加载） -->
     <script src="js/app/stateMixin.js"></script>
     <script src="js/app/bootstrapMixin.js"></script>

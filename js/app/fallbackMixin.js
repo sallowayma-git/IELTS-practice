@@ -1,9 +1,18 @@
-(function(global) {
+(function (global) {
     const mixin = {
         /**
          * 显示/隐藏加载状态
          */
         showLoading(show) {
+            if (this.loadingOverlay) {
+                if (show) {
+                    this.loadingOverlay.show();
+                } else {
+                    this.loadingOverlay.hide();
+                }
+                return;
+            }
+
             const loading = document.getElementById('loading');
             if (loading) {
                 if (typeof window.DOM !== 'undefined') {

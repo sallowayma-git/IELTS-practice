@@ -1,4 +1,4 @@
-(function(global) {
+(function (global) {
     const mixin = {
         /**
          * 设置初始视图
@@ -18,6 +18,19 @@
          */
         navigateToView(viewName) {
             if (this.currentView === viewName) return;
+
+            if (this.viewManager) {
+                this.viewManager.switchTo(`${viewName}-view`);
+                this.currentView = viewName;
+
+                // Update URL
+                const url = new URL(window.location);
+                url.searchParams.set('view', viewName);
+                window.history.replaceState({}, '', url);
+
+                this.onViewActivated(viewName);
+                return;
+            }
 
             // 隐藏所有视图
             document.querySelectorAll('.view').forEach(view => {
@@ -113,13 +126,13 @@
                 if (!descriptor || typeof descriptor.set !== 'function') {
                     window.__browseFilter = { category, type, filterMode, path };
                 }
-            } catch (_) {}
+            } catch (_) { }
 
             try {
                 if (typeof window.requestBrowseAutoScroll === 'function') {
                     window.requestBrowseAutoScroll(category, type);
                 }
-            } catch (_) {}
+            } catch (_) { }
 
             // 无论是否存在旧的 ExamBrowser，都统一走新浏览视图
             this.navigateToView('browse');
@@ -130,7 +143,7 @@
                     window.applyBrowseFilter(category, type, filterMode, path);
                     delete window.__pendingBrowseFilter;
                 }
-            } catch (_) {}
+            } catch (_) { }
         },
 
         /**

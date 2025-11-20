@@ -7094,3 +7094,22 @@ function setupExamActionHandlers() {
 
 setupExamActionHandlers();
 ensurePracticeSessionSyncListener();
+
+// --- View Change Handler ---
+window.addEventListener('viewChanged', function (e) {
+    var viewId = e.detail.viewId;
+    if (viewId === 'browse-view') {
+        var container = document.getElementById('exam-list-container');
+        if (container && !container.hasChildNodes()) {
+            if (window.browseController) {
+                window.browseController.applyFilter(window.browseController.activeFilter);
+            } else if (typeof window.filterByType === 'function') {
+                window.filterByType('all');
+            }
+        }
+    } else if (viewId === 'practice-view') {
+        if (typeof window.updatePracticeView === 'function') {
+            window.updatePracticeView();
+        }
+    }
+});
