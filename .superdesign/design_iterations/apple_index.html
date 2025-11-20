@@ -4,28 +4,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IELTS Pro</title>
+    <title>IELTS Practice</title>
     <link rel="stylesheet" href="css/apple-theme-v2.css">
 </head>
 
 <body>
-
     <!-- Global Navigation -->
     <nav class="global-nav">
         <div class="nav-content">
-            <a href="#" class="nav-logo"> IELTS Pro</a>
+            <a href="#" class="nav-logo">IELTS Practice</a>
             <ul class="nav-list">
-                <li><a class="nav-item active nav-btn" data-view="overview">总览</a></li>
-                <li><a class="nav-item nav-btn" data-view="browse">题库</a></li>
-                <li><a class="nav-item nav-btn" data-view="practice">练习</a></li>
-                <li><a class="nav-item nav-btn" data-view="vocab">词汇</a></li>
-                <li><a class="nav-item nav-btn" data-view="settings">设置</a></li>
+                <li><a class="nav-item active" data-view="overview">总览</a></li>
+                <li><a class="nav-item" data-view="browse">题库</a></li>
+                <li><a class="nav-item" data-view="practice">练习</a></li>
+                <li><a class="nav-item" data-view="vocab">词汇</a></li>
+                <li><a class="nav-item" data-view="settings">设置</a></li>
             </ul>
         </div>
     </nav>
 
-    <!-- Main Application Container -->
-    <main class="app-container">
+    <!-- Main Container -->
+    <div class="app-container">
         <div class="view-container">
 
             <!-- Overview View -->
@@ -33,9 +32,7 @@
                 <div class="hero-section">
                     <span class="hero-eyebrow">备考中心</span>
                     <h1 class="hero-title">智能追踪，<br>精准提升。</h1>
-                    <p class="hero-subtitle">
-                        实时分析你的练习数据，助你更高效地达成雅思目标。
-                    </p>
+                    <p class="hero-subtitle">实时分析你的练习数据，助你更高效地达成雅思目标。</p>
                     <div class="hero-cta-group">
                         <button class="btn btn-primary nav-btn" data-view="browse">开始练习</button>
                         <button class="btn btn-secondary nav-btn" data-view="practice">查看进度</button>
@@ -69,7 +66,7 @@
                     </div>
                 </div>
 
-                <!-- Hidden elements required by legacy JS to prevent errors -->
+                <!-- Hidden elements for legacy JS -->
                 <div style="display:none;">
                     <span id="total-exams"></span>
                     <span id="completed-exams"></span>
@@ -103,7 +100,7 @@
 
                 <div id="exam-list-container" class="exam-list">
                     <!-- Exam items injected here -->
-                    <div class="loading" style="text-align: center; padding: 40px; width: 100%; grid-column: 1 / -1;">
+                    <div class="loading" style="text-align: center; padding: 40px; width: 100%;">
                         <p>正在加载题库...</p>
                     </div>
                 </div>
@@ -143,32 +140,25 @@
                 </div>
 
                 <h3 style="margin-bottom: 24px;">历史记录</h3>
-                <div id="practice-history-list">
-                    <!-- History items -->
-                </div>
+                <div id="practice-history-list"></div>
             </section>
 
-            <!-- Other Views -->
+            <!-- Vocab View -->
             <section id="vocab-view" class="view">
-                <div class="hero-section">
-                    <h2>词汇本</h2>
-                    <p>功能开发中...</p>
-                </div>
+                <!-- Content injected by AppleVocabAdapter -->
             </section>
 
+            <!-- Settings View -->
             <section id="settings-view" class="view">
-                <div class="hero-section">
-                    <h2>设置</h2>
-                    <p>功能开发中...</p>
-                </div>
+                <!-- Content injected by AppleSettingsAdapter -->
             </section>
 
         </div>
-    </main>
+    </div>
 
     <!-- Loading Overlay -->
     <div id="global-loading-overlay"
-        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10000; display: flex; justify-content: center; align-items: center;">
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10000; background: rgba(255, 255, 255, 0.95); display: flex; justify-content: center; align-items: center;">
         <div style="text-align: center;">
             <div class="loading-spinner"
                 style="width: 40px; height: 40px; border: 3px solid rgba(0,0,0,0.1); border-top: 3px solid #0071e3; border-radius: 50%; animation: spin 1s linear infinite;">
@@ -177,17 +167,6 @@
                 Loading...</p>
         </div>
     </div>
-    <style>
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-    </style>
 
     <!-- Core Scripts -->
     <script src="../../js/utils/environmentDetector.js"></script>
@@ -256,10 +235,12 @@
     <!-- Theme Components -->
     <script src="components/AppleNav.js"></script>
     <script src="components/AppleAnimations.js"></script>
+    <script src="components/AppleVocabAdapter.js"></script>
+    <script src="components/AppleSettingsAdapter.js"></script>
 
-    <!-- Theme Adapter & Fixes -->
+    <!-- Theme Adapter Script -->
     <script>
-        // 1. Mock missing legacy components to prevent initialization freeze
+        // Mock legacy components
         const mockClass = class { constructor() { } init() { } };
         window.RecommendationDisplay = mockClass;
         window.GoalSettings = mockClass;
@@ -269,14 +250,7 @@
         window.DataManagementPanel = mockClass;
         window.SystemMaintenancePanel = mockClass;
 
-        // 2. Mock DOM elements that legacy scripts might look for
         document.addEventListener('DOMContentLoaded', () => {
-            // Ensure ViewManager is active
-            if (window.app && window.app.viewManager) {
-                console.log('Apple Theme: ViewManager active');
-            }
-
-            // 3. Optimized Loading Logic
             const hideOverlay = () => {
                 const overlay = document.getElementById('global-loading-overlay');
                 if (overlay && overlay.style.display !== 'none') {
@@ -286,38 +260,23 @@
                 }
             };
 
-            // Hide immediately if app is ready
             if (window.app && window.app.initialized) {
                 hideOverlay();
             } else {
-                // Listen for view changes (first view load)
                 window.addEventListener('viewChanged', hideOverlay, { once: true });
-
-                // Fallback: Check periodically
                 const checkInterval = setInterval(() => {
                     if (document.querySelector('.exam-item') || (window.app && window.app.initialized)) {
                         hideOverlay();
                         clearInterval(checkInterval);
                     }
                 }, 200);
-
-                // Ultimate fallback
                 setTimeout(() => {
                     hideOverlay();
                     clearInterval(checkInterval);
                 }, 1500);
             }
-
-            // Override styles injected by JS
-            const style = document.createElement('style');
-            style.textContent = `
-                .exam-item { background: #fff !important; }
-                .nav-btn.active { color: #0071e3 !important; opacity: 1 !important; }
-            `;
-            document.head.appendChild(style);
         });
     </script>
-
 </body>
 
 </html>
