@@ -1,0 +1,467 @@
+/* Apple-Style Design System V2 - Pixel Perfect */
+
+:root {
+    /* Apple Color System */
+    --system-blue: #0071e3;
+    --system-blue-hover: #0077ed;
+    --system-gray: #86868b;
+    --system-gray-2: #6e6e73;
+    --system-gray-3: #1d1d1f;
+    /* Primary Text */
+    --system-gray-4: #f5f5f7;
+    /* Background */
+    --system-gray-5: #e8e8ed;
+    --system-gray-6: #d2d2d7;
+    --system-white: #ffffff;
+
+    /* Semantic Colors */
+    --bg-body: var(--system-gray-4);
+    --bg-card: var(--system-white);
+    --text-primary: var(--system-gray-3);
+    --text-secondary: var(--system-gray);
+    --accent-color: var(--system-blue);
+
+    /* Typography - SF Pro approximation */
+    --font-display: "SF Pro Display", "SF Pro Icons", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --font-text: "SF Pro Text", "SF Pro Icons", "Helvetica Neue", Helvetica, Arial, sans-serif;
+
+    /* Layout */
+    --content-width: 980px;
+    --nav-height: 44px;
+    --radius-card: 18px;
+    --radius-button: 980px;
+    /* Pill shape */
+
+    /* Effects */
+    --shadow-card: 2px 4px 12px rgba(0, 0, 0, 0.08);
+    --shadow-hover: 2px 8px 24px rgba(0, 0, 0, 0.12);
+    --glass-bg: rgba(251, 251, 253, 0.8);
+    --glass-blur: saturate(180%) blur(20px);
+
+    /* Animation */
+    --ease-apple: cubic-bezier(0.42, 0, 0.58, 1);
+    /* Ease-in-out */
+}
+
+/* Reset & Base */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+    font-family: var(--font-text);
+    background-color: var(--bg-body);
+    color: var(--text-primary);
+    line-height: 1.47059;
+    font-weight: 400;
+    letter-spacing: -0.022em;
+    font-size: 17px;
+    overflow-x: hidden;
+}
+
+/* Typography */
+h1,
+h2,
+h3,
+h4 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+h1 {
+    font-size: 48px;
+    line-height: 1.08349;
+    letter-spacing: -0.003em;
+    margin-bottom: 0.4em;
+}
+
+h2 {
+    font-size: 40px;
+    line-height: 1.1;
+    letter-spacing: 0em;
+    margin-bottom: 0.4em;
+}
+
+h3 {
+    font-size: 28px;
+    line-height: 1.14286;
+    letter-spacing: 0.007em;
+    margin-bottom: 0.3em;
+}
+
+p {
+    margin-bottom: 1em;
+}
+
+/* Global Navigation */
+.global-nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--nav-height);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    z-index: 9999;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    transition: background 0.3s ease;
+}
+
+.nav-content {
+    max-width: var(--content-width);
+    margin: 0 auto;
+    height: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 22px;
+}
+
+.nav-logo {
+    font-size: 19px;
+    font-weight: 600;
+    color: var(--text-primary);
+    text-decoration: none;
+    letter-spacing: -0.01em;
+}
+
+.nav-list {
+    display: flex;
+    list-style: none;
+    gap: 24px;
+}
+
+.nav-item {
+    font-size: 12px;
+    color: var(--text-primary);
+    text-decoration: none;
+    opacity: 0.8;
+    transition: opacity 0.2s ease;
+    cursor: pointer;
+}
+
+.nav-item:hover {
+    opacity: 1;
+}
+
+.nav-item.active {
+    opacity: 1;
+    color: var(--accent-color);
+}
+
+/* Main Layout */
+.app-container {
+    padding-top: var(--nav-height);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.view-container {
+    flex: 1;
+    max-width: var(--content-width);
+    margin: 0 auto;
+    width: 100%;
+    padding: 60px 22px;
+}
+
+/* Hero Section */
+.hero-section {
+    text-align: center;
+    padding: 110px 0 80px;
+    /* Increased top padding for breathing room */
+    animation: fadeUp 0.8s var(--ease-apple) forwards;
+    max-width: 980px;
+    /* Standard Apple content width */
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    /* Ensure flex children are centered */
+}
+
+.hero-eyebrow {
+    font-size: 21px;
+    line-height: 1.19048;
+    font-weight: 600;
+    letter-spacing: .011em;
+    color: var(--system-gray-2);
+    margin-bottom: 14px;
+    /* Precise spacing */
+    display: block;
+}
+
+.hero-title {
+    font-size: 56px;
+    line-height: 1.07143;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    margin-bottom: 24px;
+    /* Increased from 16px */
+    max-width: 800px;
+}
+
+.hero-subtitle {
+    font-size: 24px;
+    line-height: 1.21053;
+    font-weight: 400;
+    letter-spacing: .012em;
+    color: var(--text-primary);
+    max-width: 660px;
+    margin: 0 auto 44px;
+    /* Increased bottom margin for CTA separation */
+}
+
+.hero-cta-group {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 30px;
+    /* Apple standard gap for these actions */
+}
+
+/* Bento Grid System */
+.bento-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 24px;
+    margin-top: 40px;
+}
+
+.bento-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-card);
+    padding: 30px;
+    box-shadow: var(--shadow-card);
+    transition: transform 0.3s var(--ease-apple), box-shadow 0.3s var(--ease-apple);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    overflow: hidden;
+    position: relative;
+}
+
+.bento-card:hover {
+    transform: scale(1.02);
+    box-shadow: var(--shadow-hover);
+}
+
+.bento-card.large {
+    grid-column: span 2;
+}
+
+.bento-card-content {
+    z-index: 2;
+}
+
+.bento-label {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--system-gray-2);
+    margin-bottom: 8px;
+}
+
+.bento-value {
+    font-size: 42px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+}
+
+/* Buttons */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 26px;
+    /* Slightly wider */
+    font-size: 17px;
+    line-height: 1.17648;
+    font-weight: 400;
+    border-radius: 980px;
+    /* Pill shape */
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    min-width: 120px;
+}
+
+.btn-primary {
+    background-color: var(--accent-color);
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: var(--system-blue-hover);
+}
+
+.btn-secondary {
+    background-color: transparent;
+    color: var(--accent-color);
+    padding: 0;
+    min-width: auto;
+    font-size: 19px;
+    /* Slightly larger for link style */
+    font-weight: 400;
+    letter-spacing: .012em;
+}
+
+.btn-secondary:hover {
+    text-decoration: underline;
+}
+
+.btn-secondary::after {
+    content: " ›";
+    font-size: 1.1em;
+    margin-left: 4px;
+    font-weight: 600;
+}
+
+/* Exam List Styling - Waterfall Layout */
+.exam-list {
+    column-count: 3;
+    column-gap: 24px;
+    padding-bottom: 40px;
+}
+
+.exam-item {
+    background: var(--bg-card);
+    border-radius: var(--radius-card);
+    padding: 30px;
+    box-shadow: var(--shadow-card);
+    transition: all 0.3s var(--ease-apple);
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 24px;
+    /* Spacing for waterfall items */
+    break-inside: avoid;
+    /* Prevent breaking across columns */
+    position: relative;
+    /* Remove fixed height to allow natural height for waterfall */
+    height: auto;
+    min-height: 280px;
+}
+
+.exam-item:hover {
+    transform: scale(1.02);
+    box-shadow: var(--shadow-hover);
+    z-index: 10;
+}
+
+@media (max-width: 1024px) {
+    .exam-list {
+        column-count: 2;
+    }
+}
+
+@media (max-width: 640px) {
+    .exam-list {
+        column-count: 1;
+    }
+}
+
+.exam-info {
+    flex: 1;
+}
+
+.exam-info h4 {
+    font-size: 24px;
+    margin-bottom: 8px;
+    line-height: 1.2;
+}
+
+.exam-meta {
+    font-size: 14px;
+    color: var(--system-gray);
+    margin-bottom: 20px;
+}
+
+/* Custom Exam Actions */
+.exam-actions {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.exam-item-action-btn[data-action="start"] {
+    background-color: var(--accent-color);
+    color: white;
+    border-radius: var(--radius-button);
+    padding: 8px 20px;
+    font-size: 14px;
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.exam-item-action-btn[data-action="start"]:hover {
+    background-color: var(--system-blue-hover);
+}
+
+.exam-item-action-btn[data-action="pdf"] {
+    color: var(--accent-color);
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0;
+}
+
+.exam-item-action-btn[data-action="pdf"]:hover {
+    text-decoration: underline;
+}
+
+/* Loading Overlay */
+#global-loading-overlay {
+    background: rgba(255, 255, 255, 0.95) !important;
+}
+
+/* Animations */
+@keyframes fadeUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* View Transitions */
+.view {
+    display: none;
+    opacity: 0;
+    animation: fadeUp 0.6s var(--ease-apple) forwards;
+}
+
+.view.active {
+    display: block;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .hero-title {
+        font-size: 40px;
+    }
+
+    .bento-card.large {
+        grid-column: span 1;
+    }
+
+    .nav-content {
+        padding: 0 16px;
+    }
+}

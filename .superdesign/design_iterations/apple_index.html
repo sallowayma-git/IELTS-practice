@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IELTS Pro</title>
+    <link rel="stylesheet" href="css/apple-theme-v2.css">
+</head>
+
+<body>
+
+    <!-- Global Navigation -->
+    <nav class="global-nav">
+        <div class="nav-content">
+            <a href="#" class="nav-logo"> IELTS Pro</a>
+            <ul class="nav-list">
+                <li><a class="nav-item active nav-btn" data-view="overview">总览</a></li>
+                <li><a class="nav-item nav-btn" data-view="browse">题库</a></li>
+                <li><a class="nav-item nav-btn" data-view="practice">练习</a></li>
+                <li><a class="nav-item nav-btn" data-view="vocab">词汇</a></li>
+                <li><a class="nav-item nav-btn" data-view="settings">设置</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Main Application Container -->
+    <main class="app-container">
+        <div class="view-container">
+
+            <!-- Overview View -->
+            <section id="overview-view" class="view active">
+                <div class="hero-section">
+                    <span class="hero-eyebrow">备考中心</span>
+                    <h1 class="hero-title">智能追踪，<br>精准提升。</h1>
+                    <p class="hero-subtitle">
+                        实时分析你的练习数据，助你更高效地达成雅思目标。
+                    </p>
+                    <div class="hero-cta-group">
+                        <button class="btn btn-primary nav-btn" data-view="browse">开始练习</button>
+                        <button class="btn btn-secondary nav-btn" data-view="practice">查看进度</button>
+                    </div>
+                </div>
+
+                <div class="bento-grid">
+                    <div class="bento-card">
+                        <div class="bento-card-content">
+                            <div class="bento-label">已练习题目</div>
+                            <div class="bento-value" id="total-practiced-overview">0</div>
+                        </div>
+                    </div>
+                    <div class="bento-card">
+                        <div class="bento-card-content">
+                            <div class="bento-label">平均正确率</div>
+                            <div class="bento-value" id="avg-score-overview">0%</div>
+                        </div>
+                    </div>
+                    <div class="bento-card">
+                        <div class="bento-card-content">
+                            <div class="bento-label">学习时长(分)</div>
+                            <div class="bento-value" id="study-time-overview">0</div>
+                        </div>
+                    </div>
+                    <div class="bento-card">
+                        <div class="bento-card-content">
+                            <div class="bento-label">连续打卡</div>
+                            <div class="bento-value" id="streak-days-overview">0</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hidden elements required by legacy JS to prevent errors -->
+                <div style="display:none;">
+                    <span id="total-exams"></span>
+                    <span id="completed-exams"></span>
+                    <span id="average-accuracy"></span>
+                    <span id="study-days"></span>
+                    <div data-category="P1">
+                        <div class="progress-fill"></div>
+                        <div class="progress-text"></div>
+                    </div>
+                    <div data-category="P2">
+                        <div class="progress-fill"></div>
+                        <div class="progress-text"></div>
+                    </div>
+                    <div data-category="P3">
+                        <div class="progress-fill"></div>
+                        <div class="progress-text"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Browse View -->
+            <section id="browse-view" class="view">
+                <div class="hero-section" style="padding-bottom: 40px;">
+                    <h2 class="hero-title" style="font-size: 48px;">全真题库</h2>
+                    <p class="hero-subtitle">包含剑桥雅思全系列真题。</p>
+                    <div id="type-filter-buttons"
+                        style="display: flex; justify-content: center; gap: 12px; margin-top: 20px;">
+                        <!-- Filter buttons injected here -->
+                    </div>
+                </div>
+
+                <div id="exam-list-container" class="exam-list">
+                    <!-- Exam items injected here -->
+                    <div class="loading" style="text-align: center; padding: 40px; width: 100%; grid-column: 1 / -1;">
+                        <p>正在加载题库...</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Practice View -->
+            <section id="practice-view" class="view">
+                <div class="hero-section" style="padding-bottom: 40px;">
+                    <h2 class="hero-title" style="font-size: 48px;">练习记录</h2>
+                </div>
+
+                <div class="bento-grid" style="margin-bottom: 60px;">
+                    <div class="bento-card">
+                        <div class="bento-card-content">
+                            <div class="bento-label">总练习数</div>
+                            <div class="bento-value" id="total-practiced">0</div>
+                        </div>
+                    </div>
+                    <div class="bento-card">
+                        <div class="bento-card-content">
+                            <div class="bento-label">平均分</div>
+                            <div class="bento-value" id="avg-score">0%</div>
+                        </div>
+                    </div>
+                    <div class="bento-card">
+                        <div class="bento-card-content">
+                            <div class="bento-label">总时长</div>
+                            <div class="bento-value" id="study-time">0</div>
+                        </div>
+                    </div>
+                    <div class="bento-card">
+                        <div class="bento-card-content">
+                            <div class="bento-label">连续天数</div>
+                            <div class="bento-value" id="streak-days">0</div>
+                        </div>
+                    </div>
+                </div>
+
+                <h3 style="margin-bottom: 24px;">历史记录</h3>
+                <div id="practice-history-list">
+                    <!-- History items -->
+                </div>
+            </section>
+
+            <!-- Other Views -->
+            <section id="vocab-view" class="view">
+                <div class="hero-section">
+                    <h2>词汇本</h2>
+                    <p>功能开发中...</p>
+                </div>
+            </section>
+
+            <section id="settings-view" class="view">
+                <div class="hero-section">
+                    <h2>设置</h2>
+                    <p>功能开发中...</p>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- Loading Overlay -->
+    <div id="global-loading-overlay"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10000; display: flex; justify-content: center; align-items: center;">
+        <div style="text-align: center;">
+            <div class="loading-spinner"
+                style="width: 40px; height: 40px; border: 3px solid rgba(0,0,0,0.1); border-top: 3px solid #0071e3; border-radius: 50%; animation: spin 1s linear infinite;">
+            </div>
+            <p id="loading-message" class="loading-text" style="margin-top: 16px; font-size: 14px; color: #86868b;">
+                Loading...</p>
+        </div>
+    </div>
+    <style>
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+
+    <!-- Core Scripts -->
+    <script src="../../js/utils/environmentDetector.js"></script>
+    <script src="../../js/utils/logger.js"></script>
+    <script src="../../assets/scripts/complete-exam-data.js"></script>
+    <script src="../../assets/scripts/listening-exam-data.js"></script>
+
+    <script src="../../js/utils/storage.js"></script>
+    <script src="../../js/core/storageProviderRegistry.js"></script>
+    <script src="../../js/data/dataSources/storageDataSource.js"></script>
+    <script src="../../js/data/repositories/baseRepository.js"></script>
+    <script src="../../js/data/repositories/dataRepositoryRegistry.js"></script>
+    <script src="../../js/data/repositories/practiceRepository.js"></script>
+    <script src="../../js/data/repositories/settingsRepository.js"></script>
+    <script src="../../js/data/repositories/backupRepository.js"></script>
+    <script src="../../js/data/repositories/metaRepository.js"></script>
+    <script src="../../js/data/index.js"></script>
+    <script src="../../js/utils/stateSerializer.js"></script>
+    <script src="../../js/utils/simpleStorageWrapper.js"></script>
+    <script src="../../js/utils/vocabDataIO.js"></script>
+    <script src="../../js/core/vocabScheduler.js"></script>
+    <script src="../../js/core/vocabStore.js"></script>
+    <script src="../../js/utils/dataBackupManager.js" defer></script>
+
+    <!-- UI Components -->
+    <script src="../../js/components/LoadingOverlay.js"></script>
+    <script src="../../js/components/ViewManager.js"></script>
+
+    <!-- Core Logic -->
+    <script src="../../js/core/scoreStorage.js"></script>
+    <script src="../../js/utils/answerSanitizer.js"></script>
+    <script src="../../js/core/practiceRecorder.js"></script>
+    <script src="../../js/core/legacyStateBridge.js"></script>
+    <script src="../../js/utils/legacyStateAdapter.js"></script>
+    <script src="../../js/components/PDFHandler.js"></script>
+    <script src="../../js/utils/dom.js"></script>
+    <script src="../../js/utils/performance.js"></script>
+    <script src="../../js/utils/typeChecker.js"></script>
+    <script src="../../js/utils/codeStandards.js"></script>
+
+    <!-- Views -->
+    <script src="../../js/controllers/LegacyNavigationController.js"></script>
+    <script src="../../js/views/LibraryConfigView.js"></script>
+    <script src="../../js/views/browseView.js"></script>
+    <script src="../../js/views/practiceView.js"></script>
+
+    <!-- App Logic -->
+    <script src="../../js/app/state-service.js"></script>
+    <script src="../../js/app/browseController.js"></script>
+    <script src="../../js/presentation/message-center.js"></script>
+    <script src="../../js/presentation/navigation-controller.js"></script>
+
+    <!-- Mixins and App Class -->
+    <script src="../../js/app/stateMixin.js"></script>
+    <script src="../../js/app/bootstrapMixin.js"></script>
+    <script src="../../js/app/lifecycleMixin.js"></script>
+    <script src="../../js/app/navigationMixin.js"></script>
+    <script src="../../js/app/examSessionMixin.js"></script>
+    <script src="../../js/app/suitePracticeMixin.js"></script>
+    <script src="../../js/app/fallbackMixin.js"></script>
+    <script src="../../js/app.js"></script>
+
+    <!-- Main Entry -->
+    <script src="../../js/main.js"></script>
+
+    <!-- Theme Components -->
+    <script src="components/AppleNav.js"></script>
+    <script src="components/AppleAnimations.js"></script>
+
+    <!-- Theme Adapter & Fixes -->
+    <script>
+        // 1. Mock missing legacy components to prevent initialization freeze
+        const mockClass = class { constructor() { } init() { } };
+        window.RecommendationDisplay = mockClass;
+        window.GoalSettings = mockClass;
+        window.ProgressTracker = mockClass;
+        window.SpecializedPractice = mockClass;
+        window.QuestionTypePractice = mockClass;
+        window.DataManagementPanel = mockClass;
+        window.SystemMaintenancePanel = mockClass;
+
+        // 2. Mock DOM elements that legacy scripts might look for
+        document.addEventListener('DOMContentLoaded', () => {
+            // Ensure ViewManager is active
+            if (window.app && window.app.viewManager) {
+                console.log('Apple Theme: ViewManager active');
+            }
+
+            // 3. Optimized Loading Logic
+            const hideOverlay = () => {
+                const overlay = document.getElementById('global-loading-overlay');
+                if (overlay && overlay.style.display !== 'none') {
+                    overlay.style.opacity = '0';
+                    overlay.style.transition = 'opacity 0.5s ease';
+                    setTimeout(() => { overlay.style.display = 'none'; }, 500);
+                }
+            };
+
+            // Hide immediately if app is ready
+            if (window.app && window.app.initialized) {
+                hideOverlay();
+            } else {
+                // Listen for view changes (first view load)
+                window.addEventListener('viewChanged', hideOverlay, { once: true });
+
+                // Fallback: Check periodically
+                const checkInterval = setInterval(() => {
+                    if (document.querySelector('.exam-item') || (window.app && window.app.initialized)) {
+                        hideOverlay();
+                        clearInterval(checkInterval);
+                    }
+                }, 200);
+
+                // Ultimate fallback
+                setTimeout(() => {
+                    hideOverlay();
+                    clearInterval(checkInterval);
+                }, 1500);
+            }
+
+            // Override styles injected by JS
+            const style = document.createElement('style');
+            style.textContent = `
+                .exam-item { background: #fff !important; }
+                .nav-btn.active { color: #0071e3 !important; opacity: 1 !important; }
+            `;
+            document.head.appendChild(style);
+        });
+    </script>
+
+</body>
+
+</html>
