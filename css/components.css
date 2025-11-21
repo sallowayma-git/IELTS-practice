@@ -87,8 +87,14 @@
 /* 题目网格和卡片样式 */
 .exam-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: var(--spacing-lg);
+}
+
+@media (max-width: 640px) {
+    .exam-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 .exam-list-view {
