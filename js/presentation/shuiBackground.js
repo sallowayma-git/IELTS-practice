@@ -210,7 +210,7 @@
 
         let startTime = performance.now();
         let lastFrameTime = 0;
-        const frameInterval = 1000 / 30; // ~30fps 限制，降低占用
+        const frameInterval = 1000 / 10; // ~10fps 限制，降低占用
         let isPaused = false;
 
         const handleVisibility = () => {
