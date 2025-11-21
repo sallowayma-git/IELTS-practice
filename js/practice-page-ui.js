@@ -49,8 +49,8 @@
             const element = typeof target === 'string'
                 ? document.getElementById(target)
                 : target instanceof HTMLElement
-                ? target
-                : null;
+                    ? target
+                    : null;
             if (!element) return false;
             const pane = element.closest('.pane');
             if (pane && typeof pane.scrollTo === 'function') {
@@ -260,6 +260,28 @@
                 'click',
                 (e) => {
                     const target = e.target;
+
+                    // Check if the click is on an interactive element that should not hide the toolbar
+                    const isInteractiveElement = target instanceof HTMLElement && (
+                        // Audio controls
+                        target.tagName === 'AUDIO' ||
+                        target.tagName === 'VIDEO' ||
+                        target.closest('audio') ||
+                        target.closest('video') ||
+                        // Buttons (including audio player controls)
+                        target.tagName === 'BUTTON' ||
+                        target.closest('button') ||
+                        // Input elements
+                        target.tagName === 'INPUT' ||
+                        target.tagName === 'SELECT' ||
+                        target.tagName === 'TEXTAREA' ||
+                        // Common audio player control classes
+                        target.classList.contains('play-pause-btn') ||
+                        target.classList.contains('audio-control') ||
+                        target.closest('.audio-player') ||
+                        target.closest('.audio-controls')
+                    );
+
                     if (target instanceof HTMLElement && target.classList.contains('hl')) {
                         currentHlNode = target;
                         lastRange = null;
@@ -268,7 +290,7 @@
                         setTimeout(() => {
                             keepToolbar = false;
                         }, 0);
-                    } else if (!selbar.contains(e.target)) {
+                    } else if (!selbar.contains(e.target) && !isInteractiveElement) {
                         selbar.style.display = 'none';
                         currentHlNode = null;
                     }
@@ -289,8 +311,8 @@
                     currentHlNode
                         ? currentHlNode.textContent
                         : lastRange
-                        ? lastRange.cloneContents().textContent
-                        : ''
+                            ? lastRange.cloneContents().textContent
+                            : ''
                 ).trim();
                 if (text) {
                     const noteArea = notesPanel.querySelector('textarea');
@@ -418,11 +440,10 @@
             if (audio) {
                 try {
                     audio.pause();
-                } catch (_) {}
+                } catch (_) { }
                 const playPauseBtn = document.getElementById('play-pause-btn');
                 if (playPauseBtn) {
                     playPauseBtn.innerHTML = '&#9658;';
-                    playPauseBtn.disabled = true;
                 }
             }
             if (submitBtn) {
@@ -680,10 +701,10 @@
         initializeTranscriptPane();
     });
 
-let practiceUIStylesInjected = false;
-let transcriptState = null;
-const NO_ANSWER_PLACEHOLDER = '-';
-let pendingResultsTimeout = null;
+    let practiceUIStylesInjected = false;
+    let transcriptState = null;
+    const NO_ANSWER_PLACEHOLDER = '-';
+    let pendingResultsTimeout = null;
 
     function injectPracticeUIStyles() {
         if (practiceUIStylesInjected) return;
@@ -1160,7 +1181,14 @@ let pendingResultsTimeout = null;
         const volumeSlider = document.getElementById('volume-slider');
         const speedSelect = document.getElementById('playback-speed');
 
+        // 即使audio元素不存在，也要确保播放按钮是启用的
+        if (playPauseBtn) {
+            playPauseBtn.disabled = false;
+        }
+
+        // 如果关键元素不存在，提前返回但不影响按钮状态
         if (!audio || !playPauseBtn || !progressContainer || !progressBar || !timeDisplay) {
+            console.warn('[PracticePageUI] 音频播放器元素不完整，跳过初始化');
             return;
         }
 
