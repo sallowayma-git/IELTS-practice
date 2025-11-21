@@ -129,7 +129,8 @@
     }
 
     function initCanvas() {
-        if (!global.WebGLRenderingContext) {
+        const prefersReducedMotion = global.matchMedia && global.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (!global.WebGLRenderingContext || prefersReducedMotion) {
             applyFallback();
             return;
         }
@@ -192,7 +193,8 @@
         applyPalette();
 
         function resize() {
-            const ratio = global.devicePixelRatio || 1;
+            // 降低渲染分辨率，避免在高 DPI 屏幕上过度绘制
+            const ratio = Math.min(global.devicePixelRatio || 1, 1.5);
             const width = global.innerWidth;
             const height = global.innerHeight;
             canvas.width = width * ratio;
@@ -207,7 +209,25 @@
         global.addEventListener('resize', resize);
 
         let startTime = performance.now();
+        let lastFrameTime = 0;
+        const frameInterval = 1000 / 30; // ~30fps 限制，降低占用
+        let isPaused = false;
+
+        const handleVisibility = () => {
+            isPaused = document.hidden;
+        };
+        document.addEventListener('visibilitychange', handleVisibility);
+
         function render(now) {
+            if (isPaused) {
+                global.requestAnimationFrame(render);
+                return;
+            }
+            if (now - lastFrameTime < frameInterval) {
+                global.requestAnimationFrame(render);
+                return;
+            }
+            lastFrameTime = now;
             const elapsed = (now - startTime) / 1000;
             gl.uniform1f(timeLocation, elapsed);
             gl.drawArrays(gl.TRIANGLES, 0, 6);
