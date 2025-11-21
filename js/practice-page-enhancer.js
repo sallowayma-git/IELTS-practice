@@ -3242,6 +3242,9 @@
                 metadataPayload.category = pageType;
             }
             const resolvedTitle = metadataPayload.examTitle || metadataPayload.title || derivedTitle;
+            const answerComparison = includeComparison
+                ? this.generateAnswerComparison()
+                : {};
 
             const payload = {
                 sessionId: this.sessionId,
@@ -3254,9 +3257,7 @@
                 duration: this.startTime ? Math.round((endTime - this.startTime) / 1000) : 0,
                 answers: Object.assign({}, this.answers),
                 correctAnswers: Object.assign({}, this.correctAnswers),
-                answerComparison: includeComparison
-                    ? this.generateAnswerComparison()
-                    : {},
+                answerComparison: answerComparison,
                 interactions: Array.isArray(this.interactions) ? this.interactions.slice() : [],
                 scoreInfo: includeScore ? this.extractScore() : null,
                 practiceType: practiceType,
@@ -3275,6 +3276,25 @@
 
             // 新增：添加spellingErrors字段（初始为空数组，后续任务会实现）
             payload.spellingErrors = [];
+
+            if (includeScore) {
+                const comparisonScore = this.calculateScoreFromComparison(answerComparison);
+                const scoreInfo = payload.scoreInfo;
+                const needsFallback = !scoreInfo
+                    || !Number.isFinite(scoreInfo.total)
+                    || scoreInfo.total === 0
+                    || (!Number.isFinite(scoreInfo.correct) && comparisonScore)
+                    || (scoreInfo.correct === 0 && comparisonScore && comparisonScore.correct > 0);
+
+                if (!scoreInfo && comparisonScore) {
+                    payload.scoreInfo = comparisonScore;
+                } else if (needsFallback && comparisonScore) {
+                    payload.scoreInfo = Object.assign({}, comparisonScore, scoreInfo || {});
+                    if (!payload.scoreInfo.source && comparisonScore.source) {
+                        payload.scoreInfo.source = comparisonScore.source;
+                    }
+                }
+            }
 
             this.runHooks('afterBuildPayload', payload);
 
@@ -3322,6 +3342,42 @@
             
             console.log('[PracticeEnhancer] 生成答案比较:', comparison);
             return comparison;
+        },
+
+        calculateScoreFromComparison: function(comparison) {
+            if (!comparison || typeof comparison !== 'object') {
+                return null;
+            }
+
+            let correct = 0;
+            let total = 0;
+
+            Object.values(comparison).forEach((item) => {
+                if (!item || typeof item !== 'object') {
+                    return;
+                }
+                const hasContent = item.userAnswer != null || item.correctAnswer != null;
+                if (!hasContent) {
+                    return;
+                }
+                total += 1;
+                if (item.isCorrect) {
+                    correct += 1;
+                }
+            });
+
+            if (total === 0) {
+                return null;
+            }
+
+            const accuracy = correct / total;
+            return {
+                correct,
+                total,
+                accuracy,
+                percentage: Math.round(accuracy * 100),
+                source: 'comparison_fallback'
+            };
         },
 
         compareAnswers: function (userAnswer, correctAnswer) {
