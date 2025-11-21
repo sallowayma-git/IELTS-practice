@@ -13,7 +13,7 @@
         if (typeof nativeConsole[method] === 'function') {
             return nativeConsole[method].bind(nativeConsole);
         }
-        return function noop() {};
+        return function noop() { };
     }
 
     class AppLogger {
@@ -50,7 +50,7 @@
                 ScoreStorage: 'info'
             };
             this.suppressionNotices = new Set();
-            
+
             // 新增：日志聚合和折叠功能
             this.logGroups = new Map(); // 用于存储分组日志
             this.collapsedLogs = new Map(); // 用于存储已折叠的日志
@@ -60,7 +60,7 @@
 
             // 新增：批量操作计数器
             this.batchCounters = new Map(); // 用于批量统计操作
-            
+
             // 新增：重复日志抑制功能
             this.suppressionCounters = new Map(); // 重复日志计数器
             this.duplicateDetection = {
@@ -68,7 +68,7 @@
                 timeWindow: 5000, // 5秒时间窗口
                 minCount: 3 // 最少出现3次后开始抑制
             };
-            
+
             // 新增：专门抑制配置
             this.categorySuppression = {
                 DataConsistencyManager: {
@@ -127,16 +127,16 @@
                     }
                 }
             };
-            
+
             const initialConfig = this.mergeConfig(externalConfig);
             this.globalLevel = initialConfig.level;
             this.categoryLevels = initialConfig.categories;
-            
+
             // 【紧急修复】立即强制设置 DataConsistencyManager 为 error 级别
             this.categoryLevels['DataConsistencyManager'] = 'error';
-            
+
             this.overrideConsole();
-            
+
             // 【调试信息】输出当前设置状态
             if (this.nativeMethods.log) {
                 this.nativeMethods.log(`[Logger] DataConsistencyManager 级别已强制设置为: ${this.categoryLevels['DataConsistencyManager']}`);
@@ -153,7 +153,7 @@
                 if (stored) {
                     persisted = JSON.parse(stored);
                 }
-            } catch (_) {}
+            } catch (_) { }
 
             const result = {
                 level: this.validateLevel(externalConfig.level)
@@ -181,7 +181,7 @@
                         categories: this.categoryLevels
                     }));
                 }
-            } catch (_) {}
+            } catch (_) { }
         }
 
         overrideConsole() {
@@ -256,7 +256,7 @@
                 return;
             }
             this.suppressionNotices.add(category);
-            const notifier = this.nativeMethods.log || function noop() {};
+            const notifier = this.nativeMethods.log || function noop() { };
             notifier(
                 `[Logger] ${category} 日志已折叠（当前级别: ${this.getCategoryLevel(category)}）。` +
                 ` 执行 window.AppLogger.setCategoryLevel('${category}','info') 以查看详细输出。`
@@ -283,10 +283,10 @@
             const summary = this.getLogSummary(args);
             const method = this.methodMap[level] || 'log';
             const target = this.nativeMethods[method] || this.nativeMethods.log;
-            
+
             const icon = level === 'error' ? '🔴' : level === 'warn' ? '🟡' : '🔽';
             target(`${icon} 已折叠 ${count} 条 ${category} 日志: ${summary}`);
-            
+
             // 添加展开提示
             if (this.nativeMethods.log) {
                 this.nativeMethods.log(`   💡 执行 window.AppLogger.expandLogGroup('${key}') 查看详细内容`);
@@ -307,7 +307,7 @@
 
             // 输出分隔线和组信息
             this.nativeMethods.log(`📋 展开 ${count} 条 ${category} 日志:`);
-            
+
             // 输出所有折叠的日志
             logs.forEach(log => {
                 target(`[${category}]`, ...log.args);
@@ -449,7 +449,7 @@
 
         // 新增：输出批量统计
         outputBatchStats(category, counter) {
-            const method = this.nativeMethods.log || function noop() {};
+            const method = this.nativeMethods.log || function noop() { };
             const patterns = Array.from(counter.suppressedPatterns);
             let summary = '';
             if (patterns.length > 0) {
@@ -474,7 +474,7 @@
 
             const key = this.generateLogKey(category, level, args);
             const now = Date.now();
-            
+
             // 获取或创建计数器
             if (!this.suppressionCounters.has(key)) {
                 this.suppressionCounters.set(key, {
@@ -484,9 +484,9 @@
                 });
                 return false;
             }
-            
+
             const counter = this.suppressionCounters.get(key);
-            
+
             // 检查时间窗口
             if (now - counter.firstSeen > this.duplicateDetection.timeWindow) {
                 // 重置计数器
@@ -497,11 +497,11 @@
                 });
                 return false;
             }
-            
+
             // 增加计数器
             counter.count++;
             counter.lastSeen = now;
-            
+
             // 如果达到最小抑制计数，则返回 true 进行抑制
             if (counter.count >= this.duplicateDetection.minCount) {
                 // 如果是第一次达到阈值，输出抑制通知
@@ -510,14 +510,14 @@
                 }
                 return true;
             }
-            
+
             return false;
         }
 
         // 新增：输出重复日志抑制通知
         outputDuplicateSuppression(category, count, args) {
             const summary = this.getLogSummary(args);
-            const method = this.nativeMethods.log || function noop() {};
+            const method = this.nativeMethods.log || function noop() { };
             method(`🗝️ 已抑制 ${count - 1} 条重复的 ${category} 日志: ${summary}`);
         }
 
@@ -709,7 +709,7 @@
                     this.setCategoryLevel(category, level);
                 });
             }
-            
+
             // 新增：配置分组功能
             if (config.enableGrouping !== undefined) {
                 this.enableGrouping = config.enableGrouping;
