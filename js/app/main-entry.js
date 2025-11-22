@@ -17,6 +17,13 @@
         return browseGroupPromise;
     }
 
+    function ensureExamData() {
+        if (typeof global.ensureExamDataScripts === 'function') {
+            return global.ensureExamDataScripts();
+        }
+        return ensureLazyGroup('exam-data');
+    }
+
     function ensureMoreToolsGroup() {
         return ensureLazyGroup('more-tools');
     }
@@ -168,6 +175,10 @@
                 global.AppActions.preloadPracticeSuite();
             } catch (_) { }
         }
+        // 预拉题库脚本，避免后续 loadLibrary 阻塞
+        ensureExamData().catch(function preloadExamError(error) {
+            console.warn('[MainEntry] 预加载 exam-data 失败:', error);
+        });
         // 预先加载 browse 组，确保 loadLibrary 等遗留逻辑可用
         ensureBrowseGroup().catch(function preloadError(error) {
             console.warn('[MainEntry] 预加载 browse-view 失败:', error);
@@ -197,6 +208,7 @@
     global.AppEntry = Object.assign({}, global.AppEntry || {}, {
         ensureBrowseGroup: ensureBrowseGroup,
         ensureMoreToolsGroup: ensureMoreToolsGroup,
-        browseReady: function () { return browseGroupPromise || ensureBrowseGroup(); }
+        browseReady: function () { return browseGroupPromise || ensureBrowseGroup(); },
+        examDataReady: ensureExamData
     });
 })(typeof window !== 'undefined' ? window : this);

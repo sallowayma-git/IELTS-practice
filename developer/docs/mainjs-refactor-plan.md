@@ -18,12 +18,12 @@
 - 数据结构：题库索引、练习记录、命名空间 `exam_system` 不变；不修改存储 schema。
 
 ## 拆分方案（建议文件与分组）
-1) **入口/壳层** `js/app/main-entry.js`（新建）
-   - 职责：等待 `storage` ready 设置 namespace、初始化导航、触发 overview 渲染、绑定 `examIndexLoaded` 监听。
-   - 仅依赖：logger、storage、navigation-controller、overviewView、AppBootScreen。
+1) **入口/壳层** `js/app/main-entry.js`（已建）
+   - 已完成：等待 `storage` ready 设置 namespace、初始化导航、触发 overview 渲染、绑定 `examIndexLoaded` 监听；预加载 `exam-data` 与 `browse-view` 分组，idle 预加载 `more-tools`。
+   - 依赖：logger、storage、navigation-controller、overviewView、AppBootScreen。
 
-2) **导航与首页交互** `js/presentation/indexInteractions.js`（新建或扩展导航控制器）
-   - 包含：`initializeIndexInteractions`、`setupIndexSettingsButtons`、`setupQuickLaneInteractions`，去除多余全局依赖，提供 `ensureIndexInteractions()`。
+2) **导航与首页交互** `js/presentation/indexInteractions.js`（已建）
+   - 已完成：`initializeIndexInteractions`、`setupIndexSettingsButtons`、`setupQuickLaneInteractions`，导航 hover/click 预取 `browse-view`/`more-tools`。
    - 依赖：DOMAdapter、NavigationController、message-center。
 
 3) **题库浏览模块**（整合到已有 `js/app/browseController.js` + 新文件 `js/app/examActions.js`）
@@ -35,20 +35,25 @@
    - 将 main.js 中与练习记录同步/导出/虚拟滚动的辅助函数移入对应组件，main.js 仅保留调度入口。
    - 依赖：PracticeDashboardView、markdownExporter、storage。
 
-5) **更多工具 & 时钟** `js/presentation/moreView.js`（新建）
-   - 迁移：`setupMoreViewInteractions`、时钟状态对象、flip/digital/ambient 初始化与事件绑定、vocab 入口。
+5) **更多工具 & 时钟** `js/presentation/moreView.js`（已建）
+   - 已迁移：`setupMoreViewInteractions`、时钟状态对象、flip/digital/ambient 初始化与事件绑定、vocab 入口。
    - 导出：`ensureMoreView()`；全局暴露必要的 overlay 控制函数。
 
-6) **小游戏入口** `js/presentation/miniGames.js`（新建）
-   - 包含：`launchMiniGame`（转发到具体游戏/提示），挂载到 `window.launchMiniGame`。
+6) **小游戏入口** `js/presentation/miniGames.js`（已建）
+   - 已迁移：`launchMiniGame`（vocab-spark 实现）、模态绑定、输入处理，挂载到 `window.launchMiniGame`。
 
-7) **LazyLoader 分组调整** `js/runtime/lazyLoader.js`
-   - 新增分组：`browse-view`（browseController + examActions + 相关 utils）、`more-tools`（moreView + clock/vocab 依赖），`practice-suite` 保留。
-   - 在入口/导航 hover/视图切换时 `ensureGroup`：nav hover/点击 browse → `browse-view`，点击 more → `more-tools`，idle/hover practice → `practice-suite`。
+7) **LazyLoader 分组调整** `js/runtime/lazyLoader.js`（已调整）
+   - 分组：`browse-view`（state-service、browseController、message-center、legacy-adapter、PDF/DataIntegrity/Performance/BrowseStateManager、一致性工具、BrowsePreferencesUtils、main.js）；`more-tools`（vocab 数据/调度/视图、dataBackupManager、dataManagementPanel、moreView、miniGames）；`practice-suite`（markdownExporter、practiceRecordModal、practiceHistoryEnhancer、scoreStorage、practiceRecorder 及依赖）；`exam-data` 保留。
+   - 触发：main-entry 启动时预加载 browse，idle 预加载 more；导航 hover/click 预取 browse/more；practice hover 预取 practice-suite。
 
-8) **index.html 引用简化**
-   - 改为加载：bootScreen、lazyLoader、logger、storage 基础、navigation-controller、overview 视图、main-entry。
-   - 其他模块依赖 lazyLoader 组（不再直接列出大段脚本）。
+8) **index.html 引用简化**（已精简至 39 个 script）
+   - 仅直载：bootScreen/lazyLoader/app-actions、logger+storage 基础、DOM+overview、navigation-controller、入口代理（main-entry/examActions/indexInteractions）、boot-fallbacks、runtime-fixes、App mixins + app.js。
+   - 其它模块由 lazyLoader 分组加载，首屏不再直载 main.js/practice/more 相关脚本。
+
+## 进行中的拆分计划（下一步）
+- 将 main.js 中“题库列表渲染/按钮委托/练习导出”等浏览相关逻辑迁移到现有 `js/app/examActions.js`（不新增组件），保留全局函数名（`setupExamActionHandlers`、`exportPracticeData` 等）并让 display/load 直接调用迁出的实现。
+- 更新 lazyLoader `browse-view` 分组顺序，确保 examActions 在 main.js 之前加载；移除 main.js 内对应旧实现，保留 shim/调用。
+- 自查：浏览页按钮点击、导出、考试启动流程在分组加载后正常；Boot 不再依赖手动触发 examIndexLoaded。
 
 ## 开发步骤（顺序执行）
 1) 梳理 main.js 依赖：列出全局变量/函数与所需外部模块，写入各子模块顶部 TODO。
@@ -56,8 +61,8 @@
 3) 更新 lazyLoader manifest 分组与 app-actions 预取触发。
 4) 更新 index.html 脚本引用为新入口与核心依赖（保持 defer），移除一次性大包。
 5) 清理冗余兜底/重复日志，确保 TDZ/顺序问题不存在。
-6) 自测：浏览器打开首屏、切换 browse/practice/more，控制台无未定义错误；验证导出/题库加载正常。
-7) 按仓库要求运行：`python developer/tests/ci/run_static_suite.py`，`python developer/tests/e2e/suite_practice_flow.py`。
+6) 自测：浏览器打开首屏、切换 browse/practice/more，控制台无未定义错误；验证导出/题库加载正常。（当前手动触发 `ensureGroup('exam-data')->loadLibrary()->dispatch examIndexLoaded` 可工作，后续需确保自动链路正常）
+7) 按仓库要求运行：`python developer/tests/ci/run_static_suite.py`，`python developer/tests/e2e/suite_practice_flow.py`。（未跑）
 
 ## 风险与防御
 - **顺序依赖破裂**：拆分后若忘记在分组内保持执行顺序，会导致全局变量未定义；分组加载顺序需严格按依赖排列。
