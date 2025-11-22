@@ -10,10 +10,48 @@
             'assets/scripts/complete-exam-data.js',
             'assets/scripts/listening-exam-data.js'
         ];
+
         manifest['practice-suite'] = [
+            // 练习记录功能与存储相关，需按用户行为加载
             'js/utils/markdownExporter.js',
             'js/components/practiceRecordModal.js',
-            'js/components/practiceHistoryEnhancer.js'
+            'js/components/practiceHistoryEnhancer.js',
+            'js/core/scoreStorage.js',
+            'js/utils/answerSanitizer.js',
+            'js/core/practiceRecorder.js',
+            'js/core/legacyStateBridge.js',
+            'js/utils/legacyStateAdapter.js',
+            'js/services/GlobalStateService.js'
+        ];
+
+        manifest['browse-view'] = [
+            // 浏览和主逻辑
+            'js/app/state-service.js',
+            'js/app/browseController.js',
+            'js/presentation/message-center.js',
+            'js/runtime/legacy-state-adapter.js',
+            'js/components/PDFHandler.js',
+            'js/components/SystemDiagnostics.js',
+            'js/components/PerformanceOptimizer.js',
+            'js/components/DataIntegrityManager.js',
+            'js/components/BrowseStateManager.js',
+            'js/utils/dataConsistencyManager.js',
+            'js/utils/answerComparisonUtils.js',
+            'js/utils/BrowsePreferencesUtils.js',
+            'js/main.js'
+        ];
+
+        manifest['more-tools'] = [
+            // 更多工具与词汇模块
+            'js/utils/vocabDataIO.js',
+            'js/core/vocabScheduler.js',
+            'js/core/vocabStore.js',
+            'js/components/vocabDashboardCards.js',
+            'js/components/vocabSessionView.js',
+            'js/utils/dataBackupManager.js',
+            'js/components/dataManagementPanel.js',
+            'js/presentation/moreView.js',
+            'js/presentation/miniGames.js'
         ];
     }
 

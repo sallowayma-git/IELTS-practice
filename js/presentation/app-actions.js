@@ -3,6 +3,8 @@
 
     var prefetchTriggered = false;
     var attachedPrefetchHandlers = false;
+    var browsePrefetchTriggered = false;
+    var morePrefetchTriggered = false;
 
     function ensurePracticeSuite() {
         if (!global.AppLazyLoader || typeof global.AppLazyLoader.ensureGroup !== 'function') {
@@ -49,6 +51,30 @@
         });
     }
 
+    function triggerBrowsePrefetch() {
+        if (browsePrefetchTriggered) {
+            return;
+        }
+        browsePrefetchTriggered = true;
+        if (global.AppLazyLoader && typeof global.AppLazyLoader.ensureGroup === 'function') {
+            global.AppLazyLoader.ensureGroup('browse-view').catch(function swallow(error) {
+                console.warn('[AppActions] 浏览模块预加载失败:', error);
+            });
+        }
+    }
+
+    function triggerMorePrefetch() {
+        if (morePrefetchTriggered) {
+            return;
+        }
+        morePrefetchTriggered = true;
+        if (global.AppLazyLoader && typeof global.AppLazyLoader.ensureGroup === 'function') {
+            global.AppLazyLoader.ensureGroup('more-tools').catch(function swallow(error) {
+                console.warn('[AppActions] 更多工具预加载失败:', error);
+            });
+        }
+    }
+
     function attachPrefetchTriggers() {
         if (attachedPrefetchHandlers) {
             return;
@@ -59,6 +85,20 @@
         if (practiceButton) {
             ['pointerenter', 'focus'].forEach(function bind(eventName) {
                 practiceButton.addEventListener(eventName, triggerPrefetch, { once: true });
+            });
+        }
+
+        var browseButton = document.querySelector('.main-nav [data-view="browse"]');
+        if (browseButton) {
+            ['pointerenter', 'focus'].forEach(function bind(eventName) {
+                browseButton.addEventListener(eventName, triggerBrowsePrefetch, { once: true });
+            });
+        }
+
+        var moreButton = document.querySelector('.main-nav [data-view="more"]');
+        if (moreButton) {
+            ['pointerenter', 'focus'].forEach(function bind(eventName) {
+                moreButton.addEventListener(eventName, triggerMorePrefetch, { once: true });
             });
         }
 
@@ -80,6 +120,8 @@
     global.AppActions = Object.assign({}, global.AppActions, {
         exportPracticeMarkdown: exportPracticeMarkdown,
         ensurePracticeSuite: ensurePracticeSuite,
-        preloadPracticeSuite: triggerPrefetch
+        preloadPracticeSuite: triggerPrefetch,
+        preloadBrowseView: triggerBrowsePrefetch,
+        preloadMoreTools: triggerMorePrefetch
     });
 })(typeof window !== 'undefined' ? window : this);
