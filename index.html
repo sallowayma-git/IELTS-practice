@@ -420,20 +420,15 @@
         </div>
     </div>
 
-    <!-- 启动与懒加载工具 -->
+    <!-- 启动与懒加载工具（首屏必要） -->
     <script src="js/presentation/shuiBackground.js" defer></script>
     <script src="js/runtime/bootScreen.js" defer></script>
     <script src="js/runtime/lazyLoader.js" defer></script>
     <script src="js/presentation/app-actions.js" defer></script>
 
-    <!-- 环境探测 -->
+    <!-- 基础环境与日志（首屏必要） -->
     <script src="js/utils/environmentDetector.js"></script>
-
-    <!-- 日志系统 -->
     <script src="js/utils/logger.js"></script>
-
-    <!-- 加载工具函数 -->
-
     <script src="js/utils/storage.js"></script>
     <script src="js/core/storageProviderRegistry.js"></script>
     <script src="js/data/dataSources/storageDataSource.js"></script>
@@ -446,72 +441,8 @@
     <script src="js/data/index.js"></script>
     <script src="js/utils/stateSerializer.js"></script>
     <script src="js/utils/simpleStorageWrapper.js"></script>
-    <script src="js/utils/vocabDataIO.js"></script>
-    <script src="js/core/vocabScheduler.js"></script>
-    <script src="js/core/vocabStore.js"></script>
-    <script src="js/components/vocabDashboardCards.js"></script>
-    <script src="js/components/vocabSessionView.js"></script>
-    <script src="js/utils/dataBackupManager.js"></script>
-    <script src="js/components/dataManagementPanel.js"></script>
 
-    <!-- 设置共享命名空间 -->
-    <script>
-        if (window.storage && window.storage.ready) {
-            window.storage.ready.then(() => {
-                if (typeof window.storage.setNamespace === 'function') {
-                    window.storage.setNamespace('exam_system');
-                    console.log('主页面已设置共享命名空间: exam_system');
-
-                    // 验证命名空间设置是否生效
-                    setTimeout(async () => {
-                        const testKey = 'namespace_test';
-                        const testValue = 'test_value_' + Date.now();
-                        try {
-                            await window.storage.set(testKey, testValue);
-                            const retrievedValue = await window.storage.get(testKey);
-                            if (retrievedValue === testValue) {
-                                console.log('✅ 命名空间设置验证成功: 存储和读取正常');
-                            } else {
-                                console.warn('❌ 命名空间设置验证失败: 读取值不匹配');
-                            }
-                            await window.storage.remove(testKey);
-                        } catch (error) {
-                            console.error('❌ 命名空间设置验证失败', error);
-                        }
-                    }, 1000);
-                } else {
-                    console.warn('存储管理器未加载或setNamespace方法不可用');
-                }
-            }).catch((error) => {
-                console.error('存储初始化失败，无法设置命名空间', error);
-            });
-        } else {
-            console.warn('存储管理器未加载或未暴露初始化状态');
-        }
-    </script>
-
-    <!-- 加载核心组件 -->
-    <script src="js/core/scoreStorage.js"></script>
-    <script src="js/utils/answerSanitizer.js"></script>
-    <script src="js/core/practiceRecorder.js"></script>
-    <script src="js/core/legacyStateBridge.js"></script>
-    <script src="js/utils/legacyStateAdapter.js"></script>
-    <script src="js/components/PDFHandler.js"></script>
-
-    <!-- 系统诊断组件 -->
-    <script src="js/components/SystemDiagnostics.js"></script>
-    <script src="js/components/PerformanceOptimizer.js"></script>
-    <script src="js/components/DataIntegrityManager.js"></script>
-    <script src="js/components/BrowseStateManager.js"></script>
-
-    <!-- Markdown 导出和记录详情功能 -->
-    <!--  -->
-    <script src="js/utils/dataConsistencyManager.js"></script>
-    <script src="js/utils/answerComparisonUtils.js"></script>
-    <script src="js/theme-switcher.js"></script>
-    <script src="js/utils/themeManager.js"></script>
-
-    <!-- 加载工具库 -->
+    <!-- 工具库与基础视图（首屏必要） -->
     <script src="js/utils/dom.js"></script>
     <script src="js/views/legacyViewBundle.js"></script>
     <script src="js/utils/performance.js"></script>
@@ -519,24 +450,16 @@
     <script src="js/utils/codeStandards.js"></script>
     <script src="js/services/overviewStats.js"></script>
     <script src="js/views/overviewView.js"></script>
-
-    <!-- 应用核心状态与展示模块 -->
-    <script src="js/app/state-service.js"></script>
-    <script src="js/app/browseController.js"></script>
-    <script src="js/presentation/message-center.js"></script>
     <script src="js/presentation/navigation-controller.js"></script>
-    <script src="js/runtime/legacy-state-adapter.js"></script>
 
-    <!-- 加载主脚本 -->
-    <script src="js/utils/BrowsePreferencesUtils.js"></script>
-    <script src="js/services/GlobalStateService.js"></script>
-    <script src="js/main.js"></script>
+    <!-- 入口与懒加载代理（首屏必要） -->
+    <script src="js/app/examActions.js"></script>
+    <script src="js/app/main-entry.js"></script>
+    <script src="js/presentation/indexInteractions.js"></script>
     <script src="js/boot-fallbacks.js"></script>
-    <!-- 运行时修复补丁（异步存储/恢复兼容、本地file环境增强） -->
     <script src="js/patches/runtime-fixes.js"></script>
 
-
-    <!-- 加载主应用（最后加载） -->
+    <!-- 应用核心（首屏必要） -->
     <script src="js/app/stateMixin.js"></script>
     <script src="js/app/bootstrapMixin.js"></script>
     <script src="js/app/lifecycleMixin.js"></script>
