@@ -25,7 +25,8 @@
         ];
 
         manifest['browse-view'] = [
-            // 浏览和主逻辑
+            // 浏览和主逻辑（先加载按钮/导出等动作，再加载主体 main）
+            'js/app/examActions.js',
             'js/app/state-service.js',
             'js/app/browseController.js',
             'js/presentation/message-center.js',

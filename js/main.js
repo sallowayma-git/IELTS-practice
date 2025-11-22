@@ -3131,47 +3131,6 @@ function performSearch(query) {
     displayExams(searchResults);
 }
 
-/* Replaced by robust exporter below */
-async function exportPracticeData() {
-    try {
-        const records = window.storage ? (await window.storage.get('practice_records', [])) : getPracticeRecordsState();
-        const stats = window.app && window.app.userStats ? window.app.userStats : (window.practiceStats || {});
-
-        if (!records || records.length === 0) {
-            showMessage('没有练习数据可导出', 'info');
-            return;
-        }
-
-        showMessage('正在准备导出...', 'info');
-        setTimeout(() => {
-            try {
-                const data = {
-                    exportDate: new Date().toISOString(),
-                    stats: stats,
-                    records: records
-                };
-
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json; charset=utf-8' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `practice-records-${new Date().toISOString().split('T')[0]}.json`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-
-                showMessage('导出完成', 'success');
-            } catch (error) {
-                console.error('导出失败:', error);
-                showMessage('导出失败: ' + error.message, 'error');
-            }
-        }, 100);
-    } catch (e) {
-        console.error('导出失败:', e);
-        showMessage('导出失败: ' + e.message, 'error');
-    }
-}
 async function toggleBulkDelete() {
     const nextMode = !getBulkDeleteModeState();
     setBulkDeleteModeState(nextMode);
@@ -4333,93 +4292,7 @@ function startRandomPractice(category, type = 'reading', filterMode = null, path
 
 // 已迁移至 js/presentation/indexInteractions.js
 
-// Safe exporter (compat with old UI)
-async function exportPracticeData() {
-    try {
-        if (window.dataIntegrityManager && typeof window.dataIntegrityManager.exportData === 'function') {
-            window.dataIntegrityManager.exportData();
-            try { showMessage('导出完成', 'success'); } catch (_) { }
-            return;
-        }
-    } catch (_) { }
-    try {
-        var records = (window.storage && storage.get) ? (await storage.get('practice_records', [])) : getPracticeRecordsState();
-        var blob = new Blob([JSON.stringify(records, null, 2)], { type: 'application/json; charset=utf-8' });
-        var url = URL.createObjectURL(blob);
-        var a = document.createElement('a'); a.href = url; a.download = 'practice-records.json';
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        try { showMessage('导出完成', 'success'); } catch (_) { }
-    } catch (e) {
-        try { showMessage('导出失败: ' + (e && e.message || e), 'error'); } catch (_) { }
-        console.error('[Export] failed', e);
-    }
+if (typeof setupExamActionHandlers === 'function') {
+    setupExamActionHandlers();
 }
-
-let examActionHandlersConfigured = false;
-
-function setupExamActionHandlers() {
-    if (examActionHandlersConfigured) {
-        return;
-    }
-
-    const invoke = (target, event) => {
-        const action = target.dataset.action;
-        const examId = target.dataset.examId;
-        if (!action || !examId) {
-            return;
-        }
-
-        event.preventDefault();
-
-        if (action === 'start' && typeof openExam === 'function') {
-            openExam(examId);
-            return;
-        }
-
-        if (action === 'pdf' && typeof viewPDF === 'function') {
-            viewPDF(examId);
-            return;
-        }
-
-        if (action === 'generate' && typeof generateHTML === 'function') {
-            generateHTML(examId);
-        }
-    };
-
-    const hasDomDelegate = typeof window !== 'undefined'
-        && window.DOM
-        && typeof window.DOM.delegate === 'function';
-
-    if (hasDomDelegate) {
-        window.DOM.delegate('click', '[data-action="start"]', function (event) {
-            invoke(this, event);
-        });
-        window.DOM.delegate('click', '[data-action="pdf"]', function (event) {
-            invoke(this, event);
-        });
-        window.DOM.delegate('click', '[data-action="generate"]', function (event) {
-            invoke(this, event);
-        });
-    } else {
-        document.addEventListener('click', (event) => {
-            const target = event.target.closest('[data-action]');
-            if (!target) {
-                return;
-            }
-
-            const container = document.getElementById('exam-list-container');
-            if (container && !container.contains(target)) {
-                return;
-            }
-
-            invoke(target, event);
-        });
-    }
-
-    examActionHandlersConfigured = true;
-    console.log('[Main] 考试操作按钮事件委托已设置');
-}
-
-setupExamActionHandlers();
 ensurePracticeSessionSyncListener();
