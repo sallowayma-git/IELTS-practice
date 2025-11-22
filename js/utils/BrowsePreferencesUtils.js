@@ -51,6 +51,11 @@
         if (match) {
             return match[1].toUpperCase();
         }
+        // 处理 "Part 1", "Part 2" 等格式
+        const partMatch = trimmed.match(/^Part\s+([1-4])$/i);
+        if (partMatch) {
+            return 'P' + partMatch[1];
+        }
         const embedded = trimmed.match(/\b(P[1-4])\b/i);
         if (embedded) {
             return embedded[1].toUpperCase();
