@@ -362,7 +362,7 @@
         let type = normalizeExamType(record.type || record.examType);
         let title = record.title || record.examTitle || null;
 
-        if (category === 'all' || !title || type === 'all') {
+        if (category === 'all' || category === 'Unknown' || !title || type === 'all') {
             const list = Array.isArray(examIndex) ? examIndex : [];
             let entry = null;
             if (examId) {
@@ -372,7 +372,7 @@
                 entry = list.find((exam) => exam && exam.title === title);
             }
             if (entry) {
-                if (category === 'all' && entry.category) {
+                if ((category === 'all' || category === 'Unknown') && entry.category) {
                     category = normalizeCategoryKey(entry.category);
                 }
                 if (type === 'all' && entry.type) {
@@ -664,7 +664,7 @@
                 }
             };
 
-            if (prefs.autoScrollEnabled && normalizedCategory !== 'all') {
+            if (prefs.autoScrollEnabled && (normalizedCategory !== 'all' || normalizedType !== 'all')) {
                 const entry = findLastPracticeExamEntry(exams, normalizedCategory, normalizedType);
                 if (entry) {
                     const retries = autoScrollContext ? 7 : 4;
