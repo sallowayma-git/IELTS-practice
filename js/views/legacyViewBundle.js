@@ -8,6 +8,20 @@
         return Array.isArray(value) ? value : [];
     }
 
+    function normalizeTypeValue(value) {
+        if (!value) {
+            return '';
+        }
+        var normalized = String(value).toLowerCase();
+        if (normalized.indexOf('read') !== -1 || normalized.indexOf('阅读') !== -1) {
+            return 'reading';
+        }
+        if (normalized.indexOf('listen') !== -1 || normalized.indexOf('听力') !== -1) {
+            return 'listening';
+        }
+        return normalized;
+    }
+
     function toDateKey(value) {
         if (!value) {
             return null;
@@ -17,6 +31,35 @@
             return null;
         }
         return date.toISOString().slice(0, 10);
+    }
+
+    function getRecordTimestamp(record) {
+        if (!record || typeof record !== 'object') {
+            return 0;
+        }
+        var candidates = [
+            record.date, record.endTime, record.timestamp, record.createdAt, record.updatedAt,
+            record.completedAt
+        ];
+        var rd = record.realData || {};
+        candidates.push(rd.date, rd.endTime, rd.timestamp);
+
+        var maxTs = 0;
+        for (var i = 0; i < candidates.length; i += 1) {
+            var candidate = candidates[i];
+            if (candidate == null) {
+                continue;
+            }
+            var parsed = new Date(candidate).getTime();
+            if (!isNaN(parsed) && parsed > maxTs) {
+                maxTs = parsed;
+                continue;
+            }
+            if (typeof candidate === 'number' && isFinite(candidate) && candidate > maxTs) {
+                maxTs = candidate;
+            }
+        }
+        return maxTs;
     }
 
     function calculateStreak(uniqueDateKeys) {
@@ -97,12 +140,30 @@
         if (!type || type === 'all') {
             return ensureArray(records);
         }
+        var targetType = normalizeTypeValue(type);
         var index = ensureArray(exams);
         return ensureArray(records).filter(function (record) {
+            if (!record) {
+                return false;
+            }
             var exam = index.find(function (item) {
                 return item && (item.id === record.examId || item.title === record.title);
             });
-            return exam ? exam.type === type : false;
+            var examType = exam ? normalizeTypeValue(exam.type) : '';
+            if (examType) {
+                return examType === targetType;
+            }
+            var recordType = normalizeTypeValue(
+                record.type ||
+                record.examType ||
+                (record.metadata && record.metadata.type) ||
+                (record.realData && record.realData.type)
+            );
+            if (recordType) {
+                return recordType === targetType;
+            }
+            // 无法确定类型时保持展示，避免题库切换导致历史记录被过滤掉
+            return true;
         });
     }
 
@@ -811,18 +872,22 @@
     };
 
     LegacyExamListView.prototype._getCompletionStatus = function _getCompletionStatus(exam) {
-        var records = ensureArray(global.practiceRecords).filter(function (record) {
+        var source = (typeof global.getPracticeRecordsState === 'function')
+            ? global.getPracticeRecordsState()
+            : global.practiceRecords;
+        var records = ensureArray(source).filter(function (record) {
             return record && (record.examId === exam.id || record.title === exam.title);
         });
         if (records.length === 0) {
             return null;
         }
         records.sort(function (a, b) {
-            return new Date(b.date) - new Date(a.date);
+            return getRecordTimestamp(b) - getRecordTimestamp(a);
         });
+        var latest = records[0] || {};
         return {
-            percentage: records[0].percentage || 0,
-            date: records[0].date
+            percentage: typeof latest.percentage === 'number' ? latest.percentage : 0,
+            date: latest.date || latest.endTime || latest.timestamp || latest.createdAt || null
         };
     };
 
