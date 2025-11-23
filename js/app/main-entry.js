@@ -28,6 +28,10 @@
         return ensureLazyGroup('more-tools');
     }
 
+    function ensureThemeToolsGroup() {
+        return ensureLazyGroup('theme-tools');
+    }
+
     function setStorageNamespace() {
         if (!global.storage || !global.storage.ready || typeof global.storage.setNamespace !== 'function') {
             return;
@@ -121,6 +125,26 @@
         };
     }
 
+    function ensureGlobalFunctionAfterGroup(name, group, fallback) {
+        if (typeof global[name] === 'function') {
+            return;
+        }
+        var proxy = function lazyProxy() {
+            var args = Array.prototype.slice.call(arguments);
+            return ensureLazyGroup(group).then(function () {
+                var fn = global[name];
+                if (typeof fn === 'function' && fn !== proxy) {
+                    return fn.apply(global, args);
+                }
+                if (typeof fallback === 'function') {
+                    return fallback.apply(global, args);
+                }
+                return undefined;
+            });
+        };
+        global[name] = proxy;
+    }
+
     // 懒加载代理（browse 组）
     if (typeof global.loadExamList !== 'function') {
         global.loadExamList = proxyAfterGroup('browse-view', function () {
@@ -133,6 +157,18 @@
             return global.__legacyResetBrowseViewToAll || global.resetBrowseViewToAll;
         });
     }
+
+    ensureGlobalFunctionAfterGroup('showLibraryLoaderModal', 'browse-view', function () {
+        if (typeof global.showMessage === 'function') {
+            global.showMessage('题库管理模块未就绪', 'warning');
+        }
+    });
+
+    ensureGlobalFunctionAfterGroup('showThemeSwitcherModal', 'theme-tools', function () {
+        if (typeof global.showMessage === 'function') {
+            global.showMessage('主题切换模块未就绪', 'warning');
+        }
+    });
 
     // 懒加载代理（more 组/小游戏）
     if (typeof global.launchMiniGame !== 'function') {
