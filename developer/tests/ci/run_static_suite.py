@@ -121,6 +121,15 @@ def _check_contains(path: Path, snippet: str) -> Tuple[bool, str]:
     return present, ("已包含片段" if present else f"缺少片段：{snippet}")
 
 
+def _check_practice_suite_preload(main_entry: Path) -> Tuple[bool, str]:
+    """Ensure main-entry triggers practice-suite preload (important for file:// runs)."""
+    ok, detail = _check_contains(
+        main_entry,
+        "ensureLazyGroup('practice-suite')"
+    )
+    return ok, detail
+
+
 def _collect_mixin_methods(app_dir: Path) -> List[str]:
     pattern = re.compile(r"^\s{8}(?:async\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\(", re.MULTILINE)
     reserved = {"if", "for", "while", "switch", "catch", "function", "return"}
@@ -275,6 +284,8 @@ def run_checks() -> Tuple[List[dict], bool]:
     results: List[dict] = []
     all_passed = True
 
+    main_entry = REPO_ROOT / "js" / "app" / "main-entry.js"
+
     # Core entry point presence
     index_file = REPO_ROOT / "index.html"
     passed, detail = _ensure_exists(index_file)
@@ -389,6 +400,10 @@ def run_checks() -> Tuple[List[dict], bool]:
     wrapper_passed, wrapper_detail = _check_contains(simple_wrapper, "dataRepositories")
     results.append(_format_result("simpleStorageWrapper 适配数据仓库", wrapper_passed, wrapper_detail))
     all_passed &= wrapper_passed
+
+    preload_ok, preload_detail = _check_practice_suite_preload(main_entry)
+    results.append(_format_result("practice-suite 预加载保障 (file:// 兼容)", preload_ok, preload_detail))
+    all_passed &= preload_ok
 
     main_js_path = REPO_ROOT / "js" / "main.js"
     main_js_exists, main_js_detail = _ensure_exists(main_js_path)

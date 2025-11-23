@@ -206,10 +206,15 @@
     function init() {
         setStorageNamespace();
         initializeNavigationShell();
+        // 确保练习套件在 file:// 等环境下也预加载，避免懒加载失败导致记录丢失
         if (global.AppActions && typeof global.AppActions.preloadPracticeSuite === 'function') {
             try {
                 global.AppActions.preloadPracticeSuite();
             } catch (_) { }
+        } else {
+            ensureLazyGroup('practice-suite').catch(function preloadPracticeSuiteError(err) {
+                console.warn('[MainEntry] 预加载 practice-suite 失败:', err);
+            });
         }
         // 预拉题库脚本，避免后续 loadLibrary 阻塞
         ensureExamData().catch(function preloadExamError(error) {
