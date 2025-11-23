@@ -1,0 +1,15 @@
+{
+  "name": "ielts-practice-developer",
+  "version": "1.0.0",
+  "description": "Development and testing dependencies for IELTS Practice",
+  "private": true,
+  "devDependencies": {
+    "@playwright/test": "^1.56.1"
+  },
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug"
+  }
+}

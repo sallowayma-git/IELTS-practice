@@ -10,6 +10,19 @@ class StorageManager {
         this.sessionStorageAvailable = false;
         this.useSessionStorageFallback = false;
         this.backendPreferenceKey = this.prefix + 'storage_backend';
+        this.persistentKeys = new Set([
+            'practice_records',
+            'user_stats',
+            'manual_backups',
+            'backup_settings',
+            'export_history',
+            'import_history',
+            'exam_index',
+            'exam_index_configurations',
+            'active_exam_index_key',
+            'settings',
+            'learning_goals'
+        ]);
         this.ready = this.initializeStorage().catch(error => {
             console.error('[Storage] 初始化失败:', error);
             throw error;
@@ -138,21 +151,15 @@ class StorageManager {
             try {
                 // 检查IndexedDB支持
                 if (!window.indexedDB) {
-                    if (this.localStorageAvailable) {
-                        console.warn('[Storage] IndexedDB 不支持，将使用 localStorage 持久化');
+                    if (this.localStorageAvailable || this.sessionStorageAvailable) {
+                        console.warn('[Storage] IndexedDB 不支持，将使用现有本地/会话存储');
                         this.indexedDB = null;
-                        resolve();
-                        return;
-                    }
-                    if (this.sessionStorageAvailable) {
-                        console.warn('[Storage] IndexedDB 不支持，使用 sessionStorage 作为退路（关闭标签页会丢失）');
-                        this.useSessionStorageFallback = true;
                         resolve();
                         return;
                     }
                     console.warn('[Storage] IndexedDB 不支持且无本地存储，fallback 到内存存储');
                     this.fallbackStorage = new Map();
-                    resolve(); // 即使不支持也 resolve，允许 fallback
+                    resolve();
                     return;
                 }
 
@@ -164,15 +171,9 @@ class StorageManager {
 
                 request.onerror = (event) => {
                     console.error('[Storage] IndexedDB 打开失败:', event.target.error);
-                    if (this.localStorageAvailable) {
-                        console.warn('[Storage] 使用 localStorage 作为 IndexedDB 失败的回退存储');
+                    if (this.localStorageAvailable || this.sessionStorageAvailable) {
+                        console.warn('[Storage] 使用 local/sessionStorage 作为回退存储');
                         this.indexedDB = null;
-                        resolve();
-                        return;
-                    }
-                    if (this.sessionStorageAvailable) {
-                        console.warn('[Storage] 使用 sessionStorage 作为 IndexedDB 失败的回退存储（关闭标签页会丢失）');
-                        this.useSessionStorageFallback = true;
                         resolve();
                         return;
                     }
@@ -207,15 +208,9 @@ class StorageManager {
 
             } catch (error) {
                 console.error('[Storage] IndexedDB 初始化失败:', error);
-                if (this.localStorageAvailable) {
-                    console.warn('[Storage] IndexedDB 初始化失败，将继续使用 localStorage');
+                if (this.localStorageAvailable || this.sessionStorageAvailable) {
+                    console.warn('[Storage] IndexedDB 初始化失败，将使用 local/sessionStorage');
                     this.indexedDB = null;
-                    resolve();
-                    return;
-                }
-                if (this.sessionStorageAvailable) {
-                    console.warn('[Storage] IndexedDB 初始化失败，将使用 sessionStorage（关闭标签页会丢失）');
-                    this.useSessionStorageFallback = true;
                     resolve();
                     return;
                 }
@@ -604,121 +599,66 @@ class StorageManager {
                 this.fallbackStorage.set(this.getKey(key), serializedValue);
                 this.dispatchStorageSync(key);
                 return true;
-            } else if (this.useSessionStorageFallback) {
-                console.log('[Storage] 使用 sessionStorage 存储 (退路，关闭标签页会丢失)');
-                sessionStorage.setItem(this.getKey(key), serializedValue);
-                this.setBackendPreference('session');
-                this.dispatchStorageSync(key);
-                return true;
-            } else if (this.indexedDB) {
-                console.log('[Storage] 尝试使用 IndexedDB 存储');
-                // 使用IndexedDB存储
+            }
+
+            // 首选 IndexedDB
+            if (this.indexedDB) {
                 try {
                     await this.setToIndexedDB(this.getKey(key), serializedValue);
-                    console.log('[Storage] IndexedDB 存储成功');
                     this.setBackendPreference('local');
                     this.dispatchStorageSync(key);
                     return true;
                 } catch (indexedDBError) {
-                    console.warn('[Storage] IndexedDB存储失败，尝试localStorage:', indexedDBError);
-
-                    // 降级到localStorage
-                    const quotaCheck = await this.checkStorageQuota(serializedValue.length, { skipReady });
-                    if (!quotaCheck) {
-                        console.warn('[Storage] 存储空间不足，尝试清理旧数据');
-                        await this.cleanupOldData({ skipReady });
-
-                        const quotaCheckAfterCleanup = await this.checkStorageQuota(serializedValue.length, { skipReady });
-                        if (!quotaCheckAfterCleanup) {
-                            console.error('[Storage] 存储空间仍然不足，无法保存数据');
-                            this.handleStorageQuotaExceeded(key, value);
-                            return false;
-                        }
-                    }
-
-                console.log('[Storage] 使用 localStorage 存储 (IndexedDB fallback)');
+                    console.warn('[Storage] IndexedDB存储失败，尝试其他本地存储:', indexedDBError);
+                }
+            } else {
+                // 尝试初始化一次 IndexedDB 再写
+                await this.ensureIndexedDBReady();
+                if (this.indexedDB) {
                     try {
-                        localStorage.setItem(this.getKey(key), serializedValue);
+                        await this.setToIndexedDB(this.getKey(key), serializedValue);
                         this.setBackendPreference('local');
                         this.dispatchStorageSync(key);
                         return true;
-                    } catch (lsError) {
-                        console.warn('[Storage] localStorage 存储失败，尝试提升到 IndexedDB 或 sessionStorage:', lsError);
-                        // 尝试提升到 IndexedDB
-                        const promoted = await this.tryPromoteToIndexedDB(serializedValue, key);
-                        if (promoted) {
-                            return true;
-                        }
-                        if (this.sessionStorageAvailable) {
-                            try {
-                                this.useSessionStorageFallback = true;
-                                sessionStorage.setItem(this.getKey(key), serializedValue);
-                                this.setBackendPreference('session');
-                                this.dispatchStorageSync(key);
-                                return true;
-                            } catch (ssError) {
-                                console.error('[Storage] sessionStorage 退路也失败，降级为内存存储:', ssError);
-                                this.fallbackStorage = this.fallbackStorage || new Map();
-                                this.fallbackStorage.set(this.getKey(key), serializedValue);
-                                this.dispatchStorageSync(key);
-                                return true;
-                            }
-                        }
-                        // 如果没有可用的持久化退路
-                        this.fallbackStorage = this.fallbackStorage || new Map();
-                        this.fallbackStorage.set(this.getKey(key), serializedValue);
-                        this.dispatchStorageSync(key);
-                        return true;
+                    } catch (indexedDBError2) {
+                        console.warn('[Storage] IndexedDB重试仍失败，继续降级:', indexedDBError2);
                     }
                 }
-            } else {
-                console.log('[Storage] 使用 localStorage 存储 (主要存储)');
-                // 使用localStorage存储
-                const quotaCheck = await this.checkStorageQuota(serializedValue.length, { skipReady });
-                if (!quotaCheck) {
-                    console.warn('[Storage] 存储空间不足，尝试清理旧数据');
-                    await this.cleanupOldData({ skipReady });
+            }
 
-                    const quotaCheckAfterCleanup = await this.checkStorageQuota(serializedValue.length, { skipReady });
-                    if (!quotaCheckAfterCleanup) {
-                        console.error('[Storage] 存储空间仍然不足，无法保存数据');
-                        this.handleStorageQuotaExceeded(key, value);
-                        return false;
-                    }
-                }
-
-                try {
-                    localStorage.setItem(this.getKey(key), serializedValue);
-                    this.setBackendPreference('local');
-                    this.dispatchStorageSync(key);
-                    return true;
-                } catch (lsError) {
-                    console.warn('[Storage] localStorage 存储失败，尝试提升到 IndexedDB 或 sessionStorage:', lsError);
-                    const promoted = await this.tryPromoteToIndexedDB(serializedValue, key);
-                    if (promoted) {
-                        return true;
-                    }
-                    if (this.sessionStorageAvailable) {
-                        try {
-                            this.useSessionStorageFallback = true;
-                            sessionStorage.setItem(this.getKey(key), serializedValue);
-                            this.setBackendPreference('session');
-                            this.dispatchStorageSync(key);
-                            return true;
-                        } catch (ssError) {
-                            console.error('[Storage] sessionStorage 退路也失败，降级为内存存储:', ssError);
-                            this.fallbackStorage = this.fallbackStorage || new Map();
-                            this.fallbackStorage.set(this.getKey(key), serializedValue);
-                            this.dispatchStorageSync(key);
-                            return true;
-                        }
-                    }
-                    this.fallbackStorage = this.fallbackStorage || new Map();
-                    this.fallbackStorage.set(this.getKey(key), serializedValue);
-                    this.dispatchStorageSync(key);
+            // 尝试 localStorage
+            const quotaCheck = await this.checkStorageQuota(serializedValue.length, { skipReady });
+            if (!quotaCheck) {
+                console.warn('[Storage] 存储空间不足，尝试清理旧数据');
+                await this.cleanupOldData({ skipReady });
+            }
+            try {
+                localStorage.setItem(this.getKey(key), serializedValue);
+                this.setBackendPreference('local');
+                this.dispatchStorageSync(key);
+                return true;
+            } catch (lsError) {
+                console.warn('[Storage] localStorage 存储失败，尝试提升到 IndexedDB 或 sessionStorage:', lsError);
+                const promoted = await this.tryPromoteToIndexedDB(serializedValue, key);
+                if (promoted) {
                     return true;
                 }
             }
+
+            // 尝试 sessionStorage（仅非关键键）
+            if (!this.persistentKeys.has(key) && this.sessionStorageAvailable) {
+                try {
+                    sessionStorage.setItem(this.getKey(key), serializedValue);
+                    this.setBackendPreference('session');
+                    this.dispatchStorageSync(key);
+                    return true;
+                } catch (ssError) {
+                    console.warn('[Storage] sessionStorage 存储失败，降级为内存存储:', ssError);
+                }
+            }
+
+            // 最后：如果所有持久化方案都失败，抛出错误而不是落到易丢失的内存
+            throw new Error('No persistent storage backend available for key: ' + key);
         } catch (error) {
             console.error('[Storage] set 操作错误:', error);
             this.handleStorageError(key, value, error);
@@ -780,37 +720,42 @@ class StorageManager {
         try {
             await this.ensureIndexedDBReady();
             let serializedValue;
-            const preferSession = this.useSessionStorageFallback || this.getStoredBackendPreference() === 'session';
+            let source = null;
 
             if (this.fallbackStorage) {
                 serializedValue = this.fallbackStorage.get(this.getKey(key));
-            } else if (preferSession && this.sessionStorageAvailable) {
-                serializedValue = sessionStorage.getItem(this.getKey(key));
-                if (!serializedValue && this.localStorageAvailable) {
-                    serializedValue = localStorage.getItem(this.getKey(key));
-                }
-            } else if (this.indexedDB) {
-                // 尝试从IndexedDB获取
+                if (serializedValue) source = 'memory';
+            }
+
+            // 优先 IndexedDB
+            if (!serializedValue && this.indexedDB) {
                 try {
                     serializedValue = await this.getFromIndexedDB(this.getKey(key));
+                    if (serializedValue) source = 'indexeddb';
                 } catch (indexedDBError) {
-                    console.warn('[Storage] IndexedDB获取失败，尝试localStorage:', indexedDBError);
-                    serializedValue = this.localStorageAvailable ? localStorage.getItem(this.getKey(key)) : null;
+                    console.warn('[Storage] IndexedDB获取失败，尝试其他存储:', indexedDBError);
                 }
-                // 如果IndexedDB为空但localStorage或sessionStorage有数据，继续读取
-                if (!serializedValue && this.localStorageAvailable) {
-                    serializedValue = localStorage.getItem(this.getKey(key));
-                }
-                if (!serializedValue && this.sessionStorageAvailable) {
-                    serializedValue = sessionStorage.getItem(this.getKey(key));
-                }
-            } else {
-                serializedValue = this.localStorageAvailable
-                    ? localStorage.getItem(this.getKey(key))
-                    : (this.sessionStorageAvailable ? sessionStorage.getItem(this.getKey(key)) : null);
-                if (!serializedValue && this.sessionStorageAvailable) {
-                    serializedValue = sessionStorage.getItem(this.getKey(key));
-                }
+            } else if (!serializedValue) {
+                // 尝试初始化一次再读
+                try {
+                    await this.initializeIndexedDBStorage();
+                    if (this.indexedDB) {
+                        serializedValue = await this.getFromIndexedDB(this.getKey(key));
+                        if (serializedValue) source = 'indexeddb';
+                    }
+                } catch (_) { /* ignore */ }
+            }
+
+            // 再尝试 localStorage
+            if (!serializedValue && this.localStorageAvailable) {
+                serializedValue = localStorage.getItem(this.getKey(key));
+                if (serializedValue) source = 'localStorage';
+            }
+
+            // 再尝试 sessionStorage（仅非关键键）
+            if (!serializedValue && this.sessionStorageAvailable && !this.persistentKeys.has(key)) {
+                serializedValue = sessionStorage.getItem(this.getKey(key));
+                if (serializedValue) source = 'sessionStorage';
             }
 
             if (!serializedValue) {
@@ -818,6 +763,9 @@ class StorageManager {
             }
 
             const parsed = JSON.parse(serializedValue);
+            try {
+                console.log(`[Storage] get(${key}) => ${source || 'unknown'} (${Array.isArray(parsed?.data) ? parsed.data.length + ' items' : typeof parsed?.data})`);
+            } catch (_) { /* ignore log errors */ }
             return parsed.data;
         } catch (error) {
             console.error('Storage get error:', error);
@@ -836,37 +784,26 @@ class StorageManager {
             if (this.fallbackStorage) {
                 this.fallbackStorage.delete(this.getKey(key));
                 return true;
-            } else if (this.useSessionStorageFallback) {
-                sessionStorage.removeItem(this.getKey(key));
-                return true;
-            } else if (this.indexedDB) {
-                // 尝试从IndexedDB删除
+            }
+
+            if (this.indexedDB) {
                 try {
                     await this.removeFromIndexedDB(this.getKey(key));
                     return true;
                 } catch (indexedDBError) {
-                    console.warn('[Storage] IndexedDB删除失败，尝试localStorage:', indexedDBError);
-                    if (this.localStorageAvailable) {
-                        localStorage.removeItem(this.getKey(key));
-                        return true;
-                    }
-                    if (this.sessionStorageAvailable) {
-                        sessionStorage.removeItem(this.getKey(key));
-                        return true;
-                    }
-                    return false;
+                    console.warn('[Storage] IndexedDB删除失败，尝试其他存储:', indexedDBError);
                 }
-            } else {
-                if (this.localStorageAvailable) {
-                    localStorage.removeItem(this.getKey(key));
-                    return true;
-                }
-                if (this.sessionStorageAvailable) {
-                    sessionStorage.removeItem(this.getKey(key));
-                    return true;
-                }
-                return false;
             }
+
+            if (this.localStorageAvailable) {
+                localStorage.removeItem(this.getKey(key));
+                return true;
+            }
+            if (this.sessionStorageAvailable) {
+                sessionStorage.removeItem(this.getKey(key));
+                return true;
+            }
+            return false;
         } catch (error) {
             console.error('Storage remove error:', error);
             return false;
@@ -885,7 +822,7 @@ class StorageManager {
             if (this.fallbackStorage) {
                 this.fallbackStorage.clear();
             }
-            if (this.useSessionStorageFallback || this.sessionStorageAvailable) {
+            if (this.useSessionStorageFallback || (this.sessionStorageAvailable && !this.persistentKeys.has(key))) {
                 try {
                     const sessionKeys = Object.keys(sessionStorage).filter(key => key.startsWith(this.prefix));
                     sessionKeys.forEach(key => sessionStorage.removeItem(key));
