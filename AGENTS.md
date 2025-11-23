@@ -85,3 +85,5 @@ Before starting any task, carefully examine the following five layers of questio
   - **【改进方向】** 精确指令（例如“去掉这个特殊情况”）。
 
 Adhere to this playbook for every directory under the repository root.
+
+The operation/debugging must be compatible with the `file://` protocol.

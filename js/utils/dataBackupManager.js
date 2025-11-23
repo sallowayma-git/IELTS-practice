@@ -18,6 +18,44 @@ class DataBackupManager {
         this.initialize();
     }
 
+    sanitizeExamTitle(title) {
+        if (!title) return '';
+        const str = String(title).trim();
+        if (!str) return '';
+        const pattern = /ielts\s+listening\s+practice\s*-\s*part\s*\d+\s*[:\-]?\s*(.+)$/i;
+        const match = str.match(pattern);
+        if (match && match[1]) {
+            return match[1].trim();
+        }
+        if (str.includes(' - ')) {
+            const segments = str.split(' - ').map((s) => s.trim()).filter(Boolean);
+            if (segments.length > 1) {
+                return segments[segments.length - 1];
+            }
+        }
+        return str;
+    }
+
+    sanitizeRecord(record) {
+        if (!record || typeof record !== 'object') {
+            return record;
+        }
+        const clone = { ...record };
+        const metadata = (clone.metadata && typeof clone.metadata === 'object') ? { ...clone.metadata } : {};
+        const baseTitle = metadata.examTitle || metadata.title || clone.title || clone.examTitle;
+        const cleanedTitle = this.sanitizeExamTitle(baseTitle);
+        if (cleanedTitle) {
+            metadata.examTitle = cleanedTitle;
+            metadata.title = metadata.title || cleanedTitle;
+            clone.title = cleanedTitle;
+            if (!clone.examTitle) {
+                clone.examTitle = cleanedTitle;
+            }
+            clone.metadata = metadata;
+        }
+        return clone;
+    }
+
     async initialize() {
         try {
             await this.initializeSettings();
@@ -209,6 +247,8 @@ class DataBackupManager {
         if (!normalized.practiceRecords.length) {
             throw new Error('Import file does not contain any practice records.');
         }
+
+        normalized.practiceRecords = normalized.practiceRecords.map((r) => this.sanitizeRecord(r));
 
         const originalLength = normalized.practiceRecords.length;
         if (validateData) {
