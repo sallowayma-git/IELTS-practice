@@ -86,14 +86,17 @@ async def test_complete_practice_flow(browser: Browser, console_log: List[Consol
     await _ensure_app_ready(page)
     await _dismiss_overlays(page)
     
-    # 步骤1: 进入Browse视图
-    await _click_nav(page, "browse")
+    # 步骤1: 留在Overview视图，等待加载完成
+    await page.wait_for_selector("#overview-view.active", timeout=10000)
     await page.wait_for_timeout(1000)
     
-    # 步骤2: 点击P1入口
-    p1_button = page.locator("button[data-category='P1']")
+    # 步骤2: 点击P1入口（使用更具体的选择器避免匹配多个按钮）
+    p1_button = page.locator("button[data-category='P1'][data-action='browse-category']")
     await p1_button.wait_for(state="visible", timeout=10000)
     await p1_button.click()
+    
+    # 等待导航到Browse视图
+    await page.wait_for_selector("#browse-view.active", timeout=15000)
     await page.wait_for_timeout(1000)
     
     # 步骤3: 验证频率筛选按钮显示
@@ -187,9 +190,15 @@ async def test_vocab_practice_flow(browser: Browser, console_log: List[ConsoleEn
     await _ensure_app_ready(page)
     await _dismiss_overlays(page)
     
-    # 步骤1: 进入单词背诵视图
-    await _click_nav(page, "vocab")
-    await page.wait_for_timeout(1000)
+    # 步骤1: 进入单词背诵视图（通过More视图）
+    await _click_nav(page, "more")
+    await page.wait_for_timeout(500)
+    
+    # 点击单词背诵工具卡片
+    vocab_button = page.locator("button[data-action='open-vocab']")
+    await vocab_button.wait_for(state="visible", timeout=10000)
+    await vocab_button.click()
+    await page.wait_for_timeout(1500)
     
     # 步骤2: 验证词表切换器显示
     switcher = page.locator("#vocab-list-switcher")
@@ -250,13 +259,16 @@ async def test_frequency_filter_flow(browser: Browser, console_log: List[Console
     await _ensure_app_ready(page)
     await _dismiss_overlays(page)
     
-    # 步骤1: 进入Browse视图
-    await _click_nav(page, "browse")
+    # 步骤1: 留在Overview视图，等待加载完成
+    await page.wait_for_selector("#overview-view.active", timeout=10000)
     await page.wait_for_timeout(1000)
     
-    # 步骤2: 点击P1入口
-    p1_button = page.locator("button[data-category='P1']")
+    # 步骤2: 点击P1入口（使用更具体的选择器避免匹配多个按钮）
+    p1_button = page.locator("button[data-category='P1'][data-action='browse-category']")
     await p1_button.click()
+    
+    # 等待导航到Browse视图
+    await page.wait_for_selector("#browse-view.active", timeout=15000)
     await page.wait_for_timeout(1000)
     
     # 步骤3: 验证频率筛选按钮
@@ -278,9 +290,16 @@ async def test_frequency_filter_flow(browser: Browser, console_log: List[Console
         high_freq_path = REPORT_DIR / "frequency-filter-high.png"
         await page.locator("#browse-view").screenshot(path=str(high_freq_path))
     
-    # 步骤5: 切换到P4
-    p4_button = page.locator("button[data-category='P4']")
+    # 步骤5: 切换到P4（使用更具体的选择器避免匙配多个按钮）
+    # 需要先返回Overview视图
+    await _click_nav(page, "overview")
+    await page.wait_for_timeout(500)
+    
+    p4_button = page.locator("button[data-category='P4'][data-action='browse-category']")
     await p4_button.click()
+    
+    # 等待导航到Browse视图
+    await page.wait_for_selector("#browse-view.active", timeout=15000)
     await page.wait_for_timeout(1000)
     
     # 步骤6: 验证P4"全部"按钮
