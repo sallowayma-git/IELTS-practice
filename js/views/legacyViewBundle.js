@@ -62,6 +62,70 @@
         return maxTs;
     }
 
+    function normalizePathValue(path) {
+        if (!path) {
+            return '';
+        }
+        var normalized = String(path).replace(/\\/g, '/').trim().toLowerCase();
+        normalized = normalized.replace(/^\.?\//, '');
+        return normalized;
+    }
+
+    function getPathTail(path) {
+        var normalized = normalizePathValue(path);
+        var parts = normalized.split('/').filter(Boolean);
+        if (!parts.length) {
+            return '';
+        }
+        if (parts.length === 1) {
+            return parts[0];
+        }
+        return parts.slice(-2).join('/');
+    }
+
+    function recordMatchesExam(exam, record) {
+        if (!exam || !record) {
+            return false;
+        }
+        if (exam.id && record.examId && exam.id === record.examId) {
+            return true;
+        }
+        var examTitle = exam.title || '';
+        var recordTitle = record.title || record.examTitle || '';
+        if (examTitle && recordTitle && examTitle === recordTitle) {
+            return true;
+        }
+        var examPath = normalizePathValue(exam.path || exam.resourcePath || exam.basePath);
+        var recordPath = normalizePathValue(
+            record.path ||
+            record.examPath ||
+            record.resourcePath ||
+            (record.realData && (record.realData.path || record.realData.examPath))
+        );
+        if (examPath && recordPath) {
+            if (examPath === recordPath) {
+                return true;
+            }
+            if (recordPath.endsWith('/' + examPath) || examPath.endsWith('/' + recordPath)) {
+                return true;
+            }
+            var examTail = getPathTail(examPath);
+            var recordTail = getPathTail(recordPath);
+            if (examTail && recordTail && (examTail === recordTail || examTail.endsWith(recordTail) || recordTail.endsWith(examTail))) {
+                return true;
+            }
+        }
+        var examFile = (exam.filename || exam.pdfFilename || '').toLowerCase();
+        var recordFile = (record.filename || record.examFile || record.examFilename || '').toLowerCase();
+        if (!recordFile && record.realData) {
+            recordFile = (record.realData.filename || record.realData.examFile || record.realData.pdfFilename || '').toLowerCase();
+        }
+        if (examFile && recordFile && examFile === recordFile) {
+            return true;
+        }
+        return false;
+    }
+
     function calculateStreak(uniqueDateKeys) {
         if (!uniqueDateKeys.length) {
             return 0;
@@ -876,7 +940,7 @@
             ? global.getPracticeRecordsState()
             : global.practiceRecords;
         var records = ensureArray(source).filter(function (record) {
-            return record && (record.examId === exam.id || record.title === exam.title);
+            return recordMatchesExam(exam, record);
         });
         if (records.length === 0) {
             return null;

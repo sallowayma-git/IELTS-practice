@@ -52,6 +52,30 @@ function ensurePracticeSuiteReady() {
     return Promise.resolve();
 }
 
+function ensureBrowseGroup() {
+    if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
+        return window.AppLazyLoader.ensureGroup('browse-view');
+    }
+    return Promise.resolve();
+}
+
+function getLibraryManager() {
+    if (window.LibraryManager && typeof window.LibraryManager.getInstance === 'function') {
+        return window.LibraryManager.getInstance();
+    }
+    return null;
+}
+
+async function ensureLibraryManagerReady() {
+    let manager = getLibraryManager();
+    if (manager) {
+        return manager;
+    }
+    await ensureBrowseGroup();
+    manager = getLibraryManager();
+    return manager;
+}
+
 
 
 
@@ -181,7 +205,7 @@ async function initializeLegacyComponents() {
 
     // Load data and setup listeners
     await loadLibrary();
-    await syncPracticeRecords(); // Load initial records and update UI
+    startPracticeRecordsSyncInBackground('boot'); // 后台静默加载练习记录，避免阻塞首页
     setupMessageListener(); // Listen for updates from child windows
     setupStorageSyncListener(); // Listen for storage changes from other tabs
 }
@@ -305,6 +329,30 @@ async function syncPracticeRecords() {
 
     console.log(`[System] ${records.length} 条练习记录已加载到内存。`);
     updatePracticeView();
+}
+
+let practiceRecordsLoadPromise = null;
+function ensurePracticeRecordsSync(trigger = 'default') {
+    if (practiceRecordsLoadPromise) {
+        return practiceRecordsLoadPromise;
+    }
+    practiceRecordsLoadPromise = (async () => {
+        await syncPracticeRecords();
+        return true;
+    })().catch((error) => {
+        console.warn(`[System] 练习记录同步失败(${trigger}):`, error);
+        practiceRecordsLoadPromise = null;
+        return false;
+    });
+    return practiceRecordsLoadPromise;
+}
+
+function startPracticeRecordsSyncInBackground(trigger = 'default') {
+    try {
+        ensurePracticeRecordsSync(trigger);
+    } catch (error) {
+        console.warn(`[System] 后台同步练习记录失败(${trigger}):`, error);
+    }
 }
 
 const completionNoticeState = {
@@ -792,147 +840,29 @@ async function savePracticeRecordFallback(examId, realData) {
 }
 
 async function loadLibrary(forceReload = false) {
-    const startTime = performance.now();
-    reportBootStage('加载题库索引', 35);
-    const rawKey = await getActiveLibraryConfigurationKey();
-    const activeConfigKey = typeof rawKey === 'string' && rawKey.trim()
-        ? rawKey.trim()
-        : 'exam_index';
-    const isDefaultConfig = activeConfigKey === 'exam_index';
-
-    let cachedData = null;
-    try {
-        if (!isDefaultConfig) {
-            cachedData = await storage.get(activeConfigKey);
-        } else {
-            await storage.set('active_exam_index_key', 'exam_index');
-        }
-    } catch (error) {
-        console.warn('[Library] 读取题库缓存失败:', error);
-    }
-
-    if (!forceReload && !isDefaultConfig && Array.isArray(cachedData) && cachedData.length > 0) {
-        const updatedIndex = setExamIndexState(cachedData);
-        try {
-            await savePathMapForConfiguration(activeConfigKey, updatedIndex, { setActive: true });
-        } catch (error) {
-            console.warn('[Library] 应用路径映射失败:', error);
-        }
-        finishLibraryLoading(startTime);
+    const manager = await ensureLibraryManagerReady();
+    if (!manager || typeof manager.loadActiveLibrary !== 'function') {
+        console.warn('[Library] LibraryManager 未就绪，跳过加载');
         return;
     }
-
-    if (!isDefaultConfig) {
-        const normalized = Array.isArray(cachedData) ? cachedData : [];
-        setExamIndexState(normalized);
-        if (!normalized.length) {
-            console.warn('[Library] 当前题库配置中没有找到可用数据');
-            if (typeof showMessage === 'function') {
-                showMessage('当前题库配置没有数据，请重新导入或切换至默认题库。', 'warning');
-            }
-        }
-        finishLibraryLoading(startTime);
-        return;
-    }
-
-    try {
-        await ensureExamDataScripts();
-        reportBootStage('解析题库数据', 55);
-        const readingExams = Array.isArray(window.completeExamIndex)
-            ? window.completeExamIndex.map((exam) => Object.assign({}, exam, { type: 'reading' }))
-            : [];
-        const listeningExams = Array.isArray(window.listeningExamIndex)
-            ? window.listeningExamIndex.map((exam) => Object.assign({}, exam, { type: 'listening' }))
-            : [];
-
-        if (!readingExams.length && !listeningExams.length) {
-            setExamIndexState([]);
-            console.warn('[Library] 未检测到默认题库脚本中的题源数据');
-            finishLibraryLoading(startTime);
-            return;
-        }
-
-        const combined = [...readingExams, ...listeningExams];
-        assignExamSequenceNumbers(combined);
-        const updatedIndex = setExamIndexState(combined);
-
-        const metadata = {
-            source: 'default-script',
-            generatedAt: Date.now(),
-            counts: {
-                total: combined.length,
-                reading: readingExams.length,
-                listening: listeningExams.length
-            },
-            pathRoot: {
-                reading: resolveScriptPathRoot('reading'),
-                listening: resolveScriptPathRoot('listening')
-            }
-        };
-        try { window.examIndexMetadata = metadata; } catch (_) { }
-
-        const overrideMap = {
-            reading: {
-                root: metadata.pathRoot.reading,
-                exceptions: {}
-            },
-            listening: {
-                root: metadata.pathRoot.listening,
-                exceptions: {}
-            }
-        };
-
-        await storage.set('exam_index', updatedIndex);
-        await saveLibraryConfiguration('默认题库', 'exam_index', updatedIndex.length);
-        await setActiveLibraryConfiguration('exam_index');
-        await savePathMapForConfiguration('exam_index', updatedIndex, { setActive: true, overrideMap });
-
-        finishLibraryLoading(startTime);
-    } catch (error) {
-        console.error('[Library] 加载默认题库失败:', error);
-        if (typeof showMessage === 'function') {
-            showMessage('题库刷新失败: ' + (error?.message || error), 'error');
-        }
-        window.__forceLibraryRefreshInProgress = false;
-        setExamIndexState([]);
-        finishLibraryLoading(startTime);
-    }
+    await manager.loadActiveLibrary(forceReload);
 }
 
 function resolveScriptPathRoot(type) {
-    const defaultRoot = type === 'reading'
+    const manager = getLibraryManager();
+    if (manager && typeof manager.resolveScriptPathRoot === 'function') {
+        return manager.resolveScriptPathRoot(type);
+    }
+    return type === 'reading'
         ? '睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/'
         : 'ListeningPractice/';
-    try {
-        if (type === 'reading') {
-            const rootMeta = window.completeExamIndex && window.completeExamIndex.pathRoot;
-            if (typeof rootMeta === 'string' && rootMeta.trim()) {
-                return rootMeta.trim();
-            }
-            if (rootMeta && typeof rootMeta === 'object' && typeof rootMeta.reading === 'string') {
-                return rootMeta.reading.trim();
-            }
-        } else if (type === 'listening') {
-            const listeningRoot = window.listeningExamIndex && window.listeningExamIndex.pathRoot;
-            if (typeof listeningRoot === 'string' && listeningRoot.trim()) {
-                return listeningRoot.trim();
-            }
-            const completeRoot = window.completeExamIndex && window.completeExamIndex.pathRoot;
-            if (completeRoot && typeof completeRoot === 'object' && typeof completeRoot.listening === 'string') {
-                return completeRoot.listening.trim();
-            }
-        }
-    } catch (_) { }
-    return defaultRoot;
 }
 
 function finishLibraryLoading(startTime) {
-    const loadTime = performance.now() - startTime;
-    reportBootStage('题库装载完成', 75);
-    // 修复题库索引加载链路问题：顺序为设置window.examIndex → updateOverview() → dispatchEvent('examIndexLoaded')
-    updateOverview();
-    refreshBrowseProgressFromRecords();
-    window.dispatchEvent(new CustomEvent('examIndexLoaded'));
+    const manager = getLibraryManager();
+    if (manager && typeof manager.finishLibraryLoading === 'function') {
+        return manager.finishLibraryLoading(startTime);
+    }
 }
 
 // --- UI Update Functions ---
@@ -1800,6 +1730,7 @@ function applyBrowseFilter(category = 'all', type = null, filterMode = null, pat
 // Initialize browse view when it's activated
 function initializeBrowseView() {
     console.log('[System] Initializing browse view...');
+    startPracticeRecordsSyncInBackground('browse-view');
 
     // 初始化 browseController
     if (window.browseController && !window.browseController.buttonContainer) {
@@ -1814,6 +1745,10 @@ function initializeBrowseView() {
         setBrowseFilterState('all', 'all');
         setBrowseTitle(formatBrowseTitle('all', 'all'));
     }
+
+    ensurePracticeRecordsSync('browse-view').then(() => {
+        refreshBrowseProgressFromRecords();
+    });
     loadExamList();
 }
 
@@ -2147,15 +2082,10 @@ function extractTopLevelRootSegment(root) {
     return segments[0] + '/';
 }
 
-const RAW_DEFAULT_PATH_MAP = {
-    reading: {
-        root: '睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/',
-        exceptions: {}
-    },
-    listening: {
-        root: 'ListeningPractice/',
-        exceptions: {}
-    }
+// Path map definitions moved to LibraryManager; keep thin proxies for legacy callers
+const RAW_DEFAULT_PATH_MAP = (getLibraryManager && getLibraryManager() && getLibraryManager().RAW_DEFAULT_PATH_MAP) || {
+    reading: { root: '睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/', exceptions: {} },
+    listening: { root: 'ListeningPractice/', exceptions: {} }
 };
 
 function clonePathMap(map, fallback = RAW_DEFAULT_PATH_MAP) {
@@ -2196,161 +2126,57 @@ function mergeRootWithFallback(root, fallbackRoot) {
 }
 
 function buildOverridePathMap(metadata, fallback = RAW_DEFAULT_PATH_MAP) {
-    const base = clonePathMap(fallback);
-    if (!metadata || typeof metadata !== 'object') {
-        return base;
+    const lm = getLibraryManager && getLibraryManager();
+    if (lm && typeof lm.buildOverridePathMap === 'function') {
+        return lm.buildOverridePathMap(metadata, fallback);
     }
-
-    const rootMeta = metadata.pathRoot;
-    if (rootMeta && typeof rootMeta === 'object') {
-        if (rootMeta.reading) {
-            base.reading.root = normalizePathRoot(rootMeta.reading);
-        }
-        if (rootMeta.listening) {
-            base.listening.root = normalizePathRoot(rootMeta.listening);
-        }
-    }
-
-    return base;
+    return fallback;
 }
 
-const DEFAULT_PATH_MAP = buildOverridePathMap(
-    typeof window !== 'undefined' ? window.examIndexMetadata : null,
-    RAW_DEFAULT_PATH_MAP
-);
+let DEFAULT_PATH_MAP = (getLibraryManager && getLibraryManager() && getLibraryManager().DEFAULT_PATH_MAP)
+    || buildOverridePathMap(typeof window !== 'undefined' ? window.examIndexMetadata : null, RAW_DEFAULT_PATH_MAP);
 
 const PATH_MAP_STORAGE_PREFIX = 'exam_path_map__';
 
-function normalizePathMap(map, fallback = DEFAULT_PATH_MAP) {
-    const base = clonePathMap(fallback);
-    const incoming = clonePathMap(map);
-    if (incoming.reading.root) {
-        base.reading.root = normalizePathRoot(incoming.reading.root);
-    }
-    if (incoming.listening.root) {
-        base.listening.root = normalizePathRoot(incoming.listening.root);
-    }
-    if (Object.keys(incoming.reading.exceptions).length) {
-        base.reading.exceptions = incoming.reading.exceptions;
-    }
-    if (Object.keys(incoming.listening.exceptions).length) {
-        base.listening.exceptions = incoming.listening.exceptions;
-    }
-    return base;
-}
-
-function getPathMapStorageKey(key) {
-    return PATH_MAP_STORAGE_PREFIX + key;
-}
-
-function computeCommonRoot(paths) {
-    if (!paths || !paths.length) {
-        return '';
-    }
-    const segmentsList = paths.map((rawPath) => {
-        if (typeof rawPath !== 'string') {
-            return [];
-        }
-        const normalized = rawPath.replace(/\\/g, '/').replace(/\/+$/g, '');
-        return normalized ? normalized.split('/') : [];
-    }).filter((segments) => segments.length);
-
-    if (!segmentsList.length) {
-        return '';
-    }
-
-    let prefix = segmentsList[0].slice();
-    for (let i = 1; i < segmentsList.length; i += 1) {
-        const segments = segmentsList[i];
-        let j = 0;
-        while (j < prefix.length && j < segments.length && prefix[j] === segments[j]) {
-            j += 1;
-        }
-        if (j === 0) {
-            return '';
-        }
-        prefix = prefix.slice(0, j);
-    }
-
-    return prefix.length ? prefix.join('/') + '/' : '';
-}
-
 function derivePathMapFromIndex(exams, fallbackMap = DEFAULT_PATH_MAP) {
-    const fallback = normalizePathMap(fallbackMap);
-    const result = clonePathMap(fallback);
-
-    if (!Array.isArray(exams)) {
-        return result;
+    const manager = getLibraryManager && getLibraryManager();
+    if (manager && typeof manager.derivePathMapFromIndex === 'function') {
+        return manager.derivePathMapFromIndex(exams, fallbackMap);
     }
-
-    const pathsByType = { reading: [], listening: [] };
-
-    exams.forEach((exam) => {
-        if (!exam || typeof exam.path !== 'string' || !exam.type) {
-            return;
-        }
-        const normalized = exam.path.replace(/\\/g, '/');
-        if (exam.type === 'reading') {
-            pathsByType.reading.push(normalized);
-        } else if (exam.type === 'listening') {
-            pathsByType.listening.push(normalized);
-        }
-    });
-
-    const readingRoot = computeCommonRoot(pathsByType.reading);
-    if (pathsByType.reading.length && readingRoot) {
-        result.reading.root = normalizePathRoot(readingRoot);
-    }
-
-    const listeningRoot = computeCommonRoot(pathsByType.listening);
-    if (pathsByType.listening.length && listeningRoot) {
-        result.listening.root = normalizePathRoot(listeningRoot);
-    }
-
-    return result;
+    return fallbackMap;
 }
 
 async function loadPathMapForConfiguration(key) {
-    if (!key) {
-        return clonePathMap(DEFAULT_PATH_MAP);
+    const manager = await ensureLibraryManagerReady();
+    if (manager && typeof manager.loadPathMapForConfiguration === 'function') {
+        return await manager.loadPathMapForConfiguration(key);
     }
-    try {
-        const stored = await storage.get(getPathMapStorageKey(key));
-        if (stored && typeof stored === 'object') {
-            return normalizePathMap(stored);
-        }
-    } catch (error) {
-        console.warn('[LibraryConfig] 读取路径映射失败:', error);
-    }
-    return clonePathMap(DEFAULT_PATH_MAP);
+    return DEFAULT_PATH_MAP;
 }
 
 function setActivePathMap(map) {
-    const normalized = normalizePathMap(map);
+    const normalized = map || DEFAULT_PATH_MAP;
     window.__activeLibraryPathMap = normalized;
     window.pathMap = normalized;
 }
 
 async function savePathMapForConfiguration(key, examIndex, options = {}) {
-    if (!key || !Array.isArray(examIndex)) {
-        return null;
-    }
-    const fallback = options.fallbackMap || DEFAULT_PATH_MAP;
-    const overrideMap = options.overrideMap;
-    const derived = overrideMap ? normalizePathMap(overrideMap, fallback) : derivePathMapFromIndex(examIndex, fallback);
-    try {
-        await storage.set(getPathMapStorageKey(key), derived);
-    } catch (error) {
-        console.warn('[LibraryConfig] 写入路径映射失败:', error);
+    const manager = await ensureLibraryManagerReady();
+    if (manager && typeof manager.savePathMapForConfiguration === 'function') {
+        return await manager.savePathMapForConfiguration(key, examIndex, options);
     }
     if (options.setActive) {
-        setActivePathMap(derived);
+        setActivePathMap(options.overrideMap || DEFAULT_PATH_MAP);
     }
-    return derived;
+    return null;
 }
 
 function getPathMap() {
     try {
+        const manager = getLibraryManager && getLibraryManager();
+        if (manager && typeof manager.getPathMap === 'function') {
+            return manager.getPathMap();
+        }
         if (window.__activeLibraryPathMap) {
             return window.__activeLibraryPathMap;
         }
@@ -2360,7 +2186,7 @@ function getPathMap() {
         return DEFAULT_PATH_MAP;
     } catch (error) {
         console.warn('[PathNormalization] Failed to load path map:', error);
-        return {};
+        return DEFAULT_PATH_MAP;
     }
 }
 
@@ -2663,407 +2489,35 @@ if (typeof window !== 'undefined') {
 
 // Other functions from the original file (simplified or kept as is)
 async function getActiveLibraryConfigurationKey() {
+    const manager = await ensureLibraryManagerReady();
+    if (manager && typeof manager.getActiveLibraryConfigurationKey === 'function') {
+        return await manager.getActiveLibraryConfigurationKey();
+    }
     return await storage.get('active_exam_index_key', 'exam_index');
 }
 async function getLibraryConfigurations() {
+    const manager = await ensureLibraryManagerReady();
+    if (manager && typeof manager.getLibraryConfigurations === 'function') {
+        return await manager.getLibraryConfigurations();
+    }
     return await storage.get('exam_index_configurations', []);
 }
 async function saveLibraryConfiguration(name, key, examCount) {
-    // Persist a record of available exam index configurations
-    try {
-        const configs = await storage.get('exam_index_configurations', []);
-        const newEntry = { name, key, examCount, timestamp: Date.now() };
-        const idx = configs.findIndex(c => c.key === key);
-        if (idx >= 0) {
-            configs[idx] = newEntry;
-        } else {
-            configs.push(newEntry);
-        }
-        await storage.set('exam_index_configurations', configs);
-    } catch (e) {
-        console.error('[LibraryConfig] 保存题库配置失败:', e);
+    const manager = await ensureLibraryManagerReady();
+    if (manager && typeof manager.saveLibraryConfiguration === 'function') {
+        return await manager.saveLibraryConfiguration(name, key, examCount);
     }
 }
 async function setActiveLibraryConfiguration(key) {
-    try {
-        await storage.set('active_exam_index_key', key);
-    } catch (e) {
-        console.error('[LibraryConfig] 设置活动题库配置失败:', e);
+    const manager = await ensureLibraryManagerReady();
+    if (manager && typeof manager.setActiveLibraryConfiguration === 'function') {
+        return await manager.setActiveLibraryConfiguration(key);
     }
 }
 function triggerFolderPicker() { document.getElementById('folder-picker').click(); }
 function handleFolderSelection(event) { /* legacy stub - replaced by modal-specific inputs */ }
 
 // --- Library Loader Modal and Index Management ---
-function showLibraryLoaderModal() {
-    const domApi = typeof window.DOM !== 'undefined' ? window.DOM : null;
-    const fallbackCreate = (tag, attributes = {}, children = []) => {
-        const element = document.createElement(tag);
-        Object.entries(attributes || {}).forEach(([key, value]) => {
-            if (value == null || value === false) return;
-            if (key === 'className') {
-                element.className = value;
-            } else if (key === 'dataset' && typeof value === 'object') {
-                Object.entries(value).forEach(([dataKey, dataValue]) => {
-                    if (dataValue != null) element.dataset[dataKey] = String(dataValue);
-                });
-            } else if (key === 'style' && typeof value === 'object') {
-                Object.assign(element.style, value);
-            } else {
-                element.setAttribute(key, value === true ? '' : value);
-            }
-        });
-
-        const items = Array.isArray(children) ? children : [children];
-        for (const child of items) {
-            if (child == null) continue;
-            if (typeof child === 'string') {
-                element.appendChild(document.createTextNode(child));
-            } else if (child instanceof Node) {
-                element.appendChild(child);
-            }
-        }
-        return element;
-    };
-
-    const create = domApi && typeof domApi.create === 'function' ? domApi.create : fallbackCreate;
-    const ensureArray = (value) => (Array.isArray(value) ? value : [value]);
-
-    const createLoaderCard = (type, title, description, hint) => {
-        const prefix = type === 'reading' ? 'reading' : 'listening';
-        return create('div', {
-            className: `library-loader-card library-loader-card--${type}`
-        }, [
-            create('h3', { className: 'library-loader-card-title' }, title),
-            create('p', { className: 'library-loader-card-description' }, description),
-            create('div', { className: 'library-loader-actions' }, [
-                create('button', {
-                    type: 'button',
-                    className: 'btn library-loader-primary',
-                    id: `${prefix}-full-btn`,
-                    dataset: {
-                        libraryAction: 'trigger-input',
-                        libraryTarget: `${prefix}-full-input`
-                    }
-                }, '全量重载'),
-                create('button', {
-                    type: 'button',
-                    className: 'btn btn-secondary library-loader-secondary',
-                    id: `${prefix}-inc-btn`,
-                    dataset: {
-                        libraryAction: 'trigger-input',
-                        libraryTarget: `${prefix}-inc-input`
-                    }
-                }, '增量更新')
-            ]),
-            create('input', {
-                type: 'file',
-                id: `${prefix}-full-input`,
-                className: 'library-loader-input',
-                multiple: '',
-                webkitdirectory: '',
-                dataset: {
-                    libraryType: type,
-                    libraryMode: 'full'
-                }
-            }),
-            create('input', {
-                type: 'file',
-                id: `${prefix}-inc-input`,
-                className: 'library-loader-input',
-                multiple: '',
-                webkitdirectory: '',
-                dataset: {
-                    libraryType: type,
-                    libraryMode: 'incremental'
-                }
-            }),
-            create('p', { className: 'library-loader-hint' }, hint)
-        ]);
-    };
-
-    const overlay = create('div', {
-        className: 'modal-overlay show library-loader-overlay',
-        id: 'library-loader-overlay',
-        role: 'dialog',
-        ariaModal: 'true',
-        ariaLabelledby: 'library-loader-title'
-    });
-
-    const modal = create('div', {
-        className: 'modal library-loader-modal',
-        role: 'document'
-    });
-
-    const header = create('div', {
-        className: 'modal-header library-loader-header'
-    }, [
-        create('h2', { className: 'modal-title', id: 'library-loader-title' }, '📚 加载题库'),
-        create('button', {
-            type: 'button',
-            className: 'modal-close library-loader-close',
-            ariaLabel: '关闭',
-            dataset: { libraryAction: 'close' }
-        }, '×')
-    ]);
-
-    const body = create('div', { className: 'modal-body library-loader-body' }, [
-        create('div', { className: 'library-loader-grid' }, [
-            createLoaderCard('reading', '📖 阅读题库加载', '支持全量重载与增量更新。请上传包含题目HTML/PDF的根文件夹。', '💡 建议路径：.../3. 所有文章(9.4)[134篇]/...'),
-            createLoaderCard('listening', '🎧 听力题库加载', '支持全量重载与增量更新。请上传包含题目HTML/PDF/音频的根文件夹。', '💡 建议路径：ListeningPractice/P3 或 ListeningPractice/P4')
-        ]),
-        create('div', { className: 'library-loader-instructions' }, [
-            create('div', { className: 'library-loader-instructions-title' }, '📋 操作说明'),
-            create('ul', { className: 'library-loader-instructions-list' }, [
-                create('li', null, '全量重载会替换当前配置中对应类型（阅读/听力）的全部索引，并保留另一类型原有数据。'),
-                create('li', null, '增量更新会将新文件生成的新索引追加到当前配置。若当前为默认配置，则会自动复制为新配置后再追加，确保默认配置不被影响。')
-            ])
-        ])
-    ]);
-
-    const footer = create('div', { className: 'modal-footer library-loader-footer' }, [
-        create('button', {
-            type: 'button',
-            className: 'btn btn-secondary library-loader-close-btn',
-            id: 'close-loader',
-            dataset: { libraryAction: 'close' }
-        }, '关闭')
-    ]);
-
-    ensureArray([header, body, footer]).forEach((section) => {
-        if (section) modal.appendChild(section);
-    });
-
-    overlay.appendChild(modal);
-    document.body.appendChild(overlay);
-
-    const cleanup = () => {
-        delegates.forEach((token) => {
-            if (token && typeof token.remove === 'function') {
-                token.remove();
-            }
-        });
-        delegates.length = 0;
-        overlay.remove();
-    };
-
-    const handleAction = function (event) {
-        if (!overlay.contains(this)) return;
-        const action = this.dataset.libraryAction;
-        if (action === 'close') {
-            event.preventDefault();
-            cleanup();
-            return;
-        }
-
-        if (action === 'trigger-input') {
-            event.preventDefault();
-            const targetId = this.dataset.libraryTarget;
-            const input = targetId ? overlay.querySelector(`#${targetId}`) : null;
-            if (input) {
-                input.click();
-            }
-        }
-    };
-
-    const handleChange = async function (event) {
-        if (!overlay.contains(this)) return;
-        const files = Array.from(this.files || []);
-        if (files.length === 0) return;
-
-        const type = this.dataset.libraryType;
-        const mode = this.dataset.libraryMode;
-        if (!type || !mode) return;
-
-        await handleLibraryUpload({ type, mode }, files);
-        cleanup();
-    };
-
-    const delegates = [];
-    if (domApi && typeof domApi.delegate === 'function') {
-        delegates.push(domApi.delegate('click', '.library-loader-overlay [data-library-action]', handleAction));
-        delegates.push(domApi.delegate('change', '.library-loader-overlay .library-loader-input', handleChange));
-    } else {
-        overlay.addEventListener('click', (event) => {
-            const target = event.target.closest('[data-library-action]');
-            if (!target || !overlay.contains(target)) return;
-            handleAction.call(target, event);
-        });
-
-        overlay.addEventListener('change', (event) => {
-            const target = event.target.closest('.library-loader-input');
-            if (!target || !overlay.contains(target)) return;
-            handleChange.call(target, event);
-        });
-    }
-}
-
-// expose modal launcher globally for SettingsPanel button
-try { window.showLibraryLoaderModal = showLibraryLoaderModal; } catch (_) { }
-
-async function handleLibraryUpload(options, files) {
-    const { type, mode } = options;
-    try {
-        let label = '';
-        if (mode === 'incremental') {
-            label = prompt('为此次增量更新输入一个文件夹标签', '增量-' + new Date().toISOString().slice(0, 10)) || '';
-            if (label) {
-                showMessage('使用标签: ' + label, 'info');
-            }
-            if (!detectFolderPlacement(files, type)) {
-                const proceed = confirm('检测到文件夹不在推荐的结构中。\n阅读: ...\n听力: ListeningPractice/P3 or P4\n是否继续?');
-                if (!proceed) return;
-            }
-        }
-
-        showMessage('正在解析文件并构建索引...', 'info');
-        const additions = await buildIndexFromFiles(files, type, label);
-        if (additions.length === 0) {
-            showMessage('从所选文件中未检测到任何题目', 'warning');
-            return;
-        }
-
-        const activeKey = await getActiveLibraryConfigurationKey();
-        const currentIndex = await storage.get(activeKey, getExamIndexState()) || [];
-
-        let newIndex;
-        if (mode === 'full') {
-            // Replace the part of this type and keep the other type
-            const others = currentIndex.filter(e => e.type !== type);
-            newIndex = [...others, ...additions];
-        } else {
-            // incremental: append unique by path/title
-            const existingKeys = new Set(currentIndex.map(e => (e.path || '') + '|' + (e.filename || '') + '|' + e.title));
-            const dedupAdd = additions.filter(e => !existingKeys.has((e.path || '') + '|' + (e.filename || '') + '|' + e.title));
-            newIndex = [...currentIndex, ...dedupAdd];
-        }
-        assignExamSequenceNumbers(newIndex);
-
-        // 对于全量重载，创建一个新的题库配置并自动切换
-        if (mode === 'full') {
-            const targetKey = `exam_index_${Date.now()}`;
-            const configName = `${type === 'reading' ? '阅读' : '听力'}全量-${new Date().toLocaleString()}`;
-            // 确保另一类型存在，如不存在则补齐默认嵌入数据
-            const otherType = type === 'reading' ? 'listening' : 'reading';
-            const hasOther = newIndex.some(e => e.type === otherType);
-            if (!hasOther) {
-                let fallback = [];
-                if (otherType === 'reading' && window.completeExamIndex) fallback = window.completeExamIndex.map(e => ({ ...e, type: 'reading' }));
-                if (otherType === 'listening' && window.listeningExamIndex) fallback = window.listeningExamIndex;
-                newIndex = [...newIndex, ...fallback];
-            }
-            await storage.set(targetKey, newIndex);
-            const fallbackPathMap = await loadPathMapForConfiguration(targetKey);
-            const derivedPathMap = derivePathMapFromIndex(newIndex, fallbackPathMap);
-            await savePathMapForConfiguration(targetKey, newIndex, { overrideMap: derivedPathMap, setActive: true });
-            await saveLibraryConfiguration(configName, targetKey, newIndex.length);
-            await setActiveLibraryConfiguration(targetKey);
-            try {
-                await applyLibraryConfiguration(targetKey, newIndex, { skipConfigRefresh: false });
-                showMessage('新的题库配置已创建并激活', 'success');
-            } catch (applyError) {
-                console.warn('[LibraryLoader] 自动应用新题库失败，回退为整页刷新', applyError);
-                showMessage('新的题库已保存，正在刷新界面...', 'warning');
-                setTimeout(() => { location.reload(); }, 500);
-            }
-            return;
-        }
-
-        const isDefault = activeKey === 'exam_index';
-        let targetKey = activeKey;
-        let configName = '';
-        if (mode === 'incremental' && isDefault) {
-            // Create a new configuration so as not to affect default
-            targetKey = `exam_index_${Date.now()}`;
-            configName = `${type === 'reading' ? '阅读' : '听力'}增量-${new Date().toLocaleString()}`;
-            await storage.set(targetKey, newIndex);
-            const fallbackPathMap = await loadPathMapForConfiguration(targetKey);
-            const derivedPathMap = derivePathMapFromIndex(newIndex, fallbackPathMap);
-            await savePathMapForConfiguration(targetKey, newIndex, { overrideMap: derivedPathMap, setActive: true });
-            await saveLibraryConfiguration(configName, targetKey, newIndex.length);
-            await setActiveLibraryConfiguration(targetKey);
-            showMessage('新的题库配置已创建并激活；正在重新加载...', 'success');
-            setTimeout(() => { location.reload(); }, 800);
-            return;
-        }
-
-        // Save to the current active key（非默认配置下的增量更新）
-        await storage.set(targetKey, newIndex);
-        const targetPathFallback = await loadPathMapForConfiguration(targetKey);
-        const incrementalPathMap = derivePathMapFromIndex(newIndex, targetPathFallback);
-        await savePathMapForConfiguration(targetKey, newIndex, { overrideMap: incrementalPathMap, setActive: true });
-        const incName = `${type === 'reading' ? '阅读' : '听力'}增量-${new Date().toLocaleString()}`;
-        await saveLibraryConfiguration(incName, targetKey, newIndex.length);
-        showMessage('索引已更新；正在刷新界面...', 'success');
-        setExamIndexState(newIndex);
-        updateOverview();
-        if (document.getElementById('browse-view')?.classList.contains('active')) {
-            loadExamList();
-        }
-    } catch (error) {
-        console.error('[LibraryLoader] 处理题库上传失败:', error);
-        showMessage('题库处理失败: ' + error.message, 'error');
-    }
-}
-
-function detectFolderPlacement(files, type) {
-    const paths = files.map(f => f.webkitRelativePath || f.name);
-    if (type === 'reading') {
-        return paths.some(p => /睡着过项目组\(9\.4\)\[134篇\]\/3\. 所有文章\(9\.4\)\[134篇\]\//.test(p));
-    } else {
-        return paths.some(p => /^ListeningPractice\/(P3|P4)\//.test(p));
-    }
-}
-
-async function buildIndexFromFiles(files, type, label = '') {
-    // Group by folder
-    const byDir = new Map();
-    for (const f of files) {
-        const rel = f.webkitRelativePath || f.name;
-        const parts = rel.split('/');
-        if (parts.length < 2) continue; // skip root files
-        const dir = parts.slice(0, parts.length - 1).join('/');
-        if (!byDir.has(dir)) byDir.set(dir, []);
-        byDir.get(dir).push(f);
-    }
-
-    const entries = [];
-    let idx = 0;
-    for (const [dir, fs] of byDir.entries()) {
-        // Identify HTML/PDF files
-        const html = fs.find(x => x.name.toLowerCase().endsWith('.html'));
-        const pdf = fs.find(x => x.name.toLowerCase().endsWith('.pdf'));
-        if (!html && !pdf) continue;
-        // Deduce title and category
-        const dirName = dir.split('/').pop();
-        const title = dirName.replace(/^\d+\.\s*/, '');
-        let category = 'P1';
-        const pathStr = dir;
-        const m = pathStr.match(/\b(P1|P2|P3|P4)\b/);
-        if (m) category = m[1];
-        // Build base path and filenames to align with existing buildResourcePath
-        let basePath = dir + '/';
-        // Normalize listening base to ListeningPractice root in runtime
-        if (type === 'listening') {
-            basePath = basePath.replace(/^.*?(ListeningPractice\/)/, '$1');
-        } else {
-            // For reading, ensure it is under the mega folder prefix at runtime by resolveExamBasePath
-        }
-        const id = `custom_${type}_${Date.now()}_${idx++}`;
-        entries.push({
-            id,
-            title: label ? `[${label}] ${title}` : title,
-            category,
-            type,
-            path: basePath,
-            filename: html ? html.name : undefined,
-            pdfFilename: pdf ? pdf.name : undefined,
-            hasHtml: !!html
-        });
-    }
-    return entries;
-}
-
 // ... other utility and management functions can be moved here ...
 // --- Functions Restored from Backup ---
 
@@ -3540,65 +2994,17 @@ async function resolveLibraryConfigurations() {
 }
 
 async function fetchLibraryDataset(key) {
-    if (!key) {
-        return [];
+    const manager = await ensureLibraryManagerReady();
+    if (manager && typeof manager.fetchLibraryDataset === 'function') {
+        return await manager.fetchLibraryDataset(key);
     }
-    try {
-        const dataset = await storage.get(key);
-        return Array.isArray(dataset) ? dataset : [];
-    } catch (error) {
-        console.warn('[LibraryConfig] 无法读取题库数据:', key, error);
-        return [];
-    }
+    return [];
 }
 
 async function updateLibraryConfigurationMetadata(key, examCount) {
-    if (!key) {
-        return;
-    }
-    try {
-        let configs = await getLibraryConfigurations();
-        if (!Array.isArray(configs)) {
-            configs = [];
-        }
-        const now = Date.now();
-        let mutated = false;
-
-        const updatedConfigs = configs.map((entry) => {
-            if (!entry) {
-                return entry;
-            }
-            if (typeof entry === 'string') {
-                const trimmed = entry.trim();
-                if (trimmed === key) {
-                    mutated = true;
-                    return {
-                        name: key === 'exam_index' ? '默认题库' : key,
-                        key,
-                        examCount,
-                        timestamp: now
-                    };
-                }
-                return entry;
-            }
-            if (entry && entry.key === key) {
-                const next = Object.assign({}, entry);
-                if (Number(next.examCount) !== examCount) {
-                    next.examCount = examCount;
-                }
-                next.timestamp = now;
-                mutated = true;
-                return next;
-            }
-            return entry;
-        });
-
-        if (mutated) {
-            const normalized = normalizeLibraryConfigurationRecords(updatedConfigs);
-            await storage.set('exam_index_configurations', normalized.normalized);
-        }
-    } catch (error) {
-        console.warn('[LibraryConfig] 无法刷新题库配置元数据', error);
+    const manager = await ensureLibraryManagerReady();
+    if (manager && typeof manager.updateLibraryConfigurationMetadata === 'function') {
+        return await manager.updateLibraryConfigurationMetadata(key, examCount);
     }
 }
 
@@ -3616,57 +3022,61 @@ function resetBrowseStateAfterLibrarySwitch() {
 }
 
 async function applyLibraryConfiguration(key, dataset, options = {}) {
-    const exams = Array.isArray(dataset) ? dataset.slice() : await fetchLibraryDataset(key);
-    if (!Array.isArray(exams) || exams.length === 0) {
-        showMessage('目标题库没有题目，请先加载数据', 'warning');
-        return false;
+    const manager = await ensureLibraryManagerReady();
+    if (manager && typeof manager.applyLibraryConfiguration === 'function') {
+        return await manager.applyLibraryConfiguration(key, dataset, options);
     }
+    return false;
+}
 
-    let pathMap = await loadPathMapForConfiguration(key);
-    pathMap = derivePathMapFromIndex(exams, pathMap);
-    setActivePathMap(pathMap);
-
-    setExamIndexState(exams);
-    resetBrowseStateAfterLibrarySwitch();
-
+async function debugCompareActiveIndexWithDefault() {
     try {
-        await setActiveLibraryConfiguration(key);
-    } catch (error) {
-        console.warn('[LibraryConfig] 无法写入当前题库配置:', error);
-    }
+        const activeKey = await getActiveLibraryConfigurationKey();
+        const activeIndex = Array.isArray(getExamIndexState()) ? getExamIndexState() : [];
+        const defaultIndex = Array.isArray(window.completeExamIndex)
+            ? window.completeExamIndex.map((exam) => Object.assign({}, exam, { type: 'reading' }))
+            : [];
+        const defaultListening = Array.isArray(window.listeningExamIndex) ? window.listeningExamIndex : [];
+        const storedDefault = await storage.get('exam_index', []);
+        const combinedDefault = storedDefault.length ? storedDefault : [...defaultIndex, ...defaultListening];
 
-    await updateLibraryConfigurationMetadata(key, exams.length);
-    await savePathMapForConfiguration(key, exams, {
-        overrideMap: pathMap,
-        setActive: true
-    });
+        const normalizeTail = (path) => {
+            const p = String(path || '').replace(/\\/g, '/').split('/').filter(Boolean);
+            if (p.length === 0) return '';
+            if (p.length === 1) return p[0].toLowerCase();
+            return (p[p.length - 2] + '/' + p[p.length - 1]).toLowerCase();
+        };
+        const makeKey = (exam) => {
+            const title = (exam.title || '').toLowerCase();
+            const tail = normalizeTail(exam.path || exam.resourcePath || exam.basePath);
+            const file = (exam.filename || exam.pdfFilename || '').toLowerCase();
+            return [title, tail, file].join('|');
+        };
 
-    try { updateSystemInfo(); } catch (error) { console.warn('[LibraryConfig] 更新系统信息失败', error); }
-    try { updateOverview(); } catch (error) { console.warn('[LibraryConfig] 更新概览失败', error); }
-    try { loadExamList(); } catch (error) { console.warn('[LibraryConfig] 刷新题库列表失败', error); }
+        const defaultMap = new Map();
+        combinedDefault.forEach((exam) => {
+            defaultMap.set(makeKey(exam), exam);
+        });
 
-    try {
-        window.dispatchEvent(new CustomEvent('examIndexLoaded', {
-            detail: { key }
-        }));
-    } catch (error) {
-        console.warn('[LibraryConfig] 题库切换事件派发失败', error);
-    }
-
-    if (!options.skipConfigRefresh) {
-        setTimeout(() => {
-            try {
-                renderLibraryConfigList({
-                    allowDelete: true,
-                    activeKey: key
-                });
-            } catch (error) {
-                console.warn('[LibraryConfig] 重渲染题库配置列表失败', error);
+        let hit = 0;
+        let miss = 0;
+        const misses = [];
+        activeIndex.forEach((exam) => {
+            const key = makeKey(exam);
+            if (defaultMap.has(key)) {
+                hit += 1;
+            } else {
+                miss += 1;
+                misses.push({ title: exam.title, path: exam.path, file: exam.filename || exam.pdfFilename });
             }
-        }, 0);
-    }
+        });
 
-    return true;
+        console.log('[LibraryDebug] Active key:', activeKey, '命中/总', hit, '/', activeIndex.length, '未命中示例前5:', misses.slice(0, 5));
+        return { activeKey, hit, miss, sampleMisses: misses.slice(0, 10) };
+    } catch (error) {
+        console.warn('[LibraryDebug] 比对索引失败:', error);
+        return null;
+    }
 }
 
 function renderLibraryConfigFallback(container, configs, options) {
