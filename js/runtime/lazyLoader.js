@@ -29,6 +29,7 @@
             'js/app/examActions.js',
             'js/app/state-service.js',
             'js/app/browseController.js',
+            'js/services/libraryManager.js',
             'js/presentation/message-center.js',
             'js/runtime/legacy-state-adapter.js',
             'js/components/PDFHandler.js',
@@ -53,6 +54,10 @@
             'js/components/dataManagementPanel.js',
             'js/presentation/moreView.js',
             'js/presentation/miniGames.js'
+        ];
+
+        manifest['theme-tools'] = [
+            'js/theme-switcher.js'
         ];
     }
 
