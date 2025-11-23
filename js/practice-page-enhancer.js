@@ -75,6 +75,24 @@
         return result;
     };
 
+    function sanitizeExamTitle(rawTitle) {
+        if (!rawTitle) return '';
+        const title = String(rawTitle).trim();
+        if (!title) return '';
+        const pattern = /ielts\s+listening\s+practice\s*-\s*part\s*\d+\s*[:\-]?\s*(.+)$/i;
+        const match = title.match(pattern);
+        if (match && match[1]) {
+            return match[1].trim();
+        }
+        if (title.includes(' - ')) {
+            const segments = title.split(' - ').map((s) => s.trim()).filter(Boolean);
+            if (segments.length > 1) {
+                return segments[segments.length - 1];
+            }
+        }
+        return title;
+    }
+
     const enhancerMixinRegistry = [];
 
     const registerPracticeEnhancerMixin = (definition) => {
@@ -3238,6 +3256,10 @@
             if (!metadataPayload.category && pageType) {
                 metadataPayload.category = pageType;
             }
+            const resolvedTitleRaw = metadataPayload.examTitle || metadataPayload.title || derivedTitle;
+            const normalizedTitle = sanitizeExamTitle(resolvedTitleRaw);
+            metadataPayload.examTitle = normalizedTitle || resolvedTitleRaw;
+            metadataPayload.title = metadataPayload.title || metadataPayload.examTitle;
             const resolvedTitle = metadataPayload.examTitle || metadataPayload.title || derivedTitle;
             const answerComparison = includeComparison
                 ? this.generateAnswerComparison()
