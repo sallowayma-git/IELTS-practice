@@ -301,6 +301,7 @@ async function syncPracticeRecords() {
 
     // 新增修复3D：确保全局变量是UI的单一数据源
     setPracticeRecordsState(records);
+    refreshBrowseProgressFromRecords(records);
 
     console.log(`[System] ${records.length} 条练习记录已加载到内存。`);
     updatePracticeView();
@@ -930,6 +931,7 @@ function finishLibraryLoading(startTime) {
     reportBootStage('题库装载完成', 75);
     // 修复题库索引加载链路问题：顺序为设置window.examIndex → updateOverview() → dispatchEvent('examIndexLoaded')
     updateOverview();
+    refreshBrowseProgressFromRecords();
     window.dispatchEvent(new CustomEvent('examIndexLoaded'));
 }
 
@@ -1375,6 +1377,50 @@ function setupPracticeHistoryInteractions() {
     practiceHistoryDelegatesConfigured = true;
 }
 
+function normalizeRecordType(value) {
+    if (!value) {
+        return '';
+    }
+    const normalized = String(value).toLowerCase();
+    if (normalized.includes('read') || normalized.includes('阅读')) {
+        return 'reading';
+    }
+    if (normalized.includes('listen') || normalized.includes('听力')) {
+        return 'listening';
+    }
+    return normalized;
+}
+
+function recordMatchesExamType(record, targetType, examIndex) {
+    const normalizedTarget = normalizeRecordType(targetType);
+    if (!normalizedTarget || normalizedTarget === 'all') {
+        return true;
+    }
+    if (!record) {
+        return false;
+    }
+
+    const recordType = normalizeRecordType(
+        record.type ||
+        record.examType ||
+        record.metadata?.type ||
+        record.realData?.type
+    );
+    if (recordType) {
+        return recordType === normalizedTarget;
+    }
+
+    const list = Array.isArray(examIndex) ? examIndex : [];
+    const exam = list.find((e) => e && (e.id === record.examId || e.title === record.title));
+    const examType = normalizeRecordType(exam && exam.type);
+    if (examType) {
+        return examType === normalizedTarget;
+    }
+
+    // 保底保留，避免题库切换导致无法映射类型时练习记录消失
+    return true;
+}
+
 function updatePracticeView() {
     const rawRecords = getPracticeRecordsState();
     const records = rawRecords.filter((record) => record && (record.dataSource === 'real' || record.dataSource === undefined));
@@ -1408,11 +1454,8 @@ function updatePracticeView() {
         if (stats && typeof stats.filterByExamType === 'function') {
             recordsToShow = stats.filterByExamType(recordsToShow, getExamIndexState(), examType);
         } else {
-            recordsToShow = recordsToShow.filter((record) => {
-                const list = getExamIndexState();
-                const exam = list.find((e) => e.id === record.examId || e.title === record.title);
-                return exam && exam.type === examType;
-            });
+            const examIndexSnapshot = getExamIndexState();
+            recordsToShow = recordsToShow.filter((record) => recordMatchesExamType(record, examType, examIndexSnapshot));
         }
     }
 
@@ -1443,6 +1486,26 @@ function updatePracticeView() {
     refreshBulkDeleteButton();
 }
 
+function refreshBrowseProgressFromRecords(recordsOverride = null) {
+    try {
+        const records = Array.isArray(recordsOverride)
+            ? recordsOverride
+            : (typeof getPracticeRecordsState === 'function'
+                ? getPracticeRecordsState()
+                : (Array.isArray(window.practiceRecords) ? window.practiceRecords : []));
+        if (typeof updateBrowseAnchorsFromRecords === 'function') {
+            updateBrowseAnchorsFromRecords(records);
+        }
+        const browseView = document.getElementById('browse-view');
+        const isBrowseActive = browseView && browseView.classList.contains('active');
+        if (isBrowseActive && typeof loadExamList === 'function') {
+            loadExamList();
+        }
+    } catch (error) {
+        console.warn('[Browse] 刷新浏览进度失败:', error);
+    }
+}
+
 let practiceSessionEventBound = false;
 function ensurePracticeSessionSyncListener() {
     if (practiceSessionEventBound) {
@@ -1461,6 +1524,7 @@ function ensurePracticeSessionSyncListener() {
                     : [];
                 setPracticeRecordsState([record, ...filtered]);
                 updatePracticeView();
+                refreshBrowseProgressFromRecords([record, ...filtered]);
             }
         } catch (syncError) {
             console.warn('[PracticeView] practiceSessionCompleted 事件处理失败:', syncError);

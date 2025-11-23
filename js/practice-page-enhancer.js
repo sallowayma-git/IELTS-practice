@@ -3468,46 +3468,74 @@
                 };
             }
 
+            // 匹配 "You answered X out of Y questions correctly" 格式 - 80号文件格式
+            const answeredMatch = text.match(/You answered (\d+) out of (\d+) questions? correctly/i);
+            if (answeredMatch) {
+                const correct = parseInt(answeredMatch[1]);
+                const total = parseInt(answeredMatch[2]);
+                const accuracy = total > 0 ? correct / total : 0;
+                const percentage = Math.round(accuracy * 100);
+
+                console.log('[PracticeEnhancer] 提取answered格式成绩:', { correct, total, accuracy, percentage });
+
+                return {
+                    correct: correct,
+                    total: total,
+                    accuracy: accuracy,
+                    percentage: percentage,
+                    source: 'answered_format_extraction'
+                };
+            }
+
             // 匹配 "Accuracy: 85%" 格式
             const accuracyPercentMatch = text.match(/Accuracy:\s*(\d+)%/i);
             if (accuracyPercentMatch) {
                 const percentage = parseInt(accuracyPercentMatch[1]);
-                return {
-                    correct: 0,
-                    total: 0,
-                    accuracy: percentage / 100,
-                    percentage: percentage,
-                    source: 'accuracy_percentage_extraction'
-                };
-            }
-
-            // 匹配单独的百分比 "85%" 格式
-            const percentageMatch = text.match(/(\d+)%/);
-            if (percentageMatch) {
-                const percentage = parseInt(percentageMatch[1]);
-
-                console.log('[PracticeEnhancer] 提取百分比成绩:', { percentage });
-
-                return {
-                    correct: 0,
-                    total: 0,
-                    accuracy: percentage / 100,
-                    percentage: percentage,
-                    source: 'percentage_extraction'
-                };
+                // 验证百分比范围
+                if (percentage >= 0 && percentage <= 100) {
+                    return {
+                        correct: 0,
+                        total: 0,
+                        accuracy: percentage / 100,
+                        percentage: percentage,
+                        source: 'accuracy_percentage_extraction'
+                    };
+                }
             }
 
             // 匹配 "Accuracy 85%" 格式（无冒号）
             const accuracyMatch = text.match(/Accuracy\s+(\d+)%/i);
             if (accuracyMatch) {
                 const percentage = parseInt(accuracyMatch[1]);
-                return {
-                    correct: 0,
-                    total: 0,
-                    accuracy: percentage / 100,
-                    percentage: percentage,
-                    source: 'accuracy_extraction'
-                };
+                // 验证百分比范围
+                if (percentage >= 0 && percentage <= 100) {
+                    return {
+                        correct: 0,
+                        total: 0,
+                        accuracy: percentage / 100,
+                        percentage: percentage,
+                        source: 'accuracy_extraction'
+                    };
+                }
+            }
+
+            // 匹配单独的百分比 "85%" 格式 - 更严格的匹配，避免误匹配HTML内容中的数字
+            // 要求百分号前有明确的分隔符（空格、冒号等）或在行首
+            const percentageMatch = text.match(/(?:^|[\s:])(\d+)%(?:[\s,.]|$)/);
+            if (percentageMatch) {
+                const percentage = parseInt(percentageMatch[1]);
+                // 验证百分比范围，避免误匹配如"31"这样的数字
+                if (percentage >= 0 && percentage <= 100) {
+                    console.log('[PracticeEnhancer] 提取百分比成绩:', { percentage });
+
+                    return {
+                        correct: 0,
+                        total: 0,
+                        accuracy: percentage / 100,
+                        percentage: percentage,
+                        source: 'percentage_extraction'
+                    };
+                }
             }
 
             // 尝试从表格中提取成绩信息
