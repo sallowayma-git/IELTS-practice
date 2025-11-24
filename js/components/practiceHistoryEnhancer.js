@@ -318,32 +318,47 @@ class PracticeHistoryEnhancer {
     }
 
     /**
+     * 优先从核心数据仓库获取练习记录，避免 legacy storage 造成数据缺失
+     */
+    async fetchRecordById(recordId) {
+        const toIdStr = (v) => v == null ? '' : String(v);
+        const targetIdStr = toIdStr(recordId);
+
+        // 1) 优先通过 PracticeRecorder / ScoreStorage 获取最新记录
+        const practiceRecorder = window.app?.components?.practiceRecorder;
+        if (practiceRecorder && typeof practiceRecorder.getPracticeRecords === 'function') {
+            try {
+                const maybe = practiceRecorder.getPracticeRecords();
+                const records = Array.isArray(maybe?.then ? await maybe : maybe) ? (maybe?.then ? await maybe : maybe) : [];
+                const hit = records.find(r => toIdStr(r.id) === targetIdStr || toIdStr(r.sessionId) === targetIdStr);
+                if (hit) return hit;
+            } catch (err) {
+                console.warn('[PracticeHistoryEnhancer] 从 PracticeRecorder 获取记录失败，继续降级:', err);
+            }
+        }
+
+        // 2) 兼容 legacy window.practiceRecords
+        if (Array.isArray(window.practiceRecords)) {
+            const hit = window.practiceRecords.find(r => toIdStr(r.id) === targetIdStr || toIdStr(r.sessionId) === targetIdStr);
+            if (hit) return hit;
+        }
+
+        // 3) 最后从 StorageManager 兜底
+        if (window.storage && typeof window.storage.get === 'function') {
+            const practiceRecords = await window.storage.get('practice_records', []);
+            return (Array.isArray(practiceRecords) ? practiceRecords : []).find(r => toIdStr(r.id) === targetIdStr || toIdStr(r.sessionId) === targetIdStr) || null;
+        }
+
+        return null;
+    }
+
+    /**
       * 显示记录详情
       */
     async showRecordDetails(recordId) {
         try {
             // 尝试从不同的数据源获取记录
-            let record = null;
-
-            // 首先尝试从storage获取（兼容数值/字符串ID）
-            const toIdStr = (v) => v == null ? '' : String(v);
-            const targetIdStr = toIdStr(recordId);
-
-            if (window.storage) {
-                const practiceRecords = await window.storage.get('practice_records', []);
-                record = practiceRecords.find(r => r.id === recordId || toIdStr(r.id) === targetIdStr);
-            }
-
-            // 如果storage中没有，尝试从全局变量获取
-            if (!record && window.practiceRecords) {
-                record = window.practiceRecords.find(r => r.id === recordId || toIdStr(r.id) === targetIdStr);
-            }
-
-            // 额外降级：尝试按会话ID匹配
-            if (!record && window.storage) {
-                const practiceRecords = await window.storage.get('practice_records', []);
-                record = practiceRecords.find(r => toIdStr(r.sessionId) === targetIdStr);
-            }
+            const record = await this.fetchRecordById(recordId);
             
             if (!record) {
                 throw new Error('记录不存在');
