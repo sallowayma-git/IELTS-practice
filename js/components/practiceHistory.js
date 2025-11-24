@@ -504,14 +504,11 @@ class PracticeHistory {
             
             // 检查getPracticeRecords方法是否存在
             if (typeof practiceRecorder.getPracticeRecords !== 'function') {
-                console.error('getPracticeRecords method not found on practiceRecorder');
-                const fallback = await storage.get('practice_records', []);
-                this.currentRecords = Array.isArray(fallback) ? fallback : [];
-            } else {
-                const maybe = practiceRecorder.getPracticeRecords();
-                const resolved = typeof maybe?.then === 'function' ? await maybe : maybe;
-                this.currentRecords = Array.isArray(resolved) ? resolved : [];
+                throw new Error('getPracticeRecords method not found on practiceRecorder');
             }
+            const maybe = practiceRecorder.getPracticeRecords();
+            const resolved = typeof maybe?.then === 'function' ? await maybe : maybe;
+            this.currentRecords = Array.isArray(resolved) ? resolved : [];
 
             // 应用筛选和排序
             this.applyFilters();
@@ -1213,15 +1210,19 @@ class PracticeHistory {
         if (!confirm(`确定要删除选中 ${selectedIds.size} 条记录吗？此操作不可撤销。`)) return;
         
         try {
-            const store = window.storage;
-            if (!store || typeof store.get !== 'function' || typeof store.set !== 'function') {
-                throw new Error('存储管理器未就绪');
+            const practiceRecorder = window.app?.components?.practiceRecorder;
+            const scoreStorage = practiceRecorder?.scoreStorage;
+            const storageKeys = scoreStorage?.storageKeys;
+            const targetKey = storageKeys?.practiceRecords || 'practice_records';
+
+            if (!scoreStorage || typeof scoreStorage.storage?.get !== 'function' || typeof scoreStorage.storage?.set !== 'function') {
+                throw new Error('ScoreStorage not available');
             }
 
-            const records = await store.get('practice_records', []);
-            const kept = records.filter(r => !selectedIds.has(String(r?.id)));
-            const deletedCount = records.length - kept.length;
-            await store.set('practice_records', kept);
+            const records = await scoreStorage.storage.get(targetKey, []);
+            const kept = (Array.isArray(records) ? records : []).filter(r => !selectedIds.has(String(r?.id)));
+            const deletedCount = (Array.isArray(records) ? records.length : 0) - kept.length;
+            await scoreStorage.storage.set(targetKey, kept);
 
             this.currentRecords = this.currentRecords.filter(r => !selectedIds.has(String(r.id)));
             this.filteredRecords = this.filteredRecords.filter(r => !selectedIds.has(String(r.id)));
@@ -1940,10 +1941,19 @@ class PracticeHistory {
 
         try {
             // 从存储中删除记录
-            const allRecords = await storage.get('practice_records', []);
+            const practiceRecorder = window.app?.components?.practiceRecorder;
+            const scoreStorage = practiceRecorder?.scoreStorage;
+            const storageKeys = scoreStorage?.storageKeys;
+            const targetKey = storageKeys?.practiceRecords || 'practice_records';
+
+            if (!scoreStorage || typeof scoreStorage.storage?.get !== 'function' || typeof scoreStorage.storage?.set !== 'function') {
+                throw new Error('ScoreStorage not available');
+            }
+
+            const allRecords = await scoreStorage.storage.get(targetKey, []);
             const list = Array.isArray(allRecords) ? allRecords : [];
             const updatedRecords = list.filter(r => r.id !== recordId);
-            await storage.set('practice_records', updatedRecords);
+            await scoreStorage.storage.set(targetKey, updatedRecords);
 
             // 刷新显示
             this.refreshHistory();
