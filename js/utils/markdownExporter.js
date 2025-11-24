@@ -3,6 +3,38 @@
  * 用于将练习数据导出为 Markdown 格式
  */
 class MarkdownExporter {
+    normalizeTitle(rawTitle) {
+        if (!rawTitle) return '未知题目';
+        const title = String(rawTitle).trim();
+        if (!title) return '未知题目';
+
+        // 兼容类似 "IELTS Listening Practice - Part 4 Leatherback Turtles" 的标题
+        const practiceMatch = title.match(/ielts\s+listening\s+practice\s*-\s*part\s*\d+\s*[:\-]?\s*(.+)$/i);
+        if (practiceMatch && practiceMatch[1]) {
+            return practiceMatch[1].trim();
+        }
+
+        // 通用的 “A - B” 结构，优先取末尾部分
+        if (title.includes(' - ')) {
+            const segments = title.split(' - ').map(s => s.trim()).filter(Boolean);
+            if (segments.length > 1) {
+                return segments[segments.length - 1];
+            }
+        }
+
+        return title;
+    }
+
+    hasAnswerDetails(record) {
+        if (!record) return false;
+        const comparison = record.answerComparison || record.realData?.answerComparison;
+        const answers = record.answers || record.realData?.answers;
+        const details = record.scoreInfo?.details || record.realData?.scoreInfo?.details || record.answerDetails;
+        return (comparison && Object.keys(comparison).length > 0)
+            || (answers && Object.keys(answers).length > 0)
+            || (details && Object.keys(details).length > 0);
+    }
+
     // 合并 comparison 与其他来源以补全缺失 correctAnswer
     mergeComparisonWithCorrections(record) {
         const comparison = JSON.parse(JSON.stringify(record.answerComparison || {}));
@@ -399,15 +431,25 @@ class MarkdownExporter {
      * 生成单个记录的 Markdown
      */
     generateRecordMarkdown(record) {
-        const { title, category, frequency, realData } = record;
+        const { title, category, frequency } = record;
+        const metadata = record.metadata || {};
+        const displayTitle = this.normalizeTitle(
+            metadata.examTitle
+            || metadata.title
+            || title
+            || record.examId
+            || '未知题目'
+        );
+        const categoryLabel = metadata.category || category || 'Unknown';
+        const frequencyLabel = metadata.frequency || frequency || 'unknown';
         const metrics = this.resolveScoreMetrics(record);
         
         // 标题行
-        let markdown = `### ${category}-${frequency}-${title} ${metrics.correct}/${metrics.total} (${metrics.percentage}%)\n\n`;
+        let markdown = `### ${categoryLabel}-${frequencyLabel}-${displayTitle} ${metrics.correct}/${metrics.total} (${metrics.percentage}%)\n\n`;
         
         // 如果有详细答题数据，生成表格
-        if (realData && realData.answers && realData.scoreInfo) {
-            markdown += this.generateAnswerTable(realData, record);
+        if (this.hasAnswerDetails(record)) {
+            markdown += this.generateAnswerTable(record.realData || {}, record);
         } else {
             // 如果没有详细数据，显示基本信息
             markdown += `**分数:** ${metrics.correct}/${metrics.total}\n`;
@@ -488,6 +530,10 @@ class MarkdownExporter {
             // 降级到原有逻辑
             const answers = record.answers || realData?.answers || {};
             const correctAnswers = this.getCorrectAnswers(record);
+            const detailSources = record.answerDetails
+                || record.scoreInfo?.details
+                || record.realData?.scoreInfo?.details
+                || {};
             
             let table = '| Question | Your Answer | Correct Answer | Result |\n';
             table += '| -------- | ----------- | -------------- | ------ |\n';
@@ -506,7 +552,17 @@ class MarkdownExporter {
             for (let i = 0; i < questionsToProcess.length; i++) {
                 const qNum = questionsToProcess[i];
                 try {
-                    const userAnswer = this.getUserAnswer(answers, qNum);
+                    const detailKeyCandidates = [`q${qNum}`, qNum.toString()];
+                    let userAnswer = this.getUserAnswer(answers, qNum);
+                    if (!userAnswer && detailSources && typeof detailSources === 'object') {
+                        for (const k of detailKeyCandidates) {
+                            if (detailSources[k]) {
+                                const detail = detailSources[k];
+                                userAnswer = detail.userAnswer ?? detail.answer ?? userAnswer;
+                                break;
+                            }
+                        }
+                    }
                     const correctAnswer = this.getCorrectAnswer(correctAnswers, qNum);
                     const result = this.compareAnswers(userAnswer, correctAnswer) ? '✓' : '✗';
                     
@@ -619,13 +675,16 @@ class MarkdownExporter {
             }
         }
         
-        // 尝试从 scoreInfo 的 details 中获取（优先 realData.scoreInfo，其次顶层 scoreInfo）
+        // 尝试从 scoreInfo 的 details 中获取（优先 realData.scoreInfo，其次顶层 scoreInfo，再次 answerDetails）
         const detailsSources = [];
         if (record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details) {
             detailsSources.push(record.realData.scoreInfo.details);
         }
         if (record.scoreInfo && record.scoreInfo.details) {
             detailsSources.push(record.scoreInfo.details);
+        }
+        if (record.answerDetails) {
+            detailsSources.push(record.answerDetails);
         }
         for (const details of detailsSources) {
             const correctAnswers = {};

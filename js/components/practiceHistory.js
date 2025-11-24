@@ -865,7 +865,7 @@ class PracticeHistory {
         const recordIdStr = String(record.id);
         const isSelected = this.selectedSet.has(recordIdStr) ? 'checked' : '';
         const metadata = record.metadata || {};
-        const examTitle = metadata.examTitle || record.examId;
+        const examTitle = this.getDisplayExamTitle(record);
         const categoryLabel = this.formatCategoryLabel(metadata.category);
         const frequencyLabel = this.formatFrequencyLabel(metadata.frequency);
 
@@ -933,7 +933,7 @@ class PracticeHistory {
         const recordIdStr = String(record.id);
         const isSelected = this.selectedSet.has(recordIdStr);
         const metadata = record.metadata || {};
-        const examTitle = metadata.examTitle || record.examId;
+        const examTitle = this.getDisplayExamTitle(record);
         const categoryLabel = this.formatCategoryLabel(metadata.category);
         const frequencyLabel = this.formatFrequencyLabel(metadata.frequency);
 
@@ -1261,7 +1261,7 @@ class PracticeHistory {
             ? Utils.formatDate(record.endTime, 'YYYY-MM-DD HH:mm:ss')
             : this.formatDateFallback(record.endTime, 'YYYY-MM-DD HH:mm:ss');
         const metadata = record.metadata || {};
-        const examTitle = metadata.examTitle || record.examId;
+        const examTitle = this.getDisplayExamTitle(record);
         const categoryLabel = this.formatCategoryLabel(metadata.category);
         const frequencyLabel = this.formatFrequencyLabel(metadata.frequency);
 
@@ -1725,10 +1725,11 @@ class PracticeHistory {
             return `套题第${index + 1}篇`;
         }
         const metadata = entry.metadata || {};
-        return metadata.examTitle
+        const rawTitle = metadata.examTitle
             || entry.title
             || entry.examTitle
             || `套题第${index + 1}篇`;
+        return this.sanitizeExamTitle(rawTitle);
     }
 
     formatCategoryLabel(category) {
@@ -1755,6 +1756,44 @@ class PracticeHistory {
         }
 
         return '次高频';
+    }
+
+    sanitizeExamTitle(rawTitle) {
+        if (!rawTitle) {
+            return '未知题目';
+        }
+        const title = String(rawTitle).trim();
+        if (!title) {
+            return '未知题目';
+        }
+
+        const practiceMatch = title.match(/ielts\s+listening\s+practice\s*-\s*part\s*\d+\s*[:\-]?\s*(.+)$/i);
+        if (practiceMatch && practiceMatch[1]) {
+            return practiceMatch[1].trim();
+        }
+
+        if (title.includes(' - ')) {
+            const segments = title.split(' - ').map(t => t.trim()).filter(Boolean);
+            if (segments.length > 1) {
+                return segments[segments.length - 1];
+            }
+        }
+
+        return title;
+    }
+
+    getDisplayExamTitle(record) {
+        if (!record) {
+            return '未知题目';
+        }
+        const metadata = record.metadata || {};
+        const rawTitle = metadata.examTitle
+            || metadata.title
+            || record.title
+            || record.examTitle
+            || record.examId
+            || '未知题目';
+        return this.sanitizeExamTitle(rawTitle);
     }
 
     extractQuestionNumbers(userAnswers, correctAnswers) {
@@ -2160,7 +2199,7 @@ class PracticeHistory {
      */
     generateMarkdownExport(record) {
         const metadata = record.metadata || {};
-        const examTitle = metadata.examTitle || record.examId || '未知题目';
+        const examTitle = this.getDisplayExamTitle(record);
         const category = this.formatCategoryLabel(metadata.category);
         const suiteEntries = this.getSuiteEntries(record);
         const score = this.getScoreFraction(record);
@@ -2347,7 +2386,7 @@ class PracticeHistory {
 
         try {
             const markdown = this.generateMarkdownExport(record);
-            const examTitle = record.metadata.examTitle || record.examId;
+            const examTitle = this.getDisplayExamTitle(record);
             const fileName = `${examTitle}-练习记录-${new Date().toISOString().split('T')[0]}.md`;
 
             // 下载文件
