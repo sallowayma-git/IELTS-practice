@@ -592,9 +592,31 @@ class StorageManager {
      * 存储数据
      */
     async set(key, value, options = {}) {
-        const { skipReady = false } = options;
+        const { skipReady = false, skipScoreStorageRedirect = false } = options;
         await this.waitForInitialization(skipReady);
         try {
+            // practice_records 重定向到统一 ScoreStorage，避免产生双写
+            if (key === 'practice_records' && !skipScoreStorageRedirect && !this._scoreStorageRedirecting) {
+                const scoreStorage = window.app?.components?.practiceRecorder?.scoreStorage || window.scoreStorage;
+                const storageKeys = scoreStorage?.storageKeys;
+                const targetKey = (storageKeys && storageKeys.practiceRecords) || 'practice_records';
+                if (scoreStorage && typeof scoreStorage.storage?.set === 'function') {
+                    try {
+                        this._scoreStorageRedirecting = true;
+                        await scoreStorage.storage.set(targetKey, value);
+                        this.dispatchStorageSync(key);
+                        console.warn('[Storage] practice_records 已重定向至 ScoreStorage');
+                        return true;
+                    } catch (redirectError) {
+                        console.warn('[Storage] 重定向到 ScoreStorage 失败，继续使用本地后端:', redirectError);
+                    } finally {
+                        this._scoreStorageRedirecting = false;
+                    }
+                } else {
+                    console.warn('[Storage] practice_records 已废弃，且未检测到 ScoreStorage，将使用本地后端写入');
+                }
+            }
+
             await this.ensureIndexedDBReady();
             console.log(`[Storage] 开始设置键: ${key}`);
             // 压缩数据以减少存储空间
@@ -705,9 +727,34 @@ class StorageManager {
      * @returns {Promise<boolean>} 成功返回 true，失败返回 false
      */
     async append(key, value, options = {}) {
-        const { skipReady = false } = options;
+        const { skipReady = false, skipScoreStorageRedirect = false } = options;
         await this.waitForInitialization(skipReady);
         try {
+            // practice_records 重定向到统一 ScoreStorage，避免产生双写
+            if (key === 'practice_records' && !skipScoreStorageRedirect && !this._scoreStorageRedirecting) {
+                const scoreStorage = window.app?.components?.practiceRecorder?.scoreStorage || window.scoreStorage;
+                const storageKeys = scoreStorage?.storageKeys;
+                const targetKey = (storageKeys && storageKeys.practiceRecords) || 'practice_records';
+                if (scoreStorage && typeof scoreStorage.storage?.get === 'function' && typeof scoreStorage.storage?.set === 'function') {
+                    try {
+                        this._scoreStorageRedirecting = true;
+                        const existingRecords = await scoreStorage.storage.get(targetKey, []);
+                        const normalized = Array.isArray(existingRecords) ? existingRecords : [];
+                        normalized.push(value);
+                        await scoreStorage.storage.set(targetKey, normalized);
+                        this.dispatchStorageSync(key);
+                        console.warn('[Storage] practice_records append 已重定向至 ScoreStorage');
+                        return true;
+                    } catch (redirectError) {
+                        console.warn('[Storage] 重定向到 ScoreStorage append 失败，继续使用本地后端:', redirectError);
+                    } finally {
+                        this._scoreStorageRedirecting = false;
+                    }
+                } else {
+                    console.warn('[Storage] practice_records 已废弃，且未检测到 ScoreStorage，将使用本地后端写入');
+                }
+            }
+
             await this.ensureIndexedDBReady();
             let existing = await this.get(key, null, { skipReady }) || [];
             if (!Array.isArray(existing)) {
@@ -809,7 +856,7 @@ class StorageManager {
      * 删除数据
      */
     async remove(key, options = {}) {
-        const { skipReady = false } = options;
+        const { skipReady = false, skipScoreStorageRedirect = false } = options;
         await this.waitForInitialization(skipReady);
         try {
             await this.ensureIndexedDBReady();

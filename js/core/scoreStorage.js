@@ -365,6 +365,9 @@ class ScoreStorage {
             // 初始化数据结构
             await this.initializeDataStructures();
 
+            // 尝试迁移 legacy StorageManager 中的 practice_records 到统一仓库
+            await this.migrateLegacyPracticeRecords();
+
             // 暂时禁用清理过期数据，避免误删新记录
             // await this.cleanupExpiredData();
         } catch (error) {
@@ -372,6 +375,78 @@ class ScoreStorage {
             console.error('[ScoreStorage] 初始化失败', error);
             throw error;
         }
+    }
+
+    /**
+     * 将旧版 StorageManager 的 practice_records 数据迁移到统一仓库
+     * 只运行一次，避免重复写入
+     */
+    async migrateLegacyPracticeRecords() {
+        try {
+            const migrationFlagKey = 'legacy_practice_records_migrated';
+            const alreadyMigrated = await this.storage.get(migrationFlagKey, false);
+            if (alreadyMigrated) {
+                return;
+            }
+
+            const legacyStorage = typeof window !== 'undefined' ? window.storage : null;
+            if (!legacyStorage || typeof legacyStorage.get !== 'function') {
+                await this.storage.set(migrationFlagKey, true);
+                return;
+            }
+
+            const legacyRecords = await legacyStorage.get('practice_records', []);
+            if (!Array.isArray(legacyRecords) || legacyRecords.length === 0) {
+                await this.storage.set(migrationFlagKey, true);
+                return;
+            }
+
+            const existing = await this.storage.get(this.storageKeys.practiceRecords, []);
+            const merged = this.mergeRecordsById(existing, legacyRecords);
+
+            if (merged.length !== existing.length) {
+                console.log(`[ScoreStorage] 迁移 legacy practice_records: +${merged.length - existing.length} 条`);
+                await this.storage.set(this.storageKeys.practiceRecords, merged);
+            } else {
+                console.log('[ScoreStorage] 迁移 legacy practice_records: 无新增记录');
+            }
+
+            await this.storage.set(migrationFlagKey, true);
+        } catch (error) {
+            console.warn('[ScoreStorage] 迁移 legacy practice_records 失败，跳过:', error);
+        }
+    }
+
+    /**
+     * 合并记录，按 id/sessonId 去重，优先使用更新时间较新的记录
+     */
+    mergeRecordsById(current = [], incoming = []) {
+        const toTs = (item) => {
+            const candidates = [
+                item?.updatedAt,
+                item?.createdAt,
+                item?.timestamp,
+                item?.endTime,
+                item?.date
+            ];
+            for (const c of candidates) {
+                const n = Number(new Date(c));
+                if (!Number.isNaN(n)) return n;
+            }
+            return 0;
+        };
+
+        const map = new Map();
+        [...current, ...incoming].forEach((item) => {
+            if (!item) return;
+            const key = item.id || item.sessionId || `ts_${toTs(item)}`;
+            const existing = map.get(key);
+            if (!existing || toTs(item) >= toTs(existing)) {
+                map.set(key, item);
+            }
+        });
+
+        return Array.from(map.values()).sort((a, b) => toTs(b) - toTs(a));
     }
 
     /**
@@ -747,10 +822,18 @@ class ScoreStorage {
         const derivedCorrectAnswers = this.deriveCorrectAnswerCount(recordData, normalizedAnswers);
         const totalQuestions = this.ensureNumber(recordData.totalQuestions, derivedTotalQuestions);
         const correctAnswers = this.ensureNumber(recordData.correctAnswers, derivedCorrectAnswers);
-        const accuracy = this.ensureNumber(
+        let accuracy = this.ensureNumber(
             recordData.accuracy,
             totalQuestions > 0 ? correctAnswers / totalQuestions : 0
         );
+        if (accuracy > 1 && accuracy <= 100) {
+            accuracy = accuracy / 100; // 容错百分比形式
+        }
+        if (!Number.isFinite(accuracy) || accuracy < 0) {
+            accuracy = 0;
+        } else if (accuracy > 1) {
+            accuracy = 1;
+        }
         const detailSource = recordData.answerDetails
             || recordData.scoreInfo?.details
             || recordData.realData?.scoreInfo?.details
@@ -977,13 +1060,11 @@ class ScoreStorage {
         }
         
         // 验证数值范围
-        if (record.accuracy < 0 || record.accuracy > 1) {
-            throw new Error('Accuracy must be between 0 and 1');
-        }
+        record.accuracy = Math.max(0, Math.min(1, Number(record.accuracy) || 0));
         
-        if (record.duration < 0) {
-            throw new Error('Duration cannot be negative');
-        }
+        record.duration = Number.isFinite(record.duration) && record.duration >= 0
+            ? record.duration
+            : 0;
     }
 
     /**

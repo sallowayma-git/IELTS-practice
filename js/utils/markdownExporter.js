@@ -107,6 +107,33 @@ class MarkdownExporter {
         this.storage = window.storage;
     }
 
+    async getPracticeRecordsUnified() {
+        // 优先使用 PracticeRecorder / ScoreStorage
+        const practiceRecorder = window.app?.components?.practiceRecorder;
+        if (practiceRecorder && typeof practiceRecorder.getPracticeRecords === 'function') {
+            const maybe = practiceRecorder.getPracticeRecords();
+            const resolved = typeof maybe?.then === 'function' ? await maybe : maybe;
+            if (Array.isArray(resolved) && resolved.length) {
+                return resolved;
+            }
+        }
+
+        // 兼容 legacy 全局缓存（只读兜底）
+        if (Array.isArray(window.practiceRecords) && window.practiceRecords.length) {
+            return window.practiceRecords;
+        }
+
+        // 最后尝试旧存储（只读兜底）
+        if (this.storage && typeof this.storage.get === 'function') {
+            const recs = await this.storage.get('practice_records', []);
+            if (Array.isArray(recs) && recs.length) {
+                return recs;
+            }
+        }
+
+        return [];
+    }
+
     /**
      * 导出所有练习记录为 Markdown 格式
      */
@@ -166,24 +193,18 @@ class MarkdownExporter {
             // 让出控制权
             await new Promise(resolve => setTimeout(resolve, 10));
             
-            // 首先尝试从storage获取（注意：storage.get 为异步）
+            // 优先使用统一 PracticeRecorder 数据
+            practiceRecords = await this.getPracticeRecordsUnified();
+
+            // examIndex 仍从存储/全局读取
             if (this.storage && typeof this.storage.get === 'function') {
                 try {
-                    const recs = await this.storage.get('practice_records', []);
                     const idx = await this.storage.get('exam_index', []);
-                    practiceRecords = Array.isArray(recs) ? recs : [];
                     examIndex = Array.isArray(idx) ? idx : [];
                 } catch (_) {
-                    practiceRecords = [];
                     examIndex = [];
                 }
             }
-            
-            // 如果storage中没有数据，尝试从全局变量获取
-            if ((!Array.isArray(practiceRecords) || practiceRecords.length === 0) && window.practiceRecords) {
-                practiceRecords = Array.isArray(window.practiceRecords) ? window.practiceRecords : [];
-            }
-            
             if ((!Array.isArray(examIndex) || examIndex.length === 0) && window.examIndex) {
                 examIndex = Array.isArray(window.examIndex) ? window.examIndex : [];
             }
