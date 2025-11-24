@@ -1047,8 +1047,21 @@ class PracticeRecordModal {
 
     async exportSingle(recordId) {
         try {
-            const practiceRecords = await window.storage.get('practice_records', []);
-            const record = practiceRecords.find(r => r.id === recordId);
+            let record = null;
+
+            // 1) 优先使用 PracticeRecorder / ScoreStorage
+            const practiceRecorder = window.app?.components?.practiceRecorder;
+            if (practiceRecorder && typeof practiceRecorder.getPracticeRecords === 'function') {
+                const maybe = practiceRecorder.getPracticeRecords();
+                const records = Array.isArray(maybe?.then ? await maybe : maybe) ? (maybe?.then ? await maybe : maybe) : [];
+                record = records.find(r => r.id === recordId || String(r.sessionId || '') === String(recordId));
+            }
+
+            // 2) 兼容 legacy storage 兜底
+            if (!record && window.storage && typeof window.storage.get === 'function') {
+                const practiceRecords = await window.storage.get('practice_records', []);
+                record = (Array.isArray(practiceRecords) ? practiceRecords : []).find(r => r.id === recordId || String(r.sessionId || '') === String(recordId));
+            }
 
             if (!record) {
                 throw new Error('\u8bb0\u5f55\u4e0d\u5b58\u5728');
