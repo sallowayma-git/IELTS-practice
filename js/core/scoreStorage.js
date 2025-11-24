@@ -794,13 +794,23 @@ class ScoreStorage {
             Object.assign({}, recordData, { examId: resolvedExamId }),
             type
         );
+        const comparisonSource = recordData.answerComparison
+            || recordData.realData?.answerComparison
+            || null;
         const normalizedAnswers = this.standardizeAnswers(recordData.answers || recordData.answerList || []);
-        const answerMap = normalizedAnswers.reduce((map, item) => {
+        let answerMap = normalizedAnswers.reduce((map, item) => {
             if (item && item.questionId) {
                 map[item.questionId] = item.answer || '';
             }
             return map;
         }, {});
+        // 如果 answers 为空，尝试从 answerComparison 补齐 userAnswer
+        if ((!answerMap || Object.keys(answerMap).length === 0) && comparisonSource) {
+            const fromComparison = this.convertComparisonToMap(comparisonSource, 'userAnswer');
+            if (Object.keys(fromComparison).length > 0) {
+                answerMap = fromComparison;
+            }
+        }
         const suiteSessionId = recordData.suiteSessionId
             || recordData.metadata?.suiteSessionId
             || null;
@@ -811,13 +821,19 @@ class ScoreStorage {
         if (frequency && !metadata.frequency) {
             metadata.frequency = frequency;
         }
-        const normalizedCorrectMap = (
+        let normalizedCorrectMap = (
             recordData.correctAnswerMap && typeof recordData.correctAnswerMap === 'object'
         )
             ? recordData.correctAnswerMap
             : (recordData.realData?.correctAnswers && typeof recordData.realData.correctAnswers === 'object'
                 ? recordData.realData.correctAnswers
                 : {});
+        if ((!normalizedCorrectMap || Object.keys(normalizedCorrectMap).length === 0) && comparisonSource) {
+            const fromComparison = this.convertComparisonToMap(comparisonSource, 'correctAnswer');
+            if (Object.keys(fromComparison).length > 0) {
+                normalizedCorrectMap = fromComparison;
+            }
+        }
         const derivedTotalQuestions = this.deriveTotalQuestionCount(recordData, normalizedAnswers.length);
         const derivedCorrectAnswers = this.deriveCorrectAnswerCount(recordData, normalizedAnswers);
         const totalQuestions = this.ensureNumber(recordData.totalQuestions, derivedTotalQuestions);
@@ -837,6 +853,7 @@ class ScoreStorage {
         const detailSource = recordData.answerDetails
             || recordData.scoreInfo?.details
             || recordData.realData?.scoreInfo?.details
+            || (comparisonSource ? this.convertComparisonToDetails(comparisonSource) : null)
             || this.buildAnswerDetailsFromMaps(answerMap, normalizedCorrectMap);
 
         const startTime = recordData.startTime && !Number.isNaN(new Date(recordData.startTime).getTime())
@@ -852,8 +869,8 @@ class ScoreStorage {
             || recordData.examId
             || '未命名练习';
         const normalizedSuiteEntries = this.standardizeSuiteEntries(recordData.suiteEntries || []);
-        const normalizedComparison = (recordData.answerComparison && typeof recordData.answerComparison === 'object')
-            ? this.clonePlainObject(recordData.answerComparison)
+        const normalizedComparison = comparisonSource && typeof comparisonSource === 'object'
+            ? this.clonePlainObject(comparisonSource)
             : null;
 
         return {
@@ -955,6 +972,37 @@ class ScoreStorage {
                 : entry;
         });
         return clone;
+    }
+
+    convertComparisonToMap(comparison, key = 'correctAnswer') {
+        if (!comparison || typeof comparison !== 'object') {
+            return {};
+        }
+        const map = {};
+        Object.entries(comparison).forEach(([questionId, entry]) => {
+            if (!entry || typeof entry !== 'object') return;
+            const value = entry[key] ?? (key === 'correctAnswer' ? entry.correct : entry.user);
+            if (value != null && String(value).trim() !== '') {
+                map[questionId] = value;
+            }
+        });
+        return map;
+    }
+
+    convertComparisonToDetails(comparison) {
+        if (!comparison || typeof comparison !== 'object') {
+            return null;
+        }
+        const details = {};
+        Object.entries(comparison).forEach(([questionId, entry]) => {
+            if (!entry || typeof entry !== 'object') return;
+            details[questionId] = {
+                userAnswer: entry.userAnswer ?? entry.user ?? '',
+                correctAnswer: entry.correctAnswer ?? entry.correct ?? '',
+                isCorrect: typeof entry.isCorrect === 'boolean' ? entry.isCorrect : null
+            };
+        });
+        return details;
     }
 
     standardizeSuiteEntries(entries) {
@@ -1447,11 +1495,28 @@ class ScoreStorage {
                 });
                 rd.answers = rdMap;
             }
+            const comparisonSource = r.answerComparison || rd.answerComparison || null;
+            if ((!r.answers || Object.keys(r.answers).length === 0) && comparisonSource) {
+                const fromComparison = this.convertComparisonToMap(comparisonSource, 'userAnswer');
+                if (Object.keys(fromComparison).length > 0) {
+                    r.answers = fromComparison;
+                }
+            }
             if (!r.correctAnswerMap || Object.keys(r.correctAnswerMap || {}).length === 0) {
-                r.correctAnswerMap = this.deriveCorrectMapFromDetails(r.answerDetails || r.scoreInfo?.details || rd.scoreInfo?.details);
+                if (comparisonSource) {
+                    r.correctAnswerMap = this.convertComparisonToMap(comparisonSource, 'correctAnswer');
+                }
+                if (!r.correctAnswerMap || Object.keys(r.correctAnswerMap || {}).length === 0) {
+                    r.correctAnswerMap = this.deriveCorrectMapFromDetails(r.answerDetails || r.scoreInfo?.details || rd.scoreInfo?.details);
+                }
             }
             if (!r.answerDetails) {
-                r.answerDetails = r.scoreInfo?.details || this.buildAnswerDetailsFromMaps(r.answers, r.correctAnswerMap);
+                if (comparisonSource) {
+                    r.answerDetails = this.convertComparisonToDetails(comparisonSource);
+                }
+                if (!r.answerDetails) {
+                    r.answerDetails = r.scoreInfo?.details || this.buildAnswerDetailsFromMaps(r.answers, r.correctAnswerMap);
+                }
             }
 
             // 正确/总题数归一
