@@ -1057,12 +1057,6 @@ class PracticeRecordModal {
                 record = records.find(r => r.id === recordId || String(r.sessionId || '') === String(recordId));
             }
 
-            // 2) 兼容 legacy storage 兜底
-            if (!record && window.storage && typeof window.storage.get === 'function') {
-                const practiceRecords = await window.storage.get('practice_records', []);
-                record = (Array.isArray(practiceRecords) ? practiceRecords : []).find(r => r.id === recordId || String(r.sessionId || '') === String(recordId));
-            }
-
             if (!record) {
                 throw new Error('\u8bb0\u5f55\u4e0d\u5b58\u5728');
             }

@@ -337,16 +337,10 @@ class PracticeHistoryEnhancer {
             }
         }
 
-        // 2) 兼容 legacy window.practiceRecords
+        // 2) 兼容 legacy window.practiceRecords（只读兜底）
         if (Array.isArray(window.practiceRecords)) {
             const hit = window.practiceRecords.find(r => toIdStr(r.id) === targetIdStr || toIdStr(r.sessionId) === targetIdStr);
             if (hit) return hit;
-        }
-
-        // 3) 最后从 StorageManager 兜底
-        if (window.storage && typeof window.storage.get === 'function') {
-            const practiceRecords = await window.storage.get('practice_records', []);
-            return (Array.isArray(practiceRecords) ? practiceRecords : []).find(r => toIdStr(r.id) === targetIdStr || toIdStr(r.sessionId) === targetIdStr) || null;
         }
 
         return null;
