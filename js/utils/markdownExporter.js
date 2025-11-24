@@ -216,10 +216,7 @@ class MarkdownExporter {
             console.log(`[MarkdownExporter] 找到 ${practiceRecords.length} 条记录`);
             
             // 限制记录数量避免卡死
-            if (practiceRecords.length > 50) {
-                console.warn('[MarkdownExporter] 记录数量过多，只导出最新50条');
-                practiceRecords = practiceRecords.slice(0, 50);
-            }
+            // 不再强制截断，保留全部记录（当前数据量约160条）
 
             this.updateProgress('正在处理数据...');
             await new Promise(resolve => setTimeout(resolve, 10));
@@ -375,13 +372,8 @@ class MarkdownExporter {
         // 按日期排序（最新的在前）
         const sortedDates = Object.keys(recordsByDate).sort((a, b) => b.localeCompare(a));
         
-        // 限制处理的日期数量
-        const maxDates = 10;
-        const datesToProcess = sortedDates.slice(0, maxDates);
-        
-        if (sortedDates.length > maxDates) {
-            console.warn(`[MarkdownExporter] 日期过多，只处理最新${maxDates}天的记录`);
-        }
+        // 处理全部日期（当前数据量可承受）
+        const datesToProcess = sortedDates;
         
         for (let i = 0; i < datesToProcess.length; i++) {
             const date = datesToProcess[i];
@@ -393,9 +385,8 @@ class MarkdownExporter {
             // 添加日期标题
             markdown += `## ${date}\n\n`;
             
-            // 限制每天的记录数量
-            const maxRecordsPerDay = 20;
-            const recordsToProcess = records.slice(0, maxRecordsPerDay);
+            // 处理当天全部记录
+            const recordsToProcess = records;
             
             for (let j = 0; j < recordsToProcess.length; j++) {
                 const record = recordsToProcess[j];
@@ -543,12 +534,14 @@ class MarkdownExporter {
     generateAnswerTable(realData, record) {
         try {
             // 优先使用answerComparison数据确保一致性（若有则合并补全缺失正确答案）
-            if (record.answerComparison && Object.keys(record.answerComparison).length > 0) {
-                const merged = this.mergeComparisonWithCorrections(record);
-                return this.generateTableFromComparison(merged);
+            const comparison = record.answerComparison || realData?.answerComparison || null;
+            const hasComparison = comparison && Object.keys(comparison).length > 0;
+            if (hasComparison) {
+                const merged = this.mergeComparisonWithCorrections({ ...record, answerComparison: comparison });
+                return this.generateTableFromComparison(merged, record);
             }
             
-            // 降级到原有逻辑
+            // 降级到原有逻辑（包含 detailSources）
             const answers = record.answers || realData?.answers || {};
             const correctAnswers = this.getCorrectAnswers(record);
             const detailSources = record.answerDetails
@@ -560,7 +553,11 @@ class MarkdownExporter {
             table += '| -------- | ----------- | -------------- | ------ |\n';
             
             // 获取所有题目编号并排序
-            const questionNumbers = this.extractQuestionNumbers(answers, correctAnswers);
+            const questionNumbers = this.extractQuestionNumbers(
+                answers && Object.keys(answers).length ? answers : {},
+                correctAnswers,
+                comparison || {}
+            );
             
             // 限制题目数量避免表格过大
             const maxQuestions = 50;
@@ -575,6 +572,9 @@ class MarkdownExporter {
                 try {
                     const detailKeyCandidates = [`q${qNum}`, qNum.toString()];
                     let userAnswer = this.getUserAnswer(answers, qNum);
+                    if (!userAnswer && comparison && comparison[`q${qNum}`]) {
+                        userAnswer = comparison[`q${qNum}`].userAnswer || comparison[`q${qNum}`].user || userAnswer;
+                    }
                     if (!userAnswer && detailSources && typeof detailSources === 'object') {
                         for (const k of detailKeyCandidates) {
                             if (detailSources[k]) {
@@ -608,19 +608,27 @@ class MarkdownExporter {
     /**
      * 从answerComparison生成表格
      */
-    generateTableFromComparison(answerComparison) {
+    generateTableFromComparison(answerComparison, record = null) {
         // 支持将 keys 中的非数字后缀/前缀保留下来，比如 qa/qb 显示为 a/b
 
         try {
             let table = '| Question | Your Answer | Correct Answer | Result |\n';
             table += '| -------- | ----------- | -------------- | ------ |\n';
+            const noiseKeys = new Set(['volume-slider', 'playback-speed', 'playbackspeed', 'volume']);
+            const correctMap = record ? this.getCorrectAnswers(record) : {};
             
             // 按问题编号排序
-            const sortedKeys = Object.keys(answerComparison).sort((a, b) => {
-                const numA = parseInt(a.replace(/\D/g, '')) || 0;
-                const numB = parseInt(b.replace(/\D/g, '')) || 0;
-                return numA - numB;
-            });
+            const sortedKeys = Object.keys(answerComparison)
+                .filter(k => !noiseKeys.has(k))
+                .filter(k => {
+                    const entry = answerComparison[k];
+                    return entry && (entry.userAnswer || entry.correctAnswer);
+                })
+                .sort((a, b) => {
+                    const numA = parseInt(a.replace(/\D/g, '')) || 0;
+                    const numB = parseInt(b.replace(/\D/g, '')) || 0;
+                    return numA - numB;
+                });
             
             // 限制处理的题目数量
             const maxQuestions = 50;
@@ -637,9 +645,12 @@ class MarkdownExporter {
                     }
                     const result = comparison.isCorrect ? '✓' : '✗';
                     
+                    let userAnswer = comparison.userAnswer || comparison.user || 'No Answer';
+                    let correctAnswer = comparison.correctAnswer || comparison.correct || correctMap[key] || 'N/A';
+
                     // 清理答案文本
-                    const cleanUserAnswer = this.cleanAnswerText(comparison.userAnswer || 'No Answer');
-                    const cleanCorrectAnswer = this.cleanAnswerText(comparison.correctAnswer || 'N/A');
+                    const cleanUserAnswer = this.cleanAnswerText(userAnswer);
+                    const cleanCorrectAnswer = this.cleanAnswerText(correctAnswer);
                     
                     table += `| ${questionNum} | ${cleanUserAnswer} | ${cleanCorrectAnswer} | ${result} |\n`;
                 } catch (error) {
@@ -676,19 +687,28 @@ class MarkdownExporter {
         if (record.correctAnswers && Object.keys(record.correctAnswers).length > 0) {
             return record.correctAnswers;
         }
+        // 其次使用 correctAnswerMap
+        if (record.correctAnswerMap && Object.keys(record.correctAnswerMap).length > 0) {
+            return record.correctAnswerMap;
+        }
         
-        // 其次使用realData中的correctAnswers
+        // 其次使用realData中的correctAnswers / correctAnswerMap
         if (record.realData && record.realData.correctAnswers && Object.keys(record.realData.correctAnswers).length > 0) {
             return record.realData.correctAnswers;
         }
+        if (record.realData && record.realData.correctAnswerMap && Object.keys(record.realData.correctAnswerMap).length > 0) {
+            return record.realData.correctAnswerMap;
+        }
         
         // 尝试从answerComparison中提取
-        if (record.answerComparison) {
+        if (record.answerComparison || record.realData?.answerComparison) {
+            const comparison = record.answerComparison || record.realData?.answerComparison || {};
             const correctAnswers = {};
-            Object.keys(record.answerComparison).forEach(key => {
-                const comparison = record.answerComparison[key];
-                if (comparison.correctAnswer) {
-                    correctAnswers[key] = comparison.correctAnswer;
+            Object.keys(comparison).forEach(key => {
+                const entry = comparison[key];
+                const val = entry && (entry.correctAnswer ?? entry.correct);
+                if (val != null && String(val).trim() !== '') {
+                    correctAnswers[key] = val;
                 }
             });
             if (Object.keys(correctAnswers).length > 0) {
@@ -720,6 +740,13 @@ class MarkdownExporter {
             }
         }
         
+        // fallback：若answers有值且无正确答案，至少返回题号以生成表格
+        if (record.answers && Object.keys(record.answers).length > 0) {
+            const stub = {};
+            Object.keys(record.answers).forEach(key => { stub[key] = ''; });
+            return stub;
+        }
+        
         console.warn('[MarkdownExporter] 未找到正确答案数据，记录ID:', record.id);
         return {};
     }
@@ -727,20 +754,20 @@ class MarkdownExporter {
     /**
      * 提取题目编号
      */
-    extractQuestionNumbers(userAnswers, correctAnswers) {
+    extractQuestionNumbers(userAnswers, correctAnswers, comparison = {}) {
         const allQuestions = new Set();
         
-        // 从用户答案中提取
-        Object.keys(userAnswers).forEach(key => {
-            const num = this.extractNumber(key);
-            if (num) allQuestions.add(num);
-        });
+        const addFrom = (obj) => {
+            Object.keys(obj || {}).forEach(key => {
+                const num = this.extractNumber(key);
+                if (num) allQuestions.add(num);
+            });
+        };
         
-        // 从正确答案中提取
-        Object.keys(correctAnswers).forEach(key => {
-            const num = this.extractNumber(key);
-            if (num) allQuestions.add(num);
-        });
+        // 从用户答案/正确答案提取
+        addFrom(userAnswers || {});
+        addFrom(correctAnswers || {});
+        addFrom(comparison || {});
         
         // 如果没有找到题目，生成默认序号
         if (allQuestions.size === 0) {
