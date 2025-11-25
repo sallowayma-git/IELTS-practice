@@ -79,13 +79,13 @@
         if (!rawTitle) return '';
         const title = String(rawTitle).trim();
         if (!title) return '';
-        const pattern = /ielts\s+listening\s+practice\s*-\s*part\s*\d+\s*[:\-]?\s*(.+)$/i;
+        const pattern = /ielts\s+listening\s+practice\s*[-–—]?\s*part\s*\d+\s*[:\-–—]?\s*(.+)$/i;
         const match = title.match(pattern);
         if (match && match[1]) {
             return match[1].trim();
         }
-        if (title.includes(' - ')) {
-            const segments = title.split(' - ').map((s) => s.trim()).filter(Boolean);
+        if (/[-–—]/.test(title)) {
+            const segments = title.split(/[-–—]/).map((s) => s.trim()).filter(Boolean);
             if (segments.length > 1) {
                 return segments[segments.length - 1];
             }

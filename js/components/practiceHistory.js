@@ -1768,13 +1768,16 @@ class PracticeHistory {
             return '未知题目';
         }
 
-        const practiceMatch = title.match(/ielts\s+listening\s+practice\s*-\s*part\s*\d+\s*[:\-]?\s*(.+)$/i);
+        // 兼容不同短横线/空格/大小写的前缀，提取真正题名
+        const practiceMatch = title.match(/ielts\s+listening\s+practice\s*[-–—]?\s*part\s*\d+\s*[:\-–—]?\s*(.+)$/i);
         if (practiceMatch && practiceMatch[1]) {
             return practiceMatch[1].trim();
         }
 
-        if (title.includes(' - ')) {
-            const segments = title.split(' - ').map(t => t.trim()).filter(Boolean);
+        // 通用分隔符（支持 en/em dash）
+        const dashPattern = /[-–—]/;
+        if (dashPattern.test(title)) {
+            const segments = title.split(dashPattern).map(t => t.trim()).filter(Boolean);
             if (segments.length > 1) {
                 return segments[segments.length - 1];
             }
