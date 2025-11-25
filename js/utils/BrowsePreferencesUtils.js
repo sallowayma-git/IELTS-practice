@@ -362,10 +362,11 @@
         if (!record || typeof record !== 'object') {
             return null;
         }
-        const examId = record.examId || record.id || null;
-        let category = normalizeCategoryKey(record.category || record.examCategory);
-        let type = normalizeExamType(record.type || record.examType);
-        let title = record.title || record.examTitle || null;
+        const metadata = record.metadata || {};
+        const examId = record.examId || metadata.examId || metadata.originalExamId || null;
+        let category = normalizeCategoryKey(record.category || record.examCategory || metadata.category);
+        let type = normalizeExamType(record.type || record.examType || metadata.examType);
+        let title = record.title || record.examTitle || metadata.examTitle || metadata.title || null;
 
         if (category === 'all' || category === 'Unknown' || !title || type === 'all') {
             const list = Array.isArray(examIndex) ? examIndex : [];
