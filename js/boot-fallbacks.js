@@ -269,206 +269,36 @@
   }
 
   // Fallbacks for data export/import buttons in Settings
+  var disabledMessage = function(action) {
+    window.showMessage && window.showMessage(action + '功能已移除', 'warning');
+  };
+
   if (typeof window.exportAllData !== 'function') {
     window.exportAllData = function(){
-      if (!window.dataIntegrityManager && window.DataIntegrityManager) {
-        try{ window.dataIntegrityManager = new window.DataIntegrityManager(); } catch(_){}
-      }
-      if (window.dataIntegrityManager && typeof window.dataIntegrityManager.exportData==='function') {
-        window.dataIntegrityManager.exportData();
-        window.showMessage && window.showMessage('数据导出成功','success');
-      } else {
-        window.showMessage && window.showMessage('数据管理模块未初始化','error');
-      }
+      disabledMessage('数据导出');
     };
   }
 
   if (typeof window.importData !== 'function') {
     window.importData = function(){
-      if (!window.dataIntegrityManager && window.DataIntegrityManager) {
-        try{ window.dataIntegrityManager = new window.DataIntegrityManager(); } catch(_){}
-      }
-      if (!(window.dataIntegrityManager && typeof window.dataIntegrityManager.importData==='function')) {
-        window.showMessage && window.showMessage('数据管理模块未初始化','error');
-        return;
-      }
-      var input=document.createElement('input'); input.type='file'; input.accept='.json';
-      input.onchange = function(e){ var f=e.target.files&&e.target.files[0]; if(!f) return; var ok=confirm('导入数据将覆盖当前数据，确定继续吗？'); if(!ok) return; (async function(){ try{ await window.dataIntegrityManager.importData(f); window.showMessage && window.showMessage('数据导入成功','success'); } catch(err){ window.showMessage && window.showMessage('数据导入失败: '+(err&&err.message||err),'error'); } })(); };
-      input.click();
+      disabledMessage('数据导入');
     };
   }
 
   // Fallbacks for backup operations used by Settings
   if (typeof window.createManualBackup !== 'function') {
     window.createManualBackup = function(){
-      if (!window.dataIntegrityManager && window.DataIntegrityManager) {
-        try{ window.dataIntegrityManager = new window.DataIntegrityManager(); } catch(_){}
-      }
-      if (!(window.dataIntegrityManager && typeof window.dataIntegrityManager.createBackup==='function')){
-        window.showMessage && window.showMessage('数据管理模块未初始化','error');
-        return;
-      }
-      (async function(){
-        try{
-          var b = await window.dataIntegrityManager.createBackup(null,'manual');
-          if (b && b.external) {
-            window.showMessage && window.showMessage('本地存储空间不足，已将备份下载为文件','warning');
-          } else {
-            window.showMessage && window.showMessage('备份创建成功: '+(b&&b.id||''),'success');
-          }
-        }catch(e){
-          window.showMessage && window.showMessage('备份创建失败: '+(e&&e.message||e),'error');
-        }
-      })();
+      disabledMessage('备份管理');
     };
   }
 
   if (typeof window.showBackupList !== 'function') {
     window.showBackupList = async function(){
-      var manager = _ensureFallbackDataIntegrityManager();
-      if (!(manager && typeof manager.getBackupList === 'function')) {
-        window.showMessage && window.showMessage('数据管理模块未初始化','error');
-        return;
-      }
-
-      _ensureFallbackBackupDelegates();
-
-      var backups = [];
-      try {
-        var list = await manager.getBackupList();
-        backups = Array.isArray(list) ? list : [];
-      } catch (error) {
-        console.error('[Fallback] 获取备份列表失败:', error);
-        window.showMessage && window.showMessage('获取备份列表失败: ' + (error && error.message ? error.message : error),'error');
-        return;
-      }
-
-      var domApi = (window.DOM && typeof window.DOM.create === 'function') ? window.DOM : null;
-      var create = domApi ? function(){ return window.DOM.create.apply(window.DOM, arguments); } : _fallbackCreateElement;
-
-      function buildEntries() {
-        if (!backups.length) {
-          return [
-            create('div', { className: 'backup-list-empty' }, [
-              create('div', { className: 'backup-list-empty-icon', ariaHidden: 'true' }, '📂'),
-              create('p', { className: 'backup-list-empty-text' }, '暂无备份记录。'),
-              create('p', { className: 'backup-list-empty-hint' }, '创建手动备份后将显示在此列表中。')
-            ])
-          ];
-        }
-
-        var nodes = backups.map(function(backup) {
-          if (!backup || !backup.id) {
-            return null;
-          }
-
-          var timestamp = backup.timestamp ? new Date(backup.timestamp).toLocaleString() : '未知时间';
-          var type = backup.type || 'unknown';
-          var version = backup.version || '—';
-
-          return create('div', {
-            className: 'backup-entry',
-            dataset: { backupId: backup.id }
-          }, [
-            create('div', { className: 'backup-entry-info' }, [
-              create('strong', { className: 'backup-entry-id' }, backup.id),
-              create('div', { className: 'backup-entry-meta' }, timestamp),
-              create('div', { className: 'backup-entry-meta' }, '类型: ' + type + ' | 版本: ' + version)
-            ]),
-            create('div', { className: 'backup-entry-actions' }, [
-              create('button', {
-                type: 'button',
-                className: 'btn btn-success backup-entry-restore',
-                dataset: { backupAction: 'restore', backupId: backup.id }
-              }, '恢复')
-            ])
-          ]);
-        }).filter(Boolean);
-
-        if (!nodes.length) {
-          return [
-            create('div', { className: 'backup-list-empty' }, [
-              create('div', { className: 'backup-list-empty-icon', ariaHidden: 'true' }, '📂'),
-              create('p', { className: 'backup-list-empty-text' }, '暂无可恢复的备份记录。'),
-              create('p', { className: 'backup-list-empty-hint' }, '创建手动备份后将显示在此列表中。')
-            ])
-          ];
-        }
-
-        return nodes;
-      }
-
-      var settingsView = document.getElementById('settings-view');
-      if (settingsView) {
-        var legacyList = settingsView.querySelector('.backup-list');
-        if (legacyList) { legacyList.remove(); }
-        var existingContainer = settingsView.querySelector('.backup-list-container');
-        if (existingContainer) { existingContainer.remove(); }
-      }
-
-      var existingOverlay = document.querySelector('.backup-modal-overlay');
-      if (existingOverlay) { existingOverlay.remove(); }
-
-      var card = create('div', { className: 'backup-list-card' }, [
-        create('div', { className: 'backup-list-header' }, [
-          create('h3', { className: 'backup-list-title' }, [
-            create('span', { className: 'backup-list-title-icon', ariaHidden: 'true' }, '📋'),
-            create('span', { className: 'backup-list-title-text' }, '备份列表')
-          ])
-        ]),
-        create('div', { className: 'backup-list-scroll' }, buildEntries())
-      ]);
-
-      if (settingsView) {
-        var container = create('div', { className: 'backup-list-container' }, card);
-        var mainCard = settingsView.querySelector(':scope > div');
-        if (mainCard) {
-          mainCard.appendChild(container);
-        } else {
-          settingsView.appendChild(container);
-        }
-
-        if (!backups.length) {
-          window.showMessage && window.showMessage('暂无备份记录','info');
-        }
-        return;
-      }
-
-      var overlay = create('div', { className: 'backup-modal-overlay' }, [
-        create('div', { className: 'backup-modal' }, [
-          create('div', { className: 'backup-modal-header' }, [
-            create('h3', { className: 'backup-modal-title' }, [
-              create('span', { className: 'backup-list-title-icon', ariaHidden: 'true' }, '📋'),
-              create('span', { className: 'backup-list-title-text' }, '备份列表')
-            ]),
-            create('button', {
-              type: 'button',
-              className: 'btn btn-secondary backup-modal-close',
-              dataset: { backupAction: 'close-modal' },
-              ariaLabel: '关闭备份列表'
-            }, '关闭')
-          ]),
-          create('div', { className: 'backup-modal-body' }, buildEntries()),
-          create('div', { className: 'backup-modal-footer' }, [
-            create('button', {
-              type: 'button',
-              className: 'btn btn-secondary backup-modal-close',
-              dataset: { backupAction: 'close-modal' }
-            }, '关闭')
-          ])
-        ])
-      ]);
-
-      document.body.appendChild(overlay);
-
-      if (!backups.length) {
-        window.showMessage && window.showMessage('暂无备份记录','info');
-      }
+      disabledMessage('备份列表');
     };
-
     if (typeof window.restoreBackup !== 'function') {
-      window.restoreBackup = function(backupId) {
-        return _fallbackRestoreBackupById(backupId);
+      window.restoreBackup = function(){
+        disabledMessage('备份恢复');
       };
     }
   }

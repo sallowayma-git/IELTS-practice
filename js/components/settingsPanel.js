@@ -685,8 +685,8 @@ class SettingsPanel {
                     break;
                 case 'data-management-btn':
                     this.hide();
-                    if (window.dataManagementPanel) {
-                        window.dataManagementPanel.show();
+                    if (window.showMessage) {
+                        window.showMessage('数据管理功能已移除', 'warning');
                     }
                     break;
                 case 'library-loader-btn':
