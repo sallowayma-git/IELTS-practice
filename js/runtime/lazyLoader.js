@@ -51,7 +51,6 @@
             'js/components/vocabDashboardCards.js',
             'js/components/vocabSessionView.js',
             'js/utils/dataBackupManager.js',
-            'js/components/dataManagementPanel.js',
             'js/presentation/moreView.js',
             'js/presentation/miniGames.js'
         ];

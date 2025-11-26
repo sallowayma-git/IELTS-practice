@@ -130,21 +130,6 @@
                 { name: 'SpecializedPractice', init: () => new SpecializedPractice() },
                 { name: 'QuestionTypePractice', init: () => new QuestionTypePractice() },
                 {
-                    name: 'DataManagementPanel', init: () => {
-                        const container = document.createElement('div');
-                        container.id = 'dataManagementPanel';
-                        if (typeof window.DOM !== 'undefined' && window.DOM.hide) {
-                            window.DOM.hide(container);
-                        } else {
-                            container.style.display = 'none';
-                        }
-                        document.body.appendChild(container);
-                        const instance = new DataManagementPanel(container);
-                        window.dataManagementPanel = instance;
-                        return instance;
-                    }
-                },
-                {
                     name: 'SystemMaintenancePanel', init: () => {
                         const container = document.createElement('div');
                         container.id = 'systemMaintenancePanel';
