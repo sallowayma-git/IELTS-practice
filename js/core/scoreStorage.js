@@ -1718,50 +1718,89 @@ class ScoreStorage {
     async importData(importData, options = {}) {
         try {
             await this.ensureReady();
-            const data = typeof importData === 'string' ? JSON.parse(importData) : importData;
-            
-            // 验证数据格式
-            if (!data.practiceRecords || !Array.isArray(data.practiceRecords)) {
-                throw new Error('Invalid import data format');
+            const payload = typeof importData === 'string' ? JSON.parse(importData) : importData;
+
+            const records = this.extractPracticeRecordsFromPayload(payload);
+            const stats = this.extractUserStatsFromPayload(payload);
+
+            if (!Array.isArray(records) || records.length === 0) {
+                throw new Error('Invalid import data format: no practice records found');
             }
-            
+
+            // 标准化记录，避免字段缺失
+            const standardizedRecords = records.map((r) => {
+                try {
+                    return this.standardizeRecord(r);
+                } catch (e) {
+                    console.warn('[ScoreStorage] 标准化导入记录失败，跳过:', r && r.id, e);
+                    return null;
+                }
+            }).filter(Boolean);
+
             // 创建备份
-            const backupId = await this.createBackup('pre_import_backup');
-            
+            await this.createBackup('pre_import_backup');
+
             if (options.merge) {
-                // 合并模式：添加新记录
+                // 合并模式：按 id 去重，保留导入集中的最新（后出现的覆盖）
                 const existingRecords = await this.storage.get(this.storageKeys.practiceRecords, []);
-                const existingIds = new Set(existingRecords.map(r => r.id));
-
-                const newRecords = data.practiceRecords.filter(r => !existingIds.has(r.id));
-                const mergedRecords = [...existingRecords, ...newRecords];
-
+                const mergedMap = new Map();
+                existingRecords.forEach((rec) => {
+                    if (rec && rec.id) mergedMap.set(rec.id, rec);
+                });
+                standardizedRecords.forEach((rec) => {
+                    if (rec && rec.id) mergedMap.set(rec.id, rec);
+                });
+                const mergedRecords = Array.from(mergedMap.values());
                 await this.storage.set(this.storageKeys.practiceRecords, mergedRecords);
 
                 // 重新计算统计
                 await this.recalculateUserStats();
-
-                console.log(`Imported ${newRecords.length} new records`);
+                console.log(`Imported ${standardizedRecords.length} records (merge mode), total ${mergedRecords.length}`);
 
             } else {
                 // 替换模式：完全替换数据
-                await this.storage.set(this.storageKeys.practiceRecords, data.practiceRecords);
+                await this.storage.set(this.storageKeys.practiceRecords, standardizedRecords);
 
-                if (data.userStats) {
-                    await this.storage.set(this.storageKeys.userStats, data.userStats);
+                if (stats) {
+                    await this.storage.set(this.storageKeys.userStats, stats);
                 } else {
                     await this.recalculateUserStats();
                 }
 
-                console.log(`Imported ${data.practiceRecords.length} records (replace mode)`);
+                console.log(`Imported ${standardizedRecords.length} records (replace mode)`);
             }
-            
+
             return true;
-            
+
         } catch (error) {
             console.error('Failed to import data:', error);
             throw error;
         }
+    }
+
+    extractPracticeRecordsFromPayload(payload) {
+        if (!payload) return [];
+        if (Array.isArray(payload)) return payload;
+        if (Array.isArray(payload.practiceRecords)) return payload.practiceRecords;
+        if (Array.isArray(payload.practice_records)) return payload.practice_records;
+        if (Array.isArray(payload.data?.practice_records)) return payload.data.practice_records;
+        if (Array.isArray(payload.data?.practiceRecords)) return payload.data.practiceRecords;
+        if (payload.data?.exam_system_practice_records && Array.isArray(payload.data.exam_system_practice_records.data)) {
+            return payload.data.exam_system_practice_records.data;
+        }
+        if (payload.exam_system_practice_records && Array.isArray(payload.exam_system_practice_records.data)) {
+            return payload.exam_system_practice_records.data;
+        }
+        return [];
+    }
+
+    extractUserStatsFromPayload(payload) {
+        if (!payload || typeof payload !== 'object') return null;
+        return payload.userStats
+            || payload.user_stats
+            || payload.data?.userStats
+            || payload.data?.user_stats
+            || null;
     }
 
     // Note: 备份相关方法已移除，现在使用DataBackupManager
