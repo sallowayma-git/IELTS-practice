@@ -1122,45 +1122,35 @@ class ScoreStorage {
         const { allowDuringInit = false } = options;
         await this.ensureReady({ allowDuringInit });
         const stats = await this.storage.get(this.storageKeys.userStats, this.getDefaultUserStats());
+        this.applyRecordToStats(stats, practiceRecord);
+        await this.storage.set(this.storageKeys.userStats, stats);
+        console.log('User stats updated');
+    }
+
+    applyRecordToStats(stats, practiceRecord) {
+        if (!stats || typeof stats !== 'object') {
+            return;
+        }
 
         const duration = Number(practiceRecord.duration) || 0;
         const accuracy = Number(practiceRecord.accuracy) || 0;
         const normalizedRecord = { ...practiceRecord, duration, accuracy };
 
-        if (!stats.categoryStats || typeof stats.categoryStats !== 'object') {
-            stats.categoryStats = {};
-        }
-        if (!stats.questionTypeStats || typeof stats.questionTypeStats !== 'object') {
-            stats.questionTypeStats = {};
-        }
+        stats.categoryStats = stats.categoryStats && typeof stats.categoryStats === 'object' ? stats.categoryStats : {};
+        stats.questionTypeStats = stats.questionTypeStats && typeof stats.questionTypeStats === 'object' ? stats.questionTypeStats : {};
 
-        // 更新基础统计
         stats.totalPractices += 1;
         stats.totalTimeSpent += duration;
 
-        // 计算平均分数
         const totalScore = (stats.averageScore * (stats.totalPractices - 1)) + accuracy;
-        stats.averageScore = totalScore / stats.totalPractices;
+        stats.averageScore = stats.totalPractices > 0 ? totalScore / stats.totalPractices : 0;
 
-        // 更新分类统计
         this.updateCategoryStats(stats, normalizedRecord);
-
-        // 更新题型统计
         this.updateQuestionTypeStats(stats, normalizedRecord);
-
-        // 更新连续学习天数
         this.updateStreakDays(stats, normalizedRecord);
-
-        // 检查成就
         this.checkAchievements(stats, normalizedRecord);
-        
-        // 更新时间戳
+
         stats.updatedAt = new Date().toISOString();
-        
-        // 保存统计数据
-        await this.storage.set(this.storageKeys.userStats, stats);
-        
-        console.log('User stats updated');
     }
 
     /**
@@ -1387,10 +1377,11 @@ class ScoreStorage {
         const records = (await this.storage.get(this.storageKeys.practiceRecords, []) || []).map(r => this.normalizeRecordFields(r));
         const stats = this.getDefaultUserStats();
 
-        // 重新计算所有统计数据
         for (const record of records) {
-            await this.updateUserStats(record, { allowDuringInit });
+            this.applyRecordToStats(stats, record);
         }
+
+        await this.storage.set(this.storageKeys.userStats, stats);
 
         console.log('User stats recalculated');
     }
