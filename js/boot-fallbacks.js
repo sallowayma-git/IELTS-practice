@@ -1,8 +1,8 @@
-(function(){
+(function () {
   var storage = window.storage;
   // Fallback for navigation
   if (typeof window.showView !== 'function') {
-    window.showView = function(viewName, resetCategory){
+    window.showView = function (viewName, resetCategory) {
       if (typeof document === 'undefined') {
         return;
       }
@@ -12,7 +12,7 @@
         console.warn('[Fallback] 未找到视图节点:', normalized);
         return;
       }
-      Array.prototype.forEach.call(document.querySelectorAll('.view.active'), function(v){
+      Array.prototype.forEach.call(document.querySelectorAll('.view.active'), function (v) {
         v.classList.remove('active');
       });
       target.classList.add('active');
@@ -34,7 +34,7 @@
       } else {
         var navContainer = document.querySelector('.main-nav');
         if (navContainer) {
-          Array.prototype.forEach.call(navContainer.querySelectorAll('.nav-btn'), function(btn){
+          Array.prototype.forEach.call(navContainer.querySelectorAll('.nav-btn'), function (btn) {
             btn.classList.remove('active');
           });
           var navButton = navContainer.querySelector('[data-view="' + normalized + '"]');
@@ -44,17 +44,17 @@
         }
       }
 
-      if (normalized==='browse' && (resetCategory===undefined || resetCategory===true)){
+      if (normalized === 'browse' && (resetCategory === undefined || resetCategory === true)) {
         window.currentCategory = 'all';
         window.currentExamType = 'all';
         if (typeof window.setBrowseTitle === 'function') { window.setBrowseTitle('题库浏览'); return; }
-        var t=document.getElementById('browse-title'); if (t) t.textContent='题库浏览';
+        var t = document.getElementById('browse-title'); if (t) t.textContent = '题库浏览';
       }
-      if (normalized==='browse' && typeof window.loadExamList==='function') window.loadExamList();
-      if (normalized==='practice' && window.AppActions && typeof window.AppActions.ensurePracticeSuite === 'function') {
+      if (normalized === 'browse' && typeof window.loadExamList === 'function') window.loadExamList();
+      if (normalized === 'practice' && window.AppActions && typeof window.AppActions.ensurePracticeSuite === 'function') {
         window.AppActions.ensurePracticeSuite();
       }
-      if (normalized==='practice' && typeof window.updatePracticeView==='function') window.updatePracticeView();
+      if (normalized === 'practice' && typeof window.updatePracticeView === 'function') window.updatePracticeView();
     };
   }
 
@@ -72,7 +72,7 @@
     } else {
       var navRoot = document.querySelector('.main-nav');
       if (navRoot && !navRoot._legacyNavHandler) {
-        var handler = function(event) {
+        var handler = function (event) {
           var button = event.target && event.target.closest ? event.target.closest('.nav-btn[data-view]') : null;
           if (!button || !navRoot.contains(button)) {
             return;
@@ -112,7 +112,7 @@
     var element = document.createElement(tag);
     var attrs = attributes || {};
 
-    Object.keys(attrs).forEach(function(key) {
+    Object.keys(attrs).forEach(function (key) {
       var value = attrs[key];
       if (value == null || value === false) {
         return;
@@ -124,7 +124,7 @@
       }
 
       if (key === 'dataset' && typeof value === 'object') {
-        Object.keys(value).forEach(function(dataKey) {
+        Object.keys(value).forEach(function (dataKey) {
           var dataValue = value[dataKey];
           if (dataValue == null) {
             return;
@@ -148,7 +148,7 @@
     });
 
     var normalizedChildren = Array.isArray(children) ? children : [children];
-    normalizedChildren.forEach(function(child) {
+    normalizedChildren.forEach(function (child) {
       if (child == null) {
         return;
       }
@@ -167,7 +167,7 @@
       return;
     }
 
-    document.addEventListener('click', function(event) {
+    document.addEventListener('click', function (event) {
       var target = event.target && event.target.closest ? event.target.closest('[data-backup-action]') : null;
       if (!target) {
         return;
@@ -215,7 +215,7 @@
       window.showMessage && window.showMessage('正在恢复备份...', 'info');
       await manager.restoreBackup(backupId);
       window.showMessage && window.showMessage('备份恢复成功', 'success');
-      setTimeout(function() {
+      setTimeout(function () {
         try {
           if (typeof window.showBackupList === 'function') {
             window.showBackupList();
@@ -232,19 +232,19 @@
 
   // Fallback for toast messages
   if (typeof window.showMessage !== 'function') {
-    window.showMessage = function(message, type, duration){
-      try{
+    window.showMessage = function (message, type, duration) {
+      try {
         var container = document.getElementById('message-container');
-        if(!container){
-          container=document.createElement('div');
-          container.id='message-container';
-          container.className='message-container';
+        if (!container) {
+          container = document.createElement('div');
+          container.id = 'message-container';
+          container.className = 'message-container';
           document.body.appendChild(container);
         }
 
-        var note=document.createElement('div');
-        note.className='message ' + (type||'info');
-        var icon=document.createElement('strong');
+        var note = document.createElement('div');
+        note.className = 'message ' + (type || 'info');
+        var icon = document.createElement('strong');
         var marks = { error: '✖', success: '✔', warning: '⚠️', info: 'ℹ️' };
         icon.textContent = marks[type] || marks.info;
         note.appendChild(icon);
@@ -256,20 +256,20 @@
         }
 
         var timeout = typeof duration === 'number' && duration > 0 ? duration : 4000;
-        setTimeout(function(){
+        setTimeout(function () {
           note.classList.add('message-leaving');
-          setTimeout(function(){
+          setTimeout(function () {
             if (note.parentNode) {
               note.parentNode.removeChild(note);
             }
           }, 320);
         }, timeout);
-      }catch(_){ console.log('[Toast]', type||'info', message); }
+      } catch (_) { console.log('[Toast]', type || 'info', message); }
     };
   }
 
   // Fallbacks for data export/import buttons in Settings
-  var disabledMessage = function(action) {
+  var disabledMessage = function (action) {
     window.showMessage && window.showMessage(action + '功能已移除', 'warning');
   };
 
@@ -299,49 +299,64 @@
     const modal = document.createElement('div');
     modal.className = 'import-mode-modal-lite';
 
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'close-btn-lite';
+    closeBtn.innerHTML = '&times;';
+    closeBtn.ariaLabel = '关闭';
+    closeBtn.addEventListener('click', () => document.body.removeChild(overlay));
+
     const title = document.createElement('h4');
     title.textContent = '选择导入模式';
     const desc = document.createElement('p');
-    desc.textContent = '先确定导入策略，再选择要导入的文件。';
+    desc.textContent = '请选择适合当前场景的数据导入策略';
 
     const options = document.createElement('div');
     options.className = 'import-mode-options-lite';
 
     const defs = [
-      { mode: 'merge', icon: '➕', title: '增量导入', text: '合并新数据，保留现有记录。' },
-      { mode: 'replace', icon: '⚠️', title: '覆盖导入', text: '替换所有记录，慎用。' }
+      { mode: 'merge', icon: '📥', title: '增量导入', text: '合并新数据，保留现有记录。适合日常更新。' },
+      { mode: 'replace', icon: '⚠️', title: '覆盖导入', text: '清空并替换所有记录。慎用，数据不可恢复。' }
     ];
 
     defs.forEach((def) => {
       const card = document.createElement('div');
       card.className = 'import-mode-option-lite';
+      card.role = 'button';
+      card.tabIndex = 0;
+
       const icon = document.createElement('div');
       icon.className = 'mode-icon-lite';
       icon.textContent = def.icon;
+
       const head = document.createElement('strong');
       head.textContent = def.title;
+
       const text = document.createElement('p');
       text.textContent = def.text;
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'mode-select-btn-lite';
-      btn.textContent = '选择';
-      btn.addEventListener('click', () => {
+
+      card.append(icon, head, text);
+
+      const selectAction = () => {
         document.body.removeChild(overlay);
         onSelect(def.mode);
+      };
+
+      card.addEventListener('click', selectAction);
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          selectAction();
+        }
       });
-      card.append(icon, head, text, btn);
+
       options.appendChild(card);
     });
 
-    const closeBtn = document.createElement('button');
-    closeBtn.type = 'button';
-    closeBtn.className = 'close-btn-lite';
-    closeBtn.textContent = '×';
-    closeBtn.addEventListener('click', () => document.body.removeChild(overlay));
-
     modal.append(closeBtn, title, desc, options);
     overlay.appendChild(modal);
+
+    // Close on backdrop click
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay) {
         document.body.removeChild(overlay);
@@ -352,17 +367,94 @@
       const style = document.createElement('style');
       style.id = 'import-mode-lite-style';
       style.textContent = `
-        .import-mode-overlay-lite{position:fixed;inset:0;background:rgba(15,23,42,0.55);display:flex;align-items:center;justify-content:center;z-index:10000;padding:16px;box-sizing:border-box;}
-        .import-mode-modal-lite{position:relative;background:rgba(249,250,251,0.98);color:#0f172a;width:420px;max-width:92vw;border-radius:16px;padding:28px 26px;box-shadow:0 30px 60px rgba(15,23,42,0.25);}
-        .import-mode-modal-lite h4{margin:0;font-size:18px;}
-        .import-mode-modal-lite p{margin:8px 0 0;font-size:14px;color:#475569;}
-        .import-mode-options-lite{display:flex;flex-direction:column;gap:12px;margin-top:18px;}
-        .import-mode-option-lite{border:1px solid rgba(15,23,42,0.08);border-radius:12px;padding:16px;background:#fff;box-shadow:0 12px 24px rgba(15,23,42,0.08);}
-        .mode-icon-lite{width:36px;height:36px;border-radius:10px;background:rgba(59,130,246,0.12);display:flex;align-items:center;justify-content:center;margin-bottom:4px;font-size:18px;}
-        .mode-select-btn-lite{margin-top:8px;padding:6px 16px;border:none;border-radius:999px;background-image:linear-gradient(135deg,rgba(59,130,246,.85),rgba(14,165,233,.85));color:#fff;cursor:pointer;}
-        .mode-select-btn-lite:hover{box-shadow:0 10px 18px rgba(14,165,233,0.3);}
-        .close-btn-lite{position:absolute;top:10px;right:14px;border:none;background:transparent;font-size:20px;color:#94a3b8;cursor:pointer;}
-        .close-btn-lite:hover{color:#475569;}
+        @keyframes importFadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes importScaleIn { from { opacity: 0; transform: scale(0.95) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        
+        .import-mode-overlay-lite {
+          position: fixed; inset: 0; z-index: 10000;
+          background: rgba(0, 0, 0, 0.25);
+          backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+          display: flex; align-items: center; justify-content: center;
+          padding: 20px;
+          animation: importFadeIn 0.3s ease-out;
+        }
+        .import-mode-modal-lite {
+          position: relative; width: 440px; max-width: 90vw;
+          /* White transparent gradient for substantial glass feel */
+          background: linear-gradient(165deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.85) 100%);
+          backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%);
+          border-radius: 24px;
+          /* Highlight border */
+          border: 1px solid rgba(255, 255, 255, 0.8);
+          /* Rich shadow + Top highlight for 3D glass effect */
+          box-shadow: 
+            0 25px 50px -12px rgba(0, 0, 0, 0.15), 
+            inset 0 1px 0 rgba(255, 255, 255, 1),
+            inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+          padding: 40px 32px;
+          color: #1d1d1f;
+          font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+          animation: importScaleIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+          display: flex; flex-direction: column; align-items: center;
+        }
+        .import-mode-modal-lite h4 {
+          margin: 0 0 12px; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; text-align: center;
+          color: #1d1d1f;
+        }
+        .import-mode-modal-lite > p {
+          margin: 0 0 32px; font-size: 15px; color: #86868b; text-align: center; line-height: 1.4;
+        }
+        .import-mode-options-lite {
+          display: grid; grid-template-columns: 1fr 1fr; gap: 16px; width: 100%;
+        }
+        .import-mode-option-lite {
+          display: flex; flex-direction: column; align-items: center; text-align: center;
+          padding: 24px 16px;
+          /* Glassy cards */
+          background: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.6));
+          border: 1px solid rgba(255, 255, 255, 0.6);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+          border-radius: 20px;
+          cursor: pointer;
+          transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+          user-select: none;
+        }
+        .import-mode-option-lite:hover {
+          background: linear-gradient(145deg, rgba(255, 255, 255, 1), rgba(255, 255, 255, 0.9));
+          transform: translateY(-2px);
+          box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 1);
+          border-color: rgba(255, 255, 255, 1);
+        }
+        .import-mode-option-lite:active {
+          transform: scale(0.98);
+          background: rgba(245, 245, 247, 0.9);
+        }
+        .mode-icon-lite {
+          font-size: 36px; margin-bottom: 14px;
+          filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));
+          transition: transform 0.3s ease;
+        }
+        .import-mode-option-lite:hover .mode-icon-lite {
+          transform: scale(1.1) rotate(-5deg);
+        }
+        .import-mode-option-lite strong {
+          display: block; font-size: 16px; font-weight: 600; margin-bottom: 6px; color: #1d1d1f;
+        }
+        .import-mode-option-lite p {
+          font-size: 13px; color: #86868b; line-height: 1.4; margin: 0;
+        }
+        .close-btn-lite {
+          position: absolute; top: 16px; right: 16px;
+          width: 28px; height: 28px;
+          border-radius: 50%; border: none;
+          background: rgba(0, 0, 0, 0.05);
+          color: #86868b; font-size: 18px; line-height: 1;
+          cursor: pointer; display: flex; align-items: center; justify-content: center;
+          transition: all 0.2s;
+        }
+        .close-btn-lite:hover {
+          background: rgba(0, 0, 0, 0.1); color: #1d1d1f;
+        }
       `;
       document.head.appendChild(style);
     }
@@ -403,13 +495,13 @@
   }
 
   if (typeof window.exportAllData !== 'function') {
-    window.exportAllData = function(){
+    window.exportAllData = function () {
       disabledMessage('数据导出');
     };
   }
 
   if (typeof window.importData !== 'function') {
-    window.importData = function(){
+    window.importData = function () {
       showImportModeModal((mode) => {
         const input = document.createElement('input');
         input.type = 'file';
@@ -425,33 +517,33 @@
 
   // Fallbacks for backup operations used by Settings
   if (typeof window.createManualBackup !== 'function') {
-    window.createManualBackup = function(){
+    window.createManualBackup = function () {
       disabledMessage('备份管理');
     };
   }
 
   if (typeof window.showBackupList !== 'function') {
-    window.showBackupList = async function(){
+    window.showBackupList = async function () {
       disabledMessage('备份列表');
     };
     if (typeof window.restoreBackup !== 'function') {
-      window.restoreBackup = function(){
+      window.restoreBackup = function () {
         disabledMessage('备份恢复');
       };
     }
   }
-  async function ensureDefaultConfig(){
-    try{
+  async function ensureDefaultConfig() {
+    try {
       var configs = [];
       if (window.storage && storage.get) {
         var maybeConfigs = storage.get('exam_index_configurations', []);
         configs = (maybeConfigs && typeof maybeConfigs.then === 'function') ? await maybeConfigs : maybeConfigs;
       }
       if (!Array.isArray(configs)) configs = [];
-      var hasDefault = configs.some(function(c){ return c && c.key==='exam_index'; });
-      if (!hasDefault){
-        var count = Array.isArray(window.examIndex)? window.examIndex.length : 0;
-        configs.push({ name:'默认题库', key:'exam_index', examCount: count, timestamp: Date.now() });
+      var hasDefault = configs.some(function (c) { return c && c.key === 'exam_index'; });
+      if (!hasDefault) {
+        var count = Array.isArray(window.examIndex) ? window.examIndex.length : 0;
+        configs.push({ name: '默认题库', key: 'exam_index', examCount: count, timestamp: Date.now() });
         if (window.storage && storage.set) {
           try {
             var maybeSetConfigs = storage.set('exam_index_configurations', configs);
@@ -465,7 +557,7 @@
             var currentActive = storage.get('active_exam_index_key');
             currentActive = (currentActive && typeof currentActive.then === 'function') ? await currentActive : currentActive;
             if (!currentActive && window.storage && storage.set) {
-              var maybeSetActive = storage.set('active_exam_index_key','exam_index');
+              var maybeSetActive = storage.set('active_exam_index_key', 'exam_index');
               if (maybeSetActive && typeof maybeSetActive.then === 'function') await maybeSetActive;
             }
           } catch (activeErr) {
@@ -474,7 +566,7 @@
         }
       }
       return configs;
-    }catch(e){
+    } catch (e) {
       console.warn('[Fallback] ensureDefaultConfig 失败:', e);
       return [];
     }
@@ -482,7 +574,7 @@
 
   // Fallback for library config list
   if (typeof window.showLibraryConfigListV2 !== 'function') {
-    window.showLibraryConfigListV2 = async function(){
+    window.showLibraryConfigListV2 = async function () {
       var configs = [];
       try {
         configs = (window.storage && storage.get) ? await storage.get('exam_index_configurations', []) : [];
@@ -502,7 +594,7 @@
         if (window.storage && storage.get) {
           activeKey = await storage.get('active_exam_index_key', 'exam_index');
         }
-      } catch (e) {}
+      } catch (e) { }
 
       if (typeof window.renderLibraryConfigList === 'function') {
         window.renderLibraryConfigList({ configs: configs, activeKey: activeKey, allowDelete: true });
@@ -535,7 +627,7 @@
 
       var list = document.createElement('div');
       list.className = 'library-config-panel__list';
-      configs.forEach(function(cfg){
+      configs.forEach(function (cfg) {
         if (!cfg) return;
         var item = document.createElement('div');
         item.className = 'library-config-panel__item' + (cfg.key === activeKey ? ' library-config-panel__item--active' : '');
@@ -595,7 +687,7 @@
       panel.appendChild(footer);
 
       host.appendChild(panel);
-      host.onclick = function(event){
+      host.onclick = function (event) {
         var target = event.target && event.target.closest('[data-config-action]');
         if (!target || !host.contains(target)) return;
         var action = target.dataset.configAction;
@@ -612,7 +704,7 @@
 
   // Fallback improved loader modal (only if missing)
   if (typeof window.showLibraryLoaderModal !== 'function') {
-    window.showLibraryLoaderModal = function(){
+    window.showLibraryLoaderModal = function () {
       if (typeof document === 'undefined') {
         return;
       }
@@ -623,11 +715,11 @@
       }
 
       var create = _fallbackCreateElement;
-      var ensureArray = function(value) {
+      var ensureArray = function (value) {
         return Array.isArray(value) ? value : [value];
       };
 
-      var createLoaderCard = function(type, title, description, hint) {
+      var createLoaderCard = function (type, title, description, hint) {
         var prefix = type === 'reading' ? 'reading' : 'listening';
         return create('div', {
           className: 'library-loader-card library-loader-card--' + type
@@ -726,7 +818,7 @@
         }, '关闭')
       ]);
 
-      ensureArray([header, body, footer]).forEach(function(section) {
+      ensureArray([header, body, footer]).forEach(function (section) {
         if (section) {
           modal.appendChild(section);
         }
@@ -737,7 +829,7 @@
         document.body.appendChild(overlay);
       }
 
-      var clickHandler = function(event) {
+      var clickHandler = function (event) {
         var target = event.target && event.target.closest ? event.target.closest('[data-library-action]') : null;
         if (!target || !overlay.contains(target)) {
           return;
@@ -763,7 +855,7 @@
         }
       };
 
-      var changeHandler = function(event) {
+      var changeHandler = function (event) {
         var input = event.target && event.target.closest ? event.target.closest('.library-loader-input') : null;
         if (!input || !overlay.contains(input)) {
           return;
@@ -795,9 +887,9 @@
           console.error('[Fallback] 处理题库上传失败:', error);
         }
 
-        Promise.resolve(upload).then(function() {
+        Promise.resolve(upload).then(function () {
           cleanup();
-        }).catch(function(error) {
+        }).catch(function (error) {
           console.error('[Fallback] 题库上传流程出错:', error);
           cleanup();
         });

@@ -154,19 +154,6 @@
     --sp-6: 24px;
     --sp-7: 28px;
     --sp-8: 32px;
-    --fz-xs: 12px;
-    --fz-sm: 14px;
-    --fz-md: 16px;
-    --fz-lg: 20px;
-    --fz-xl: 24px;
-    --fz-2xl: 32px;
-    --fw-medium: 500;
-    --fw-bold: 700;
-}
-
-@property --body-gradient-angle {
-    syntax: '<angle>';
-    inherits: false;
     initial-value: 135deg;
 }
 
