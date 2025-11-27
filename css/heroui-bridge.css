@@ -19,6 +19,18 @@
     --shui-radius-md: 16px;
     --shui-radius-sm: 12px;
     --shui-blur: 28px;
+
+    /* Bauhaus Theme Variables for Settings View */
+    --bauhaus-text-main: #0f172a;
+    --bauhaus-text-muted: #64748b;
+    --bauhaus-accent-red: #dc2626;
+    /* WCAG AA Compliant on white */
+    --bauhaus-accent-blue: #2563eb;
+    /* WCAG AA Compliant on white */
+    --bauhaus-accent-dark: #334155;
+    /* WCAG AAA Compliant on white */
+    --bauhaus-glass-border: rgba(255, 255, 255, 0.6);
+    --bauhaus-glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
 }
 
 body.hero-body {
@@ -663,8 +675,8 @@ body.hero-body.shui-bg-static {
 #settings-view #library-config-btn,
 #settings-view #force-refresh-btn {
     background: rgba(255, 255, 255, 0.7);
-    color: var(--bauhaus-accent-blue) !important;
-    border: 1px solid rgba(37, 99, 235, 0.2);
+    color: var(--bauhaus-text-main) !important;
+    border: 1px solid rgba(15, 23, 42, 0.15);
 }
 
 #settings-view #load-library-btn:hover,
