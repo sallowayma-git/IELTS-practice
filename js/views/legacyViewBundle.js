@@ -289,7 +289,7 @@
     // --- Practice history renderer ---
     var historyRenderer = { helpers: {} };
 
-    historyRenderer.helpers.getScoreColor = function(percentage) {
+    historyRenderer.helpers.getScoreColor = function (percentage) {
         var pct = Number(percentage) || 0;
         if (pct >= 90) return '#10b981';
         if (pct >= 75) return '#f59e0b';
@@ -297,7 +297,7 @@
         return '#ef4444';
     };
 
-    historyRenderer.helpers.formatDurationShort = function(seconds) {
+    historyRenderer.helpers.formatDurationShort = function (seconds) {
         var s = Math.max(0, Math.floor(Number(seconds) || 0));
         if (s < 60) return s + '秒';
         var m = Math.floor(s / 60);
@@ -307,7 +307,7 @@
         return h + '小时' + mm + '分钟';
     };
 
-    historyRenderer.helpers.getDurationColor = function(seconds) {
+    historyRenderer.helpers.getDurationColor = function (seconds) {
         var minutes = (Number(seconds) || 0) / 60;
         if (minutes < 20) return '#10b981';
         if (minutes < 23) return '#f59e0b';
@@ -322,7 +322,7 @@
         }
         var element = document.createElement(tag);
         var attrs = attributes || {};
-        Object.keys(attrs).forEach(function(key) {
+        Object.keys(attrs).forEach(function (key) {
             var value = attrs[key];
             if (value == null) return;
             if (key === 'className') {
@@ -330,7 +330,7 @@
                 return;
             }
             if (key === 'dataset' && typeof value === 'object') {
-                Object.keys(value).forEach(function(dataKey) {
+                Object.keys(value).forEach(function (dataKey) {
                     var dataValue = value[dataKey];
                     if (dataValue != null) {
                         element.dataset[dataKey] = String(dataValue);
@@ -346,7 +346,7 @@
         });
 
         var list = Array.isArray(children) ? children : [children];
-        list.forEach(function(child) {
+        list.forEach(function (child) {
             if (child == null) return;
             if (typeof child === 'string') {
                 element.appendChild(document.createTextNode(child));
@@ -367,7 +367,7 @@
             container.removeChild(container.firstChild);
         }
         var nodes = Array.isArray(content) ? content : [content];
-        nodes.forEach(function(node) {
+        nodes.forEach(function (node) {
             if (!node) return;
             if (typeof node === 'string') {
                 container.appendChild(document.createTextNode(node));
@@ -377,7 +377,7 @@
         });
     }
 
-    historyRenderer.createRecordNode = function(record, options) {
+    historyRenderer.createRecordNode = function (record, options) {
         options = options || {};
         var bulkDeleteMode = Boolean(options.bulkDeleteMode);
         var selectedRecords = options.selectedRecords || new Set();
@@ -462,7 +462,7 @@
         return item;
     };
 
-    historyRenderer.renderEmptyState = function(container) {
+    historyRenderer.renderEmptyState = function (container) {
         if (!container) return;
         replaceContent(container, createNode('div', { className: 'practice-history-empty' }, [
             createNode('div', { className: 'practice-history-empty-icon' }, '📂'),
@@ -470,7 +470,7 @@
         ]));
     };
 
-    historyRenderer.renderList = function(container, records, options) {
+    historyRenderer.renderList = function (container, records, options) {
         options = options || {};
         if (!container) return null;
         var list = Array.isArray(records) ? records : [];
@@ -481,7 +481,7 @@
 
         var itemFactory = typeof options.itemFactory === 'function'
             ? options.itemFactory
-            : function(record) {
+            : function (record) {
                 return historyRenderer.createRecordNode(record, options);
             };
 
@@ -499,7 +499,7 @@
         return null;
     };
 
-    historyRenderer.destroyScroller = function(scroller) {
+    historyRenderer.destroyScroller = function (scroller) {
         if (!scroller) return;
         if (typeof scroller.destroy === 'function') {
             try {
@@ -629,6 +629,20 @@
             if (exam && exam.type) {
                 fallbackParts.push(exam.type);
             }
+
+            // Add frequency text for reading materials
+            if (exam && exam.type === 'reading' && exam.frequency) {
+                var frequencyLabels = {
+                    'ultra-high': '超高',
+                    'high': '高',
+                    'medium': '次',
+                    'low': '低',
+                    'standard': '标准'
+                };
+                var label = frequencyLabels[exam.frequency] || exam.frequency;
+                fallbackParts.push(label);
+            }
+
             metaText = fallbackParts.join(' | ');
         }
         meta.textContent = metaText;
@@ -807,12 +821,12 @@
                                 event.preventDefault();
                             }
                             if (typeof global.loadLibrary === 'function') {
-                                try { global.loadLibrary(false); } catch (_) {}
+                                try { global.loadLibrary(false); } catch (_) { }
                             } else if (typeof global.showLibraryLoaderModal === 'function') {
                                 global.showLibraryLoaderModal();
                             }
                         });
-                    } catch (_) {}
+                    } catch (_) { }
                 }
 
                 actionContainer.appendChild(button);
@@ -870,14 +884,14 @@
             if (key === 'className') {
                 element.className = value;
             } else if (key === 'dataset' && typeof value === 'object') {
-                Object.keys(value).forEach(function(dataKey) {
+                Object.keys(value).forEach(function (dataKey) {
                     var dataValue = value[dataKey];
                     if (dataValue != null) {
                         element.dataset[dataKey] = String(dataValue);
                     }
                 });
             } else if (key === 'style' && typeof value === 'object') {
-                Object.keys(value).forEach(function(styleKey) {
+                Object.keys(value).forEach(function (styleKey) {
                     element.style[styleKey] = value[styleKey];
                 });
             } else if (key === 'ariaHidden') {
@@ -1025,7 +1039,7 @@
         }
         try {
             this.container.removeEventListener('click', this._boundClickHandler);
-        } catch (_) {}
+        } catch (_) { }
         this.container = null;
         this._isMounted = false;
     };
@@ -1267,8 +1281,8 @@
             }
         }, '切换');
         if (typeof switchButton.addEventListener === 'function') {
-            (function(button, key) {
-                button.addEventListener('click', function(event) {
+            (function (button, key) {
+                button.addEventListener('click', function (event) {
                     if (event && typeof event.preventDefault === 'function') {
                         event.preventDefault();
                     }
@@ -1294,8 +1308,8 @@
                 }
             }, '删除');
             if (typeof deleteButton.addEventListener === 'function') {
-                (function(button, key) {
-                    button.addEventListener('click', function(event) {
+                (function (button, key) {
+                    button.addEventListener('click', function (event) {
                         if (event && typeof event.preventDefault === 'function') {
                             event.preventDefault();
                         }
@@ -1364,7 +1378,7 @@
         }
 
         var handlers = options && options.handlers ? options.handlers : {};
-        var findActionTarget = function(node) {
+        var findActionTarget = function (node) {
             var current = node;
             while (current && current !== host) {
                 if (current.dataset && current.dataset.configAction) {
