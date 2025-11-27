@@ -273,6 +273,135 @@
     window.showMessage && window.showMessage(action + '功能已移除', 'warning');
   };
 
+  var ensureDataBackupManager = (function () {
+    let loading = null;
+    return function ensureDataBackupManager() {
+      if (window.DataBackupManager) {
+        return Promise.resolve(new window.DataBackupManager());
+      }
+      if (loading) {
+        return loading.then(() => new window.DataBackupManager());
+      }
+      loading = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'js/utils/dataBackupManager.js';
+        script.onload = () => resolve();
+        script.onerror = (err) => reject(err || new Error('failed to load dataBackupManager'));
+        document.head.appendChild(script);
+      });
+      return loading.then(() => new window.DataBackupManager());
+    };
+  })();
+
+  function showImportModeModal(onSelect) {
+    const overlay = document.createElement('div');
+    overlay.className = 'import-mode-overlay-lite';
+    const modal = document.createElement('div');
+    modal.className = 'import-mode-modal-lite';
+
+    const title = document.createElement('h4');
+    title.textContent = '选择导入模式';
+    const desc = document.createElement('p');
+    desc.textContent = '先确定导入策略，再选择要导入的文件。';
+
+    const options = document.createElement('div');
+    options.className = 'import-mode-options-lite';
+
+    const defs = [
+      { mode: 'merge', icon: '➕', title: '增量导入', text: '合并新数据，保留现有记录。' },
+      { mode: 'replace', icon: '⚠️', title: '覆盖导入', text: '替换所有记录，慎用。' }
+    ];
+
+    defs.forEach((def) => {
+      const card = document.createElement('div');
+      card.className = 'import-mode-option-lite';
+      const icon = document.createElement('div');
+      icon.className = 'mode-icon-lite';
+      icon.textContent = def.icon;
+      const head = document.createElement('strong');
+      head.textContent = def.title;
+      const text = document.createElement('p');
+      text.textContent = def.text;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'mode-select-btn-lite';
+      btn.textContent = '选择';
+      btn.addEventListener('click', () => {
+        document.body.removeChild(overlay);
+        onSelect(def.mode);
+      });
+      card.append(icon, head, text, btn);
+      options.appendChild(card);
+    });
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'close-btn-lite';
+    closeBtn.textContent = '×';
+    closeBtn.addEventListener('click', () => document.body.removeChild(overlay));
+
+    modal.append(closeBtn, title, desc, options);
+    overlay.appendChild(modal);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        document.body.removeChild(overlay);
+      }
+    });
+
+    if (!document.getElementById('import-mode-lite-style')) {
+      const style = document.createElement('style');
+      style.id = 'import-mode-lite-style';
+      style.textContent = `
+        .import-mode-overlay-lite{position:fixed;inset:0;background:rgba(15,23,42,0.55);display:flex;align-items:center;justify-content:center;z-index:10000;padding:16px;box-sizing:border-box;}
+        .import-mode-modal-lite{position:relative;background:rgba(249,250,251,0.98);color:#0f172a;width:420px;max-width:92vw;border-radius:16px;padding:28px 26px;box-shadow:0 30px 60px rgba(15,23,42,0.25);}
+        .import-mode-modal-lite h4{margin:0;font-size:18px;}
+        .import-mode-modal-lite p{margin:8px 0 0;font-size:14px;color:#475569;}
+        .import-mode-options-lite{display:flex;flex-direction:column;gap:12px;margin-top:18px;}
+        .import-mode-option-lite{border:1px solid rgba(15,23,42,0.08);border-radius:12px;padding:16px;background:#fff;box-shadow:0 12px 24px rgba(15,23,42,0.08);}
+        .mode-icon-lite{width:36px;height:36px;border-radius:10px;background:rgba(59,130,246,0.12);display:flex;align-items:center;justify-content:center;margin-bottom:4px;font-size:18px;}
+        .mode-select-btn-lite{margin-top:8px;padding:6px 16px;border:none;border-radius:999px;background-image:linear-gradient(135deg,rgba(59,130,246,.85),rgba(14,165,233,.85));color:#fff;cursor:pointer;}
+        .mode-select-btn-lite:hover{box-shadow:0 10px 18px rgba(14,165,233,0.3);}
+        .close-btn-lite{position:absolute;top:10px;right:14px;border:none;background:transparent;font-size:20px;color:#94a3b8;cursor:pointer;}
+        .close-btn-lite:hover{color:#475569;}
+      `;
+      document.head.appendChild(style);
+    }
+
+    document.body.appendChild(overlay);
+  }
+
+  function processImportPayload(file, mode) {
+    const inputFile = file;
+    if (!inputFile) {
+      window.showMessage && window.showMessage('请选择要导入的文件', 'warning');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => window.showMessage && window.showMessage('文件读取失败', 'error');
+    reader.onload = async () => {
+      let data;
+      try {
+        data = JSON.parse(reader.result);
+      } catch (error) {
+        window.showMessage && window.showMessage('文件格式无效，需为 JSON', 'error');
+        return;
+      }
+      try {
+        const manager = await ensureDataBackupManager();
+        const result = await manager.importPracticeData(data, {
+          mergeMode: mode === 'replace' ? 'replace' : 'merge',
+          createBackup: true,
+          validateData: true
+        });
+        window.showMessage && window.showMessage(`导入成功：新增 ${result.importedCount || 0} 条，跳过 ${result.skippedCount || 0} 条。`, 'success');
+      } catch (error) {
+        console.error('[importData] failed', error);
+        window.showMessage && window.showMessage('导入失败：' + (error && error.message ? error.message : error), 'error');
+      }
+    };
+    reader.readAsText(inputFile, 'utf-8');
+  }
+
   if (typeof window.exportAllData !== 'function') {
     window.exportAllData = function(){
       disabledMessage('数据导出');
@@ -281,7 +410,16 @@
 
   if (typeof window.importData !== 'function') {
     window.importData = function(){
-      disabledMessage('数据导入');
+      showImportModeModal((mode) => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json,application/json';
+        input.onchange = (event) => {
+          const file = event.target.files && event.target.files[0];
+          processImportPayload(file, mode);
+        };
+        input.click();
+      });
     };
   }
 
