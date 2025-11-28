@@ -3417,9 +3417,6 @@ function startRandomPractice(category, type = 'reading', filterMode = null, path
     openExamWithFallback(randomExam);
 }
 
-// 已迁移至 js/presentation/indexInteractions.js
-
-if (typeof setupExamActionHandlers === 'function') {
-    setupExamActionHandlers();
-}
+// Phase 4: 清理重复事件绑定
+// setupExamActionHandlers 已在 examActions.js 的 displayExams 中调用，此处移除重复调用
 ensurePracticeSessionSyncListener();
