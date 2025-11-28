@@ -1,7 +1,55 @@
 // Main JavaScript logic for the application
 // This file is the result of refactoring the inline script from improved-working-system.html
 
+// ============================================================================
+// Phase 1: 全局状态迁移到 AppStateService
+// ============================================================================
+
 const legacyStateAdapter = window.LegacyStateAdapter ? window.LegacyStateAdapter.getInstance() : null;
+
+// 全局状态现已迁移到 AppStateService，以下为向后兼容的 getter
+// fallbackExamSessions - 迁移到 AppStateService
+Object.defineProperty(window, 'fallbackExamSessions', {
+    get: function () {
+        if (window.appStateService) {
+            return window.appStateService.getFallbackExamSessions();
+        }
+        // 降级：如果 state-service 未加载，返回临时 Map
+        if (!window.__legacyFallbackExamSessions) {
+            window.__legacyFallbackExamSessions = new Map();
+        }
+        return window.__legacyFallbackExamSessions;
+    },
+    set: function (value) {
+        if (window.appStateService && value instanceof Map) {
+            window.appStateService.setFallbackExamSessions(value);
+        } else {
+            window.__legacyFallbackExamSessions = value;
+        }
+    },
+    configurable: true
+});
+
+// processedSessions - 迁移到 AppStateService
+Object.defineProperty(window, 'processedSessions', {
+    get: function () {
+        if (window.appStateService) {
+            return window.appStateService.getProcessedSessions();
+        }
+        // 降级：如果 state-service 未加载，返回临时 Set
+        if (!window.__legacyProcessedSessions) {
+            window.__legacyProcessedSessions = new Set();
+        }
+        return window.__legacyProcessedSessions;
+    },
+    configurable: true
+});
+
+// 其他全局变量保留在 main.js（暂未迁移）
+let practiceListScroller = null;
+let app = null;
+let pdfHandler = null;
+let browseStateManager = null;
 
 function normalizeRecordId(id) {
     if (id == null) {
@@ -14,51 +62,47 @@ if (typeof window !== 'undefined') {
     window.normalizeRecordId = normalizeRecordId;
 }
 
-let fallbackExamSessions = new Map();
-let processedSessions = new Set();
-let practiceListScroller = null;
-let app = null;
-let pdfHandler = null;
-let browseStateManager = null;
-
 let examListViewInstance = null;
 let practiceDashboardViewInstance = null;
 let legacyNavigationController = null;
 
-function reportBootStage(message, progress) {
-    if (window.AppBootScreen && typeof window.AppBootScreen.setStage === 'function') {
-        try {
-            window.AppBootScreen.setStage(message, progress);
-        } catch (error) {
-            console.warn('[BootStage] 更新失败:', error);
-        }
-    }
+// ============================================================================
+// Phase 1: Boot/Ensure 函数 Shim 层（实际实现在 main-entry.js）
+// ============================================================================
+
+// reportBootStage - 已在 main-entry.js 实现
+// 保留此处为兼容性注释，实际由 main-entry.js 提供
+if (typeof window.reportBootStage !== 'function') {
+    window.reportBootStage = function reportBootStage(message, progress) {
+        console.warn('[main.js shim] reportBootStage 应由 main-entry.js 提供');
+    };
 }
 
-function ensureExamDataScripts() {
-    if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
-        return window.AppLazyLoader.ensureGroup('exam-data');
-    }
-    return Promise.resolve();
+// ensureExamDataScripts - 已在 main-entry.js 实现
+if (typeof window.ensureExamDataScripts !== 'function') {
+    window.ensureExamDataScripts = function ensureExamDataScripts() {
+        console.warn('[main.js shim] ensureExamDataScripts 应由 main-entry.js 提供');
+        return Promise.resolve();
+    };
 }
 
-function ensurePracticeSuiteReady() {
-    if (window.AppActions && typeof window.AppActions.ensurePracticeSuite === 'function') {
-        return window.AppActions.ensurePracticeSuite();
-    }
-    if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
-        return window.AppLazyLoader.ensureGroup('practice-suite');
-    }
-    return Promise.resolve();
+// ensurePracticeSuiteReady - 已在 main-entry.js 实现
+if (typeof window.ensurePracticeSuiteReady !== 'function') {
+    window.ensurePracticeSuiteReady = function ensurePracticeSuiteReady() {
+        console.warn('[main.js shim] ensurePracticeSuiteReady 应由 main-entry.js 提供');
+        return Promise.resolve();
+    };
 }
 
-function ensureBrowseGroup() {
-    if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
-        return window.AppLazyLoader.ensureGroup('browse-view');
-    }
-    return Promise.resolve();
+// ensureBrowseGroup - 已在 main-entry.js 实现
+if (typeof window.ensureBrowseGroup !== 'function') {
+    window.ensureBrowseGroup = function ensureBrowseGroup() {
+        console.warn('[main.js shim] ensureBrowseGroup 应由 main-entry.js 提供');
+        return Promise.resolve();
+    };
 }
 
+// getLibraryManager - 保留在 main.js（依赖 browse-view 组加载后的全局对象）
 function getLibraryManager() {
     if (window.LibraryManager && typeof window.LibraryManager.getInstance === 'function') {
         return window.LibraryManager.getInstance();
@@ -66,12 +110,16 @@ function getLibraryManager() {
     return null;
 }
 
+// ensureLibraryManagerReady - 转发到 getLibraryManager + ensureBrowseGroup
 async function ensureLibraryManagerReady() {
     let manager = getLibraryManager();
     if (manager) {
         return manager;
     }
-    await ensureBrowseGroup();
+    // 确保 browse-view 组加载（LibraryManager 在该组中）
+    if (typeof window.ensureBrowseGroup === 'function') {
+        await window.ensureBrowseGroup();
+    }
     manager = getLibraryManager();
     return manager;
 }
