@@ -35,11 +35,17 @@
 
 **Phase 1 验收**: ✅ 通过 - 基线测试 26/28，CI 测试通过，无关键错误
 
-### 阶段2：题库浏览与题库配置模块化
-- [ ] 筛选状态读写（`setBrowseFilterState`、`getCurrentCategory`/`ExamType`、标题设置、`clearPendingBrowseAutoScroll` 等）搬到 `js/app/browseController.js` + `js/app/state-service.js`，并在控制器内统一订阅 UI 更新。
-- [ ] 列表渲染与交互（`loadExamList`、`displayExams`、`setupExamActionHandlers`、`initializeBrowseView`、`applyBrowseFilter`、`resetBrowseViewToAll`、置顶/频率模式逻辑）迁入 `js/app/examActions.js`，main.js 仅保留全局入口函数并调用新实现。
-- [ ] 题库配置与切换（`resolveLibraryConfigurations`、`fetchLibraryDataset`、`updateLibraryConfigurationMetadata`、`renderLibraryConfigList`、`switchLibraryConfig`、`deleteLibraryConfig`、`resetBrowseStateAfterLibrarySwitch`）整合到 `js/services/libraryManager.js` 或新建 `js/app/libraryConfigController.js`，公开 `window.switchLibraryConfig`/`window.deleteLibraryConfig` 兼容层。
-- [ ] 校正 `AppLazyLoader` 的 `browse-view` 分组顺序，确保上述新文件先于 main.js；更新 index.html/预取触发以覆盖首个浏览点击。
+### Phase 2: Browse/Library Module Refactoring (Completed)
+**Goal**: Extract browse view and library management logic.
+- [x] Migrate filter state read/write logic to `browseController.js`.
+- [x] Migrate list rendering (`loadExamList`, `renderExamList`) to `examActions.js`.
+- [x] Migrate library configuration logic to `libraryManager.js`.
+- [x] Verify and adjust `lazyLoader.js` order for `browse-view` group.
+- [x] Create compatibility shims in `main.js` for moved functions.
+- [x] Run automated tests to ensure no regressions.
+- **Deliverable**: `browseController.js`, `examActions.js`, `libraryManager.js` fully functional; `main.js` delegates to them.
+- **Status**: **Completed**
+- **Documentation**: `developer/docs/phase2-complete-summary.md`
 
 ### 阶段3：练习记录/导出/套题模式模块化
 - [ ] 练习记录链路（`syncPracticeRecords`、`ensurePracticeRecordsSync`、`startPracticeRecordsSyncInBackground`、`ensurePracticeSessionSyncListener`、记录过滤/选中/批删）迁至 `js/presentation/app-actions.js` + `js/practice/` 相关组件，状态落在 `AppStateService`，保留全局事件监听桥。

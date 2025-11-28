@@ -1,38 +1,304 @@
-(function initExamActionProxies(global) {
+(function (global) {
     'use strict';
 
-    function ensureBrowse() {
-        if (global.AppEntry && typeof global.AppEntry.ensureBrowseGroup === 'function') {
-            return global.AppEntry.ensureBrowseGroup();
-        }
-        if (global.AppLazyLoader && typeof global.AppLazyLoader.ensureGroup === 'function') {
-            return global.AppLazyLoader.ensureGroup('browse-view');
-        }
-        return Promise.resolve();
-    }
+    // ============================================================================
+    // 配置与常量
+    // ============================================================================
 
-    function createProxy(targetName) {
-        return function proxy() {
-            var args = Array.prototype.slice.call(arguments);
-            return ensureBrowse().then(function () {
-                var impl = global['__legacy' + targetName] || global[targetName];
-                if (impl && impl !== proxy && typeof impl === 'function') {
-                    return impl.apply(global, args);
+    const preferredFirstExamByCategory = {
+        'P1_reading': { id: 'p1-09', title: 'Listening to the Ocean 海洋探测' },
+        'P2_reading': { id: 'p2-high-12', title: 'The fascinating world of attine ants 切叶蚁' },
+        'P3_reading': { id: 'p3-high-11', title: 'The Fruit Book 果实之书' },
+        'P1_listening': { id: 'listening-p3-01', title: 'Julia and Bob’s science project is due' },
+        'P3_listening': { id: 'listening-p3-02', title: 'Climate change and allergies' }
+    };
+
+    // ============================================================================
+    // 核心功能：加载与渲染
+    // ============================================================================
+
+    /**
+     * 加载并渲染题库列表
+     */
+    function loadExamList() {
+        console.log('[ExamActions] loadExamList 被调用');
+        
+        // 1. 频率模式委托给 BrowseController
+        if (global.__browseFilterMode && global.__browseFilterMode !== 'default' && global.browseController) {
+            try {
+                if (!global.browseController.buttonContainer) {
+                    global.browseController.initialize('type-filter-buttons');
                 }
-                return undefined;
+                if (global.browseController.currentMode !== global.__browseFilterMode) {
+                    global.browseController.setMode(global.__browseFilterMode);
+                } else {
+                    const activeFilter = global.browseController.activeFilter || 'all';
+                    global.browseController.applyFilter(activeFilter);
+                }
+                return;
+            } catch (error) {
+                console.warn('[Browse] 频率模式刷新失败，回退到默认逻辑:', error);
+            }
+        }
+
+        // 2. 获取题库快照
+        let examIndexSnapshot = [];
+        if (global.appStateService) {
+            examIndexSnapshot = global.appStateService.getExamIndex();
+        } else if (typeof global.getExamIndexState === 'function') {
+            examIndexSnapshot = global.getExamIndexState();
+        } else {
+            examIndexSnapshot = Array.isArray(global.examIndex) ? global.examIndex : [];
+        }
+
+        let examsToShow = Array.from(examIndexSnapshot);
+
+        // 3. 获取筛选条件
+        let activeCategory = 'all';
+        let activeExamType = 'all';
+
+        if (global.browseController) {
+            activeCategory = global.browseController.getCurrentCategory();
+            activeExamType = global.browseController.getCurrentExamType();
+        } else {
+            // 降级支持
+            activeCategory = typeof global.getCurrentCategory === 'function' ? global.getCurrentCategory() : 'all';
+            activeExamType = typeof global.getCurrentExamType === 'function' ? global.getCurrentExamType() : 'all';
+        }
+
+        // 4. 执行筛选
+        // 仅在频率模式下使用 basePath 过滤
+        const isFrequencyMode = global.__browseFilterMode && global.__browseFilterMode !== 'default';
+        const basePathFilter = isFrequencyMode && (typeof global.__browsePath === 'string' && global.__browsePath.trim())
+            ? global.__browsePath.trim()
+            : null;
+
+        if (activeExamType !== 'all') {
+            examsToShow = examsToShow.filter(exam => exam.type === activeExamType);
+        }
+        if (activeCategory !== 'all') {
+            const filteredByCategory = examsToShow.filter(exam => exam.category === activeCategory);
+            // 只有在有筛选结果或不是频率模式时才应用分类过滤
+            if (filteredByCategory.length > 0 || !basePathFilter) {
+                examsToShow = filteredByCategory;
+            }
+        }
+        // 只有在频率模式下才应用路径过滤
+        if (basePathFilter) {
+            examsToShow = examsToShow.filter((exam) => {
+                return typeof exam?.path === 'string' && exam.path.includes(basePathFilter);
             });
-        };
+        }
+
+        // 5. 执行置顶逻辑
+        if (activeCategory !== 'all' && activeExamType !== 'all') {
+            const key = `${activeCategory}_${activeExamType}`;
+            const preferred = preferredFirstExamByCategory[key];
+
+            if (preferred) {
+                // 优先通过 preferred.id 在过滤后的 examsToShow 中查找
+                let preferredIndex = examsToShow.findIndex(exam => exam.id === preferred.id);
+
+                // 如果失败，fallback 到 preferred.title + currentCategory + currentExamType 匹配
+                if (preferredIndex === -1) {
+                    preferredIndex = examsToShow.findIndex(exam =>
+                        exam.title === preferred.title &&
+                        exam.category === activeCategory &&
+                        exam.type === activeExamType
+                    );
+                }
+
+                if (preferredIndex > -1) {
+                    const [item] = examsToShow.splice(preferredIndex, 1);
+                    examsToShow.unshift(item);
+                }
+            }
+        }
+
+        // 6. 更新状态并渲染
+        if (global.appStateService) {
+            global.appStateService.setFilteredExams(examsToShow);
+        } else if (typeof global.setFilteredExamsState === 'function') {
+            global.setFilteredExamsState(examsToShow);
+        }
+
+        displayExams(examsToShow);
+
+        // 7. 触发渲染后钩子
+        if (typeof global.handlePostExamListRender === 'function') {
+            global.handlePostExamListRender(examsToShow, { category: activeCategory, type: activeExamType });
+        }
+
+        return examsToShow;
     }
 
-    if (typeof global.loadExamList !== 'function') {
-        global.loadExamList = createProxy('LoadExamList');
+    /**
+     * 重置浏览视图
+     */
+    function resetBrowseViewToAll() {
+        if (global.browseController) {
+            global.browseController.clearPendingBrowseAutoScroll();
+
+            const currentCategory = global.browseController.getCurrentCategory();
+            const currentType = global.browseController.getCurrentExamType();
+
+            if (currentCategory === 'all' && currentType === 'all') {
+                if (global.setBrowseTitle) global.setBrowseTitle('题库列表'); // 或 formatBrowseTitle
+                loadExamList();
+                return;
+            }
+
+            global.browseController.setBrowseFilterState('all', 'all');
+        } else {
+            // 降级
+            if (typeof global.clearPendingBrowseAutoScroll === 'function') global.clearPendingBrowseAutoScroll();
+            if (typeof global.setBrowseFilterState === 'function') global.setBrowseFilterState('all', 'all');
+        }
+
+        if (global.setBrowseTitle) global.setBrowseTitle('题库列表');
+        loadExamList();
     }
 
-    if (typeof global.resetBrowseViewToAll !== 'function') {
-        global.resetBrowseViewToAll = createProxy('ResetBrowseViewToAll');
+    /**
+     * 渲染题库列表 DOM
+     */
+    function displayExams(exams) {
+        // 1. 尝试使用 BrowseController 管理的 examListViewInstance
+        let view = null;
+        if (global.browseController && typeof global.browseController.getExamListView === 'function') {
+            view = global.browseController.getExamListView();
+        } else if (global.BrowseController && typeof global.BrowseController.getExamListView === 'function') {
+            view = global.BrowseController.getExamListView();
+        } else if (global.ensureExamListView) {
+            view = global.ensureExamListView();
+        }
+
+        if (view) {
+            view.render(exams, { loadingSelector: '#browse-view .loading' });
+            setupExamActionHandlers();
+            return;
+        }
+
+        // 2. 降级：直接 DOM 操作 (从 main.js 迁移)
+        const container = document.getElementById('exam-list-container');
+        if (!container) {
+            return;
+        }
+
+        while (container.firstChild) {
+            container.removeChild(container.firstChild);
+        }
+
+        const normalizedExams = Array.isArray(exams) ? exams : [];
+        if (normalizedExams.length === 0) {
+            renderEmptyState(container);
+            return;
+        }
+
+        const list = document.createElement('div');
+        list.className = 'exam-list';
+
+        normalizedExams.forEach((exam) => {
+            if (!exam) return;
+            const item = createExamCard(exam);
+            list.appendChild(item);
+        });
+
+        container.appendChild(list);
+        setupExamActionHandlers();
     }
 
-    // --- Exam action bindings (migrated from main.js) ---
+    /**
+     * 渲染空状态
+     */
+    function renderEmptyState(container) {
+        const empty = document.createElement('div');
+        empty.className = 'exam-list-empty';
+        empty.setAttribute('role', 'status');
+
+        const icon = document.createElement('div');
+        icon.className = 'exam-list-empty-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.textContent = '🔍';
+
+        const text = document.createElement('p');
+        text.className = 'exam-list-empty-text';
+        text.textContent = '未找到匹配的题目';
+
+        const hint = document.createElement('p');
+        hint.className = 'exam-list-empty-hint';
+        hint.textContent = '请调整筛选条件或搜索词后再试';
+
+        empty.appendChild(icon);
+        empty.appendChild(text);
+        empty.appendChild(hint);
+        container.appendChild(empty);
+    }
+
+    /**
+     * 创建单个题库卡片
+     */
+    function createExamCard(exam) {
+        const item = document.createElement('div');
+        item.className = 'exam-item';
+        if (exam.id) {
+            item.dataset.examId = exam.id;
+        }
+
+        const info = document.createElement('div');
+        info.className = 'exam-info';
+        const infoContent = document.createElement('div');
+        const title = document.createElement('h4');
+        title.textContent = exam.title || '';
+        const meta = document.createElement('div');
+        meta.className = 'exam-meta';
+
+        // 格式化元数据
+        let metaText = '';
+        if (typeof global.formatExamMetaText === 'function') {
+            metaText = global.formatExamMetaText(exam);
+        } else {
+            metaText = `${exam.category || ''} | ${exam.type || ''}`;
+        }
+
+        meta.textContent = metaText;
+        infoContent.appendChild(title);
+        infoContent.appendChild(meta);
+        info.appendChild(infoContent);
+
+        const actions = document.createElement('div');
+        actions.className = 'exam-actions';
+
+        const startBtn = document.createElement('button');
+        startBtn.className = 'btn exam-item-action-btn';
+        startBtn.type = 'button';
+        startBtn.dataset.action = 'start';
+        if (exam.id) {
+            startBtn.dataset.examId = exam.id;
+        }
+        startBtn.textContent = '开始练习';
+        actions.appendChild(startBtn);
+
+        // PDF 按钮
+        const pdfBtn = document.createElement('button');
+        pdfBtn.className = 'btn btn-outline exam-item-action-btn';
+        pdfBtn.type = 'button';
+        pdfBtn.dataset.action = 'pdf';
+        if (exam.id) {
+            pdfBtn.dataset.examId = exam.id;
+        }
+        pdfBtn.textContent = 'PDF';
+        actions.appendChild(pdfBtn);
+
+        item.appendChild(info);
+        item.appendChild(actions);
+        return item;
+    }
+
+    // ============================================================================
+    // 事件处理与工具
+    // ============================================================================
+
     var examActionHandlersConfigured = false;
 
     function setupExamActionHandlers() {
@@ -69,13 +335,13 @@
             && typeof global.DOM.delegate === 'function';
 
         if (hasDomDelegate) {
-            global.DOM.delegate('click', '[data-action=\"start\"]', function (event) {
+            global.DOM.delegate('click', '[data-action="start"]', function (event) {
                 invoke(this, event);
             });
-            global.DOM.delegate('click', '[data-action=\"pdf\"]', function (event) {
+            global.DOM.delegate('click', '[data-action="pdf"]', function (event) {
                 invoke(this, event);
             });
-            global.DOM.delegate('click', '[data-action=\"generate\"]', function (event) {
+            global.DOM.delegate('click', '[data-action="generate"]', function (event) {
                 invoke(this, event);
             });
         } else if (typeof document !== 'undefined') {
@@ -120,6 +386,24 @@
         }
     }
 
+    // ============================================================================
+    // 导出到全局
+    // ============================================================================
+
+    global.ExamActions = {
+        loadExamList,
+        resetBrowseViewToAll,
+        displayExams,
+        setupExamActionHandlers,
+        exportPracticeData
+    };
+
+    global.loadExamList = loadExamList;
+    global.resetBrowseViewToAll = resetBrowseViewToAll;
+    global.displayExams = displayExams;
     global.setupExamActionHandlers = setupExamActionHandlers;
     global.exportPracticeData = exportPracticeData;
+
+    console.log('[ExamActions] 模块已加载 (Phase 2)');
+
 })(typeof window !== 'undefined' ? window : this);
