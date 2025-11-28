@@ -1919,7 +1919,7 @@ function loadExamList() {
 function loadExamListFallback() {
     console.warn('[main.js] 使用降级渲染逻辑');
     try {
-        const examIndex = typeof getExamIndexState === 'function' ? getExamIndexState() : (Array.isArray(window.examIndex) ? window.examIndex : []);
+        let examIndex = typeof getExamIndexState === 'function' ? getExamIndexState() : (Array.isArray(window.examIndex) ? window.examIndex : []);
         const container = document.getElementById('exam-list-container');
         if (!container) return;
         
@@ -1930,9 +1930,26 @@ function loadExamListFallback() {
             return;
         }
         
+        // 应用当前筛选状态（修复 P2 bug）
+        const currentCategory = typeof getCurrentCategory === 'function' ? getCurrentCategory() : 'all';
+        const currentType = typeof getCurrentExamType === 'function' ? getCurrentExamType() : 'all';
+        
+        let filtered = Array.from(examIndex);
+        if (currentType !== 'all') {
+            filtered = filtered.filter(function (exam) { return exam.type === currentType; });
+        }
+        if (currentCategory !== 'all') {
+            filtered = filtered.filter(function (exam) { return exam.category === currentCategory; });
+        }
+        
+        if (filtered.length === 0) {
+            container.innerHTML = '<div class="exam-list-empty"><p>未找到匹配的题目</p></div>';
+            return;
+        }
+        
         const list = document.createElement('div');
         list.className = 'exam-list';
-        examIndex.forEach(function (exam) {
+        filtered.forEach(function (exam) {
             if (!exam) return;
             const item = document.createElement('div');
             item.className = 'exam-item';
@@ -1984,6 +2001,12 @@ function displayExams(exams) {
     try {
         const container = document.getElementById('exam-list-container');
         if (!container) return;
+        
+        // 清除 loading 指示器（修复 P2 bug）
+        const loadingEl = document.querySelector('#browse-view .loading');
+        if (loadingEl) {
+            loadingEl.style.display = 'none';
+        }
         
         const normalizedExams = Array.isArray(exams) ? exams : [];
         if (normalizedExams.length === 0) {

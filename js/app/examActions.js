@@ -223,6 +223,13 @@
         });
 
         container.appendChild(list);
+        
+        // 清除 loading 指示器（修复 P2 bug）
+        const loadingEl = document.querySelector('#browse-view .loading');
+        if (loadingEl) {
+            loadingEl.style.display = 'none';
+        }
+        
         setupExamActionHandlers();
     }
 
