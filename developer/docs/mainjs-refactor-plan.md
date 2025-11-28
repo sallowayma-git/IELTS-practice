@@ -10,13 +10,19 @@
 
 ## 阶段化任务清单（完成请勾选，严格按顺序）
 
-### 阶段0：基线盘点与安全阀
+### 阶段0：基线盘点与安全阀 ✅ **已完成**
 - [x] 列出 `js/main.js` 全局变量/函数 → 标注归属模块（导航/浏览/练习/工具/配置），补充到各目标文件顶部 TODO。
-  - ✅ 已完成：详见 `developer/docs/phase0-inventory.md`（140+ 函数归属清单）
+  - ✅ 已完成：详见 `developer/docs/phase0/inventory.md`（140+ 函数归属清单）
 - [x] 绘制加载顺序与懒加载触发点（index.html、`js/runtime/lazyLoader.js`、`js/presentation/app-actions.js`、`js/app/main-entry.js`），标出必须先于 main.js 的依赖。
-  - ✅ 已完成：详见 `developer/docs/phase0-dependency-diagram.md`（6 类依赖图）
-- [ ] 手动 file:// 打开首屏，记录控制台基线日志/告警，确认 `examIndexLoaded` → `loadExamList` 正常。
-  - ⏳ 待用户执行：需在浏览器中手动测试并保存日志
+  - ✅ 已完成：详见 `developer/docs/phase0/dependency-diagram.md`（6 类依赖图）
+- [x] 手动 file:// 打开首屏，记录控制台基线日志/告警，确认 `examIndexLoaded` → `loadExamList` 正常。
+  - ✅ 已完成：用户确认手动测试通过
+  - ✅ 已创建 Playwright 自动化测试：`developer/tests/baseline/phase0_baseline_playwright.py`
+  - ✅ 已优化 E2E 测试：`developer/tests/e2e/suite_practice_flow.py`
+  - ✅ 已创建统一测试运行器：`developer/tests/run_all_tests.py`
+  - ✅ 文档已整理到：`developer/docs/phase0/`
+
+**Phase 0 验收**: ✅ 通过 - 基线已锁定，可开始 Phase 1
 
 ### 阶段1：入口/壳层与全局状态出清
 - [ ] 将 boot/ensure 类函数（`reportBootStage`、`ensureExamDataScripts`、`ensurePracticeSuiteReady`、`ensureBrowseGroup`、`ensureLibraryManagerReady`）迁移到 `js/app/main-entry.js` + `js/presentation/app-actions.js`，main.js 仅保留 shim 转发。
