@@ -63,8 +63,8 @@
             ],
             filterLogic: 'folder-based',
             folderMap: {
-                'all': ['1-10', '11-20', '21-30', '31-40', '41-50', 
-                        '51-60', '61-70', '71-80', '81-90', '91-100'],
+                'all': ['1-10', '11-20', '21-30', '31-40', '41-50',
+                    '51-60', '61-70', '71-80', '81-90', '91-100'],
                 'ultra-high': ['P4 超高频(51)'],
                 'high': ['P4 高频(52)'],
                 'medium': ['P4 中频(64)']
@@ -96,10 +96,10 @@
 
             // 从全局状态恢复模式
             this.restoreMode();
-            
+
             // 渲染初始按钮
             this.renderFilterButtons();
-            
+
             return true;
         }
 
@@ -115,13 +115,13 @@
 
             this.currentMode = mode;
             this.activeFilter = 'all'; // 重置为默认筛选
-            
+
             // 保存到全局状态
             this.saveMode();
-            
+
             // 重新渲染按钮
             this.renderFilterButtons();
-            
+
             // 应用筛选
             this.applyFilter(this.activeFilter);
         }
@@ -143,7 +143,7 @@
             }
 
             const config = this.getCurrentModeConfig();
-            
+
             // 清空现有按钮
             this.buttonContainer.innerHTML = '';
 
@@ -153,7 +153,7 @@
                 button.className = 'btn btn-sm';
                 button.textContent = filter.label;
                 button.dataset.filterId = filter.id;
-                
+
                 // 设置激活状态
                 if (filter.id === this.activeFilter) {
                     button.classList.add('active');
@@ -174,10 +174,10 @@
          */
         handleFilterClick(filterId) {
             this.activeFilter = filterId;
-            
+
             // 更新按钮激活状态
             this.updateButtonStates();
-            
+
             // 应用筛选
             this.applyFilter(filterId);
         }
@@ -207,7 +207,7 @@
          */
         applyFilter(filterId) {
             const config = this.getCurrentModeConfig();
-            
+
             if (config.filterLogic === 'type-based') {
                 // 默认模式：按类型筛选
                 this.filterByType(filterId);
@@ -238,7 +238,7 @@
             const config = this.getCurrentModeConfig();
             const folders = config.folderMap[filterId];
             const basePath = config.basePath || null;
-            
+
             if (!folders) {
                 console.warn('[BrowseController] 未找到文件夹映射:', filterId);
                 return;
@@ -246,7 +246,7 @@
 
             // 获取题库索引
             const examIndex = this.getExamIndex();
-            
+
             // 筛选题目
             const filtered = examIndex.filter(exam => {
                 if (!exam || !exam.path) {
@@ -256,7 +256,6 @@
                 if (basePath && !exam.path.includes(basePath)) {
                     return false;
                 }
-
                 // 检查路径是否包含任一目标文件夹
                 return folders.some(folder => {
                     return exam.path.includes(folder);
@@ -267,6 +266,8 @@
             this.displayFilteredExams(filtered);
         }
 
+
+
         /**
          * 获取题库索引
          * @returns {Array} 题库数组
@@ -276,7 +277,7 @@
             if (typeof global.getExamIndexState === 'function') {
                 return global.getExamIndexState();
             }
-            
+
             // 回退到全局变量
             return Array.isArray(global.examIndex) ? global.examIndex : [];
         }
@@ -335,9 +336,128 @@
         resetToDefault() {
             this.setMode('default');
         }
-    }
 
-    // ============================================================================
+        // ============================================================================
+        // Phase 2: 筛选状态管理迁移
+        // ============================================================================
+
+        /**
+         * 设置浏览筛选状态
+         * @param {string} category - 类别 (all, reading, listening)
+         * @param {string} type - 类型 (all, reading, listening)
+         */
+        setBrowseFilterState(category, type) {
+            if (global.appStateService) {
+                global.appStateService.setBrowseFilter({ category, type });
+            }
+            this.updateBrowseTitle();
+        }
+
+        /**
+         * 获取当前类别
+         * @returns {string}
+         */
+        getCurrentCategory() {
+            if (global.appStateService) {
+                return global.appStateService.getBrowseFilter().category || 'all';
+            }
+            return 'all';
+        }
+
+        /**
+         * 获取当前类型
+         * @returns {string}
+         */
+        getCurrentExamType() {
+            if (global.appStateService) {
+                return global.appStateService.getBrowseFilter().type || 'all';
+            }
+            return 'all';
+        }
+
+        /**
+         * 更新浏览标题
+         */
+        updateBrowseTitle() {
+            const titleElement = document.getElementById('browse-title');
+            if (!titleElement) return;
+
+            const category = this.getCurrentCategory();
+            const mode = this.currentMode;
+
+            let title = '题库列表';
+
+            if (mode === 'frequency-p1') {
+                title = 'P1 频率模式';
+            } else if (mode === 'frequency-p4') {
+                title = 'P4 频率模式';
+            } else {
+                // 默认模式
+                const map = {
+                    'all': '全部题目',
+                    'reading': '阅读理解',
+                    'listening': '听力训练'
+                };
+                title = map[category] || '题库列表';
+            }
+
+            titleElement.textContent = title;
+        }
+
+        /**
+         * 清除待处理的自动滚动
+         */
+        clearPendingBrowseAutoScroll() {
+            if (global.browseStateManager) {
+                global.browseStateManager.clearPendingScroll();
+            }
+        }
+
+        /**
+         * 应用筛选（统一入口）
+         * @param {string} category 
+         * @param {string} type 
+         * @param {Object} options - 可选参数 { path, filterMode }
+         */
+        applyBrowseFilter(category, type, options = {}) {
+            // 1. 更新状态
+            this.setBrowseFilterState(category, type);
+
+            // 2. 处理额外参数（path, filterMode）
+            if (options.path) {
+                global.__browsePath = options.path;
+            }
+            if (options.filterMode) {
+                global.__browseFilterMode = options.filterMode;
+            }
+
+            // 3. 更新标题
+            this.updateBrowseTitle();
+
+            // 4. 调用 ExamActions.loadExamList 来执行真正的筛选和渲染
+            // 这确保了所有逻辑（包括频率模式、置顶等）都由 ExamActions 统一处理
+            if (global.ExamActions && typeof global.ExamActions.loadExamList === 'function') {
+                global.ExamActions.loadExamList();
+            } else if (typeof global.loadExamList === 'function') {
+                global.loadExamList();
+            } else {
+                console.warn('[BrowseController] 无法加载题库列表: loadExamList 未定义');
+            }
+        }
+
+        // ============================================================================
+        // Phase 2: 全局实例迁移 (examListViewInstance)
+        // ============================================================================
+
+        getExamListView() {
+            return this._examListViewInstance || null;
+        }
+
+        setExamListView(instance) {
+            this._examListViewInstance = instance;
+            return instance;
+        }
+    }
     // 导出到全局
     // ============================================================================
 

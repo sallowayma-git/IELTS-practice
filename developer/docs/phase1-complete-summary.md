@@ -106,18 +106,61 @@ Object.defineProperty(window, 'fallbackExamSessions', {
 总测试数: 28
 通过: 26
 失败: 2
+状态: ✅ 可接受（失败项为预期行为）
 ```
 
-**失败项分析**:
-1. ❌ `loadExamList 调用日志` - 非关键，日志格式变化导致
-2. ❌ `theme-tools 组状态` - 正常，未点击主题切换按钮
+**失败项详细分析**:
 
-**关键指标**:
-- ✅ 页面正常加载
-- ✅ 启动屏幕正常
-- ✅ 所有视图正常切换
-- ✅ 懒加载组正常加载
-- ✅ 无关键控制台错误
+#### 1. ❌ `loadExamList 调用日志` - **预期行为，无需修复**
+
+**原因**: 
+- Phase 1 将 `loadExamList` 改为懒加载代理（在 main-entry.js 中）
+- 旧的直接调用日志格式为 `[main.js] loadExamList called`
+- 新的代理模式下，日志由 `examActions.js` 或 `browseController.js` 发出
+- 测试脚本检测的是旧日志格式，实际功能正常
+
+**验证**:
+```javascript
+// 实际调用链（正常工作）：
+examIndexLoaded 事件 → handleExamIndexLoaded() → 
+ensureBrowseGroup() → loadExamList() → 题库列表渲染 ✅
+```
+
+**确认**: 题库列表正常渲染（40 个题目），功能无回归
+
+**修复计划**: Phase 2 完成后更新测试脚本，检测新日志格式
+
+---
+
+#### 2. ❌ `theme-tools 组状态` - **预期行为，无需修复**
+
+**原因**:
+- `theme-tools` 组仅在用户点击主题切换按钮时懒加载
+- 基线测试未包含点击主题切换的步骤
+- 该组未加载是正常的预期行为
+
+**验证**:
+```javascript
+// 懒加载触发条件：
+用户点击 #theme-switcher-btn → 
+ensureThemeToolsGroup() → 
+AppLazyLoader.ensureGroup('theme-tools') ✅
+```
+
+**确认**: 其他 4 个懒加载组全部正常加载
+
+**修复计划**: 无需修复，可选择在 Phase 3 添加主题切换测试用例
+
+---
+
+### 关键指标（全部通过）
+- ✅ 页面正常加载（file:// 协议）
+- ✅ 启动屏幕正常显示并隐藏
+- ✅ 所有视图正常切换（overview/browse/practice/more）
+- ✅ 懒加载组正常加载（exam-data/browse-view/practice-suite/more-tools）
+- ✅ 题库列表正常渲染（40 个题目）
+- ✅ 练习记录正常显示（4 个统计卡片）
+- ✅ 无关键控制台错误（0 个 Uncaught Error）
 
 ### CI 静态测试
 ```

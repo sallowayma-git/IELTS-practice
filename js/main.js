@@ -62,7 +62,22 @@ if (typeof window !== 'undefined') {
     window.normalizeRecordId = normalizeRecordId;
 }
 
-let examListViewInstance = null;
+// examListViewInstance - 迁移到 browseController
+Object.defineProperty(window, 'examListViewInstance', {
+    get: function () {
+        if (window.browseController && typeof window.browseController.getExamListView === 'function') {
+            return window.browseController.getExamListView();
+        }
+        return null;
+    },
+    set: function (value) {
+        if (window.browseController && typeof window.browseController.setExamListView === 'function') {
+            window.browseController.setExamListView(value);
+        }
+    },
+    configurable: true
+});
+
 let practiceDashboardViewInstance = null;
 let legacyNavigationController = null;
 
@@ -124,7 +139,74 @@ async function ensureLibraryManagerReady() {
     return manager;
 }
 
+// ============================================================================
+// Phase 2: 浏览/筛选函数 Shim 层（实际实现在 browseController.js）
+// ============================================================================
 
+// setBrowseFilterState
+if (typeof window.setBrowseFilterState !== 'function') {
+    window.setBrowseFilterState = function (category, type) {
+        if (window.browseController && typeof window.browseController.setBrowseFilterState === 'function') {
+            window.browseController.setBrowseFilterState(category, type);
+        }
+    };
+}
+
+// getCurrentCategory
+if (typeof window.getCurrentCategory !== 'function') {
+    window.getCurrentCategory = function () {
+        if (window.browseController && typeof window.browseController.getCurrentCategory === 'function') {
+            return window.browseController.getCurrentCategory();
+        }
+        return 'all';
+    };
+}
+
+// getCurrentExamType
+if (typeof window.getCurrentExamType !== 'function') {
+    window.getCurrentExamType = function () {
+        if (window.browseController && typeof window.browseController.getCurrentExamType === 'function') {
+            return window.browseController.getCurrentExamType();
+        }
+        return 'all';
+    };
+}
+
+// updateBrowseTitle
+if (typeof window.updateBrowseTitle !== 'function') {
+    window.updateBrowseTitle = function () {
+        if (window.browseController && typeof window.browseController.updateBrowseTitle === 'function') {
+            window.browseController.updateBrowseTitle();
+        }
+    };
+}
+
+// clearPendingBrowseAutoScroll
+if (typeof window.clearPendingBrowseAutoScroll !== 'function') {
+    window.clearPendingBrowseAutoScroll = function () {
+        if (window.browseController && typeof window.browseController.clearPendingBrowseAutoScroll === 'function') {
+            window.browseController.clearPendingBrowseAutoScroll();
+        }
+    };
+}
+
+// switchLibraryConfig
+if (typeof window.switchLibraryConfig !== 'function') {
+    window.switchLibraryConfig = function (key) {
+        if (window.LibraryManager && typeof window.LibraryManager.switchLibraryConfig === 'function') {
+            return window.LibraryManager.switchLibraryConfig(key);
+        }
+    };
+}
+
+// loadLibrary
+if (typeof window.loadLibrary !== 'function') {
+    window.loadLibrary = function (key) {
+        if (window.LibraryManager && typeof window.LibraryManager.loadLibrary === 'function') {
+            return window.LibraryManager.loadLibrary(key);
+        }
+    };
+}
 
 
 const preferredFirstExamByCategory = {
@@ -137,13 +219,23 @@ const preferredFirstExamByCategory = {
 
 
 function ensureExamListView() {
-    if (!examListViewInstance && window.LegacyExamListView) {
-        examListViewInstance = new window.LegacyExamListView({
+    // 通过 browseController getter 访问，避免直接引用已移除的变量
+    let instance = null;
+    if (window.browseController && typeof window.browseController.getExamListView === 'function') {
+        instance = window.browseController.getExamListView();
+    }
+    
+    if (!instance && window.LegacyExamListView) {
+        instance = new window.LegacyExamListView({
             domAdapter: window.DOMAdapter,
             containerId: 'exam-list-container'
         });
+        // 保存到 browseController
+        if (window.browseController && typeof window.browseController.setExamListView === 'function') {
+            window.browseController.setExamListView(instance);
+        }
     }
-    return examListViewInstance;
+    return instance;
 }
 
 function ensurePracticeDashboardView() {
@@ -274,6 +366,7 @@ async function cleanupOldCache() {
 
 // --- Data Loading and Management ---
 
+// Phase 3: 练习记录同步 - 保留在 main.js（核心数据流，暂不迁移）
 async function syncPracticeRecords() {
     console.log('[System] 正在从存储中同步练习记录...');
     let records = [];
@@ -903,13 +996,33 @@ async function savePracticeRecordFallback(examId, realData) {
     }
 }
 
-async function loadLibrary(forceReload = false) {
+async function loadLibrary(keyOrForceReload = false) {
     const manager = await ensureLibraryManagerReady();
-    if (!manager || typeof manager.loadActiveLibrary !== 'function') {
+    if (!manager) {
         console.warn('[Library] LibraryManager 未就绪，跳过加载');
         return;
     }
-    await manager.loadActiveLibrary(forceReload);
+
+    const supportsManagerLoad = typeof manager.loadLibrary === 'function';
+    const supportsApplyConfig = typeof manager.applyLibraryConfiguration === 'function';
+    const supportsLoadActive = typeof manager.loadActiveLibrary === 'function';
+
+    if (typeof keyOrForceReload === 'string') {
+        if (supportsManagerLoad) {
+            return manager.loadLibrary(keyOrForceReload);
+        }
+        if (supportsApplyConfig) {
+            return manager.applyLibraryConfiguration(keyOrForceReload);
+        }
+    }
+
+    const forceReload = !!keyOrForceReload;
+    if (supportsLoadActive) {
+        return manager.loadActiveLibrary(forceReload);
+    }
+    if (supportsManagerLoad) {
+        return manager.loadLibrary(forceReload ? 'default' : undefined);
+    }
 }
 
 function resolveScriptPathRoot(type) {
@@ -1229,6 +1342,7 @@ function ensureBulkDeleteMode(options = {}) {
     return true;
 }
 
+// Phase 3: 练习历史交互设置 - 保留在 main.js（依赖 DOM 事件委托，暂不迁移）
 let practiceHistoryDelegatesConfigured = false;
 
 function setupPracticeHistoryInteractions() {
@@ -1377,6 +1491,7 @@ function recordMatchesExamType(record, targetType, examIndex) {
     return true;
 }
 
+// Phase 3: 练习记录视图更新 - 保留在 main.js（依赖多个组件，暂不迁移）
 function updatePracticeView() {
     const rawRecords = getPracticeRecordsState();
     const records = rawRecords.filter((record) => record && (record.dataSource === 'real' || record.dataSource === undefined));
@@ -1489,6 +1604,7 @@ function ensurePracticeSessionSyncListener() {
     });
 }
 
+// Phase 3: 练习统计计算 - 保留在 main.js（数据处理逻辑，暂不迁移）
 function computePracticeSummaryFallback(records) {
     const normalized = Array.isArray(records) ? records : [];
     const totalPracticed = normalized.length;
@@ -1545,6 +1661,7 @@ function computePracticeSummaryFallback(records) {
     };
 }
 
+// Phase 3: 应用练习统计 - 保留在 main.js（DOM 操作，暂不迁移）
 function applyPracticeSummaryFallback(summary) {
     if (!summary || typeof document === 'undefined') {
         return;
@@ -1797,209 +1914,145 @@ function filterRecordsByType(type) {
 
 
 function loadExamList() {
-    if (window.__browseFilterMode && window.__browseFilterMode !== 'default' && window.browseController) {
-        try {
-            if (!window.browseController.buttonContainer) {
-                window.browseController.initialize('type-filter-buttons');
-            }
-            if (window.browseController.currentMode !== window.__browseFilterMode) {
-                window.browseController.setMode(window.__browseFilterMode);
+    if (window.ExamActions && typeof window.ExamActions.loadExamList === 'function') {
+        return window.ExamActions.loadExamList();
+    }
+    console.warn('[main.js] ExamActions.loadExamList 未就绪，尝试加载 browse-view 组');
+    if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
+        window.AppLazyLoader.ensureGroup('browse-view').then(function () {
+            if (window.ExamActions && typeof window.ExamActions.loadExamList === 'function') {
+                window.ExamActions.loadExamList();
             } else {
-                const activeFilter = window.browseController.activeFilter || 'all';
-                window.browseController.applyFilter(activeFilter);
+                // 最终降级：直接 DOM 渲染
+                loadExamListFallback();
             }
-            return;
-        } catch (error) {
-            console.warn('[Browse] 频率模式刷新失败，回退到默认逻辑:', error);
-        }
-    }
-
-    // 使用 Array.from() 创建副本，避免污染全局 examIndex
-    const examIndexSnapshot = getExamIndexState();
-    let examsToShow = Array.from(examIndexSnapshot);
-
-    // 先过滤
-    const activeExamType = getCurrentExamType();
-    const activeCategory = getCurrentCategory();
-
-    // 仅在频率模式下使用 basePath 过滤
-    const isFrequencyMode = window.__browseFilterMode && window.__browseFilterMode !== 'default';
-    const basePathFilter = isFrequencyMode && (typeof window.__browsePath === 'string' && window.__browsePath.trim())
-        ? window.__browsePath.trim()
-        : null;
-
-    if (activeExamType !== 'all') {
-        examsToShow = examsToShow.filter(exam => exam.type === activeExamType);
-    }
-    if (activeCategory !== 'all') {
-        const filteredByCategory = examsToShow.filter(exam => exam.category === activeCategory);
-        // 只有在有筛选结果或不是频率模式时才应用分类过滤
-        if (filteredByCategory.length > 0 || !basePathFilter) {
-            examsToShow = filteredByCategory;
-        }
-    }
-    // 只有在频率模式下才应用路径过滤
-    if (basePathFilter) {
-        examsToShow = examsToShow.filter((exam) => {
-            return typeof exam?.path === 'string' && exam.path.includes(basePathFilter);
+        }).catch(function (err) {
+            console.error('[main.js] browse-view 组加载失败:', err);
+            loadExamListFallback();
         });
+    } else {
+        // 无懒加载器，直接降级
+        loadExamListFallback();
     }
+}
 
-    // 然后置顶过滤后的数组
-    if (activeCategory !== 'all' && activeExamType !== 'all') {
-        const key = `${activeCategory}_${activeExamType}`;
-        const preferred = preferredFirstExamByCategory[key];
-
-        if (preferred) {
-            // 优先通过 preferred.id 在过滤后的 examsToShow 中查找
-            let preferredIndex = examsToShow.findIndex(exam => exam.id === preferred.id);
-
-            // 如果失败，fallback 到 preferred.title + currentCategory + currentExamType 匹配
-            if (preferredIndex === -1) {
-                preferredIndex = examsToShow.findIndex(exam =>
-                    exam.title === preferred.title &&
-                    exam.category === activeCategory &&
-                    exam.type === activeExamType
-                );
-            }
-
-            if (preferredIndex > -1) {
-                const [item] = examsToShow.splice(preferredIndex, 1);
-                examsToShow.unshift(item);
-            } else {
-                console.warn('[PinTop] No match found in filtered examsToShow for preferred:', preferred);
-            }
+function loadExamListFallback() {
+    console.warn('[main.js] 使用降级渲染逻辑');
+    try {
+        let examIndex = typeof getExamIndexState === 'function' ? getExamIndexState() : (Array.isArray(window.examIndex) ? window.examIndex : []);
+        const container = document.getElementById('exam-list-container');
+        if (!container) return;
+        
+        container.innerHTML = '<div class="exam-list-empty"><p>题库加载中...</p></div>';
+        
+        if (examIndex.length === 0) {
+            container.innerHTML = '<div class="exam-list-empty"><p>暂无题目</p></div>';
+            return;
         }
+        
+        // 应用当前筛选状态（修复 P2 bug）
+        const currentCategory = typeof getCurrentCategory === 'function' ? getCurrentCategory() : 'all';
+        const currentType = typeof getCurrentExamType === 'function' ? getCurrentExamType() : 'all';
+        
+        let filtered = Array.from(examIndex);
+        if (currentType !== 'all') {
+            filtered = filtered.filter(function (exam) { return exam.type === currentType; });
+        }
+        if (currentCategory !== 'all') {
+            filtered = filtered.filter(function (exam) { return exam.category === currentCategory; });
+        }
+        
+        if (filtered.length === 0) {
+            container.innerHTML = '<div class="exam-list-empty"><p>未找到匹配的题目</p></div>';
+            return;
+        }
+        
+        const list = document.createElement('div');
+        list.className = 'exam-list';
+        filtered.forEach(function (exam) {
+            if (!exam) return;
+            const item = document.createElement('div');
+            item.className = 'exam-item';
+            item.innerHTML = '<div class="exam-info"><h4>' + (exam.title || '') + '</h4></div>' +
+                '<div class="exam-actions">' +
+                '<button class="btn" onclick="window.openExam(\'' + (exam.id || '') + '\')">开始练习</button>' +
+                '<button class="btn btn-outline" onclick="window.viewPDF(\'' + (exam.id || '') + '\')">PDF</button>' +
+                '</div>';
+            list.appendChild(item);
+        });
+        container.innerHTML = '';
+        container.appendChild(list);
+    } catch (err) {
+        console.error('[main.js] 降级渲染失败:', err);
     }
-
-    const activeList = setFilteredExamsState(examsToShow);
-    displayExams(activeList);
-    handlePostExamListRender(activeList, { category: activeCategory, type: activeExamType });
-    return activeList;
 }
 
 function resetBrowseViewToAll() {
-    clearPendingBrowseAutoScroll();
-    const currentCategory = getCurrentCategory();
-    const currentType = getCurrentExamType();
-
-    if (currentCategory === 'all' && currentType === 'all') {
-        setBrowseTitle(formatBrowseTitle('all', 'all'));
-        loadExamList();
-        return;
+    if (window.ExamActions && typeof window.ExamActions.resetBrowseViewToAll === 'function') {
+        return window.ExamActions.resetBrowseViewToAll();
     }
-
-    setBrowseFilterState('all', 'all');
-    setBrowseTitle(formatBrowseTitle('all', 'all'));
-    loadExamList();
+    console.warn('[main.js] ExamActions.resetBrowseViewToAll 未就绪');
+    if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
+        window.AppLazyLoader.ensureGroup('browse-view').then(function () {
+            if (window.ExamActions && typeof window.ExamActions.resetBrowseViewToAll === 'function') {
+                window.ExamActions.resetBrowseViewToAll();
+            } else {
+                // 降级：重置状态并重新加载
+                if (typeof setBrowseFilterState === 'function') setBrowseFilterState('all', 'all');
+                loadExamList();
+            }
+        }).catch(function () {
+            if (typeof setBrowseFilterState === 'function') setBrowseFilterState('all', 'all');
+            loadExamList();
+        });
+    } else {
+        if (typeof setBrowseFilterState === 'function') setBrowseFilterState('all', 'all');
+        loadExamList();
+    }
 }
 
 function displayExams(exams) {
-    const view = ensureExamListView();
-    if (view) {
-        view.render(exams, { loadingSelector: '#browse-view .loading' });
-        setupExamActionHandlers();
-        return;
+    if (window.ExamActions && typeof window.ExamActions.displayExams === 'function') {
+        return window.ExamActions.displayExams(exams);
     }
-
-    const container = document.getElementById('exam-list-container');
-    if (!container) {
-        return;
-    }
-
-    while (container.firstChild) {
-        container.removeChild(container.firstChild);
-    }
-
-    const normalizedExams = Array.isArray(exams) ? exams : [];
-    if (normalizedExams.length === 0) {
-        const empty = document.createElement('div');
-        empty.className = 'exam-list-empty';
-        empty.setAttribute('role', 'status');
-
-        const icon = document.createElement('div');
-        icon.className = 'exam-list-empty-icon';
-        icon.setAttribute('aria-hidden', 'true');
-        icon.textContent = '🔍';
-
-        const text = document.createElement('p');
-        text.className = 'exam-list-empty-text';
-        text.textContent = '未找到匹配的题目';
-
-        const hint = document.createElement('p');
-        hint.className = 'exam-list-empty-hint';
-        hint.textContent = '请调整筛选条件或搜索词后再试';
-
-        empty.appendChild(icon);
-        empty.appendChild(text);
-        empty.appendChild(hint);
-        container.appendChild(empty);
-        return;
-    }
-
-    const list = document.createElement('div');
-    list.className = 'exam-list';
-
-    normalizedExams.forEach((exam) => {
-        if (!exam) {
+    console.warn('[main.js] ExamActions.displayExams 未就绪，使用降级渲染');
+    
+    // 立即降级渲染（displayExams 需要同步执行）
+    try {
+        const container = document.getElementById('exam-list-container');
+        if (!container) return;
+        
+        // 清除 loading 指示器（修复 P2 bug）
+        const loadingEl = document.querySelector('#browse-view .loading');
+        if (loadingEl) {
+            loadingEl.style.display = 'none';
+        }
+        
+        const normalizedExams = Array.isArray(exams) ? exams : [];
+        if (normalizedExams.length === 0) {
+            container.innerHTML = '<div class="exam-list-empty"><p>未找到匹配的题目</p></div>';
             return;
         }
-        const item = document.createElement('div');
-        item.className = 'exam-item';
-        if (exam.id) {
-            item.dataset.examId = exam.id;
-        }
-
-        const info = document.createElement('div');
-        info.className = 'exam-info';
-        const infoContent = document.createElement('div');
-        const title = document.createElement('h4');
-        title.textContent = exam.title || '';
-        const meta = document.createElement('div');
-        meta.className = 'exam-meta';
-        const metaText = formatExamMetaText(exam);
-        meta.textContent = metaText || `${exam.category || ''} | ${exam.type || ''}`;
-        infoContent.appendChild(title);
-        infoContent.appendChild(meta);
-        info.appendChild(infoContent);
-
-        const actions = document.createElement('div');
-        actions.className = 'exam-actions';
-
-        const startBtn = document.createElement('button');
-        startBtn.className = 'btn exam-item-action-btn';
-        startBtn.type = 'button';
-        startBtn.dataset.action = 'start';
-        if (exam.id) {
-            startBtn.dataset.examId = exam.id;
-        }
-        startBtn.textContent = '开始';
-
-        const pdfBtn = document.createElement('button');
-        pdfBtn.className = 'btn btn-secondary exam-item-action-btn';
-        pdfBtn.type = 'button';
-        pdfBtn.dataset.action = 'pdf';
-        if (exam.id) {
-            pdfBtn.dataset.examId = exam.id;
-        }
-        pdfBtn.textContent = 'PDF';
-
-        actions.appendChild(startBtn);
-        actions.appendChild(pdfBtn);
-
-        item.appendChild(info);
-        item.appendChild(actions);
-        list.appendChild(item);
-    });
-
-    container.appendChild(list);
-
-    const loadingIndicator = document.querySelector('#browse-view .loading');
-    if (loadingIndicator) {
-        loadingIndicator.style.display = 'none';
+        
+        const list = document.createElement('div');
+        list.className = 'exam-list';
+        normalizedExams.forEach(function (exam) {
+            if (!exam) return;
+            const item = document.createElement('div');
+            item.className = 'exam-item';
+            item.innerHTML = '<div class="exam-info"><h4>' + (exam.title || '') + '</h4>' +
+                '<div class="exam-meta">' + (exam.category || '') + ' | ' + (exam.type || '') + '</div></div>' +
+                '<div class="exam-actions">' +
+                '<button class="btn" onclick="window.openExam(\'' + (exam.id || '') + '\')">开始练习</button>' +
+                '<button class="btn btn-outline" onclick="window.viewPDF(\'' + (exam.id || '') + '\')">PDF</button>' +
+                '</div>';
+            list.appendChild(item);
+        });
+        container.innerHTML = '';
+        container.appendChild(list);
+    } catch (err) {
+        console.error('[main.js] displayExams 降级渲染失败:', err);
     }
-
-    setupExamActionHandlers();
 }
 
 const ABSOLUTE_URL_RE = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//;
@@ -3313,36 +3366,41 @@ function hideDeveloperTeam() {
     if (modal) modal.classList.remove('show');
 }
 
+// Phase 3: 套题模式 - 已迁移到 app-actions.js
 function startSuitePractice() {
+    if (window.AppActions && typeof window.AppActions.startSuitePractice === 'function') {
+        return window.AppActions.startSuitePractice();
+    }
+    // 降级：直接调用 app
     const appInstance = window.app;
     if (appInstance && typeof appInstance.startSuitePractice === 'function') {
         try {
             return appInstance.startSuitePractice();
         } catch (error) {
-            console.error('[SuitePractice] 启动失败', error);
+            console.error('[main.js] 套题模式启动失败', error);
             if (typeof showMessage === 'function') {
                 showMessage('套题模式启动失败，请稍后重试', 'error');
             }
-            return;
         }
-    }
-
-    const fallbackNotice = '套题模式尚未初始化，请完成加载后再试。';
-    if (typeof showMessage === 'function') {
-        showMessage(fallbackNotice, 'warning');
-    } else if (typeof alert === 'function') {
-        alert(fallbackNotice);
+    } else {
+        if (typeof showMessage === 'function') {
+            showMessage('套题模式尚未初始化', 'warning');
+        }
     }
 }
 
+// Phase 3: 打开题目 - 已迁移到 app-actions.js
 function openExamWithFallback(exam, delay = 600) {
+    if (window.AppActions && typeof window.AppActions.openExamWithFallback === 'function') {
+        return window.AppActions.openExamWithFallback(exam, delay);
+    }
+    // 降级：直接执行
     if (!exam) {
         if (typeof showMessage === 'function') {
             showMessage('未找到可用题目', 'error');
         }
         return;
     }
-
     const launch = () => {
         try {
             if (exam.hasHtml) {
@@ -3351,13 +3409,12 @@ function openExamWithFallback(exam, delay = 600) {
                 viewPDF(exam.id);
             }
         } catch (error) {
-            console.error('[QuickLane] 启动题目失败:', error);
+            console.error('[main.js] 启动题目失败:', error);
             if (typeof showMessage === 'function') {
                 showMessage('无法打开题目，请检查题库路径', 'error');
             }
         }
     };
-
     if (delay > 0) {
         setTimeout(launch, delay);
     } else {
@@ -3365,7 +3422,12 @@ function openExamWithFallback(exam, delay = 600) {
     }
 }
 
+// Phase 3: 随机练习 - 已迁移到 app-actions.js
 function startRandomPractice(category, type = 'reading', filterMode = null, path = null) {
+    if (window.AppActions && typeof window.AppActions.startRandomPractice === 'function') {
+        return window.AppActions.startRandomPractice(category, type, filterMode, path);
+    }
+    // 降级：直接执行
     const list = getExamIndexState();
     const normalizedType = (!type || type === 'all') ? null : type;
     const normalizedPath = (typeof path === 'string' && path.trim()) ? path.trim() : null;
@@ -3374,14 +3436,12 @@ function startRandomPractice(category, type = 'reading', filterMode = null, path
     if (normalizedType) {
         pool = pool.filter((exam) => exam.type === normalizedType);
     }
-
     if (category && category !== 'all') {
         const filteredByCategory = pool.filter((exam) => exam.category === category);
         if (filteredByCategory.length > 0 || !normalizedPath) {
             pool = filteredByCategory;
         }
     }
-
     if (normalizedPath) {
         pool = pool.filter((exam) => typeof exam?.path === 'string' && exam.path.includes(normalizedPath));
     } else if (filterMode && window.BROWSE_MODES && window.BROWSE_MODES[filterMode]) {
@@ -3390,28 +3450,20 @@ function startRandomPractice(category, type = 'reading', filterMode = null, path
             pool = pool.filter((exam) => typeof exam?.path === 'string' && exam.path.includes(modeConfig.basePath));
         }
     }
-
     if (pool.length === 0) {
         if (typeof showMessage === 'function') {
-            const typeLabel = normalizedType === 'listening'
-                ? '听力'
-                : (normalizedType === 'reading' ? '阅读' : '题库');
+            const typeLabel = normalizedType === 'listening' ? '听力' : (normalizedType === 'reading' ? '阅读' : '题库');
             showMessage(`${category} ${typeLabel} 分类暂无可用题目`, 'error');
         }
         return;
     }
-
     const randomExam = pool[Math.floor(Math.random() * pool.length)];
     if (typeof showMessage === 'function') {
         showMessage(`随机选择: ${randomExam.title}`, 'info');
     }
-
     openExamWithFallback(randomExam);
 }
 
-// 已迁移至 js/presentation/indexInteractions.js
-
-if (typeof setupExamActionHandlers === 'function') {
-    setupExamActionHandlers();
-}
+// Phase 4: 清理重复事件绑定
+// setupExamActionHandlers 已在 examActions.js 的 displayExams 中调用，此处移除重复调用
 ensurePracticeSessionSyncListener();

@@ -530,6 +530,33 @@
         return singleton;
     }
 
+    async function switchLibraryConfig(key) {
+        const manager = getInstance();
+        // 如果没有传入 key，尝试获取当前激活的 key
+        if (!key) {
+            key = await manager.getActiveLibraryConfigurationKey();
+        }
+        // 如果仍然没有 key，默认为 exam_index
+        if (!key) {
+            key = 'exam_index';
+        }
+
+        // 确认对话框逻辑（如果需要）
+        // 这里简化为直接切换，因为 UI 层通常会处理确认
+
+        return await manager.applyLibraryConfiguration(key);
+    }
+
+    async function loadLibrary(key) {
+        const manager = getInstance();
+        if (key === 'default' || key === 'exam_index') {
+            // 重新加载默认题库
+            return await manager.loadActiveLibrary(true);
+        }
+        // 加载指定题库
+        return await manager.applyLibraryConfiguration(key);
+    }
+
     global.LibraryManager = {
         getInstance,
         derivePathMapFromIndex,
@@ -537,6 +564,13 @@
         mergeRootWithFallback,
         buildOverridePathMap,
         RAW_DEFAULT_PATH_MAP,
-        DEFAULT_PATH_MAP
+        DEFAULT_PATH_MAP,
+        switchLibraryConfig,
+        loadLibrary
     };
+
+    // 导出全局快捷函数
+    global.switchLibraryConfig = switchLibraryConfig;
+    global.loadLibrary = loadLibrary;
+
 })(typeof window !== 'undefined' ? window : globalThis);
