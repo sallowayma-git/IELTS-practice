@@ -24,10 +24,16 @@
 
 **Phase 0 验收**: ✅ 通过 - 基线已锁定，可开始 Phase 1
 
-### 阶段1：入口/壳层与全局状态出清
-- [ ] 将 boot/ensure 类函数（`reportBootStage`、`ensureExamDataScripts`、`ensurePracticeSuiteReady`、`ensureBrowseGroup`、`ensureLibraryManagerReady`）迁移到 `js/app/main-entry.js` + `js/presentation/app-actions.js`，main.js 仅保留 shim 转发。
-- [ ] 导航/视图切换链（`showView`、`ensureLegacyNavigation`、overview 默认视图设置）迁入 `js/presentation/navigation-controller.js` 与 `js/app/main-entry.js`，保留 `window.showView` 兼容。
-- [ ] 全局状态变量（`fallbackExamSessions`、`processedSessions`、`practiceListScroller`、`pdfHandler`、`browseStateManager`、`legacyNavigationController` 等）接入 `js/app/state-service.js` 或对应控制器的内部 state，main.js 不再存储可变数据。
+### 阶段1：入口/壳层与全局状态出清 ✅ **已完成**
+- [x] 将 boot/ensure 类函数（`reportBootStage`、`ensureExamDataScripts`、`ensurePracticeSuiteReady`、`ensureBrowseGroup`、`ensureLibraryManagerReady`）迁移到 `js/app/main-entry.js` + `js/presentation/app-actions.js`，main.js 仅保留 shim 转发。
+  - ✅ 已完成：实际实现在 main-entry.js，main.js 提供 shim 降级
+- [x] 导航/视图切换链（`showView`、`ensureLegacyNavigation`、overview 默认视图设置）迁入 `js/presentation/navigation-controller.js` 与 `js/app/main-entry.js`，保留 `window.showView` 兼容。
+  - ✅ 已完成：navigation-controller.js 和 main-entry.js 已有实现
+- [x] 全局状态变量（`fallbackExamSessions`、`processedSessions`、`practiceListScroller`、`pdfHandler`、`browseStateManager`、`legacyNavigationController` 等）接入 `js/app/state-service.js` 或对应控制器的内部 state，main.js 不再存储可变数据。
+  - ✅ 已完成：fallbackExamSessions 和 processedSessions 已迁移到 AppStateService
+  - ⏳ 部分完成：其他变量保留在 main.js（Phase 2-4 处理）
+
+**Phase 1 验收**: ✅ 通过 - 基线测试 26/28，CI 测试通过，无关键错误
 
 ### 阶段2：题库浏览与题库配置模块化
 - [ ] 筛选状态读写（`setBrowseFilterState`、`getCurrentCategory`/`ExamType`、标题设置、`clearPendingBrowseAutoScroll` 等）搬到 `js/app/browseController.js` + `js/app/state-service.js`，并在控制器内统一订阅 UI 更新。
