@@ -499,6 +499,102 @@
         return null;
     };
 
+    historyRenderer.helpers.getRecordTimestampSafe = function (record) {
+        if (!record || typeof record !== 'object') {
+            return 0;
+        }
+        var candidates = [
+            record.date, record.endTime, record.timestamp, record.createdAt, record.updatedAt, record.completedAt
+        ];
+        var rd = record.realData || {};
+        candidates.push(rd.date, rd.endTime, rd.timestamp);
+        var maxTs = 0;
+        for (var i = 0; i < candidates.length; i += 1) {
+            var candidate = candidates[i];
+            if (candidate == null) continue;
+            var parsed = new Date(candidate).getTime();
+            if (!isNaN(parsed) && parsed > maxTs) {
+                maxTs = parsed;
+                continue;
+            }
+            if (typeof candidate === 'number' && isFinite(candidate) && candidate > maxTs) {
+                maxTs = candidate;
+            }
+        }
+        return maxTs;
+    };
+
+    historyRenderer.helpers.computeRecordsSignature = function (records) {
+        var list = Array.isArray(records) ? records : [];
+        var tokens = list.map(function (record, index) {
+            var id = record && record.id != null ? record.id : ('idx' + index);
+            var ts = historyRenderer.helpers.getRecordTimestampSafe(record);
+            var pct = Number(record && record.percentage) || 0;
+            var dur = Number(record && record.duration) || 0;
+            return id + ':' + ts + ':' + pct + ':' + dur;
+        });
+        return list.length + '|' + tokens.join(';');
+    };
+
+    /**
+     * 渲染练习历史列表，自动复用已有 VirtualScroller，避免无谓重建导致滚动跳动。
+     */
+    historyRenderer.renderWithState = function (container, records, options) {
+        options = options || {};
+        if (!container) return null;
+
+        var list = Array.isArray(records) ? records : [];
+        var currentScroller = options.scroller || null;
+
+        if (list.length === 0) {
+            historyRenderer.destroyScroller(currentScroller);
+            historyRenderer.renderEmptyState(container);
+            return null;
+        }
+
+        var canReuse = currentScroller
+            && typeof currentScroller.updateItems === 'function'
+            && currentScroller.container === container;
+
+        if (canReuse) {
+            try {
+                currentScroller.updateItems(list);
+                return currentScroller;
+            } catch (error) {
+                console.warn('[PracticeHistoryRenderer] 更新虚拟滚动器失败，回退重建:', error);
+            }
+        } else {
+            historyRenderer.destroyScroller(currentScroller);
+        }
+
+        return historyRenderer.renderList(container, list, {
+            bulkDeleteMode: options.bulkDeleteMode,
+            selectedRecords: options.selectedRecords,
+            scrollerOptions: options.scrollerOptions,
+            itemFactory: options.itemFactory
+        });
+    };
+
+    /**
+     * 高阶封装：渲染练习历史视图并返回最新 scroller。
+     */
+    historyRenderer.renderView = function (params) {
+        params = params || {};
+        var container = params.container;
+        if (!container) {
+            return { scroller: null };
+        }
+        var list = Array.isArray(params.records) ? params.records : [];
+        var scroller = historyRenderer.renderWithState(container, list, {
+            bulkDeleteMode: params.bulkDeleteMode,
+            selectedRecords: params.selectedRecords,
+            scrollerOptions: params.scrollerOptions,
+            itemFactory: params.itemFactory,
+            scroller: params.scroller
+        });
+        return { scroller: scroller };
+    };
+
     historyRenderer.destroyScroller = function (scroller) {
         if (!scroller) return;
         if (typeof scroller.destroy === 'function') {
