@@ -1,10 +1,6 @@
 // Main JavaScript logic for the application
 // This file is the result of refactoring the inline script from improved-working-system.html
 
-// ============================================================================
-// Phase 1: 全局状态迁移到 AppStateService
-// ============================================================================
-
 const legacyStateAdapter = window.LegacyStateAdapter ? window.LegacyStateAdapter.getInstance() : null;
 
 // 全局状态现已迁移到 AppStateService，以下为向后兼容的 getter
@@ -366,6 +362,7 @@ async function cleanupOldCache() {
 
 // --- Data Loading and Management ---
 
+// Phase 3: 练习记录同步 - 保留在 main.js（核心数据流，暂不迁移）
 async function syncPracticeRecords() {
     console.log('[System] 正在从存储中同步练习记录...');
     let records = [];
@@ -1321,6 +1318,7 @@ function ensureBulkDeleteMode(options = {}) {
     return true;
 }
 
+// Phase 3: 练习历史交互设置 - 保留在 main.js（依赖 DOM 事件委托，暂不迁移）
 let practiceHistoryDelegatesConfigured = false;
 
 function setupPracticeHistoryInteractions() {
@@ -1469,6 +1467,7 @@ function recordMatchesExamType(record, targetType, examIndex) {
     return true;
 }
 
+// Phase 3: 练习记录视图更新 - 保留在 main.js（依赖多个组件，暂不迁移）
 function updatePracticeView() {
     const rawRecords = getPracticeRecordsState();
     const records = rawRecords.filter((record) => record && (record.dataSource === 'real' || record.dataSource === undefined));
@@ -1581,6 +1580,7 @@ function ensurePracticeSessionSyncListener() {
     });
 }
 
+// Phase 3: 练习统计计算 - 保留在 main.js（数据处理逻辑，暂不迁移）
 function computePracticeSummaryFallback(records) {
     const normalized = Array.isArray(records) ? records : [];
     const totalPracticed = normalized.length;
@@ -1637,6 +1637,7 @@ function computePracticeSummaryFallback(records) {
     };
 }
 
+// Phase 3: 应用练习统计 - 保留在 main.js（DOM 操作，暂不迁移）
 function applyPracticeSummaryFallback(summary) {
     if (!summary || typeof document === 'undefined') {
         return;
@@ -3318,36 +3319,41 @@ function hideDeveloperTeam() {
     if (modal) modal.classList.remove('show');
 }
 
+// Phase 3: 套题模式 - 已迁移到 app-actions.js
 function startSuitePractice() {
+    if (window.AppActions && typeof window.AppActions.startSuitePractice === 'function') {
+        return window.AppActions.startSuitePractice();
+    }
+    // 降级：直接调用 app
     const appInstance = window.app;
     if (appInstance && typeof appInstance.startSuitePractice === 'function') {
         try {
             return appInstance.startSuitePractice();
         } catch (error) {
-            console.error('[SuitePractice] 启动失败', error);
+            console.error('[main.js] 套题模式启动失败', error);
             if (typeof showMessage === 'function') {
                 showMessage('套题模式启动失败，请稍后重试', 'error');
             }
-            return;
         }
-    }
-
-    const fallbackNotice = '套题模式尚未初始化，请完成加载后再试。';
-    if (typeof showMessage === 'function') {
-        showMessage(fallbackNotice, 'warning');
-    } else if (typeof alert === 'function') {
-        alert(fallbackNotice);
+    } else {
+        if (typeof showMessage === 'function') {
+            showMessage('套题模式尚未初始化', 'warning');
+        }
     }
 }
 
+// Phase 3: 打开题目 - 已迁移到 app-actions.js
 function openExamWithFallback(exam, delay = 600) {
+    if (window.AppActions && typeof window.AppActions.openExamWithFallback === 'function') {
+        return window.AppActions.openExamWithFallback(exam, delay);
+    }
+    // 降级：直接执行
     if (!exam) {
         if (typeof showMessage === 'function') {
             showMessage('未找到可用题目', 'error');
         }
         return;
     }
-
     const launch = () => {
         try {
             if (exam.hasHtml) {
@@ -3356,13 +3362,12 @@ function openExamWithFallback(exam, delay = 600) {
                 viewPDF(exam.id);
             }
         } catch (error) {
-            console.error('[QuickLane] 启动题目失败:', error);
+            console.error('[main.js] 启动题目失败:', error);
             if (typeof showMessage === 'function') {
                 showMessage('无法打开题目，请检查题库路径', 'error');
             }
         }
     };
-
     if (delay > 0) {
         setTimeout(launch, delay);
     } else {
@@ -3370,7 +3375,12 @@ function openExamWithFallback(exam, delay = 600) {
     }
 }
 
+// Phase 3: 随机练习 - 已迁移到 app-actions.js
 function startRandomPractice(category, type = 'reading', filterMode = null, path = null) {
+    if (window.AppActions && typeof window.AppActions.startRandomPractice === 'function') {
+        return window.AppActions.startRandomPractice(category, type, filterMode, path);
+    }
+    // 降级：直接执行
     const list = getExamIndexState();
     const normalizedType = (!type || type === 'all') ? null : type;
     const normalizedPath = (typeof path === 'string' && path.trim()) ? path.trim() : null;
@@ -3379,14 +3389,12 @@ function startRandomPractice(category, type = 'reading', filterMode = null, path
     if (normalizedType) {
         pool = pool.filter((exam) => exam.type === normalizedType);
     }
-
     if (category && category !== 'all') {
         const filteredByCategory = pool.filter((exam) => exam.category === category);
         if (filteredByCategory.length > 0 || !normalizedPath) {
             pool = filteredByCategory;
         }
     }
-
     if (normalizedPath) {
         pool = pool.filter((exam) => typeof exam?.path === 'string' && exam.path.includes(normalizedPath));
     } else if (filterMode && window.BROWSE_MODES && window.BROWSE_MODES[filterMode]) {
@@ -3395,22 +3403,17 @@ function startRandomPractice(category, type = 'reading', filterMode = null, path
             pool = pool.filter((exam) => typeof exam?.path === 'string' && exam.path.includes(modeConfig.basePath));
         }
     }
-
     if (pool.length === 0) {
         if (typeof showMessage === 'function') {
-            const typeLabel = normalizedType === 'listening'
-                ? '听力'
-                : (normalizedType === 'reading' ? '阅读' : '题库');
+            const typeLabel = normalizedType === 'listening' ? '听力' : (normalizedType === 'reading' ? '阅读' : '题库');
             showMessage(`${category} ${typeLabel} 分类暂无可用题目`, 'error');
         }
         return;
     }
-
     const randomExam = pool[Math.floor(Math.random() * pool.length)];
     if (typeof showMessage === 'function') {
         showMessage(`随机选择: ${randomExam.title}`, 'info');
     }
-
     openExamWithFallback(randomExam);
 }
 

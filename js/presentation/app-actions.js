@@ -117,11 +117,134 @@
         document.addEventListener('DOMContentLoaded', attachPrefetchTriggers);
     }
 
+    // ============================================================================
+    // Phase 3: 套题/随机练习/导出功能
+    // ============================================================================
+
+    function startSuitePractice() {
+        var appInstance = global.app;
+        if (appInstance && typeof appInstance.startSuitePractice === 'function') {
+            try {
+                return appInstance.startSuitePractice();
+            } catch (error) {
+                console.error('[AppActions] 套题模式启动失败', error);
+                if (typeof global.showMessage === 'function') {
+                    global.showMessage('套题模式启动失败，请稍后重试', 'error');
+                }
+                return;
+            }
+        }
+
+        var fallbackNotice = '套题模式尚未初始化，请完成加载后再试。';
+        if (typeof global.showMessage === 'function') {
+            global.showMessage(fallbackNotice, 'warning');
+        } else if (typeof alert === 'function') {
+            alert(fallbackNotice);
+        }
+    }
+
+    function openExamWithFallback(exam, delay) {
+        var actualDelay = typeof delay === 'number' ? delay : 600;
+        
+        if (!exam) {
+            if (typeof global.showMessage === 'function') {
+                global.showMessage('未找到可用题目', 'error');
+            }
+            return;
+        }
+
+        var launch = function () {
+            try {
+                if (exam.hasHtml && typeof global.openExam === 'function') {
+                    global.openExam(exam.id);
+                } else if (typeof global.viewPDF === 'function') {
+                    global.viewPDF(exam.id);
+                } else {
+                    console.warn('[AppActions] openExam/viewPDF 未定义');
+                }
+            } catch (error) {
+                console.error('[AppActions] 启动题目失败:', error);
+                if (typeof global.showMessage === 'function') {
+                    global.showMessage('无法打开题目，请检查题库路径', 'error');
+                }
+            }
+        };
+
+        if (actualDelay > 0) {
+            setTimeout(launch, actualDelay);
+        } else {
+            launch();
+        }
+    }
+
+    function startRandomPractice(category, type, filterMode, path) {
+        var getExamIndexState = global.getExamIndexState || function () {
+            return Array.isArray(global.examIndex) ? global.examIndex : [];
+        };
+        
+        var list = getExamIndexState();
+        var normalizedType = (!type || type === 'all') ? null : type;
+        var normalizedPath = (typeof path === 'string' && path.trim()) ? path.trim() : null;
+
+        var pool = Array.from(list);
+        
+        if (normalizedType) {
+            pool = pool.filter(function (exam) { return exam.type === normalizedType; });
+        }
+
+        if (category && category !== 'all') {
+            var filteredByCategory = pool.filter(function (exam) { return exam.category === category; });
+            if (filteredByCategory.length > 0 || !normalizedPath) {
+                pool = filteredByCategory;
+            }
+        }
+
+        if (normalizedPath) {
+            pool = pool.filter(function (exam) {
+                return typeof exam?.path === 'string' && exam.path.includes(normalizedPath);
+            });
+        } else if (filterMode && global.BROWSE_MODES && global.BROWSE_MODES[filterMode]) {
+            var modeConfig = global.BROWSE_MODES[filterMode];
+            if (modeConfig?.basePath) {
+                pool = pool.filter(function (exam) {
+                    return typeof exam?.path === 'string' && exam.path.includes(modeConfig.basePath);
+                });
+            }
+        }
+
+        if (pool.length === 0) {
+            if (typeof global.showMessage === 'function') {
+                var typeLabel = normalizedType === 'listening'
+                    ? '听力'
+                    : (normalizedType === 'reading' ? '阅读' : '题库');
+                global.showMessage(category + ' ' + typeLabel + ' 分类暂无可用题目', 'error');
+            }
+            return;
+        }
+
+        var randomExam = pool[Math.floor(Math.random() * pool.length)];
+        if (typeof global.showMessage === 'function') {
+            global.showMessage('随机选择: ' + randomExam.title, 'info');
+        }
+
+        openExamWithFallback(randomExam);
+    }
+
     global.AppActions = Object.assign({}, global.AppActions, {
         exportPracticeMarkdown: exportPracticeMarkdown,
         ensurePracticeSuite: ensurePracticeSuite,
         preloadPracticeSuite: triggerPrefetch,
         preloadBrowseView: triggerBrowsePrefetch,
-        preloadMoreTools: triggerMorePrefetch
+        preloadMoreTools: triggerMorePrefetch,
+        // Phase 3
+        startSuitePractice: startSuitePractice,
+        openExamWithFallback: openExamWithFallback,
+        startRandomPractice: startRandomPractice
     });
+
+    // 挂载到全局（向后兼容）
+    global.startSuitePractice = startSuitePractice;
+    global.openExamWithFallback = openExamWithFallback;
+    global.startRandomPractice = startRandomPractice;
+
 })(typeof window !== 'undefined' ? window : this);
