@@ -185,9 +185,17 @@
         let view = null;
         if (global.browseController && typeof global.browseController.getExamListView === 'function') {
             view = global.browseController.getExamListView();
-        } else if (global.BrowseController && typeof global.BrowseController.getExamListView === 'function') {
+            // 确保 LegacyExamListView 能被创建（初始值为 null）
+            if (!view && typeof global.browseController.ensureExamListView === 'function') {
+                view = global.browseController.ensureExamListView();
+            }
+        }
+
+        if (!view && global.BrowseController && typeof global.BrowseController.getExamListView === 'function') {
             view = global.BrowseController.getExamListView();
-        } else if (global.ensureExamListView) {
+        }
+
+        if (!view && global.ensureExamListView) {
             view = global.ensureExamListView();
         }
 
