@@ -585,11 +585,19 @@
             return { scroller: null };
         }
         var list = Array.isArray(params.records) ? params.records : [];
+        var itemFactory = typeof params.itemFactory === 'function'
+            ? params.itemFactory
+            : function (record) {
+                return historyRenderer.createRecordNode(record, {
+                    bulkDeleteMode: params.bulkDeleteMode,
+                    selectedRecords: params.selectedRecords
+                });
+            };
         var scroller = historyRenderer.renderWithState(container, list, {
             bulkDeleteMode: params.bulkDeleteMode,
             selectedRecords: params.selectedRecords,
             scrollerOptions: params.scrollerOptions,
-            itemFactory: params.itemFactory,
+            itemFactory: itemFactory,
             scroller: params.scroller
         });
         return { scroller: scroller };

@@ -1146,44 +1146,6 @@ function setupOverviewInteractions() {
     overviewDelegatesConfigured = true;
 }
 
-function getScoreColor(percentage) {
-    if (window.PracticeHistoryRenderer && window.PracticeHistoryRenderer.helpers && typeof window.PracticeHistoryRenderer.helpers.getScoreColor === 'function') {
-        return window.PracticeHistoryRenderer.helpers.getScoreColor(percentage);
-    }
-    const pct = Number(percentage) || 0;
-    if (pct >= 90) return '#10b981';
-    if (pct >= 75) return '#f59e0b';
-    if (pct >= 60) return '#f97316';
-    return '#ef4444';
-}
-
-function renderPracticeRecordItem(record) {
-    if (!window.PracticeHistoryRenderer) {
-        console.warn('[PracticeHistory] Renderer 未就绪，返回空节点');
-        return null;
-    }
-
-    return window.PracticeHistoryRenderer.createRecordNode(record, {
-        bulkDeleteMode: getBulkDeleteModeState(),
-        selectedRecords: getSelectedRecordsState()
-    });
-}
-
-function renderPracticeHistoryEmptyState(container) {
-    if (window.PracticeHistoryRenderer) {
-        window.PracticeHistoryRenderer.renderEmptyState(container);
-        return;
-    }
-
-    if (!container) return;
-    while (container.firstChild) {
-        container.removeChild(container.firstChild);
-    }
-    const placeholder = document.createElement('div');
-    placeholder.textContent = '暂无任何练习记录';
-    container.appendChild(placeholder);
-}
-
 function refreshBulkDeleteButton() {
     const btn = document.getElementById('bulk-delete-btn');
     if (!btn) {
@@ -1408,9 +1370,7 @@ function updatePracticeView() {
     // --- 4. Render history list ---
     const renderer = window.PracticeHistoryRenderer;
     if (!renderer) {
-        console.warn('[PracticeHistory] Renderer 未加载，渲染空状态');
-        renderPracticeHistoryEmptyState(historyContainer);
-        refreshBulkDeleteButton();
+        console.warn('[PracticeHistory] Renderer 未加载，跳过渲染');
         return;
     }
 
@@ -1421,7 +1381,6 @@ function updatePracticeView() {
             bulkDeleteMode: getBulkDeleteModeState(),
             selectedRecords: getSelectedRecordsState(),
             scrollerOptions: { itemHeight: 100, containerHeight: 650 },
-            itemFactory: renderPracticeRecordItem,
             scroller: practiceListScroller
         })
         : null;
