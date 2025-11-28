@@ -136,14 +136,32 @@
      * 重置浏览视图
      */
     function resetBrowseViewToAll() {
+        // 1. 清除频率模式标记（关键修复）
+        if (typeof global.__browseFilterMode !== 'undefined') {
+            global.__browseFilterMode = 'default';
+        }
+        if (typeof global.__browsePath !== 'undefined') {
+            global.__browsePath = null;
+        }
+
+        // 2. 重置 browseController 到默认模式
         if (global.browseController) {
             global.browseController.clearPendingBrowseAutoScroll();
+
+            // 恢复默认模式（消除频率模式）
+            if (typeof global.browseController.resetToDefault === 'function') {
+                global.browseController.resetToDefault();
+            } else {
+                // 降级：手动重置
+                global.browseController.currentMode = 'default';
+                global.browseController.activeFilter = 'all';
+            }
 
             const currentCategory = global.browseController.getCurrentCategory();
             const currentType = global.browseController.getCurrentExamType();
 
             if (currentCategory === 'all' && currentType === 'all') {
-                if (global.setBrowseTitle) global.setBrowseTitle('题库列表'); // 或 formatBrowseTitle
+                if (global.setBrowseTitle) global.setBrowseTitle('题库列表');
                 loadExamList();
                 return;
             }
