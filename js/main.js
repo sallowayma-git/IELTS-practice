@@ -870,7 +870,7 @@ function resolveScriptPathRoot(type) {
         return manager.resolveScriptPathRoot(type);
     }
     return type === 'reading'
-        ? '睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/'
+        ? '睡着过项目组/2. 所有文章(11.20)[192篇]/'
         : 'ListeningPractice/';
 }
 
@@ -2058,7 +2058,7 @@ function extractTopLevelRootSegment(root) {
 
 // Path map definitions moved to LibraryManager; keep thin proxies for legacy callers
 const RAW_DEFAULT_PATH_MAP = (getLibraryManager && getLibraryManager() && getLibraryManager().RAW_DEFAULT_PATH_MAP) || {
-    reading: { root: '睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/', exceptions: {} },
+    reading: { root: '睡着过项目组/2. 所有文章(11.20)[192篇]/', exceptions: {} },
     listening: { root: 'ListeningPractice/', exceptions: {} }
 };
 
