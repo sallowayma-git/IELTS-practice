@@ -323,6 +323,22 @@ async function syncPracticeRecords() {
         });
     } catch (e) { console.warn('[System] normalize durations failed:', e); }
 
+    // 若数据未变则跳过 UI 刷新，避免无意义的列表重置
+    try {
+        const prev = typeof getPracticeRecordsState === 'function'
+            ? getPracticeRecordsState()
+            : (Array.isArray(window.practiceRecords) ? window.practiceRecords : []);
+        const renderer = window.PracticeHistoryRenderer;
+        if (renderer && renderer.helpers && typeof renderer.helpers.computeRecordsSignature === 'function') {
+            const prevSig = renderer.helpers.computeRecordsSignature(prev);
+            const nextSig = renderer.helpers.computeRecordsSignature(records);
+            if (prevSig === nextSig) {
+                console.log('[System] 练习记录未变化，跳过UI刷新');
+                return;
+            }
+        }
+    } catch (_) { /* 保底不中断同步流程 */ }
+
     // 新增修复3D：确保全局变量是UI的单一数据源
     setPracticeRecordsState(records);
     refreshBrowseProgressFromRecords(records);
@@ -1398,21 +1414,20 @@ function updatePracticeView() {
         return;
     }
 
-    renderer.destroyScroller(practiceListScroller);
-    practiceListScroller = null;
-
-    if (recordsToShow.length === 0) {
-        renderPracticeHistoryEmptyState(historyContainer);
-        refreshBulkDeleteButton();
-        return;
+    const renderResult = typeof renderer.renderView === 'function'
+        ? renderer.renderView({
+            container: historyContainer,
+            records: recordsToShow,
+            bulkDeleteMode: getBulkDeleteModeState(),
+            selectedRecords: getSelectedRecordsState(),
+            scrollerOptions: { itemHeight: 100, containerHeight: 650 },
+            itemFactory: renderPracticeRecordItem,
+            scroller: practiceListScroller
+        })
+        : null;
+    if (renderResult && renderResult.scroller !== undefined) {
+        practiceListScroller = renderResult.scroller;
     }
-
-    practiceListScroller = renderer.renderList(historyContainer, recordsToShow, {
-        bulkDeleteMode: getBulkDeleteModeState(),
-        selectedRecords: getSelectedRecordsState(),
-        scrollerOptions: { itemHeight: 100, containerHeight: 650 },
-        itemFactory: renderPracticeRecordItem
-    });
     refreshBulkDeleteButton();
 }
 
