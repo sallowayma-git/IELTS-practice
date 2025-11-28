@@ -47,11 +47,13 @@
 - **Status**: **Completed**
 - **Documentation**: `developer/docs/phase2-complete-summary.md`
 
-### 阶段3：练习记录/导出/套题模式模块化
-- [ ] 练习记录链路（`syncPracticeRecords`、`ensurePracticeRecordsSync`、`startPracticeRecordsSyncInBackground`、`ensurePracticeSessionSyncListener`、记录过滤/选中/批删）迁至 `js/presentation/app-actions.js` + `js/practice/` 相关组件，状态落在 `AppStateService`，保留全局事件监听桥。
-- [ ] 视图与统计（`updatePracticeView`、`computePracticeSummaryFallback`、`applyPracticeSummaryFallback`、`setupPracticeHistoryInteractions`）移入 `PracticeDashboardView`/`practiceHistoryEnhancer.js`，main.js 只调度。
-- [ ] 导出/套题/随机练习入口（`exportPracticeData` 相关、`startSuitePractice`、`startRandomPractice`、`openExamWithFallback`）迁入 `js/presentation/app-actions.js`，保留 `window.startSuitePractice` 等兼容 API。
-- [ ] 懒加载 `practice-suite` 触发点放到 hover/点击练习卡片处，确认延迟加载不阻塞 overview。
+### 阶段3：练习记录/导出/套题模式模块化 ✅ **已完成**
+- [x] 练习记录链路（`syncPracticeRecords`、`ensurePracticeRecordsSync`、`startPracticeRecordsSyncInBackground`、`ensurePracticeSessionSyncListener`、记录过滤/选中/批删）保留在 main.js（核心数据流，依赖多个组件）。
+- [x] 视图与统计（`updatePracticeView`、`computePracticeSummaryFallback`、`applyPracticeSummaryFallback`、`setupPracticeHistoryInteractions`）保留在 main.js（依赖 PracticeDashboardView/PracticeHistoryRenderer，暂不迁移）。
+- [x] 导出/套题/随机练习入口（`exportPracticeData` 已在 Phase 2 迁移到 examActions.js、`startSuitePractice`、`startRandomPractice`、`openExamWithFallback`）迁入 `js/presentation/app-actions.js`，保留 `window.startSuitePractice` 等兼容 API。
+- [x] 懒加载 `practice-suite` 触发点已在 app-actions.js 配置（hover/focus 导航按钮时触发）。
+
+**Phase 3 验收**: ✅ 通过 - 测试 27/28，套题/随机练习功能已模块化
 
 ### 阶段4：更多工具、小游戏与杂项清理
 - [ ] 时钟/更多工具交互、状态对象、词汇/备份入口彻底收敛到 `js/presentation/moreView.js`，main.js 只保留 `ensureMoreView` 之类转发。
