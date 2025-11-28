@@ -996,13 +996,33 @@ async function savePracticeRecordFallback(examId, realData) {
     }
 }
 
-async function loadLibrary(forceReload = false) {
+async function loadLibrary(keyOrForceReload = false) {
     const manager = await ensureLibraryManagerReady();
-    if (!manager || typeof manager.loadActiveLibrary !== 'function') {
+    if (!manager) {
         console.warn('[Library] LibraryManager 未就绪，跳过加载');
         return;
     }
-    await manager.loadActiveLibrary(forceReload);
+
+    const supportsManagerLoad = typeof manager.loadLibrary === 'function';
+    const supportsApplyConfig = typeof manager.applyLibraryConfiguration === 'function';
+    const supportsLoadActive = typeof manager.loadActiveLibrary === 'function';
+
+    if (typeof keyOrForceReload === 'string') {
+        if (supportsManagerLoad) {
+            return manager.loadLibrary(keyOrForceReload);
+        }
+        if (supportsApplyConfig) {
+            return manager.applyLibraryConfiguration(keyOrForceReload);
+        }
+    }
+
+    const forceReload = !!keyOrForceReload;
+    if (supportsLoadActive) {
+        return manager.loadActiveLibrary(forceReload);
+    }
+    if (supportsManagerLoad) {
+        return manager.loadLibrary(forceReload ? 'default' : undefined);
+    }
 }
 
 function resolveScriptPathRoot(type) {
