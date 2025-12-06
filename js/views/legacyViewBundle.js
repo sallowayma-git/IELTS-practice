@@ -485,12 +485,8 @@
                 return historyRenderer.createRecordNode(record, options);
             };
 
-        if (global.VirtualScroller && options.scrollerOptions !== false) {
-            var scrollerOpts = Object.assign({ itemHeight: 100, containerHeight: 650 }, options.scrollerOptions || {});
-            replaceContent(container, []);
-            return new global.VirtualScroller(container, list, itemFactory, scrollerOpts);
-        }
-
+        // 禁用VirtualScroller以支持CSS Grid布局
+        // VirtualScroller使用position:absolute会破坏Grid布局
         if (domAdapter && typeof domAdapter.fragment === 'function') {
             domAdapter.replaceContent(container, domAdapter.fragment(list, itemFactory));
         } else {
@@ -537,40 +533,24 @@
     };
 
     /**
-     * 渲染练习历史列表，自动复用已有 VirtualScroller，避免无谓重建导致滚动跳动。
+     * 渲染练习历史列表（简化版，不使用VirtualScroller以支持Grid布局）
      */
     historyRenderer.renderWithState = function (container, records, options) {
         options = options || {};
         if (!container) return null;
 
         var list = Array.isArray(records) ? records : [];
-        var currentScroller = options.scroller || null;
 
         if (list.length === 0) {
-            historyRenderer.destroyScroller(currentScroller);
             historyRenderer.renderEmptyState(container);
             return null;
         }
 
-        var canReuse = currentScroller
-            && typeof currentScroller.updateItems === 'function'
-            && currentScroller.container === container;
-
-        if (canReuse) {
-            try {
-                currentScroller.updateItems(list);
-                return currentScroller;
-            } catch (error) {
-                console.warn('[PracticeHistoryRenderer] 更新虚拟滚动器失败，回退重建:', error);
-            }
-        } else {
-            historyRenderer.destroyScroller(currentScroller);
-        }
-
+        // 直接使用普通渲染，不使用VirtualScroller
         return historyRenderer.renderList(container, list, {
             bulkDeleteMode: options.bulkDeleteMode,
             selectedRecords: options.selectedRecords,
-            scrollerOptions: options.scrollerOptions,
+            scrollerOptions: false, // 明确禁用VirtualScroller
             itemFactory: options.itemFactory
         });
     };
