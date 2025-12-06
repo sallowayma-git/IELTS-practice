@@ -194,6 +194,15 @@
         if (overlay) {
           overlay.remove();
         }
+        return;
+      }
+
+      if (action === 'dismiss-inline') {
+        event.preventDefault();
+        var inline = document.querySelector('.backup-list-container');
+        if (inline) {
+          inline.remove();
+        }
       }
     });
 
@@ -608,6 +617,16 @@
       var container = document.getElementById('settings-view');
       var create = _fallbackCreateElement;
 
+      // 防止重复渲染多个列表/遮罩
+      var existingInline = (container && container.querySelector('.backup-list-container')) || document.querySelector('.backup-list-container');
+      if (existingInline) {
+        existingInline.remove();
+      }
+      var existingOverlay = document.querySelector('.backup-modal-overlay');
+      if (existingOverlay) {
+        existingOverlay.remove();
+      }
+
       var buildEntries = function () {
         if (!Array.isArray(backups) || backups.length === 0) {
           return [
@@ -648,16 +667,21 @@
           create('h3', { className: 'backup-list-title' }, [
             create('span', { className: 'backup-list-title-icon', ariaHidden: 'true' }, '📋'),
             create('span', { className: 'backup-list-title-text' }, '备份列表')
-          ])
+          ]),
+          create('button', {
+            type: 'button',
+            className: 'btn btn-secondary backup-list-dismiss',
+            dataset: { backupAction: 'dismiss-inline' }
+          }, '收起')
         ]),
         create('div', { className: 'backup-list-scroll' }, buildEntries())
       ]);
 
       if (container) {
         var holder = create('div', { className: 'backup-list-container' }, card);
-        var mainCard = container.querySelector(':scope > div');
-        if (mainCard) {
-          mainCard.appendChild(holder);
+        var settingsGroup = container.querySelector('.hero-settings-group');
+        if (settingsGroup && settingsGroup.parentElement === container) {
+          settingsGroup.insertAdjacentElement('afterend', holder);
         } else {
           container.appendChild(holder);
         }
