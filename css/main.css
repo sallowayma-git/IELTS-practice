@@ -2439,13 +2439,15 @@ body.no-scroll {
 }
 
 .practice-history-list,
-#practice-history-list {
-
-    overflow-y: auto;
+#practice-history-list,
+#history-list {
+    overflow-y: visible;
     position: relative;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-md);
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    padding: 8px;
+    width: 100%;
 }
 
 .practice-history-list .record-selection,
@@ -2539,8 +2541,14 @@ body.no-scroll {
 }
 
 .history-item-selected {
-    background-color: rgba(255, 0, 0, 0.1) !important;
-    border-left: 3px solid #ff6b6b;
+    background: linear-gradient(135deg, #fff5f5 0%, #ffe5e5 100%) !important;
+    border-color: #ff6b6b !important;
+    box-shadow: 0 2px 8px rgba(255, 107, 107, 0.2) !important;
+}
+
+.history-item-selected:hover {
+    background: linear-gradient(135deg, #ffebeb 0%, #ffd5d5 100%) !important;
+    border-color: #ff5252 !important;
 }
 
 .record-meta-line {
@@ -2618,6 +2626,15 @@ body.no-scroll {
 
 
 @media (max-width: 768px) {
+
+    /* 练习历史列表 - 小屏幕单列 */
+    .practice-history-list,
+    #practice-history-list,
+    #history-list {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
     .message-container {
         position: relative;
         top: auto;

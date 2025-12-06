@@ -159,7 +159,7 @@ class PracticeHistory {
         document.addEventListener('practiceSessionCompleted', () => {
             this.refreshHistory();
         });
-        
+
         // 监听视图激活事件
         document.addEventListener('click', (e) => {
             // 批量选择复选框
@@ -169,7 +169,7 @@ class PracticeHistory {
                 this.toggleSelection(recordId);
                 return;
             }
-            
+
             // 题目标题点击 - 显示详情
             const recordTitle = e.target.closest('.record-title');
             if (recordTitle) {
@@ -180,7 +180,7 @@ class PracticeHistory {
                     return;
                 }
             }
-            
+
             // 操作按钮点击
             const actionBtn = e.target.closest('[data-history-action]');
             if (actionBtn) {
@@ -191,7 +191,7 @@ class PracticeHistory {
                 this.handleRecordAction(action, recordId);
                 return;
             }
-            
+
             // 分页按钮点击
             const pageBtn = e.target.closest('.page-btn');
             if (pageBtn && !pageBtn.classList.contains('disabled')) {
@@ -200,7 +200,7 @@ class PracticeHistory {
                 return;
             }
         });
-        
+
         // 键盘快捷键
         document.addEventListener('keydown', (e) => {
             if (document.getElementById('practice-view').classList.contains('active')) {
@@ -228,7 +228,7 @@ class PracticeHistory {
     createHistoryInterface() {
         const practiceView = document.getElementById('practice-view');
         if (!practiceView) return;
-        
+
         practiceView.innerHTML = `
             <div class="practice-history-container">
                 <div class="history-header">
@@ -366,7 +366,7 @@ class PracticeHistory {
                 </div>
             </div>
         `;
-        
+
         this.setupFilterEvents();
         this.loadHistory();
     }
@@ -377,10 +377,10 @@ class PracticeHistory {
     setupFilterEvents() {
         // 筛选器变化事件
         const filterElements = [
-            'category-filter', 'frequency-filter', 'status-filter', 
+            'category-filter', 'frequency-filter', 'status-filter',
             'date-range-filter', 'sort-by', 'sort-order', 'records-per-page'
         ];
-        
+
         filterElements.forEach(id => {
             const element = document.getElementById(id);
             if (element) {
@@ -390,25 +390,25 @@ class PracticeHistory {
                 });
             }
         });
-        
+
         // 正确率滑块事件
         const minAccuracy = document.getElementById('min-accuracy');
         const maxAccuracy = document.getElementById('max-accuracy');
-        
+
         if (minAccuracy && maxAccuracy) {
             minAccuracy.addEventListener('input', (e) => {
                 document.getElementById('min-accuracy-value').textContent = e.target.value + '%';
                 this.filters.minAccuracy = parseInt(e.target.value);
                 this.applyFilters();
             });
-            
+
             maxAccuracy.addEventListener('input', (e) => {
                 document.getElementById('max-accuracy-value').textContent = e.target.value + '%';
                 this.filters.maxAccuracy = parseInt(e.target.value);
                 this.applyFilters();
             });
         }
-        
+
         // 搜索输入事件 - 使用事件委托如果可用
         if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
             const handleSearch = (e) => {
@@ -436,7 +436,7 @@ class PracticeHistory {
                 }, 300));
             }
         }
-        
+
         // 日期范围筛选器 - 使用事件委托如果可用
         if (typeof window.DOM !== 'undefined' && window.DOM.delegate) {
             const handleDateRange = (e) => {
@@ -482,11 +482,11 @@ class PracticeHistory {
         this.filters.frequency = document.getElementById('frequency-filter')?.value || 'all';
         this.filters.status = document.getElementById('status-filter')?.value || 'all';
         this.filters.dateRange = document.getElementById('date-range-filter')?.value || 'all';
-        
+
         this.sortBy = document.getElementById('sort-by')?.value || 'startTime';
         this.sortOrder = document.getElementById('sort-order')?.value || 'desc';
         this.recordsPerPage = parseInt(document.getElementById('records-per-page')?.value || '20');
-        
+
         // 重置到第一页
         this.currentPage = 1;
     }
@@ -501,7 +501,7 @@ class PracticeHistory {
             if (!practiceRecorder) {
                 throw new Error('PracticeRecorder not available');
             }
-            
+
             // 检查getPracticeRecords方法是否存在
             if (typeof practiceRecorder.getPracticeRecords !== 'function') {
                 throw new Error('getPracticeRecords method not found on practiceRecorder');
@@ -514,9 +514,9 @@ class PracticeHistory {
             this.applyFilters();
             this.selectedSet.clear();
             this.updateBulkActions();
-            
+
             console.log(`Loaded ${this.currentRecords.length} practice records`);
-            
+
         } catch (error) {
             console.error('Failed to load practice history:', error);
             this.showError('加载历史记录失败');
@@ -535,37 +535,37 @@ class PracticeHistory {
      */
     applyFilters() {
         let filtered = [...this.currentRecords];
-        
+
         // 应用分类筛选
         if (this.filters.category !== 'all') {
-            filtered = filtered.filter(record => 
+            filtered = filtered.filter(record =>
                 record.metadata.category === this.filters.category
             );
         }
-        
+
         // 应用频率筛选
         if (this.filters.frequency !== 'all') {
-            filtered = filtered.filter(record => 
+            filtered = filtered.filter(record =>
                 record.metadata.frequency === this.filters.frequency
             );
         }
-        
+
         // 应用状态筛选
         if (this.filters.status !== 'all') {
-            filtered = filtered.filter(record => 
+            filtered = filtered.filter(record =>
                 record.status === this.filters.status
             );
         }
-        
+
         // 应用日期范围筛选
         filtered = this.applyDateRangeFilter(filtered);
-        
+
         // 应用正确率筛选
         filtered = filtered.filter(record => {
             const accuracy = Math.round(record.accuracy * 100);
             return accuracy >= this.filters.minAccuracy && accuracy <= this.filters.maxAccuracy;
         });
-        
+
         // 应用搜索筛选
         if (this.searchQuery) {
             filtered = filtered.filter(record => {
@@ -574,20 +574,20 @@ class PracticeHistory {
                 return title.includes(this.searchQuery) || examId.includes(this.searchQuery);
             });
         }
-        
+
         // 应用排序
         filtered = this.applySorting(filtered);
-        
+
         this.filteredRecords = filtered;
         this.selectedSet.clear();
         this.updateBulkActions();
-        
+
         // 更新统计信息
         this.updateHistoryStats();
-        
+
         // 渲染记录列表
         this.renderHistoryList();
-        
+
         // 渲染分页
         this.renderPagination();
     }
@@ -599,10 +599,10 @@ class PracticeHistory {
         if (this.filters.dateRange === 'all') {
             return records;
         }
-        
+
         const now = new Date();
         let startDate, endDate;
-        
+
         switch (this.filters.dateRange) {
             case 'today':
                 startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -626,7 +626,7 @@ class PracticeHistory {
                 if (endInput?.value) endDate = new Date(endInput.value + 'T23:59:59');
                 break;
         }
-        
+
         if (startDate || endDate) {
             return records.filter(record => {
                 const recordDate = new Date(record.startTime);
@@ -635,7 +635,7 @@ class PracticeHistory {
                 return true;
             });
         }
-        
+
         return records;
     }
 
@@ -645,7 +645,7 @@ class PracticeHistory {
     applySorting(records) {
         return records.sort((a, b) => {
             let aValue, bValue;
-            
+
             switch (this.sortBy) {
                 case 'startTime':
                     aValue = new Date(a.startTime).getTime();
@@ -667,7 +667,7 @@ class PracticeHistory {
                     aValue = new Date(a.startTime).getTime();
                     bValue = new Date(b.startTime).getTime();
             }
-            
+
             if (this.sortOrder === 'asc') {
                 return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
             } else {
@@ -682,22 +682,22 @@ class PracticeHistory {
     updateHistoryStats() {
         try {
             const totalPractices = this.filteredRecords.length;
-            const avgAccuracy = totalPractices > 0 
+            const avgAccuracy = totalPractices > 0
                 ? Math.round(this.filteredRecords.reduce((sum, r) => sum + r.accuracy, 0) / totalPractices * 100)
                 : 0;
             const totalTime = this.filteredRecords.reduce((sum, r) => sum + r.duration, 0);
-            
+
             document.getElementById('total-practices').textContent = totalPractices;
             document.getElementById('avg-accuracy').textContent = avgAccuracy + '%';
-            
+
             // 防御性检查 Utils 对象是否存在
             console.log('[PracticeHistory] Utils对象检查:', {
                 windowUtils: !!window.Utils,
                 formatDurationExists: window.Utils && typeof window.Utils.formatDuration === 'function',
                 totalTime: totalTime
             });
-            
-            const formattedTime = (window.Utils && typeof window.Utils.formatDuration === 'function') 
+
+            const formattedTime = (window.Utils && typeof window.Utils.formatDuration === 'function')
                 ? Utils.formatDuration(totalTime)
                 : this.formatDurationFallback(totalTime);
             document.getElementById('total-time').textContent = formattedTime;
@@ -860,27 +860,31 @@ class PracticeHistory {
         const accuracyClass = accuracy >= 80 ? 'excellent' : accuracy >= 60 ? 'good' : 'needs-improvement';
         const statusClass = record.status === 'completed' ? 'completed' : 'interrupted';
         const recordIdStr = String(record.id);
-        const isSelected = this.selectedSet.has(recordIdStr) ? 'checked' : '';
+        const isSelected = this.selectedSet.has(recordIdStr);
+        const selectedClass = isSelected ? 'selected' : '';
+        const checkedAttr = isSelected ? 'checked' : '';
         const metadata = record.metadata || {};
         const examTitle = this.getDisplayExamTitle(record);
         const categoryLabel = this.formatCategoryLabel(metadata.category);
         const frequencyLabel = this.formatFrequencyLabel(metadata.frequency);
 
         return `
-            <div class="history-record-item" data-record-id="${recordIdStr}">
+            <div class="history-record-item ${selectedClass}" data-record-id="${recordIdStr}">
                 <div class="record-main">
-                    <div class="record-checkbox">
-                        <input type="checkbox" data-record-id="${recordIdStr}" ${isSelected}>
-                    </div>
-                    <div class="record-status">
-                        <div class="status-indicator ${statusClass}"></div>
-                    </div>
-                    <div class="record-content">
-                        <h4 class="record-title clickable">${examTitle}</h4>
-                        <div class="record-meta">
-                            <span class="record-category">${categoryLabel}</span>
-                            <span class="record-frequency">${frequencyLabel}</span>
-                            <span class="record-time">${startTime}</span>
+                    <div class="record-header-row">
+                        <div class="record-checkbox">
+                            <input type="checkbox" data-record-id="${recordIdStr}" ${checkedAttr}>
+                        </div>
+                        <div class="record-status">
+                            <div class="status-indicator ${statusClass}"></div>
+                        </div>
+                        <div class="record-content">
+                            <h4 class="record-title clickable">${examTitle}</h4>
+                            <div class="record-meta">
+                                <span class="record-category">${categoryLabel}</span>
+                                <span class="record-frequency">${frequencyLabel}</span>
+                                <span class="record-time">${startTime}</span>
+                            </div>
                         </div>
                     </div>
                     <div class="record-stats">
@@ -934,17 +938,21 @@ class PracticeHistory {
         const categoryLabel = this.formatCategoryLabel(metadata.category);
         const frequencyLabel = this.formatFrequencyLabel(metadata.frequency);
 
-        // 创建文档片段提高性能
-        const fragment = document.createDocumentFragment();
-
         // 主容器
         const recordItem = document.createElement('div');
         recordItem.className = 'history-record-item';
+        if (isSelected) {
+            recordItem.classList.add('selected');
+        }
         recordItem.dataset.recordId = recordIdStr;
 
         // 记录主内容
         const recordMain = document.createElement('div');
         recordMain.className = 'record-main';
+
+        // 顶部区域：复选框 + 状态 + 内容
+        const headerRow = document.createElement('div');
+        headerRow.className = 'record-header-row';
 
         // 复选框
         const checkboxDiv = document.createElement('div');
@@ -993,6 +1001,11 @@ class PracticeHistory {
         contentDiv.appendChild(title);
         contentDiv.appendChild(meta);
 
+        // 组装顶部区域
+        headerRow.appendChild(checkboxDiv);
+        headerRow.appendChild(statusDiv);
+        headerRow.appendChild(contentDiv);
+
         // 统计信息
         const statsDiv = document.createElement('div');
         statsDiv.className = 'record-stats';
@@ -1038,9 +1051,7 @@ class PracticeHistory {
         actionsDiv.appendChild(deleteBtn);
 
         // 组装元素
-        recordMain.appendChild(checkboxDiv);
-        recordMain.appendChild(statusDiv);
-        recordMain.appendChild(contentDiv);
+        recordMain.appendChild(headerRow);
         recordMain.appendChild(statsDiv);
         recordMain.appendChild(actionsDiv);
 
@@ -1055,16 +1066,16 @@ class PracticeHistory {
     renderPagination() {
         const pagination = document.getElementById('history-pagination');
         if (!pagination) return;
-        
+
         const totalPages = Math.ceil(this.filteredRecords.length / this.recordsPerPage);
-        
+
         if (totalPages <= 1) {
             pagination.innerHTML = '';
             return;
         }
-        
+
         let paginationHTML = '<div class="pagination">';
-        
+
         // 上一页按钮
         paginationHTML += `
             <button class="page-btn ${this.currentPage === 1 ? 'disabled' : ''}" 
@@ -1072,18 +1083,18 @@ class PracticeHistory {
                 ← 上一页
             </button>
         `;
-        
+
         // 页码按钮
         const startPage = Math.max(1, this.currentPage - 2);
         const endPage = Math.min(totalPages, this.currentPage + 2);
-        
+
         if (startPage > 1) {
             paginationHTML += `<button class="page-btn" data-page="1">1</button>`;
             if (startPage > 2) {
                 paginationHTML += `<span class="page-ellipsis">...</span>`;
             }
         }
-        
+
         for (let i = startPage; i <= endPage; i++) {
             paginationHTML += `
                 <button class="page-btn ${i === this.currentPage ? 'active' : ''}" 
@@ -1092,14 +1103,14 @@ class PracticeHistory {
                 </button>
             `;
         }
-        
+
         if (endPage < totalPages) {
             if (endPage < totalPages - 1) {
                 paginationHTML += `<span class="page-ellipsis">...</span>`;
             }
             paginationHTML += `<button class="page-btn" data-page="${totalPages}">${totalPages}</button>`;
         }
-        
+
         // 下一页按钮
         paginationHTML += `
             <button class="page-btn ${this.currentPage === totalPages ? 'disabled' : ''}" 
@@ -1107,19 +1118,19 @@ class PracticeHistory {
                 下一页 →
             </button>
         `;
-        
+
         paginationHTML += '</div>';
-        
+
         // 页面信息
         const startRecord = (this.currentPage - 1) * this.recordsPerPage + 1;
         const endRecord = Math.min(this.currentPage * this.recordsPerPage, this.filteredRecords.length);
-        
+
         paginationHTML += `
             <div class="pagination-info">
                 显示 ${startRecord}-${endRecord} 条，共 ${this.filteredRecords.length} 条记录
             </div>
         `;
-        
+
         pagination.innerHTML = paginationHTML;
     }
 
@@ -1128,13 +1139,13 @@ class PracticeHistory {
      */
     goToPage(page) {
         const totalPages = Math.ceil(this.filteredRecords.length / this.recordsPerPage);
-        
+
         if (page < 1 || page > totalPages) return;
-        
+
         this.currentPage = page;
         this.renderHistoryList();
         this.renderPagination();
-        
+
         // 滚动到顶部
         document.getElementById('history-list').scrollIntoView({ behavior: 'smooth' });
     }
@@ -1146,7 +1157,7 @@ class PracticeHistory {
         const recordIdStr = String(recordId);
         const record = this.filteredRecords.find(r => String(r.id) === recordIdStr);
         if (!record) return;
-        
+
         switch (action) {
             case 'retry':
                 this.retryExam(record);
@@ -1179,14 +1190,31 @@ class PracticeHistory {
      */
     toggleSelection(recordId) {
         const id = String(recordId);
+        const recordElement = document.querySelector(`.history-record-item[data-record-id="${id}"]`);
+        const checkbox = document.querySelector(`input[type="checkbox"][data-record-id="${id}"]`);
+
         if (this.selectedSet.has(id)) {
             this.selectedSet.delete(id);
+            // 移除选中状态的视觉反馈
+            if (recordElement) {
+                recordElement.classList.remove('selected');
+            }
+            if (checkbox) {
+                checkbox.checked = false;
+            }
         } else {
             this.selectedSet.add(id);
+            // 添加选中状态的视觉反馈
+            if (recordElement) {
+                recordElement.classList.add('selected');
+            }
+            if (checkbox) {
+                checkbox.checked = true;
+            }
         }
         this.updateBulkActions();
     }
-    
+
     /**
      * 更新批量操作UI
      */
@@ -1197,7 +1225,7 @@ class PracticeHistory {
             btn.textContent = `批量删除 (${this.selectedSet.size})`;
         }
     }
-    
+
     /**
      * 批量删除选中记录
      */
@@ -1208,7 +1236,7 @@ class PracticeHistory {
             return;
         }
         if (!confirm(`确定要删除选中 ${selectedIds.size} 条记录吗？此操作不可撤销。`)) return;
-        
+
         try {
             const practiceRecorder = window.app?.components?.practiceRecorder;
             const scoreStorage = practiceRecorder?.scoreStorage;
@@ -1227,7 +1255,7 @@ class PracticeHistory {
             this.currentRecords = this.currentRecords.filter(r => !selectedIds.has(String(r.id)));
             this.filteredRecords = this.filteredRecords.filter(r => !selectedIds.has(String(r.id)));
             this.selectedSet.clear();
-            
+
             if (typeof this.refreshHistory === 'function') {
                 this.refreshHistory();
             } else {
@@ -1242,7 +1270,7 @@ class PracticeHistory {
             window.showMessage('批量删除失败', 'error');
         }
     }
-    
+
     /**
      * 显示记录详情
      */
@@ -1250,7 +1278,7 @@ class PracticeHistory {
         const recordIdStr = String(recordId);
         const record = this.filteredRecords.find(r => String(r.id) === recordIdStr);
         if (!record) return;
-        
+
         const accuracy = Math.round(record.accuracy * 100);
         const duration = (window.Utils && typeof window.Utils.formatDuration === 'function')
             ? Utils.formatDuration(record.duration)
@@ -1369,7 +1397,7 @@ class PracticeHistory {
                 </div>
             </div>
         `;
-        
+
         this.showModal(detailsContent);
     }
 
@@ -1450,10 +1478,10 @@ class PracticeHistory {
         const tableRows = answersData.map((answer, index) => {
             const correctIcon = answer.isCorrect === true ? '✓'
                 : answer.isCorrect === false ? '✗'
-                : '-';
+                    : '-';
             const correctClass = answer.isCorrect === true ? 'correct'
                 : answer.isCorrect === false ? 'incorrect'
-                : 'unknown';
+                    : 'unknown';
 
             return `
                 <tr class="answer-row ${correctClass}">
@@ -1827,7 +1855,7 @@ class PracticeHistory {
         const match = String(key).match(/(\d+)/);
         return match ? parseInt(match[1], 10) : null;
     }
-    
+
     /**
      * 格式化答案显示
      */
@@ -1984,7 +2012,7 @@ class PracticeHistory {
         };
         this.searchQuery = '';
         this.currentPage = 1;
-        
+
         // 重置UI
         document.getElementById('category-filter').value = 'all';
         document.getElementById('frequency-filter').value = 'all';
@@ -1996,7 +2024,7 @@ class PracticeHistory {
         document.getElementById('max-accuracy-value').textContent = '100%';
         document.getElementById('history-search').value = '';
         document.getElementById('custom-date-range').style.display = 'none';
-        
+
         // 重新应用筛选
         this.applyFilters();
     }
@@ -2017,10 +2045,10 @@ class PracticeHistory {
             if (!practiceRecorder) {
                 throw new Error('PracticeRecorder not available');
             }
-            
+
             // 导出为JSON格式
             const exportData = practiceRecorder.exportData('json');
-            
+
             // 创建下载链接
             const blob = new Blob([exportData], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
@@ -2031,9 +2059,9 @@ class PracticeHistory {
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-            
+
             window.showMessage('历史记录已导出', 'success');
-            
+
         } catch (error) {
             console.error('Failed to export history:', error);
             window.showMessage('导出失败', 'error');
@@ -2079,9 +2107,9 @@ class PracticeHistory {
                 </div>
             </div>
         `;
-        
+
         this.showModal(importContent);
-        
+
         // 设置文件选择事件
         document.getElementById('import-file').addEventListener('change', (e) => {
             const fileName = e.target.files[0]?.name || '未选择文件';
@@ -2095,31 +2123,31 @@ class PracticeHistory {
     async performImport() {
         const fileInput = document.getElementById('import-file');
         const file = fileInput.files[0];
-        
+
         if (!file) {
             window.showMessage('请选择要导入的文件', 'warning');
             return;
         }
-        
+
         try {
             const importMode = document.querySelector('input[name="import-mode"]:checked').value;
             const fileContent = await this.readFile(file);
-            
+
             const practiceRecorder = window.app?.components?.practiceRecorder;
             if (!practiceRecorder) {
                 throw new Error('PracticeRecorder not available');
             }
-            
+
             await practiceRecorder.importData(fileContent, { merge: importMode === 'merge' });
-            
+
             // 关闭对话框
             document.querySelector('.modal-overlay').remove();
-            
+
             // 刷新历史记录
             this.refreshHistory();
-            
+
             window.showMessage('数据导入成功', 'success');
-            
+
         } catch (error) {
             console.error('Failed to import data:', error);
             window.showMessage('导入失败：' + error.message, 'error');
@@ -2166,16 +2194,16 @@ class PracticeHistory {
         const modalOverlay = document.createElement('div');
         modalOverlay.className = 'modal-overlay show';
         modalOverlay.innerHTML = `<div class="modal">${content}</div>`;
-        
+
         document.body.appendChild(modalOverlay);
-        
+
         // 点击背景关闭
         modalOverlay.addEventListener('click', (e) => {
             if (e.target === modalOverlay) {
                 modalOverlay.remove();
             }
         });
-        
+
         // ESC键关闭
         const escHandler = (e) => {
             if (e.key === 'Escape') {
@@ -2265,7 +2293,7 @@ class PracticeHistory {
             const userAnswer = (answer.userAnswer || '').toString();
             const resultIcon = answer.isCorrect === true ? '✅'
                 : answer.isCorrect === false ? '❌'
-                : '❓';
+                    : '❓';
 
             const formattedCorrect = correctAnswer.padEnd(17, ' ');
             const formattedUser = userAnswer.padEnd(17, ' ');
@@ -2291,7 +2319,7 @@ class PracticeHistory {
             const userAnswer = entry.hasUserAnswer ? (entry.userAnswer || '') : '未作答';
             const resultIcon = entry.isCorrect === true ? '✅'
                 : entry.isCorrect === false ? '❌'
-                : '❓';
+                    : '❓';
 
             const formattedCorrect = correctAnswer.padEnd(17, ' ');
             const formattedUser = userAnswer.padEnd(17, ' ');
@@ -2433,7 +2461,7 @@ class PracticeHistory {
         try {
             let combinedMarkdown = `# IELTS练习记录导出\n\n`;
             combinedMarkdown += `导出时间: ${new Date().toLocaleString()}\n\n`;
-            
+
             recordIds.forEach(recordId => {
                 const record = this.filteredRecords.find(r => r.id === recordId);
                 if (record) {
