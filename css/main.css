@@ -2113,10 +2113,12 @@ body.no-scroll {
 
 .exam-list {
     display: grid;
-    gap: var(--space-lg);
-    max-height: 600px;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: var(--space-md);
+    max-height: 72vh;
     overflow-y: auto;
-    padding-right: var(--space-sm);
+    padding-left: var(--space-sm);
+    align-content: start;
 }
 
 .exam-list-empty {
@@ -2205,23 +2207,25 @@ body.no-scroll {
 }
 
 .exam-item {
-    background: var(--exam-item-bg);
+    background: var(--bloom-surface);
+    background-image: none;
     padding: var(--space-lg);
-    border-radius: var(--border-radius-lg);
-    border: var(--exam-item-border-width) solid var(--exam-item-border-color);
+    border-radius: var(--border-radius-xl);
+    border: 1px solid transparent;
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    gap: var(--space-md);
     transition: all var(--transition-normal);
-    box-shadow: var(--shadow-lg);
+    box-shadow: var(--bloom-shadow);
     position: relative;
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(12px);
 }
 
 .exam-item:hover {
-    transform: translateX(4px);
-    box-shadow: var(--shadow-md);
-    border-color: var(--color-gray-300);
+    transform: translateY(-3px);
+    box-shadow: 0 18px 44px rgba(215, 180, 140, 0.18), 0 10px 26px rgba(53, 192, 161, 0.14);
+    border-color: var(--bloom-border-strong);
+    background: linear-gradient(140deg, rgba(252, 226, 199, 0.96), rgba(188, 228, 213, 0.9));
 }
 
 .exam-item:hover .exam-item-action-btn {
@@ -2245,24 +2249,56 @@ body.no-scroll {
 }
 
 .exam-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
     font-size: var(--font-size-sm);
-    color: var(--color-gray-600);
+    color: #3a4148;
     font-weight: var(--font-weight-medium);
     margin-top: var(--space-xs);
+    padding: 6px 10px;
+    border-radius: var(--border-radius-lg);
+    background: rgba(232, 189, 145, 0.18);
 }
 
 .exam-actions {
-    display: flex;
-    gap: var(--space-md);
-    align-items: center;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-sm);
+    width: 100%;
 }
 
 .exam-item-action-btn {
-    opacity: 0.8;
-    transform: scale(0.95);
+    opacity: 0.95;
+    transform: translateY(0);
     transition: all var(--transition-normal);
     padding: var(--space-sm) var(--space-md);
     font-size: var(--font-size-sm);
+    border-radius: var(--border-radius-lg);
+    border: 1px solid rgba(232, 189, 145, 0.4);
+    background: linear-gradient(135deg, #f6b26b, #35c0a1);
+    color: #0f1416;
+    box-shadow: 0 8px 20px rgba(215, 180, 140, 0.14), 0 4px 10px rgba(53, 192, 161, 0.12);
+}
+
+.exam-item-action-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    background: linear-gradient(135deg, #ffc48c, #45d7b6);
+    box-shadow: 0 12px 26px rgba(215, 180, 140, 0.18), 0 6px 14px rgba(53, 192, 161, 0.14);
+}
+
+.exam-item-action-btn.btn-secondary {
+    background: rgba(255, 255, 255, 0.94);
+    color: #2f3a3f;
+    border: 1px solid rgba(232, 189, 145, 0.35);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
+}
+
+.exam-item-action-btn.btn-secondary:hover:not(:disabled) {
+    background: linear-gradient(135deg, rgba(252, 226, 199, 0.96), rgba(188, 228, 213, 0.9));
+    color: #2f3a3f;
+    box-shadow: 0 12px 22px rgba(215, 180, 140, 0.18), 0 6px 14px rgba(53, 192, 161, 0.12);
 }
 
 .practice-dot {
