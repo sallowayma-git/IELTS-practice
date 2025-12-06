@@ -2473,14 +2473,13 @@ body.no-scroll {
 .history-item {
     display: grid;
     grid-template-columns: auto 1fr auto auto;
-    column-gap: 12px;
-    row-gap: 6px;
+    gap: var(--space-lg);
     align-items: center;
-    padding: 14px 16px;
-    background: #f9f7f4;
-    border-radius: 14px;
-    border: 1px solid #d9d2c6;
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.06);
+    padding: var(--space-md) var(--space-lg);
+    background: #F0EDE8;
+    border-radius: var(--border-radius-lg);
+    border: 2px solid #737373;
+    box-shadow: var(--shadow-lg);
     transition: all var(--transition-normal);
     margin-bottom: 0;
     position: relative;
@@ -2489,9 +2488,9 @@ body.no-scroll {
 }
 
 .history-item:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.08);
-    border-color: #c6bfb4;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--color-gray-300);
 }
 
 /* .history-item:last-child 规则不再需要 */
@@ -2555,10 +2554,10 @@ body.no-scroll {
 .record-meta-line {
     display: flex;
     align-items: baseline;
-    margin-top: 6px;
-    gap: 12px;
-    opacity: 0.75;
-    color: #2d2d2d;
+    margin-top: 8px;
+    gap: 20px;
+    opacity: 0.8;
+    color: #0D0D0D;
 }
 
 .record-date {
@@ -2588,14 +2587,11 @@ body.no-scroll {
     display: flex;
     justify-content: flex-end;
     flex-shrink: 0;
-    margin-left: 8px;
-    padding-left: 4px;
 }
 
 .record-percentage {
     font-weight: bold;
-    font-size: 1.45em;
-    line-height: 1.1;
+    font-size: 1.2em;
     color: #0D0D0D;
 }
 

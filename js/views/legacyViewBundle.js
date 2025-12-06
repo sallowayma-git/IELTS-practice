@@ -463,6 +463,12 @@
                 'aria-label': '选择练习记录'
             })
         ]);
+        var checkboxNode = selection && selection.querySelector ? selection.querySelector('input[type="checkbox"]') : null;
+        if (checkboxNode) {
+            checkboxNode.checked = !!isSelected;
+            checkboxNode.defaultChecked = !!isSelected;
+            checkboxNode.setAttribute('aria-checked', isSelected ? 'true' : 'false');
+        }
 
         if (bulkDeleteMode) {
             item.classList.add('history-item-selectable');
