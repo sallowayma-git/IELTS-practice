@@ -316,6 +316,56 @@
         return '#dc2626';
     };
 
+    historyRenderer.helpers.createGridLayoutCalculator = function (options) {
+        options = options || {};
+        var baseHeight = Number(options.itemHeight) || 120;
+        var desktopGap = options.desktopGap != null ? Number(options.desktopGap) : 16;
+        var mobileGap = options.mobileGap != null ? Number(options.mobileGap) : 12;
+
+        return function (context) {
+            context = context || {};
+            var items = Array.isArray(context.items) ? context.items : [];
+            var container = context.container;
+            var containerWidth = container && container.clientWidth ? container.clientWidth : 0;
+            var isMobile = false;
+            if (typeof window !== 'undefined' && typeof window.innerWidth === 'number') {
+                isMobile = window.innerWidth <= 768;
+            }
+            if (!isMobile && containerWidth > 0) {
+                isMobile = containerWidth <= 768;
+            }
+
+            var itemsPerRow = isMobile ? 1 : 2;
+            var gap = isMobile ? mobileGap : desktopGap;
+            var rowStride = baseHeight + gap;
+            var totalRows = itemsPerRow > 0 ? Math.ceil(items.length / itemsPerRow) : 0;
+            var totalHeight = totalRows > 0 ? (totalRows * rowStride - gap) : 0;
+
+            return {
+                itemsPerRow: itemsPerRow,
+                rowHeight: rowStride,
+                gap: gap,
+                totalRows: totalRows,
+                totalHeight: totalHeight,
+                positionFor: function (index) {
+                    var row = Math.floor(index / itemsPerRow);
+                    var col = index % itemsPerRow;
+                    var top = row * rowStride;
+                    if (itemsPerRow === 1) {
+                        return { top: top, left: 0, width: '100%', height: baseHeight };
+                    }
+                    var halfGap = gap / 2;
+                    return {
+                        top: top,
+                        left: col === 0 ? 0 : 'calc(50% + ' + halfGap + 'px)',
+                        width: 'calc(50% - ' + halfGap + 'px)',
+                        height: baseHeight
+                    };
+                }
+            };
+        };
+    };
+
     function createNode(tag, attributes, children) {
         if (domAdapter && typeof domAdapter.create === 'function') {
             return domAdapter.create(tag, attributes, children);
@@ -380,7 +430,14 @@
     historyRenderer.createRecordNode = function (record, options) {
         options = options || {};
         var bulkDeleteMode = Boolean(options.bulkDeleteMode);
-        var selectedRecords = options.selectedRecords || new Set();
+        var selectedRecordsInput = options.selectedRecords;
+        var selectedRecords = new Set();
+        if (selectedRecordsInput && typeof selectedRecordsInput.forEach === 'function') {
+            selectedRecordsInput.forEach(function (value) {
+                if (value == null) return;
+                selectedRecords.add(String(value));
+            });
+        }
         var helpers = historyRenderer.helpers;
         var durationInSeconds = Number(record && record.duration) || 0;
         var percentage = typeof record.percentage === 'number'
@@ -394,12 +451,13 @@
             dataset: { recordId: recordId }
         });
 
+        var isSelected = recordId && selectedRecords.has(recordId);
         var selection = createNode('div', {
             className: 'record-selection' + (bulkDeleteMode ? '' : ' record-selection-hidden')
         }, [
             createNode('input', {
                 type: 'checkbox',
-                checked: selectedRecords.has(recordId) ? '' : null,
+                checked: isSelected ? 'checked' : null,
                 dataset: { recordId: recordId },
                 tabindex: bulkDeleteMode ? '0' : '-1',
                 'aria-label': '选择练习记录'
@@ -408,7 +466,7 @@
 
         if (bulkDeleteMode) {
             item.classList.add('history-item-selectable');
-            if (recordId && selectedRecords.has(recordId)) {
+            if (isSelected) {
                 item.classList.add('history-item-selected');
             }
         }
@@ -485,8 +543,78 @@
                 return historyRenderer.createRecordNode(record, options);
             };
 
-        // 禁用VirtualScroller以支持CSS Grid布局
-        // VirtualScroller使用position:absolute会破坏Grid布局
+        function measureMaxItemHeight(list) {
+            if (!container || !itemFactory || !Array.isArray(list) || list.length === 0) return null;
+            var containerWidth = container.clientWidth || container.offsetWidth || 0;
+            var isMobile = false;
+            if (typeof window !== 'undefined' && typeof window.innerWidth === 'number') {
+                isMobile = window.innerWidth <= 768;
+            }
+            if (!isMobile && containerWidth > 0) {
+                isMobile = containerWidth <= 768;
+            }
+            var gapPx = isMobile ? 12 : 16;
+            var targetWidth = 0;
+            if (containerWidth > 0) {
+                targetWidth = isMobile ? containerWidth : Math.max(0, (containerWidth - gapPx) / 2);
+            }
+
+            var wrapper = document.createElement('div');
+            wrapper.style.position = 'absolute';
+            wrapper.style.visibility = 'hidden';
+            wrapper.style.pointerEvents = 'none';
+            wrapper.style.width = '100%';
+            container.appendChild(wrapper);
+
+            var maxHeight = 0;
+            var samples = Math.min(list.length, 30);
+            for (var i = 0; i < samples; i += 1) {
+                var node = itemFactory(list[i], i);
+                if (!node || !(node instanceof Node)) continue;
+                node.style.position = 'relative';
+                node.style.width = targetWidth > 0 ? (targetWidth + 'px') : '100%';
+                wrapper.appendChild(node);
+                var h = node.offsetHeight || node.clientHeight || 0;
+                if (h > maxHeight) {
+                    maxHeight = h;
+                }
+                node.remove();
+            }
+            wrapper.remove();
+            return maxHeight > 0 ? maxHeight : null;
+        }
+
+        var useVirtualScroller = global.VirtualScroller && options.scrollerOptions !== false;
+        if (useVirtualScroller) {
+            var scrollerOpts = Object.assign(
+                { itemHeight: 120, containerHeight: 650, bufferSize: 4 },
+                options.scrollerOptions || {}
+            );
+            var measuredHeight = measureMaxItemHeight(list);
+            if (measuredHeight && measuredHeight > 0) {
+                scrollerOpts.itemHeight = measuredHeight + 8; // 留出安全空间避免文字溢出
+            }
+            scrollerOpts.layoutCalculator = historyRenderer.helpers.createGridLayoutCalculator(scrollerOpts);
+            var scrollerFactory = (global.performanceOptimizer && typeof global.performanceOptimizer.createVirtualScroller === 'function')
+                ? global.performanceOptimizer.createVirtualScroller.bind(global.performanceOptimizer)
+                : function (c, items, renderer, opts) {
+                    return new global.VirtualScroller(c, items, renderer, opts);
+                };
+
+            if (options.scroller && typeof options.scroller.updateItems === 'function') {
+                options.scroller.renderer = itemFactory;
+                options.scroller.layoutCalculator = scrollerOpts.layoutCalculator;
+                options.scroller.updateItems(list);
+                if (typeof options.scroller.recalculate === 'function') {
+                    options.scroller.recalculate();
+                }
+                return options.scroller;
+            }
+            return scrollerFactory(container, list, itemFactory, scrollerOpts);
+        }
+
+        historyRenderer.destroyScroller(options.scroller);
+
         if (domAdapter && typeof domAdapter.fragment === 'function') {
             domAdapter.replaceContent(container, domAdapter.fragment(list, itemFactory));
         } else {
@@ -543,15 +671,21 @@
 
         if (list.length === 0) {
             historyRenderer.renderEmptyState(container);
+            historyRenderer.destroyScroller(options.scroller);
             return null;
         }
 
-        // 直接使用普通渲染，不使用VirtualScroller
+        var scrollerOptions = options.scrollerOptions;
+        if (scrollerOptions === undefined) {
+            scrollerOptions = { itemHeight: 120, containerHeight: 650 };
+        }
+
         return historyRenderer.renderList(container, list, {
             bulkDeleteMode: options.bulkDeleteMode,
             selectedRecords: options.selectedRecords,
-            scrollerOptions: false, // 明确禁用VirtualScroller
-            itemFactory: options.itemFactory
+            scrollerOptions: scrollerOptions,
+            itemFactory: options.itemFactory,
+            scroller: options.scroller
         });
     };
 
