@@ -236,10 +236,12 @@
          */
         filterByFolder(filterId) {
             const config = this.getCurrentModeConfig();
+            const basePath = global.__browsePath || config.basePath || null;
             const folders = config.folderMap[filterId];
-            const basePath = config.basePath || null;
 
-            if (!folders) {
+            // 允许“全部”入口只按 basePath 过滤（frequency-p1 无全量按钮）
+            const isAllFilter = filterId === 'all';
+            if (!folders && !isAllFilter) {
                 console.warn('[BrowseController] 未找到文件夹映射:', filterId);
                 return;
             }
@@ -256,6 +258,12 @@
                 if (basePath && !exam.path.includes(basePath)) {
                     return false;
                 }
+
+                // “全部”仅做 basePath 过滤
+                if (isAllFilter) {
+                    return true;
+                }
+
                 // 检查路径是否包含任一目标文件夹
                 return folders.some(folder => {
                     return exam.path.includes(folder);
