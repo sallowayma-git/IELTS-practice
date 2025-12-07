@@ -237,6 +237,30 @@ def _check_js_body_forbidden(source: str, function_name: str, forbidden: str) ->
     return True, "未发现禁止片段"
 
 
+def _check_window_load_library_shim(source: str) -> Tuple[bool, str]:
+    """
+    Prevent regressions where window.loadLibrary self-calls and causes a stack overflow.
+    Expect the shim to delegate to loadLibraryInternal and avoid calling loadLibrary() directly.
+    """
+    pattern = re.compile(
+        r"window\.loadLibrary\s*=\s*function\s*\([^)]*\)\s*\{(?P<body>[\s\S]*?)\}",
+        re.MULTILINE,
+    )
+    match = pattern.search(source)
+    if not match:
+        return False, "未找到 window.loadLibrary 定义"
+
+    body = match.group("body")
+    if "loadLibraryInternal" not in body:
+        return False, "未转发到 loadLibraryInternal，可能存在自递归风险"
+
+    recursive_call = re.search(r"\bloadLibrary(?!Internal)\s*\(", body)
+    if recursive_call:
+        return False, "检测到对 loadLibrary 的直接调用，可能触发自递归"
+
+    return True, "已转发到 loadLibraryInternal，未检测到自递归"
+
+
 def _check_resolve_exam_base_path(source: str) -> Tuple[bool, dict]:
     body = _extract_js_function_body(source, "resolveExamBasePath")
     if body is None:
@@ -423,6 +447,14 @@ def run_checks() -> Tuple[List[dict], bool]:
         switch_passed, switch_detail = _check_js_body_forbidden(main_js_source, "switchLibraryConfig", "confirm(")
         results.append(_format_result("switchLibraryConfig 禁止 confirm", switch_passed, switch_detail))
         all_passed &= switch_passed
+
+        shim_passed, shim_detail = _check_window_load_library_shim(main_js_source)
+        results.append(_format_result("loadLibrary 全局 shim 防递归", shim_passed, shim_detail))
+        all_passed &= shim_passed
+
+        internal_passed, internal_detail = _check_js_function_definition(main_js_source, "loadLibraryInternal")
+        results.append(_format_result("loadLibraryInternal 定义存在性", internal_passed, internal_detail))
+        all_passed &= internal_passed
 
         for helper_name in ("buildOverridePathMap", "mergeRootWithFallback"):
             helper_passed, helper_detail = _check_js_function_definition(main_js_source, helper_name)
