@@ -199,14 +199,10 @@ if (typeof window.switchLibraryConfig !== 'function') {
     };
 }
 
-// loadLibrary
-if (typeof window.loadLibrary !== 'function') {
-    window.loadLibrary = function (key) {
-        if (window.LibraryManager && typeof window.LibraryManager.loadLibrary === 'function') {
-            return window.LibraryManager.loadLibrary(key);
-        }
-    };
-}
+// loadLibrary - 始终转发到 LibraryManager 实现，支持字符串 key
+window.loadLibrary = function (keyOrForceReload) {
+    return loadLibrary(keyOrForceReload);
+};
 
 
 const preferredFirstExamByCategory = {
@@ -1942,18 +1938,28 @@ function loadExamListFallback() {
         let examIndex = typeof getExamIndexState === 'function' ? getExamIndexState() : (Array.isArray(window.examIndex) ? window.examIndex : []);
         const container = document.getElementById('exam-list-container');
         if (!container) return;
-        
+
+        // 清除 loading 指示器
+        const loadingEl = document.querySelector('#browse-view .loading');
+        if (loadingEl) {
+            loadingEl.style.display = 'none';
+        }
+
         container.innerHTML = '<div class="exam-list-empty"><p>题库加载中...</p></div>';
-        
+
         if (examIndex.length === 0) {
             container.innerHTML = '<div class="exam-list-empty"><p>暂无题目</p></div>';
             return;
         }
-        
+
         // 应用当前筛选状态（修复 P2 bug）
         const currentCategory = typeof getCurrentCategory === 'function' ? getCurrentCategory() : 'all';
         const currentType = typeof getCurrentExamType === 'function' ? getCurrentExamType() : 'all';
-        
+        const isFrequencyMode = window.__browseFilterMode && window.__browseFilterMode !== 'default';
+        const basePathFilter = isFrequencyMode && typeof window.__browsePath === 'string' && window.__browsePath.trim()
+            ? window.__browsePath.trim()
+            : null;
+
         let filtered = Array.from(examIndex);
         if (currentType !== 'all') {
             filtered = filtered.filter(function (exam) { return exam.type === currentType; });
@@ -1961,7 +1967,12 @@ function loadExamListFallback() {
         if (currentCategory !== 'all') {
             filtered = filtered.filter(function (exam) { return exam.category === currentCategory; });
         }
-        
+        if (basePathFilter) {
+            filtered = filtered.filter(function (exam) {
+                return typeof exam?.path === 'string' && exam.path.includes(basePathFilter);
+            });
+        }
+
         if (filtered.length === 0) {
             container.innerHTML = '<div class="exam-list-empty"><p>未找到匹配的题目</p></div>';
             return;
@@ -1992,6 +2003,11 @@ function resetBrowseViewToAll() {
         return window.ExamActions.resetBrowseViewToAll();
     }
     console.warn('[main.js] ExamActions.resetBrowseViewToAll 未就绪');
+
+    // 清除频率模式状态，确保回到默认列表
+    window.__browseFilterMode = 'default';
+    window.__browsePath = null;
+
     if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
         window.AppLazyLoader.ensureGroup('browse-view').then(function () {
             if (window.ExamActions && typeof window.ExamActions.resetBrowseViewToAll === 'function') {
