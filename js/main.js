@@ -201,7 +201,7 @@ if (typeof window.switchLibraryConfig !== 'function') {
 
 // loadLibrary - 始终转发到 LibraryManager 实现，支持字符串 key
 window.loadLibrary = function (keyOrForceReload) {
-    return loadLibrary(keyOrForceReload);
+    return loadLibraryInternal(keyOrForceReload);
 };
 
 
@@ -340,7 +340,7 @@ async function initializeLegacyComponents() {
     }
 
     // Load data and setup listeners
-    await loadLibrary();
+    await loadLibraryInternal();
     startPracticeRecordsSyncInBackground('boot'); // 后台静默加载练习记录，避免阻塞首页
     setupMessageListener(); // Listen for updates from child windows
     setupStorageSyncListener(); // Listen for storage changes from other tabs
@@ -992,7 +992,7 @@ async function savePracticeRecordFallback(examId, realData) {
     }
 }
 
-async function loadLibrary(keyOrForceReload = false) {
+async function loadLibraryInternal(keyOrForceReload = false) {
     const manager = await ensureLibraryManagerReady();
     if (!manager) {
         console.warn('[Library] LibraryManager 未就绪，跳过加载');
