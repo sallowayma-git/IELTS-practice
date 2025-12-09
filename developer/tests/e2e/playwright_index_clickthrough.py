@@ -109,7 +109,7 @@ async def _get_practice_stats(page: Page) -> dict:
         "avg: document.querySelector('#avg-score')?.textContent?.trim() || '',"
         "time: document.querySelector('#study-time')?.textContent?.trim() || '',"
         "streak: document.querySelector('#streak-days')?.textContent?.trim() || ''"
-        "}))"
+        "})"
     )
     return stats if isinstance(stats, dict) else {}
 
