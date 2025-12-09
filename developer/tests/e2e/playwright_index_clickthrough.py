@@ -110,7 +110,7 @@ async def _open_practice_popup(page: Page, button, name: str) -> None:
 
 async def _get_backups(page: Page) -> list:
     backups = await page.evaluate(
-        "() => (window.storage?.get && window.storage.get('exam_system_backups')) || []"
+        "() => (window.storage?.get && window.storage.get('manual_backups')) || []"
     )
     return backups if isinstance(backups, list) else []
 
