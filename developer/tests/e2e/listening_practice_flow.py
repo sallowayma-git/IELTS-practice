@@ -102,7 +102,11 @@ async def _collect_filter_buttons(page: Page) -> list:
 
 
 async def _write_failure_report(
-    page: Page, console_log: List[ConsoleEntry], report_path: Path, error_message: str
+    page: Page,
+    console_log: List[ConsoleEntry],
+    report_path: Path,
+    error_message: str,
+    snapshots: list | None = None,
 ) -> None:
     """将失败信息写入JSON报告"""
     try:
@@ -114,6 +118,8 @@ async def _write_failure_report(
             "filterButtons": filter_states,
             "consoleErrors": console_errors,
         }
+        if snapshots:
+            payload["snapshots"] = snapshots
         report_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
     except Exception as report_error:
         print(f"[FrequencyTest] 无法写入失败报告: {report_error}")
@@ -279,6 +285,7 @@ async def test_frequency_filter_flow(browser: Browser, console_log: List[Console
     """
     debug_report_path = REPORT_DIR / "frequency-filter-debug.json"
     debug_report_path.unlink(missing_ok=True)
+    snapshots: list = []
 
     context = await browser.new_context()
     context.on("page", lambda pg: _collect_console(pg, console_log))
@@ -304,6 +311,7 @@ async def test_frequency_filter_flow(browser: Browser, console_log: List[Console
 
         # 记录默认题目数
         default_snapshot = await _get_exam_snapshot(page)
+        snapshots.append({"step": "P1 default", "data": default_snapshot})
 
         # 依次尝试高频/中频/低频（缺少则回退到超高频）
         frequency_order = ["high", "medium", "low", "ultra-high"]
@@ -320,6 +328,7 @@ async def test_frequency_filter_flow(browser: Browser, console_log: List[Console
             new_snapshot = await _get_exam_snapshot(page)
             assert _snapshots_changed(active_snapshot, new_snapshot), f"筛选 {fid} 未改变题目集合"
             active_snapshot = new_snapshot
+            snapshots.append({"step": f"P1 filter {fid}", "data": active_snapshot})
 
         # 截图：默认状态
         default_path = REPORT_DIR / "frequency-filter-default.png"
@@ -337,6 +346,7 @@ async def test_frequency_filter_flow(browser: Browser, console_log: List[Console
         await page.wait_for_selector(".exam-item", timeout=20000)
 
         p4_default = await _get_exam_snapshot(page)
+        snapshots.append({"step": "P4 default", "data": p4_default})
 
         # 选择一个非"全部"的筛选后再点击"全部"
         p4_filters = [
@@ -351,6 +361,7 @@ async def test_frequency_filter_flow(browser: Browser, console_log: List[Console
             await _wait_for_list_change(page, p4_default)
             filtered_snapshot = await _get_exam_snapshot(page)
             assert _snapshots_changed(p4_default, filtered_snapshot), "P4 非全部筛选未改变结果"
+            snapshots.append({"step": f"P4 filter {first_filter}", "data": filtered_snapshot})
 
         all_btn = page.locator("#type-filter-buttons button[data-filter-id='all']")
         assert await all_btn.count() > 0, "未找到P4全部筛选按钮"
@@ -360,6 +371,8 @@ async def test_frequency_filter_flow(browser: Browser, console_log: List[Console
         assert _snapshots_changed(filtered_snapshot, all_snapshot), "P4 全部筛选未恢复更多题目"
         if p4_default["count"]:
             assert all_snapshot["count"] >= filtered_snapshot["count"]
+
+        snapshots.append({"step": "P4 all", "data": all_snapshot})
 
         await context.close()
 
@@ -371,7 +384,13 @@ async def test_frequency_filter_flow(browser: Browser, console_log: List[Console
             "p4Count": all_snapshot["count"],
         }
     except Exception as exc:
-        await _write_failure_report(page, console_log, debug_report_path, str(exc))
+        await _write_failure_report(
+            page,
+            console_log,
+            debug_report_path,
+            str(exc),
+            snapshots,
+        )
         await context.close()
         raise
 
