@@ -18,6 +18,7 @@ E2E_RUNNER_PATH = REPO_ROOT / "developer" / "tests" / "e2e" / "app-e2e-runner.ht
 
 
 CHECK_RESULTS = {"checks": [], "failed": 0, "passed": 0}
+_AUTO_CLOSE_POPUPS = True
 
 
 def _record_result(name: str, passed: bool, detail: str = "") -> None:
@@ -56,17 +57,28 @@ async def _accept_dialog(dialog: Dialog) -> None:
         pass
 
 
+async def _close_popup_if_enabled(popup) -> None:
+    if not _AUTO_CLOSE_POPUPS:
+        return
+    try:
+        await popup.close()
+    except PlaywrightError:
+        pass
+
+
 async def _click_navigation(page: Page, view: str) -> None:
     await page.locator(f"nav.main-nav button[data-view='{view}']").click()
     await page.wait_for_selector(f"#{view}-view.active", timeout=10000)
 
 
 async def _open_practice_popup(page: Page, button, name: str) -> None:
+    global _AUTO_CLOSE_POPUPS
     before_records = await page.evaluate(
         "() => (window.storage?.get && window.storage.get('practice_records')?.length) || 0"
     )
     popup = None
     try:
+        _AUTO_CLOSE_POPUPS = False
         async with page.expect_popup(timeout=1500) as popup_wait:
             await button.click()
         popup = await popup_wait.value
@@ -91,6 +103,7 @@ async def _open_practice_popup(page: Page, button, name: str) -> None:
     except PlaywrightError as exc:
         _assert_and_record(f"{name}-popup", False, failure=f"未捕获弹窗: {exc}")
     finally:
+        _AUTO_CLOSE_POPUPS = True
         if popup:
             await popup.close()
 
@@ -405,7 +418,7 @@ async def exercise_index_interactions(page: Page) -> None:
     await _ensure_app_ready(page)
 
     page.on("dialog", lambda dialog: asyncio.ensure_future(_accept_dialog(dialog)))
-    page.on("popup", lambda popup: asyncio.ensure_future(popup.close()))
+    page.on("popup", lambda popup: asyncio.ensure_future(_close_popup_if_enabled(popup)))
 
     await _exercise_developer_links(page)
     await _exercise_overview(page)
