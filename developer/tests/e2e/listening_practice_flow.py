@@ -71,17 +71,38 @@ def _collect_console(page: Page, store: List[ConsoleEntry]) -> None:
 
 
 async def _get_exam_snapshot(page: Page) -> dict:
-    """获取当前题目列表的快照数据"""
-    cards = page.locator(".exam-item")
-    count = await cards.count()
-    titles = [t.strip() for t in await cards.locator("h4").all_text_contents() if t.strip()]
-    return {"count": count, "titles": titles}
+    """获取当前题目列表的快照数据（兼容 exam-card / exam-item 两种结构）"""
+    return await page.evaluate(
+        "() => {\n"
+        "  const modernCards = Array.from(document.querySelectorAll('.exam-card'));\n"
+        "  const legacyCards = Array.from(document.querySelectorAll('.exam-item'));\n"
+        "  const cards = modernCards.length ? modernCards : legacyCards;\n"
+        "  const titles = cards\n"
+        "    .map(el => {\n"
+        "      const titleEl = el.querySelector('.exam-title') || el.querySelector('h4');\n"
+        "      return (titleEl?.textContent || '').trim();\n"
+        "    })\n"
+        "    .filter(Boolean);\n"
+        "  return { count: cards.length, titles };\n"
+        "}"
+    )
 
 
 async def _wait_for_list_change(page: Page, previous: dict) -> None:
     """等待题目列表与之前的快照出现差异"""
     await page.wait_for_function(
-        "expected => {\n            const cards = Array.from(document.querySelectorAll('.exam-item'));\n            const titles = cards.map(el => el.querySelector('h4')?.textContent?.trim() || '');\n            if (cards.length !== expected.count) return true;\n            if (titles.length !== expected.titles.length) return true;\n            return titles.some((t, idx) => t !== expected.titles[idx]);\n        }",
+        "expected => {\n"
+        "  const modernCards = Array.from(document.querySelectorAll('.exam-card'));\n"
+        "  const legacyCards = Array.from(document.querySelectorAll('.exam-item'));\n"
+        "  const cards = modernCards.length ? modernCards : legacyCards;\n"
+        "  const titles = cards.map(el => {\n"
+        "    const titleEl = el.querySelector('.exam-title') || el.querySelector('h4');\n"
+        "    return (titleEl?.textContent || '').trim();\n"
+        "  });\n"
+        "  if (cards.length !== expected.count) return true;\n"
+        "  if (titles.length !== expected.titles.length) return true;\n"
+        "  return titles.some((t, idx) => t !== expected.titles[idx]);\n"
+        "}",
         previous,
         timeout=15000,
     )
@@ -97,7 +118,11 @@ def _snapshots_changed(prev: dict, new: dict) -> bool:
 async def _collect_filter_buttons(page: Page) -> list:
     """收集当前筛选按钮状态"""
     return await page.evaluate(
-        "() => Array.from(document.querySelectorAll('#type-filter-buttons button')).map(btn => ({\n            label: btn.textContent?.trim() || '',\n            filterId: btn.dataset.filterId || '',\n            active: btn.classList.contains('active')\n        }))"
+        "() => Array.from(document.querySelectorAll('#type-filter-buttons button')).map(btn => ({"
+        "  label: (btn.textContent || '').trim(),"
+        "  filterId: btn.dataset.filterId || '',"
+        "  active: btn.classList.contains('active')"
+        "}))"
     )
 
 
@@ -157,11 +182,12 @@ async def test_complete_practice_flow(browser: Browser, console_log: List[Consol
     
     # 步骤3: 点击第一个题目（100 P1）
     # 注意：频率筛选按钮功能未实现，跳过验证
-    first_exam = page.locator(".exam-card").first
+    first_exam = page.locator(".exam-card, .exam-item").first
     await first_exam.wait_for(state="visible", timeout=10000)
-    
+
     # 获取题目标题
-    exam_title = await first_exam.locator(".exam-title").text_content()
+    title_locator = first_exam.locator(".exam-title, h4")
+    exam_title = await title_locator.first.text_content()
     
     # 打开题目
     async with page.expect_popup() as popup_wait:
@@ -307,7 +333,7 @@ async def test_frequency_filter_flow(browser: Browser, console_log: List[Console
 
         await page.wait_for_selector("#browse-view.active", timeout=15000)
         await page.wait_for_selector("#type-filter-buttons button", timeout=15000)
-        await page.wait_for_selector(".exam-item", timeout=20000)
+        await page.wait_for_selector(".exam-card, .exam-item", timeout=20000)
 
         # 记录默认题目数
         default_snapshot = await _get_exam_snapshot(page)
@@ -343,7 +369,7 @@ async def test_frequency_filter_flow(browser: Browser, console_log: List[Console
 
         await page.wait_for_selector("#browse-view.active", timeout=15000)
         await page.wait_for_selector("#type-filter-buttons button", timeout=15000)
-        await page.wait_for_selector(".exam-item", timeout=20000)
+        await page.wait_for_selector(".exam-card, .exam-item", timeout=20000)
 
         p4_default = await _get_exam_snapshot(page)
         snapshots.append({"step": "P4 default", "data": p4_default})
