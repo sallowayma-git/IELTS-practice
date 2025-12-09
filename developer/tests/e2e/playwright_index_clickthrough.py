@@ -74,7 +74,11 @@ async def _click_navigation(page: Page, view: str) -> None:
 async def _open_practice_popup(page: Page, button, name: str) -> None:
     global _AUTO_CLOSE_POPUPS
     before_records = await page.evaluate(
-        "() => (window.storage?.get && window.storage.get('practice_records')?.length) || 0"
+        "async () => {"
+        "  if (!window.storage?.get) return 0;"
+        "  const records = await window.storage.get('practice_records');"
+        "  return Array.isArray(records) ? records.length : 0;"
+        "}"
     )
     popup = None
     try:
@@ -92,7 +96,11 @@ async def _open_practice_popup(page: Page, button, name: str) -> None:
         )
 
         records_after = await popup.evaluate(
-            "() => (window.storage?.get && window.storage.get('practice_records')?.length) || 0"
+            "async () => {"
+            "  if (!window.storage?.get) return 0;"
+            "  const records = await window.storage.get('practice_records');"
+            "  return Array.isArray(records) ? records.length : 0;"
+            "}"
         )
         _assert_and_record(
             f"{name}-records",
