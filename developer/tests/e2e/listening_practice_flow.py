@@ -7,6 +7,7 @@ E2E测试：听力练习完整流程
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List
@@ -67,6 +68,55 @@ def _collect_console(page: Page, store: List[ConsoleEntry]) -> None:
     def _handler(msg: ConsoleMessage) -> None:
         store.append(ConsoleEntry(page_title=page.url, type=msg.type, text=msg.text))
     page.on("console", _handler)
+
+
+async def _get_exam_snapshot(page: Page) -> dict:
+    """获取当前题目列表的快照数据"""
+    cards = page.locator(".exam-item")
+    count = await cards.count()
+    titles = [t.strip() for t in await cards.locator("h4").all_text_contents() if t.strip()]
+    return {"count": count, "titles": titles}
+
+
+async def _wait_for_list_change(page: Page, previous: dict) -> None:
+    """等待题目列表与之前的快照出现差异"""
+    await page.wait_for_function(
+        "expected => {\n            const cards = Array.from(document.querySelectorAll('.exam-item'));\n            const titles = cards.map(el => el.querySelector('h4')?.textContent?.trim() || '');\n            if (cards.length !== expected.count) return true;\n            if (titles.length !== expected.titles.length) return true;\n            return titles.some((t, idx) => t !== expected.titles[idx]);\n        }",
+        previous,
+        timeout=15000,
+    )
+
+
+def _snapshots_changed(prev: dict, new: dict) -> bool:
+    """比较两个快照是否存在差异"""
+    if prev.get("count") != new.get("count"):
+        return True
+    return set(prev.get("titles", [])) != set(new.get("titles", []))
+
+
+async def _collect_filter_buttons(page: Page) -> list:
+    """收集当前筛选按钮状态"""
+    return await page.evaluate(
+        "() => Array.from(document.querySelectorAll('#type-filter-buttons button')).map(btn => ({\n            label: btn.textContent?.trim() || '',\n            filterId: btn.dataset.filterId || '',\n            active: btn.classList.contains('active')\n        }))"
+    )
+
+
+async def _write_failure_report(
+    page: Page, console_log: List[ConsoleEntry], report_path: Path, error_message: str
+) -> None:
+    """将失败信息写入JSON报告"""
+    try:
+        REPORT_DIR.mkdir(parents=True, exist_ok=True)
+        filter_states = await _collect_filter_buttons(page)
+        console_errors = [entry.__dict__ for entry in console_log if entry.type == "error"]
+        payload = {
+            "error": error_message,
+            "filterButtons": filter_states,
+            "consoleErrors": console_errors,
+        }
+        report_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+    except Exception as report_error:
+        print(f"[FrequencyTest] 无法写入失败报告: {report_error}")
 
 
 async def test_complete_practice_flow(browser: Browser, console_log: List[ConsoleEntry]) -> dict:
@@ -227,63 +277,103 @@ async def test_frequency_filter_flow(browser: Browser, console_log: List[Console
     4. 验证题目列表更新
     5. 测试P4"全部"按钮
     """
+    debug_report_path = REPORT_DIR / "frequency-filter-debug.json"
+    debug_report_path.unlink(missing_ok=True)
+
     context = await browser.new_context()
     context.on("page", lambda pg: _collect_console(pg, console_log))
-    
+
     page = await context.new_page()
     await page.goto(INDEX_URL)
-    await _ensure_app_ready(page)
-    await _dismiss_overlays(page)
-    
-    # 步骤1: 留在Overview视图，等待加载完成
-    await page.wait_for_selector("#overview-view.active", timeout=10000)
-    await page.wait_for_timeout(1000)
-    
-    # 步骤2: 点击P1入口（使用更具体的选择器避免匹配多个按钮）
-    p1_button = page.locator("button[data-category='P1'][data-action='browse-category']")
-    await p1_button.click()
-    
-    # 等待导航到Browse视图
-    await page.wait_for_selector("#browse-view.active", timeout=15000)
-    await page.wait_for_timeout(1000)
-    
-    # 步骤3: 截图Browse视图（频率筛选功能未实现）
-    
-    # 截图：默认状态
-    default_path = REPORT_DIR / "frequency-filter-default.png"
-    await page.locator("#browse-view").screenshot(path=str(default_path))
-    
-    # 注意：频率筛选按钮功能未实现，跳过高频筛选测试
-    
-    # 步骤5: 切换到P4（使用更具体的选择器避免匙配多个按钮）
-    # 需要先返回Overview视图
-    await _click_nav(page, "overview")
-    await page.wait_for_timeout(500)
-    
-    p4_button = page.locator("button[data-category='P4'][data-action='browse-category']")
-    await p4_button.click()
-    
-    # 等待导航到Browse视图
-    await page.wait_for_selector("#browse-view.active", timeout=15000)
-    await page.wait_for_timeout(1000)
-    
-    # 步骤6: 验证P4"全部"按钮
-    all_btn = page.locator(".frequency-filter-btn[data-frequency='all']")
-    if await all_btn.count() > 0:
-        await all_btn.click()
+
+    try:
+        await _ensure_app_ready(page)
+        await _dismiss_overlays(page)
+
+        # 步骤1: 留在Overview视图，等待加载完成
+        await page.wait_for_selector("#overview-view.active", timeout=10000)
         await page.wait_for_timeout(1000)
-        
-        # 截图：P4全部
-        p4_all_path = REPORT_DIR / "frequency-filter-p4-all.png"
-        await page.locator("#browse-view").screenshot(path=str(p4_all_path))
-    
-    await context.close()
-    
-    return {
-        "name": "频率筛选流程",
-        "status": "pass",
-        "screenshots": [str(default_path)]
-    }
+
+        # 步骤2: 点击P1入口，进入频率模式
+        p1_button = page.locator("button[data-category='P1'][data-action='browse-category']")
+        await p1_button.click()
+
+        await page.wait_for_selector("#browse-view.active", timeout=15000)
+        await page.wait_for_selector("#type-filter-buttons button", timeout=15000)
+        await page.wait_for_selector(".exam-item", timeout=20000)
+
+        # 记录默认题目数
+        default_snapshot = await _get_exam_snapshot(page)
+
+        # 依次尝试高频/中频/低频（缺少则回退到超高频）
+        frequency_order = ["high", "medium", "low", "ultra-high"]
+        active_snapshot = default_snapshot
+        available_filters = [
+            fid for fid in frequency_order
+            if await page.locator(f"#type-filter-buttons button[data-filter-id='{fid}']").count() > 0
+        ]
+
+        for fid in available_filters[:3]:
+            button = page.locator(f"#type-filter-buttons button[data-filter-id='{fid}']")
+            await button.click()
+            await _wait_for_list_change(page, active_snapshot)
+            new_snapshot = await _get_exam_snapshot(page)
+            assert _snapshots_changed(active_snapshot, new_snapshot), f"筛选 {fid} 未改变题目集合"
+            active_snapshot = new_snapshot
+
+        # 截图：默认状态
+        default_path = REPORT_DIR / "frequency-filter-default.png"
+        await page.locator("#browse-view").screenshot(path=str(default_path))
+
+        # 步骤5: 切换到P4
+        await _click_nav(page, "overview")
+        await page.wait_for_timeout(500)
+
+        p4_button = page.locator("button[data-category='P4'][data-action='browse-category']")
+        await p4_button.click()
+
+        await page.wait_for_selector("#browse-view.active", timeout=15000)
+        await page.wait_for_selector("#type-filter-buttons button", timeout=15000)
+        await page.wait_for_selector(".exam-item", timeout=20000)
+
+        p4_default = await _get_exam_snapshot(page)
+
+        # 选择一个非"全部"的筛选后再点击"全部"
+        p4_filters = [
+            fid for fid in frequency_order
+            if fid != "all" and await page.locator(f"#type-filter-buttons button[data-filter-id='{fid}']").count() > 0
+        ]
+        filtered_snapshot = p4_default
+        if p4_filters:
+            first_filter = p4_filters[0]
+            filter_btn = page.locator(f"#type-filter-buttons button[data-filter-id='{first_filter}']")
+            await filter_btn.click()
+            await _wait_for_list_change(page, p4_default)
+            filtered_snapshot = await _get_exam_snapshot(page)
+            assert _snapshots_changed(p4_default, filtered_snapshot), "P4 非全部筛选未改变结果"
+
+        all_btn = page.locator("#type-filter-buttons button[data-filter-id='all']")
+        assert await all_btn.count() > 0, "未找到P4全部筛选按钮"
+        await all_btn.click()
+        await _wait_for_list_change(page, filtered_snapshot)
+        all_snapshot = await _get_exam_snapshot(page)
+        assert _snapshots_changed(filtered_snapshot, all_snapshot), "P4 全部筛选未恢复更多题目"
+        if p4_default["count"]:
+            assert all_snapshot["count"] >= filtered_snapshot["count"]
+
+        await context.close()
+
+        return {
+            "name": "频率筛选流程",
+            "status": "pass",
+            "screenshots": [str(default_path)],
+            "defaultCount": default_snapshot["count"],
+            "p4Count": all_snapshot["count"],
+        }
+    except Exception as exc:
+        await _write_failure_report(page, console_log, debug_report_path, str(exc))
+        await context.close()
+        raise
 
 
 async def run() -> None:
