@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import List
 
@@ -112,7 +112,7 @@ async def _write_failure_report(
     try:
         REPORT_DIR.mkdir(parents=True, exist_ok=True)
         filter_states = await _collect_filter_buttons(page)
-        console_errors = [entry.__dict__ for entry in console_log if entry.type == "error"]
+        console_errors = [asdict(entry) for entry in console_log if entry.type == "error"]
         payload = {
             "error": error_message,
             "filterButtons": filter_states,
