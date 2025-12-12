@@ -270,9 +270,6 @@ async def run() -> None:
                 except Exception as e:
                     log_step(f"关闭套题窗口失败: {e}", "WARNING")
 
-            test_passed = True
-            return
-
             log_step("切换到练习记录视图...")
             await _click_nav(page, "practice")
             await page.wait_for_timeout(2000)
