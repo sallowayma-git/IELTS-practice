@@ -53,7 +53,11 @@
                 // 显示活动会话指示器
 
                 // 定期更新活动会话
-                this.startSessionMonitoring();
+                if (typeof this.startSessionMonitoring === 'function') {
+                    this.startSessionMonitoring();
+                } else {
+                    console.warn('[App] startSessionMonitoring 未注入，跳过会话监控');
+                }
 
                 // 设置全局错误处理
                 this.setupGlobalErrorHandling();

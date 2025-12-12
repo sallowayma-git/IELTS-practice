@@ -50,6 +50,14 @@ body.hero-body.shui-bg-static {
     background: linear-gradient(135deg, var(--shui-gradient-start) 0%, var(--shui-gradient-end) 100%);
 }
 
+:root[data-theme="blue"] body.hero-body::before {
+    display: block;
+}
+
+:root[data-theme="blue"] #shui-bg-canvas {
+    display: none;
+}
+
 #shui-bg-canvas {
     position: fixed;
     inset: 0;

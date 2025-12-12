@@ -206,6 +206,20 @@ function handleThemeQueryParameters() {
 handleThemeQueryParameters();
 themePreferenceController.maybeAutoRedirect();
 
+function setShuiBackgroundEnabled(enabled) {
+    const body = document.body;
+    if (!body) return;
+    const canvas = document.getElementById('shui-bg-canvas');
+    if (canvas) {
+        canvas.style.display = enabled ? 'block' : 'none';
+    }
+    body.classList.toggle('shui-bg-active', enabled);
+    body.classList.toggle('shui-bg-static', enabled && body.classList.contains('shui-bg-static'));
+    if (!enabled) {
+        body.classList.remove('shui-bg-static');
+    }
+}
+
 // Theme switching functionality
 function applyTheme(theme) {
     const root = document.documentElement;
@@ -218,6 +232,7 @@ function applyTheme(theme) {
             document.body.classList.remove('bloom-dark-mode');
             localStorage.setItem('bloom-theme-mode', 'light');
         }
+        setShuiBackgroundEnabled(theme !== 'blue');
         localStorage.setItem('theme', theme);
         themePreferenceController.recordInternalTheme(theme);
         // Update switcher buttons
@@ -232,6 +247,7 @@ function applyDefaultTheme() {
         root.removeAttribute('data-theme');
         document.body.classList.remove('theme-blue');
         document.body.classList.remove('blue-dark-mode');
+        setShuiBackgroundEnabled(true);
         localStorage.removeItem('theme');
         themePreferenceController.recordInternalTheme('default');
         // Re-apply Bloom saved mode

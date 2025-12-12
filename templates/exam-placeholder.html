@@ -499,6 +499,9 @@
     window.addEventListener('message', handleIncoming);
 
     parseParams();
+    if (dom.completeBtn) {
+        dom.completeBtn.disabled = false;
+    }
     log('占位页已初始化，等待父窗口发送 INIT_SESSION。');
     setTimeout(() => {
         if (!state.sessionId) {

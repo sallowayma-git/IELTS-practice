@@ -1,4 +1,5 @@
 (function(global) {
+    global.ExamSystemAppMixins = global.ExamSystemAppMixins || {};
     const MAX_LEGACY_PRACTICE_RECORDS = 1000;
     const isFileProtocol = !!(global && global.location && global.location.protocol === 'file:');
     const PRACTICE_ENHANCER_SCRIPT_PATH = './js/practice-page-enhancer.js';
@@ -301,6 +302,25 @@
             const retryCount = Number.isFinite(retryOptions.guardRetryCount) ? retryOptions.guardRetryCount : 0;
             const examId = retryOptions.examId;
 
+            const isTestMode = this._shouldUsePlaceholderPage();
+            const shouldForcePlaceholder = isTestMode && !!retryOptions.suiteSessionId;
+
+            if (shouldForcePlaceholder && !normalizedHref.includes('templates/exam-placeholder.html')) {
+                const placeholderUrl = this._buildExamPlaceholderUrl(exam, retryOptions);
+                if (placeholderUrl) {
+                    try {
+                        if (examWindow.location && typeof examWindow.location.replace === 'function') {
+                            examWindow.location.replace(placeholderUrl);
+                        } else {
+                            examWindow.location.href = placeholderUrl;
+                        }
+                        return examWindow;
+                    } catch (forceError) {
+                        console.warn('[App] 套题模式强制跳转占位页失败，继续使用原窗口:', forceError);
+                    }
+                }
+            }
+
             if (examId && this.examWindows && this.examWindows.has(examId)) {
                 const windowInfo = this.examWindows.get(examId);
                 if (windowInfo && windowInfo.dataCollectorReady) {
@@ -349,7 +369,6 @@
                 return examWindow;
             }
 
-            const isTestMode = this._shouldUsePlaceholderPage();
             if (!isTestMode) {
                 console.warn('[App] 非测试环境，跳过占位页重定向');
                 return examWindow;

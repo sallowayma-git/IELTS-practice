@@ -1,0 +1,1213 @@
+{
+  "generatedAt": "2025-12-12T08:28:53.940068",
+  "duration": 8.407018,
+  "status": "pass",
+  "consoleLogs": [
+    {
+      "type": "info",
+      "text": "[Logger] Logger initialized {level: info, categories: Object}",
+      "timestamp": "2025-12-12T08:28:47.925535",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:47 AM] [data/index] 数据仓库初始化完成",
+      "timestamp": "2025-12-12T08:28:48.000053",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [SimpleStorageWrapper] 已连接新的数据仓库接口",
+      "timestamp": "2025-12-12T08:28:48.007812",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [DOM] DOM工具库已加载，统一事件委托、DOM创建和样式管理",
+      "timestamp": "2025-12-12T08:28:48.008384",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [AppPerformance] 性能工具库已加载，统一缓存、防抖节流、渲染监控和内存管理",
+      "timestamp": "2025-12-12T08:28:48.009482",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [TypeChecker] JSDoc类型检查工具已加载",
+      "timestamp": "2025-12-12T08:28:48.010665",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [CodeStandards] 代码规范已加载，Linus式简洁标准生效",
+      "timestamp": "2025-12-12T08:28:48.011871",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [ExamActions] 模块已加载 (Phase 2)",
+      "timestamp": "2025-12-12T08:28:48.013226",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "warning",
+      "text": "[GroupMarkerNotSet(crbug.com/242999)!:A0101900C4050000]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader (about:flags#enable-unsafe-swiftshader) flag to opt in to lower security guarantees for trusted content.",
+      "timestamp": "2025-12-12T08:28:48.070381",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [ExamActions] 模块已加载 (Phase 2)",
+      "timestamp": "2025-12-12T08:28:48.079501",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "log",
+      "text": "Upgrading storage from unknown to 1.0.0",
+      "timestamp": "2025-12-12T08:28:48.087792",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [BrowseController] 模块已加载",
+      "timestamp": "2025-12-12T08:28:48.109948",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (File not found)",
+      "timestamp": "2025-12-12T08:28:48.150914",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [MainEntry] 已设置存储命名空间: exam_system",
+      "timestamp": "2025-12-12T08:28:48.155867",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [PracticeHistoryEnhancer] 开始初始化",
+      "timestamp": "2025-12-12T08:28:48.218780",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [RuntimeFixes] PracticeRecorder.recoverTemporaryRecords 已替换为异步实现",
+      "timestamp": "2025-12-12T08:28:48.219455",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [App] 持久化状态加载完成",
+      "timestamp": "2025-12-12T08:28:48.230917",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "log",
+      "text": "ScoreStorage initialized",
+      "timestamp": "2025-12-12T08:28:48.231104",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [PDFHandler] PDF Handler initialized",
+      "timestamp": "2025-12-12T08:28:48.245360",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [System] PDF处理器已初始化",
+      "timestamp": "2025-12-12T08:28:48.245810",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [BrowseStateManager] 初始化浏览状态管理器",
+      "timestamp": "2025-12-12T08:28:48.246112",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [BrowseStateManager] 使用事件委托设置监听器",
+      "timestamp": "2025-12-12T08:28:48.247816",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [System] 浏览状态管理器已初始化",
+      "timestamp": "2025-12-12T08:28:48.248189",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [DataIntegrityManager] 已绑定数据仓库接口",
+      "timestamp": "2025-12-12T08:28:48.248958",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [DataIntegrityManager] 已绑定数据仓库接口",
+      "timestamp": "2025-12-12T08:28:48.249398",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [DataIntegrityManager] 数据完整性管理器已创建",
+      "timestamp": "2025-12-12T08:28:48.249916",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [System] 数据完整性管理器已初始化",
+      "timestamp": "2025-12-12T08:28:48.250282",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [System] 性能优化器已初始化",
+      "timestamp": "2025-12-12T08:28:48.250490",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [System] 首次运行，执行升级清理...",
+      "timestamp": "2025-12-12T08:28:48.250880",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [System] 正在清理旧缓存与配置...",
+      "timestamp": "2025-12-12T08:28:48.251420",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "log",
+      "text": "Storage version initialized: 1.0.0",
+      "timestamp": "2025-12-12T08:28:48.251599",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [ScoreStorage] 保留现有练习记录: 0 条",
+      "timestamp": "2025-12-12T08:28:48.252914",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [System] 旧缓存清理完成",
+      "timestamp": "2025-12-12T08:28:48.254931",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [ScoreStorage] 保留现有用户统计",
+      "timestamp": "2025-12-12T08:28:48.292101",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [PracticeHistoryEnhancer] 检测到练习历史组件",
+      "timestamp": "2025-12-12T08:28:48.317876",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [PracticeHistoryEnhancer] 检测到全局导出函数",
+      "timestamp": "2025-12-12T08:28:48.318588",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [PracticeHistoryEnhancer] 全局函数已增强",
+      "timestamp": "2025-12-12T08:28:48.319193",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [PracticeHistoryEnhancer] 练习历史增强功能已初始化",
+      "timestamp": "2025-12-12T08:28:48.319406",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [PracticeRecorder] 初始化完成",
+      "timestamp": "2025-12-12T08:28:48.324393",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "log",
+      "text": "Restored 0 active sessions",
+      "timestamp": "2025-12-12T08:28:48.349621",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [PracticeRecorder] 没有需要恢复的临时记录",
+      "timestamp": "2025-12-12T08:28:48.355719",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [DataIntegrityManager] 初始一致性检查完成 {practice: Object, settings: Object, backups: Object, meta: Object}",
+      "timestamp": "2025-12-12T08:28:48.363833",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [DataIntegrityManager] 自动备份已启动 (600秒间隔)",
+      "timestamp": "2025-12-12T08:28:48.364346",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [DataIntegrityManager] 初始一致性检查完成 {practice: Object, settings: Object, backups: Object, meta: Object}",
+      "timestamp": "2025-12-12T08:28:48.364816",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [DataIntegrityManager] 自动备份已启动 (600秒间隔)",
+      "timestamp": "2025-12-12T08:28:48.365273",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [DataIntegrityManager] 数据完整性管理器已初始化",
+      "timestamp": "2025-12-12T08:28:48.367991",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [DataIntegrityManager] 数据完整性管理器已初始化",
+      "timestamp": "2025-12-12T08:28:48.368539",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [ExamActions] loadExamList 被调用",
+      "timestamp": "2025-12-12T08:28:48.386124",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [ExamActions] 考试操作按钮事件委托已设置",
+      "timestamp": "2025-12-12T08:28:48.388235",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [System] 正在从存储中同步练习记录...",
+      "timestamp": "2025-12-12T08:28:48.459680",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:48 AM] [System] 练习记录未变化，跳过UI刷新",
+      "timestamp": "2025-12-12T08:28:48.468515",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "warning",
+      "text": "[.WebGL-0x78c00146c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+      "timestamp": "2025-12-12T08:28:48.841404",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "warning",
+      "text": "[.WebGL-0x78c00146c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+      "timestamp": "2025-12-12T08:28:49.001270",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "warning",
+      "text": "[.WebGL-0x78c00146c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+      "timestamp": "2025-12-12T08:28:49.923447",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "warning",
+      "text": "[.WebGL-0x78c00146c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)",
+      "timestamp": "2025-12-12T08:28:50.329033",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "log",
+      "text": "Practice session started for exam: p1-low-34",
+      "timestamp": "2025-12-12T08:28:51.434785",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "log",
+      "text": "Session confirmed started: p1-low-34",
+      "timestamp": "2025-12-12T08:28:51.636700",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "log",
+      "text": "Session confirmed started: p1-low-34",
+      "timestamp": "2025-12-12T08:28:51.637913",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "log",
+      "text": "Session confirmed started: p1-low-34",
+      "timestamp": "2025-12-12T08:28:51.639082",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "log",
+      "text": "Session confirmed started: p1-low-34",
+      "timestamp": "2025-12-12T08:28:51.640101",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:51 AM] [System] 收到存储同步事件，正在更新练习记录... {key: active_sessions}",
+      "timestamp": "2025-12-12T08:28:51.660466",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:51 AM] [System] 正在从存储中同步练习记录...",
+      "timestamp": "2025-12-12T08:28:51.660917",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:51 AM] [System] 练习记录未变化，跳过UI刷新",
+      "timestamp": "2025-12-12T08:28:51.674159",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:51 AM] [System] 收到存储同步事件，正在更新练习记录... {key: active_sessions}",
+      "timestamp": "2025-12-12T08:28:51.690437",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:51 AM] [System] 正在从存储中同步练习记录...",
+      "timestamp": "2025-12-12T08:28:51.691653",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:51 AM] [System] 练习记录未变化，跳过UI刷新",
+      "timestamp": "2025-12-12T08:28:51.696134",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:51 AM] [System] 收到存储同步事件，正在更新练习记录... {key: active_sessions}",
+      "timestamp": "2025-12-12T08:28:51.708534",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:51 AM] [System] 正在从存储中同步练习记录...",
+      "timestamp": "2025-12-12T08:28:51.709059",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:51 AM] [System] 练习记录未变化，跳过UI刷新",
+      "timestamp": "2025-12-12T08:28:51.713389",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:51 AM] [System] 收到存储同步事件，正在更新练习记录... {key: active_sessions}",
+      "timestamp": "2025-12-12T08:28:51.754411",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:51 AM] [System] 正在从存储中同步练习记录...",
+      "timestamp": "2025-12-12T08:28:51.767633",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:51 AM] [System] 练习记录未变化，跳过UI刷新",
+      "timestamp": "2025-12-12T08:28:51.768305",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:51 AM] [System] 收到存储同步事件，正在更新练习记录... {key: active_sessions}",
+      "timestamp": "2025-12-12T08:28:51.768941",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:51 AM] [System] 正在从存储中同步练习记录...",
+      "timestamp": "2025-12-12T08:28:51.769366",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:51 AM] [System] 练习记录未变化，跳过UI刷新",
+      "timestamp": "2025-12-12T08:28:51.769759",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 初始化增强器",
+      "timestamp": "2025-12-12T08:28:51.813777",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 初始化增强器",
+      "timestamp": "2025-12-12T08:28:51.813943",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 开始初始化",
+      "timestamp": "2025-12-12T08:28:51.815015",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 开始初始化",
+      "timestamp": "2025-12-12T08:28:51.815092",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 已启用 mixin: standard-inline-practice",
+      "timestamp": "2025-12-12T08:28:51.817831",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 已启用 mixin: standard-inline-practice",
+      "timestamp": "2025-12-12T08:28:51.817896",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "warning",
+      "text": "[PracticeEnhancer] 存储管理器未加载或setNamespace方法不可用",
+      "timestamp": "2025-12-12T08:28:51.818293",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "warning",
+      "text": "[PracticeEnhancer] 存储管理器未加载或setNamespace方法不可用",
+      "timestamp": "2025-12-12T08:28:51.818398",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 开始检测多套题结构",
+      "timestamp": "2025-12-12T08:28:51.819902",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 开始检测多套题结构",
+      "timestamp": "2025-12-12T08:28:51.819984",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 未检测到多套题结构，使用单套题模式",
+      "timestamp": "2025-12-12T08:28:51.821820",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 未检测到多套题结构，使用单套题模式",
+      "timestamp": "2025-12-12T08:28:51.821989",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 多套题模式: false",
+      "timestamp": "2025-12-12T08:28:51.822983",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 多套题模式: false",
+      "timestamp": "2025-12-12T08:28:51.823074",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 消息已发送: REQUEST_INIT",
+      "timestamp": "2025-12-12T08:28:51.823890",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 消息已发送: REQUEST_INIT",
+      "timestamp": "2025-12-12T08:28:51.824046",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 通信设置完成",
+      "timestamp": "2025-12-12T08:28:51.824574",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 通信设置完成",
+      "timestamp": "2025-12-12T08:28:51.824663",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 增强答案监听器设置完成",
+      "timestamp": "2025-12-12T08:28:51.825074",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 增强答案监听器设置完成",
+      "timestamp": "2025-12-12T08:28:51.825174",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 开始提取正确答案",
+      "timestamp": "2025-12-12T08:28:51.825566",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 开始提取正确答案",
+      "timestamp": "2025-12-12T08:28:51.825608",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[CorrectAnswerExtractor] 开始提取正确答案",
+      "timestamp": "2025-12-12T08:28:51.825869",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[CorrectAnswerExtractor] 开始提取正确答案",
+      "timestamp": "2025-12-12T08:28:51.825900",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "warning",
+      "text": "[CorrectAnswerExtractor] 所有提取策略都失败了",
+      "timestamp": "2025-12-12T08:28:51.826100",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "warning",
+      "text": "[CorrectAnswerExtractor] 所有提取策略都失败了",
+      "timestamp": "2025-12-12T08:28:51.826129",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "warning",
+      "text": "[PracticeEnhancer] 提取器未找到答案，使用备用方法",
+      "timestamp": "2025-12-12T08:28:51.826332",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "warning",
+      "text": "[PracticeEnhancer] 提取器未找到答案，使用备用方法",
+      "timestamp": "2025-12-12T08:28:51.826361",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 备用方法提取正确答案: {}",
+      "timestamp": "2025-12-12T08:28:51.827496",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 备用方法提取正确答案: {}",
+      "timestamp": "2025-12-12T08:28:51.827529",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 提交拦截设置完成",
+      "timestamp": "2025-12-12T08:28:51.827693",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 提交拦截设置完成",
+      "timestamp": "2025-12-12T08:28:51.827721",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 初始化完成",
+      "timestamp": "2025-12-12T08:28:51.828124",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 初始化完成",
+      "timestamp": "2025-12-12T08:28:51.828163",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 收到会话初始化: p1-low-34_1765528131428_sivmx0r2i Exam ID: p1-low-34",
+      "timestamp": "2025-12-12T08:28:51.830253",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 收到会话初始化: p1-low-34_1765528131428_sivmx0r2i Exam ID: p1-low-34",
+      "timestamp": "2025-12-12T08:28:51.830292",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 消息已发送: SESSION_READY",
+      "timestamp": "2025-12-12T08:28:51.830582",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 消息已发送: SESSION_READY",
+      "timestamp": "2025-12-12T08:28:51.830614",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "Session confirmed started: p1-low-34",
+      "timestamp": "2025-12-12T08:28:51.832337",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "log",
+      "text": "Session confirmed started: p1-low-34",
+      "timestamp": "2025-12-12T08:28:51.833126",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "log",
+      "text": "Session confirmed started: p1-low-34",
+      "timestamp": "2025-12-12T08:28:51.833434",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:51 AM] [System] 收到存储同步事件，正在更新练习记录... {key: active_sessions}",
+      "timestamp": "2025-12-12T08:28:51.841342",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:51 AM] [System] 正在从存储中同步练习记录...",
+      "timestamp": "2025-12-12T08:28:51.841966",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:51 AM] [System] 练习记录未变化，跳过UI刷新",
+      "timestamp": "2025-12-12T08:28:51.844759",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:51 AM] [System] 收到存储同步事件，正在更新练习记录... {key: active_sessions}",
+      "timestamp": "2025-12-12T08:28:51.848597",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:51 AM] [System] 正在从存储中同步练习记录...",
+      "timestamp": "2025-12-12T08:28:51.848888",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:51 AM] [System] 练习记录未变化，跳过UI刷新",
+      "timestamp": "2025-12-12T08:28:51.851945",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 收到会话初始化: p1-low-34_1765528131919 Exam ID: p1-low-34",
+      "timestamp": "2025-12-12T08:28:51.922619",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 收到会话初始化: p1-low-34_1765528131919 Exam ID: p1-low-34",
+      "timestamp": "2025-12-12T08:28:51.922673",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 消息已发送: SESSION_READY",
+      "timestamp": "2025-12-12T08:28:51.923002",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 消息已发送: SESSION_READY",
+      "timestamp": "2025-12-12T08:28:51.923036",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:51 AM] [System] 收到存储同步事件，正在更新练习记录... {key: active_sessions}",
+      "timestamp": "2025-12-12T08:28:51.924983",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:51 AM] [System] 正在从存储中同步练习记录...",
+      "timestamp": "2025-12-12T08:28:51.925458",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:51 AM] [System] 练习记录未变化，跳过UI刷新",
+      "timestamp": "2025-12-12T08:28:51.926088",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 检测到提交按钮点击: JSHandle@node",
+      "timestamp": "2025-12-12T08:28:52.736573",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 检测到提交按钮点击: JSHandle@node",
+      "timestamp": "2025-12-12T08:28:52.736677",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 开始全面收集答案...",
+      "timestamp": "2025-12-12T08:28:52.738340",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 开始全面收集答案...",
+      "timestamp": "2025-12-12T08:28:52.738384",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 找到输入元素总数: 0",
+      "timestamp": "2025-12-12T08:28:52.740325",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 找到输入元素总数: 0",
+      "timestamp": "2025-12-12T08:28:52.740381",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 找到data答案元素: 0",
+      "timestamp": "2025-12-12T08:28:52.740873",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 找到data答案元素: 0",
+      "timestamp": "2025-12-12T08:28:52.740907",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 尝试从页面结构收集答案...",
+      "timestamp": "2025-12-12T08:28:52.741137",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 尝试从页面结构收集答案...",
+      "timestamp": "2025-12-12T08:28:52.741191",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 找到问题容器: 0",
+      "timestamp": "2025-12-12T08:28:52.741558",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 找到问题容器: 0",
+      "timestamp": "2025-12-12T08:28:52.741592",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 全面收集完成，答案数量从 0 增加到 0",
+      "timestamp": "2025-12-12T08:28:52.741857",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 全面收集完成，答案数量从 0 增加到 0",
+      "timestamp": "2025-12-12T08:28:52.741888",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 收集到的所有答案: {}",
+      "timestamp": "2025-12-12T08:28:52.742143",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 收集到的所有答案: {}",
+      "timestamp": "2025-12-12T08:28:52.742208",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 开始全面收集答案...",
+      "timestamp": "2025-12-12T08:28:52.742446",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 开始全面收集答案...",
+      "timestamp": "2025-12-12T08:28:52.742479",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 找到输入元素总数: 0",
+      "timestamp": "2025-12-12T08:28:52.742930",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 找到输入元素总数: 0",
+      "timestamp": "2025-12-12T08:28:52.742964",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 找到data答案元素: 0",
+      "timestamp": "2025-12-12T08:28:52.743208",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 找到data答案元素: 0",
+      "timestamp": "2025-12-12T08:28:52.743238",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 尝试从页面结构收集答案...",
+      "timestamp": "2025-12-12T08:28:52.743457",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 尝试从页面结构收集答案...",
+      "timestamp": "2025-12-12T08:28:52.743489",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 找到问题容器: 0",
+      "timestamp": "2025-12-12T08:28:52.745952",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 找到问题容器: 0",
+      "timestamp": "2025-12-12T08:28:52.746014",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 全面收集完成，答案数量从 0 增加到 0",
+      "timestamp": "2025-12-12T08:28:52.746317",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 全面收集完成，答案数量从 0 增加到 0",
+      "timestamp": "2025-12-12T08:28:52.746349",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 收集到的所有答案: {}",
+      "timestamp": "2025-12-12T08:28:52.746620",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 收集到的所有答案: {}",
+      "timestamp": "2025-12-12T08:28:52.746659",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 生成答案比较: {}",
+      "timestamp": "2025-12-12T08:28:52.746936",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 生成答案比较: {}",
+      "timestamp": "2025-12-12T08:28:52.747035",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:52 AM] [PracticeRecorder] 套题模式条目 p1-low-34 属于 suite_mj2lv4ue_e886a0，跳过单篇记录保存。",
+      "timestamp": "2025-12-12T08:28:52.806548",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "log",
+      "text": "Practice session ended: p1-low-34 (completed)",
+      "timestamp": "2025-12-12T08:28:52.807018",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:52 AM] [System] 收到练习完成消息，正在同步记录...",
+      "timestamp": "2025-12-12T08:28:52.807617",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:52 AM] [System] 收到存储同步事件，正在更新练习记录... {key: active_sessions}",
+      "timestamp": "2025-12-12T08:28:52.815821",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:52 AM] [System] 正在从存储中同步练习记录...",
+      "timestamp": "2025-12-12T08:28:52.816675",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:52 AM] [System] 练习记录未变化，跳过UI刷新",
+      "timestamp": "2025-12-12T08:28:52.818396",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "warning",
+      "text": "[PracticeEnhancer] 未找到gradeAnswers函数",
+      "timestamp": "2025-12-12T08:28:52.826431",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "warning",
+      "text": "[PracticeEnhancer] 未找到gradeAnswers函数",
+      "timestamp": "2025-12-12T08:28:52.826495",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 开始全面收集答案...",
+      "timestamp": "2025-12-12T08:28:52.827026",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 开始全面收集答案...",
+      "timestamp": "2025-12-12T08:28:52.827091",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 找到输入元素总数: 0",
+      "timestamp": "2025-12-12T08:28:52.828123",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 找到输入元素总数: 0",
+      "timestamp": "2025-12-12T08:28:52.828158",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 找到data答案元素: 0",
+      "timestamp": "2025-12-12T08:28:52.828573",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 找到data答案元素: 0",
+      "timestamp": "2025-12-12T08:28:52.828687",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 尝试从页面结构收集答案...",
+      "timestamp": "2025-12-12T08:28:52.828930",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 尝试从页面结构收集答案...",
+      "timestamp": "2025-12-12T08:28:52.828961",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 找到问题容器: 0",
+      "timestamp": "2025-12-12T08:28:52.829610",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 找到问题容器: 0",
+      "timestamp": "2025-12-12T08:28:52.829648",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 全面收集完成，答案数量从 0 增加到 0",
+      "timestamp": "2025-12-12T08:28:52.829941",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 全面收集完成，答案数量从 0 增加到 0",
+      "timestamp": "2025-12-12T08:28:52.829975",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 收集到的所有答案: {}",
+      "timestamp": "2025-12-12T08:28:52.830288",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 收集到的所有答案: {}",
+      "timestamp": "2025-12-12T08:28:52.830321",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:53 AM] [System] 正在从存储中同步练习记录...",
+      "timestamp": "2025-12-12T08:28:53.149234",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "info",
+      "text": "[8:28:53 AM] [System] 练习记录未变化，跳过UI刷新",
+      "timestamp": "2025-12-12T08:28:53.150512",
+      "page": "http://localhost:8000/index.html?test_env=1"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 页面隐藏，收集答案",
+      "timestamp": "2025-12-12T08:28:53.802435",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 页面隐藏，收集答案",
+      "timestamp": "2025-12-12T08:28:53.802509",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 开始全面收集答案...",
+      "timestamp": "2025-12-12T08:28:53.802897",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 开始全面收集答案...",
+      "timestamp": "2025-12-12T08:28:53.802953",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 找到输入元素总数: 0",
+      "timestamp": "2025-12-12T08:28:53.803307",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 找到输入元素总数: 0",
+      "timestamp": "2025-12-12T08:28:53.803339",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 找到data答案元素: 0",
+      "timestamp": "2025-12-12T08:28:53.803683",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 找到data答案元素: 0",
+      "timestamp": "2025-12-12T08:28:53.803722",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 尝试从页面结构收集答案...",
+      "timestamp": "2025-12-12T08:28:53.803878",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 尝试从页面结构收集答案...",
+      "timestamp": "2025-12-12T08:28:53.803908",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 找到问题容器: 0",
+      "timestamp": "2025-12-12T08:28:53.804133",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 找到问题容器: 0",
+      "timestamp": "2025-12-12T08:28:53.804219",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 全面收集完成，答案数量从 0 增加到 0",
+      "timestamp": "2025-12-12T08:28:53.804476",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 全面收集完成，答案数量从 0 增加到 0",
+      "timestamp": "2025-12-12T08:28:53.804505",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 收集到的所有答案: {}",
+      "timestamp": "2025-12-12T08:28:53.807280",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    },
+    {
+      "type": "log",
+      "text": "[PracticeEnhancer] 收集到的所有答案: {}",
+      "timestamp": "2025-12-12T08:28:53.807319",
+      "page": "http://localhost:8000/templates/exam-placeholder.html?examId=p1-low-34&title=The+Slow+Food+Organization+%E6%85%A2%E9%A3%9F%E8%BF%90%E5%8A%A8%E7%BB%84%E7%BB%87&category=P1&suiteSessionId=suite_mj2lv4ue_e886a0&index=0"
+    }
+  ]
+}

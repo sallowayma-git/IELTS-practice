@@ -84,8 +84,104 @@ class ExamSystemApp {
 // 新增修复3E：在js/app.js的DOMContentLoaded初始化中去除顶层await
 // 应用启动
 document.addEventListener('DOMContentLoaded', () => {
-    const startApp = () => {
+    const ensureExamSessionMixinLoaded = () => new Promise((resolve) => {
+        if (window.ExamSystemAppMixins && window.ExamSystemAppMixins.examSession) {
+            resolve(true);
+            return;
+        }
+
+        const installFallback = () => {
+            const ensureAbsoluteUrl = (rawUrl) => {
+                if (!rawUrl) return rawUrl;
+                try {
+                    if (typeof rawUrl === 'string' && /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(rawUrl)) {
+                        return rawUrl;
+                    }
+                    if (typeof window !== 'undefined' && window.location) {
+                        return new URL(rawUrl, window.location.href).href;
+                    }
+                    return new URL(rawUrl, 'http://localhost/').href;
+                } catch (_) {
+                    return rawUrl;
+                }
+            };
+
+            const buildPlaceholder = (exam = {}, options = {}) => {
+                const params = new URLSearchParams();
+                if (exam.id) params.set('examId', exam.id);
+                if (exam.title) params.set('title', exam.title);
+                if (exam.category) params.set('category', exam.category);
+                if (options.suiteSessionId) params.set('suiteSessionId', options.suiteSessionId);
+                if (Number.isFinite(options.sequenceIndex)) params.set('index', String(options.sequenceIndex));
+                const query = params.toString();
+                return ensureAbsoluteUrl(query ? `templates/exam-placeholder.html?${query}` : 'templates/exam-placeholder.html');
+            };
+
+            window.ExamSystemAppMixins = window.ExamSystemAppMixins || {};
+            window.ExamSystemAppMixins.examSession = {
+                startSessionMonitoring() {},
+                _ensureAbsoluteUrl: ensureAbsoluteUrl,
+                _buildExamPlaceholderUrl: buildPlaceholder,
+                _shouldUsePlaceholderPage() {
+                    try {
+                        if (window.EnvironmentDetector && typeof window.EnvironmentDetector.isInTestEnvironment === 'function') {
+                            return window.EnvironmentDetector.isInTestEnvironment();
+                        }
+                    } catch (_) {}
+                    return false;
+                },
+                _guardExamWindowContent(examWindow, exam = null, options = {}) {
+                    if (!examWindow || examWindow.closed) return examWindow;
+                    const placeholderUrl = buildPlaceholder(exam || {}, options || {});
+                    try {
+                        if (examWindow.location && typeof examWindow.location.replace === 'function') {
+                            examWindow.location.replace(placeholderUrl);
+                        } else {
+                            examWindow.location.href = placeholderUrl;
+                        }
+                    } catch (_) {}
+                    return examWindow;
+                },
+                async openExam(examId, options = {}) {
+                    const placeholderUrl = buildPlaceholder({ id: examId }, options || {});
+                    const targetName = options && options.target === 'tab'
+                        ? (options.windowName || 'ielts-suite-mode-tab')
+                        : '_blank';
+                    let win = null;
+                    try { win = window.open(placeholderUrl, targetName); } catch (_) {}
+                    if (!win) {
+                        try { window.location.href = placeholderUrl; return window; } catch (_) {}
+                    }
+                    return win;
+                }
+            };
+        };
+
         try {
+            const script = document.createElement('script');
+            script.src = 'js/app/examSessionMixin.js';
+            script.async = false;
+            script.onload = () => {
+                if (!window.ExamSystemAppMixins || !window.ExamSystemAppMixins.examSession) {
+                    installFallback();
+                }
+                resolve(true);
+            };
+            script.onerror = () => {
+                installFallback();
+                resolve(false);
+            };
+            (document.head || document.body || document.documentElement).appendChild(script);
+        } catch (error) {
+            console.warn('[App] 无法动态加载 examSessionMixin:', error);
+            installFallback();
+            resolve(false);
+        }
+    });
+
+    const startApp = async () => {
+        try {
+            await ensureExamSessionMixinLoaded();
             const mixinGlue = window.ExamSystemAppMixins && window.ExamSystemAppMixins.__applyToApp;
             if (typeof mixinGlue === 'function') {
                 mixinGlue();
