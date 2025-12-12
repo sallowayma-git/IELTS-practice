@@ -72,18 +72,19 @@ def _collect_console(page: Page, store: List[ConsoleEntry]) -> None:
 
 async def _get_exam_titles(page: Page) -> List[str]:
     """获取当前题目列表的标题（兼容 exam-card / exam-item）"""
+    modern_titles = await page.locator(".exam-card .exam-title").all_text_contents()
+    modern_titles = [t.strip() for t in modern_titles if t and t.strip()]
+    if modern_titles:
+        return modern_titles
+
+    # 兼容旧版 exam-item 结构
     return await page.evaluate(
-        "() => {\n"
-        "  const modernCards = Array.from(document.querySelectorAll('.exam-card'));\n"
-        "  const legacyCards = Array.from(document.querySelectorAll('.exam-item'));\n"
-        "  const cards = modernCards.length ? modernCards : legacyCards;\n"
-        "  return cards\n"
-        "    .map(el => {\n"
-        "      const titleEl = el.querySelector('.exam-title') || el.querySelector('h4');\n"
-        "      return (titleEl?.textContent || '').trim();\n"
-        "    })\n"
-        "    .filter(Boolean);\n"
-        "}"
+        "() => Array.from(document.querySelectorAll('.exam-item'))\n"
+        "  .map(el => {\n"
+        "    const titleEl = el.querySelector('.exam-title') || el.querySelector('h4');\n"
+        "    return (titleEl?.textContent || '').trim();\n"
+        "  })\n"
+        "  .filter(Boolean)"
     )
 
 
@@ -158,15 +159,16 @@ async def _click_filter_and_wait(
 
     await page.wait_for_function(
         "(prev) => {\n"
-        "  const modernCards = Array.from(document.querySelectorAll('.exam-card'));\n"
-        "  const legacyCards = Array.from(document.querySelectorAll('.exam-item'));\n"
-        "  const cards = modernCards.length ? modernCards : legacyCards;\n"
-        "  const titles = cards\n"
+        "  const modernTitles = Array.from(document.querySelectorAll('.exam-card .exam-title'))\n"
+        "    .map(el => (el.textContent || '').trim())\n"
+        "    .filter(Boolean);\n"
+        "  const legacyTitles = Array.from(document.querySelectorAll('.exam-item'))\n"
         "    .map(el => {\n"
         "      const titleEl = el.querySelector('.exam-title') || el.querySelector('h4');\n"
         "      return (titleEl?.textContent || '').trim();\n"
         "    })\n"
         "    .filter(Boolean);\n"
+        "  const titles = modernTitles.length ? modernTitles : legacyTitles;\n"
         "  if (!titles.length) return false;\n"
         "  if (titles.length !== prev.length) return true;\n"
         "  return titles.some((t, i) => t !== prev[i]);\n"
