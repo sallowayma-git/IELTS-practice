@@ -71,9 +71,21 @@ def _collect_console(page: Page, store: List[ConsoleEntry]) -> None:
 
 
 async def _get_exam_titles(page: Page) -> List[str]:
-    """获取当前列表中的题目标题"""
-    titles = await page.locator(".exam-card .exam-title").all_text_contents()
-    return [title.strip() for title in titles if title and title.strip()]
+    """获取当前题目列表的标题（兼容 exam-card / exam-item）"""
+    modern_titles = await page.locator(".exam-card .exam-title").all_text_contents()
+    modern_titles = [t.strip() for t in modern_titles if t and t.strip()]
+    if modern_titles:
+        return modern_titles
+
+    # 兼容旧版 exam-item 结构
+    return await page.evaluate(
+        "() => Array.from(document.querySelectorAll('.exam-item'))\n"
+        "  .map(el => {\n"
+        "    const titleEl = el.querySelector('.exam-title') || el.querySelector('h4');\n"
+        "    return (titleEl?.textContent || '').trim();\n"
+        "  })\n"
+        "  .filter(Boolean)"
+    )
 
 
 async def _get_filter_buttons_state(page: Page) -> List[Dict[str, Any]]:
@@ -91,8 +103,10 @@ async def _write_failure_report(
     page: Page,
     console_log: List[ConsoleEntry],
     report_path: Path,
+    error_message: str | None = None,
+    snapshots: list | None = None,
 ) -> None:
-    """在失败时写入调试信息"""
+    """写入失败调试信息"""
     try:
         report = {
             "pageUrl": page.url,
@@ -104,14 +118,17 @@ async def _write_failure_report(
             "consoleErrors": [
                 asdict(entry)
                 for entry in console_log
-                if entry.type.lower() == "error"
+                if entry.type and entry.type.lower() == "error"
             ],
         }
+        if error_message:
+            report["error"] = error_message
+        if snapshots:
+            report["snapshots"] = snapshots
         report_path.parent.mkdir(parents=True, exist_ok=True)
         report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2))
-    except Exception:
-        # 报告写入失败时不中断原始异常
-        pass
+    except Exception as report_error:
+        print(f"[FrequencyTest] 无法写入失败报告: {report_error}")
 
 
 async def _click_filter_and_wait(
@@ -141,13 +158,20 @@ async def _click_filter_and_wait(
     await button.first.click()
 
     await page.wait_for_function(
-        "(prev) => {"
-        "  const titles = Array.from(document.querySelectorAll('.exam-card .exam-title'))"
-        "    .map(el => (el.textContent || '').trim())"
-        "    .filter(Boolean);"
-        "  if (!titles.length) return false;"
-        "  if (titles.length !== prev.length) return true;"
-        "  return titles.some((t, i) => t !== prev[i]);"
+        "(prev) => {\n"
+        "  const modernTitles = Array.from(document.querySelectorAll('.exam-card .exam-title'))\n"
+        "    .map(el => (el.textContent || '').trim())\n"
+        "    .filter(Boolean);\n"
+        "  const legacyTitles = Array.from(document.querySelectorAll('.exam-item'))\n"
+        "    .map(el => {\n"
+        "      const titleEl = el.querySelector('.exam-title') || el.querySelector('h4');\n"
+        "      return (titleEl?.textContent || '').trim();\n"
+        "    })\n"
+        "    .filter(Boolean);\n"
+        "  const titles = modernTitles.length ? modernTitles : legacyTitles;\n"
+        "  if (!titles.length) return false;\n"
+        "  if (titles.length !== prev.length) return true;\n"
+        "  return titles.some((t, i) => t !== prev[i]);\n"
         "}",
         previous_titles,
         timeout=15000,
@@ -189,11 +213,12 @@ async def test_complete_practice_flow(browser: Browser, console_log: List[Consol
     
     # 步骤3: 点击第一个题目（100 P1）
     # 注意：频率筛选按钮功能未实现，跳过验证
-    first_exam = page.locator(".exam-card").first
+    first_exam = page.locator(".exam-card, .exam-item").first
     await first_exam.wait_for(state="visible", timeout=10000)
-    
+
     # 获取题目标题
-    exam_title = await first_exam.locator(".exam-title").text_content()
+    title_locator = first_exam.locator(".exam-title, h4")
+    exam_title = await title_locator.first.text_content()
     
     # 打开题目
     async with page.expect_popup() as popup_wait:
@@ -315,14 +340,12 @@ async def test_frequency_filter_flow(browser: Browser, console_log: List[Console
     4. 验证题目列表更新
     5. 测试P4"全部"按钮
     """
-    REPORT_DIR.mkdir(parents=True, exist_ok=True)
-
-    context = await browser.new_context()
-    context.on("page", lambda pg: _collect_console(pg, console_log))
-
     debug_report_path = REPORT_DIR / "frequency-filter-debug.json"
     if debug_report_path.exists():
         debug_report_path.unlink()
+
+    context = await browser.new_context()
+    context.on("page", lambda pg: _collect_console(pg, console_log))
 
     page = await context.new_page()
 
@@ -331,32 +354,46 @@ async def test_frequency_filter_flow(browser: Browser, console_log: List[Console
         await _ensure_app_ready(page)
         await _dismiss_overlays(page)
 
+        text_to_filter_id = {
+            "全部": "all",
+            "超高频": "ultra-high",
+            "高频": "high",
+            "中频": "medium",
+            "低频": "low",
+        }
+
         # 步骤1: 留在Overview视图，等待加载完成
         await page.wait_for_selector("#overview-view.active", timeout=10000)
         await page.wait_for_timeout(1000)
 
-        # 步骤2: 点击P1入口（使用更具体的选择器避免匹配多个按钮）
+        # 步骤2: 点击P1入口，进入频率模式
         p1_button = page.locator("button[data-category='P1'][data-action='browse-category']")
         await p1_button.click()
 
-        # 等待导航到Browse视图并加载列表
         await page.wait_for_selector("#browse-view.active", timeout=15000)
-        await page.wait_for_selector(".exam-card", timeout=20000)
+        await page.wait_for_selector("#type-filter-buttons button", timeout=15000)
+        await page.wait_for_selector(".exam-card, .exam-item", timeout=20000)
         await page.wait_for_timeout(500)
 
         # 记录默认题目数
         default_titles = await _get_exam_titles(page)
-        default_count = len(default_titles)
-        if default_count == 0:
+        if not default_titles:
             raise AssertionError("未获取到默认题目列表")
+        default_count = len(default_titles)
 
         default_path = REPORT_DIR / "frequency-filter-default.png"
         await page.locator("#browse-view").screenshot(path=str(default_path))
 
-        # 依次点击高频/中频/低频（或对应的UI按钮），验证列表变化
+        # 依次尝试高频/中频/低频（缺少则回退到超高频）
         filter_buttons = await _get_filter_buttons_state(page)
-        available_filters = [btn.get("filterId") for btn in filter_buttons if btn.get("filterId")]
-        sequence = [fid for fid in ["high", "medium", "low", "ultra-high"] if fid in available_filters]
+        available_filters = []
+        for btn in filter_buttons:
+            fid = btn.get("filterId") or text_to_filter_id.get(btn.get("text", ""))
+            if fid:
+                available_filters.append(fid)
+        sequence = [
+            fid for fid in ["high", "medium", "low", "ultra-high"] if fid in available_filters
+        ]
 
         if len(sequence) < 2:
             raise AssertionError("频率筛选按钮不足，无法验证列表变化")
@@ -370,7 +407,7 @@ async def test_frequency_filter_flow(browser: Browser, console_log: List[Console
             changes.append({"filter": filter_id, "count": len(new_titles)})
             previous_titles = new_titles
 
-        # 步骤5: 切换到P4并验证“全部”恢复
+        # 步骤5: 切换到P4
         await _click_nav(page, "overview")
         await page.wait_for_timeout(500)
 
@@ -379,7 +416,7 @@ async def test_frequency_filter_flow(browser: Browser, console_log: List[Console
 
         await page.wait_for_selector("#browse-view.active", timeout=15000)
         await page.wait_for_selector("#type-filter-buttons button", timeout=10000)
-        await page.wait_for_selector(".exam-card", timeout=20000)
+        await page.wait_for_selector(".exam-card, .exam-item", timeout=20000)
         await page.wait_for_timeout(500)
 
         p4_default_titles = await _get_exam_titles(page)
@@ -387,7 +424,11 @@ async def test_frequency_filter_flow(browser: Browser, console_log: List[Console
             raise AssertionError("P4 列表为空")
 
         p4_filters = await _get_filter_buttons_state(page)
-        p4_filter_ids = [btn.get("filterId") for btn in p4_filters if btn.get("filterId")]
+        p4_filter_ids = []
+        for btn in p4_filters:
+            fid = btn.get("filterId") or text_to_filter_id.get(btn.get("text", ""))
+            if fid:
+                p4_filter_ids.append(fid)
 
         if "all" not in p4_filter_ids:
             raise AssertionError("未找到 P4 的全部筛选按钮")
@@ -399,7 +440,9 @@ async def test_frequency_filter_flow(browser: Browser, console_log: List[Console
         if not non_all_sequence:
             raise AssertionError("P4 缺少可用的频率筛选按钮")
 
-        filtered_titles = await _click_filter_and_wait(page, non_all_sequence[0], p4_default_titles)
+        filtered_titles = await _click_filter_and_wait(
+            page, non_all_sequence[0], p4_default_titles
+        )
         all_titles = await _click_filter_and_wait(page, "all", filtered_titles)
 
         if len(all_titles) < len(filtered_titles):
@@ -416,8 +459,8 @@ async def test_frequency_filter_flow(browser: Browser, console_log: List[Console
             "changes": changes,
             "screenshots": [str(default_path), str(p4_all_path)],
         }
-    except Exception:
-        await _write_failure_report(page, console_log, debug_report_path)
+    except Exception as exc:
+        await _write_failure_report(page, console_log, debug_report_path, str(exc))
         raise
     finally:
         await context.close()
