@@ -17,6 +17,11 @@
         return browseGroupPromise;
     }
 
+    // 向后兼容：提供 window.ensureBrowseGroup，避免 main.js 注入垃圾 shim 警告
+    if (typeof global.ensureBrowseGroup !== 'function') {
+        global.ensureBrowseGroup = ensureBrowseGroup;
+    }
+
     function ensureExamData() {
         if (typeof global.ensureExamDataScripts === 'function') {
             return global.ensureExamDataScripts();
