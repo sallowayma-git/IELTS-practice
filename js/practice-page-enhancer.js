@@ -446,9 +446,33 @@
         const raw = String(value).trim();
         if (!raw) return null;
         const cleaned = raw.replace(/[-_](anchor|nav)$/i, '');
+
+        // 兼容多套题键：优先规范化 "套题ID::问题ID" 中的问题ID部分
+        const suiteSeparatorIndex = cleaned.lastIndexOf('::');
+        if (suiteSeparatorIndex !== -1 && suiteSeparatorIndex < cleaned.length - 2) {
+            const suitePart = cleaned.slice(0, suiteSeparatorIndex);
+            const questionPart = cleaned.slice(suiteSeparatorIndex + 2);
+            const normalizedQuestionPart = normalizeQuestionKey(questionPart);
+            if (normalizedQuestionPart) {
+                return `${suitePart}::${normalizedQuestionPart}`;
+            }
+        }
+
         if (/^q[\w-]+/i.test(cleaned)) {
             return cleaned.replace(/^Q/, 'q');
         }
+
+        // 兼容资源页命名（如 t2_q16 / set1_q1），提取最后一个 q+数字
+        let qDigits = null;
+        const qDigitPattern = /(?:^|[^a-z0-9])q(\d{1,4})/gi;
+        let match = null;
+        while ((match = qDigitPattern.exec(cleaned)) !== null) {
+            qDigits = match[1];
+        }
+        if (qDigits) {
+            return `q${qDigits}`;
+        }
+
         const digitsMatch = cleaned.match(/^\d+/);
         if (digitsMatch) {
             return 'q' + digitsMatch[0];
@@ -1929,6 +1953,24 @@
                 testAnswers = answerKey[`test${testNum}`] ||
                     answerKey[`t${testNum}`] ||
                     answerKey[testNum];
+
+                // 兼容 V2 资源页：answerKey 为扁平映射（如 { t1_q1: 'xxx', ... }）
+                if (!testAnswers) {
+                    const pattern = new RegExp(`^t${testNum}[_-]`, 'i');
+                    const filtered = {};
+                    Object.entries(answerKey).forEach(([key, value]) => {
+                        if (!key) {
+                            return;
+                        }
+                        const normalizedKey = String(key).trim();
+                        if (pattern.test(normalizedKey)) {
+                            filtered[normalizedKey] = value;
+                        }
+                    });
+                    if (Object.keys(filtered).length > 0) {
+                        testAnswers = filtered;
+                    }
+                }
             }
 
             if (!testAnswers) {
@@ -2488,10 +2530,70 @@
                 self.handleSubmit();
             });
 
+            // 兼容独立套题页：挂钩其内部提交函数（例如 App.finishSuite），避免漏报套题完成
+            this.ensureExternalSuiteHooks();
+
             // 定期检查结果是否出现
             this.startResultsMonitoring();
 
             console.log('[PracticeEnhancer] 提交拦截设置完成');
+        },
+
+        /**
+         * 为独立套题资源页安装提交钩子（例如 App.finishSuite）。
+         * 目标：不改资源页逻辑也能逐套发送 PRACTICE_COMPLETE。
+         */
+        ensureExternalSuiteHooks: function () {
+            const enhancer = this;
+            const attemptHook = () => {
+                if (!enhancer.isMultiSuite) {
+                    enhancer.isMultiSuite = enhancer.detectMultiSuiteStructure();
+                }
+                if (!enhancer.isMultiSuite) {
+                    return false;
+                }
+
+                const app = window.App;
+                if (!app || typeof app.finishSuite !== 'function') {
+                    return false;
+                }
+                if (app.finishSuite && app.finishSuite.__practiceEnhancerWrapped) {
+                    return true;
+                }
+
+                const originalFinishSuite = app.finishSuite;
+                const wrappedFinishSuite = function (suiteId) {
+                    const result = originalFinishSuite.apply(this, arguments);
+                    try {
+                        enhancer.handleSuiteSubmit(suiteId);
+                    } catch (error) {
+                        console.warn('[PracticeEnhancer] App.finishSuite 钩子执行失败:', error);
+                    }
+                    return result;
+                };
+
+                wrappedFinishSuite.__practiceEnhancerWrapped = true;
+                wrappedFinishSuite.__practiceEnhancerOriginal = originalFinishSuite;
+                app.finishSuite = wrappedFinishSuite;
+
+                console.log('[PracticeEnhancer] 已挂钩 App.finishSuite');
+                return true;
+            };
+
+            if (attemptHook()) {
+                return;
+            }
+
+            let tries = 0;
+            const maxTries = 10;
+            const retry = () => {
+                tries += 1;
+                if (attemptHook() || tries >= maxTries) {
+                    return;
+                }
+                setTimeout(retry, 300);
+            };
+            setTimeout(retry, 300);
         },
 
         /**
@@ -2603,19 +2705,36 @@
             const comparison = {};
             const prefix = `${suiteId}::`;
 
-            // 遍历所有答案，找出属于该套题的答案
-            for (const [key, userAnswer] of Object.entries(this.answers)) {
-                if (key.startsWith(prefix)) {
-                    const questionId = key.substring(prefix.length);
-                    const correctAnswer = this.correctAnswers[key] || this.correctAnswers[questionId];
-
-                    comparison[questionId] = {
-                        userAnswer: userAnswer,
-                        correctAnswer: correctAnswer,
-                        isCorrect: this.compareAnswers(userAnswer, correctAnswer)
-                    };
+            const questionIds = new Set();
+            const collectSuiteKeys = (source) => {
+                if (!source || typeof source !== 'object') {
+                    return;
                 }
-            }
+                Object.keys(source).forEach((key) => {
+                    if (!key || !key.startsWith(prefix)) {
+                        return;
+                    }
+                    const questionId = key.substring(prefix.length);
+                    if (questionId) {
+                        questionIds.add(questionId);
+                    }
+                });
+            };
+
+            collectSuiteKeys(this.answers);
+            collectSuiteKeys(this.correctAnswers);
+
+            questionIds.forEach((questionId) => {
+                const prefixedKey = `${suiteId}::${questionId}`;
+                const userAnswer = this.answers[prefixedKey] ?? this.answers[questionId] ?? null;
+                const correctAnswer = this.correctAnswers[prefixedKey] ?? this.correctAnswers[questionId] ?? null;
+
+                comparison[questionId] = {
+                    userAnswer,
+                    correctAnswer,
+                    isCorrect: this.compareAnswers(userAnswer, correctAnswer)
+                };
+            });
 
             return comparison;
         },
@@ -2702,19 +2821,25 @@
         sendSuiteCompleteMessage: function (suiteId, comparison, scoreInfo, spellingErrors) {
             const prefix = `${suiteId}::`;
 
-            // 提取该套题的答案（使用"套题ID::问题ID"格式的键）
+            // 提取该套题的答案（子页面内为套题作用域，消息内使用不带前缀的问题ID）
             const suiteAnswers = {};
             const suiteCorrectAnswers = {};
 
             for (const [key, value] of Object.entries(this.answers)) {
                 if (key.startsWith(prefix)) {
-                    suiteAnswers[key] = value;
+                    const questionId = key.substring(prefix.length);
+                    if (questionId) {
+                        suiteAnswers[questionId] = value;
+                    }
                 }
             }
 
             for (const [key, value] of Object.entries(this.correctAnswers)) {
                 if (key.startsWith(prefix)) {
-                    suiteCorrectAnswers[key] = value;
+                    const questionId = key.substring(prefix.length);
+                    if (questionId) {
+                        suiteCorrectAnswers[questionId] = value;
+                    }
                 }
             }
 

@@ -88,7 +88,20 @@
             };
         }
 
-        const digitMatch = lowered.match(/(\d{1,4})/);
+        let preferredDigits = null;
+        try {
+            const qDigitPattern = /(?:^|[^a-z0-9])q(\d{1,4})/g;
+            let match = null;
+            while ((match = qDigitPattern.exec(lowered)) !== null) {
+                preferredDigits = match[1];
+            }
+        } catch (_) {
+            preferredDigits = null;
+        }
+
+        const digitMatch = preferredDigits
+            ? [null, preferredDigits]
+            : lowered.match(/(\d{1,4})/);
         let questionNumber = null;
         let canonicalKey = lowered;
 
