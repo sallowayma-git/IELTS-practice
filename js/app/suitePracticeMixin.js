@@ -536,8 +536,15 @@
                 const answers = result.answers || {};
 
                 Object.entries(answers).forEach(([questionId, answer]) => {
-                    // 使用 "套题ID::问题ID" 格式
-                    const key = `${suiteId}::${questionId}`;
+                    const normalizedQuestionId = questionId == null ? '' : String(questionId);
+                    if (!normalizedQuestionId) {
+                        return;
+                    }
+
+                    // 使用 "套题ID::问题ID" 格式，兼容子页面已带前缀的情况
+                    const key = normalizedQuestionId.startsWith(`${suiteId}::`)
+                        ? normalizedQuestionId
+                        : `${suiteId}::${normalizedQuestionId}`;
                     aggregated[key] = answer;
                 });
             });
@@ -562,8 +569,15 @@
                 const comparison = result.answerComparison || {};
 
                 Object.entries(comparison).forEach(([questionId, comparisonData]) => {
-                    // 使用 "套题ID::问题ID" 格式
-                    const key = `${suiteId}::${questionId}`;
+                    const normalizedQuestionId = questionId == null ? '' : String(questionId);
+                    if (!normalizedQuestionId) {
+                        return;
+                    }
+
+                    // 使用 "套题ID::问题ID" 格式，兼容子页面已带前缀的情况
+                    const key = normalizedQuestionId.startsWith(`${suiteId}::`)
+                        ? normalizedQuestionId
+                        : `${suiteId}::${normalizedQuestionId}`;
                     aggregated[key] = comparisonData;
                 });
             });

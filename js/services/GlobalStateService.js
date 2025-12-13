@@ -70,6 +70,12 @@
             try { global.practiceRecords = normalized; } catch (_) { }
         }
         const finalRecords = Array.isArray(normalized) ? normalized : [];
+
+        // 兼容层：确保 window.app.state.practice.records 同步更新（E2E 依赖该状态）
+        try {
+            global.practiceRecords = finalRecords;
+        } catch (_) { }
+
         if (typeof global.updateBrowseAnchorsFromRecords === 'function') {
             global.updateBrowseAnchorsFromRecords(finalRecords);
         }

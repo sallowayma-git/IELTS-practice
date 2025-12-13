@@ -1787,6 +1787,32 @@
                 data.sessionId = `${examId}_${Date.now()}`;
             }
 
+            // 仅在P1/P4听力填空场景尝试补齐 spellingErrors（错词抓取）
+            try {
+                const collector = window.spellingErrorCollector;
+                const hasExisting = Array.isArray(data?.spellingErrors) && data.spellingErrors.length > 0;
+                const comparison = data?.answerComparison || data?.realData?.answerComparison || null;
+
+                if (!hasExisting && collector && typeof collector.detectErrors === 'function' && comparison && typeof comparison === 'object') {
+                    const examIdForDetect = data?.examId || examId;
+                    const source = typeof collector.detectSource === 'function'
+                        ? collector.detectSource(examIdForDetect)
+                        : 'other';
+
+                    if (source === 'p1' || source === 'p4') {
+                        const suiteId = data?.suiteId || null;
+                        const detected = collector.detectErrors(comparison, suiteId, examIdForDetect);
+                        if (Array.isArray(detected) && detected.length > 0) {
+                            data.spellingErrors = detected;
+                        } else if (!Array.isArray(data.spellingErrors)) {
+                            data.spellingErrors = [];
+                        }
+                    }
+                }
+            } catch (error) {
+                console.warn('[DataCollection] 拼写错误检测失败，已忽略:', error);
+            }
+
             let suiteHandlerDeclined = false;
             if (this.suiteExamMap && this.suiteExamMap.has(examId) && typeof this.handleSuitePracticeComplete === 'function') {
                 try {
@@ -1835,6 +1861,17 @@
                     }
                 } catch (syncErr) {
                     console.warn('[DataCollection] 刷新练习记录失败（UI可能需要手动刷新）:', syncErr);
+                }
+
+                // P1/P4：落库后同步保存错词到词表（multi-suite 在 finalizeMultiSuiteRecord 内处理）
+                if (Array.isArray(data?.spellingErrors) && data.spellingErrors.length > 0
+                    && window.spellingErrorCollector
+                    && typeof window.spellingErrorCollector.saveErrors === 'function') {
+                    try {
+                        await window.spellingErrorCollector.saveErrors(data.spellingErrors);
+                    } catch (saveError) {
+                        console.warn('[DataCollection] 保存拼写错误词表失败（不影响主流程）:', saveError);
+                    }
                 }
 
                 // 更新UI状态
