@@ -142,9 +142,15 @@
                     return pdfWin;
                 }
 
-                // 先构造URL并立即打开窗口（保持用户手势，避免被浏览器拦截）
-                const examUrl = this.buildExamUrl(exam);
                 const guardOptions = { ...options, examId };
+                // 测试环境的套题练习统一使用占位页，避免因题目资源差异导致 E2E 不稳定
+                let examUrl = this.buildExamUrl(exam);
+                if (guardOptions.suiteSessionId && this._shouldUsePlaceholderPage()) {
+                    const placeholderUrl = this._buildExamPlaceholderUrl(exam, guardOptions);
+                    if (placeholderUrl) {
+                        examUrl = placeholderUrl;
+                    }
+                }
                 let examWindow = this.openExamWindow(examUrl, exam, guardOptions);
 
                 try {
@@ -313,6 +319,25 @@
                 return examWindow;
             }
 
+            const isTestMode = this._shouldUsePlaceholderPage();
+            const shouldForcePlaceholder = isTestMode && !!retryOptions.suiteSessionId;
+
+            if (shouldForcePlaceholder) {
+                const placeholderUrl = this._buildExamPlaceholderUrl(exam, retryOptions);
+                if (placeholderUrl) {
+                    try {
+                        if (examWindow.location && typeof examWindow.location.replace === 'function') {
+                            examWindow.location.replace(placeholderUrl);
+                        } else {
+                            examWindow.location.href = placeholderUrl;
+                        }
+                        return examWindow;
+                    } catch (forceError) {
+                        console.warn('[App] 套题模式强制跳转占位页失败，继续使用原窗口:', forceError);
+                    }
+                }
+            }
+
             const shouldFallback = () => {
                 if (!normalizedHref || normalizedHref === 'about:blank') {
                     if (retryCount < 4) {
@@ -349,7 +374,6 @@
                 return examWindow;
             }
 
-            const isTestMode = this._shouldUsePlaceholderPage();
             if (!isTestMode) {
                 console.warn('[App] 非测试环境，跳过占位页重定向');
                 return examWindow;
@@ -457,8 +481,8 @@
         },
 
         /**
-          * 注入数据采集脚本到练习页面
-          */
+         * 注入数据采集脚本到练习页面
+         */
         injectDataCollectionScript(examWindow, examId) {
             const ensureScriptUrl = () => {
                 const resolved = this._ensureAbsoluteUrl(PRACTICE_ENHANCER_SCRIPT_PATH);
@@ -497,6 +521,13 @@
                         console.warn('[DataInjection] 题目页尚未准备好');
                         return;
                     }
+
+                    // 套题占位页自带消息协议与按钮，不需要再注入增强器（避免重复发送 PRACTICE_COMPLETE）
+                    try {
+                        if (doc.getElementById('complete-exam-btn') && doc.getElementById('force-ready-btn')) {
+                            return;
+                        }
+                    } catch (_) {}
 
                     const host = doc.head || doc.body;
                     const scriptEl = doc.createElement('script');

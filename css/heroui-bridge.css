@@ -40,12 +40,16 @@ body.hero-body {
     animation: none;
 }
 
-body.hero-body.shui-bg-active {
+:root[data-theme="blue"] #shui-bg-canvas {
+    display: none;
+}
+
+:root:not([data-theme="blue"]) body.hero-body.shui-bg-active {
     animation: none;
     background: transparent !important;
 }
 
-body.hero-body.shui-bg-static {
+:root:not([data-theme="blue"]) body.hero-body.shui-bg-static {
     animation: none;
     background: linear-gradient(135deg, var(--shui-gradient-start) 0%, var(--shui-gradient-end) 100%);
 }
@@ -61,7 +65,7 @@ body.hero-body.shui-bg-static {
     opacity: 1;
 }
 
-body.hero-body::before {
+:root:not([data-theme="blue"]) body.hero-body::before {
     display: none;
 }
 

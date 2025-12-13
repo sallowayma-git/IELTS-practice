@@ -130,7 +130,7 @@ async def _complete_passage(suite_page: Page, total_count: int, index: int) -> b
         await suite_page.wait_for_load_state("load")
         await suite_page.wait_for_selector("#complete-exam-btn", timeout=20000)
         await suite_page.wait_for_function(
-            "() => document.getElementById('complete-exam-btn') && !document.getElementById('complete-exam-btn').disabled",
+            "() => { const btn = document.getElementById('complete-exam-btn'); return btn && !btn.disabled; }",
             timeout=20000,
         )
         
@@ -141,7 +141,7 @@ async def _complete_passage(suite_page: Page, total_count: int, index: int) -> b
         log_step("已点击完成按钮")
         
         await suite_page.wait_for_function(
-            "() => document.getElementById('complete-exam-btn') && document.getElementById('complete-exam-btn').disabled",
+            "() => { const btn = document.getElementById('complete-exam-btn'); return btn && btn.disabled; }",
             timeout=20000,
         )
         
@@ -165,11 +165,7 @@ async def _complete_passage(suite_page: Page, total_count: int, index: int) -> b
                 raise
 
             await suite_page.wait_for_function(
-                "() => document.getElementById('complete-exam-btn') && document.getElementById('complete-exam-btn').disabled",
-                timeout=15000,
-            )
-            await suite_page.wait_for_function(
-                "() => document.getElementById('complete-exam-btn') && !document.getElementById('complete-exam-btn').disabled",
+                "() => { const btn = document.getElementById('complete-exam-btn'); return btn && !btn.disabled; }",
                 timeout=20000,
             )
             log_step(f"第 {index + 2} 篇练习已准备就绪", "SUCCESS")
@@ -181,6 +177,18 @@ async def _complete_passage(suite_page: Page, total_count: int, index: int) -> b
     except Exception as e:
         log_step(f"完成练习时出错: {e}", "ERROR")
         raise
+
+
+async def _launch_chromium(p) -> Browser:
+    """以 file:// 友好的参数启动 Chromium，并在崩溃时回退默认参数。"""
+    try:
+        return await p.chromium.launch(
+            headless=True,
+            args=["--allow-file-access-from-files"],
+        )
+    except Exception as e:
+        log_step(f"Chromium 启动失败，回退默认参数: {e}", "WARNING")
+        return await p.chromium.launch(headless=True)
 
 
 def _collect_console(page: Page, store: List[ConsoleEntry]) -> None:
@@ -210,7 +218,7 @@ async def run() -> None:
     try:
         async with async_playwright() as p:
             log_step("启动 Chromium 浏览器...")
-            browser: Browser = await p.chromium.launch(headless=True)
+            browser: Browser = await _launch_chromium(p)
             context = await browser.new_context()
 
             context.on("page", lambda pg: _collect_console(pg, console_log))
