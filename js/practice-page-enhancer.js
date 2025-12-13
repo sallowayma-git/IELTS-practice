@@ -75,6 +75,63 @@
         return result;
     };
 
+    const detectEnhancerScriptUrl = () => {
+        try {
+            if (document.currentScript && document.currentScript.src) {
+                return document.currentScript.src;
+            }
+            const scripts = document.querySelectorAll('script[src]');
+            for (const script of scripts) {
+                if (script.src && script.src.includes('practice-page-enhancer.js')) {
+                    return script.src;
+                }
+            }
+        } catch (_) {
+            // ignore
+        }
+        return null;
+    };
+
+    const resolveEnhancerBaseUrl = () => {
+        const scriptUrl = detectEnhancerScriptUrl();
+        if (scriptUrl) {
+            try {
+                return new URL('.', scriptUrl).href;
+            } catch (_) {
+                // ignore and fallback
+            }
+        }
+        try {
+            return new URL('./js/', window.location.href).href;
+        } catch (_) {
+            return './js/';
+        }
+    };
+
+    const ENHANCER_BASE_URL = resolveEnhancerBaseUrl();
+    const dependencyLoader = {
+        cache: new Map(),
+        loadScript(url) {
+            if (!url) {
+                return Promise.reject(new Error('script url missing'));
+            }
+            if (this.cache.has(url)) {
+                return this.cache.get(url);
+            }
+            const promise = new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.type = 'text/javascript';
+                script.defer = true;
+                script.src = url;
+                script.onload = () => resolve(true);
+                script.onerror = (err) => reject(err);
+                (document.head || document.body || document.documentElement).appendChild(script);
+            });
+            this.cache.set(url, promise);
+            return promise;
+        }
+    };
+
     function sanitizeExamTitle(rawTitle) {
         if (!rawTitle) return '';
         const title = String(rawTitle).trim();
@@ -873,6 +930,9 @@
                 this.pageContext = this.getPageContext(true);
                 this.activateMixins();
 
+                this.enhancerBaseUrl = this.getEnhancerBaseUrl();
+                await this.ensureStorageAvailable();
+                await this.ensureSpellingErrorCollector();
                 await this.prepareStorageNamespace();
 
                 // 检测多套题结构
@@ -1000,6 +1060,154 @@
 
             // 默认返回null（单套题模式）
             return null;
+        },
+
+        getEnhancerBaseUrl: function () {
+            if (this.enhancerBaseUrl) {
+                return this.enhancerBaseUrl;
+            }
+            this.enhancerBaseUrl = ENHANCER_BASE_URL;
+            return this.enhancerBaseUrl;
+        },
+
+        buildFallbackUrls: function (paths) {
+            return (paths || []).map((p) => {
+                try {
+                    return new URL(p, window.location.href).href;
+                } catch (_) {
+                    return null;
+                }
+            }).filter(Boolean);
+        },
+
+        ensureStorageAvailable: async function () {
+            try {
+                if (window.storage && typeof window.storage.setNamespace === 'function') {
+                    if (window.storage.ready && typeof window.storage.ready.then === 'function') {
+                        await window.storage.ready;
+                    }
+                    return true;
+                }
+
+                const tryLoad = async (urls) => {
+                    for (const url of urls) {
+                        if (!url) continue;
+                        try {
+                            console.log('[PracticeEnhancer] 尝试加载存储管理器:', url);
+                            await dependencyLoader.loadScript(url);
+                            if (window.storage && typeof window.storage.setNamespace === 'function') {
+                                if (window.storage.ready && typeof window.storage.ready.then === 'function') {
+                                    await window.storage.ready;
+                                }
+                                return true;
+                            }
+                        } catch (error) {
+                            console.warn('[PracticeEnhancer] 存储管理器加载失败:', error);
+                        }
+                    }
+                    return false;
+                };
+
+                const baseUrl = this.getEnhancerBaseUrl();
+                const baseCandidate = new URL('utils/storage.js', baseUrl).href;
+                const fallbackUrls = this.buildFallbackUrls([
+                    '../../../../js/utils/storage.js',
+                    '../../../js/utils/storage.js',
+                    '../../js/utils/storage.js',
+                    '../js/utils/storage.js',
+                    './js/utils/storage.js'
+                ]);
+
+                const loaded = await tryLoad([baseCandidate, ...fallbackUrls]);
+                if (loaded) return true;
+            } catch (error) {
+                console.warn('[PracticeEnhancer] 加载存储管理器失败:', error);
+            }
+
+            // 创建简易回退存储，确保流程不中断
+            console.warn('[PracticeEnhancer] 使用简易回退存储');
+            const fallbackPrefix = 'exam_system_';
+            const safeStore = (() => {
+                try {
+                    return window.localStorage;
+                } catch (_) {
+                    return null;
+                }
+            })();
+
+            const stubStorage = {
+                namespace: '',
+                ready: Promise.resolve(),
+                setNamespace(ns) { this.namespace = ns ? `${ns}_` : ''; },
+                async set(key, value) {
+                    if (!safeStore) return false;
+                    const k = fallbackPrefix + this.namespace + key;
+                    safeStore.setItem(k, JSON.stringify({ value }));
+                    return true;
+                },
+                async get(key) {
+                    if (!safeStore) return null;
+                    const k = fallbackPrefix + this.namespace + key;
+                    const raw = safeStore.getItem(k);
+                    if (!raw) return null;
+                    try {
+                        const parsed = JSON.parse(raw);
+                        return parsed && parsed.value !== undefined ? parsed.value : parsed;
+                    } catch (_) {
+                        return null;
+                    }
+                },
+                async remove(key) {
+                    if (!safeStore) return false;
+                    const k = fallbackPrefix + this.namespace + key;
+                    safeStore.removeItem(k);
+                    return true;
+                }
+            };
+
+            window.storage = stubStorage;
+            return true;
+        },
+
+        ensureSpellingErrorCollector: async function () {
+            if (window.spellingErrorCollector) {
+                return true;
+            }
+
+            if (window.SpellingErrorCollector) {
+                window.spellingErrorCollector = new window.SpellingErrorCollector();
+                return true;
+            }
+
+            const tryLoad = async (urls) => {
+                for (const url of urls) {
+                    if (!url) continue;
+                    try {
+                        console.log('[PracticeEnhancer] 尝试加载SpellingErrorCollector:', url);
+                        await dependencyLoader.loadScript(url);
+                        if (!window.spellingErrorCollector && window.SpellingErrorCollector) {
+                            window.spellingErrorCollector = new window.SpellingErrorCollector();
+                        }
+                        if (window.spellingErrorCollector) return true;
+                    } catch (error) {
+                        console.warn('[PracticeEnhancer] 加载SpellingErrorCollector失败:', error);
+                    }
+                }
+                return false;
+            };
+
+            const baseUrl = this.getEnhancerBaseUrl();
+            const baseCandidate = new URL('app/spellingErrorCollector.js', baseUrl).href;
+            const fallbackUrls = this.buildFallbackUrls([
+                '../../../../js/app/spellingErrorCollector.js',
+                '../../../js/app/spellingErrorCollector.js',
+                '../../js/app/spellingErrorCollector.js',
+                '../js/app/spellingErrorCollector.js',
+                './js/app/spellingErrorCollector.js'
+            ]);
+
+            const loaded = await tryLoad([baseCandidate, ...fallbackUrls]);
+            return loaded;
         },
 
         prepareStorageNamespace: async function () {

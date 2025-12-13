@@ -5526,3 +5526,68 @@ body.theme-blue ::-webkit-scrollbar-thumb {
         padding: 20px;
     }
 }
+
+/* Developer Easter Egg - Connected Heart */
+#dev-poi {
+    overflow: visible;
+    z-index: 10;
+}
+
+.heart-interaction {
+    position: absolute;
+    /* Position at the center of the gap (assuming --space-lg gap) */
+    left: calc(100% + var(--space-lg) / 2);
+    top: 50%;
+    /* Center the element itself on that point */
+    transform: translate(-50%, -50%) scale(0);
+    font-size: 1.5rem;
+    color: #fca5a5;
+    opacity: 0;
+    transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    pointer-events: none;
+    filter: drop-shadow(0 2px 4px rgba(244, 63, 94, 0.3));
+    z-index: 20;
+    line-height: 1;
+    user-select: none;
+}
+
+#dev-poi:hover .heart-interaction,
+#dev-poi:has(+ #dev-nana:hover) .heart-interaction {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.2);
+    animation: heartBeat 1s infinite ease-in-out;
+}
+
+@keyframes heartBeat {
+    0% {
+        transform: translate(-50%, -50%) scale(1.1);
+    }
+
+    14% {
+        transform: translate(-50%, -50%) scale(1.35);
+    }
+
+    28% {
+        transform: translate(-50%, -50%) scale(1.1);
+    }
+
+    42% {
+        transform: translate(-50%, -50%) scale(1.35);
+    }
+
+    70% {
+        transform: translate(-50%, -50%) scale(1.1);
+    }
+
+    100% {
+        transform: translate(-50%, -50%) scale(1.1);
+    }
+}
+
+@media (max-width: 480px) {
+    .heart-interaction {
+        /* Mobile gap is 10px, so half is 5px */
+        left: calc(100% + 5px);
+        font-size: 1.2rem;
+    }
+}
