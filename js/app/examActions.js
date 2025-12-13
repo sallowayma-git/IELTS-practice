@@ -1,10 +1,8 @@
 (function (global) {
     'use strict';
 
-    // ============================================================================
-    // 配置与常量
-    // ============================================================================
-
+   // 配置与常量
+   
     const preferredFirstExamByCategory = {
         'P1_reading': { id: 'p1-09', title: 'Listening to the Ocean 海洋探测' },
         'P2_reading': { id: 'p2-high-12', title: 'The fascinating world of attine ants 切叶蚁' },
@@ -13,10 +11,8 @@
         'P3_listening': { id: 'listening-p3-02', title: 'Climate change and allergies' }
     };
 
-    // ============================================================================
-    // 核心功能：加载与渲染
-    // ============================================================================
-
+   // 核心功能：加载与渲染
+   
     /**
      * 加载并渲染题库列表
      */
@@ -396,6 +392,37 @@
         try { console.log('[ExamActions] 考试操作按钮事件委托已设置'); } catch (_) { }
     }
 
+    function ensureBrowseGroupReady() {
+        if (typeof global.ensureBrowseGroup === 'function') {
+            return global.ensureBrowseGroup();
+        }
+        if (global.AppEntry && typeof global.AppEntry.ensureBrowseGroup === 'function') {
+            return global.AppEntry.ensureBrowseGroup();
+        }
+        if (global.AppLazyLoader && typeof global.AppLazyLoader.ensureGroup === 'function') {
+            return global.AppLazyLoader.ensureGroup('browse-view');
+        }
+        return Promise.resolve();
+    }
+
+    async function ensureDataIntegrityManagerReady() {
+        try {
+            await ensureBrowseGroupReady();
+        } catch (error) {
+            console.warn('[ExamActions] 浏览组预加载失败，继续尝试导出:', error);
+        }
+
+        if (!global.dataIntegrityManager && global.DataIntegrityManager) {
+            try {
+                global.dataIntegrityManager = new global.DataIntegrityManager();
+            } catch (error) {
+                console.warn('[ExamActions] 初始化 DataIntegrityManager 失败:', error);
+            }
+        }
+
+        return global.dataIntegrityManager || null;
+    }
+
     async function exportPracticeData() {
         try {
             if (global.dataIntegrityManager && typeof global.dataIntegrityManager.exportData === 'function') {
@@ -418,6 +445,31 @@
         }
     }
 
+    async function exportAllData() {
+        var manager = null;
+        try {
+            manager = await ensureDataIntegrityManagerReady();
+            if (manager && typeof manager.exportData === 'function') {
+                await manager.exportData();
+                try { global.showMessage && global.showMessage('数据导出成功', 'success'); } catch (_) { }
+                return;
+            }
+        } catch (error) {
+            console.error('[ExamActions] 数据导出失败:', error);
+            if (typeof global.showMessage === 'function') {
+                global.showMessage('数据导出失败: ' + (error && error.message || error), 'error');
+            }
+            return;
+        }
+
+        if (typeof global.exportPracticeData === 'function') {
+            return global.exportPracticeData();
+        }
+        if (typeof global.showMessage === 'function') {
+            global.showMessage('数据管理模块未就绪', 'warning');
+        }
+    }
+
     // ============================================================================
     // 导出到全局
     // ============================================================================
@@ -427,6 +479,7 @@
         resetBrowseViewToAll,
         displayExams,
         setupExamActionHandlers,
+        exportAllData,
         exportPracticeData
     };
 
@@ -434,6 +487,7 @@
     global.resetBrowseViewToAll = resetBrowseViewToAll;
     global.displayExams = displayExams;
     global.setupExamActionHandlers = setupExamActionHandlers;
+    global.exportAllData = exportAllData;
     global.exportPracticeData = exportPracticeData;
 
     console.log('[ExamActions] 模块已加载 (Phase 2)');
