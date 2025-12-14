@@ -81,7 +81,8 @@
                 return document.currentScript.src;
             }
             const scripts = document.querySelectorAll('script[src]');
-            for (const script of scripts) {
+            for (let idx = scripts.length - 1; idx >= 0; idx -= 1) {
+                const script = scripts[idx];
                 if (script.src && script.src.includes('practice-page-enhancer.js')) {
                     return script.src;
                 }
@@ -224,8 +225,19 @@
             name: 'listening-suite-practice',
             priority: 30,
             shouldActivate() {
-                return !!(document.querySelector('[data-submit-suite]')
-                    || document.querySelector('.suite-submit-btn'));
+                if (document.querySelector('[data-submit-suite]') || document.querySelector('.suite-submit-btn')) {
+                    return true;
+                }
+
+                if (document.querySelectorAll('[data-suite-id]').length > 1) {
+                    return true;
+                }
+
+                if (!document.getElementById('test-pages-container') || !document.getElementById('part-pills')) {
+                    return false;
+                }
+
+                return document.querySelectorAll('.test-page').length > 1;
             },
             apply(enhancer) {
                 if (!enhancer || typeof enhancer.registerHook !== 'function') {
