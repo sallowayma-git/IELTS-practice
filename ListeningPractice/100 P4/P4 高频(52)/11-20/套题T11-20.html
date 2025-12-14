@@ -1,0 +1,1032 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>IELTS Listening Practice - T11-20</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  /* --- V2.0 Core Styles & Base --- */
+  :root { --splitter-width: 5px; --splitter-color: #eaecef; }
+  html, body { height: 100%; margin: 0; overflow: hidden; scroll-behavior: smooth; }
+  body {
+    background-color: #f1f3f4;
+    font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+    font-size: 13pt; /* Default is now LARGE */
+    font-weight: 400;
+    color: #000;
+    transition: background-color 0.3s, color 0.3s, font-size 0.2s;
+    display: flex;
+    flex-direction: column;
+  }
+  body.font-regular { font-size: 10pt; }
+  body.font-xlarge { font-size: 16pt; }
+
+  .app-wrapper { 
+    display: flex; 
+    flex-grow: 1;
+    overflow: hidden;
+  }
+
+  .shell { background: #f6f7fb; display: flex; flex-direction: column; flex-grow: 1; min-width: 0; }
+  h1, h2, h3, h4 { font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif; font-weight: 600; color: #2E74B5; }
+  strong, b { font-weight: 600; }
+  
+  /* --- Layout & Panes --- */
+  #main-shell { display: flex; flex-grow: 1; overflow: hidden; }
+  #left-pane { flex: 1 1 100%; overflow-y: auto; background: #fff; transition: flex-basis 0.4s ease-in-out, background-color 0.3s; padding: 0 16px; box-sizing: border-box; }
+  #splitter { width: var(--splitter-width); background: var(--splitter-color); cursor: col-resize; display: none; }
+  #right-pane { flex: 0 0 0; overflow-y: auto; background: #fcfdff; display: none; padding: 0 24px; box-sizing: border-box; transition: background-color 0.3s; }
+  
+  #main-shell.split-view #left-pane { flex-basis: 60%; padding: 0 24px; }
+  #main-shell.split-view #splitter { display: block; }
+  #main-shell.split-view #right-pane { display: block; flex-basis: calc(40% - var(--splitter-width)); }
+
+  .test-page, .transcript-page { display: none; }
+  .test-page.active, .transcript-page.active { display: block; }
+
+  #sticky-header { 
+    position: relative;
+    z-index: 10; 
+    background: #fff; 
+    padding: 16px;
+    border-bottom: 1px solid #eaecef; 
+    box-sizing: border-box;
+    flex-shrink: 0;
+  }
+  .audio-player-wrapper { display: none; }
+  .audio-player-wrapper.active { display: block; }
+  .audio-player { display: flex; align-items: center; gap: 12px; width: 100%; }
+  .play-pause-btn { background: #3b82f6; color: white; border: none; border-radius: 50%; width: 36px; height: 36px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .progress-container { flex-grow: 1; }
+  .progress-bar-wrapper { width: 100%; height: 8px; background-color: #e0e0e0; border-radius: 4px; cursor: pointer; }
+  .progress-bar { width: 0; height: 100%; background-color: #3b82f6; border-radius: 4px; }
+  .time-display { font-size: 0.9em; min-width: 90px; text-align: center; flex-shrink: 0; }
+  .top-bar-button { height: 36px; padding: 0 12px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #fff; color: #374151; cursor: pointer; font-size: 10pt; font-family: inherit; flex-shrink: 0; }
+
+  /* --- Custom Select for Speed Control --- */
+  .speed-control { position: relative; flex-shrink: 0; }
+  .custom-select { appearance: none; -webkit-appearance: none; background-color: #f3f4f6; border: 1px solid #d1d5db; border-radius: 6px; padding: 6px 30px 6px 12px; font-size: 1em; font-weight: 500; cursor: pointer; min-width: 90px; }
+  .speed-control::after { content: '▾'; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; font-size: 1.2em; color: #6b7280; }
+
+  /* --- Bottom Bar & Buttons --- */
+  .bottom-bar { position: fixed; left: 0; right: 0; bottom: 0; height: 64px; background: #fff; border-top: 1px solid #eaecef; box-shadow: 0 -6px 18px rgba(0,0,0,.06); display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 16px; z-index: 100; transition: background-color 0.3s; box-sizing: border-box; }
+  .bb-left, .bb-center { display: flex; align-items: center; gap: 8px; }
+  .pills { display: flex; gap: 10px; align-items: center; }
+  .pill { padding: 6px 16px; border-radius: 18px; border: 1px solid #d1d5db; background: #f9fafb; color: #374151; font-size: 11pt; cursor: pointer; transition: all 0.2s ease; }
+  .pill.active { background: #2E74B5; border-color: #2E74B5; color: #fff; font-weight: 600; }
+  .bb-center button { height: 38px; padding: 0 16px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #fff; color: #374151; cursor: pointer; font-size: 11pt; font-family: inherit; }
+  .btn-primary { background-color: #2563eb !important; color: white !important; border-color: #2563eb !important; font-weight: 600; }
+  button#clean-btn.has-save { background-color: #fee2e2 !important; color: #991b1b !important; border-color: #fecaca !important; font-weight: 600;}
+
+  /* MODIFIED: Timer display styles */
+  .timer-display-box { height: 36px; padding: 0 12px; border: 1px solid #d1d5db; border-radius: 8px; cursor: pointer; font-size: 13pt; font-family: inherit; display: flex; align-items: center; justify-content: center; min-width: 50px; transition: background-color 0.3s, border-color 0.3s; user-select: none; flex-shrink: 0; font-weight: 600; }
+  .timer-paused { background-color: #fef2f2; border-color: #fecaca; }
+
+  /* --- Question Styles --- */
+  .test-page { text-align: left; padding-top: 20px; padding-bottom: 80px; }
+  .group { border: 1px solid #eef0f6; border-radius: 12px; padding: 24px; margin: 0; }
+  .test-title-container { border-bottom: 1px solid #BFBFBF; padding-bottom: 6px; margin-bottom: 16px; }
+  .test-title { font-size: 1.2em; margin: 0; }
+  .date-info { font-size: 0.85em; color: #6b7280; font-style: italic; margin-top: 4px; }
+  .fill-in-question { margin-bottom: 12pt; line-height: 1.75; text-align: left; }
+  .fill-in-question input[type="text"] { width: 200px; font-size: 1.1em; padding: 4px 6px; border: 1px solid #9ca3af; border-radius: 4px; margin: 0 8px; vertical-align: baseline; }
+  input.error { border-color: #fca5a5 !important; background-color: #fef2f2 !important; }
+  input.correct { border-color: #86efac !important; background-color: #f0fdf4 !important; }
+
+  /* --- Transcript Styles --- */
+  .transcript-page h4 { font-size: 1.2em; border-bottom: 1px solid #BFBFBF; padding-bottom: 6px; margin-top: 24pt; margin-bottom: 12pt; }
+  .transcript-page ol { padding-left: 0; list-style: none; }
+  .transcript-page li { display: grid; grid-template-columns: 30px auto; gap: 8px; align-items: start; }
+  .transcript-page li:not(.translation) { margin-bottom: 0pt; }
+  .transcript-page li.translation { margin-bottom: 8pt; }
+  .transcript-page li .num { font-weight: bold; }
+  .transcript-page li.translation .num { visibility: hidden; }
+
+  /* --- Notes Panel & Highlighter --- */
+  #notes-splitter { width: var(--splitter-width); background: var(--splitter-color); cursor: col-resize; display: none; }
+  #notes { flex-basis: 0; display: none; flex-shrink: 0; width: auto; background: #fafbff; border-left: 1px solid #eaecef; flex-direction: column; overflow: hidden; }
+  body.notes-open #notes { display: flex; flex-basis: 420px; }
+  body.notes-open #notes-splitter { display: block; }
+  .side-panel-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-bottom: 1px solid #eaecef; background: #f8f9fa; flex-shrink: 0; }
+  .side-panel-close { background: transparent; border: none; font-size: 24px; cursor: pointer; }
+  #notes-list { overflow-y: auto; padding: 12px; flex-grow: 1; }
+  .note-card { background: #fff; border-radius: 10px; padding: 12px; margin: 0 0 10px; border: 1px solid #e6e9f3; }
+  .note-quote { background:#f6f8ff; border:1px solid #e5eafe; border-radius:8px; padding:8px 10px; margin: 6px 0 10px; font-size: 1rem; cursor: pointer; }
+  .note-card textarea { width: 100%; min-height: 64px; border: 1px solid #e1e4ef; border-radius: 8px; padding: 8px; box-sizing: border-box; font-size: 16px; }
+  .hl { background: #fff59d; }
+  .hl-blue { background: #bae6fd; cursor: pointer; }
+  
+  #selbar { position: absolute; background: #fff; border: 1px solid #eaecef; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: 6px; gap: 6px; display: inline-flex; z-index: 101; }
+  #selbar[hidden] { display: none; }
+  #selbar button { border: 1px solid #e1e4ef; border-radius: 6px; padding: 5px 10px; background: #fff; cursor: pointer; font-size: 0.9em; }
+
+  #settings-panel { position: absolute; background: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); border: 1px solid #e5e7eb; width: 200px; z-index: 101; padding: 6px; display: none; }
+  #settings-panel.active { display: block; }
+  .settings-section { padding: 6px; }
+  .settings-section h5 { margin: 0 0 8px; font-size: 0.8em; color: #6b7280; font-weight: 600; text-transform: uppercase; }
+  .settings-group button { width: 100%; background: #f3f4f6; border: 1px solid transparent; text-align: left; padding: 8px 12px; border-radius: 6px; cursor: pointer; margin-bottom: 4px; font-size: 1em; }
+  .settings-group button.selected { background: #e0e7ff; color: #4338ca; font-weight: 600; border-color: #c7d2fe; }
+  .settings-divider { border-top: 1px solid #e5e7eb; margin: 6px 0; }
+
+  /* --- Enhanced Results & History --- */
+  .results-in-page { margin-top: 30px; border-top: 2px solid #eef0f6; padding-top: 20px; }
+  .results-container { max-width: 650px; margin: 0 auto; }
+  .results-summary { font-size: 1.1em; font-weight: 600; margin-bottom: 16px; display: flex; justify-content: flex-start; gap: 3em; }
+  .results-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.95em; }
+  .results-table th, .results-table td { border: 1px solid #e1e4ef; padding: 8px 12px; text-align: left; }
+  .results-table th { background: #f8f9fa; font-weight: 600; }
+  .result-correct { color: #16a34a; font-weight: bold; }
+  .result-incorrect { color: #dc2626; font-weight: bold; }
+  .your-answer { font-style: italic; color: #4b5563; }
+  .no-answer { color: #9ca3af; font-style: italic; }
+
+  /* --- Dialogs & History Panel --- */
+  .dialog-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 200; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: opacity 0.2s, visibility 0.2s; }
+  #confirm-dialog-overlay, #clean-history-dialog-overlay { z-index: 300; }
+  .dialog-overlay.visible { opacity: 1; visibility: visible; }
+  .dialog-box { background: white; padding: 24px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 90%; max-width: 400px; text-align: center; transform: scale(0.95); transition: transform 0.2s; }
+  .dialog-overlay.visible .dialog-box { transform: scale(1); }
+  .dialog-box p { margin: 0 0 20px; font-size: 1.1em; }
+  .dialog-buttons { display: flex; gap: 12px; justify-content: center; }
+  .dialog-buttons.vertical { flex-direction: column; }
+  .dialog-buttons button { padding: 10px 20px; border-radius: 8px; font-size: 1em; cursor: pointer; border: 1px solid #d1d5db; }
+  #confirm-dialog-yes { background-color: #2563eb; color: white; border-color: #2563eb; }
+  #confirm-dialog-no { background-color: #fff; color: #374151; }
+  #history-panel { max-width: 700px; width: 90%; max-height: 80vh; display: flex; flex-direction: column; text-align: left; }
+  .history-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; border-bottom: 1px solid #eaecef; margin-bottom: 12px; }
+  .history-header h3 { margin: 0; }
+  .history-header .btn-clean { font-size: 10pt; height: 32px; padding: 0 12px; background-color: #fff; color: #2E74B5; border: 1px solid #d1d5db; font-weight: 600; }
+  #history-list { overflow-y: auto; padding-right: 10px; }
+  .history-item { border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 12px; }
+  .history-summary { padding: 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: #f9fafb; }
+  .history-summary:hover { background: #f3f4f6; }
+  .history-details { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; background: #fff; }
+  .history-details.visible { max-height: 500px; padding: 12px; border-top: 1px solid #e5e7eb;}
+  .history-item-delete-btn { background: transparent; border: none; font-size: 24px; cursor: pointer; color: #ef4444; padding: 4px 8px; line-height: 1; }
+  .mistake-table { width: 100%; margin-top: 10px; border-collapse: collapse; }
+  .mistake-table th, .mistake-table td { border: 1px solid #e1e4ef; padding: 8px; text-align: left; }
+  #clean-current-btn, #clean-all-btn { background-color: #fee2e2; color: #b91c1c; border-color: #fecaca; }
+  #clean-cancel-btn { background-color: #f3f4f6; color: #6b7280; border-color: #e5e7eb; }
+  
+  /* --- Auto-hiding scrollbar styles --- */
+  #left-pane::-webkit-scrollbar, #right-pane::-webkit-scrollbar, #notes-list::-webkit-scrollbar { width: 8px; }
+  #left-pane::-webkit-scrollbar-track, #right-pane::-webkit-scrollbar-track, #notes-list::-webkit-scrollbar-track { background: transparent; }
+  #left-pane::-webkit-scrollbar-thumb, #right-pane::-webkit-scrollbar-thumb, #notes-list::-webkit-scrollbar-thumb { background-color: transparent; border-radius: 4px; }
+  #left-pane:hover::-webkit-scrollbar-thumb, #right-pane:hover::-webkit-scrollbar-thumb, #notes-list:hover::-webkit-scrollbar-thumb { background-color: #ccc; }
+  .dark-mode #left-pane:hover::-webkit-scrollbar-thumb, .dark-mode #right-pane:hover::-webkit-scrollbar-thumb, .dark-mode #notes-list:hover::-webkit-scrollbar-thumb { background-color: #4b5563; }
+
+  /* --- Dark Mode --- */
+  body.dark-mode { background-color: #111827; color: #d1d5db; }
+  .dark-mode .shell, .dark-mode #left-pane, .dark-mode #sticky-header, .dark-mode .bottom-bar, .dark-mode #right-pane, .dark-mode #notes, .dark-mode .note-card, .dark-mode #settings-panel, .dark-mode .results-table th, .dark-mode .dialog-box { background-color: #1f2937; color: #d1d5db; border-color: #374151; }
+  .dark-mode h1, .dark-mode h2, .dark-mode h3, .dark-mode h4 { color: #93c5fd; }
+  .dark-mode .pill { background: #374151; color: #d1d5db; border-color: #4b5563; }
+  .dark-mode .pill.active { background: #60a5fa; border-color: #60a5fa; color: #111827; }
+  .dark-mode input[type="text"] { background: #374151; border-color: #4b5563; color: #d1d5db; }
+  .dark-mode input.error { background-color: #4b1924 !important; border-color: #991b1b !important; }
+  .dark-mode input.correct { background-color: #163b2d !important; border-color: #14532d !important; }
+  .dark-mode .note-quote { background: #374151; border-color: #4b5563; }
+  .dark-mode button, .dark-mode .dialog-buttons button, .dark-mode .top-bar-button { background-color: #374151; border-color: #4b5563; color: #d1d5db;}
+  .dark-mode .btn-primary { background-color: #3b82f6 !important; border-color: #3b82f6 !important; color: white !important;}
+  .dark-mode button#clean-btn.has-save { background-color: #450a0a !important; color: #fee2e2 !important; border-color: #991b1b !important;}
+  .dark-mode #confirm-dialog-yes { background-color: #3b82f6; border-color: #3b82f6;}
+  .dark-mode #confirm-dialog-no { background-color: #4b5563; border-color: #5a6676;}
+  .dark-mode .settings-group button { background: #374151; }
+  .dark-mode .settings-group button.selected { background: #312e81; color: #e0e7ff; border-color: #4f46e5;}
+  .dark-mode .custom-select { background-color: #374151; color: #d1d5db; border-color: #4b5563; }
+  .dark-mode .speed-control::after { color: #9ca3af; }
+  .dark-mode .your-answer { color: #9ca3af; }
+  .dark-mode .timer-paused { background-color: #450a0a; border-color: #991b1b;}
+  .dark-mode .history-summary { background: #1f2937; }
+  .dark-mode .history-summary:hover { background: #374151; }
+  .dark-mode .history-details { background: #111827; }
+  .dark-mode .history-header .btn-clean { background-color: #374151; color: #93c5fd; border-color: #4b5563; }
+  .dark-mode #clean-current-btn, .dark-mode #clean-all-btn { background-color: #450a0a; color: #fecaca; border-color: #991b1b; }
+  .dark-mode #clean-cancel-btn { background-color: #374151; color: #9ca3af; border-color: #4b5563; }
+</style>
+</head>
+<body class="font-large">
+
+<div id="sticky-header">
+  <div id="audio-player-container"></div>
+</div>
+
+<div class="app-wrapper">
+  <div class="shell">
+    <div id="main-shell">
+      <div id="left-pane">
+        <div id="test-pages-container"></div>
+      </div>
+      <div id="splitter"></div>
+      <div id="right-pane">
+        <div id="transcript-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="notes-splitter"></div>
+  <div id="notes">
+    <div class="side-panel-header"><span>My Notes</span><button id="notes-close" type="button" class="side-panel-close">&times;</button></div>
+    <div id="notes-list"></div>
+  </div>
+</div>
+
+<div class="bottom-bar">
+  <div class="bb-left"><div id="part-pills" class="pills"></div></div>
+  <div class="bb-center">
+    <button id="submit-btn" class="btn-primary" type="button">Submit</button>
+    <button id="reset-btn" type="button">Reset</button>
+    <button id="submit-all-btn" class="btn-primary" type="button">Submit All</button>
+    <button id="clean-btn" type="button">Clean</button>
+    <button id="history-btn" type="button">History</button>
+  </div>
+</div>
+
+<div id="selbar" hidden>
+    <button data-act="hl">Highlight</button>
+    <button data-act="note">Note</button>
+    <button data-act="del">Clear</button>
+</div>
+
+<div id="settings-panel">
+  <div class="settings-section">
+    <h5>Font Size</h5>
+    <div class="settings-group" id="font-size-group">
+      <button data-size="regular">Regular</button>
+      <button data-size="large" class="selected">Large</button>
+      <button data-size="xlarge">Extra Large</button>
+    </div>
+  </div>
+  <div class="settings-divider"></div>
+  <div class="settings-section">
+    <h5>Color Mode</h5>
+    <div class="settings-group" id="color-mode-group">
+      <button data-mode="light" class="selected">Black on White</button>
+      <button data-mode="dark">White on Black</button>
+    </div>
+  </div>
+</div>
+
+<div id="confirm-dialog-overlay" class="dialog-overlay">
+  <div id="confirm-dialog-box" class="dialog-box">
+    <p id="confirm-dialog-msg"></p>
+    <div class="dialog-buttons">
+      <button id="confirm-dialog-no">Cancel</button>
+      <button id="confirm-dialog-yes">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div id="history-panel-overlay" class="dialog-overlay">
+  <div id="history-panel" class="dialog-box">
+    <div class="history-header">
+      <h3 id="history-title">History</h3>
+      <button id="history-clean-btn" class="btn-clean">Clean</button>
+    </div>
+    <div id="history-list"></div>
+  </div>
+</div>
+
+<div id="clean-history-dialog-overlay" class="dialog-overlay">
+  <div id="clean-history-dialog-box" class="dialog-box">
+    <p>Choose a cleanup option:</p>
+    <div class="dialog-buttons vertical">
+      <button id="clean-current-btn">Clear History for This Test</button>
+      <button id="clean-all-btn">Clear All History</button>
+      <button id="clean-cancel-btn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+'use strict';
+
+const __safeStorage = (() => {
+    try {
+        return window.localStorage;
+    } catch (_) {
+        return null;
+    }
+})();
+
+const localStorage = {
+    getItem(key) {
+        if (!__safeStorage) return null;
+        try { return __safeStorage.getItem(key); } catch (_) { return null; }
+    },
+    setItem(key, value) {
+        if (!__safeStorage) return;
+        try { __safeStorage.setItem(key, String(value)); } catch (_) {}
+    },
+    removeItem(key) {
+        if (!__safeStorage) return;
+        try { __safeStorage.removeItem(key); } catch (_) {}
+    }
+};
+
+window.inputCache = {}; // 全局输入缓存
+window.App = {
+    state: { timerSecs: 0, timerInterval: null, paused: false, finishedSections: new Set(), confirmCallback: null, pageInitialized: new Set() },
+    templates: { content: {} },
+    answerKey: {},
+
+    init() {
+        this.populateContent(); 
+        this.buildLayout(); 
+        this.cacheElements(); 
+        this.bindEvents(); 
+        this.ensureSuiteButtonsForAll();
+        this.loadGlobalState();
+        this.startTimer(); 
+        this.showPage(localStorage.getItem('lastActivePage') || 'page-test11'); 
+        this.AudioPlayer.init(); 
+        this.Splitter.init(); 
+        this.Splitter.initNotes();
+        this.applySafeArea();
+        // 全局提交按钮绑定到当前激活套题
+        if (this.el.submitBtn) {
+            this.el.submitBtn.addEventListener('click', () => this.submitCurrentSuite());
+        }
+    },
+    resolveInitialPageId(preferredId) {
+        const hasPreferred = preferredId && this.templates.content && this.templates.content[preferredId];
+        return hasPreferred ? preferredId : this.getDefaultPageId();
+    },
+    getDefaultPageId() {
+        const keys = Object.keys(this.templates.content || {});
+        return keys.length ? keys[0] : 'page-test1';
+    },
+    ensureSuiteSubmitButton(pageId) {
+        const suitePage = document.getElementById(pageId);
+        if (!suitePage) return;
+        // 移除页面内的分题提交按钮（防止误导用户）
+        const existingContainer = suitePage.querySelector('.suite-submit-container');
+        if (existingContainer) existingContainer.remove();
+        // 不再创建页面内按钮，只使用底部栏的全局 Submit 按钮
+    },
+    ensureSuiteButtonsForAll() {
+        (Object.keys(this.templates.content || {})).forEach(id => this.ensureSuiteSubmitButton(id));
+    },
+    cacheElements() {
+        const $ = s => document.querySelector(s);
+        this.el = { 
+            body: $('body'), mainShell: $('#main-shell'), leftPane: $('#left-pane'), 
+            allPanes: [$('#left-pane'), $('#right-pane'), $('#notes')], 
+            submitBtn: $('#submit-btn'), resetBtn: $('#reset-btn'), 
+            audioContainer: $('#audio-player-container'), pagesContainer: $('#test-pages-container'), 
+            transcriptContainer: $('#transcript-content'), pillsContainer: $('#part-pills'), 
+            bottomBar: $('.bottom-bar'),
+            notes: $('#notes'), notesCloseBtn: $('#notes-close'), notesList: $('#notes-list'), 
+            selbar: $('#selbar'), settingsPanel: $('#settings-panel'),
+            submitAllBtn: $('#submit-all-btn'),
+            cleanBtn: $('#clean-btn'),
+            historyBtn: $('#history-btn'),
+            confirmDialog: {
+                overlay: $('#confirm-dialog-overlay'),
+                msg: $('#confirm-dialog-msg'),
+                yes: $('#confirm-dialog-yes'),
+                no: $('#confirm-dialog-no')
+            },
+            historyPanel: {
+                overlay: $('#history-panel-overlay'),
+                title: $('#history-title'),
+                list: $('#history-list'),
+                cleanBtn: $('#history-clean-btn')
+            },
+            cleanHistoryDialog: {
+                overlay: $('#clean-history-dialog-overlay'),
+                cleanCurrentBtn: $('#clean-current-btn'),
+                cleanAllBtn: $('#clean-all-btn'),
+                cancelBtn: $('#clean-cancel-btn')
+            }
+        };
+    },
+    buildLayout() {
+        const audioContainer = document.getElementById('audio-player-container'), pagesContainer = document.getElementById('test-pages-container'), transcriptContainer = document.getElementById('transcript-content'), pillsContainer = document.getElementById('part-pills');
+        let audioHTML = '', pagesHTML = '', transcriptHTML = '', pillsHTML = '';
+        for (const [id, data] of Object.entries(this.templates.content)) {
+            const pageNum = id.replace('page-test', '');
+            const suiteId = `set${pageNum}`;
+            audioHTML += `<div class="audio-player-wrapper" id="audio-${id}"><div class="audio-player">
+                <span class="timer-display-box" role="button">00:00</span>
+                <button class="play-pause-btn">&#9658;</button>
+                <div class="progress-container"><div class="progress-bar-wrapper"><div class="progress-bar"></div></div></div>
+                <div class="time-display">00:00 / 00:00</div>
+                <div class="speed-control"><select class="custom-select"><option value="0.5">0.5x</option><option value="0.75">0.75x</option><option value="0.9">0.9x</option><option value="1.0" selected>1.0x</option><option value="1.25">1.25x</option><option value="1.5">1.5x</option><option value="1.7">1.7x</option><option value="2.0">2.0x</option></select></div>
+                <button data-action="toggle-settings" class="top-bar-button">Settings</button>
+                <button data-action="toggle-notes" class="top-bar-button">Notes</button>
+                <audio class="listening-audio" src="${data.audioSrc}" preload="metadata"></audio>
+            </div></div>`;
+            pagesHTML += `<div class="test-page" id="${id}" data-suite-id="${suiteId}">${data.questions}</div>`;
+            transcriptHTML += `<div class="transcript-page" id="transcript-${id}"><h4>Transcript: T${pageNum} ${data.title}</h4><ol style="counter-reset: item-counter ${data.startNum - 1};">${data.transcript}</ol><p>&nbsp;</p><p>&nbsp;</p></div>`;
+            pillsHTML += `<div class="pill" data-target="${id}">T${pageNum}</div>`;
+        }
+        audioContainer.innerHTML = audioHTML; pagesContainer.innerHTML = pagesHTML; transcriptContainer.innerHTML = transcriptHTML; pillsContainer.innerHTML = pillsHTML;
+    },
+    bindEvents() {
+        // 🔧 修复页面切换输入丢失
+        this.el.pillsContainer.addEventListener('click', e => { 
+            if (!e.target.classList.contains('pill')) return;
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            
+            const current = document.querySelector('.test-page.active');
+            if (current) {
+                window.inputCache[current.id] = [];
+                current.querySelectorAll('input[type="text"]').forEach((input, i) => {
+                    window.inputCache[current.id][i] = input.value;
+                });
+            }
+            
+            const targetId = e.target.dataset.target;
+            document.querySelectorAll('.test-page, .audio-player-wrapper, .transcript-page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+            
+            document.getElementById(targetId).classList.add('active');
+            document.getElementById(`audio-${targetId}`).classList.add('active');
+            e.target.classList.add('active');
+            
+            localStorage.setItem('lastActivePage', targetId);
+
+            
+            const testPrefix = `t${targetId.replace('page-test', '')}`;
+
+            
+            const isFinished = this.state.finishedSections.has(testPrefix);
+
+            
+            this.el.mainShell.classList.toggle('split-view', isFinished);
+
+            
+            if (isFinished) {
+
+            
+                document.getElementById(`transcript-${targetId}`)?.classList.add('active');
+
+            
+            }
+
+            
+            const activeAudioWrapper = document.getElementById(`audio-${targetId}`);
+
+            
+            this.el.activeTimer = activeAudioWrapper ? activeAudioWrapper.querySelector('.timer-display-box') : null;
+
+            
+            if (this.el.submitBtn) this.el.submitBtn.disabled = isFinished;
+            
+            setTimeout(() => {
+                if (window.inputCache[targetId]) {
+                    document.getElementById(targetId).querySelectorAll('input[type="text"]').forEach((input, i) => {
+                        if (window.inputCache[targetId][i]) {
+                            input.value = window.inputCache[targetId][i];
+                        }
+                    });
+                }
+            }, 10);
+        });
+        // 使用事件委托监听套题提交按钮
+        this.el.pagesContainer.addEventListener('click', e => {
+            const submitBtn = e.target.closest('[data-submit-suite]');
+            if (submitBtn) {
+                const suiteId = submitBtn.dataset.submitSuite;
+                this.finishSuite(suiteId);
+            }
+        });
+        this.el.resetBtn.addEventListener('click', () => { this.showConfirm('确认重置当前练习吗？所有进度将丢失。', () => this.clearCurrentSectionState(true)); });
+        
+        this.el.audioContainer.addEventListener('click', e => {
+            const target = e.target;
+            if (target.classList.contains('timer-display-box')) this.togglePause();
+            if (target.dataset.action === 'toggle-settings') {
+                this.el.settingsPanel.classList.toggle('active');
+                if(this.el.settingsPanel.classList.contains('active')) {
+                    const rect = target.getBoundingClientRect();
+                    this.el.settingsPanel.style.top = `${rect.bottom + 8}px`;
+                    this.el.settingsPanel.style.right = `${window.innerWidth - rect.right}px`;
+                    this.el.settingsPanel.style.left = 'auto';
+                }
+            }
+            if (target.dataset.action === 'toggle-notes') this.notes.toggle();
+        });
+
+        document.addEventListener('click', e => {
+            const settingsBtn = e.target.closest('[data-action="toggle-settings"]');
+            if (!this.el.settingsPanel.contains(e.target) && !settingsBtn) {
+                this.el.settingsPanel.classList.remove('active');
+            }
+        });
+
+        this.el.settingsPanel.addEventListener('click', e => {
+            const button = e.target.closest('button');
+            if (!button) return;
+            const size = button.dataset.size;
+            const mode = button.dataset.mode;
+            if (size) {
+                this.el.body.classList.remove('font-regular', 'font-large', 'font-xlarge');
+                this.el.body.classList.add(`font-${size}`);
+                document.querySelectorAll('#font-size-group button').forEach(b => b.classList.remove('selected'));
+                button.classList.add('selected');
+            }
+            if (mode) {
+                this.el.body.classList.toggle('dark-mode', mode === 'dark');
+                document.querySelectorAll('#color-mode-group button').forEach(b => b.classList.remove('selected'));
+                button.classList.add('selected');
+            }
+        });
+
+        this.el.notesCloseBtn.addEventListener('click', () => this.notes.toggle(false));
+        document.addEventListener('mouseup', e => this.highlighter.handleMouseUp(e));
+        this.el.selbar.addEventListener('click', e => this.highlighter.handleAction(e));
+        
+        this.el.notesList.addEventListener('click', e => {
+            const delBtn = e.target.closest('button[data-act="del-note"]');
+            if (delBtn) {
+                const card = delBtn.closest('.note-card');
+                if (card) {
+                    const hid = card.dataset.hid;
+                    if (hid) {
+                        const elToUnwrap = document.querySelector(`span[data-hid="${hid}"]`);
+                        if (elToUnwrap) App.highlighter.unWrap(elToUnwrap);
+                    }
+                    card.remove();
+                }
+                return; 
+            }
+
+            const card = e.target.closest('.note-card');
+            if (card && e.target.closest('.note-quote')) {
+                const hid = card.dataset.hid;
+                if (hid) {
+                    const targetHighlight = document.querySelector(`span[data-hid="${hid}"]`);
+                    if (targetHighlight) {
+                        targetHighlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        targetHighlight.style.transition = 'background-color 0.2s';
+                        targetHighlight.style.backgroundColor = '#fecaca';
+                        setTimeout(() => { targetHighlight.style.backgroundColor = ''; }, 1200);
+                    }
+                }
+            }
+        });
+        
+        window.addEventListener('resize', () => this.applySafeArea());
+    
+        const dialog = this.el.confirmDialog;
+        dialog.yes.addEventListener('click', () => { if (this.state.confirmCallback) this.state.confirmCallback(); this.hideConfirm(); });
+        dialog.no.addEventListener('click', () => this.hideConfirm());
+        dialog.overlay.addEventListener('click', (e) => { if (e.target === dialog.overlay) this.hideConfirm(); });
+        this.el.submitAllBtn.addEventListener('click', () => this.showConfirm('确认提交全部套题吗?', () => this.submitAllSuites()));
+        this.el.cleanBtn.addEventListener('click', () => this.showConfirm('确认清除当前练习的存档吗?', () => this.clearCurrentSectionState(false)));
+
+        this.el.historyBtn.addEventListener('click', () => this.history.open());
+        this.el.historyPanel.overlay.addEventListener('click', (e) => { if(e.target.id === 'history-panel-overlay') this.history.close(); });
+        this.el.historyPanel.list.addEventListener('click', e => {
+            const summary = e.target.closest('.history-summary');
+            if (summary && !e.target.closest('.history-item-delete-btn')) {
+                const details = summary.nextElementSibling;
+                details.classList.toggle('visible');
+            }
+            const deleteBtn = e.target.closest('.history-item-delete-btn');
+            if (deleteBtn) {
+                const timestamp = deleteBtn.dataset.timestamp;
+                this.showConfirm('确认删除此条历史记录吗?', () => this.history.delete(timestamp));
+            }
+        });
+
+        const cleanDialog = this.el.cleanHistoryDialog;
+        this.el.historyPanel.cleanBtn.addEventListener('click', () => cleanDialog.overlay.classList.add('visible'));
+        cleanDialog.cancelBtn.addEventListener('click', () => cleanDialog.overlay.classList.remove('visible'));
+        cleanDialog.overlay.addEventListener('click', (e) => { if(e.target === cleanDialog.overlay) cleanDialog.overlay.classList.remove('visible'); });
+        cleanDialog.cleanCurrentBtn.addEventListener('click', () => this.history.cleanCurrent());
+        cleanDialog.cleanAllBtn.addEventListener('click', () => this.history.cleanAll());
+    },
+    showConfirm(message, onConfirm) {
+        this.el.confirmDialog.msg.textContent = message;
+        this.state.confirmCallback = onConfirm;
+        this.el.confirmDialog.overlay.classList.add('visible');
+    },
+    hideConfirm() {
+        this.el.confirmDialog.overlay.classList.remove('visible');
+        this.state.confirmCallback = null;
+    },
+    loadGlobalState() {},
+
+    snapshotActivePage() {
+        const activePage = this.el.pagesContainer.querySelector('.test-page.active');
+        if (!activePage) return;
+
+        // 将当前输入值写回 DOM 属性，避免切页时被 innerHTML 丢失
+        activePage.querySelectorAll('input[type="text"]').forEach(input => {
+            input.setAttribute('value', input.value);
+        });
+        activePage.querySelectorAll('textarea').forEach(textarea => {
+            textarea.innerHTML = textarea.value;
+        });
+
+        const pageId = activePage.id;
+        const transcriptPage = document.getElementById(`transcript-${pageId}`);
+        this.state.pageSnapshots.set(pageId, {
+            pageHTML: activePage.innerHTML,
+            transcriptHTML: transcriptPage ? transcriptPage.innerHTML : '',
+            notesHTML: this.el.notesList.innerHTML
+        });
+    },
+
+    restorePage(pageId) {
+        const snapshot = this.state.pageSnapshots.get(pageId);
+        if (!snapshot) return false;
+        const testPage = document.getElementById(pageId);
+        const transcriptPage = document.getElementById(`transcript-${pageId}`);
+        if (!testPage || !transcriptPage) return false;
+        testPage.innerHTML = snapshot.pageHTML;
+        transcriptPage.innerHTML = snapshot.transcriptHTML;
+        this.el.notesList.innerHTML = snapshot.notesHTML;
+        return true;
+    },
+
+    clearCurrentSectionState(isResetButton) {
+        const activePage = this.el.pagesContainer.querySelector('.test-page.active');
+        if (!activePage) return;
+        const pageId = activePage.id;
+        const testPrefix = `t${pageId.replace('page-test', '')}`;
+        this.state.finishedSections.delete(testPrefix);
+        this.state.pageInitialized.delete(testPrefix);
+        this.state.pageSnapshots.delete(pageId);
+
+        const template = this.templates.content[pageId];
+        if (template) {
+            activePage.innerHTML = template.questions;
+            const transcript = document.getElementById(`transcript-${pageId}`);
+            if (transcript) {
+                transcript.innerHTML = `<h4>Transcript: T${pageId.replace('page-test','')} ${template.title}</h4><ol style="counter-reset: item-counter ${template.startNum - 1};">${template.transcript}</ol><p>&nbsp;</p><p>&nbsp;</p>`;
+            }
+            this.el.notesList.innerHTML = '';
+        }
+
+        if (isResetButton) location.reload();
+        else this.showPage(pageId);
+    },
+
+    showPage(pageId) {
+        this.snapshotActivePage();
+        this.notes.toggle(false);
+        this.highlighter.hideSelbar();
+        document.querySelectorAll('.listening-audio').forEach(audio => audio.pause());
+
+        const resolvedPageId = (this.templates.content && this.templates.content[pageId]) ? pageId : this.getDefaultPageId();
+        if (!resolvedPageId) return;
+
+        const testPrefix = `t${resolvedPageId.replace('page-test', '')}`;
+        const testPage = document.getElementById(resolvedPageId);
+        const transcriptPage = document.getElementById(`transcript-${resolvedPageId}`);
+        if (!testPage || !transcriptPage) return;
+
+        const savedStateJSON = null;
+        const hasSavedState = !!savedStateJSON;
+        this.el.cleanBtn.classList.toggle('has-save', hasSavedState);
+
+        if (!this.state.pageInitialized.has(testPrefix) && savedStateJSON) {
+            try {
+                const state = JSON.parse(savedStateJSON);
+                testPage.innerHTML = state.pageHTML;
+                transcriptPage.innerHTML = state.transcriptHTML;
+                this.el.notesList.innerHTML = state.notesHTML;
+                if (state.isFinished) this.state.finishedSections.add(testPrefix);
+                else this.state.finishedSections.delete(testPrefix);
+            } catch (error) {
+                console.warn('恢复存档失败', error);
+            }
+            this.state.pageInitialized.add(testPrefix);
+        } else if (!this.state.pageInitialized.has(testPrefix)) {
+            this.state.pageInitialized.add(testPrefix);
+        } else {
+            this.restorePage(resolvedPageId);
+        }
+
+        document.querySelectorAll('.test-page, .audio-player-wrapper, .transcript-page').forEach(p => p.classList.remove('active'));
+        this.ensureSuiteSubmitButton(resolvedPageId);
+        testPage.classList.add('active');
+        const activeAudioWrapper = document.getElementById(`audio-${resolvedPageId}`);
+        if (activeAudioWrapper) {
+            activeAudioWrapper.classList.add('active');
+            this.el.activeTimer = activeAudioWrapper.querySelector('.timer-display-box');
+        } else {
+            this.el.activeTimer = null;
+        }
+
+        document.querySelectorAll('.pill').forEach(p => p.classList.toggle('active', p.dataset.target === resolvedPageId));
+        localStorage.setItem('lastActivePage', resolvedPageId);
+        const isFinished = this.state.finishedSections.has(testPrefix);
+        this.el.submitBtn.disabled = isFinished;
+        this.el.mainShell.classList.toggle('split-view', isFinished);
+        if (isFinished) document.getElementById(`transcript-${resolvedPageId}`)?.classList.add('active');
+    },
+    startTimer() {
+        if (this.state.timerInterval) clearInterval(this.state.timerInterval);
+        this.state.timerSecs = 0;
+        const updateTimerDisplay = () => {
+            if (!this.el.activeTimer) return;
+            const m = String(Math.floor(this.state.timerSecs / 60)).padStart(2, '0');
+            const s = String(this.state.timerSecs % 60).padStart(2, '0');
+            this.el.activeTimer.textContent = `${m}:${s}`;
+        };
+        updateTimerDisplay();
+        this.state.timerInterval = setInterval(() => { if (!this.state.paused) { this.state.timerSecs++; updateTimerDisplay(); } }, 1000);
+    },
+    togglePause() {
+        if (!this.el.activeTimer) return;
+        this.state.paused = !this.state.paused;
+        this.el.activeTimer.classList.toggle('timer-paused', this.state.paused);
+    },
+
+    submitCurrentSuite() {
+        const activePage = document.querySelector('.test-page.active');
+        if (!activePage) return;
+        const suiteId = activePage.dataset.suiteId;
+        if (suiteId) this.finishSuite(suiteId);
+    },
+
+    submitAllSuites() {
+        if (this.state && this.state.submittingAll) return;
+        const suiteIds = Array.from(document.querySelectorAll('.test-page[data-suite-id]'))
+            .map(page => page.dataset.suiteId)
+            .filter(Boolean);
+
+        if (!suiteIds.length) return;
+
+        if (this.state) this.state.submittingAll = true;
+        if (this.el && this.el.submitAllBtn) {
+            this.el.submitAllBtn.disabled = true;
+        }
+
+        suiteIds.forEach(id => this.finishSuite(id));
+
+        if (this.el && this.el.submitAllBtn) {
+            this.el.submitAllBtn.disabled = false;
+        }
+        if (this.state) this.state.submittingAll = false;
+    },
+
+    finishSuite(suiteId) {
+        // 通过 suiteId 找到对应的 test-page
+        const suitePage = document.querySelector(`[data-suite-id="${suiteId}"]`);
+        if (!suitePage) return;
+        
+        const pageId = suitePage.id;
+        const testPrefix = `t${pageId.replace('page-test', '')}`
+        if (this.state.finishedSections.has(testPrefix)) return;
+        
+        let tableHTML = `<table class="results-table"><thead><tr><th>Q</th><th>Your Answer</th><th>Correct Answer</th><th>Result</th></tr></thead><tbody>`;
+        const questionLabels = Array.from(suitePage.querySelectorAll('.fill-in-question b'));
+        let processedInputs = new Set();
+        const allAnswers = [];
+
+        questionLabels.forEach(label => {
+            const questionText = label.textContent.replace('.', '');
+            const parentP = label.closest('.fill-in-question');
+            const inputsForLabel = Array.from(parentP.querySelectorAll('input[type="text"]'));
+            if (inputsForLabel.length === 0 || processedInputs.has(inputsForLabel[0])) return;
+            
+            let userAnswers = [], correctAnswers = [], isCorrectArray = [];
+            
+            inputsForLabel.forEach(input => {
+                processedInputs.add(input);
+                const userAnswer = input.value.trim();
+                const correctAnswer = this.answerKey[input.name] || '';
+                userAnswers.push(userAnswer);
+                correctAnswers.push(correctAnswer);
+                const isCorrect = userAnswer !== '' && (userAnswer.toLowerCase().replace(/[\s\$\-€£,\.]/g, '') === correctAnswer.toLowerCase().replace(/[\s\$\-€£,\.]/g, ''));
+                
+                input.classList.add(isCorrect ? 'correct' : 'error');
+                isCorrectArray.push(isCorrect);
+                input.disabled = true;
+            });
+            
+            const isAllCorrectForLabel = isCorrectArray.every(Boolean);
+            allAnswers.push({ q: questionText, user: userAnswers.join(' / '), correct: correctAnswers.join(' / '), isCorrect: isAllCorrectForLabel });
+
+            const resultClass = isAllCorrectForLabel ? 'result-correct' : 'result-incorrect';
+            const resultIcon = isAllCorrectForLabel ? '✓' : '✗';
+            tableHTML += `<tr><td><b>${questionText}</b></td><td class="your-answer">${userAnswers.map(ua => ua || '<i class="no-answer">No Answer</i>').join(' / ')}</td><td>${correctAnswers.join(' / ')}</td><td class="${resultClass}">${resultIcon}</td></tr>`;
+        });
+        tableHTML += `</tbody></table>`;
+        
+        const totalQuestions = allAnswers.length;
+        const correctQuestions = allAnswers.filter(a => a.isCorrect).length;
+        const percentage = totalQuestions > 0 ? ((correctQuestions / totalQuestions) * 100).toFixed(0) : 0;
+        
+        const summaryHTML = `<div class="results-summary"><span>Score: ${correctQuestions} / ${totalQuestions}</span><span>Accuracy: ${percentage}%</span></div>`;
+        const resultsContainer = suitePage.querySelector('.results-in-page');
+        if(resultsContainer) {
+            resultsContainer.innerHTML = `<div class="results-container">${summaryHTML}${tableHTML}</div>`;
+            if (suitePage.classList.contains('active')) {
+                setTimeout(() => {
+                    resultsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100);
+            }
+        }
+
+        this.state.finishedSections.add(testPrefix);
+        
+        // 禁用该套题的提交按钮
+        const submitBtn = suitePage.querySelector('[data-submit-suite]');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Submitted';
+            submitBtn.style.opacity = '0.6';
+            submitBtn.style.cursor = 'not-allowed';
+        }
+
+        const isActiveSuite = suitePage.classList.contains('active');
+        if (isActiveSuite) {
+            this.el.mainShell.classList.add('split-view');
+            document.querySelectorAll('.transcript-page').forEach(p => p.classList.remove('active'));
+            document.getElementById(`transcript-${pageId}`)?.classList.add('active');
+            if (this.el.submitBtn) this.el.submitBtn.disabled = true;
+        }
+        
+        this.history.add(testPrefix, { score: correctQuestions, total: totalQuestions, accuracy: percentage, answers: allAnswers });
+        
+        // 检查是否所有套题都已完成
+        this.checkAllSuitesCompleted();
+    },
+    checkAllSuitesCompleted() {
+        const total = Object.keys(this.templates.content || {}).length;
+        if (total && this.state.finishedSections.size >= total) {
+            console.log('[PracticePage] 所有套题已提交');
+        }
+    },
+    applySafeArea() {
+        // The spacer div in the HTML is a more robust solution for the bottom bar issue.
+        // This function can be kept for future safe-area implementations (e.g., iPhone notches).
+    },
+    notes: {
+        toggle(forceOpen) {
+            const shouldOpen = forceOpen === undefined ? !document.body.classList.contains('notes-open') : forceOpen;
+            document.body.classList.toggle('notes-open', shouldOpen);
+        },
+        create(targetSpan) { if (!targetSpan) return; const hid = targetSpan.dataset.hid || `h_${Date.now()}`; targetSpan.dataset.hid = hid; const existed = App.el.notesList.querySelector(`.note-card[data-hid="${hid}"]`); if (existed) { this.toggle(true); existed.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); return; } const text = (targetSpan.textContent || '').trim(); const card = document.createElement('div'); card.className = 'note-card'; card.dataset.hid = hid; card.innerHTML = `<div class="note-quote">${text || '(empty)'}</div><textarea placeholder="..."></textarea><div class="note-actions"><button type="button" data-act="del-note">Delete</button></div>`; App.el.notesList.prepend(card); this.toggle(true); }
+    },
+    highlighter: {
+        unWrap(el) { if (el && el.parentNode) { const p = el.parentNode; while (el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); } }, hideSelbar() { if (App.el && App.el.selbar) App.el.selbar.hidden = true; }, positionToolbar(rect, w) { let left = rect.left + rect.width / 2 - w / 2; App.el.selbar.style.left = `${window.scrollX + left}px`; App.el.selbar.style.top = `${window.scrollY + rect.top}px`; App.el.selbar.style.transform = 'translateY(-100%) translateY(-8px)'; },
+        handleMouseUp(e) { if (e.target.closest('#selbar, #notes, .bottom-bar, #settings-panel, .dialog-overlay, #history-panel-overlay')) return; const clickedHl = e.target.closest('.hl,.hl-blue'); const s = window.getSelection(); App.el.selbar.targetElement = null; if (clickedHl && s.isCollapsed) { s.removeAllRanges(); App.el.selbar.querySelector('[data-act="hl"]').hidden = true; App.el.selbar.querySelector('[data-act="note"]').hidden = false; App.el.selbar.querySelector('[data-act="del"]').hidden = false; App.el.selbar.hidden = false; this.positionToolbar(clickedHl.getBoundingClientRect(), App.el.selbar.offsetWidth); App.el.selbar.targetElement = clickedHl; } else if (s && !s.isCollapsed) { const r = s.getRangeAt(0); if (!r.toString().trim()) return; const rect = r.getBoundingClientRect(); if (!rect || (!rect.width && !rect.height)) return this.hideSelbar(); App.el.selbar.querySelector('[data-act="hl"]').hidden = false; App.el.selbar.querySelector('[data-act="note"]').hidden = false; App.el.selbar.querySelector('[data-act="del"]').hidden = true; App.el.selbar.hidden = false; this.positionToolbar(rect, App.el.selbar.offsetWidth); } else { this.hideSelbar(); } },
+        handleAction(e) {
+            const act = e.target.closest('button')?.dataset.act;
+            if (!act) return;
+            if (act === 'hl' || act === 'note') {
+                const s = window.getSelection();
+                if (!s || s.isCollapsed) return;
+                const r = s.getRangeAt(0);
+                const span = document.createElement('span');
+                span.className = act === 'hl' ? 'hl' : 'hl-blue';
+                try { r.surroundContents(span); } catch { span.appendChild(r.extractContents()); r.insertNode(span); }
+                if (act === 'note') { span.dataset.hid = `h_${Date.now()}`; App.notes.create(span); }
+                if (window.getSelection) { window.getSelection().removeAllRanges(); } else if (document.selection) { document.selection.empty(); }
+            } else if (act === 'del' && App.el.selbar.targetElement) { this.unWrap(App.el.selbar.targetElement); }
+            this.hideSelbar();
+        }
+    },
+    AudioPlayer: {
+        init() {
+            document.getElementById('audio-player-container').addEventListener('click', e => {
+                const playerWrapper = e.target.closest('.audio-player-wrapper');
+                if (!playerWrapper) return;
+                const audio = playerWrapper.querySelector('.listening-audio');
+                if (e.target.classList.contains('play-pause-btn')) {
+                    document.querySelectorAll('.listening-audio').forEach(a => { if(a !== audio) a.pause(); });
+                    audio.paused ? audio.play() : audio.pause();
+                } else if (e.target.closest('.progress-bar-wrapper')) {
+                     if(audio.duration) {
+                        const pCont = playerWrapper.querySelector('.progress-bar-wrapper');
+                        const rect = pCont.getBoundingClientRect();
+                        audio.currentTime = ((e.clientX - rect.left) / rect.width) * audio.duration;
+                    }
+                }
+            });
+            document.getElementById('audio-player-container').addEventListener('change', e => {
+                const playerWrapper = e.target.closest('.audio-player-wrapper');
+                if (!playerWrapper || !e.target.classList.contains('custom-select')) return;
+                const audio = playerWrapper.querySelector('.listening-audio');
+                audio.playbackRate = parseFloat(e.target.value);
+            });
+            const format = t => { if(isNaN(t)) return "00:00"; const m=Math.floor(t/60),s=Math.floor(t%60); return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`; };
+            const updateAudioUI = (audio) => {
+                const playerWrapper = audio.closest('.audio-player-wrapper');
+                if (!playerWrapper) return;
+                const progress = playerWrapper.querySelector('.progress-bar');
+                const time = playerWrapper.querySelector('.time-display');
+                const btn = playerWrapper.querySelector('.play-pause-btn');
+                if(audio.duration) {
+                    progress.style.width = `${(audio.currentTime/audio.duration)*100}%`;
+                    time.textContent = `${format(audio.currentTime)} / ${format(audio.duration)}`;
+                }
+                btn.innerHTML = audio.paused ? '&#9658;' : '&#10074;&#10074;';
+            };
+            
+            setInterval(() => {
+                const activeAudio = document.querySelector('.audio-player-wrapper.active .listening-audio');
+                if (activeAudio) updateAudioUI(activeAudio);
+            }, 500);
+        }
+    },
+    Splitter: {
+        init() { const splitter = document.getElementById('splitter'), left = document.getElementById('left-pane'), right = document.getElementById('right-pane'); let drag = false; splitter.addEventListener('mousedown', () => { drag = true; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; }); window.addEventListener('mouseup', () => { drag = false; document.body.style.cursor = 'default'; document.body.style.userSelect = 'auto'; }); window.addEventListener('mousemove', e => { if (!drag) return; const total = left.parentElement.offsetWidth, newLeft = e.clientX, newRight = total - newLeft - splitter.offsetWidth; if (newLeft > 200 && newRight > 200) { left.style.flexBasis = `${newLeft}px`; right.style.flexBasis = `${newRight}px`; } }); },
+        initNotes() { const splitter = document.getElementById('notes-splitter'), shell = document.querySelector('.shell'), notes = document.getElementById('notes'); let drag = false; splitter.addEventListener('mousedown', () => { drag = true; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; }); window.addEventListener('mouseup', () => { drag = false; document.body.style.cursor = 'default'; document.body.style.userSelect = 'auto'; }); window.addEventListener('mousemove', e => { if (!drag) return; const total = document.querySelector('.app-wrapper').offsetWidth; const newNotesWidth = total - e.clientX; if (newNotesWidth > 200 && newNotesWidth < total - 300) { notes.style.flexBasis = `${newNotesWidth}px`; } }); }
+    },
+    history: {
+        getTestPrefix() {
+            const activePage = document.querySelector('.test-page.active');
+            if (!activePage) return null;
+            return `t${activePage.id.replace('page-test', '')}`;
+        },
+        load(testPrefix) { const data = localStorage.getItem(`ieltsHistory-${testPrefix}`); return data ? JSON.parse(data) : []; },
+        save(testPrefix, historyData) { localStorage.setItem(`ieltsHistory-${testPrefix}`, JSON.stringify(historyData)); },
+        add(testPrefix, result) { const historyData = this.load(testPrefix); const entry = { timestamp: Date.now(), ...result }; historyData.unshift(entry); this.save(testPrefix, historyData); },
+        delete(timestamp) {
+            const testPrefix = this.getTestPrefix();
+            if (!testPrefix || !timestamp) return;
+            let historyData = this.load(testPrefix);
+            historyData = historyData.filter(item => item.timestamp !== parseInt(timestamp));
+            this.save(testPrefix, historyData);
+            this.open();
+        },
+        open() {
+            const testPrefix = this.getTestPrefix();
+            if (!testPrefix) return;
+            const historyData = this.load(testPrefix);
+            const listEl = App.el.historyPanel.list;
+            App.el.historyPanel.title.textContent = `History for T${testPrefix.replace('t','')}`;
+            listEl.innerHTML = '';
+            if (historyData.length === 0) {
+                listEl.innerHTML = '<p style="text-align: center; color: #6b7280;">No history for this test yet.</p>';
+            } else {
+                historyData.forEach(item => {
+                    const date = new Date(item.timestamp).toLocaleString();
+                    const answersHTML = `<table class="mistake-table">
+                        <thead><tr><th>Q</th><th>Your Answer</th><th>Correct Answer</th></tr></thead>
+                        <tbody>
+                            ${(item.answers || []).map(ans => `
+                                <tr>
+                                    <td><b>${ans.q}</b></td>
+                                    <td class="${ans.isCorrect ? 'result-correct' : 'result-incorrect'}">${ans.user || '<i>empty</i>'}</td>
+                                    <td>${ans.correct}</td>
+                                </tr>`).join('')}
+                        </tbody>
+                    </table>`;
+                    listEl.innerHTML += `<div class="history-item"><div class="history-summary"><div><strong>${date}</strong><br><span>Score: ${item.score}/${item.total} (${item.accuracy}%)</span></div><button class="history-item-delete-btn" data-timestamp="${item.timestamp}">&times;</button></div><div class="history-details">${answersHTML}</div></div>`;
+                });
+            }
+            App.el.historyPanel.overlay.classList.add('visible');
+        },
+        close() { App.el.historyPanel.overlay.classList.remove('visible'); },
+        cleanCurrent() {
+            const testPrefix = this.getTestPrefix();
+            if (!testPrefix) return;
+            this.save(testPrefix, []);
+            this.open();
+            App.el.cleanHistoryDialog.overlay.classList.remove('visible');
+        },
+        cleanAll() {
+            for (let i = 1; i <= 20; i++) { // Adjusted loop for T1-T20
+                localStorage.removeItem(`ieltsHistory-t${i}`);
+            }
+            this.open(); // Refresh current view
+            App.el.cleanHistoryDialog.overlay.classList.remove('visible');
+        }
+    },
+    
+    populateContent() {
+        this.templates.content = {
+          'page-test11':{title:'Discussion of British and America Films', startNum:26, dates:'(2014.12.20/2011.3.10/2007.6.16)', audioSrc:'./part4.11.Discussion of British and America Films.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T11: Discussion of British and America Films</h4><p class="date-info">(2014.12.20/2011.3.10/2007.6.16)</p></div><p class="fill-in-question"><b>26.</b> First of all, there is a <input type="text" name="t11_q26"> which all the writers get together and talk about the stories.</p><p class="fill-in-question"><b>27.</b> after that, writers would have a <input type="text" name="t11_q27"> meeting</p><p class="fill-in-question"><b>28.</b> stage three is a discussion which lasts around <input type="text" name="t11_q28"></p><p class="fill-in-question"><b>29.</b> The nest step is called a <input type="text" name="t11_q29"> stage</p><p class="fill-in-question"><b>30.</b> In the end, the editing work should be finished by <input type="text" name="t11_q30"></p></div><div class="results-in-page" id="results-page-test11"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">26.</span><span>First of all, there is a <strong>story conference</strong> which all the writers get together and talk about the stories.</span></li><li class="translation"><span></span><span>首先，会有一个故事研讨会，所有的作者聚在一起讨论故事。</span></li><li><span class="num">27.</span><span>after that, writers would have a <strong>planning</strong> meeting.</span></li><li class="translation"><span></span><span>之后，作者们会有一个策划会议。</span></li><li><span class="num">28.</span><span>stage three is a discussion which lasts around <strong>four weeks</strong>.</span></li><li class="translation"><span></span><span>第三阶段是持续大约四周的讨论。</span></li><li><span class="num">29.</span><span>The next step is called a <strong>production</strong> stage.</span></li><li class="translation"><span></span><span>下一步叫做制作阶段。</span></li><li><span class="num">30.</span><span>In the end, the editing work should be finished by <strong>videotape editor</strong>.</span></li><li class="translation"><span></span><span>最后，剪辑工作应由录像带剪辑师完成。</span></li>`},
+          'page-test12':{title:'Survey on Local Supermarkets', startNum:31, dates:'(2016.5.7/2015.5.30/2013.9.7)', audioSrc:'./part4.12.Survey on Local Supermarkets.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T12: Survey on Local Supermarkets</h4><p class="date-info">(2016.5.7/2015.5.30/2013.9.7)</p></div><p class="fill-in-question"><b>31.</b> Data is collected from interview with <input type="text" name="t12_q31"></p><p class="fill-in-question"><b>32.</b> It is useful to researchers, but sometimes lacking of <input type="text" name="t12_q32"></p><p class="fill-in-question"><b>33.</b> <input type="text" name="t12_q33"> of customer groups</p><p class="fill-in-question"><b>34.</b> Excellent range of <input type="text" name="t12_q34"> food</p><p class="fill-in-question"><b>35.</b> use too much <input type="text" name="t12_q35"></p><p class="fill-in-question"><b>36.</b> provide <input type="text" name="t12_q36"></p><p class="fill-in-question"><b>37.</b> should stock a greater variety of eco-friendly <input type="text" name="t12_q37"> food</p><p class="fill-in-question"><b>38.</b> Encourage people to buy <input type="text" name="t12_q38"> product</p><p class="fill-in-question"><b>39.</b> improve staff <input type="text" name="t12_q39"> policies</p><p class="fill-in-question"><b>40.</b> helpful <input type="text" name="t12_q40"> of green food</p></div><div class="results-in-page" id="results-page-test12"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">31.</span><span>Data is collected from interview with <strong>shoppers</strong>.</span></li><li class="translation"><span></span><span>数据是通过采访购物者收集的。</span></li><li><span class="num">32.</span><span>It is useful to researchers, but sometimes lacking of <strong>details</strong>.</span></li><li class="translation"><span></span><span>它对研究人员有用，但有时缺乏细节。</span></li><li><span class="num">33.</span><span><strong>Surveys</strong> of customer groups.</span></li><li class="translation"><span></span><span>对顾客群体的调查。</span></li><li><span class="num">34.</span><span>Excellent range of <strong>organic</strong> food.</span></li><li class="translation"><span></span><span>品类齐全的有机食品。</span></li><li><span class="num">35.</span><span>use too much <strong>packaging</strong>.</span></li><li class="translation"><span></span><span>使用过多的包装。</span></li><li><span class="num">36.</span><span>provide <strong>bags</strong>.</span></li><li class="translation"><span></span><span>提供袋子。</span></li><li><span class="num">37.</span><span>should stock a greater variety of eco-friendly <strong>cleaning</strong> food.</span></li><li class="translation"><span></span><span>应该储备更多种类的环保清洁食品。</span></li><li><span class="num">38.</span><span>Encourage people to buy <strong>local</strong> product.</span></li><li class="translation"><span></span><span>鼓励人们购买本地产品。</span></li><li><span class="num">39.</span><span>improve staff <strong>training</strong> policies.</span></li><li class="translation"><span></span><span>改善员工培训政策。</span></li><li><span class="num">40.</span><span>helpful <strong>advertising</strong> of green food.</span></li><li class="translation"><span></span><span>有益的绿色食品广告。</span></li>`},
+          'page-test13':{title:'Birds Observation and Preservation', startNum:31, dates:'(2018.6.30/2017.11.2/2012.11.17)', audioSrc:'./part4.13.Birds Observation and Preservation.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T13: Birds Observation and Preservation</h4><p class="date-info">(2018.6.30/2017.11.2/2012.11.17)</p></div><p class="fill-in-question"><b>31.</b> Birds which are <input type="text" name="t13_q31">, for further study</p><p class="fill-in-question"><b>32.</b> Scientists need to <input type="text" name="t13_q32"> rather than counts</p><p class="fill-in-question"><b>33.</b> <input type="text" name="t13_q33"> for tunnel bird's call</p><p class="fill-in-question"><b>34.</b> tag for identify birds' <input type="text" name="t13_q34"></p><p class="fill-in-question"><b>35.</b> have impact on the birds, such as <input type="text" name="t13_q35"></p><p class="fill-in-question"><b>36.</b> helpful for birds' <input type="text" name="t13_q36"></p><p class="fill-in-question"><b>37.</b> Monitor for <input type="text" name="t13_q37"> of birds callings during flight</p><p class="fill-in-question"><b>38.</b> <input type="text" name="t13_q38"> were made to listen to their sound</p><p class="fill-in-question"><b>39.</b> Noise devices being put in monitoring in great <input type="text" name="t13_q39"></p><p class="fill-in-question"><b>40.</b> reduce dangers by <input type="text" name="t13_q40"> farm</p></div><div class="results-in-page" id="results-page-test13"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">31.</span><span>Birds which are <strong>protected</strong>, for further study.</span></li><li class="translation"><span></span><span>受保护的鸟类，以供进一步研究。</span></li><li><span class="num">32.</span><span>Scientists need to <strong>estimate</strong> rather than counts.</span></li><li class="translation"><span></span><span>科学家需要的是估计而不是计数。</span></li><li><span class="num">33.</span><span><strong>mapping</strong> for tunnel bird's call.</span></li><li class="translation"><span></span><span>为隧道鸟的叫声绘制地图。</span></li><li><span class="num">34.</span><span>tag for identify birds' <strong>tracks</strong>.</span></li><li class="translation"><span></span><span>用于识别鸟类踪迹的标签。</span></li><li><span class="num">35.</span><span>have impact on the birds, such as <strong>pollution</strong>.</span></li><li class="translation"><span></span><span>对鸟类有影响，比如污染。</span></li><li><span class="num">36.</span><span>helpful for birds' <strong>survival</strong>.</span></li><li class="translation"><span></span><span>有助于鸟类的生存。</span></li><li><span class="num">37.</span><span>Monitor for <strong>frequency</strong> of birds callings during flight.</span></li><li class="translation"><span></span><span>监测飞行中鸟叫的频率。</span></li><li><span class="num">38.</span><span><strong>Recordings</strong> were made to listen to their sound.</span></li><li class="translation"><span></span><span>进行了录音以听取它们的声音。</span></li><li><span class="num">39.</span><span>Noise devices being put in monitoring in great <strong>distance</strong>.</span></li><li class="translation"><span></span><span>在很远的距离放置噪音设备进行监测。</span></li><li><span class="num">40.</span><span>reduce dangers by <strong>wind</strong> farm.</span></li><li class="translation"><span></span><span>通过风力发电场减少危险。</span></li>`},
+          'page-test14':{title:'The Influence of Competition on Workplace', startNum:31, dates:'(2016.4.21/2014.6.7/2010.10.30)', audioSrc:'./part4.14.The Influence of Competition on Workplace.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T14: The Influence of Competition on Workplace</h4><p class="date-info">(2016.4.21/2014.6.7/2010.10.30)</p></div><p class="fill-in-question"><b>31.</b> The survey was done on the influence of competition in the <input type="text" name="t14_q31"></p><p class="fill-in-question"><b>32.</b> Phenomenon: only <input type="text" name="t14_q32"> women take important positions in large companies</p><p class="fill-in-question"><b>33.</b> Women are weaker in three sides: math, science and <input type="text" name="t14_q33"></p><p class="fill-in-question"><b>34.</b> When men and women's <input type="text" name="t14_q34"> and ability are equal, they are treated equally.</p><p class="fill-in-question"><b>35.</b> Women like to take less <input type="text" name="t14_q35"> compared to men.</p><p class="fill-in-question"><b>36.</b> Men are more <input type="text" name="t14_q36"> about the competition.</p><p class="fill-in-question"><b>37.</b> Percentage of women who are not willing to take risks is <input type="text" name="t14_q37"></p><p class="fill-in-question"><b>38.</b> Women don't want to take competitive <input type="text" name="t14_q38"></p><p class="fill-in-question"><b>39.</b> Men enjoy <input type="text" name="t14_q39"> more than women do.</p><p class="fill-in-question"><b>40.</b> Women don't want to take risks is because they worry future <input type="text" name="t14_q40"> and career opportunity.</p></div><div class="results-in-page" id="results-page-test14"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">31.</span><span>The survey was done on the influence of competition in the <strong>workplace</strong>.</span></li><li class="translation"><span></span><span>该调查是关于竞争在工作场所中的影响。</span></li><li><span class="num">32.</span><span>Phenomenon: only <strong>2%</strong> women take important positions in large companies.</span></li><li class="translation"><span></span><span>现象：只有2%的女性在大公司担任重要职位。</span></li><li><span class="num">33.</span><span>Women are weaker in three sides: math, science and <strong>engineering</strong>.</span></li><li class="translation"><span></span><span>女性在三个方面较弱：数学、科学和工程。</span></li><li><span class="num">34.</span><span>When men and women's <strong>skill</strong> and ability are equal, they are treated equally.</span></li><li class="translation"><span></span><span>当男性和女性的技能和能力相同时，他们受到平等待遇。</span></li><li><span class="num">35.</span><span>Women like to take less <strong>workload</strong> compared to men.</span></li><li class="translation"><span></span><span>与男性相比，女性喜欢承担较少的工作量。</span></li><li><span class="num">36.</span><span>Men are more <strong>confident</strong> about the competition.</span></li><li class="translation"><span></span><span>男性对竞争更有信心。</span></li><li><span class="num">37.</span><span>Percentage of women who are not willing to take risks is <strong>14%</strong>.</span></li><li class="translation"><span></span><span>不愿意承担风险的女性比例为14%。</span></li><li><span class="num">38.</span><span>Women don't want to take competitive <strong>feedback</strong>.</span></li><li class="translation"><span></span><span>女性不希望收到竞争性的反馈。</span></li><li><span class="num">39.</span><span>Men enjoy <strong>challenges</strong> more than women do.</span></li><li class="translation"><span></span><span>男性比女性更享受挑战。</span></li><li><span class="num">40.</span><span>Women don't want to take risks is because they worry future <strong>salary</strong> and career opportunity.</span></li><li class="translation"><span></span><span>女性不想冒险是因为她们担心未来的薪水和职业机会。</span></li>`},
+          'page-test15':{title:'The Production of Plastics', startNum:31, dates:'(2019.6.29/2016.1.23/2012.2.4)', audioSrc:'./part4.15.The Production of Plastics.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T15: The Production of Plastics</h4><p class="date-info">(2019.6.29/2016.1.23/2012.2.4)</p></div><p class="fill-in-question"><b>31.</b> People use <input type="text" name="t15_q31"> and acid to produce plastic.</p><p class="fill-in-question"><b>32.</b> Plastic is commonly found on products such as detergent bottles, <input type="text" name="t15_q32"> jugs</p><p class="fill-in-question"><b>33.</b> It's used to produce artificial <input type="text" name="t15_q33"></p><p class="fill-in-question"><b>34.</b> Cellulose is not like real plastic because it becomes <input type="text" name="t15_q34"> when heated.</p><p class="fill-in-question"><b>35.</b> First plastic was invented in a <input type="text" name="t15_q35"></p><p class="fill-in-question"><b>36.</b> A <input type="text" name="t15_q36"> named Alexander Parkes developed it.</p><p class="fill-in-question"><b>37.</b> Plastic can be produced by collecting recycled <input type="text" name="t15_q37"></p><p class="fill-in-question"><b>38.</b> One disadvantage is that plastic produces <input type="text" name="t15_q38"> when it's burnt.</p><p class="fill-in-question"><b>39.</b> Research has shown that plastic decomposes by the <input type="text" name="t15_q39"></p><p class="fill-in-question"><b>40.</b> Natural <input type="text" name="t15_q40"> no longer has a stranglehold on rubber products.</p></div><div class="results-in-page" id="results-page-test15"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">31.</span><span>People use <strong>cotton</strong> and acid to produce plastic.</span></li><li class="translation"><span></span><span>人们使用棉花和酸来生产塑料。</span></li><li><span class="num">32.</span><span>Plastic is commonly found on products such as detergent bottles, <strong>milk</strong> jugs.</span></li><li class="translation"><span></span><span>塑料常见于洗涤剂瓶、牛奶壶等产品上。</span></li><li><span class="num">33.</span><span>It's used to produce artificial <strong>silk</strong>.</span></li><li class="translation"><span></span><span>它被用来生产人造丝。</span></li><li><span class="num">34.</span><span>Cellulose is not like real plastic because it becomes <strong>hard</strong> when heated.</span></li><li class="translation"><span></span><span>纤维素不像真正的塑料，因为它在加热时会变硬。</span></li><li><span class="num">35.</span><span>First plastic was invented in a <strong>laboratory</strong>.</span></li><li class="translation"><span></span><span>第一种塑料是在实验室里发明的。</span></li><li><span class="num">36.</span><span>A <strong>chemist</strong> named Alexander Parkes developed it.</span></li><li class="translation"><span></span><span>一位名叫亚历山大·帕克斯的化学家开发了它。</span></li><li><span class="num">37.</span><span>Plastic can be produced by collecting recycled <strong>pens</strong>.</span></li><li class="translation"><span></span><span>塑料可以通过回收废旧笔来生产。</span></li><li><span class="num">38.</span><span>One disadvantage is that plastic produces <strong>gas</strong> when it's burnt.</span></li><li class="translation"><span></span><span>一个缺点是塑料燃烧时会产生气体。</span></li><li><span class="num">39.</span><span>Research has shown that plastic decomposes by the <strong>light</strong>.</span></li><li class="translation"><span></span><span>研究表明塑料会被光分解。</span></li><li><span class="num">40.</span><span>Natural <strong>wood</strong> no longer has a stranglehold on rubber products.</span></li><li class="translation"><span></span><span>天然木材不再在橡胶产品上占有垄断地位。</span></li>`},
+          'page-test16':{title:'Ethical Behavior', startNum:31, dates:'(2013.11.30/2010.10.23/2008.4.5)', audioSrc:'./part4.16.Ethical Behavior.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T16: Ethical Behavior</h4><p class="date-info">(2013.11.30/2010.10.23/2008.4.5)</p></div><p class="fill-in-question"><b>31.</b> Research has been lasting for <input type="text" name="t16_q31"></p><p class="fill-in-question"><b>32.</b> Big companies should be more <input type="text" name="t16_q32"></p><p class="fill-in-question"><b>33.</b> The name of a book called Management and <input type="text" name="t16_q33"></p><p class="fill-in-question"><b>34.</b> more <input type="text" name="t16_q34"> involved</p><p class="fill-in-question"><b>35.</b> The company should have strict <input type="text" name="t16_q35"></p><p class="fill-in-question"><b>36.</b> The company can sometimes invite some <input type="text" name="t16_q36"> in the training sessions</p><p class="fill-in-question"><b>37.</b> Different level of <input type="text" name="t16_q37"></p><p class="fill-in-question"><b>38.</b> Mangers should have great <input type="text" name="t16_q38"> vision</p><p class="fill-in-question"><b>39.</b> Privacy in areas such as <input type="text" name="t16_q39"></p><p class="fill-in-question"><b>40.</b> Focused on <input type="text" name="t16_q40"> of individual and organization</p></div><div class="results-in-page" id="results-page-test16"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">31.</span><span>Research has been lasting for <strong>four decades</strong>.</span></li><li class="translation"><span></span><span>研究已经持续了四十年。</span></li><li><span class="num">32.</span><span>Big companies should be more <strong>accountable</strong>.</span></li><li class="translation"><span></span><span>大公司应该更加负责。</span></li><li><span class="num">33.</span><span>The name of a book called Management and <strong>Private Property</strong>.</span></li><li class="translation"><span></span><span>一本名为《管理与私有财产》的书。</span></li><li><span class="num">34.</span><span>more <strong>young people</strong> involved.</span></li><li class="translation"><span></span><span>更多年轻人参与其中。</span></li><li><span class="num">35.</span><span>The company should have strict <strong>safety standard</strong>.</span></li><li class="translation"><span></span><span>公司应有严格的安全标准。</span></li><li><span class="num">36.</span><span>The company can sometimes invite some <strong>philosophers</strong> in the training sessions.</span></li><li class="translation"><span></span><span>公司有时会邀请一些哲学家参加培训课程。</span></li><li><span class="num">37.</span><span>Different level of <strong>corporation morale</strong>.</span></li><li class="translation"><span></span><span>不同层次的企业士气。</span></li><li><span class="num">38.</span><span>Mangers should have great <strong>global</strong> vision.</span></li><li class="translation"><span></span><span>管理者应有宏大的全球视野。</span></li><li><span class="num">39.</span><span>Privacy in areas such as <strong>health</strong>.</span></li><li class="translation"><span></span><span>在健康等领域的隐私。</span></li><li><span class="num">40.</span><span>Focused on <strong>behavior</strong> of individual and organization.</span></li><li class="translation"><span></span><span>专注于个人和组织的行为。</span></li>`},
+          'page-test17':{title:'Bio-mimicry', startNum:31, dates:'(2019.5.11/2015.4.30/2013.8.29)', audioSrc:'./part4.17.Bio-mimicry.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T17: Bio-mimicry</h4><p class="date-info">(2019.5.11/2015.4.30/2013.8.29)</p></div><p class="fill-in-question"><b>31.</b> In the past, Arctic people copied <input type="text" name="t17_q31"> skills from polar bears</p><p class="fill-in-question"><b>32.</b> dragline silk is much stronger than <input type="text" name="t17_q32"></p><p class="fill-in-question"><b>33.</b> more resillient than synthetic fiber but finer than human <input type="text" name="t17_q33"></p><p class="fill-in-question"><b>34.</b> artificial silk is used to create environmentally friendly equipment for <input type="text" name="t17_q34"></p><p class="fill-in-question"><b>35.</b> it is used as a medical solution for repairing <input type="text" name="t17_q35"> injuries</p><p class="fill-in-question"><b>36.</b> medical stitches using silk cna cause less <input type="text" name="t17_q36"></p><p class="fill-in-question"><b>37.</b> ...can solve the problem: <input type="text" name="t17_q37"> of a high speed train can be reduced</p><p class="fill-in-question"><b>38.</b> other uses include on planes and skating <input type="text" name="t17_q38"> used in Olympics</p><p class="fill-in-question"><b>39.</b> It can solve the problem of train vibration at the end of a <input type="text" name="t17_q39"></p><p class="fill-in-question"><b>40.</b> ...shape of the beak reduces the loss of <input type="text" name="t17_q40"></p></div><div class="results-in-page" id="results-page-test17"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">31.</span><span>In the past, Arctic people copied <strong>hunting</strong> skills from polar bears.</span></li><li class="translation"><span></span><span>过去，北极地区的人们模仿北极熊的捕猎技巧。</span></li><li><span class="num">32.</span><span>dragline silk is much stronger than <strong>steel</strong>.</span></li><li class="translation"><span></span><span>牵引丝比钢的强度大得多。</span></li><li><span class="num">33.</span><span>more resillient than synthetic fiber but finer than human <strong>hair</strong>.</span></li><li class="translation"><span></span><span>比合成纤维更有弹性，但比人类的头发更细。</span></li><li><span class="num">34.</span><span>artificial silk is used to create environmentally friendly equipment for <strong>fishing</strong>.</span></li><li class="translation"><span></span><span>人造丝被用来制造环保的渔具。</span></li><li><span class="num">35.</span><span>it is used as a medical solution for repairing <strong>sports</strong> injuries.</span></li><li class="translation"><span></span><span>它被用作修复运动损伤的医疗解决方案。</span></li><li><span class="num">36.</span><span>medical stitches using silk cna cause less <strong>pain</strong>.</span></li><li class="translation"><span></span><span>使用丝绸制成的医用缝合线可以减轻疼痛。</span></li><li><span class="num">37.</span><span>...can solve the problem: <strong>noisy</strong> of a high speed train can be reduced.</span></li><li class="translation"><span></span><span>可以解决问题：高速列车的噪音可以被降低。</span></li><li><span class="num">38.</span><span>other uses include on planes and skating <strong>boots</strong> used in Olympics.</span></li><li class="translation"><span></span><span>其他用途包括飞机和奥运会使用的滑冰鞋。</span></li><li><span class="num">39.</span><span>It can solve the problem of train vibration at the end of a <strong>tunnel</strong>.</span></li><li class="translation"><span></span><span>它可以解决火车在隧道尽头的振动问题。</span></li><li><span class="num">40.</span><span>...shape of the beak reduces the loss of <strong>energy</strong>.</span></li><li class="translation"><span></span><span>鸟喙的形状减少了能量的损失。</span></li>`},
+          'page-test18':{title:'The History of Bicycle', startNum:31, dates:'(2018.5.24/2017.1.12/2010.1.23)', audioSrc:'./part4.18.The History of Bicycle.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T18: The History of Bicycle</h4><p class="date-info">(2018.5.24/2017.1.12/2010.1.23)</p></div><p class="fill-in-question"><b>31.</b> faster and requires <input type="text" name="t18_q31"> than walking</p><p class="fill-in-question"><b>32.</b> Year: <input type="text" name="t18_q32"></p><p class="fill-in-question"><b>33.</b> <input type="text" name="t18_q33"> tyres and it's two wheels' sizes are different</p><p class="fill-in-question"><b>34.</b> go much <input type="text" name="t18_q34"> for smoother ride</p><p class="fill-in-question"><b>35.</b> a <input type="text" name="t18_q35"> connected the pedal and the wheel</p><p class="fill-in-question"><b>36.</b> It is <input type="text" name="t18_q36"> than precious models</p><p class="fill-in-question"><b>37.</b> still <input type="text" name="t18_q37"> to ride because the wheels are too small</p><p class="fill-in-question"><b>38.</b> Gear: rate of <input type="text" name="t18_q38"></p><p class="fill-in-question"><b>39.</b> key pedal which help go <input type="text" name="t18_q39"></p><p class="fill-in-question"><b>40.</b> loads can be carried over the <input type="text" name="t18_q40"></p></div><div class="results-in-page" id="results-page-test18"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">31.</span><span>faster and requires <strong>less effort</strong> than walking.</span></li><li class="translation"><span></span><span>比步行更快，需要更少的力气。</span></li><li><span class="num">32.</span><span>Year: <strong>1860s</strong>.</span></li><li class="translation"><span></span><span>年份：1860年代。</span></li><li><span class="num">33.</span><span><strong>rubber</strong> tyres and it's two wheels' sizes are different.</span></li><li class="translation"><span></span><span>橡胶轮胎，并且它的两个轮子大小不同。</span></li><li><span class="num">34.</span><span>go much <strong>further</strong> for smoother ride.</span></li><li class="translation"><span></span><span>为了更平稳的骑行而走得更远。</span></li><li><span class="num">35.</span><span>a <strong>chain</strong> connected the pedal and the wheel.</span></li><li class="translation"><span></span><span>一条链条连接了踏板和轮子。</span></li><li><span class="num">36.</span><span>It is <strong>safer</strong> than precious models.</span></li><li class="translation"><span></span><span>它比之前的型号更安全。</span></li><li><span class="num">37.</span><span>still <strong>uncomfortable</strong> to ride because the wheels are too small.</span></li><li class="translation"><span></span><span>因为轮子太小，骑起来仍然不舒服。</span></li><li><span class="num">38.</span><span>Gear: rate of <strong>speed</strong>.</span></li><li class="translation"><span></span><span>齿轮：速度的比例。</span></li><li><span class="num">39.</span><span>key pedal which help go <strong>downhill</strong>.</span></li><li class="translation"><span></span><span>有助于下坡的关键踏板。</span></li><li><span class="num">40.</span><span>loads can be carried over the <strong>back wheel</strong>.</span></li><li class="translation"><span></span><span>货物可以放在后轮上。</span></li>`},
+          'page-test19':{title:'Underwater Archaeological Sites', startNum:31, dates:'(2018.4.26/2016.11.5/2013.12.12)', audioSrc:'./part4.19.Underwater Archaeological Sites.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T19: Underwater Archaeological Sites</h4><p class="date-info">(2018.4.26/2016.11.5/2013.12.12)</p></div><p class="fill-in-question"><b>31.</b> Maoris actually don't have record on language which is <input type="text" name="t19_q31"></p><p class="fill-in-question"><b>32.</b> suggested the <input type="text" name="t19_q32"> of people at that time</p><p class="fill-in-question"><b>33.</b> find that <input type="text" name="t19_q33"> available in that period</p><p class="fill-in-question"><b>34.</b> The sailors escape from the <input type="text" name="t19_q34"></p><p class="fill-in-question"><b>35.</b> Possible reason for sunken: bad <input type="text" name="t19_q35"></p><p class="fill-in-question"><b>36.</b> Ship installed of a <input type="text" name="t19_q36"> fight against pirates</p><p class="fill-in-question"><b>37.</b> A historical <input type="text" name="t19_q37"> of wreck was found</p><p class="fill-in-question"><b>38.</b> The <input type="text" name="t19_q38"> chance was limited due to poor technology</p><p class="fill-in-question"><b>39.</b> People came to these places for the cargo of <input type="text" name="t19_q39"></p><p class="fill-in-question"><b>40.</b> A lot of treasure such as jewelry and <input type="text" name="t19_q40"> were found.</p></div><div class="results-in-page" id="results-page-test19"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">31.</span><span>Maoris actually don't have record on language which is <strong>written</strong>.</span></li><li class="translation"><span></span><span>毛利人实际上没有书面语言的记录。</span></li><li><span class="num">32.</span><span>suggested the <strong>lifestyle</strong> of people at that time.</span></li><li class="translation"><span></span><span>暗示了当时人们的生活方式。</span></li><li><span class="num">33.</span><span>find that <strong>technology</strong> available in that period.</span></li><li class="translation"><span></span><span>发现在那个时期可用的技术。</span></li><li><span class="num">34.</span><span>The sailors escape from the <strong>shore</strong>.</span></li><li class="translation"><span></span><span>水手们从岸边逃离。</span></li><li><span class="num">35.</span><span>Possible reason for sunken: bad <strong>storm</strong>.</span></li><li class="translation"><span></span><span>沉没的可能原因：恶劣的风暴。</span></li><li><span class="num">36.</span><span>Ship installed of a <strong>gun</strong> fight against pirates.</span></li><li class="translation"><span></span><span>船上安装了一门用于对抗海盗的枪。</span></li><li><span class="num">37.</span><span>A historical <strong>map</strong> of wreck was found.</span></li><li class="translation"><span></span><span>发现了一张关于沉船的历史地图。</span></li><li><span class="num">38.</span><span>The <strong>research</strong> chance was limited due to poor technology.</span></li><li class="translation"><span></span><span>由于技术落后，研究的机会是有限的。</span></li><li><span class="num">39.</span><span>People came to these places for the cargo of <strong>gold</strong>.</span></li><li class="translation"><span></span><span>人们为了黄金货物来到这些地方。</span></li><li><span class="num">40.</span><span>A lot of treasure such as jewelry and <strong>coins</strong> were found.</span></li><li class="translation"><span></span><span>发现了大量的宝藏，如珠宝和硬币。</span></li>`},
+          'page-test20':{title:'Archaeological Site of Trimera', startNum:31, dates:'(2018.1.6/2013.6.8/2012.4.12)', audioSrc:'./part4.20.Archaeological Site of Trimera.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T20: Archaeological Site of Trimera</h4><p class="date-info">(2018.1.6/2013.6.8/2012.4.12)</p></div><p class="fill-in-question"><b>31.</b> Roman trading grains, olive and <input type="text" name="t20_q31"></p><p class="fill-in-question"><b>32.</b> 1500s, a French found the remain of <input type="text" name="t20_q32"></p><p class="fill-in-question"><b>33.</b> British archeologist and Swedish conducted a full <input type="text" name="t20_q33"></p><p class="fill-in-question"><b>34.</b> local <input type="text" name="t20_q34"></p><p class="fill-in-question"><b>35.</b> <input type="text" name="t20_q35"></p><p class="fill-in-question"><b>36.</b> evidence for <input type="text" name="t20_q36"> industry</p><p class="fill-in-question"><b>37.</b> people come to collect <input type="text" name="t20_q37"></p><p class="fill-in-question"><b>38.</b> face next to the stone <input type="text" name="t20_q38"> on the river</p><p class="fill-in-question"><b>39.</b> the sculptures of <input type="text" name="t20_q39"></p><p class="fill-in-question"><b>40.</b> another sculpture is for Roman <input type="text" name="t20_q40"></p></div><div class="results-in-page" id="results-page-test20"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">31.</span><span>Roman trading grains, olive and <strong>pottery</strong>.</span></li><li class="translation"><span></span><span>罗马人交易谷物、橄榄和陶器。</span></li><li><span class="num">32.</span><span>1500s, a French found the remain of <strong>castle</strong>.</span></li><li class="translation"><span></span><span>1500年代，一个法国人发现了城堡的遗迹。</span></li><li><span class="num">33.</span><span>British archeologist and Swedish conducted a full <strong>survey</strong>.</span></li><li class="translation"><span></span><span>英国考古学家和瑞典人进行了一次全面的调查。</span></li><li><span class="num">34.</span><span>local <strong>market</strong>.</span></li><li class="translation"><span></span><span>本地市场。</span></li><li><span class="num">35.</span><span><strong>silver coins</strong>.</span></li><li class="translation"><span></span><span>银币。</span></li><li><span class="num">36.</span><span>evidence for <strong>textile</strong> industry.</span></li><li class="translation"><span></span><span>纺织工业的证据。</span></li><li><span class="num">37.</span><span>people come to collect <strong>water</strong>.</span></li><li class="translation"><span></span><span>人们来收集水。</span></li><li><span class="num">38.</span><span>face next to the stone <strong>bridge</strong> on the river.</span></li><li class="translation"><span></span><span>河上石桥旁边的面孔。</span></li><li><span class="num">39.</span><span>the sculptures of <strong>lions</strong>.</span></li><li class="translation"><span></span><span>狮子的雕塑。</span></li><li><span class="num">40.</span><span>another sculpture is for Roman <strong>Emperor</strong>.</span></li><li class="translation"><span></span><span>另一座雕塑是为罗马皇帝而建的。</span></li>`}
+        };
+        this.answerKey = {
+            't11_q26': 'story conference', 't11_q27': 'planning', 't11_q28': 'four weeks', 't11_q29': 'production', 't11_q30': 'videotape editor',
+            't12_q31': 'shoppers', 't12_q32': 'details', 't12_q33': 'surveys', 't12_q34': 'organic', 't12_q35': 'packaging', 't12_q36': 'bags', 't12_q37': 'cleaning', 't12_q38': 'local', 't12_q39': 'training', 't12_q40': 'advertising',
+            't13_q31': 'protected', 't13_q32': 'estimate', 't13_q33': 'mapping', 't13_q34': 'tracks', 't13_q35': 'pollution', 't13_q36': 'survival', 't13_q37': 'frequency', 't13_q38': 'recordings', 't13_q39': 'distance', 't13_q40': 'wind',
+            't14_q31': 'workplace', 't14_q32': '2%', 't14_q33': 'engineering', 't14_q34': 'skill', 't14_q35': 'workload', 't14_q36': 'confident', 't14_q37': '14%', 't14_q38': 'feedback', 't14_q39': 'challenges', 't14_q40': 'salary',
+            't15_q31': 'cotton', 't15_q32': 'milk', 't15_q33': 'silk', 't15_q34': 'hard', 't15_q35': 'laboratory', 't15_q36': 'chemist', 't15_q37': 'pens', 't15_q38': 'gas', 't15_q39': 'light', 't15_q40': 'wood',
+            't16_q31': 'four decades', 't16_q32': 'accountable', 't16_q33': 'private property', 't16_q34': 'young people', 't16_q35': 'safety standard', 't16_q36': 'philosophers', 't16_q37': 'corporation morale', 't16_q38': 'global', 't16_q39': 'health', 't16_q40': 'behavior',
+            't17_q31': 'hunting', 't17_q32': 'steel', 't17_q33': 'hair', 't17_q34': 'fishing', 't17_q35': 'sports', 't17_q36': 'pain', 't17_q37': 'noisy', 't17_q38': 'boots', 't17_q39': 'tunnel', 't17_q40': 'energy',
+            't18_q31': 'less effort', 't18_q32': '1860s', 't18_q33': 'rubber', 't18_q34': 'further', 't18_q35': 'chain', 't18_q36': 'safer', 't18_q37': 'uncomfortable', 't18_q38': 'speed', 't18_q39': 'downhill', 't18_q40': 'back wheel',
+            't19_q31': 'written', 't19_q32': 'lifestyle', 't19_q33': 'technology', 't19_q34': 'shore', 't19_q35': 'storm', 't19_q36': 'gun', 't19_q37': 'map', 't19_q38': 'research', 't19_q39': 'gold', 't19_q40': 'coins',
+            't20_q31': 'pottery', 't20_q32': 'castle', 't20_q33': 'survey', 't20_q34': 'market', 't20_q35': 'silver coins', 't20_q36': 'textile', 't20_q37': 'water', 't20_q38': 'bridge', 't20_q39': 'lions', 't20_q40': 'emperor'
+        };
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => App.init());
+}());
+</script>
+
+<script src="../../../../js/practice-page-enhancer.js"></script>
+</body>
+</html>

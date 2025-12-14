@@ -1,0 +1,1027 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>IELTS Listening Practice - T17-24</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  /* --- V2.0 Core Styles & Base --- */
+  :root { --splitter-width: 5px; --splitter-color: #eaecef; }
+  html, body { height: 100%; margin: 0; overflow: hidden; scroll-behavior: smooth; }
+  body {
+    background-color: #f1f3f4;
+    font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+    font-size: 13pt; /* Default is now LARGE */
+    font-weight: 400;
+    color: #000;
+    transition: background-color 0.3s, color 0.3s, font-size 0.2s;
+    display: flex;
+    flex-direction: column;
+  }
+  body.font-regular { font-size: 10pt; }
+  body.font-xlarge { font-size: 16pt; }
+
+  .app-wrapper { 
+    display: flex; 
+    flex-grow: 1;
+    overflow: hidden;
+  }
+
+  .shell { background: #f6f7fb; display: flex; flex-direction: column; flex-grow: 1; min-width: 0; }
+  h1, h2, h3, h4 { font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif; font-weight: 600; color: #2E74B5; }
+  strong, b { font-weight: 600; }
+  
+  /* --- Layout & Panes --- */
+  #main-shell { display: flex; flex-grow: 1; overflow: hidden; }
+  #left-pane { flex: 1 1 100%; overflow-y: auto; background: #fff; transition: flex-basis 0.4s ease-in-out, background-color 0.3s; padding: 0 16px; box-sizing: border-box; }
+  #splitter { width: var(--splitter-width); background: var(--splitter-color); cursor: col-resize; display: none; }
+  #right-pane { flex: 0 0 0; overflow-y: auto; background: #fcfdff; display: none; padding: 0 24px; box-sizing: border-box; transition: background-color 0.3s; }
+  
+  #main-shell.split-view #left-pane { flex-basis: 60%; padding: 0 24px; }
+  #main-shell.split-view #splitter { display: block; }
+  #main-shell.split-view #right-pane { display: block; flex-basis: calc(40% - var(--splitter-width)); }
+
+  .test-page, .transcript-page { display: none; }
+  .test-page.active, .transcript-page.active { display: block; }
+
+  #sticky-header { 
+    position: relative;
+    z-index: 10; 
+    background: #fff; 
+    padding: 16px;
+    border-bottom: 1px solid #eaecef; 
+    box-sizing: border-box;
+    flex-shrink: 0;
+  }
+  .audio-player-wrapper { display: none; }
+  .audio-player-wrapper.active { display: block; }
+  .audio-player { display: flex; align-items: center; gap: 12px; width: 100%; }
+  .play-pause-btn { background: #3b82f6; color: white; border: none; border-radius: 50%; width: 36px; height: 36px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .progress-container { flex-grow: 1; }
+  .progress-bar-wrapper { width: 100%; height: 8px; background-color: #e0e0e0; border-radius: 4px; cursor: pointer; }
+  .progress-bar { width: 0; height: 100%; background-color: #3b82f6; border-radius: 4px; }
+  .time-display { font-size: 0.9em; min-width: 90px; text-align: center; flex-shrink: 0; }
+  .top-bar-button { height: 36px; padding: 0 12px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #fff; color: #374151; cursor: pointer; font-size: 10pt; font-family: inherit; flex-shrink: 0; }
+
+  /* --- Custom Select for Speed Control --- */
+  .speed-control { position: relative; flex-shrink: 0; }
+  .custom-select { appearance: none; -webkit-appearance: none; background-color: #f3f4f6; border: 1px solid #d1d5db; border-radius: 6px; padding: 6px 30px 6px 12px; font-size: 1em; font-weight: 500; cursor: pointer; min-width: 90px; }
+  .speed-control::after { content: '▾'; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; font-size: 1.2em; color: #6b7280; }
+
+  /* --- Bottom Bar & Buttons --- */
+  .bottom-bar { position: fixed; left: 0; right: 0; bottom: 0; height: 64px; background: #fff; border-top: 1px solid #eaecef; box-shadow: 0 -6px 18px rgba(0,0,0,.06); display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 16px; z-index: 100; transition: background-color 0.3s; box-sizing: border-box; }
+  .bb-left, .bb-center { display: flex; align-items: center; gap: 8px; }
+  .pills { display: flex; gap: 10px; align-items: center; }
+  .pill { padding: 6px 16px; border-radius: 18px; border: 1px solid #d1d5db; background: #f9fafb; color: #374151; font-size: 11pt; cursor: pointer; transition: all 0.2s ease; }
+  .pill.active { background: #2E74B5; border-color: #2E74B5; color: #fff; font-weight: 600; }
+  .bb-center button { height: 38px; padding: 0 16px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #fff; color: #374151; cursor: pointer; font-size: 11pt; font-family: inherit; }
+  .btn-primary { background-color: #2563eb !important; color: white !important; border-color: #2563eb !important; font-weight: 600; }
+  button#clean-btn.has-save { background-color: #fee2e2 !important; color: #991b1b !important; border-color: #fecaca !important; font-weight: 600;}
+
+  /* MODIFIED: Timer display styles */
+  .timer-display-box { height: 36px; padding: 0 12px; border: 1px solid #d1d5db; border-radius: 8px; cursor: pointer; font-size: 13pt; font-family: inherit; display: flex; align-items: center; justify-content: center; min-width: 50px; transition: background-color 0.3s, border-color 0.3s; user-select: none; flex-shrink: 0; font-weight: 600; }
+  .timer-paused { background-color: #fef2f2; border-color: #fecaca; }
+
+  /* --- Question Styles --- */
+  .test-page { text-align: left; padding-top: 20px; padding-bottom: 80px; }
+  .group { border: 1px solid #eef0f6; border-radius: 12px; padding: 24px; margin: 0; }
+  .test-title-container { border-bottom: 1px solid #BFBFBF; padding-bottom: 6px; margin-bottom: 16px; }
+  .test-title { font-size: 1.2em; margin: 0; }
+  .date-info { font-size: 0.85em; color: #6b7280; font-style: italic; margin-top: 4px; }
+  .fill-in-question { margin-bottom: 12pt; line-height: 1.75; text-align: left; }
+  .fill-in-question input[type="text"] { width: 200px; font-size: 1.1em; padding: 4px 6px; border: 1px solid #9ca3af; border-radius: 4px; margin: 0 8px; vertical-align: baseline; }
+  input.error { border-color: #fca5a5 !important; background-color: #fef2f2 !important; }
+  input.correct { border-color: #86efac !important; background-color: #f0fdf4 !important; }
+
+  /* --- Transcript Styles --- */
+  .transcript-page h4 { font-size: 1.2em; border-bottom: 1px solid #BFBFBF; padding-bottom: 6px; margin-top: 24pt; margin-bottom: 12pt; }
+  .transcript-page ol { padding-left: 0; list-style: none; }
+  .transcript-page li { display: grid; grid-template-columns: 30px auto; gap: 8px; align-items: start; }
+  .transcript-page li:not(.translation) { margin-bottom: 0pt; }
+  .transcript-page li.translation { margin-bottom: 8pt; }
+  .transcript-page li .num { font-weight: bold; }
+  .transcript-page li.translation .num { visibility: hidden; }
+
+  /* --- Notes Panel & Highlighter --- */
+  #notes-splitter { width: var(--splitter-width); background: var(--splitter-color); cursor: col-resize; display: none; }
+  #notes { flex-basis: 0; display: none; flex-shrink: 0; width: auto; background: #fafbff; border-left: 1px solid #eaecef; flex-direction: column; overflow: hidden; }
+  body.notes-open #notes { display: flex; flex-basis: 420px; }
+  body.notes-open #notes-splitter { display: block; }
+  .side-panel-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-bottom: 1px solid #eaecef; background: #f8f9fa; flex-shrink: 0; }
+  .side-panel-close { background: transparent; border: none; font-size: 24px; cursor: pointer; }
+  #notes-list { overflow-y: auto; padding: 12px; flex-grow: 1; }
+  .note-card { background: #fff; border-radius: 10px; padding: 12px; margin: 0 0 10px; border: 1px solid #e6e9f3; }
+  .note-quote { background:#f6f8ff; border:1px solid #e5eafe; border-radius:8px; padding:8px 10px; margin: 6px 0 10px; font-size: 1rem; cursor: pointer; }
+  .note-card textarea { width: 100%; min-height: 64px; border: 1px solid #e1e4ef; border-radius: 8px; padding: 8px; box-sizing: border-box; font-size: 16px; }
+  .hl { background: #fff59d; }
+  .hl-blue { background: #bae6fd; cursor: pointer; }
+  
+  #selbar { position: absolute; background: #fff; border: 1px solid #eaecef; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: 6px; gap: 6px; display: inline-flex; z-index: 101; }
+  #selbar[hidden] { display: none; }
+  #selbar button { border: 1px solid #e1e4ef; border-radius: 6px; padding: 5px 10px; background: #fff; cursor: pointer; font-size: 0.9em; }
+
+  #settings-panel { position: absolute; background: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); border: 1px solid #e5e7eb; width: 200px; z-index: 101; padding: 6px; display: none; }
+  #settings-panel.active { display: block; }
+  .settings-section { padding: 6px; }
+  .settings-section h5 { margin: 0 0 8px; font-size: 0.8em; color: #6b7280; font-weight: 600; text-transform: uppercase; }
+  .settings-group button { width: 100%; background: #f3f4f6; border: 1px solid transparent; text-align: left; padding: 8px 12px; border-radius: 6px; cursor: pointer; margin-bottom: 4px; font-size: 1em; }
+  .settings-group button.selected { background: #e0e7ff; color: #4338ca; font-weight: 600; border-color: #c7d2fe; }
+  .settings-divider { border-top: 1px solid #e5e7eb; margin: 6px 0; }
+
+  /* --- Enhanced Results & History --- */
+  .results-in-page { margin-top: 30px; border-top: 2px solid #eef0f6; padding-top: 20px; }
+  .results-container { max-width: 650px; margin: 0 auto; }
+  .results-summary { font-size: 1.1em; font-weight: 600; margin-bottom: 16px; display: flex; justify-content: flex-start; gap: 3em; }
+  .results-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.95em; }
+  .results-table th, .results-table td { border: 1px solid #e1e4ef; padding: 8px 12px; text-align: left; }
+  .results-table th { background: #f8f9fa; font-weight: 600; }
+  .result-correct { color: #16a34a; font-weight: bold; }
+  .result-incorrect { color: #dc2626; font-weight: bold; }
+  .your-answer { font-style: italic; color: #4b5563; }
+  .no-answer { color: #9ca3af; font-style: italic; }
+
+  /* --- Dialogs & History Panel --- */
+  .dialog-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 200; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: opacity 0.2s, visibility 0.2s; }
+  #confirm-dialog-overlay, #clean-history-dialog-overlay { z-index: 300; }
+  .dialog-overlay.visible { opacity: 1; visibility: visible; }
+  .dialog-box { background: white; padding: 24px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 90%; max-width: 400px; text-align: center; transform: scale(0.95); transition: transform 0.2s; }
+  .dialog-overlay.visible .dialog-box { transform: scale(1); }
+  .dialog-box p { margin: 0 0 20px; font-size: 1.1em; }
+  .dialog-buttons { display: flex; gap: 12px; justify-content: center; }
+  .dialog-buttons.vertical { flex-direction: column; }
+  .dialog-buttons button { padding: 10px 20px; border-radius: 8px; font-size: 1em; cursor: pointer; border: 1px solid #d1d5db; }
+  #confirm-dialog-yes { background-color: #2563eb; color: white; border-color: #2563eb; }
+  #confirm-dialog-no { background-color: #fff; color: #374151; }
+  #history-panel { max-width: 700px; width: 90%; max-height: 80vh; display: flex; flex-direction: column; text-align: left; }
+  .history-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; border-bottom: 1px solid #eaecef; margin-bottom: 12px; }
+  .history-header h3 { margin: 0; }
+  .history-header .btn-clean { font-size: 10pt; height: 32px; padding: 0 12px; background-color: #fff; color: #2E74B5; border: 1px solid #d1d5db; font-weight: 600; }
+  #history-list { overflow-y: auto; padding-right: 10px; }
+  .history-item { border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 12px; }
+  .history-summary { padding: 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: #f9fafb; }
+  .history-summary:hover { background: #f3f4f6; }
+  .history-details { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; background: #fff; }
+  .history-details.visible { max-height: 500px; padding: 12px; border-top: 1px solid #e5e7eb;}
+  .history-item-delete-btn { background: transparent; border: none; font-size: 24px; cursor: pointer; color: #ef4444; padding: 4px 8px; line-height: 1; }
+  .mistake-table { width: 100%; margin-top: 10px; border-collapse: collapse; }
+  .mistake-table th, .mistake-table td { border: 1px solid #e1e4ef; padding: 8px; text-align: left; }
+  #clean-current-btn, #clean-all-btn { background-color: #fee2e2; color: #b91c1c; border-color: #fecaca; }
+  #clean-cancel-btn { background-color: #f3f4f6; color: #6b7280; border-color: #e5e7eb; }
+  
+  /* --- Auto-hiding scrollbar styles --- */
+  #left-pane::-webkit-scrollbar, #right-pane::-webkit-scrollbar, #notes-list::-webkit-scrollbar { width: 8px; }
+  #left-pane::-webkit-scrollbar-track, #right-pane::-webkit-scrollbar-track, #notes-list::-webkit-scrollbar-track { background: transparent; }
+  #left-pane::-webkit-scrollbar-thumb, #right-pane::-webkit-scrollbar-thumb, #notes-list::-webkit-scrollbar-thumb { background-color: transparent; border-radius: 4px; }
+  #left-pane:hover::-webkit-scrollbar-thumb, #right-pane:hover::-webkit-scrollbar-thumb, #notes-list:hover::-webkit-scrollbar-thumb { background-color: #ccc; }
+  .dark-mode #left-pane:hover::-webkit-scrollbar-thumb, .dark-mode #right-pane:hover::-webkit-scrollbar-thumb, .dark-mode #notes-list:hover::-webkit-scrollbar-thumb { background-color: #4b5563; }
+
+  /* --- Dark Mode --- */
+  body.dark-mode { background-color: #111827; color: #d1d5db; }
+  .dark-mode .shell, .dark-mode #left-pane, .dark-mode #sticky-header, .dark-mode .bottom-bar, .dark-mode #right-pane, .dark-mode #notes, .dark-mode .note-card, .dark-mode #settings-panel, .dark-mode .results-table th, .dark-mode .dialog-box { background-color: #1f2937; color: #d1d5db; border-color: #374151; }
+  .dark-mode h1, .dark-mode h2, .dark-mode h3, .dark-mode h4 { color: #93c5fd; }
+  .dark-mode .pill { background: #374151; color: #d1d5db; border-color: #4b5563; }
+  .dark-mode .pill.active { background: #60a5fa; border-color: #60a5fa; color: #111827; }
+  .dark-mode input[type="text"] { background: #374151; border-color: #4b5563; color: #d1d5db; }
+  .dark-mode input.error { background-color: #4b1924 !important; border-color: #991b1b !important; }
+  .dark-mode input.correct { background-color: #163b2d !important; border-color: #14532d !important; }
+  .dark-mode .note-quote { background: #374151; border-color: #4b5563; }
+  .dark-mode button, .dark-mode .dialog-buttons button, .dark-mode .top-bar-button { background-color: #374151; border-color: #4b5563; color: #d1d5db;}
+  .dark-mode .btn-primary { background-color: #3b82f6 !important; border-color: #3b82f6 !important; color: white !important;}
+  .dark-mode button#clean-btn.has-save { background-color: #450a0a !important; color: #fee2e2 !important; border-color: #991b1b !important;}
+  .dark-mode #confirm-dialog-yes { background-color: #3b82f6; border-color: #3b82f6;}
+  .dark-mode #confirm-dialog-no { background-color: #4b5563; border-color: #5a6676;}
+  .dark-mode .settings-group button { background: #374151; }
+  .dark-mode .settings-group button.selected { background: #312e81; color: #e0e7ff; border-color: #4f46e5;}
+  .dark-mode .custom-select { background-color: #374151; color: #d1d5db; border-color: #4b5563; }
+  .dark-mode .speed-control::after { color: #9ca3af; }
+  .dark-mode .your-answer { color: #9ca3af; }
+  .dark-mode .timer-paused { background-color: #450a0a; border-color: #991b1b;}
+  .dark-mode .history-summary { background: #1f2937; }
+  .dark-mode .history-summary:hover { background: #374151; }
+  .dark-mode .history-details { background: #111827; }
+  .dark-mode .history-header .btn-clean { background-color: #374151; color: #93c5fd; border-color: #4b5563; }
+  .dark-mode #clean-current-btn, .dark-mode #clean-all-btn { background-color: #450a0a; color: #fecaca; border-color: #991b1b; }
+  .dark-mode #clean-cancel-btn { background-color: #374151; color: #9ca3af; border-color: #4b5563; }
+</style>
+</head>
+<body class="font-large">
+
+<div id="sticky-header">
+  <div id="audio-player-container"></div>
+</div>
+
+<div class="app-wrapper">
+  <div class="shell">
+    <div id="main-shell">
+      <div id="left-pane">
+        <div id="test-pages-container"></div>
+      </div>
+      <div id="splitter"></div>
+      <div id="right-pane">
+        <div id="transcript-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="notes-splitter"></div>
+  <div id="notes">
+    <div class="side-panel-header"><span>My Notes</span><button id="notes-close" type="button" class="side-panel-close">&times;</button></div>
+    <div id="notes-list"></div>
+  </div>
+</div>
+
+<div class="bottom-bar">
+  <div class="bb-left"><div id="part-pills" class="pills"></div></div>
+  <div class="bb-center">
+    <button id="submit-btn" class="btn-primary" type="button">Submit</button>
+    <button id="reset-btn" type="button">Reset</button>
+    <button id="submit-all-btn" class="btn-primary" type="button">Submit All</button>
+    <button id="clean-btn" type="button">Clean</button>
+    <button id="history-btn" type="button">History</button>
+  </div>
+</div>
+
+<div id="selbar" hidden>
+    <button data-act="hl">Highlight</button>
+    <button data-act="note">Note</button>
+    <button data-act="del">Clear</button>
+</div>
+
+<div id="settings-panel">
+  <div class="settings-section">
+    <h5>Font Size</h5>
+    <div class="settings-group" id="font-size-group">
+      <button data-size="regular">Regular</button>
+      <button data-size="large" class="selected">Large</button>
+      <button data-size="xlarge">Extra Large</button>
+    </div>
+  </div>
+  <div class="settings-divider"></div>
+  <div class="settings-section">
+    <h5>Color Mode</h5>
+    <div class="settings-group" id="color-mode-group">
+      <button data-mode="light" class="selected">Black on White</button>
+      <button data-mode="dark">White on Black</button>
+    </div>
+  </div>
+</div>
+
+<div id="confirm-dialog-overlay" class="dialog-overlay">
+  <div id="confirm-dialog-box" class="dialog-box">
+    <p id="confirm-dialog-msg"></p>
+    <div class="dialog-buttons">
+      <button id="confirm-dialog-no">Cancel</button>
+      <button id="confirm-dialog-yes">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div id="history-panel-overlay" class="dialog-overlay">
+  <div id="history-panel" class="dialog-box">
+    <div class="history-header">
+      <h3 id="history-title">History</h3>
+      <button id="history-clean-btn" class="btn-clean">Clean</button>
+    </div>
+    <div id="history-list"></div>
+  </div>
+</div>
+
+<div id="clean-history-dialog-overlay" class="dialog-overlay">
+  <div id="clean-history-dialog-box" class="dialog-box">
+    <p>Choose a cleanup option:</p>
+    <div class="dialog-buttons vertical">
+      <button id="clean-current-btn">Clear History for This Test</button>
+      <button id="clean-all-btn">Clear All History</button>
+      <button id="clean-cancel-btn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+'use strict';
+
+const __safeStorage = (() => {
+    try {
+        return window.localStorage;
+    } catch (_) {
+        return null;
+    }
+})();
+
+const localStorage = {
+    getItem(key) {
+        if (!__safeStorage) return null;
+        try { return __safeStorage.getItem(key); } catch (_) { return null; }
+    },
+    setItem(key, value) {
+        if (!__safeStorage) return;
+        try { __safeStorage.setItem(key, String(value)); } catch (_) {}
+    },
+    removeItem(key) {
+        if (!__safeStorage) return;
+        try { __safeStorage.removeItem(key); } catch (_) {}
+    }
+};
+
+window.inputCache = {}; // 全局输入缓存
+window.App = {
+    state: { timerSecs: 0, timerInterval: null, paused: false, finishedSections: new Set(), confirmCallback: null, pageInitialized: new Set(),  },
+    templates: { content: {} },
+    answerKey: {},
+
+    init() {
+        this.populateContent(); 
+        this.buildLayout(); 
+        this.cacheElements(); 
+        this.bindEvents(); 
+        this.ensureSuiteButtonsForAll();
+        this.loadGlobalState();
+        this.startTimer(); 
+        this.showPage(localStorage.getItem('lastActivePage') || 'page-test17'); 
+        this.AudioPlayer.init(); 
+        this.Splitter.init(); 
+        this.Splitter.initNotes();
+        this.applySafeArea();
+        // 全局提交按钮绑定到当前激活套题
+        if (this.el.submitBtn) {
+            this.el.submitBtn.addEventListener('click', () => this.submitCurrentSuite());
+        }
+    },
+    resolveInitialPageId(preferredId) {
+        const hasPreferred = preferredId && this.templates.content && this.templates.content[preferredId];
+        return hasPreferred ? preferredId : this.getDefaultPageId();
+    },
+    getDefaultPageId() {
+        const keys = Object.keys(this.templates.content || {});
+        return keys.length ? keys[0] : 'page-test1';
+    },
+    ensureSuiteSubmitButton(pageId) {
+        const suitePage = document.getElementById(pageId);
+        if (!suitePage) return;
+        // 移除页面内的分题提交按钮（防止误导用户）
+        const existingContainer = suitePage.querySelector('.suite-submit-container');
+        if (existingContainer) existingContainer.remove();
+        // 不再创建页面内按钮，只使用底部栏的全局 Submit 按钮
+    },
+    ensureSuiteButtonsForAll() {
+        (Object.keys(this.templates.content || {})).forEach(id => this.ensureSuiteSubmitButton(id));
+    },
+    cacheElements() {
+        const $ = s => document.querySelector(s);
+        this.el = { 
+            body: $('body'), mainShell: $('#main-shell'), leftPane: $('#left-pane'), 
+            allPanes: [$('#left-pane'), $('#right-pane'), $('#notes')], 
+            submitBtn: $('#submit-btn'), resetBtn: $('#reset-btn'), 
+            audioContainer: $('#audio-player-container'), pagesContainer: $('#test-pages-container'), 
+            transcriptContainer: $('#transcript-content'), pillsContainer: $('#part-pills'), 
+            bottomBar: $('.bottom-bar'),
+            notes: $('#notes'), notesCloseBtn: $('#notes-close'), notesList: $('#notes-list'), 
+            selbar: $('#selbar'), settingsPanel: $('#settings-panel'),
+            submitAllBtn: $('#submit-all-btn'),
+            cleanBtn: $('#clean-btn'),
+            historyBtn: $('#history-btn'),
+            confirmDialog: {
+                overlay: $('#confirm-dialog-overlay'),
+                msg: $('#confirm-dialog-msg'),
+                yes: $('#confirm-dialog-yes'),
+                no: $('#confirm-dialog-no')
+            },
+            historyPanel: {
+                overlay: $('#history-panel-overlay'),
+                title: $('#history-title'),
+                list: $('#history-list'),
+                cleanBtn: $('#history-clean-btn')
+            },
+            cleanHistoryDialog: {
+                overlay: $('#clean-history-dialog-overlay'),
+                cleanCurrentBtn: $('#clean-current-btn'),
+                cleanAllBtn: $('#clean-all-btn'),
+                cancelBtn: $('#clean-cancel-btn')
+            }
+        };
+    },
+    buildLayout() {
+        const audioContainer = document.getElementById('audio-player-container'), pagesContainer = document.getElementById('test-pages-container'), transcriptContainer = document.getElementById('transcript-content'), pillsContainer = document.getElementById('part-pills');
+        let audioHTML = '', pagesHTML = '', transcriptHTML = '', pillsHTML = '';
+        for (const [id, data] of Object.entries(this.templates.content)) {
+            const pageNum = id.replace('page-test', '');
+            const suiteId = `set${pageNum}`;
+            audioHTML += `<div class="audio-player-wrapper" id="audio-${id}"><div class="audio-player">
+                <span class="timer-display-box" role="button">00:00</span>
+                <button class="play-pause-btn">&#9658;</button>
+                <div class="progress-container"><div class="progress-bar-wrapper"><div class="progress-bar"></div></div></div>
+                <div class="time-display">00:00 / 00:00</div>
+                <div class="speed-control"><select class="custom-select"><option value="0.5">0.5x</option><option value="0.75">0.75x</option><option value="0.9">0.9x</option><option value="1.0" selected>1.0x</option><option value="1.25">1.25x</option><option value="1.5">1.5x</option><option value="1.7">1.7x</option><option value="2.0">2.0x</option></select></div>
+                <button data-action="toggle-settings" class="top-bar-button">Settings</button>
+                <button data-action="toggle-notes" class="top-bar-button">Notes</button>
+                <audio class="listening-audio" src="${data.audioSrc}" preload="metadata"></audio>
+            </div></div>`;
+            pagesHTML += `<div class="test-page" id="${id}" data-suite-id="${suiteId}">${data.questions}</div>`;
+            transcriptHTML += `<div class="transcript-page" id="transcript-${id}"><h4>Transcript: T${pageNum} ${data.title}</h4><ol style="counter-reset: item-counter ${data.startNum - 1};">${data.transcript}</ol><p>&nbsp;</p><p>&nbsp;</p></div>`;
+            pillsHTML += `<div class="pill" data-target="${id}">T${pageNum}</div>`;
+        }
+        audioContainer.innerHTML = audioHTML; pagesContainer.innerHTML = pagesHTML; transcriptContainer.innerHTML = transcriptHTML; pillsContainer.innerHTML = pillsHTML;
+    },
+    bindEvents() {
+        this.el.pillsContainer.addEventListener('click', e => { 
+            if (!e.target.classList.contains('pill')) return;
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            
+            const current = document.querySelector('.test-page.active');
+            if (current) {
+                window.inputCache[current.id] = [];
+                current.querySelectorAll('input[type="text"]').forEach((input, i) => {
+                    window.inputCache[current.id][i] = input.value;
+                });
+            }
+            
+            const targetId = e.target.dataset.target;
+            document.querySelectorAll('.test-page, .audio-player-wrapper, .transcript-page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+            
+            document.getElementById(targetId).classList.add('active');
+            document.getElementById(`audio-${targetId}`).classList.add('active');
+            e.target.classList.add('active');
+            
+            localStorage.setItem('lastActivePage', targetId);
+
+            
+            const testPrefix = `t${targetId.replace('page-test', '')}`;
+
+            
+            const isFinished = this.state.finishedSections.has(testPrefix);
+
+            
+            this.el.mainShell.classList.toggle('split-view', isFinished);
+
+            
+            if (isFinished) {
+
+            
+                document.getElementById(`transcript-${targetId}`)?.classList.add('active');
+
+            
+            }
+
+            
+            const activeAudioWrapper = document.getElementById(`audio-${targetId}`);
+
+            
+            this.el.activeTimer = activeAudioWrapper ? activeAudioWrapper.querySelector('.timer-display-box') : null;
+
+            
+            if (this.el.submitBtn) this.el.submitBtn.disabled = isFinished;
+            
+            setTimeout(() => {
+                if (window.inputCache[targetId]) {
+                    document.getElementById(targetId).querySelectorAll('input[type="text"]').forEach((input, i) => {
+                        if (window.inputCache[targetId][i]) {
+                            input.value = window.inputCache[targetId][i];
+                        }
+                    });
+                }
+            }, 10);
+        });
+        // 使用事件委托监听套题提交按钮
+        this.el.pagesContainer.addEventListener('click', e => {
+            const submitBtn = e.target.closest('[data-submit-suite]');
+            if (submitBtn) {
+                const suiteId = submitBtn.dataset.submitSuite;
+                this.finishSuite(suiteId);
+            }
+        });
+        this.el.resetBtn.addEventListener('click', () => { this.showConfirm('确认重置当前练习吗？所有进度将丢失。', () => this.clearCurrentSectionState(true)); });
+        
+        this.el.audioContainer.addEventListener('click', e => {
+            const target = e.target;
+            if (target.classList.contains('timer-display-box')) this.togglePause();
+            if (target.dataset.action === 'toggle-settings') {
+                this.el.settingsPanel.classList.toggle('active');
+                if(this.el.settingsPanel.classList.contains('active')) {
+                    const rect = target.getBoundingClientRect();
+                    this.el.settingsPanel.style.top = `${rect.bottom + 8}px`;
+                    this.el.settingsPanel.style.right = `${window.innerWidth - rect.right}px`;
+                    this.el.settingsPanel.style.left = 'auto';
+                }
+            }
+            if (target.dataset.action === 'toggle-notes') this.notes.toggle();
+        });
+
+        document.addEventListener('click', e => {
+            const settingsBtn = e.target.closest('[data-action="toggle-settings"]');
+            if (!this.el.settingsPanel.contains(e.target) && !settingsBtn) {
+                this.el.settingsPanel.classList.remove('active');
+            }
+        });
+
+        this.el.settingsPanel.addEventListener('click', e => {
+            const button = e.target.closest('button');
+            if (!button) return;
+            const size = button.dataset.size;
+            const mode = button.dataset.mode;
+            if (size) {
+                this.el.body.classList.remove('font-regular', 'font-large', 'font-xlarge');
+                this.el.body.classList.add(`font-${size}`);
+                document.querySelectorAll('#font-size-group button').forEach(b => b.classList.remove('selected'));
+                button.classList.add('selected');
+            }
+            if (mode) {
+                this.el.body.classList.toggle('dark-mode', mode === 'dark');
+                document.querySelectorAll('#color-mode-group button').forEach(b => b.classList.remove('selected'));
+                button.classList.add('selected');
+            }
+        });
+
+        this.el.notesCloseBtn.addEventListener('click', () => this.notes.toggle(false));
+        document.addEventListener('mouseup', e => this.highlighter.handleMouseUp(e));
+        this.el.selbar.addEventListener('click', e => this.highlighter.handleAction(e));
+        
+        this.el.notesList.addEventListener('click', e => {
+            const delBtn = e.target.closest('button[data-act="del-note"]');
+            if (delBtn) {
+                const card = delBtn.closest('.note-card');
+                if (card) {
+                    const hid = card.dataset.hid;
+                    if (hid) {
+                        const elToUnwrap = document.querySelector(`span[data-hid="${hid}"]`);
+                        if (elToUnwrap) App.highlighter.unWrap(elToUnwrap);
+                    }
+                    card.remove();
+                }
+                return; 
+            }
+
+            const card = e.target.closest('.note-card');
+            if (card && e.target.closest('.note-quote')) {
+                const hid = card.dataset.hid;
+                if (hid) {
+                    const targetHighlight = document.querySelector(`span[data-hid="${hid}"]`);
+                    if (targetHighlight) {
+                        targetHighlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        targetHighlight.style.transition = 'background-color 0.2s';
+                        targetHighlight.style.backgroundColor = '#fecaca';
+                        setTimeout(() => { targetHighlight.style.backgroundColor = ''; }, 1200);
+                    }
+                }
+            }
+        });
+        
+        window.addEventListener('resize', () => this.applySafeArea());
+    
+        const dialog = this.el.confirmDialog;
+        dialog.yes.addEventListener('click', () => { if (this.state.confirmCallback) this.state.confirmCallback(); this.hideConfirm(); });
+        dialog.no.addEventListener('click', () => this.hideConfirm());
+        dialog.overlay.addEventListener('click', (e) => { if (e.target === dialog.overlay) this.hideConfirm(); });
+        this.el.submitAllBtn.addEventListener('click', () => this.showConfirm('确认提交全部套题吗?', () => this.submitAllSuites()));
+        this.el.cleanBtn.addEventListener('click', () => this.showConfirm('确认清除当前练习的存档吗?', () => this.clearCurrentSectionState(false)));
+
+        this.el.historyBtn.addEventListener('click', () => this.history.open());
+        this.el.historyPanel.overlay.addEventListener('click', (e) => { if(e.target.id === 'history-panel-overlay') this.history.close(); });
+        this.el.historyPanel.list.addEventListener('click', e => {
+            const summary = e.target.closest('.history-summary');
+            if (summary && !e.target.closest('.history-item-delete-btn')) {
+                const details = summary.nextElementSibling;
+                details.classList.toggle('visible');
+            }
+            const deleteBtn = e.target.closest('.history-item-delete-btn');
+            if (deleteBtn) {
+                const timestamp = deleteBtn.dataset.timestamp;
+                this.showConfirm('确认删除此条历史记录吗?', () => this.history.delete(timestamp));
+            }
+        });
+
+        const cleanDialog = this.el.cleanHistoryDialog;
+        this.el.historyPanel.cleanBtn.addEventListener('click', () => cleanDialog.overlay.classList.add('visible'));
+        cleanDialog.cancelBtn.addEventListener('click', () => cleanDialog.overlay.classList.remove('visible'));
+        cleanDialog.overlay.addEventListener('click', (e) => { if(e.target === cleanDialog.overlay) cleanDialog.overlay.classList.remove('visible'); });
+        cleanDialog.cleanCurrentBtn.addEventListener('click', () => this.history.cleanCurrent());
+        cleanDialog.cleanAllBtn.addEventListener('click', () => this.history.cleanAll());
+    },
+    showConfirm(message, onConfirm) {
+        this.el.confirmDialog.msg.textContent = message;
+        this.state.confirmCallback = onConfirm;
+        this.el.confirmDialog.overlay.classList.add('visible');
+    },
+    hideConfirm() {
+        this.el.confirmDialog.overlay.classList.remove('visible');
+        this.state.confirmCallback = null;
+    },
+    loadGlobalState() {},
+
+    snapshotActivePage() {
+        const activePage = this.el.pagesContainer.querySelector('.test-page.active');
+        if (!activePage) return;
+
+        // 将当前输入值写回 DOM 属性，避免切页时被 innerHTML 丢失
+        activePage.querySelectorAll('input[type="text"]').forEach(input => {
+            input.setAttribute('value', input.value);
+        });
+        activePage.querySelectorAll('textarea').forEach(textarea => {
+            textarea.innerHTML = textarea.value;
+        });
+
+        const pageId = activePage.id;
+        const transcriptPage = document.getElementById(`transcript-${pageId}`);
+        this.state.pageSnapshots.set(pageId, {
+            pageHTML: activePage.innerHTML,
+            transcriptHTML: transcriptPage ? transcriptPage.innerHTML : '',
+            notesHTML: this.el.notesList.innerHTML
+        });
+    },
+
+    restorePage(pageId) {
+        const snapshot = this.state.pageSnapshots.get(pageId);
+        if (!snapshot) return false;
+        const testPage = document.getElementById(pageId);
+        const transcriptPage = document.getElementById(`transcript-${pageId}`);
+        if (!testPage || !transcriptPage) return false;
+        testPage.innerHTML = snapshot.pageHTML;
+        transcriptPage.innerHTML = snapshot.transcriptHTML;
+        this.el.notesList.innerHTML = snapshot.notesHTML;
+        return true;
+    },
+
+    clearCurrentSectionState(isResetButton) {
+        const activePage = this.el.pagesContainer.querySelector('.test-page.active');
+        if (!activePage) return;
+        const pageId = activePage.id;
+        const testPrefix = `t${pageId.replace('page-test', '')}`;
+        this.state.finishedSections.delete(testPrefix);
+        this.state.pageInitialized.delete(testPrefix);
+        this.state.pageSnapshots.delete(pageId);
+
+        const template = this.templates.content[pageId];
+        if (template) {
+            activePage.innerHTML = template.questions;
+            const transcript = document.getElementById(`transcript-${pageId}`);
+            if (transcript) {
+                transcript.innerHTML = `<h4>Transcript: T${pageId.replace('page-test','')} ${template.title}</h4><ol style="counter-reset: item-counter ${template.startNum - 1};">${template.transcript}</ol><p>&nbsp;</p><p>&nbsp;</p>`;
+            }
+            this.el.notesList.innerHTML = '';
+        }
+
+        if (isResetButton) location.reload();
+        else this.showPage(pageId);
+    },
+
+    showPage(pageId) {
+        this.snapshotActivePage();
+        this.notes.toggle(false);
+        this.highlighter.hideSelbar();
+        document.querySelectorAll('.listening-audio').forEach(audio => audio.pause());
+
+        const resolvedPageId = (this.templates.content && this.templates.content[pageId]) ? pageId : this.getDefaultPageId();
+        if (!resolvedPageId) return;
+
+        const testPrefix = `t${resolvedPageId.replace('page-test', '')}`;
+        const testPage = document.getElementById(resolvedPageId);
+        const transcriptPage = document.getElementById(`transcript-${resolvedPageId}`);
+        if (!testPage || !transcriptPage) return;
+
+        const savedStateJSON = null;
+        const hasSavedState = !!savedStateJSON;
+        this.el.cleanBtn.classList.toggle('has-save', hasSavedState);
+
+        if (!this.state.pageInitialized.has(testPrefix) && savedStateJSON) {
+            try {
+                const state = JSON.parse(savedStateJSON);
+                testPage.innerHTML = state.pageHTML;
+                transcriptPage.innerHTML = state.transcriptHTML;
+                this.el.notesList.innerHTML = state.notesHTML;
+                if (state.isFinished) this.state.finishedSections.add(testPrefix);
+                else this.state.finishedSections.delete(testPrefix);
+            } catch (error) {
+                console.warn('恢复存档失败', error);
+            }
+            this.state.pageInitialized.add(testPrefix);
+        } else if (!this.state.pageInitialized.has(testPrefix)) {
+            this.state.pageInitialized.add(testPrefix);
+        } else {
+            this.restorePage(resolvedPageId);
+        }
+
+        document.querySelectorAll('.test-page, .audio-player-wrapper, .transcript-page').forEach(p => p.classList.remove('active'));
+        this.ensureSuiteSubmitButton(resolvedPageId);
+        testPage.classList.add('active');
+        const activeAudioWrapper = document.getElementById(`audio-${resolvedPageId}`);
+        if (activeAudioWrapper) {
+            activeAudioWrapper.classList.add('active');
+            this.el.activeTimer = activeAudioWrapper.querySelector('.timer-display-box');
+        } else {
+            this.el.activeTimer = null;
+        }
+
+        document.querySelectorAll('.pill').forEach(p => p.classList.toggle('active', p.dataset.target === resolvedPageId));
+        localStorage.setItem('lastActivePage', resolvedPageId);
+        const isFinished = this.state.finishedSections.has(testPrefix);
+        this.el.submitBtn.disabled = isFinished;
+        this.el.mainShell.classList.toggle('split-view', isFinished);
+        if (isFinished) document.getElementById(`transcript-${resolvedPageId}`)?.classList.add('active');
+    },
+    startTimer() {
+        if (this.state.timerInterval) clearInterval(this.state.timerInterval);
+        this.state.timerSecs = 0;
+        const updateTimerDisplay = () => {
+            if (!this.el.activeTimer) return;
+            const m = String(Math.floor(this.state.timerSecs / 60)).padStart(2, '0');
+            const s = String(this.state.timerSecs % 60).padStart(2, '0');
+            this.el.activeTimer.textContent = `${m}:${s}`;
+        };
+        updateTimerDisplay();
+        this.state.timerInterval = setInterval(() => { if (!this.state.paused) { this.state.timerSecs++; updateTimerDisplay(); } }, 1000);
+    },
+    togglePause() {
+        if (!this.el.activeTimer) return;
+        this.state.paused = !this.state.paused;
+        this.el.activeTimer.classList.toggle('timer-paused', this.state.paused);
+    },
+
+    submitCurrentSuite() {
+        const activePage = document.querySelector('.test-page.active');
+        if (!activePage) return;
+        const suiteId = activePage.dataset.suiteId;
+        if (suiteId) this.finishSuite(suiteId);
+    },
+
+    submitAllSuites() {
+        if (this.state && this.state.submittingAll) return;
+        const suiteIds = Array.from(document.querySelectorAll('.test-page[data-suite-id]'))
+            .map(page => page.dataset.suiteId)
+            .filter(Boolean);
+
+        if (!suiteIds.length) return;
+
+        if (this.state) this.state.submittingAll = true;
+        if (this.el && this.el.submitAllBtn) {
+            this.el.submitAllBtn.disabled = true;
+        }
+
+        suiteIds.forEach(id => this.finishSuite(id));
+
+        if (this.el && this.el.submitAllBtn) {
+            this.el.submitAllBtn.disabled = false;
+        }
+        if (this.state) this.state.submittingAll = false;
+    },
+
+    finishSuite(suiteId) {
+        // 通过 suiteId 找到对应的 test-page
+        const suitePage = document.querySelector(`[data-suite-id="${suiteId}"]`);
+        if (!suitePage) return;
+        
+        const pageId = suitePage.id;
+        const testPrefix = `t${pageId.replace('page-test', '')}`
+        if (this.state.finishedSections.has(testPrefix)) return;
+        
+        let tableHTML = `<table class="results-table"><thead><tr><th>Q</th><th>Your Answer</th><th>Correct Answer</th><th>Result</th></tr></thead><tbody>`;
+        const questionLabels = Array.from(suitePage.querySelectorAll('.fill-in-question b'));
+        let processedInputs = new Set();
+        const allAnswers = [];
+
+        questionLabels.forEach(label => {
+            const questionText = label.textContent.replace('.', '');
+            const parentP = label.closest('.fill-in-question');
+            const inputsForLabel = Array.from(parentP.querySelectorAll('input[type="text"]'));
+            if (inputsForLabel.length === 0 || processedInputs.has(inputsForLabel[0])) return;
+            
+            let userAnswers = [], correctAnswers = [], isCorrectArray = [];
+            
+            inputsForLabel.forEach(input => {
+                processedInputs.add(input);
+                const userAnswer = input.value.trim();
+                const correctAnswer = this.answerKey[input.name] || '';
+                userAnswers.push(userAnswer);
+                correctAnswers.push(correctAnswer);
+                const isCorrect = userAnswer !== '' && (userAnswer.toLowerCase().replace(/[\s\$\-€£,\.]/g, '') === correctAnswer.toLowerCase().replace(/[\s\$\-€£,\.]/g, ''));
+                
+                input.classList.add(isCorrect ? 'correct' : 'error');
+                isCorrectArray.push(isCorrect);
+                input.disabled = true;
+            });
+            
+            const isAllCorrectForLabel = isCorrectArray.every(Boolean);
+            allAnswers.push({ q: questionText, user: userAnswers.join(' / '), correct: correctAnswers.join(' / '), isCorrect: isAllCorrectForLabel });
+
+            const resultClass = isAllCorrectForLabel ? 'result-correct' : 'result-incorrect';
+            const resultIcon = isAllCorrectForLabel ? '✓' : '✗';
+            tableHTML += `<tr><td><b>${questionText}</b></td><td class="your-answer">${userAnswers.map(ua => ua || '<i class="no-answer">No Answer</i>').join(' / ')}</td><td>${correctAnswers.join(' / ')}</td><td class="${resultClass}">${resultIcon}</td></tr>`;
+        });
+        tableHTML += `</tbody></table>`;
+        
+        const totalQuestions = allAnswers.length;
+        const correctQuestions = allAnswers.filter(a => a.isCorrect).length;
+        const percentage = totalQuestions > 0 ? ((correctQuestions / totalQuestions) * 100).toFixed(0) : 0;
+        
+        const summaryHTML = `<div class="results-summary"><span>Score: ${correctQuestions} / ${totalQuestions}</span><span>Accuracy: ${percentage}%</span></div>`;
+        const resultsContainer = suitePage.querySelector('.results-in-page');
+        if(resultsContainer) {
+            resultsContainer.innerHTML = `<div class="results-container">${summaryHTML}${tableHTML}</div>`;
+            if (suitePage.classList.contains('active')) {
+                setTimeout(() => {
+                    resultsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100);
+            }
+        }
+
+        this.state.finishedSections.add(testPrefix);
+        
+        // 禁用该套题的提交按钮
+        const submitBtn = suitePage.querySelector('[data-submit-suite]');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Submitted';
+            submitBtn.style.opacity = '0.6';
+            submitBtn.style.cursor = 'not-allowed';
+        }
+
+        const isActiveSuite = suitePage.classList.contains('active');
+        if (isActiveSuite) {
+            this.el.mainShell.classList.add('split-view');
+            document.querySelectorAll('.transcript-page').forEach(p => p.classList.remove('active'));
+            document.getElementById(`transcript-${pageId}`)?.classList.add('active');
+            if (this.el.submitBtn) this.el.submitBtn.disabled = true;
+        }
+        
+        this.history.add(testPrefix, { score: correctQuestions, total: totalQuestions, accuracy: percentage, answers: allAnswers });
+        
+        // 检查是否所有套题都已完成
+        this.checkAllSuitesCompleted();
+    },
+    checkAllSuitesCompleted() {
+        const total = Object.keys(this.templates.content || {}).length;
+        if (total && this.state.finishedSections.size >= total) {
+            console.log('[PracticePage] 所有套题已提交');
+        }
+    },
+    applySafeArea() {
+        // The spacer div in the HTML is a more robust solution for the bottom bar issue.
+        // This function can be kept for future safe-area implementations (e.g., iPhone notches).
+    },
+    notes: {
+        toggle(forceOpen) {
+            const shouldOpen = forceOpen === undefined ? !document.body.classList.contains('notes-open') : forceOpen;
+            document.body.classList.toggle('notes-open', shouldOpen);
+        },
+        create(targetSpan) { if (!targetSpan) return; const hid = targetSpan.dataset.hid || `h_${Date.now()}`; targetSpan.dataset.hid = hid; const existed = App.el.notesList.querySelector(`.note-card[data-hid="${hid}"]`); if (existed) { this.toggle(true); existed.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); return; } const text = (targetSpan.textContent || '').trim(); const card = document.createElement('div'); card.className = 'note-card'; card.dataset.hid = hid; card.innerHTML = `<div class="note-quote">${text || '(empty)'}</div><textarea placeholder="..."></textarea><div class="note-actions"><button type="button" data-act="del-note">Delete</button></div>`; App.el.notesList.prepend(card); this.toggle(true); }
+    },
+    highlighter: {
+        unWrap(el) { if (el && el.parentNode) { const p = el.parentNode; while (el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); } }, hideSelbar() { if (App.el && App.el.selbar) App.el.selbar.hidden = true; }, positionToolbar(rect, w) { let left = rect.left + rect.width / 2 - w / 2; App.el.selbar.style.left = `${window.scrollX + left}px`; App.el.selbar.style.top = `${window.scrollY + rect.top}px`; App.el.selbar.style.transform = 'translateY(-100%) translateY(-8px)'; },
+        handleMouseUp(e) { if (e.target.closest('#selbar, #notes, .bottom-bar, #settings-panel, .dialog-overlay, #history-panel-overlay')) return; const clickedHl = e.target.closest('.hl,.hl-blue'); const s = window.getSelection(); App.el.selbar.targetElement = null; if (clickedHl && s.isCollapsed) { s.removeAllRanges(); App.el.selbar.querySelector('[data-act="hl"]').hidden = true; App.el.selbar.querySelector('[data-act="note"]').hidden = false; App.el.selbar.querySelector('[data-act="del"]').hidden = false; App.el.selbar.hidden = false; this.positionToolbar(clickedHl.getBoundingClientRect(), App.el.selbar.offsetWidth); App.el.selbar.targetElement = clickedHl; } else if (s && !s.isCollapsed) { const r = s.getRangeAt(0); if (!r.toString().trim()) return; const rect = r.getBoundingClientRect(); if (!rect || (!rect.width && !rect.height)) return this.hideSelbar(); App.el.selbar.querySelector('[data-act="hl"]').hidden = false; App.el.selbar.querySelector('[data-act="note"]').hidden = false; App.el.selbar.querySelector('[data-act="del"]').hidden = true; App.el.selbar.hidden = false; this.positionToolbar(rect, App.el.selbar.offsetWidth); } else { this.hideSelbar(); } },
+        handleAction(e) {
+            const act = e.target.closest('button')?.dataset.act;
+            if (!act) return;
+            if (act === 'hl' || act === 'note') {
+                const s = window.getSelection();
+                if (!s || s.isCollapsed) return;
+                const r = s.getRangeAt(0);
+                const span = document.createElement('span');
+                span.className = act === 'hl' ? 'hl' : 'hl-blue';
+                try { r.surroundContents(span); } catch { span.appendChild(r.extractContents()); r.insertNode(span); }
+                if (act === 'note') { span.dataset.hid = `h_${Date.now()}`; App.notes.create(span); }
+                if (window.getSelection) { window.getSelection().removeAllRanges(); } else if (document.selection) { document.selection.empty(); }
+            } else if (act === 'del' && App.el.selbar.targetElement) { this.unWrap(App.el.selbar.targetElement); }
+            this.hideSelbar();
+        }
+    },
+    AudioPlayer: {
+        init() {
+            document.getElementById('audio-player-container').addEventListener('click', e => {
+                const playerWrapper = e.target.closest('.audio-player-wrapper');
+                if (!playerWrapper) return;
+                const audio = playerWrapper.querySelector('.listening-audio');
+                if (e.target.classList.contains('play-pause-btn')) {
+                    document.querySelectorAll('.listening-audio').forEach(a => { if(a !== audio) a.pause(); });
+                    audio.paused ? audio.play() : audio.pause();
+                } else if (e.target.closest('.progress-bar-wrapper')) {
+                     if(audio.duration) {
+                        const pCont = playerWrapper.querySelector('.progress-bar-wrapper');
+                        const rect = pCont.getBoundingClientRect();
+                        audio.currentTime = ((e.clientX - rect.left) / rect.width) * audio.duration;
+                    }
+                }
+            });
+            document.getElementById('audio-player-container').addEventListener('change', e => {
+                const playerWrapper = e.target.closest('.audio-player-wrapper');
+                if (!playerWrapper || !e.target.classList.contains('custom-select')) return;
+                const audio = playerWrapper.querySelector('.listening-audio');
+                audio.playbackRate = parseFloat(e.target.value);
+            });
+            const format = t => { if(isNaN(t)) return "00:00"; const m=Math.floor(t/60),s=Math.floor(t%60); return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`; };
+            const updateAudioUI = (audio) => {
+                const playerWrapper = audio.closest('.audio-player-wrapper');
+                if (!playerWrapper) return;
+                const progress = playerWrapper.querySelector('.progress-bar');
+                const time = playerWrapper.querySelector('.time-display');
+                const btn = playerWrapper.querySelector('.play-pause-btn');
+                if(audio.duration) {
+                    progress.style.width = `${(audio.currentTime/audio.duration)*100}%`;
+                    time.textContent = `${format(audio.currentTime)} / ${format(audio.duration)}`;
+                }
+                btn.innerHTML = audio.paused ? '&#9658;' : '&#10074;&#10074;';
+            };
+            
+            setInterval(() => {
+                const activeAudio = document.querySelector('.audio-player-wrapper.active .listening-audio');
+                if (activeAudio) updateAudioUI(activeAudio);
+            }, 500);
+        }
+    },
+    Splitter: {
+        init() { const splitter = document.getElementById('splitter'), left = document.getElementById('left-pane'), right = document.getElementById('right-pane'); let drag = false; splitter.addEventListener('mousedown', () => { drag = true; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; }); window.addEventListener('mouseup', () => { drag = false; document.body.style.cursor = 'default'; document.body.style.userSelect = 'auto'; }); window.addEventListener('mousemove', e => { if (!drag) return; const total = left.parentElement.offsetWidth, newLeft = e.clientX, newRight = total - newLeft - splitter.offsetWidth; if (newLeft > 200 && newRight > 200) { left.style.flexBasis = `${newLeft}px`; right.style.flexBasis = `${newRight}px`; } }); },
+        initNotes() { const splitter = document.getElementById('notes-splitter'), shell = document.querySelector('.shell'), notes = document.getElementById('notes'); let drag = false; splitter.addEventListener('mousedown', () => { drag = true; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; }); window.addEventListener('mouseup', () => { drag = false; document.body.style.cursor = 'default'; document.body.style.userSelect = 'auto'; }); window.addEventListener('mousemove', e => { if (!drag) return; const total = document.querySelector('.app-wrapper').offsetWidth; const newNotesWidth = total - e.clientX; if (newNotesWidth > 200 && newNotesWidth < total - 300) { notes.style.flexBasis = `${newNotesWidth}px`; } }); }
+    },
+    history: {
+        getTestPrefix() {
+            const activePage = document.querySelector('.test-page.active');
+            if (!activePage) return null;
+            return `t${activePage.id.replace('page-test', '')}`;
+        },
+        load(testPrefix) { const data = localStorage.getItem(`ieltsHistory-${testPrefix}`); return data ? JSON.parse(data) : []; },
+        save(testPrefix, historyData) { localStorage.setItem(`ieltsHistory-${testPrefix}`, JSON.stringify(historyData)); },
+        add(testPrefix, result) { const historyData = this.load(testPrefix); const entry = { timestamp: Date.now(), ...result }; historyData.unshift(entry); this.save(testPrefix, historyData); },
+        delete(timestamp) {
+            const testPrefix = this.getTestPrefix();
+            if (!testPrefix || !timestamp) return;
+            let historyData = this.load(testPrefix);
+            historyData = historyData.filter(item => item.timestamp !== parseInt(timestamp));
+            this.save(testPrefix, historyData);
+            this.open();
+        },
+        open() {
+            const testPrefix = this.getTestPrefix();
+            if (!testPrefix) return;
+            const historyData = this.load(testPrefix);
+            const listEl = App.el.historyPanel.list;
+            App.el.historyPanel.title.textContent = `History for T${testPrefix.replace('t','')}`;
+            listEl.innerHTML = '';
+            if (historyData.length === 0) {
+                listEl.innerHTML = '<p style="text-align: center; color: #6b7280;">No history for this test yet.</p>';
+            } else {
+                historyData.forEach(item => {
+                    const date = new Date(item.timestamp).toLocaleString();
+                    const answersHTML = `<table class="mistake-table">
+                        <thead><tr><th>Q</th><th>Your Answer</th><th>Correct Answer</th></tr></thead>
+                        <tbody>
+                            ${(item.answers || []).map(ans => `
+                                <tr>
+                                    <td><b>${ans.q}</b></td>
+                                    <td class="${ans.isCorrect ? 'result-correct' : 'result-incorrect'}">${ans.user || '<i>empty</i>'}</td>
+                                    <td>${ans.correct}</td>
+                                </tr>`).join('')}
+                        </tbody>
+                    </table>`;
+                    listEl.innerHTML += `<div class="history-item"><div class="history-summary"><div><strong>${date}</strong><br><span>Score: ${item.score}/${item.total} (${item.accuracy}%)</span></div><button class="history-item-delete-btn" data-timestamp="${item.timestamp}">&times;</button></div><div class="history-details">${answersHTML}</div></div>`;
+                });
+            }
+            App.el.historyPanel.overlay.classList.add('visible');
+        },
+        close() { App.el.historyPanel.overlay.classList.remove('visible'); },
+        cleanCurrent() {
+            const testPrefix = this.getTestPrefix();
+            if (!testPrefix) return;
+            this.save(testPrefix, []);
+            this.open();
+            App.el.cleanHistoryDialog.overlay.classList.remove('visible');
+        },
+        cleanAll() {
+            for (let i = 1; i <= 8; i++) {
+                localStorage.removeItem(`ieltsHistory-t${i}`);
+            }
+            this.open(); // Refresh current view
+            App.el.cleanHistoryDialog.overlay.classList.remove('visible');
+        }
+    },
+    
+    populateContent() {
+        this.templates.content = {
+          'page-test17':{title:'Countryside Hotel Booking', startNum:1, dates:'(2022.4.30/2021.4.29/2019.8.1 亚太/2019.5.4/2015.6.27)', audioSrc:'./part1.17.Countryside Hotel Booking.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T17: Countryside Hotel Booking</h4><p class="date-info">(2022.4.30/2021.4.29/2019.8.1 亚太/2019.5.4/2015.6.27)</p></div><p class="fill-in-question"><b>1.</b> prefer location area: the <input type="text" name="t17_q1"></p><p class="fill-in-question"><b>2.</b> try to avoid <input type="text" name="t17_q2"></p><p class="fill-in-question"><b>3.</b> length of stay: a <input type="text" name="t17_q3"></p><p class="fill-in-question"><b>4.</b> The hotel must be very <input type="text" name="t17_q4"></p><p class="fill-in-question"><b>5.</b> have a good <input type="text" name="t17_q5"> for children</p><p class="fill-in-question"><b>6.</b> have a <input type="text" name="t17_q6"> nearby</p><p class="fill-in-question"><b>7.</b> prefer a <input type="text" name="t17_q7"> instead of a balcony</p><p class="fill-in-question"><b>8.</b> personal detail, name: Mrs. <input type="text" name="t17_q8"></p><p class="fill-in-question"><b>9.</b> contact number: <input type="text" name="t17_q9"></p><p class="fill-in-question"><b>10.</b> where she saw the ads: the magazine of the <input type="text" name="t17_q10"></p></div><div class="results-in-page" id="results-page-test17"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">1.</span><span>prefer location area: the <strong>northeast</strong>.</span></li><li class="translation"><span></span><span>偏好地点区域：东北部。</span></li><li><span class="num">2.</span><span>try to avoid <strong>peak season</strong>.</span></li><li class="translation"><span></span><span>尽量避开旺季。</span></li><li><span class="num">3.</span><span>length of stay: a <strong>weekend</strong>.</span></li><li class="translation"><span></span><span>停留时长：一个周末。</span></li><li><span class="num">4.</span><span>The hotel must be very <strong>quiet</strong>.</span></li><li class="translation"><span></span><span>酒店必须非常安静。</span></li><li><span class="num">5.</span><span>have a good <strong>beach</strong> for children.</span></li><li class="translation"><span></span><span>有一个适合儿童的优质海滩。</span></li><li><span class="num">6.</span><span>have a <strong>restaurant</strong> nearby.</span></li><li class="translation"><span></span><span>附近有餐厅。</span></li><li><span class="num">7.</span><span>prefer a <strong>garden</strong> instead of a balcony.</span></li><li class="translation"><span></span><span>更喜欢花园而不是阳台。</span></li><li><span class="num">8.</span><span>personal detail, name: Mrs. <strong>Cheffins</strong>.</span></li><li class="translation"><span></span><span>个人信息，姓名：Cheffins夫人。</span></li><li><span class="num">9.</span><span>contact number: <strong>0-1-9-2-4-double 7-2-8-5</strong>.</span></li><li class="translation"><span></span><span>联系电话：0192477285。</span></li><li><span class="num">10.</span><span>where she saw the ads: the magazine of the <strong>country living</strong>.</span></li><li class="translation"><span></span><span>她看到广告的地方：《乡村生活》杂志。</span></li>`},
+          'page-test18':{title:'Visitors Survey', startNum:1, dates:'(2019.4.6/2011.2.17/2009.1.17/2007.7.14)', audioSrc:'./part1.18.visitors survey.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T18: Visitors Survey</h4><p class="date-info">(2019.4.6/2011.2.17/2009.1.17/2007.7.14)</p></div><p class="fill-in-question"><b>1.</b> Total number of visits: <input type="text" name="t18_q1"></p><p class="fill-in-question"><b>2.</b> Best thing about the city: <input type="text" name="t18_q2"></p><p class="fill-in-question"><b>3.</b> Favourite attraction: <input type="text" name="t18_q3"></p><p class="fill-in-question"><b>4.</b> Best thing about the destination's dining options: <input type="text" name="t18_q4"></p><p class="fill-in-question"><b>5.</b> Method of transport to destination: by <input type="text" name="t18_q5"></p><p class="fill-in-question"><b>6.</b> Age group: <input type="text" name="t18_q6"></p><p class="fill-in-question"><b>7.</b> Income level: <input type="text" name="t18_q7"></p><p class="fill-in-question"><b>8.</b> Purpose of visit: <input type="text" name="t18_q8"></p><p class="fill-in-question"><b>9.</b> Occupation: <input type="text" name="t18_q9"></p><p class="fill-in-question"><b>10.</b> Opinion of cost of accommodation: <input type="text" name="t18_q10"></p></div><div class="results-in-page" id="results-page-test18"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">1.</span><span>Total number of visits: <strong>3</strong>.</span></li><li class="translation"><span></span><span>总访问次数：3。</span></li><li><span class="num">2.</span><span>Best thing about the city: <strong>weather</strong>.</span></li><li class="translation"><span></span><span>这个城市最棒的地方：天气。</span></li><li><span class="num">3.</span><span>Favourite attraction: <strong>Town Hall</strong>.</span></li><li class="translation"><span></span><span>最喜欢的景点：市政厅。</span></li><li><span class="num">4.</span><span>Best thing about the destination's dining options: <strong>variety</strong>.</span></li><li class="translation"><span></span><span>目的地餐饮选择最棒的地方：多样性。</span></li><li><span class="num">5.</span><span>Method of transport to destination: by <strong>plane</strong>.</span></li><li class="translation"><span></span><span>到达目的地的交通方式：乘飞机。</span></li><li><span class="num">6.</span><span>Age group: <strong>over 40</strong>.</span></li><li class="translation"><span></span><span>年龄组：40岁以上。</span></li><li><span class="num">7.</span><span>Income level: <strong>mid-range</strong>.</span></li><li class="translation"><span></span><span>收入水平：中等。</span></li><li><span class="num">8.</span><span>Purpose of visit: <strong>tourism</strong>.</span></li><li class="translation"><span></span><span>访问目的：旅游。</span></li><li><span class="num">9.</span><span>Occupation: <strong>computer programmer</strong>.</span></li><li class="translation"><span></span><span>职业：计算机程序员。</span></li><li><span class="num">10.</span><span>Opinion of cost of accommodation: <strong>good value</strong>.</span></li><li class="translation"><span></span><span>对住宿费用的看法：物有所值。</span></li>`},
+          'page-test19':{title:'Talking about Fire Prevention', startNum:11, dates:'(2016.11.3/2015.9.26/2014.1.25/2009.5.16)', audioSrc:'./part1.19.talking about fire prevention.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T19: Talking about Fire Prevention</h4><p class="date-info">(2016.11.3/2015.9.26/2014.1.25/2009.5.16)</p></div><p class="fill-in-question"><b>11.</b> select trees with <input type="text" name="t19_q11"> leaves</p><p class="fill-in-question"><b>12.</b> houses should not be built too <input type="text" name="t19_q12"> to the trees</p><p class="fill-in-question"><b>13.</b> better between <input type="text" name="t19_q13"> meters</p><p class="fill-in-question"><b>14.</b> secure the roof with no <input type="text" name="t19_q14"></p><p class="fill-in-question"><b>15.</b> clean the <input type="text" name="t19_q15"> from the roof</p><p class="fill-in-question"><b>16.</b> remove the <input type="text" name="t19_q16"> tank from the yard</p><p class="fill-in-question"><b>17.</b> all the <input type="text" name="t19_q17"> should be told about the prevention of fire</p><p class="fill-in-question"><b>18.</b> bushfire usually occurs in <input type="text" name="t19_q18"></p><p class="fill-in-question"><b>19.</b> remember to take a <input type="text" name="t19_q19"> and batteries</p><p class="fill-in-question"><b>20.</b> Volunteers have <input type="text" name="t19_q20"> for 4 weeks</p></div><div class="results-in-page" id="results-page-test19"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">11.</span><span>select trees with <strong>soft</strong> leaves.</span></li><li class="translation"><span></span><span>选择有柔软叶子的树。</span></li><li><span class="num">12.</span><span>houses should not be built too <strong>close</strong> to the trees.</span></li><li class="translation"><span></span><span>房屋不应建得离树太近。</span></li><li><span class="num">13.</span><span>better between <strong>10-15 meters</strong>.</span></li><li class="translation"><span></span><span>最好在10-15米之间。</span></li><li><span class="num">14.</span><span>secure the roof with no <strong>gaps</strong>.</span></li><li class="translation"><span></span><span>确保屋顶没有缝隙。</span></li><li><span class="num">15.</span><span>clean the <strong>rubbish</strong> from the roof.</span></li><li class="translation"><span></span><span>清理屋顶的垃圾。</span></li><li><span class="num">16.</span><span>remove the <strong>gas</strong> tank from the yard.</span></li><li class="translation"><span></span><span>从院子里移走煤气罐。</span></li><li><span class="num">17.</span><span>all the <strong>family members</strong> should be told about the prevention of fire.</span></li><li class="translation"><span></span><span>应告知所有家庭成员有关防火的知识。</span></li><li><span class="num">18.</span><span>bushfire usually occurs in <strong>October</strong>.</span></li><li class="translation"><span></span><span>丛林大火通常发生在十月。</span></li><li><span class="num">19.</span><span>remember to take a <strong>radio</strong> and batteries.</span></li><li class="translation"><span></span><span>记得带上收音机和电池。</span></li><li><span class="num">20.</span><span>Volunteers have <strong>training</strong> for 4 weeks.</span></li><li class="translation"><span></span><span>志愿者有为期4周的培训。</span></li>`},
+          'page-test20':{title:'House Moving Enquiring', startNum:1, dates:'(2019.2.23/2018.8.2 亚太/2014.4.24/2010.6.26 澳洲)', audioSrc:'./part1.20.house moving enquiring.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T20: House Moving Enquiring</h4><p class="date-info">(2019.2.23/2018.8.2 亚太/2014.4.24/2010.6.26 澳洲)</p></div><p class="fill-in-question"><b>1.</b> the woman's title: <input type="text" name="t20_q1"></p><p class="fill-in-question"><b>2.</b> future location: <input type="text" name="t20_q2"> of the city</p><p class="fill-in-question"><b>3.</b> company size: total staff number <input type="text" name="t20_q3"></p><p class="fill-in-question"><b>4.</b> preferred location near the <input type="text" name="t20_q4"></p><p class="fill-in-question"><b>5.</b> preferred moving in date: <input type="text" name="t20_q5"></p><p class="fill-in-question"><b>6.</b> the size of new office: <input type="text" name="t20_q6"> square meters</p><p class="fill-in-question"><b>7.</b> remove the <input type="text" name="t20_q7"> in conference room</p><p class="fill-in-question"><b>8.</b> <input type="text" name="t20_q8"> room needs enlargement, too small</p><p class="fill-in-question"><b>9.</b> <input type="text" name="t20_q9"> area is needed some improvements</p><p class="fill-in-question"><b>10.</b> has a terrace with a view of <input type="text" name="t20_q10"> outside building</p></div><div class="results-in-page" id="results-page-test20"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">1.</span><span>the woman's title: <strong>manager</strong>.</span></li><li class="translation"><span></span><span>该女士的职位：经理。</span></li><li><span class="num">2.</span><span>future location: <strong>centre</strong> of the city.</span></li><li class="translation"><span></span><span>未来位置：市中心。</span></li><li><span class="num">3.</span><span>company size: total staff number <strong>40</strong>.</span></li><li class="translation"><span></span><span>公司规模：员工总数40人。</span></li><li><span class="num">4.</span><span>preferred location near the <strong>station</strong>.</span></li><li class="translation"><span></span><span>首选位置：靠近车站。</span></li><li><span class="num">5.</span><span>preferred moving in date: <strong>May</strong>.</span></li><li class="translation"><span></span><span>首选入住日期：五月。</span></li><li><span class="num">6.</span><span>the size of new office: <strong>12000</strong> square meters.</span></li><li class="translation"><span></span><span>新办公室面积：12000平方米。</span></li><li><span class="num">7.</span><span>remove the <strong>booths</strong> in conference room.</span></li><li class="translation"><span></span><span>移除会议室的隔间。</span></li><li><span class="num">8.</span><span><strong>store</strong> room needs enlargement, too small.</span></li><li class="translation"><span></span><span>储藏室需要扩大，太小了。</span></li><li><span class="num">9.</span><span><strong>kitchen</strong> area is needed some improvements.</span></li><li class="translation"><span></span><span>厨房区域需要一些改进。</span></li><li><span class="num">10.</span><span>has a terrace with a view of <strong>river</strong> outside building.</span></li><li class="translation"><span></span><span>有一个露台，可以看到外面的河流。</span></li>`},
+          'page-test21':{title:'Flight Complaints', startNum:1, dates:'(2019.1.12/2018.2.24/2016.2.27/2012.5.12)', audioSrc:'./part1.21.flight complaints.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T21: Flight Complaints</h4><p class="date-info">(2019.1.12/2018.2.24/2016.2.27/2012.5.12)</p></div><p class="fill-in-question"><b>1.</b> Name: <input type="text" name="t21_q1"></p><p class="fill-in-question"><b>2.</b> She wants to buy 4 tickets: <input type="text" name="t21_q2"> tickets</p><p class="fill-in-question"><b>3.</b> departure time: <input type="text" name="t21_q3"></p><p class="fill-in-question"><b>4.</b> the words on the website page: <input type="text" name="t21_q4"></p><p class="fill-in-question"><b>5.</b> one adult can bring <input type="text" name="t21_q5"> children at most allowed</p><p class="fill-in-question"><b>6.</b> All of them are under <input type="text" name="t21_q6"> years old</p><p class="fill-in-question"><b>7.</b> children need less <input type="text" name="t21_q7"></p><p class="fill-in-question"><b>8.</b> what the huge family and <input type="text" name="t21_q8"> group will do</p><p class="fill-in-question"><b>9.</b> letter will be sent to the <input type="text" name="t21_q9"></p><p class="fill-in-question"><b>10.</b> reference number: <input type="text" name="t21_q10"></p></div><div class="results-in-page" id="results-page-test21"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">1.</span><span>Name: <strong>Quigley</strong>.</span></li><li class="translation"><span></span><span>姓名：奎格利。</span></li><li><span class="num">2.</span><span>She wants to buy 4 tickets: <strong>return</strong> tickets.</span></li><li class="translation"><span></span><span>她想买4张票：往返票。</span></li><li><span class="num">3.</span><span>departure time: <strong>11.45</strong>.</span></li><li class="translation"><span></span><span>出发时间：11点45分。</span></li><li><span class="num">4.</span><span>the words on the website page: <strong>error message</strong>.</span></li><li class="translation"><span></span><span>网站页面上的文字：错误信息。</span></li><li><span class="num">5.</span><span>one adult can bring <strong>2</strong> children at most allowed.</span></li><li class="translation"><span></span><span>一位成人最多可携带2名儿童。</span></li><li><span class="num">6.</span><span>All of them are under <strong>12</strong> years old.</span></li><li class="translation"><span></span><span>他们都在12岁以下。</span></li><li><span class="num">7.</span><span>children need less <strong>food</strong>.</span></li><li class="translation"><span></span><span>儿童需要较少的食物。</span></li><li><span class="num">8.</span><span>what the huge family and <strong>school</strong> group will do.</span></li><li class="translation"><span></span><span>大家庭和学校团体该怎么办。</span></li><li><span class="num">9.</span><span>letter will be sent to the <strong>manager</strong>.</span></li><li class="translation"><span></span><span>信将寄给经理。</span></li><li><span class="num">10.</span><span>reference number: <strong>GBK8422</strong>.</span></li><li class="translation"><span></span><span>参考编号：GBK8422。</span></li>`},
+          'page-test22':{title:'Return Vacuum Cleaner', startNum:1, dates:'(2018.9.15/2016.5.21/2015.12.5/2013.8.17)', audioSrc:'./part1.22.return vacuum cleaner.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T22: Return Vacuum Cleaner</h4><p class="date-info">(2018.9.15/2016.5.21/2015.12.5/2013.8.17)</p></div><p class="fill-in-question"><b>1.</b> name: Dianna <input type="text" name="t22_q1"></p><p class="fill-in-question"><b>2.</b> leave a number of <input type="text" name="t22_q2"> telephone number</p><p class="fill-in-question"><b>3.</b> address: <input type="text" name="t22_q3"> Avenue</p><p class="fill-in-question"><b>4.</b> date of purchase: <input type="text" name="t22_q4"></p><p class="fill-in-question"><b>5.</b> original vacuum problem in the: <input type="text" name="t22_q5"></p><p class="fill-in-question"><b>6.</b> price: $<input type="text" name="t22_q6"> in a sale</p><p class="fill-in-question"><b>7.</b> suggest action: <input type="text" name="t22_q7"></p><p class="fill-in-question"><b>8.</b> new vacuum has a <input type="text" name="t22_q8"></p><p class="fill-in-question"><b>9.</b> new type price: $<input type="text" name="t22_q9"></p><p class="fill-in-question"><b>10.</b> colour: <input type="text" name="t22_q10"></p></div><div class="results-in-page" id="results-page-test22"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">1.</span><span>name: Dianna <strong>Ruddick</strong>.</span></li><li class="translation"><span></span><span>姓名：戴安娜·拉迪克。</span></li><li><span class="num">2.</span><span>leave a number of <strong>home</strong> telephone number.</span></li><li class="translation"><span></span><span>留下一个家庭电话号码。</span></li><li><span class="num">3.</span><span>address: <strong>garden</strong> Avenue.</span></li><li class="translation"><span></span><span>地址：花园大道。</span></li><li><span class="num">4.</span><span>date of purchase: <strong>31st July</strong>.</span></li><li class="translation"><span></span><span>购买日期：7月31日。</span></li><li><span class="num">5.</span><span>original vacuum problem in the: <strong>handle</strong>.</span></li><li class="translation"><span></span><span>吸尘器最初的问题在于：把手。</span></li><li><span class="num">6.</span><span>price: $<strong>104</strong> in a sale.</span></li><li class="translation"><span></span><span>价格：促销价104美元。</span></li><li><span class="num">7.</span><span>suggest action: <strong>free repair</strong>.</span></li><li class="translation"><span></span><span>建议措施：免费维修。</span></li><li><span class="num">8.</span><span>new vacuum has a <strong>reusable bag</strong>.</span></li><li class="translation"><span></span><span>新吸尘器有一个可重复使用的袋子。</span></li><li><span class="num">9.</span><span>new type price: $<strong>190</strong>.</span></li><li class="translation"><span></span><span>新型号价格：190美元。</span></li><li><span class="num">10.</span><span>colour: <strong>silver</strong>.</span></li><li class="translation"><span></span><span>颜色：银色。</span></li>`},
+          'page-test23':{title:'Newtown Sailing School', startNum:1, dates:'(2019.1.20/2018.1.20/2015.10.8/2012.6.16)', audioSrc:'./part1.23.newtown sailing school.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T23: Newtown Sailing School</h4><p class="date-info">(2019.1.20/2018.1.20/2015.10.8/2012.6.16)</p></div><p class="fill-in-question"><b>1.</b> It will be open late on night of <input type="text" name="t23_q1"> until 11p.m.</p><p class="fill-in-question"><b>2.</b> The key to the <input type="text" name="t23_q2"> is available until the payment for a deposit</p><p class="fill-in-question"><b>3.</b> Annual membership fee is $<input type="text" name="t23_q3"> a family with a child age under 16</p><p class="fill-in-question"><b>4.</b> Parking place is in <input type="text" name="t23_q4"> Road</p><p class="fill-in-question"><b>5.</b> provide <input type="text" name="t23_q5"> on the first floor</p><p class="fill-in-question"><b>6.</b> call the secretary on <input type="text" name="t23_q6"> (direct line) before the day</p><p class="fill-in-question"><b>7.</b> you need to bring a <input type="text" name="t23_q7"></p><p class="fill-in-question"><b>8.</b> <input type="text" name="t23_q8"> courses</p><p class="fill-in-question"><b>9.</b> all you need is a <input type="text" name="t23_q9"></p><p class="fill-in-question"><b>10.</b> <input type="text" name="t23_q10"> diving courses</p></div><div class="results-in-page" id="results-page-test23"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">1.</span><span>It will be open late on night of <strong>Thursday</strong> until 11p.m.</span></li><li class="translation"><span></span><span>它将在周四晚上开放至晚上11点。</span></li><li><span class="num">2.</span><span>The key to the <strong>side gate</strong> is available until the payment for a deposit.</span></li><li class="translation"><span></span><span>侧门的钥匙在支付押金后即可获得。</span></li><li><span class="num">3.</span><span>Annual membership fee is $<strong>138</strong> a family with a child age under 16.</span></li><li class="translation"><span></span><span>对于有16岁以下儿童的家庭，年度会员费为138美元。</span></li><li><span class="num">4.</span><span>Parking place is in <strong>Lossely</strong> Road.</span></li><li class="translation"><span></span><span>停车场在Lossely路。</span></li><li><span class="num">5.</span><span>provide <strong>cafe</strong> on the first floor.</span></li><li class="translation"><span></span><span>一楼提供咖啡馆。</span></li><li><span class="num">6.</span><span>call the secretary on <strong>073076552</strong> (direct line) before the day.</span></li><li class="translation"><span></span><span>请在当天之前致电秘书处，电话是073076552（直线）。</span></li><li><span class="num">7.</span><span>you need to bring a <strong>sleeping bag</strong>.</span></li><li class="translation"><span></span><span>你需要带一个睡袋。</span></li><li><span class="num">8.</span><span><strong>wind surfing</strong> courses.</span></li><li class="translation"><span></span><span>帆板冲浪课程。</span></li><li><span class="num">9.</span><span>all you need is a <strong>passport</strong>.</span></li><li class="translation"><span></span><span>你所需要的就是一本护照。</span></li><li><span class="num">10.</span><span><strong>radio</strong> diving courses.</span></li><li class="translation"><span></span><span>无线电潜水课程。</span></li>`},
+          'page-test24':{title:'Package Delivery', startNum:1, dates:'(2017.1.21/2015.9.19/2014.10.18/2013.3.23)', audioSrc:'./part1.24.package delivery.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T24: Package Delivery</h4><p class="date-info">(2017.1.21/2015.9.19/2014.10.18/2013.3.23)</p></div><p class="fill-in-question"><b>1.</b> best arrived before <input type="text" name="t24_q1"></p><p class="fill-in-question"><b>2.</b> type of delivery: <input type="text" name="t24_q2"> Express</p><p class="fill-in-question"><b>3.</b> Name: Anna <input type="text" name="t24_q3"></p><p class="fill-in-question"><b>4.</b> Sender's Address: 14 <input type="text" name="t24_q4"> Road</p><p class="fill-in-question"><b>5.</b> Receiver's: <input type="text" name="t24_q5"></p><p class="fill-in-question"><b>6.</b> Mailer's Address: <input type="text" name="t24_q6"></p><p class="fill-in-question"><b>7.</b> Mail package includes: <input type="text" name="t24_q7"></p><p class="fill-in-question"><b>8.</b> some <input type="text" name="t24_q8"></p><p class="fill-in-question"><b>9.</b> the post fee is $<input type="text" name="t24_q9"></p><p class="fill-in-question"><b>10.</b> need to bring the receipt and <input type="text" name="t24_q10"> number</p></div><div class="results-in-page" id="results-page-test24"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">1.</span><span>best arrived before <strong>Friday</strong>.</span></li><li class="translation"><span></span><span>最好在周五前到达。</span></li><li><span class="num">2.</span><span>type of delivery: <strong>International</strong> Express.</span></li><li class="translation"><span></span><span>递送类型：国际快递。</span></li><li><span class="num">3.</span><span>Name: Anna <strong>Hillman</strong>.</span></li><li class="translation"><span></span><span>姓名：安娜·希尔曼。</span></li><li><span class="num">4.</span><span>Sender's Address: 14 <strong>Mountain</strong> Road.</span></li><li class="translation"><span></span><span>发件人地址：山路14号。</span></li><li><span class="num">5.</span><span>Receiver's: <strong>Park Avenue</strong>.</span></li><li class="translation"><span></span><span>收件人地址：公园大道。</span></li><li><span class="num">6.</span><span>Mailer's Address: <strong>North Building</strong>.</span></li><li class="translation"><span></span><span>寄件人地址：北楼。</span></li><li><span class="num">7.</span><span>Mail package includes: <strong>books</strong>.</span></li><li class="translation"><span></span><span>邮寄包裹包括：书籍。</span></li><li><span class="num">8.</span><span>some <strong>photographs</strong>.</span></li><li class="translation"><span></span><span>一些照片。</span></li><li><span class="num">9.</span><span>the post fee is $<strong>98</strong>.</span></li><li class="translation"><span></span><span>邮费是98美元。</span></li><li><span class="num">10.</span><span>need to bring the receipt and <strong>ID</strong> number.</span></li><li class="translation"><span></span><span>需要携带收据和身份证号码。</span></li>`}
+        };
+        this.answerKey = {
+            't17_q1': 'northeast', 't17_q2': 'peak season', 't17_q3': 'weekend', 't17_q4': 'quiet', 't17_q5': 'beach', 't17_q6': 'restaurant', 't17_q7': 'garden', 't17_q8': 'Cheffins', 't17_q9': '0192477285', 't17_q10': 'country living',
+            't18_q1': '3', 't18_q2': 'weather', 't18_q3': 'Town Hall', 't18_q4': 'variety', 't18_q5': 'plane', 't18_q6': 'over 40', 't18_q7': 'mid-range', 't18_q8': 'tourism', 't18_q9': 'computer programmer', 't18_q10': 'good value',
+            't19_q11': 'soft', 't19_q12': 'close', 't19_q13': '10-15', 't19_q14': 'gaps', 't19_q15': 'rubbish', 't19_q16': 'gas', 't19_q17': 'family members', 't19_q18': 'October', 't19_q19': 'radio', 't19_q20': 'training',
+            't20_q1': 'manager', 't20_q2': 'centre', 't20_q3': '40', 't20_q4': 'station', 't20_q5': 'May', 't20_q6': '12000', 't20_q7': 'booths', 't20_q8': 'store', 't20_q9': 'kitchen', 't20_q10': 'river',
+            't21_q1': 'Quigley', 't21_q2': 'return', 't21_q3': '11.45', 't21_q4': 'error message', 't21_q5': '2', 't21_q6': '12', 't21_q7': 'food', 't21_q8': 'school', 't21_q9': 'manager', 't21_q10': 'GBK8422',
+            't22_q1': 'Ruddick', 't22_q2': 'home', 't22_q3': 'garden', 't22_q4': '31st July', 't22_q5': 'handle', 't22_q6': '104', 't22_q7': 'free repair', 't22_q8': 'reusable bag', 't22_q9': '190', 't22_q10': 'silver',
+            't23_q1': 'Thursday', 't23_q2': 'side gate', 't23_q3': '138', 't23_q4': 'Lossely', 't23_q5': 'cafe', 't23_q6': '073076552', 't23_q7': 'sleeping bag', 't23_q8': 'wind surfing', 't23_q9': 'passport', 't23_q10': 'radio',
+            't24_q1': 'Friday', 't24_q2': 'International', 't24_q3': 'Hillman', 't24_q4': 'Mountain', 't24_q5': 'Park Avenue', 't24_q6': 'North Building', 't24_q7': 'books', 't24_q8': 'photographs', 't24_q9': '98', 't24_q10': 'ID'
+        };
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => App.init());
+}());
+</script>
+
+<script src="../../../../js/practice-page-enhancer.js"></script>
+</body>
+</html>

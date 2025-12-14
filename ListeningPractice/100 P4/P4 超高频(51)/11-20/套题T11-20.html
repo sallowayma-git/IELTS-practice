@@ -1,0 +1,1031 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>IELTS Listening Practice - T11-20</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  /* --- V2.0 Core Styles & Base --- */
+  :root { --splitter-width: 5px; --splitter-color: #eaecef; }
+  html, body { height: 100%; margin: 0; overflow: hidden; scroll-behavior: smooth; }
+  body {
+    background-color: #f1f3f4;
+    font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+    font-size: 13pt; /* Default is now LARGE */
+    font-weight: 400;
+    color: #000;
+    transition: background-color 0.3s, color 0.3s, font-size 0.2s;
+    display: flex;
+    flex-direction: column;
+  }
+  body.font-regular { font-size: 10pt; }
+  body.font-xlarge { font-size: 16pt; }
+
+  .app-wrapper { 
+    display: flex; 
+    flex-grow: 1;
+    overflow: hidden;
+  }
+
+  .shell { background: #f6f7fb; display: flex; flex-direction: column; flex-grow: 1; min-width: 0; }
+  h1, h2, h3, h4 { font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif; font-weight: 600; color: #2E74B5; }
+  strong, b { font-weight: 600; }
+  
+  /* --- Layout & Panes --- */
+  #main-shell { display: flex; flex-grow: 1; overflow: hidden; }
+  #left-pane { flex: 1 1 100%; overflow-y: auto; background: #fff; transition: flex-basis 0.4s ease-in-out, background-color 0.3s; padding: 0 16px; box-sizing: border-box; }
+  #splitter { width: var(--splitter-width); background: var(--splitter-color); cursor: col-resize; display: none; }
+  #right-pane { flex: 0 0 0; overflow-y: auto; background: #fcfdff; display: none; padding: 0 24px; box-sizing: border-box; transition: background-color 0.3s; }
+  
+  #main-shell.split-view #left-pane { flex-basis: 60%; padding: 0 24px; }
+  #main-shell.split-view #splitter { display: block; }
+  #main-shell.split-view #right-pane { display: block; flex-basis: calc(40% - var(--splitter-width)); }
+
+  .test-page, .transcript-page { display: none; }
+  .test-page.active, .transcript-page.active { display: block; }
+
+  #sticky-header { 
+    position: relative;
+    z-index: 10; 
+    background: #fff; 
+    padding: 16px;
+    border-bottom: 1px solid #eaecef; 
+    box-sizing: border-box;
+    flex-shrink: 0;
+  }
+  .audio-player-wrapper { display: none; }
+  .audio-player-wrapper.active { display: block; }
+  .audio-player { display: flex; align-items: center; gap: 12px; width: 100%; }
+  .play-pause-btn { background: #3b82f6; color: white; border: none; border-radius: 50%; width: 36px; height: 36px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .progress-container { flex-grow: 1; }
+  .progress-bar-wrapper { width: 100%; height: 8px; background-color: #e0e0e0; border-radius: 4px; cursor: pointer; }
+  .progress-bar { width: 0; height: 100%; background-color: #3b82f6; border-radius: 4px; }
+  .time-display { font-size: 0.9em; min-width: 90px; text-align: center; flex-shrink: 0; }
+  .top-bar-button { height: 36px; padding: 0 12px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #fff; color: #374151; cursor: pointer; font-size: 10pt; font-family: inherit; flex-shrink: 0; }
+
+  /* --- Custom Select for Speed Control --- */
+  .speed-control { position: relative; flex-shrink: 0; }
+  .custom-select { appearance: none; -webkit-appearance: none; background-color: #f3f4f6; border: 1px solid #d1d5db; border-radius: 6px; padding: 6px 30px 6px 12px; font-size: 1em; font-weight: 500; cursor: pointer; min-width: 90px; }
+  .speed-control::after { content: '▾'; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; font-size: 1.2em; color: #6b7280; }
+
+  /* --- Bottom Bar & Buttons --- */
+  .bottom-bar { position: fixed; left: 0; right: 0; bottom: 0; height: 64px; background: #fff; border-top: 1px solid #eaecef; box-shadow: 0 -6px 18px rgba(0,0,0,.06); display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 16px; z-index: 100; transition: background-color 0.3s; box-sizing: border-box; }
+  .bb-left, .bb-center { display: flex; align-items: center; gap: 8px; }
+  .pills { display: flex; gap: 10px; align-items: center; }
+  .pill { padding: 6px 16px; border-radius: 18px; border: 1px solid #d1d5db; background: #f9fafb; color: #374151; font-size: 11pt; cursor: pointer; transition: all 0.2s ease; }
+  .pill.active { background: #2E74B5; border-color: #2E74B5; color: #fff; font-weight: 600; }
+  .bb-center button { height: 38px; padding: 0 16px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #fff; color: #374151; cursor: pointer; font-size: 11pt; font-family: inherit; }
+  .btn-primary { background-color: #2563eb !important; color: white !important; border-color: #2563eb !important; font-weight: 600; }
+  button#clean-btn.has-save { background-color: #fee2e2 !important; color: #991b1b !important; border-color: #fecaca !important; font-weight: 600;}
+
+  /* MODIFIED: Timer display styles */
+  .timer-display-box { height: 36px; padding: 0 12px; border: 1px solid #d1d5db; border-radius: 8px; cursor: pointer; font-size: 13pt; font-family: inherit; display: flex; align-items: center; justify-content: center; min-width: 50px; transition: background-color 0.3s, border-color 0.3s; user-select: none; flex-shrink: 0; font-weight: 600; }
+  .timer-paused { background-color: #fef2f2; border-color: #fecaca; }
+
+  /* --- Question Styles --- */
+  .test-page { text-align: left; padding-top: 20px; padding-bottom: 80px; }
+  .group { border: 1px solid #eef0f6; border-radius: 12px; padding: 24px; margin: 0; }
+  .test-title-container { border-bottom: 1px solid #BFBFBF; padding-bottom: 6px; margin-bottom: 16px; }
+  .test-title { font-size: 1.2em; margin: 0; }
+  .date-info { font-size: 0.85em; color: #6b7280; font-style: italic; margin-top: 4px; }
+  .fill-in-question { margin-bottom: 12pt; line-height: 1.75; text-align: left; }
+  .fill-in-question input[type="text"] { width: 200px; font-size: 1.1em; padding: 4px 6px; border: 1px solid #9ca3af; border-radius: 4px; margin: 0 8px; vertical-align: baseline; }
+  input.error { border-color: #fca5a5 !important; background-color: #fef2f2 !important; }
+  input.correct { border-color: #86efac !important; background-color: #f0fdf4 !important; }
+
+  /* --- Transcript Styles --- */
+  .transcript-page h4 { font-size: 1.2em; border-bottom: 1px solid #BFBFBF; padding-bottom: 6px; margin-top: 24pt; margin-bottom: 12pt; }
+  .transcript-page ol { padding-left: 0; list-style: none; }
+  .transcript-page li { display: grid; grid-template-columns: 30px auto; gap: 8px; align-items: start; }
+  .transcript-page li:not(.translation) { margin-bottom: 0pt; }
+  .transcript-page li.translation { margin-bottom: 8pt; }
+  .transcript-page li .num { font-weight: bold; }
+  .transcript-page li.translation .num { visibility: hidden; }
+
+  /* --- Notes Panel & Highlighter --- */
+  #notes-splitter { width: var(--splitter-width); background: var(--splitter-color); cursor: col-resize; display: none; }
+  #notes { flex-basis: 0; display: none; flex-shrink: 0; width: auto; background: #fafbff; border-left: 1px solid #eaecef; flex-direction: column; overflow: hidden; }
+  body.notes-open #notes { display: flex; flex-basis: 420px; }
+  body.notes-open #notes-splitter { display: block; }
+  .side-panel-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-bottom: 1px solid #eaecef; background: #f8f9fa; flex-shrink: 0; }
+  .side-panel-close { background: transparent; border: none; font-size: 24px; cursor: pointer; }
+  #notes-list { overflow-y: auto; padding: 12px; flex-grow: 1; }
+  .note-card { background: #fff; border-radius: 10px; padding: 12px; margin: 0 0 10px; border: 1px solid #e6e9f3; }
+  .note-quote { background:#f6f8ff; border:1px solid #e5eafe; border-radius:8px; padding:8px 10px; margin: 6px 0 10px; font-size: 1rem; cursor: pointer; }
+  .note-card textarea { width: 100%; min-height: 64px; border: 1px solid #e1e4ef; border-radius: 8px; padding: 8px; box-sizing: border-box; font-size: 16px; }
+  .hl { background: #fff59d; }
+  .hl-blue { background: #bae6fd; cursor: pointer; }
+  
+  #selbar { position: absolute; background: #fff; border: 1px solid #eaecef; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: 6px; gap: 6px; display: inline-flex; z-index: 101; }
+  #selbar[hidden] { display: none; }
+  #selbar button { border: 1px solid #e1e4ef; border-radius: 6px; padding: 5px 10px; background: #fff; cursor: pointer; font-size: 0.9em; }
+
+  #settings-panel { position: absolute; background: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); border: 1px solid #e5e7eb; width: 200px; z-index: 101; padding: 6px; display: none; }
+  #settings-panel.active { display: block; }
+  .settings-section { padding: 6px; }
+  .settings-section h5 { margin: 0 0 8px; font-size: 0.8em; color: #6b7280; font-weight: 600; text-transform: uppercase; }
+  .settings-group button { width: 100%; background: #f3f4f6; border: 1px solid transparent; text-align: left; padding: 8px 12px; border-radius: 6px; cursor: pointer; margin-bottom: 4px; font-size: 1em; }
+  .settings-group button.selected { background: #e0e7ff; color: #4338ca; font-weight: 600; border-color: #c7d2fe; }
+  .settings-divider { border-top: 1px solid #e5e7eb; margin: 6px 0; }
+
+  /* --- Enhanced Results & History --- */
+  .results-in-page { margin-top: 30px; border-top: 2px solid #eef0f6; padding-top: 20px; }
+  .results-container { max-width: 650px; margin: 0 auto; }
+  .results-summary { font-size: 1.1em; font-weight: 600; margin-bottom: 16px; display: flex; justify-content: flex-start; gap: 3em; }
+  .results-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.95em; }
+  .results-table th, .results-table td { border: 1px solid #e1e4ef; padding: 8px 12px; text-align: left; }
+  .results-table th { background: #f8f9fa; font-weight: 600; }
+  .result-correct { color: #16a34a; font-weight: bold; }
+  .result-incorrect { color: #dc2626; font-weight: bold; }
+  .your-answer { font-style: italic; color: #4b5563; }
+  .no-answer { color: #9ca3af; font-style: italic; }
+
+  /* --- Dialogs & History Panel --- */
+  .dialog-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 200; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: opacity 0.2s, visibility 0.2s; }
+  #confirm-dialog-overlay, #clean-history-dialog-overlay { z-index: 300; }
+  .dialog-overlay.visible { opacity: 1; visibility: visible; }
+  .dialog-box { background: white; padding: 24px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 90%; max-width: 400px; text-align: center; transform: scale(0.95); transition: transform 0.2s; }
+  .dialog-overlay.visible .dialog-box { transform: scale(1); }
+  .dialog-box p { margin: 0 0 20px; font-size: 1.1em; }
+  .dialog-buttons { display: flex; gap: 12px; justify-content: center; }
+  .dialog-buttons.vertical { flex-direction: column; }
+  .dialog-buttons button { padding: 10px 20px; border-radius: 8px; font-size: 1em; cursor: pointer; border: 1px solid #d1d5db; }
+  #confirm-dialog-yes { background-color: #2563eb; color: white; border-color: #2563eb; }
+  #confirm-dialog-no { background-color: #fff; color: #374151; }
+  #history-panel { max-width: 700px; width: 90%; max-height: 80vh; display: flex; flex-direction: column; text-align: left; }
+  .history-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; border-bottom: 1px solid #eaecef; margin-bottom: 12px; }
+  .history-header h3 { margin: 0; }
+  .history-header .btn-clean { font-size: 10pt; height: 32px; padding: 0 12px; background-color: #fff; color: #2E74B5; border: 1px solid #d1d5db; font-weight: 600; }
+  #history-list { overflow-y: auto; padding-right: 10px; }
+  .history-item { border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 12px; }
+  .history-summary { padding: 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: #f9fafb; }
+  .history-summary:hover { background: #f3f4f6; }
+  .history-details { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; background: #fff; }
+  .history-details.visible { max-height: 500px; padding: 12px; border-top: 1px solid #e5e7eb;}
+  .history-item-delete-btn { background: transparent; border: none; font-size: 24px; cursor: pointer; color: #ef4444; padding: 4px 8px; line-height: 1; }
+  .mistake-table { width: 100%; margin-top: 10px; border-collapse: collapse; }
+  .mistake-table th, .mistake-table td { border: 1px solid #e1e4ef; padding: 8px; text-align: left; }
+  #clean-current-btn, #clean-all-btn { background-color: #fee2e2; color: #b91c1c; border-color: #fecaca; }
+  #clean-cancel-btn { background-color: #f3f4f6; color: #6b7280; border-color: #e5e7eb; }
+  
+  /* --- Auto-hiding scrollbar styles --- */
+  #left-pane::-webkit-scrollbar, #right-pane::-webkit-scrollbar, #notes-list::-webkit-scrollbar { width: 8px; }
+  #left-pane::-webkit-scrollbar-track, #right-pane::-webkit-scrollbar-track, #notes-list::-webkit-scrollbar-track { background: transparent; }
+  #left-pane::-webkit-scrollbar-thumb, #right-pane::-webkit-scrollbar-thumb, #notes-list::-webkit-scrollbar-thumb { background-color: transparent; border-radius: 4px; }
+  #left-pane:hover::-webkit-scrollbar-thumb, #right-pane:hover::-webkit-scrollbar-thumb, #notes-list:hover::-webkit-scrollbar-thumb { background-color: #ccc; }
+  .dark-mode #left-pane:hover::-webkit-scrollbar-thumb, .dark-mode #right-pane:hover::-webkit-scrollbar-thumb, .dark-mode #notes-list:hover::-webkit-scrollbar-thumb { background-color: #4b5563; }
+
+  /* --- Dark Mode --- */
+  body.dark-mode { background-color: #111827; color: #d1d5db; }
+  .dark-mode .shell, .dark-mode #left-pane, .dark-mode #sticky-header, .dark-mode .bottom-bar, .dark-mode #right-pane, .dark-mode #notes, .dark-mode .note-card, .dark-mode #settings-panel, .dark-mode .results-table th, .dark-mode .dialog-box { background-color: #1f2937; color: #d1d5db; border-color: #374151; }
+  .dark-mode h1, .dark-mode h2, .dark-mode h3, .dark-mode h4 { color: #93c5fd; }
+  .dark-mode .pill { background: #374151; color: #d1d5db; border-color: #4b5563; }
+  .dark-mode .pill.active { background: #60a5fa; border-color: #60a5fa; color: #111827; }
+  .dark-mode input[type="text"] { background: #374151; border-color: #4b5563; color: #d1d5db; }
+  .dark-mode input.error { background-color: #4b1924 !important; border-color: #991b1b !important; }
+  .dark-mode input.correct { background-color: #163b2d !important; border-color: #14532d !important; }
+  .dark-mode .note-quote { background: #374151; border-color: #4b5563; }
+  .dark-mode button, .dark-mode .dialog-buttons button, .dark-mode .top-bar-button { background-color: #374151; border-color: #4b5563; color: #d1d5db;}
+  .dark-mode .btn-primary { background-color: #3b82f6 !important; border-color: #3b82f6 !important; color: white !important;}
+  .dark-mode button#clean-btn.has-save { background-color: #450a0a !important; color: #fee2e2 !important; border-color: #991b1b !important;}
+  .dark-mode #confirm-dialog-yes { background-color: #3b82f6; border-color: #3b82f6;}
+  .dark-mode #confirm-dialog-no { background-color: #4b5563; border-color: #5a6676;}
+  .dark-mode .settings-group button { background: #374151; }
+  .dark-mode .settings-group button.selected { background: #312e81; color: #e0e7ff; border-color: #4f46e5;}
+  .dark-mode .custom-select { background-color: #374151; color: #d1d5db; border-color: #4b5563; }
+  .dark-mode .speed-control::after { color: #9ca3af; }
+  .dark-mode .your-answer { color: #9ca3af; }
+  .dark-mode .timer-paused { background-color: #450a0a; border-color: #991b1b;}
+  .dark-mode .history-summary { background: #1f2937; }
+  .dark-mode .history-summary:hover { background: #374151; }
+  .dark-mode .history-details { background: #111827; }
+  .dark-mode .history-header .btn-clean { background-color: #374151; color: #93c5fd; border-color: #4b5563; }
+  .dark-mode #clean-current-btn, .dark-mode #clean-all-btn { background-color: #450a0a; color: #fecaca; border-color: #991b1b; }
+  .dark-mode #clean-cancel-btn { background-color: #374151; color: #9ca3af; border-color: #4b5563; }
+</style>
+</head>
+<body class="font-large">
+
+<div id="sticky-header">
+  <div id="audio-player-container"></div>
+</div>
+
+<div class="app-wrapper">
+  <div class="shell">
+    <div id="main-shell">
+      <div id="left-pane">
+        <div id="test-pages-container"></div>
+      </div>
+      <div id="splitter"></div>
+      <div id="right-pane">
+        <div id="transcript-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="notes-splitter"></div>
+  <div id="notes">
+    <div class="side-panel-header"><span>My Notes</span><button id="notes-close" type="button" class="side-panel-close">&times;</button></div>
+    <div id="notes-list"></div>
+  </div>
+</div>
+
+<div class="bottom-bar">
+  <div class="bb-left"><div id="part-pills" class="pills"></div></div>
+  <div class="bb-center">
+    <button id="submit-btn" class="btn-primary" type="button">Submit</button>
+    <button id="reset-btn" type="button">Reset</button>
+    <button id="submit-all-btn" class="btn-primary" type="button">Submit All</button>
+    <button id="clean-btn" type="button">Clean</button>
+    <button id="history-btn" type="button">History</button>
+  </div>
+</div>
+
+<div id="selbar" hidden>
+    <button data-act="hl">Highlight</button>
+    <button data-act="note">Note</button>
+    <button data-act="del">Clear</button>
+</div>
+
+<div id="settings-panel">
+  <div class="settings-section">
+    <h5>Font Size</h5>
+    <div class="settings-group" id="font-size-group">
+      <button data-size="regular">Regular</button>
+      <button data-size="large" class="selected">Large</button>
+      <button data-size="xlarge">Extra Large</button>
+    </div>
+  </div>
+  <div class="settings-divider"></div>
+  <div class="settings-section">
+    <h5>Color Mode</h5>
+    <div class="settings-group" id="color-mode-group">
+      <button data-mode="light" class="selected">Black on White</button>
+      <button data-mode="dark">White on Black</button>
+    </div>
+  </div>
+</div>
+
+<div id="confirm-dialog-overlay" class="dialog-overlay">
+  <div id="confirm-dialog-box" class="dialog-box">
+    <p id="confirm-dialog-msg"></p>
+    <div class="dialog-buttons">
+      <button id="confirm-dialog-no">Cancel</button>
+      <button id="confirm-dialog-yes">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div id="history-panel-overlay" class="dialog-overlay">
+  <div id="history-panel" class="dialog-box">
+    <div class="history-header">
+      <h3 id="history-title">History</h3>
+      <button id="history-clean-btn" class="btn-clean">Clean</button>
+    </div>
+    <div id="history-list"></div>
+  </div>
+</div>
+
+<div id="clean-history-dialog-overlay" class="dialog-overlay">
+  <div id="clean-history-dialog-box" class="dialog-box">
+    <p>Choose a cleanup option:</p>
+    <div class="dialog-buttons vertical">
+      <button id="clean-current-btn">Clear History for This Test</button>
+      <button id="clean-all-btn">Clear All History</button>
+      <button id="clean-cancel-btn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+'use strict';
+
+const __safeStorage = (() => {
+    try {
+        return window.localStorage;
+    } catch (_) {
+        return null;
+    }
+})();
+
+const localStorage = {
+    getItem(key) {
+        if (!__safeStorage) return null;
+        try { return __safeStorage.getItem(key); } catch (_) { return null; }
+    },
+    setItem(key, value) {
+        if (!__safeStorage) return;
+        try { __safeStorage.setItem(key, String(value)); } catch (_) {}
+    },
+    removeItem(key) {
+        if (!__safeStorage) return;
+        try { __safeStorage.removeItem(key); } catch (_) {}
+    }
+};
+
+window.inputCache = {}; // 全局输入缓存
+window.App = {
+    state: { timerSecs: 0, timerInterval: null, paused: false, finishedSections: new Set(), confirmCallback: null, pageInitialized: new Set(),  },
+    templates: { content: {} },
+    answerKey: {},
+
+    init() {
+        this.populateContent(); 
+        this.buildLayout(); 
+        this.cacheElements(); 
+        this.bindEvents(); 
+        this.ensureSuiteButtonsForAll();
+        this.loadGlobalState();
+        this.startTimer(); 
+        this.showPage(localStorage.getItem('lastActivePage') || 'page-test11'); 
+        this.AudioPlayer.init(); 
+        this.Splitter.init(); 
+        this.Splitter.initNotes();
+        this.applySafeArea();
+        // 全局提交按钮绑定到当前激活套题
+        if (this.el.submitBtn) {
+            this.el.submitBtn.addEventListener('click', () => this.submitCurrentSuite());
+        }
+    },
+    resolveInitialPageId(preferredId) {
+        const hasPreferred = preferredId && this.templates.content && this.templates.content[preferredId];
+        return hasPreferred ? preferredId : this.getDefaultPageId();
+    },
+    getDefaultPageId() {
+        const keys = Object.keys(this.templates.content || {});
+        return keys.length ? keys[0] : 'page-test1';
+    },
+    ensureSuiteSubmitButton(pageId) {
+        const suitePage = document.getElementById(pageId);
+        if (!suitePage) return;
+        // 移除页面内的分题提交按钮（防止误导用户）
+        const existingContainer = suitePage.querySelector('.suite-submit-container');
+        if (existingContainer) existingContainer.remove();
+        // 不再创建页面内按钮，只使用底部栏的全局 Submit 按钮
+    },
+    ensureSuiteButtonsForAll() {
+        (Object.keys(this.templates.content || {})).forEach(id => this.ensureSuiteSubmitButton(id));
+    },
+    cacheElements() {
+        const $ = s => document.querySelector(s);
+        this.el = { 
+            body: $('body'), mainShell: $('#main-shell'), leftPane: $('#left-pane'), 
+            allPanes: [$('#left-pane'), $('#right-pane'), $('#notes')], 
+            submitBtn: $('#submit-btn'), resetBtn: $('#reset-btn'), 
+            audioContainer: $('#audio-player-container'), pagesContainer: $('#test-pages-container'), 
+            transcriptContainer: $('#transcript-content'), pillsContainer: $('#part-pills'), 
+            bottomBar: $('.bottom-bar'),
+            notes: $('#notes'), notesCloseBtn: $('#notes-close'), notesList: $('#notes-list'), 
+            selbar: $('#selbar'), settingsPanel: $('#settings-panel'),
+            submitAllBtn: $('#submit-all-btn'),
+            cleanBtn: $('#clean-btn'),
+            historyBtn: $('#history-btn'),
+            confirmDialog: {
+                overlay: $('#confirm-dialog-overlay'),
+                msg: $('#confirm-dialog-msg'),
+                yes: $('#confirm-dialog-yes'),
+                no: $('#confirm-dialog-no')
+            },
+            historyPanel: {
+                overlay: $('#history-panel-overlay'),
+                title: $('#history-title'),
+                list: $('#history-list'),
+                cleanBtn: $('#history-clean-btn')
+            },
+            cleanHistoryDialog: {
+                overlay: $('#clean-history-dialog-overlay'),
+                cleanCurrentBtn: $('#clean-current-btn'),
+                cleanAllBtn: $('#clean-all-btn'),
+                cancelBtn: $('#clean-cancel-btn')
+            }
+        };
+    },
+    buildLayout() {
+        const audioContainer = document.getElementById('audio-player-container'), pagesContainer = document.getElementById('test-pages-container'), transcriptContainer = document.getElementById('transcript-content'), pillsContainer = document.getElementById('part-pills');
+        let audioHTML = '', pagesHTML = '', transcriptHTML = '', pillsHTML = '';
+        for (const [id, data] of Object.entries(this.templates.content)) {
+            const pageNum = id.replace('page-test', '');
+            const suiteId = `set${pageNum}`;
+            audioHTML += `<div class="audio-player-wrapper" id="audio-${id}"><div class="audio-player">
+                <span class="timer-display-box" role="button">00:00</span>
+                <button class="play-pause-btn">&#9658;</button>
+                <div class="progress-container"><div class="progress-bar-wrapper"><div class="progress-bar"></div></div></div>
+                <div class="time-display">00:00 / 00:00</div>
+                <div class="speed-control"><select class="custom-select"><option value="0.5">0.5x</option><option value="0.75">0.75x</option><option value="0.9">0.9x</option><option value="1.0" selected>1.0x</option><option value="1.25">1.25x</option><option value="1.5">1.5x</option><option value="1.7">1.7x</option><option value="2.0">2.0x</option></select></div>
+                <button data-action="toggle-settings" class="top-bar-button">Settings</button>
+                <button data-action="toggle-notes" class="top-bar-button">Notes</button>
+                <audio class="listening-audio" src="${data.audioSrc}" preload="metadata"></audio>
+            </div></div>`;
+            pagesHTML += `<div class="test-page" id="${id}" data-suite-id="${suiteId}">${data.questions}</div>`;
+            transcriptHTML += `<div class="transcript-page" id="transcript-${id}"><h4>Transcript: T${pageNum} ${data.title}</h4><ol style="counter-reset: item-counter ${data.startNum - 1};">${data.transcript}</ol><p>&nbsp;</p><p>&nbsp;</p></div>`;
+            pillsHTML += `<div class="pill" data-target="${id}">T${pageNum}</div>`;
+        }
+        audioContainer.innerHTML = audioHTML; pagesContainer.innerHTML = pagesHTML; transcriptContainer.innerHTML = transcriptHTML; pillsContainer.innerHTML = pillsHTML;
+    },
+    bindEvents() {
+        this.el.pillsContainer.addEventListener('click', e => { 
+            if (!e.target.classList.contains('pill')) return;
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            
+            const current = document.querySelector('.test-page.active');
+            if (current) {
+                window.inputCache[current.id] = [];
+                current.querySelectorAll('input[type="text"]').forEach((input, i) => {
+                    window.inputCache[current.id][i] = input.value;
+                });
+            }
+            
+            const targetId = e.target.dataset.target;
+            document.querySelectorAll('.test-page, .audio-player-wrapper, .transcript-page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+            
+            document.getElementById(targetId).classList.add('active');
+            document.getElementById(`audio-${targetId}`).classList.add('active');
+            e.target.classList.add('active');
+            
+            localStorage.setItem('lastActivePage', targetId);
+
+            
+            const testPrefix = `t${targetId.replace('page-test', '')}`;
+
+            
+            const isFinished = this.state.finishedSections.has(testPrefix);
+
+            
+            this.el.mainShell.classList.toggle('split-view', isFinished);
+
+            
+            if (isFinished) {
+
+            
+                document.getElementById(`transcript-${targetId}`)?.classList.add('active');
+
+            
+            }
+
+            
+            const activeAudioWrapper = document.getElementById(`audio-${targetId}`);
+
+            
+            this.el.activeTimer = activeAudioWrapper ? activeAudioWrapper.querySelector('.timer-display-box') : null;
+
+            
+            if (this.el.submitBtn) this.el.submitBtn.disabled = isFinished;
+            
+            setTimeout(() => {
+                if (window.inputCache[targetId]) {
+                    document.getElementById(targetId).querySelectorAll('input[type="text"]').forEach((input, i) => {
+                        if (window.inputCache[targetId][i]) {
+                            input.value = window.inputCache[targetId][i];
+                        }
+                    });
+                }
+            }, 10);
+        });
+        // 使用事件委托监听套题提交按钮
+        this.el.pagesContainer.addEventListener('click', e => {
+            const submitBtn = e.target.closest('[data-submit-suite]');
+            if (submitBtn) {
+                const suiteId = submitBtn.dataset.submitSuite;
+                this.finishSuite(suiteId);
+            }
+        });
+        this.el.resetBtn.addEventListener('click', () => { this.showConfirm('确认重置当前练习吗？所有进度将丢失。', () => this.clearCurrentSectionState(true)); });
+        
+        this.el.audioContainer.addEventListener('click', e => {
+            const target = e.target;
+            if (target.classList.contains('timer-display-box')) this.togglePause();
+            if (target.dataset.action === 'toggle-settings') {
+                this.el.settingsPanel.classList.toggle('active');
+                if(this.el.settingsPanel.classList.contains('active')) {
+                    const rect = target.getBoundingClientRect();
+                    this.el.settingsPanel.style.top = `${rect.bottom + 8}px`;
+                    this.el.settingsPanel.style.right = `${window.innerWidth - rect.right}px`;
+                    this.el.settingsPanel.style.left = 'auto';
+                }
+            }
+            if (target.dataset.action === 'toggle-notes') this.notes.toggle();
+        });
+
+        document.addEventListener('click', e => {
+            const settingsBtn = e.target.closest('[data-action="toggle-settings"]');
+            if (!this.el.settingsPanel.contains(e.target) && !settingsBtn) {
+                this.el.settingsPanel.classList.remove('active');
+            }
+        });
+
+        this.el.settingsPanel.addEventListener('click', e => {
+            const button = e.target.closest('button');
+            if (!button) return;
+            const size = button.dataset.size;
+            const mode = button.dataset.mode;
+            if (size) {
+                this.el.body.classList.remove('font-regular', 'font-large', 'font-xlarge');
+                this.el.body.classList.add(`font-${size}`);
+                document.querySelectorAll('#font-size-group button').forEach(b => b.classList.remove('selected'));
+                button.classList.add('selected');
+            }
+            if (mode) {
+                this.el.body.classList.toggle('dark-mode', mode === 'dark');
+                document.querySelectorAll('#color-mode-group button').forEach(b => b.classList.remove('selected'));
+                button.classList.add('selected');
+            }
+        });
+
+        this.el.notesCloseBtn.addEventListener('click', () => this.notes.toggle(false));
+        document.addEventListener('mouseup', e => this.highlighter.handleMouseUp(e));
+        this.el.selbar.addEventListener('click', e => this.highlighter.handleAction(e));
+        
+        this.el.notesList.addEventListener('click', e => {
+            const delBtn = e.target.closest('button[data-act="del-note"]');
+            if (delBtn) {
+                const card = delBtn.closest('.note-card');
+                if (card) {
+                    const hid = card.dataset.hid;
+                    if (hid) {
+                        const elToUnwrap = document.querySelector(`span[data-hid="${hid}"]`);
+                        if (elToUnwrap) App.highlighter.unWrap(elToUnwrap);
+                    }
+                    card.remove();
+                }
+                return; 
+            }
+
+            const card = e.target.closest('.note-card');
+            if (card && e.target.closest('.note-quote')) {
+                const hid = card.dataset.hid;
+                if (hid) {
+                    const targetHighlight = document.querySelector(`span[data-hid="${hid}"]`);
+                    if (targetHighlight) {
+                        targetHighlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        targetHighlight.style.transition = 'background-color 0.2s';
+                        targetHighlight.style.backgroundColor = '#fecaca';
+                        setTimeout(() => { targetHighlight.style.backgroundColor = ''; }, 1200);
+                    }
+                }
+            }
+        });
+        
+        window.addEventListener('resize', () => this.applySafeArea());
+    
+        const dialog = this.el.confirmDialog;
+        dialog.yes.addEventListener('click', () => { if (this.state.confirmCallback) this.state.confirmCallback(); this.hideConfirm(); });
+        dialog.no.addEventListener('click', () => this.hideConfirm());
+        dialog.overlay.addEventListener('click', (e) => { if (e.target === dialog.overlay) this.hideConfirm(); });
+        this.el.submitAllBtn.addEventListener('click', () => this.showConfirm('确认提交全部套题吗?', () => this.submitAllSuites()));
+        this.el.cleanBtn.addEventListener('click', () => this.showConfirm('确认清除当前练习的存档吗?', () => this.clearCurrentSectionState(false)));
+
+        this.el.historyBtn.addEventListener('click', () => this.history.open());
+        this.el.historyPanel.overlay.addEventListener('click', (e) => { if(e.target.id === 'history-panel-overlay') this.history.close(); });
+        this.el.historyPanel.list.addEventListener('click', e => {
+            const summary = e.target.closest('.history-summary');
+            if (summary && !e.target.closest('.history-item-delete-btn')) {
+                const details = summary.nextElementSibling;
+                details.classList.toggle('visible');
+            }
+            const deleteBtn = e.target.closest('.history-item-delete-btn');
+            if (deleteBtn) {
+                const timestamp = deleteBtn.dataset.timestamp;
+                this.showConfirm('确认删除此条历史记录吗?', () => this.history.delete(timestamp));
+            }
+        });
+
+        const cleanDialog = this.el.cleanHistoryDialog;
+        this.el.historyPanel.cleanBtn.addEventListener('click', () => cleanDialog.overlay.classList.add('visible'));
+        cleanDialog.cancelBtn.addEventListener('click', () => cleanDialog.overlay.classList.remove('visible'));
+        cleanDialog.overlay.addEventListener('click', (e) => { if(e.target === cleanDialog.overlay) cleanDialog.overlay.classList.remove('visible'); });
+        cleanDialog.cleanCurrentBtn.addEventListener('click', () => this.history.cleanCurrent());
+        cleanDialog.cleanAllBtn.addEventListener('click', () => this.history.cleanAll());
+    },
+    showConfirm(message, onConfirm) {
+        this.el.confirmDialog.msg.textContent = message;
+        this.state.confirmCallback = onConfirm;
+        this.el.confirmDialog.overlay.classList.add('visible');
+    },
+    hideConfirm() {
+        this.el.confirmDialog.overlay.classList.remove('visible');
+        this.state.confirmCallback = null;
+    },
+    loadGlobalState() {},
+
+    snapshotActivePage() {
+        const activePage = this.el.pagesContainer.querySelector('.test-page.active');
+        if (!activePage) return;
+
+        // 将当前输入值写回 DOM 属性，避免切页时被 innerHTML 丢失
+        activePage.querySelectorAll('input[type="text"]').forEach(input => {
+            input.setAttribute('value', input.value);
+        });
+        activePage.querySelectorAll('textarea').forEach(textarea => {
+            textarea.innerHTML = textarea.value;
+        });
+
+        const pageId = activePage.id;
+        const transcriptPage = document.getElementById(`transcript-${pageId}`);
+        this.state.pageSnapshots.set(pageId, {
+            pageHTML: activePage.innerHTML,
+            transcriptHTML: transcriptPage ? transcriptPage.innerHTML : '',
+            notesHTML: this.el.notesList.innerHTML
+        });
+    },
+
+    restorePage(pageId) {
+        const snapshot = this.state.pageSnapshots.get(pageId);
+        if (!snapshot) return false;
+        const testPage = document.getElementById(pageId);
+        const transcriptPage = document.getElementById(`transcript-${pageId}`);
+        if (!testPage || !transcriptPage) return false;
+        testPage.innerHTML = snapshot.pageHTML;
+        transcriptPage.innerHTML = snapshot.transcriptHTML;
+        this.el.notesList.innerHTML = snapshot.notesHTML;
+        return true;
+    },
+
+    clearCurrentSectionState(isResetButton) {
+        const activePage = this.el.pagesContainer.querySelector('.test-page.active');
+        if (!activePage) return;
+        const pageId = activePage.id;
+        const testPrefix = `t${pageId.replace('page-test', '')}`;
+        this.state.finishedSections.delete(testPrefix);
+        this.state.pageInitialized.delete(testPrefix);
+        this.state.pageSnapshots.delete(pageId);
+
+        const template = this.templates.content[pageId];
+        if (template) {
+            activePage.innerHTML = template.questions;
+            const transcript = document.getElementById(`transcript-${pageId}`);
+            if (transcript) {
+                transcript.innerHTML = `<h4>Transcript: T${pageId.replace('page-test','')} ${template.title}</h4><ol style="counter-reset: item-counter ${template.startNum - 1};">${template.transcript}</ol><p>&nbsp;</p><p>&nbsp;</p>`;
+            }
+            this.el.notesList.innerHTML = '';
+        }
+
+        if (isResetButton) location.reload();
+        else this.showPage(pageId);
+    },
+
+    showPage(pageId) {
+        this.snapshotActivePage();
+        this.notes.toggle(false);
+        this.highlighter.hideSelbar();
+        document.querySelectorAll('.listening-audio').forEach(audio => audio.pause());
+
+        const resolvedPageId = (this.templates.content && this.templates.content[pageId]) ? pageId : this.getDefaultPageId();
+        if (!resolvedPageId) return;
+
+        const testPrefix = `t${resolvedPageId.replace('page-test', '')}`;
+        const testPage = document.getElementById(resolvedPageId);
+        const transcriptPage = document.getElementById(`transcript-${resolvedPageId}`);
+        if (!testPage || !transcriptPage) return;
+
+        const savedStateJSON = null;
+        const hasSavedState = !!savedStateJSON;
+        this.el.cleanBtn.classList.toggle('has-save', hasSavedState);
+
+        if (!this.state.pageInitialized.has(testPrefix) && savedStateJSON) {
+            try {
+                const state = JSON.parse(savedStateJSON);
+                testPage.innerHTML = state.pageHTML;
+                transcriptPage.innerHTML = state.transcriptHTML;
+                this.el.notesList.innerHTML = state.notesHTML;
+                if (state.isFinished) this.state.finishedSections.add(testPrefix);
+                else this.state.finishedSections.delete(testPrefix);
+            } catch (error) {
+                console.warn('恢复存档失败', error);
+            }
+            this.state.pageInitialized.add(testPrefix);
+        } else if (!this.state.pageInitialized.has(testPrefix)) {
+            this.state.pageInitialized.add(testPrefix);
+        } else {
+            this.restorePage(resolvedPageId);
+        }
+
+        document.querySelectorAll('.test-page, .audio-player-wrapper, .transcript-page').forEach(p => p.classList.remove('active'));
+        this.ensureSuiteSubmitButton(resolvedPageId);
+        testPage.classList.add('active');
+        const activeAudioWrapper = document.getElementById(`audio-${resolvedPageId}`);
+        if (activeAudioWrapper) {
+            activeAudioWrapper.classList.add('active');
+            this.el.activeTimer = activeAudioWrapper.querySelector('.timer-display-box');
+        } else {
+            this.el.activeTimer = null;
+        }
+
+        document.querySelectorAll('.pill').forEach(p => p.classList.toggle('active', p.dataset.target === resolvedPageId));
+        localStorage.setItem('lastActivePage', resolvedPageId);
+        const isFinished = this.state.finishedSections.has(testPrefix);
+        this.el.submitBtn.disabled = isFinished;
+        this.el.mainShell.classList.toggle('split-view', isFinished);
+        if (isFinished) document.getElementById(`transcript-${resolvedPageId}`)?.classList.add('active');
+    },
+    startTimer() {
+        if (this.state.timerInterval) clearInterval(this.state.timerInterval);
+        this.state.timerSecs = 0;
+        const updateTimerDisplay = () => {
+            if (!this.el.activeTimer) return;
+            const m = String(Math.floor(this.state.timerSecs / 60)).padStart(2, '0');
+            const s = String(this.state.timerSecs % 60).padStart(2, '0');
+            this.el.activeTimer.textContent = `${m}:${s}`;
+        };
+        updateTimerDisplay();
+        this.state.timerInterval = setInterval(() => { if (!this.state.paused) { this.state.timerSecs++; updateTimerDisplay(); } }, 1000);
+    },
+    togglePause() {
+        if (!this.el.activeTimer) return;
+        this.state.paused = !this.state.paused;
+        this.el.activeTimer.classList.toggle('timer-paused', this.state.paused);
+    },
+
+    submitCurrentSuite() {
+        const activePage = document.querySelector('.test-page.active');
+        if (!activePage) return;
+        const suiteId = activePage.dataset.suiteId;
+        if (suiteId) this.finishSuite(suiteId);
+    },
+
+    submitAllSuites() {
+        if (this.state && this.state.submittingAll) return;
+        const suiteIds = Array.from(document.querySelectorAll('.test-page[data-suite-id]'))
+            .map(page => page.dataset.suiteId)
+            .filter(Boolean);
+
+        if (!suiteIds.length) return;
+
+        if (this.state) this.state.submittingAll = true;
+        if (this.el && this.el.submitAllBtn) {
+            this.el.submitAllBtn.disabled = true;
+        }
+
+        suiteIds.forEach(id => this.finishSuite(id));
+
+        if (this.el && this.el.submitAllBtn) {
+            this.el.submitAllBtn.disabled = false;
+        }
+        if (this.state) this.state.submittingAll = false;
+    },
+
+    finishSuite(suiteId) {
+        // 通过 suiteId 找到对应的 test-page
+        const suitePage = document.querySelector(`[data-suite-id="${suiteId}"]`);
+        if (!suitePage) return;
+        
+        const pageId = suitePage.id;
+        const testPrefix = `t${pageId.replace('page-test', '')}`
+        if (this.state.finishedSections.has(testPrefix)) return;
+        
+        let tableHTML = `<table class="results-table"><thead><tr><th>Q</th><th>Your Answer</th><th>Correct Answer</th><th>Result</th></tr></thead><tbody>`;
+        const questionLabels = Array.from(suitePage.querySelectorAll('.fill-in-question b'));
+        let processedInputs = new Set();
+        const allAnswers = [];
+
+        questionLabels.forEach(label => {
+            const questionText = label.textContent.replace('.', '');
+            const parentP = label.closest('.fill-in-question');
+            const inputsForLabel = Array.from(parentP.querySelectorAll('input[type="text"]'));
+            if (inputsForLabel.length === 0 || processedInputs.has(inputsForLabel[0])) return;
+            
+            let userAnswers = [], correctAnswers = [], isCorrectArray = [];
+            
+            inputsForLabel.forEach(input => {
+                processedInputs.add(input);
+                const userAnswer = input.value.trim();
+                const correctAnswer = this.answerKey[input.name] || '';
+                userAnswers.push(userAnswer);
+                correctAnswers.push(correctAnswer);
+                const isCorrect = userAnswer !== '' && (userAnswer.toLowerCase().replace(/[\s\$\-€£,\.]/g, '') === correctAnswer.toLowerCase().replace(/[\s\$\-€£,\.]/g, ''));
+                
+                input.classList.add(isCorrect ? 'correct' : 'error');
+                isCorrectArray.push(isCorrect);
+                input.disabled = true;
+            });
+            
+            const isAllCorrectForLabel = isCorrectArray.every(Boolean);
+            allAnswers.push({ q: questionText, user: userAnswers.join(' / '), correct: correctAnswers.join(' / '), isCorrect: isAllCorrectForLabel });
+
+            const resultClass = isAllCorrectForLabel ? 'result-correct' : 'result-incorrect';
+            const resultIcon = isAllCorrectForLabel ? '✓' : '✗';
+            tableHTML += `<tr><td><b>${questionText}</b></td><td class="your-answer">${userAnswers.map(ua => ua || '<i class="no-answer">No Answer</i>').join(' / ')}</td><td>${correctAnswers.join(' / ')}</td><td class="${resultClass}">${resultIcon}</td></tr>`;
+        });
+        tableHTML += `</tbody></table>`;
+        
+        const totalQuestions = allAnswers.length;
+        const correctQuestions = allAnswers.filter(a => a.isCorrect).length;
+        const percentage = totalQuestions > 0 ? ((correctQuestions / totalQuestions) * 100).toFixed(0) : 0;
+        
+        const summaryHTML = `<div class="results-summary"><span>Score: ${correctQuestions} / ${totalQuestions}</span><span>Accuracy: ${percentage}%</span></div>`;
+        const resultsContainer = suitePage.querySelector('.results-in-page');
+        if(resultsContainer) {
+            resultsContainer.innerHTML = `<div class="results-container">${summaryHTML}${tableHTML}</div>`;
+            if (suitePage.classList.contains('active')) {
+                setTimeout(() => {
+                    resultsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100);
+            }
+        }
+
+        this.state.finishedSections.add(testPrefix);
+        
+        // 禁用该套题的提交按钮
+        const submitBtn = suitePage.querySelector('[data-submit-suite]');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Submitted';
+            submitBtn.style.opacity = '0.6';
+            submitBtn.style.cursor = 'not-allowed';
+        }
+
+        const isActiveSuite = suitePage.classList.contains('active');
+        if (isActiveSuite) {
+            this.el.mainShell.classList.add('split-view');
+            document.querySelectorAll('.transcript-page').forEach(p => p.classList.remove('active'));
+            document.getElementById(`transcript-${pageId}`)?.classList.add('active');
+            if (this.el.submitBtn) this.el.submitBtn.disabled = true;
+        }
+        
+        this.history.add(testPrefix, { score: correctQuestions, total: totalQuestions, accuracy: percentage, answers: allAnswers });
+        
+        // 检查是否所有套题都已完成
+        this.checkAllSuitesCompleted();
+    },
+    checkAllSuitesCompleted() {
+        const total = Object.keys(this.templates.content || {}).length;
+        if (total && this.state.finishedSections.size >= total) {
+            console.log('[PracticePage] 所有套题已提交');
+        }
+    },
+    applySafeArea() {
+        // The spacer div in the HTML is a more robust solution for the bottom bar issue.
+        // This function can be kept for future safe-area implementations (e.g., iPhone notches).
+    },
+    notes: {
+        toggle(forceOpen) {
+            const shouldOpen = forceOpen === undefined ? !document.body.classList.contains('notes-open') : forceOpen;
+            document.body.classList.toggle('notes-open', shouldOpen);
+        },
+        create(targetSpan) { if (!targetSpan) return; const hid = targetSpan.dataset.hid || `h_${Date.now()}`; targetSpan.dataset.hid = hid; const existed = App.el.notesList.querySelector(`.note-card[data-hid="${hid}"]`); if (existed) { this.toggle(true); existed.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); return; } const text = (targetSpan.textContent || '').trim(); const card = document.createElement('div'); card.className = 'note-card'; card.dataset.hid = hid; card.innerHTML = `<div class="note-quote">${text || '(empty)'}</div><textarea placeholder="..."></textarea><div class="note-actions"><button type="button" data-act="del-note">Delete</button></div>`; App.el.notesList.prepend(card); this.toggle(true); }
+    },
+    highlighter: {
+        unWrap(el) { if (el && el.parentNode) { const p = el.parentNode; while (el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); } }, hideSelbar() { if (App.el && App.el.selbar) App.el.selbar.hidden = true; }, positionToolbar(rect, w) { let left = rect.left + rect.width / 2 - w / 2; App.el.selbar.style.left = `${window.scrollX + left}px`; App.el.selbar.style.top = `${window.scrollY + rect.top}px`; App.el.selbar.style.transform = 'translateY(-100%) translateY(-8px)'; },
+        handleMouseUp(e) { if (e.target.closest('#selbar, #notes, .bottom-bar, #settings-panel, .dialog-overlay, #history-panel-overlay')) return; const clickedHl = e.target.closest('.hl,.hl-blue'); const s = window.getSelection(); App.el.selbar.targetElement = null; if (clickedHl && s.isCollapsed) { s.removeAllRanges(); App.el.selbar.querySelector('[data-act="hl"]').hidden = true; App.el.selbar.querySelector('[data-act="note"]').hidden = false; App.el.selbar.querySelector('[data-act="del"]').hidden = false; App.el.selbar.hidden = false; this.positionToolbar(clickedHl.getBoundingClientRect(), App.el.selbar.offsetWidth); App.el.selbar.targetElement = clickedHl; } else if (s && !s.isCollapsed) { const r = s.getRangeAt(0); if (!r.toString().trim()) return; const rect = r.getBoundingClientRect(); if (!rect || (!rect.width && !rect.height)) return this.hideSelbar(); App.el.selbar.querySelector('[data-act="hl"]').hidden = false; App.el.selbar.querySelector('[data-act="note"]').hidden = false; App.el.selbar.querySelector('[data-act="del"]').hidden = true; App.el.selbar.hidden = false; this.positionToolbar(rect, App.el.selbar.offsetWidth); } else { this.hideSelbar(); } },
+        handleAction(e) {
+            const act = e.target.closest('button')?.dataset.act;
+            if (!act) return;
+            if (act === 'hl' || act === 'note') {
+                const s = window.getSelection();
+                if (!s || s.isCollapsed) return;
+                const r = s.getRangeAt(0);
+                const span = document.createElement('span');
+                span.className = act === 'hl' ? 'hl' : 'hl-blue';
+                try { r.surroundContents(span); } catch { span.appendChild(r.extractContents()); r.insertNode(span); }
+                if (act === 'note') { span.dataset.hid = `h_${Date.now()}`; App.notes.create(span); }
+                if (window.getSelection) { window.getSelection().removeAllRanges(); } else if (document.selection) { document.selection.empty(); }
+            } else if (act === 'del' && App.el.selbar.targetElement) { this.unWrap(App.el.selbar.targetElement); }
+            this.hideSelbar();
+        }
+    },
+    AudioPlayer: {
+        init() {
+            document.getElementById('audio-player-container').addEventListener('click', e => {
+                const playerWrapper = e.target.closest('.audio-player-wrapper');
+                if (!playerWrapper) return;
+                const audio = playerWrapper.querySelector('.listening-audio');
+                if (e.target.classList.contains('play-pause-btn')) {
+                    document.querySelectorAll('.listening-audio').forEach(a => { if(a !== audio) a.pause(); });
+                    audio.paused ? audio.play() : audio.pause();
+                } else if (e.target.closest('.progress-bar-wrapper')) {
+                     if(audio.duration) {
+                        const pCont = playerWrapper.querySelector('.progress-bar-wrapper');
+                        const rect = pCont.getBoundingClientRect();
+                        audio.currentTime = ((e.clientX - rect.left) / rect.width) * audio.duration;
+                    }
+                }
+            });
+            document.getElementById('audio-player-container').addEventListener('change', e => {
+                const playerWrapper = e.target.closest('.audio-player-wrapper');
+                if (!playerWrapper || !e.target.classList.contains('custom-select')) return;
+                const audio = playerWrapper.querySelector('.listening-audio');
+                audio.playbackRate = parseFloat(e.target.value);
+            });
+            const format = t => { if(isNaN(t)) return "00:00"; const m=Math.floor(t/60),s=Math.floor(t%60); return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`; };
+            const updateAudioUI = (audio) => {
+                const playerWrapper = audio.closest('.audio-player-wrapper');
+                if (!playerWrapper) return;
+                const progress = playerWrapper.querySelector('.progress-bar');
+                const time = playerWrapper.querySelector('.time-display');
+                const btn = playerWrapper.querySelector('.play-pause-btn');
+                if(audio.duration) {
+                    progress.style.width = `${(audio.currentTime/audio.duration)*100}%`;
+                    time.textContent = `${format(audio.currentTime)} / ${format(audio.duration)}`;
+                }
+                btn.innerHTML = audio.paused ? '&#9658;' : '&#10074;&#10074;';
+            };
+            
+            setInterval(() => {
+                const activeAudio = document.querySelector('.audio-player-wrapper.active .listening-audio');
+                if (activeAudio) updateAudioUI(activeAudio);
+            }, 500);
+        }
+    },
+    Splitter: {
+        init() { const splitter = document.getElementById('splitter'), left = document.getElementById('left-pane'), right = document.getElementById('right-pane'); let drag = false; splitter.addEventListener('mousedown', () => { drag = true; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; }); window.addEventListener('mouseup', () => { drag = false; document.body.style.cursor = 'default'; document.body.style.userSelect = 'auto'; }); window.addEventListener('mousemove', e => { if (!drag) return; const total = left.parentElement.offsetWidth, newLeft = e.clientX, newRight = total - newLeft - splitter.offsetWidth; if (newLeft > 200 && newRight > 200) { left.style.flexBasis = `${newLeft}px`; right.style.flexBasis = `${newRight}px`; } }); },
+        initNotes() { const splitter = document.getElementById('notes-splitter'), shell = document.querySelector('.shell'), notes = document.getElementById('notes'); let drag = false; splitter.addEventListener('mousedown', () => { drag = true; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; }); window.addEventListener('mouseup', () => { drag = false; document.body.style.cursor = 'default'; document.body.style.userSelect = 'auto'; }); window.addEventListener('mousemove', e => { if (!drag) return; const total = document.querySelector('.app-wrapper').offsetWidth; const newNotesWidth = total - e.clientX; if (newNotesWidth > 200 && newNotesWidth < total - 300) { notes.style.flexBasis = `${newNotesWidth}px`; } }); }
+    },
+    history: {
+        getTestPrefix() {
+            const activePage = document.querySelector('.test-page.active');
+            if (!activePage) return null;
+            return `t${activePage.id.replace('page-test', '')}`;
+        },
+        load(testPrefix) { const data = localStorage.getItem(`ieltsHistory-${testPrefix}`); return data ? JSON.parse(data) : []; },
+        save(testPrefix, historyData) { localStorage.setItem(`ieltsHistory-${testPrefix}`, JSON.stringify(historyData)); },
+        add(testPrefix, result) { const historyData = this.load(testPrefix); const entry = { timestamp: Date.now(), ...result }; historyData.unshift(entry); this.save(testPrefix, historyData); },
+        delete(timestamp) {
+            const testPrefix = this.getTestPrefix();
+            if (!testPrefix || !timestamp) return;
+            let historyData = this.load(testPrefix);
+            historyData = historyData.filter(item => item.timestamp !== parseInt(timestamp));
+            this.save(testPrefix, historyData);
+            this.open();
+        },
+        open() {
+            const testPrefix = this.getTestPrefix();
+            if (!testPrefix) return;
+            const historyData = this.load(testPrefix);
+            const listEl = App.el.historyPanel.list;
+            App.el.historyPanel.title.textContent = `History for T${testPrefix.replace('t','')}`;
+            listEl.innerHTML = '';
+            if (historyData.length === 0) {
+                listEl.innerHTML = '<p style="text-align: center; color: #6b7280;">No history for this test yet.</p>';
+            } else {
+                historyData.forEach(item => {
+                    const date = new Date(item.timestamp).toLocaleString();
+                    const answersHTML = `<table class="mistake-table">
+                        <thead><tr><th>Q</th><th>Your Answer</th><th>Correct Answer</th></tr></thead>
+                        <tbody>
+                            ${(item.answers || []).map(ans => `
+                                <tr>
+                                    <td><b>${ans.q}</b></td>
+                                    <td class="${ans.isCorrect ? 'result-correct' : 'result-incorrect'}">${ans.user || '<i>empty</i>'}</td>
+                                    <td>${ans.correct}</td>
+                                </tr>`).join('')}
+                        </tbody>
+                    </table>`;
+                    listEl.innerHTML += `<div class="history-item"><div class="history-summary"><div><strong>${date}</strong><br><span>Score: ${item.score}/${item.total} (${item.accuracy}%)</span></div><button class="history-item-delete-btn" data-timestamp="${item.timestamp}">&times;</button></div><div class="history-details">${answersHTML}</div></div>`;
+                });
+            }
+            App.el.historyPanel.overlay.classList.add('visible');
+        },
+        close() { App.el.historyPanel.overlay.classList.remove('visible'); },
+        cleanCurrent() {
+            const testPrefix = this.getTestPrefix();
+            if (!testPrefix) return;
+            this.save(testPrefix, []);
+            this.open();
+            App.el.cleanHistoryDialog.overlay.classList.remove('visible');
+        },
+        cleanAll() {
+            for (let i = 1; i <= 20; i++) { // Adjusted loop to include all possible tests
+                localStorage.removeItem(`ieltsHistory-t${i}`);
+            }
+            this.open(); // Refresh current view
+            App.el.cleanHistoryDialog.overlay.classList.remove('visible');
+        }
+    },
+    
+    populateContent() {
+        this.templates.content = {
+          'page-test11':{title:'Study on Australia Crocodiles', startNum:31, dates:'(2019.3.9 亚太/2019.2.9 亚太/2016.9.3/2014.8.9/2011.8.27)', audioSrc:'./part4.11.Study on Australia Crocodiles.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T11: Study on Australia Crocodiles</h4><p class="date-info">(2019.3.9 亚太/2019.2.9 亚太/2016.9.3/2014.8.9/2011.8.27)</p></div><p class="fill-in-question"><b>31.</b> This research is special because it was conducted by using <input type="text" name="t11_q31"></p><p class="fill-in-question"><b>32.</b> Experts carried out previous studies with <input type="text" name="t11_q32"></p><p class="fill-in-question"><b>33.</b> The problem is that it always lost <input type="text" name="t11_q33"></p><p class="fill-in-question"><b>34.</b> They are not easily captured, as they are cautious to avoid <input type="text" name="t11_q34"> followed</p><p class="fill-in-question"><b>35.</b> Sometimes crocodiles waited a whole week, then followed the most <input type="text" name="t11_q35"> way home.</p><p class="fill-in-question"><b>36.</b> Scientists set tracking devices in the <input type="text" name="t11_q36"> of the crocodiles.</p><p class="fill-in-question"><b>37.</b> They transfer crocodiles to different places by <input type="text" name="t11_q37"></p><p class="fill-in-question"><b>38.</b> Research aims on how crocodiles <input type="text" name="t11_q38"></p><p class="fill-in-question"><b>39.</b> Crocodiles find their direction by using their sense to the <input type="text" name="t11_q39"></p><p class="fill-in-question"><b>40.</b> Crocodiles have the same orientation system like the <input type="text" name="t11_q40"></p></div><div class="results-in-page" id="results-page-test11"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">31.</span><span>This research is special because it was conducted by using <strong>satellite</strong>.</span></li><li class="translation"><span></span><span>这项研究很特别，因为它是通过使用卫星进行的。</span></li><li><span class="num">32.</span><span>Experts carried out previous studies with <strong>radio</strong>.</span></li><li class="translation"><span></span><span>专家们之前使用无线电进行过研究。</span></li><li><span class="num">33.</span><span>The problem is that it always lost <strong>signals</strong>.</span></li><li class="translation"><span></span><span>问题是它总是丢失信号。</span></li><li><span class="num">34.</span><span>They are not easily captured, as they are cautious to avoid <strong>people</strong> followed.</span></li><li class="translation"><span></span><span>它们不容易被捕获，因为它们很谨慎，会避开被人类跟随。</span></li><li><span class="num">35.</span><span>Sometimes crocodiles waited a whole week, then followed the most <strong>route</strong> way home.</span></li><li class="translation"><span></span><span>有时鳄鱼会等待整整一周，然后沿着最常走的路线回家。</span></li><li><span class="num">36.</span><span>Scientists set tracking devices in the <strong>head</strong> of the crocodiles.</span></li><li class="translation"><span></span><span>科学家们在鳄鱼的头部安装了追踪设备。</span></li><li><span class="num">37.</span><span>They transfer crocodiles to different places by <strong>helicopter</strong>.</span></li><li class="translation"><span></span><span>他们用直升机将鳄鱼转移到不同的地方。</span></li><li><span class="num">38.</span><span>Research aims on how crocodiles <strong>navigate</strong>.</span></li><li class="translation"><span></span><span>研究旨在了解鳄鱼如何导航。</span></li><li><span class="num">39.</span><span>Crocodiles find their direction by using their sense to the <strong>sun</strong>.</span></li><li class="translation"><span></span><span>鳄鱼通过对太阳的感觉来找到它们的方向。</span></li><li><span class="num">40.</span><span>Crocodiles have the same orientation system like the <strong>birds</strong>.</span></li><li class="translation"><span></span><span>鳄鱼拥有和鸟类一样的定位系统。</span></li>`},
+          'page-test12':{title:'Children Psychology', startNum:31, dates:'(2021.4.10/2020.9.27/2017.11.4 亚太/2014.7.26/2009.12.12/2008.11.20)', audioSrc:'./part4.12Children Psychology.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T12: Children Psychology</h4><p class="date-info">(2021.4.10/2020.9.27/2017.11.4 亚太/2014.7.26/2009.12.12/2008.11.20)</p></div><p class="fill-in-question"><b>31.</b> Linking all factors and children's awareness of peers are <input type="text" name="t12_q31"></p><p class="fill-in-question"><b>32.</b> Children's behaviors are related to the animal experiment in <input type="text" name="t12_q32"></p><p class="fill-in-question"><b>33.</b> Research shows that children's behavior has relationship with children's <input type="text" name="t12_q33"></p><p class="fill-in-question"><b>34.</b> Researchers believe that children are <input type="text" name="t12_q34"> learners.</p><p class="fill-in-question"><b>35.</b> Gene determines children's <input type="text" name="t12_q35"></p><p class="fill-in-question"><b>36.</b> Researchers focused on children's <input type="text" name="t12_q36"> process.</p><p class="fill-in-question"><b>37.</b> Researchers concentrate on memory <input type="text" name="t12_q37"></p><p class="fill-in-question"><b>38.</b> Psychologists think children are <input type="text" name="t12_q38"></p><p class="fill-in-question"><b>39.</b> Experiment was conducted on a child raised for years in a <input type="text" name="t12_q39"></p></div><div class="results-in-page" id="results-page-test12"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">31.</span><span>Linking all factors and children's awareness of peers are <strong>connected</strong>.</span></li><li class="translation"><span></span><span>所有因素与儿童对同伴的认知是相互关联的。</span></li><li><span class="num">32.</span><span>Children's behaviors are related to the animal experiment in <strong>laboratories</strong>.</span></li><li class="translation"><span></span><span>儿童的行为与实验室中的动物实验有关。</span></li><li><span class="num">33.</span><span>Research shows that children's behavior has relationship with children's <strong>background</strong>.</span></li><li class="translation"><span></span><span>研究表明，儿童的行为与他们的背景有关。</span></li><li><span class="num">34.</span><span>Researchers believe that children are <strong>passive</strong> learners.</span></li><li class="translation"><span></span><span>研究人员认为儿童是被动的学习者。</span></li><li><span class="num">35.</span><span>Gene determines children's <strong>personality</strong>.</span></li><li class="translation"><span></span><span>基因决定了儿童的个性。</span></li><li><span class="num">36.</span><span>Researchers focused on children's <strong>learning</strong> process.</span></li><li class="translation"><span></span><span>研究人员关注儿童的学习过程。</span></li><li><span class="num">37.</span><span>Researchers concentrate on memory <strong>stimulating</strong>.</span></li><li class="translation"><span></span><span>研究人员专注于记忆刺激。</span></li><li><span class="num">38.</span><span>Psychologists think children are <strong>self-centered</strong>.</span></li><li class="translation"><span></span><span>心理学家认为儿童是自我中心的。</span></li><li><span class="num">39.</span><span>Experiment was conducted on a child raised for years in a <strong>house</strong>.</span></li><li class="translation"><span></span><span>实验是在一个被抚养多年的孩子家里进行的。</span></li>`},
+          'page-test13':{title:'An Survey about Diet:Obesity', startNum:31, dates:'(2021.5.22/2019.1.19/2016.6.16/2015.7.23/2011.4.16)', audioSrc:'./part4.13.An Survey about Diet Obesity.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T13: An Survey about Diet:Obesity</h4><p class="date-info">(2021.5.22/2019.1.19/2016.6.16/2015.7.23/2011.4.16)</p></div><p class="fill-in-question"><b>31.</b> The group of people who intake a great deal of fat is the <input type="text" name="t13_q31"></p><p class="fill-in-question"><b>32.</b> The research was carried out among different groups, ranging from a diversity of races, people with various <input type="text" name="t13_q32">, to whether born overseas</p><p class="fill-in-question"><b>33.</b> Students were asked to conduct <input type="text" name="t13_q33"> on the rising phenomenon of obesity.</p><p class="fill-in-question"><b>34.</b> In the end, the causes led to the growing obese population are <input type="text" name="t13_q34"></p><p class="fill-in-question"><b>35.</b> With living condition improved in more and more households, children are asked to <input type="text" name="t13_q35"></p><p class="fill-in-question"><b>36.</b> With the working pressure, parents have no <input type="text" name="t13_q36"> to instruct their children bad living habits.</p><p class="fill-in-question"><b>37.</b> The <input type="text" name="t13_q37"> of respondents is limited, which affects the validity of the result.</p><p class="fill-in-question"><b>38.</b> Obesity has a close <input type="text" name="t13_q38"> between the dietary pattern.</p><p class="fill-in-question"><b>39.</b> Children are very likely to be influenced by their <input type="text" name="t13_q39"></p><p class="fill-in-question"><b>40.</b> But the influence decreases with the <input type="text" name="t13_q40"> of children</p></div><div class="results-in-page" id="results-page-test13"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">31.</span><span>The group of people who intake a great deal of fat is the <strong>teenager</strong>.</span></li><li class="translation"><span></span><span>摄入大量脂肪的人群是青少年。</span></li><li><span class="num">32.</span><span>The research was carried out among different groups, ranging from a diversity of races, people with various <strong>income</strong>, to whether born overseas.</span></li><li class="translation"><span></span><span>该研究在不同群体中进行，范围涵盖不同种族、不同收入的人群，以及他们是否在海外出生。</span></li><li><span class="num">33.</span><span>Students were asked to conduct <strong>surveys</strong> on the rising phenomenon of obesity.</span></li><li class="translation"><span></span><span>学生们被要求就日益普遍的肥胖现象进行调查。</span></li><li><span class="num">34.</span><span>In the end, the causes led to the growing obese population are <strong>similar</strong>.</span></li><li class="translation"><span></span><span>最终，导致肥胖人口增长的原因是相似的。</span></li><li><span class="num">35.</span><span>With living condition improved in more and more households, children are asked to <strong>drink milk</strong>.</span></li><li class="translation"><span></span><span>随着越来越多家庭生活条件的改善，孩子们被要求喝牛奶。</span></li><li><span class="num">36.</span><span>With the working pressure, parents have no <strong>time</strong> to instruct their children bad living habits.</span></li><li class="translation"><span></span><span>由于工作压力，父母没有时间教导孩子改掉不良生活习惯。</span></li><li><span class="num">37.</span><span>The <strong>number</strong> of respondents is limited, which affects the validity of the result.</span></li><li class="translation"><span></span><span>受访者的数量有限，这影响了结果的有效性。</span></li><li><span class="num">38.</span><span>Obesity has a close <strong>relationship</strong> between the dietary pattern.</span></li><li class="translation"><span></span><span>肥胖与饮食模式之间有密切的关系。</span></li><li><span class="num">39.</span><span>Children are very likely to be influenced by their <strong>friends</strong>.</span></li><li class="translation"><span></span><span>儿童很可能会受到他们朋友的影响。</span></li><li><span class="num">40.</span><span>But the influence decreases with the <strong>age</strong> of children.</span></li><li class="translation"><span></span><span>但这种影响会随着孩子的年龄增长而减弱。</span></li>`},
+          'page-test14':{title:'History of Salt', startNum:31, dates:'(2020.7.11/2018.12.8/2018.4.14 亚太/2015.8.13/2011.1.22)', audioSrc:'./part4.14.History of Salt.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T14: History of Salt</h4><p class="date-info">(2020.7.11/2018.12.8/2018.4.14 亚太/2015.8.13/2011.1.22)</p></div><p class="fill-in-question"><b>31.</b> people all know that salt is essential for human <input type="text" name="t14_q31"></p><p class="fill-in-question"><b>32.</b> English word "<strong>salary</strong>" derived from the Latin word salt which is used to describe the payment made to Roman soldiers.</p><p class="fill-in-question"><b>33.</b> animals are fed in the local <input type="text" name="t14_q33"> during the summer</p><p class="fill-in-question"><b>34.</b> the fresh meat is available in <input type="text" name="t14_q34"> only in Sweden</p><p class="fill-in-question"><b>35.</b> record of 1573 has indicated how salt preserved the diet of the <input type="text" name="t14_q35"> in Sweden</p><p class="fill-in-question"><b>36.</b> <input type="text" name="t14_q36"> consumption in Scotland is increased rapidly because the food was so salty</p><p class="fill-in-question"><b>37.</b> Sweden needs to protect its <input type="text" name="t14_q37"> to import Commodity salt sources</p><p class="fill-in-question"><b>38.</b> civilization build along the <input type="text" name="t14_q38"> locations due to salt reserve there.</p><p class="fill-in-question"><b>39.</b> Salt from spring water is more <input type="text" name="t14_q39"> and purer compared to sea water</p><p class="fill-in-question"><b>40.</b> Salt trade cities formed due to a nature mean of <input type="text" name="t14_q40"></p></div><div class="results-in-page" id="results-page-test14"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">31.</span><span>people all know that salt is essential for human <strong>health</strong>.</span></li><li class="translation"><span></span><span>所有人都知道盐对人类健康至关重要。</span></li><li><span class="num">32.</span><span>English word "<strong>salary</strong>" derived from the Latin word salt which is used to describe the payment made to Roman soldiers.</span></li><li class="translation"><span></span><span>英语单词“salary”（薪水）源自拉丁词“salt”（盐），用来描述支付给罗马士兵的报酬。</span></li><li><span class="num">33.</span><span>animals are fed in the local <strong>forests</strong> during the summer.</span></li><li class="translation"><span></span><span>夏天，动物在当地的森林里被喂养。</span></li><li><span class="num">34.</span><span>the fresh meat is available in <strong>October</strong> only in Sweden.</span></li><li class="translation"><span></span><span>在瑞典，新鲜的肉只在十月份有售。</span></li><li><span class="num">35.</span><span>record of 1573 has indicated how salt preserved the diet of the <strong>King</strong> in Sweden.</span></li><li class="translation"><span></span><span>1573年的记录表明了盐是如何保存瑞典国王的饮食的。</span></li><li><span class="num">36.</span><span><strong>Beer</strong> consumption in Scotland is increased rapidly because the food was so salty.</span></li><li class="translation"><span></span><span>苏格兰的啤酒消费量迅速增加，因为食物太咸了。</span></li><li><span class="num">37.</span><span>Sweden needs to protect its <strong>shipping</strong> to import Commodity salt sources.</span></li><li class="translation"><span></span><span>瑞典需要保护其航运来进口商品盐源。</span></li><li><span class="num">38.</span><span>civilization build along the <strong>desert</strong> locations due to salt reserve there.</span></li><li class="translation"><span></span><span>由于有盐储量，文明沿着沙漠地区建立起来。</span></li><li><span class="num">39.</span><span>Salt from spring water is more <strong>concentrated</strong> and purer compared to sea water.</span></li><li class="translation"><span></span><span>与海水相比，泉水中的盐更浓缩、更纯净。</span></li><li><span class="num">40.</span><span>Salt trade cities formed due to a nature mean of <strong>transport</strong>.</span></li><li class="translation"><span></span><span>由于一种天然的运输方式，盐贸易城市形成了。</span></li>`},
+          'page-test15':{title:"Film Director in Ireland:Burgman's Film", startNum:31, dates:'(2020.10.10/2019.1.17/2018.11.10/2017.11.4/2016.10.29)', audioSrc:"./part4.15.Film Director inIreland Burgman`s Film.mp3",questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T15: Film Director in Ireland:Burgman's Film</h4><p class="date-info">(2020.10.10/2019.1.17/2018.11.10/2017.11.4/2016.10.29)</p></div><p class="fill-in-question"><b>31.</b> When compared to painting or music, move lack of <input type="text" name="t15_q31">, form of entertainment</p><p class="fill-in-question"><b>32.</b> character development is not enough and it's depending too much on famous <input type="text" name="t15_q32"></p><p class="fill-in-question"><b>33.</b> applying techniques of <input type="text" name="t15_q33"> to cause positive effect</p><p class="fill-in-question"><b>34.</b> impose lasting influence on <input type="text" name="t15_q34"> for some audience</p><p class="fill-in-question"><b>35.</b> Each image has its own <input type="text" name="t15_q35"> and contributes to all the meaning</p><p class="fill-in-question"><b>36.</b> The characters body language, facial expressions are just as important as their <input type="text" name="t15_q36"></p><p class="fill-in-question"><b>37.</b> the story works two levels, one is drama and the other is <input type="text" name="t15_q37"></p><p class="fill-in-question"><b>38.</b> film which are full of <input type="text" name="t15_q38"> connecting to journey will inspire the audience</p><p class="fill-in-question"><b>39.</b> all of Director's works are underline <input type="text" name="t15_q39"> relationship</p><p class="fill-in-question"><b>40.</b> people will learn to <input type="text" name="t15_q40"> all the life offers</p></div><div class="results-in-page" id="results-page-test15"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">31.</span><span>When compared to painting or music, move lack of <strong>depth</strong>, form of entertainment.</span></li><li class="translation"><span></span><span>与绘画或音乐相比，作为一种娱乐形式，它缺乏深度。</span></li><li><span class="num">32.</span><span>character development is not enough and it's depending too much on famous <strong>actors</strong>.</span></li><li class="translation"><span></span><span>角色发展不够，而且过于依赖著名演员。</span></li><li><span class="num">33.</span><span>applying techniques of <strong>light</strong> to cause positive effect.</span></li><li class="translation"><span></span><span>运用光的技巧来产生积极的效果。</span></li><li><span class="num">34.</span><span>impose lasting influence on <strong>emotion</strong> for some audience.</span></li><li class="translation"><span></span><span>对一些观众的情感产生持久的影响。</span></li><li><span class="num">35.</span><span>Each image has its own <strong>purpose</strong> and contributes to all the meaning.</span></li><li class="translation"><span></span><span>每个画面都有其自身的目的，并为整体意义做出贡献。</span></li><li><span class="num">36.</span><span>The characters body language, facial expressions are just as important as their <strong>words</strong>.</span></li><li class="translation"><span></span><span>角色的肢体语言、面部表情和他们的言语同样重要。</span></li><li><span class="num">37.</span><span>the story works two levels, one is drama and the other is <strong>myth</strong>.</span></li><li class="translation"><span></span><span>这个故事在两个层面上运作，一个是戏剧，另一个是神话。</span></li><li><span class="num">38.</span><span>film which are full of <strong>dreams</strong> connecting to journey will inspire the audience.</span></li><li class="translation"><span></span><span>充满与旅程相连的梦想的电影将激励观众。</span></li><li><span class="num">39.</span><span>all of Director's works are underline <strong>family</strong> relationship.</span></li><li class="translation"><span></span><span>导演的所有作品都强调了家庭关系。</span></li><li><span class="num">40.</span><span>people will learn to <strong>accept</strong> all the life offers.</span></li><li class="translation"><span></span><span>人们将学会接受生活提供的一切。</span></li>`},
+          'page-test16':{title:'Cave Dwelling Animals', startNum:31, dates:'(2021.2.20/2019.9.7/2019.7.18 亚太/2015.10.10/2013.3.14)', audioSrc:'./part4.16.Cave Animals.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T16: Cave Dwelling Animals</h4><p class="date-info">(2021.2.20/2019.9.7/2019.7.18 亚太/2015.10.10/2013.3.14)</p></div><p class="fill-in-question"><b>31.</b> Troglodyte like the <input type="text" name="t16_q31"> twilight and transition zones of caves</p><p class="fill-in-question"><b>32.</b> They have evolved longer legs and antennae, sensory hairs and a better sense of <input type="text" name="t16_q32"> than their surface-dwelling counterparts.</p><p class="fill-in-question"><b>33.</b> Some troglodyte find <input type="text" name="t16_q33"> in the cave area</p><p class="fill-in-question"><b>34.</b> The second animal is a cave lover named bats, which lived in caves during the day of <input type="text" name="t16_q34"> for hibernation.</p><p class="fill-in-question"><b>35.</b> They always like damp and <input type="text" name="t16_q35"> environment</p><p class="fill-in-question"><b>36.</b> These animals always stay in cave because other animals will eat their <input type="text" name="t16_q36"></p><p class="fill-in-question"><b>37.</b> There are still some other kinds of animals, which are colorless and <input type="text" name="t16_q37"></p><p class="fill-in-question"><b>38.</b> Meanwhile, some cave <input type="text" name="t16_q38"> will have reduced eyes</p><p class="fill-in-question"><b>39.</b> These species always rely on cave <input type="text" name="t16_q39"></p><p class="fill-in-question"><b>40.</b> These animals are in danger, they are affected by <input type="text" name="t16_q40"></p></div><div class="results-in-page" id="results-page-test16"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">31.</span><span>Troglodyte like the <strong>entrance</strong> twilight and transition zones of caves.</span></li><li class="translation"><span></span><span>洞穴生物喜欢洞穴的入口、微光区和过渡区。</span></li><li><span class="num">32.</span><span>They have evolved longer legs and antennae, sensory hairs and a better sense of <strong>smell</strong> than their surface-dwelling counterparts.</span></li><li class="translation"><span></span><span>与地表同类相比，它们进化出了更长的腿、触角、感觉毛和更灵敏的嗅觉。</span></li><li><span class="num">33.</span><span>Some troglodyte find <strong>water</strong> in the cave area.</span></li><li class="translation"><span></span><span>一些洞穴生物在洞穴区域找到了水。</span></li><li><span class="num">34.</span><span>The second animal is a cave lover named bats, which lived in caves during the day of <strong>winter</strong> for hibernation.</span></li><li class="translation"><span></span><span>第二种动物是名为蝙蝠的洞穴爱好者，它们在冬季白天生活在洞穴中冬眠。</span></li><li><span class="num">35.</span><span>They always like damp and <strong>dark</strong> environment.</span></li><li class="translation"><span></span><span>它们总是喜欢潮湿和黑暗的环境。</span></li><li><span class="num">36.</span><span>These animals always stay in cave because other animals will eat their <strong>eggs</strong>.</span></li><li class="translation"><span></span><span>这些动物总是待在洞穴里，因为其他动物会吃掉它们的蛋。</span></li><li><span class="num">37.</span><span>There are still some other kinds of animals, which are colorless and <strong>blind</strong>.</span></li><li class="translation"><span></span><span>还有一些其他种类的动物，它们是无色和失明的。</span></li><li><span class="num">38.</span><span>Meanwhile, some cave <strong>fish</strong> will have reduced eyes.</span></li><li class="translation"><span></span><span>同时，一些洞穴鱼的眼睛会退化。</span></li><li><span class="num">39.</span><span>These species always rely on cave <strong>soil</strong>.</span></li><li class="translation"><span></span><span>这些物种总是依赖于洞穴土壤。</span></li><li><span class="num">40.</span><span>These animals are in danger, they are affected by <strong>disease</strong>.</span></li><li class="translation"><span></span><span>这些动物处于危险之中，它们受到疾病的影响。</span></li>`},
+          'page-test17':{title:'The Olfaction of Human', startNum:31, dates:'(2010.10.17/2021.7.24/2018.11.1 亚太/2017.6.3 亚太/2017.4.29 亚太)', audioSrc:'./part4.17.The Olfaction of Human.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T17: The Olfaction of Human</h4><p class="date-info">(2010.10.17/2021.7.24/2018.11.1 亚太/2017.6.3 亚太/2017.4.29 亚太)</p></div><p class="fill-in-question"><b>31.</b> The proportion of the human brain devoted to smell is small, as in mammals like <input type="text" name="t17_q31"></p><p class="fill-in-question"><b>32.</b> Humans can notice the presence of <input type="text" name="t17_q32"> which has been highly diluted</p><p class="fill-in-question"><b>33.</b> Volunteers' ability to track the smell of <input type="text" name="t17_q33"> improved each time they did it</p><p class="fill-in-question"><b>34.</b> When people could smell the scent of <input type="text" name="t17_q34"> in a nightclub, they enjoyed themselves more.</p><p class="fill-in-question"><b>35.</b> Volunteers can detect the <input type="text" name="t17_q35"> in the sweat of the skydivers.</p><p class="fill-in-question"><b>36.</b> The humans sense of smell is considered relatively unimportant because we find it difficult to identify the <input type="text" name="t17_q36"> of a smell.</p><p class="fill-in-question"><b>37.</b> Smell stimulate memories that are vivid but not always <input type="text" name="t17_q37"></p><p class="fill-in-question"><b>38.</b> We remember things that we smell during our <input type="text" name="t17_q38"></p><p class="fill-in-question"><b>39.</b> Even faint odors can tell others whether we are <input type="text" name="t17_q39"></p><p class="fill-in-question"><b>40.</b> A chef trained her sense of smell by regularly smelling <input type="text" name="t17_q40"></p></div><div class="results-in-page" id="results-page-test17"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">31.</span><span>The proportion of the human brain devoted to smell is small, as in mammals like <strong>monkeys</strong>.</span></li><li class="translation"><span></span><span>人脑中负责嗅觉的部分比例很小，就像猴子等哺乳动物一样。</span></li><li><span class="num">32.</span><span>Humans can notice the presence of <strong>chemical</strong> which has been highly diluted.</span></li><li class="translation"><span></span><span>人类可以察觉到已被高度稀释的化学物质的存在。</span></li><li><span class="num">33.</span><span>Volunteers' ability to track the smell of <strong>chocolate</strong> improved each time they did it.</span></li><li class="translation"><span></span><span>志愿者追踪巧克力气味的能力每次都得到了提高。</span></li><li><span class="num">34.</span><span>When people could smell the scent of <strong>oranges</strong> in a nightclub, they enjoyed themselves more.</span></li><li class="translation"><span></span><span>当人们在夜总会闻到橙子的香味时，他们会更开心。</span></li><li><span class="num">35.</span><span>Volunteers can detect the <strong>fear</strong> in the sweat of the skydivers.</span></li><li class="translation"><span></span><span>志愿者可以从跳伞者的汗水中检测到恐惧。</span></li><li><span class="num">36.</span><span>The humans sense of smell is considered relatively unimportant because we find it difficult to identify the <strong>source</strong> of a smell.</span></li><li class="translation"><span></span><span>人类的嗅觉被认为相对不重要，因为我们很难识别气味的来源。</span></li><li><span class="num">37.</span><span>Smell stimulate memories that are vivid but not always <strong>accurate</strong>.</span></li><li class="translation"><span></span><span>气味会激发那些生动但并不总是准确的记忆。</span></li><li><span class="num">38.</span><span>We remember things that we smell during our <strong>childhood</strong>.</span></li><li class="translation"><span></span><span>我们记得童年时期闻到的东西。</span></li><li><span class="num">39.</span><span>Even faint odors can tell others whether we are <strong>sad</strong>.</span></li><li class="translation"><span></span><span>即使是微弱的气味也能告诉别人我们是否悲伤。</span></li><li><span class="num">40.</span><span>A chef trained her sense of smell by regularly smelling <strong>spices</strong>.</span></li><li class="translation"><span></span><span>一位厨师通过定期闻香料来训练她的嗅觉。</span></li>`},
+          'page-test18':{title:'Microclimate Impact on Tortoises', startNum:31, dates:'(2021.3.13/2019.4.6 亚太/2018.2.10/2017.1.14/2012.4.14)', audioSrc:'./part4.18.Micro-climate Impact on Tortoises.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T18: Microclimate Impact on Tortoises</h4><p class="date-info">(2021.3.13/2019.4.6 亚太/2018.2.10/2017.1.14/2012.4.14)</p></div><p class="fill-in-question"><b>31.</b> In group A, the tortoises were placed in a sand base with an open <input type="text" name="t18_q31"></p><p class="fill-in-question"><b>32.</b> In group B, the tortoises lived in a glass bottle covered with <input type="text" name="t18_q32"></p><p class="fill-in-question"><b>33.</b> Diet was high in protein and mainly consisted of food in the <input type="text" name="t18_q33"></p><p class="fill-in-question"><b>34.</b> The tortoises in group A became more active during <input type="text" name="t18_q34"></p><p class="fill-in-question"><b>35.</b> The tortoises in group B buried themselves in the sand in <input type="text" name="t18_q35"></p><p class="fill-in-question"><b>36.</b> But they became stablized with constant temperature and <input type="text" name="t18_q36"></p><p class="fill-in-question"><b>37.</b> The tortoises in group A increased in average <input type="text" name="t18_q37"></p><p class="fill-in-question"><b>38.</b> There was a massive loss of body <input type="text" name="t18_q38"> in group A</p><p class="fill-in-question"><b>39.</b> As a result, the tortoises had some weakness in their <input type="text" name="t18_q39"></p><p class="fill-in-question"><b>40.</b> In group B, no <input type="text" name="t18_q40"> problems had been identified</p></div><div class="results-in-page" id="results-page-test18"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">31.</span><span>In group A, the tortoises were placed in a sand base with an open <strong>roof</strong>.</span></li><li class="translation"><span></span><span>在A组中，乌龟被放置在一个带有开放式屋顶的沙基中。</span></li><li><span class="num">32.</span><span>In group B, the tortoises lived in a glass bottle covered with <strong>newspapers</strong>.</span></li><li class="translation"><span></span><span>在B组中，乌龟生活在一个用报纸覆盖的玻璃瓶里。</span></li><li><span class="num">33.</span><span>Diet was high in protein and mainly consisted of food in the <strong>wild</strong>.</span></li><li class="translation"><span></span><span>饮食富含蛋白质，主要由野外食物组成。</span></li><li><span class="num">34.</span><span>The tortoises in group A became more active during <strong>feeding time</strong>.</span></li><li class="translation"><span></span><span>A组的乌龟在喂食时间变得更加活跃。</span></li><li><span class="num">35.</span><span>The tortoises in group B buried themselves in the sand in <strong>hot weather</strong>.</span></li><li class="translation"><span></span><span>B组的乌龟在炎热的天气里把自己埋在沙子里。</span></li><li><span class="num">36.</span><span>But they became stablized with constant temperature and <strong>moisture</strong>.</span></li><li class="translation"><span></span><span>但它们在恒定的温度和湿度下变得稳定。</span></li><li><span class="num">37.</span><span>The tortoises in group A increased in average <strong>size</strong>.</span></li><li class="translation"><span></span><span>A组乌龟的平均体型增加了。</span></li><li><span class="num">38.</span><span>There was a massive loss of body <strong>fluids</strong> in group A.</span></li><li class="translation"><span></span><span>A组出现了大量的体液流失。</span></li><li><span class="num">39.</span><span>As a result, the tortoises had some weakness in their <strong>bones</strong>.</span></li><li class="translation"><span></span><span>结果，乌龟的骨骼出现了一些弱点。</span></li><li><span class="num">40.</span><span>In group B, no <strong>kidney</strong> problems had been identified.</span></li><li class="translation"><span></span><span>在B组中，没有发现肾脏问题。</span></li>`},
+          'page-test19':{title:'The Improving of Red Hill', startNum:31, dates:'(2020.10.17/2020.8.6/2017.8.19/2016.2.20/2011.6.25)', audioSrc:'./part4.19.The Improving of Red Hill.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T19: The Improving of Red Hill</h4><p class="date-info">(2020.10.17/2020.8.6/2017.8.19/2016.2.20/2011.6.25)</p></div><p class="fill-in-question"><b>31.</b> It was mainly in <input type="text" name="t19_q31"> sector which was the most famous industry in the past.</p><p class="fill-in-question"><b>32.</b> The <input type="text" name="t19_q32"> companies developed very fast, one big insurance company hired 600 people.</p><p class="fill-in-question"><b>33.</b> Now, the <input type="text" name="t19_q33"> sector is now the most important industry in this town</p><p class="fill-in-question"><b>34.</b> Parents are picking up children where is close to <input type="text" name="t19_q34"></p><p class="fill-in-question"><b>35.</b> ...provides 16000 more homes and 20000 more <input type="text" name="t19_q35"></p><p class="fill-in-question"><b>36.</b> A new <input type="text" name="t19_q36"> is under construction for a famous university.</p><p class="fill-in-question"><b>37.</b> The government encourages <input type="text" name="t19_q37"> in the city.</p><p class="fill-in-question"><b>38.</b> It aims to reduce <input type="text" name="t19_q38"> problems by 20% by the end of the year.</p><p class="fill-in-question"><b>39.</b> An area of 100 million square meters is planned for <input type="text" name="t19_q39"> use.</p><p class="fill-in-question"><b>40.</b> Another area of 80 million square meters reserved for <input type="text" name="t19_q40"> use.</p></div><div class="results-in-page" id="results-page-test19"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">31.</span><span>It was mainly in <strong>furniture</strong> sector which was the most famous industry in the past.</span></li><li class="translation"><span></span><span>它主要是在家具行业，这是过去最著名的产业。</span></li><li><span class="num">32.</span><span>The <strong>insurance</strong> companies developed very fast, one big insurance company hired 600 people.</span></li><li class="translation"><span></span><span>保险公司发展得非常快，一家大保险公司雇佣了600人。</span></li><li><span class="num">33.</span><span>Now, the <strong>services</strong> sector is now the most important industry in this town.</span></li><li class="translation"><span></span><span>现在，服务业是这个镇上最重要的产业。</span></li><li><span class="num">34.</span><span>Parents are picking up children where is close to <strong>schools</strong>.</span></li><li class="translation"><span></span><span>父母在靠近学校的地方接孩子。</span></li><li><span class="num">35.</span><span>...provides 16000 more homes and 20000 more <strong>jobs</strong>.</span></li><li class="translation"><span></span><span>…提供16000个新住宅和20000个新工作岗位。</span></li><li><span class="num">36.</span><span>A new <strong>campus</strong> is under construction for a famous university.</span></li><li class="translation"><span></span><span>一所著名大学的新校区正在建设中。</span></li><li><span class="num">37.</span><span>The government encourages <strong>cycling</strong> in the city.</span></li><li class="translation"><span></span><span>政府鼓励在城市里骑自行车。</span></li><li><span class="num">38.</span><span>It aims to reduce <strong>traffic</strong> problems by 20% by the end of the year.</span></li><li class="translation"><span></span><span>它的目标是在年底前将交通问题减少20%。</span></li><li><span class="num">39.</span><span>An area of 100 million square meters is planned for <strong>retail</strong> use.</span></li><li class="translation"><span></span><span>一个1亿平方米的区域被规划用于零售业。</span></li><li><span class="num">40.</span><span>Another area of 80 million square meters reserved for <strong>office</strong> use.</span></li><li class="translation"><span></span><span>另一个8000万平方米的区域被保留用作办公用途。</span></li>`},
+          'page-test20':{title:'The History of Western Popular Music', startNum:31, dates:'(2021.12.25/2021.7.1/2019.11.23 亚太/2017.6.24/2013.2.23)', audioSrc:'./part4.20.The History of Western Popular Music.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T20: The History of Western Popular Music</h4><p class="date-info">(2021.12.25/2021.7.1/2019.11.23 亚太/2017.6.24/2013.2.23)</p></div><p class="fill-in-question"><b>31.</b> During the process of urbanization, many people in Europe moved to towns and cities to worked in <input type="text" name="t20_q31"></p><p class="fill-in-question"><b>32.</b> In the US, local culture was influenced by different <input type="text" name="t20_q32"> emerged "melting pot" of world</p><p class="fill-in-question"><b>33.</b> Different types of songs developed bu they shared a common <input type="text" name="t20_q33"></p><p class="fill-in-question"><b>34.</b> In Europe and America, music developed into a profitable <input type="text" name="t20_q34"> similar as other traditional ones.</p><p class="fill-in-question"><b>35.</b> Popularity of music created opportunity of <input type="text" name="t20_q35">, such as publishers and writers.</p><p class="fill-in-question"><b>36.</b> Performers were firstly separated from <input type="text" name="t20_q36"></p><p class="fill-in-question"><b>37.</b> The <input type="text" name="t20_q37"> was interested in music, apart from workers in the end of 19 century.</p><p class="fill-in-question"><b>38.</b> Profit of products was affected by several factors, the most important one was <input type="text" name="t20_q38"> of sale.</p><p class="fill-in-question"><b>39.</b> Secondly, a new system of <input type="text" name="t20_q39"> led to the development of pop music.</p><p class="fill-in-question"><b>40.</b> <input type="text" name="t20_q40"> culture greatly influenced pop music in the US.</p></div><div class="results-in-page" id="results-page-test20"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">31.</span><span>During the process of urbanization, many people in Europe moved to towns and cities to worked in <strong>factories</strong>.</span></li><li class="translation"><span></span><span>在城市化进程中，许多欧洲人搬到城镇和城市在工厂工作。</span></li><li><span class="num">32.</span><span>In the US, local culture was influenced by different <strong>immigrations</strong> emerged "melting pot" of world.</span></li><li class="translation"><span></span><span>在美国，当地文化受到不同移民的影响，形成了世界的“大熔炉”。</span></li><li><span class="num">33.</span><span>Different types of songs developed bu they shared a common <strong>language</strong>.</span></li><li class="translation"><span></span><span>不同类型的歌曲发展起来，但它们共享一种共同的语言。</span></li><li><span class="num">34.</span><span>In Europe and America, music developed into a profitable <strong>industry</strong> similar as other traditional ones.</span></li><li class="translation"><span></span><span>在欧洲和美洲，音乐发展成为一个与其他传统产业类似的盈利产业。</span></li><li><span class="num">35.</span><span>Popularity of music created opportunity of <strong>jobs</strong>, such as publishers and writers.</span></li><li class="translation"><span></span><span>音乐的普及创造了就业机会，例如出版商和作家。</span></li><li><span class="num">36.</span><span>Performers were firstly separated from <strong>audience</strong>.</span></li><li class="translation"><span></span><span>表演者首先与观众分离。</span></li><li><span class="num">37.</span><span>The <strong>middle class</strong> was interested in music, apart from workers in the end of 19 century.</span></li><li class="translation"><span></span><span>除了19世纪末的工人外，中产阶级也对音乐感兴趣。</span></li><li><span class="num">38.</span><span>Profit of products was affected by several factors, the most important one was <strong>quantity</strong> of sale.</span></li><li class="translation"><span></span><span>产品的利润受到几个因素的影响，最重要的是销售数量。</span></li><li><span class="num">39.</span><span>Secondly, a new system of <strong>recording</strong> led to the development of pop music.</span></li><li class="translation"><span></span><span>其次，一种新的录音系统导致了流行音乐的发展。</span></li><li><span class="num">40.</span><span><strong>Youth</strong> culture greatly influenced pop music in the US.</span></li><li class="translation"><span></span><span>青年文化极大地影响了美国的流行音乐。</span></li>`}
+        };
+        this.answerKey = {
+            't11_q31': 'satellite', 't11_q32': 'radio', 't11_q33': 'signals', 't11_q34': 'people', 't11_q35': 'route', 't11_q36': 'head', 't11_q37': 'helicopter', 't11_q38': 'navigate', 't11_q39': 'sun', 't11_q40': 'birds',
+            't12_q31': 'connected', 't12_q32': 'laboratories', 't12_q33': 'background', 't12_q34': 'passive', 't12_q35': 'personality', 't12_q36': 'learning', 't12_q37': 'stimulating', 't12_q38': 'self-centered', 't12_q39': 'house',
+            't13_q31': 'teenager', 't13_q32': 'income', 't13_q33': 'surveys', 't13_q34': 'similar', 't13_q35': 'drink milk', 't13_q36': 'time', 't13_q37': 'number', 't13_q38': 'relationship', 't13_q39': 'friends', 't13_q40': 'age',
+            't14_q31': 'health', 't14_q32': 'salary', 't14_q33': 'forests', 't14_q34': 'october', 't14_q35': 'king', 't14_q36': 'beer', 't14_q37': 'shipping', 't14_q38': 'desert', 't14_q39': 'concentrated', 't14_q40': 'transport',
+            't15_q31': 'depth', 't15_q32': 'actors', 't15_q33': 'light', 't15_q34': 'emotion', 't15_q35': 'purpose', 't15_q36': 'words', 't15_q37': 'myth', 't15_q38': 'dreams', 't15_q39': 'family', 't15_q40': 'accept',
+            't16_q31': 'entrance', 't16_q32': 'smell', 't16_q33': 'water', 't16_q34': 'winter', 't16_q35': 'dark', 't16_q36': 'eggs', 't16_q37': 'blind', 't16_q38': 'fish', 't16_q39': 'soil', 't16_q40': 'disease',
+            't17_q31': 'monkeys', 't17_q32': 'chemical', 't17_q33': 'chocolate', 't17_q34': 'oranges', 't17_q35': 'fear', 't17_q36': 'source', 't17_q37': 'accurate', 't17_q38': 'childhood', 't17_q39': 'sad', 't17_q40': 'spices',
+            't18_q31': 'roof', 't18_q32': 'newspapers', 't18_q33': 'wild', 't18_q34': 'feeding time', 't18_q35': 'hot weather', 't18_q36': 'moisture', 't18_q37': 'size', 't18_q38': 'fluids', 't18_q39': 'bones', 't18_q40': 'kidney',
+            't19_q31': 'furniture', 't19_q32': 'insurance', 't19_q33': 'services', 't19_q34': 'schools', 't19_q35': 'jobs', 't19_q36': 'campus', 't19_q37': 'cycling', 't19_q38': 'traffic', 't19_q39': 'retail', 't19_q40': 'office',
+            't20_q31': 'factories', 't20_q32': 'immigrations', 't20_q33': 'language', 't20_q34': 'industry', 't20_q35': 'jobs', 't20_q36': 'audience', 't20_q37': 'middle class', 't20_q38': 'quantity', 't20_q39': 'recording', 't20_q40': 'youth'
+        };
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => App.init());
+}());
+</script>
+
+<script src="../../../../js/practice-page-enhancer.js"></script>
+</body>
+</html>

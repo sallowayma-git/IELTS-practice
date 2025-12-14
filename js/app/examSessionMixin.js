@@ -1845,7 +1845,14 @@
             }
 
             let suiteHandlerDeclined = false;
-            if (this.suiteExamMap && this.suiteExamMap.has(examId) && typeof this.handleSuitePracticeComplete === 'function') {
+            const shouldDelegateToSuiteHandler = Boolean(
+                data
+                && typeof data === 'object'
+                && typeof data.suiteId === 'string'
+                && data.suiteId.trim()
+            ) || Boolean(this.suiteExamMap && this.suiteExamMap.has(examId));
+
+            if (shouldDelegateToSuiteHandler && typeof this.handleSuitePracticeComplete === 'function') {
                 try {
                     const handled = await this.handleSuitePracticeComplete(examId, data);
                     if (handled) {
