@@ -5,6 +5,7 @@
 /documents/
 /docs/
 /tools/
+/developer/node_modules/
 
 # ListeningPractice 资源体积大，默认忽略；仅放行 100 P1 / 100 P4 的 HTML 便于维护与回归
 /ListeningPractice/**
@@ -19,6 +20,7 @@
 /templates/hp/
 /ielts-writing-assistant/
 /BACKUP/
+
 
 # 忽略可能的系统文件
 .DS_Store

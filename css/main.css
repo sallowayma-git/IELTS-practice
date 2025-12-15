@@ -4945,6 +4945,48 @@ body.theme-blue.blue-dark-mode .view>h2,
     color: #ffffff !important;
 }
 
+/* Blue dark mode additional text contrast fixes */
+body.theme-blue.blue-dark-mode .container,
+body.theme-blue.blue-dark-mode .view,
+body.theme-blue.blue-dark-mode .category-card,
+body.theme-blue.blue-dark-mode .exam-item,
+body.theme-blue.blue-dark-mode .stat-card,
+body.theme-blue.blue-dark-mode .practice-history,
+body.theme-blue.blue-dark-mode .more-view-subtitle,
+body.theme-blue.blue-dark-mode .overview-section-title,
+body.theme-blue.blue-dark-mode .tool-card-content h3,
+body.theme-blue.blue-dark-mode .tool-card-content p,
+:root[data-theme="blue"] body.blue-dark-mode .container,
+:root[data-theme="blue"] body.blue-dark-mode .view,
+:root[data-theme="blue"] body.blue-dark-mode .category-card,
+:root[data-theme="blue"] body.blue-dark-mode .exam-item,
+:root[data-theme="blue"] body.blue-dark-mode .stat-card,
+:root[data-theme="blue"] body.blue-dark-mode .practice-history,
+:root[data-theme="blue"] body.blue-dark-mode .more-view-subtitle,
+:root[data-theme="blue"] body.blue-dark-mode .overview-section-title,
+:root[data-theme="blue"] body.blue-dark-mode .tool-card-content h3,
+:root[data-theme="blue"] body.blue-dark-mode .tool-card-content p {
+    color: #ffffff !important;
+}
+
+/* Blue dark mode stat card numbers */
+body.theme-blue.blue-dark-mode .stat-number,
+body.theme-blue.blue-dark-mode .stat-label,
+:root[data-theme="blue"] body.blue-dark-mode .stat-number,
+:root[data-theme="blue"] body.blue-dark-mode .stat-label {
+    color: #ffffff !important;
+}
+
+/* Blue dark mode search and form elements */
+body.theme-blue.blue-dark-mode .search-input,
+body.theme-blue.blue-dark-mode .search-input::placeholder,
+:root[data-theme="blue"] body.blue-dark-mode .search-input,
+:root[data-theme="blue"] body.blue-dark-mode .search-input::placeholder {
+    color: #ffffff !important;
+    background: rgba(12, 26, 54, 0.9) !important;
+    border-color: rgba(87, 183, 242, 0.4) !important;
+}
+
 /* Blue dark mode moon effect for header */
 body.theme-blue.blue-dark-mode .header h1::before,
 :root[data-theme="blue"] body.blue-dark-mode .header h1::before {
@@ -4974,6 +5016,36 @@ body.theme-blue.blue-dark-mode .header h1::before,
             drop-shadow(0 0 10px rgba(255, 255, 224, 0.8)) drop-shadow(0 0 20px rgba(230, 230, 250, 0.6)) drop-shadow(0 0 30px rgba(176, 196, 222, 0.4));
         transform: scale(1.02) rotate(-2deg);
     }
+}
+
+/* Blue dark mode navigation and tool cards */
+body.theme-blue.blue-dark-mode .nav-btn,
+body.theme-blue.blue-dark-mode .tool-card,
+body.theme-blue.blue-dark-mode .more-tools-grid .tool-card,
+:root[data-theme="blue"] body.blue-dark-mode .nav-btn,
+:root[data-theme="blue"] body.blue-dark-mode .tool-card,
+:root[data-theme="blue"] body.blue-dark-mode .more-tools-grid .tool-card {
+    color: #ffffff !important;
+    background: rgba(12, 26, 54, 0.9) !important;
+    border-color: rgba(87, 183, 242, 0.4) !important;
+}
+
+/* Blue dark mode empty states and hints */
+body.theme-blue.blue-dark-mode .exam-list-empty,
+body.theme-blue.blue-dark-mode .exam-list-empty-text,
+body.theme-blue.blue-dark-mode .exam-list-empty-hint,
+body.theme-blue.blue-dark-mode .practice-history-empty,
+body.theme-blue.blue-dark-mode .practice-history-empty-text,
+body.theme-blue.blue-dark-mode .overview-empty,
+:root[data-theme="blue"] body.blue-dark-mode .exam-list-empty,
+:root[data-theme="blue"] body.blue-dark-mode .exam-list-empty-text,
+:root[data-theme="blue"] body.blue-dark-mode .exam-list-empty-hint,
+:root[data-theme="blue"] body.blue-dark-mode .practice-history-empty,
+:root[data-theme="blue"] body.blue-dark-mode .practice-history-empty-text,
+:root[data-theme="blue"] body.blue-dark-mode .overview-empty {
+    color: #ffffff !important;
+    background: rgba(12, 26, 54, 0.8) !important;
+    border-color: rgba(87, 183, 242, 0.3) !important;
 }
 
 /* Blue Dark Mode (toggle via .blue-dark-mode on body) */
@@ -5033,7 +5105,47 @@ body.theme-blue.blue-dark-mode .record-meta-line,
 body.theme-blue.blue-dark-mode .record-percentage,
 body.theme-blue.blue-dark-mode .category-title,
 body.theme-blue.blue-dark-mode .category-meta {
-    color: #cfe4ff;
+    color: #ffffff;
+}
+
+/* Blue dark mode text color - precise selectors only */
+body.theme-blue.blue-dark-mode .view > h2,
+body.theme-blue.blue-dark-mode .more-view-subtitle,
+body.theme-blue.blue-dark-mode .overview-section-title,
+body.theme-blue.blue-dark-mode .overview-section-label,
+body.theme-blue.blue-dark-mode .tool-card-content h3,
+body.theme-blue.blue-dark-mode .tool-card-content p,
+body.theme-blue.blue-dark-mode .practice-history > div:first-child,
+body.theme-blue.blue-dark-mode .browse-title-bar h2,
+body.theme-blue.blue-dark-mode #browse-title,
+body.theme-blue.blue-dark-mode .hero-header h1,
+body.theme-blue.blue-dark-mode .hero-panel h3,
+body.theme-blue.blue-dark-mode .hero-panel__title,
+body.theme-blue.blue-dark-mode .hero-panel__muted,
+body.theme-blue.blue-dark-mode .hero-section h3,
+body.theme-blue.blue-dark-mode .hero-surface,
+body.theme-blue.blue-dark-mode .system-management-panel h3,
+body.theme-blue.blue-dark-mode .data-management-panel h3,
+body.theme-blue.blue-dark-mode .hero-settings-group h3,
+:root[data-theme="blue"] body.blue-dark-mode .view > h2,
+:root[data-theme="blue"] body.blue-dark-mode .more-view-subtitle,
+:root[data-theme="blue"] body.blue-dark-mode .overview-section-title,
+:root[data-theme="blue"] body.blue-dark-mode .overview-section-label,
+:root[data-theme="blue"] body.blue-dark-mode .tool-card-content h3,
+:root[data-theme="blue"] body.blue-dark-mode .tool-card-content p,
+:root[data-theme="blue"] body.blue-dark-mode .practice-history > div:first-child,
+:root[data-theme="blue"] body.blue-dark-mode .browse-title-bar h2,
+:root[data-theme="blue"] body.blue-dark-mode #browse-title,
+:root[data-theme="blue"] body.blue-dark-mode .hero-header h1,
+:root[data-theme="blue"] body.blue-dark-mode .hero-panel h3,
+:root[data-theme="blue"] body.blue-dark-mode .hero-panel__title,
+:root[data-theme="blue"] body.blue-dark-mode .hero-panel__muted,
+:root[data-theme="blue"] body.blue-dark-mode .hero-section h3,
+:root[data-theme="blue"] body.blue-dark-mode .hero-surface,
+:root[data-theme="blue"] body.blue-dark-mode .system-management-panel h3,
+:root[data-theme="blue"] body.blue-dark-mode .data-management-panel h3,
+:root[data-theme="blue"] body.blue-dark-mode .hero-settings-group h3 {
+    color: #ffffff !important;
 }
 
 body.theme-blue.blue-dark-mode .btn,
@@ -5047,6 +5159,21 @@ body.theme-blue.blue-dark-mode .btn-info {
 body.theme-blue.blue-dark-mode .btn:hover:not(:disabled) {
     background: #1154D9;
     box-shadow: 0 8px 20px rgba(17, 84, 217, 0.28);
+}
+
+/* Blue dark mode practice stats cards */
+body.theme-blue.blue-dark-mode .practice-stats .stat-card,
+:root[data-theme="blue"] body.blue-dark-mode .practice-stats .stat-card {
+    background: var(--exam-item-bg) !important;
+    border-color: var(--exam-item-border-color) !important;
+    color: #ffffff !important;
+}
+
+body.theme-blue.blue-dark-mode .practice-stats .stat-number,
+body.theme-blue.blue-dark-mode .practice-stats .stat-label,
+:root[data-theme="blue"] body.blue-dark-mode .practice-stats .stat-number,
+:root[data-theme="blue"] body.blue-dark-mode .practice-stats .stat-label {
+    color: #ffffff !important;
 }
 
 /* Blue waves now drawn as body background layers; pseudo-elements removed to ensure waves stay behind content. */

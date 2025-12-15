@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HP Map Navigation Manual Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-result {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .pass { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .fail { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        .iframe-container {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+        iframe {
+            width: 100%;
+            height: 600px;
+            border: none;
+        }
+        .test-steps {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .test-steps ol {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .test-steps li {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧙‍♂️ HP Map Navigation Manual Test</h1>
+    <p>手动验证 HarryPoter.html 地图点击跳转功能</p>
+
+    <div class="test-container">
+        <h2>📋 测试步骤</h2>
+        <div class="test-steps">
+            <ol>
+                <li>在下方的 iframe 中查看 HarryPoter.html 页面</li>
+                <li>验证地图是否正确显示</li>
+                <li>依次点击四个地图区域：Hogwarts、The Burrow、Quidditch Pitch、Azkaban</li>
+                <li>验证每次点击是否正确跳转到对应的 Welcome.html 页面</li>
+                <li>检查 URL 是否包含正确的视图参数</li>
+                <li>点击下方按钮记录测试结果</li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="test-container">
+        <h2>🎯 HarryPoter.html 地图测试</h2>
+        <div class="iframe-container">
+            <iframe src="../../../.superdesign/design_iterations/HarryPoter.html" 
+                    title="HarryPoter Map"></iframe>
+        </div>
+        
+        <h3>测试结果记录</h3>
+        <button onclick="recordTest('map-display', true)">✅ 地图正确显示</button>
+        <button onclick="recordTest('map-display', false)">❌ 地图显示异常</button>
+        
+        <br>
+        
+        <button onclick="recordTest('hogwarts-click', true)">✅ Hogwarts 点击正常</button>
+        <button onclick="recordTest('hogwarts-click', false)">❌ Hogwarts 点击异常</button>
+        
+        <br>
+        
+        <button onclick="recordTest('burrow-click', true)">✅ The Burrow 点击正常</button>
+        <button onclick="recordTest('burrow-click', false)">❌ The Burrow 点击异常</button>
+        
+        <br>
+        
+        <button onclick="recordTest('quidditch-click', true)">✅ Quidditch Pitch 点击正常</button>
+        <button onclick="recordTest('quidditch-click', false)">❌ Quidditch Pitch 点击异常</button>
+        
+        <br>
+        
+        <button onclick="recordTest('azkaban-click', true)">✅ Azkaban 点击正常</button>
+        <button onclick="recordTest('azkaban-click', false)">❌ Azkaban 点击异常</button>
+        
+        <br>
+        
+        <button onclick="recordTest('url-params', true)">✅ URL 参数正确</button>
+        <button onclick="recordTest('url-params', false)">❌ URL 参数错误</button>
+        
+        <div id="test-results"></div>
+        
+        <button onclick="generateReport()" style="background: #28a745; margin-top: 20px;">📊 生成测试报告</button>
+        <button onclick="clearResults()" style="background: #dc3545; margin-top: 20px;">🗑️ 清除结果</button>
+    </div>
+
+    <div class="test-container">
+        <h2>📝 预期行为验证</h2>
+        <div class="test-steps">
+            <h3>Requirements 3.1 验证点：</h3>
+            <ul>
+                <li><strong>buildResourcePath 函数：</strong> 应该能够解析正确的资源路径</li>
+                <li><strong>地图点击跳转：</strong> 点击地图区域应该正确跳转到目标页面</li>
+                <li><strong>URL 格式：</strong> 跳转后的 URL 应该包含 <code>?view=&lt;view&gt;#&lt;view&gt;</code> 格式</li>
+            </ul>
+            
+            <h3>预期的跳转映射：</h3>
+            <ul>
+                <li><strong>Hogwarts (霍格沃兹)：</strong> → HP/Welcome.html?view=overview#overview</li>
+                <li><strong>The Burrow (陋居)：</strong> → HP/Welcome.html?view=history#history</li>
+                <li><strong>Quidditch Pitch (魁地奇球场)：</strong> → HP/Welcome.html?view=practice#practice</li>
+                <li><strong>Azkaban (阿兹卡班)：</strong> → HP/Welcome.html?view=settings#settings</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const testResults = {};
+        
+        function recordTest(testName, passed) {
+            testResults[testName] = passed;
+            updateResultsDisplay();
+        }
+        
+        function updateResultsDisplay() {
+            const container = document.getElementById('test-results');
+            container.innerHTML = '';
+            
+            Object.entries(testResults).forEach(([testName, passed]) => {
+                const div = document.createElement('div');
+                div.className = `test-result ${passed ? 'pass' : 'fail'}`;
+                div.textContent = `${getTestDisplayName(testName)}: ${passed ? '通过' : '失败'}`;
+                container.appendChild(div);
+            });
+        }
+        
+        function getTestDisplayName(testName) {
+            const names = {
+                'map-display': '地图显示',
+                'hogwarts-click': 'Hogwarts 点击',
+                'burrow-click': 'The Burrow 点击',
+                'quidditch-click': 'Quidditch Pitch 点击',
+                'azkaban-click': 'Azkaban 点击',
+                'url-params': 'URL 参数'
+            };
+            return names[testName] || testName;
+        }
+        
+        function generateReport() {
+            const totalTests = Object.keys(testResults).length;
+            const passedTests = Object.values(testResults).filter(Boolean).length;
+            const failedTests = totalTests - passedTests;
+            
+            const report = `
+测试报告 - HP Map Navigation
+============================
+总测试数: ${totalTests}
+通过: ${passedTests}
+失败: ${failedTests}
+成功率: ${totalTests > 0 ? Math.round((passedTests / totalTests) * 100) : 0}%
+
+详细结果:
+${Object.entries(testResults).map(([name, passed]) => 
+    `- ${getTestDisplayName(name)}: ${passed ? '✅ 通过' : '❌ 失败'}`
+).join('\n')}
+
+Requirements 3.1 验证状态:
+${passedTests === totalTests ? '✅ 所有测试通过，地图导航功能正常' : '⚠️ 部分测试失败，需要检查相关功能'}
+            `;
+            
+            alert(report);
+            console.log(report);
+        }
+        
+        function clearResults() {
+            Object.keys(testResults).forEach(key => delete testResults[key]);
+            updateResultsDisplay();
+        }
+        
+        // 监听 iframe 中的消息（如果有的话）
+        window.addEventListener('message', function(event) {
+            console.log('收到来自 iframe 的消息:', event.data);
+        });
+        
+        // 页面加载完成后的初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            const infoDiv = document.createElement('div');
+            infoDiv.className = 'test-result info';
+            infoDiv.textContent = '测试页面已加载，请按照上述步骤进行手动测试';
+            document.getElementById('test-results').appendChild(infoDiv);
+        });
+    </script>
+</body>
+</html>
