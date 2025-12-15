@@ -3,13 +3,19 @@
   "version": "1.0.0",
   "description": "Development and testing dependencies for IELTS Practice",
   "private": true,
+  "type": "module",
   "devDependencies": {
-    "@playwright/test": "^1.56.1"
+    "@playwright/test": "^1.56.1",
+    "fast-check": "^4.4.0",
+    "vitest": "^4.0.15"
   },
   "scripts": {
     "test": "playwright test",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
-    "test:debug": "playwright test --debug"
+    "test:debug": "playwright test --debug",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest",
+    "test:property": "vitest run --testNamePattern='Property'"
   }
 }
