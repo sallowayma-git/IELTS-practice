@@ -9,7 +9,10 @@
  * 4. 空词表处理
  */
 
-const assert = require('assert');
+import assert from 'assert';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 const originalConsoleLog = (console && typeof console.log === 'function')
     ? console.log.bind(console)
@@ -61,7 +64,10 @@ global.storage = {
 };
 
 // 加载SpellingErrorCollector
-eval(require('fs').readFileSync('js/app/spellingErrorCollector.js', 'utf8'));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const repoRoot = path.resolve(__dirname, '../../../..');
+eval(fs.readFileSync(path.join(repoRoot, 'js/app/spellingErrorCollector.js'), 'utf8'));
 
 // Mock VocabStore
 class MockVocabStore {
@@ -371,16 +377,11 @@ async function runTests() {
     return allPassed ? 0 : 1;
 }
 
-// 运行测试
-if (require.main === module) {
-    runTests().then(code => process.exit(code)).catch(err => {
-        emitResult({
-            status: 'fail',
-            error: err.message,
-            stack: err.stack
-        });
-        process.exit(1);
+runTests().then(code => process.exit(code)).catch(err => {
+    emitResult({
+        status: 'fail',
+        error: err.message,
+        stack: err.stack
     });
-}
-
-module.exports = { runTests };
+    process.exit(1);
+});
