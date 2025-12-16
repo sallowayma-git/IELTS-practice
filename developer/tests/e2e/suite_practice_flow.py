@@ -15,21 +15,31 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 import re
+import subprocess
+import sys
 from typing import List, Optional
-
-from playwright.async_api import (  # type: ignore[import-untyped]
-    Browser,
-    ConsoleMessage,
-    Error as PlaywrightError,
-    Page,
-    TimeoutError as PlaywrightTimeoutError,
-    async_playwright,
-)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 INDEX_PATH = REPO_ROOT / "index.html"
 INDEX_URL = f"{INDEX_PATH.as_uri()}?test_env=1"
 REPORT_DIR = REPO_ROOT / "developer" / "tests" / "e2e" / "reports"
+
+try:
+    from playwright.async_api import (  # type: ignore[import-untyped]
+        Browser,
+        ConsoleMessage,
+        Error as PlaywrightError,
+        Page,
+        TimeoutError as PlaywrightTimeoutError,
+        async_playwright,
+    )
+except ModuleNotFoundError:
+    node_runner = REPO_ROOT / "developer" / "tests" / "e2e" / "suite_practice_flow.node.js"
+    completed = subprocess.run([
+        "node",
+        str(node_runner),
+    ], cwd=str(REPO_ROOT))
+    raise SystemExit(completed.returncode)
 
 
 def log_step(message: str, level: str = "INFO") -> None:

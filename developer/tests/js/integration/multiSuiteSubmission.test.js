@@ -9,7 +9,7 @@
  * 4. 拼写错误收集
  */
 
-const assert = require('assert');
+import assert from 'assert';
 
 const originalConsoleLog = (console && typeof console.log === 'function')
     ? console.log.bind(console)
@@ -362,16 +362,11 @@ async function runTests() {
     return allPassed ? 0 : 1;
 }
 
-// 运行测试
-if (require.main === module) {
-    runTests().then(code => process.exit(code)).catch(err => {
-        emitResult({
-            status: 'fail',
-            error: err.message,
-            stack: err.stack
-        });
-        process.exit(1);
+runTests().then(code => process.exit(code)).catch(err => {
+    emitResult({
+        status: 'fail',
+        error: err.message,
+        stack: err.stack
     });
-}
-
-module.exports = { runTests };
+    process.exit(1);
+});
