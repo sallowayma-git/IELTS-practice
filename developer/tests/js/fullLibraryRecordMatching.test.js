@@ -5,11 +5,15 @@
  * 确保 AnswerComparisonUtils 的全量题库匹配与 metadata 填充逻辑在 Node 环境下可被静态校验。
  */
 
-const path = require('path');
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
 
-const AnswerComparisonUtils = require(
-    path.join(__dirname, '..', '..', '..', 'js', 'utils', 'answerComparisonUtils.js')
-);
+const require = createRequire(import.meta.url);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const AnswerComparisonUtils = require(path.join(__dirname, '..', '..', '..', 'js', 'utils', 'answerComparisonUtils.js'));
 
 const results = [];
 

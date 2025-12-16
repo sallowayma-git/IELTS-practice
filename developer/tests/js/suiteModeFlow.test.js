@@ -1,9 +1,12 @@
 #!/usr/bin/env node
-const path = require('path');
-const fs = require('fs');
-const vm = require('vm');
-const assert = require('assert');
+import path from 'path';
+import fs from 'fs';
+import vm from 'vm';
+import assert from 'assert';
+import { fileURLToPath } from 'url';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '../../..');
 
 function loadScript(relativePath, context) {

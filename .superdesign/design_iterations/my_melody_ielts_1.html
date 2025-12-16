@@ -2674,11 +2674,21 @@
             filterExams() {
                 const typeFilter = document.getElementById('typeFilter')?.value || 'all';
                 const difficultyFilter = document.getElementById('difficultyFilter')?.value || 'all';
-                const searchTerm = document.getElementById('searchBox')?.value.toLowerCase() || '';
+                const searchTerm = (document.getElementById('searchBox')?.value || '').toLowerCase().trim();
                 const candidate = document.getElementById('examGrid');
                 const sections = document.querySelectorAll('#browse .category-section');
-                if (candidate) candidate.style.display = searchTerm ? 'block' : 'none';
-                sections.forEach(sec => { sec.style.display = searchTerm ? 'none' : ''; });
+
+                if (!searchTerm) {
+                    if (candidate) {
+                        candidate.innerHTML = '';
+                        candidate.style.display = 'none';
+                    }
+                    sections.forEach(sec => { sec.style.display = ''; });
+                    return;
+                }
+
+                if (candidate) candidate.style.display = 'block';
+                sections.forEach(sec => { sec.style.display = 'none'; });
 
                 let filtered = this.examData.filter(exam => {
                     const typeMatch = typeFilter === 'all' || exam.type === typeFilter;
@@ -4655,30 +4665,51 @@
 
         // 构建资源路径
         function buildResourcePath(exam, kind = 'html') {
+            try {
+                const adapter = window.themeAdapter || window.MelodyAdapter;
+                if (adapter && typeof adapter.buildResourcePath === 'function') {
+                    return adapter.buildResourcePath(exam, kind);
+                }
+            } catch (_) {}
+
             if (!exam) {
                 console.warn('[Resource] Invalid exam data:', exam);
                 return '#';
             }
 
-            const type = String(exam.type || '').toLowerCase().trim();
-            let basePath = String(exam.path || '').replace(/\\/g, '/');
-            if (basePath && !basePath.endsWith('/')) basePath += '/';
+            const normalizePart = (value, trimLeading) => {
+                if (!value) return '';
+                let v = String(value).replace(/\\/g, '/');
+                if (trimLeading) v = v.replace(/^\/+/, '');
+                return v.replace(/\/+$/g, '');
+            };
 
-            // base标签="../../"已设置，基准路径为项目根目录
-            // 因此路径应该从根目录开始
-            let root;
-            if (type === 'listening') {
-                root = ''; // ListeningPractice已经在exam.path中
-            } else {
-                root = '睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/';
-            }
+            const inferPrefix = () => {
+                try {
+                    const p = String(location.pathname || '').replace(/\\/g, '/');
+                    const anchor = '/.superdesign/design_iterations/';
+                    const idx = p.indexOf(anchor);
+                    if (idx === -1) return './';
+                    const after = p.slice(idx + anchor.length);
+                    const parts = after.split('/').filter(Boolean);
+                    const depth = Math.max(0, parts.length - 1);
+                    const ups = new Array(2 + depth).fill('..');
+                    return ups.join('/');
+                } catch (_) {
+                    return './';
+                }
+            };
 
-            let fileName;
-            if (kind === 'html') fileName = exam.filename || exam.fileName || 'index.html';
-            else fileName = exam.pdfFilename || exam.fileName || 'content.pdf';
+            const base = normalizePart(window.HP_BASE_PREFIX, false) || inferPrefix();
+            const folder = normalizePart(exam.path || '', true);
+            const fileName = (kind === 'pdf')
+                ? (exam.pdfFilename || exam.filename || exam.fileName || '')
+                : (exam.filename || exam.fileName || '');
 
-            const fullPath = root + basePath + fileName;
-            console.log('[Resource] Building path:', { type, basePath, root, fileName, fullPath, baseHref: document.baseURI });
+            const fullPath = [normalizePart(base, false), folder, normalizePart(fileName, true)]
+                .filter(Boolean)
+                .join('/');
+
             return encodeURI(fullPath);
         }
 

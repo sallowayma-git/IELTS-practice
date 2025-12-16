@@ -16,11 +16,15 @@
   // 存储键常量 - 与主系统保持一致
   const STORAGE_KEYS = {
     EXAM_INDEX: 'exam_index',
+    ACTIVE_EXAM_INDEX_KEY: 'active_exam_index_key',
+    EXAM_INDEX_CONFIGURATIONS: 'exam_index_configurations',
     PRACTICE_RECORDS: 'practice_records'
   };
 
   // 有效的 type 值
   const VALID_TYPES = new Set(['reading', 'listening']);
+
+  const EXAM_INDEX_KEY_RE = /^exam_index(_\d+)?$/;
 
   // 路径解析备用策略顺序
   const PATH_FALLBACK_ORDER = ['map', 'fallback', 'raw', 'relative-up', 'relative-design'];
@@ -111,6 +115,34 @@
   }
 
   /**
+   * 推断从当前页面到仓库根目录的相对前缀（兼容 file:// 与设计页目录结构）
+   */
+  function inferRepoRootPrefix() {
+    try {
+      const rawPath = (window.location && window.location.pathname) ? String(window.location.pathname) : '';
+      const path = rawPath.replace(/\\/g, '/');
+
+      const prefixFromAnchor = (anchor, baseUps) => {
+        const idx = path.indexOf(anchor);
+        if (idx === -1) return '';
+        const after = path.slice(idx + anchor.length);
+        const parts = after.split('/').filter(Boolean);
+        const depth = Math.max(0, parts.length - 1);
+        const ups = new Array(baseUps + depth).fill('..');
+        return ups.length ? ups.join('/') : '.';
+      };
+
+      const design = prefixFromAnchor('/.superdesign/design_iterations/', 2);
+      if (design) return design;
+
+      const superdesign = prefixFromAnchor('/.superdesign/', 1);
+      if (superdesign) return superdesign;
+    } catch (_) {}
+
+    return './';
+  }
+
+  /**
    * 类型规范化 - 将 type 字段规范化为 'reading' 或 'listening'
    * @param {string} type - 原始类型值
    * @returns {string} - 规范化后的类型 ('reading' | 'listening')
@@ -149,6 +181,14 @@
         ...exam,
         type: normalizeType(exam.type)
       };
+    });
+  }
+
+  function markType(exams, type) {
+    if (!Array.isArray(exams)) return [];
+    return exams.map((exam) => {
+      if (!exam) return exam;
+      return { ...exam, type };
     });
   }
 
@@ -620,7 +660,7 @@
         }
       };
 
-      const base = window.HP_BASE_PREFIX || './';
+      const base = normalizeBasePath(window.HP_BASE_PREFIX) || inferRepoRootPrefix();
       const folder = exam.path || '';
       const primaryFile = kind === 'pdf'
         ? (exam.pdfFilename || exam.filename || '')
@@ -966,7 +1006,10 @@
         // 检查是否是我们关心的键
         const key = event.key.replace(/^exam_system_/, '');
         
-        if (key === STORAGE_KEYS.EXAM_INDEX) {
+        if (key === STORAGE_KEYS.ACTIVE_EXAM_INDEX_KEY) {
+          console.log('[ThemeAdapterBase] 检测到题库索引切换');
+          this._loadExamIndex().catch(console.error);
+        } else if (key === STORAGE_KEYS.EXAM_INDEX || EXAM_INDEX_KEY_RE.test(key) || key === STORAGE_KEYS.EXAM_INDEX_CONFIGURATIONS) {
           console.log('[ThemeAdapterBase] 检测到题库索引变化');
           this._loadExamIndex().catch(console.error);
         } else if (key === STORAGE_KEYS.PRACTICE_RECORDS) {
@@ -1221,14 +1264,22 @@
      */
     async _loadExamIndex() {
       try {
-        let data = await this._readFromStorage(STORAGE_KEYS.EXAM_INDEX);
+        const rawActiveKey = await this._readFromStorage(STORAGE_KEYS.ACTIVE_EXAM_INDEX_KEY);
+        const activeKey = (typeof rawActiveKey === 'string' && EXAM_INDEX_KEY_RE.test(rawActiveKey))
+          ? rawActiveKey
+          : STORAGE_KEYS.EXAM_INDEX;
+
+        let data = await this._readFromStorage(activeKey);
+        if ((!Array.isArray(data) || data.length === 0) && activeKey !== STORAGE_KEYS.EXAM_INDEX) {
+          data = await this._readFromStorage(STORAGE_KEYS.EXAM_INDEX);
+        }
         
         // 回退到全局变量
         if (!data || !Array.isArray(data) || data.length === 0) {
           console.log('[ThemeAdapterBase] 存储中无题库索引，尝试全局变量');
           const reading = Array.isArray(window.completeExamIndex) ? window.completeExamIndex : [];
           const listening = Array.isArray(window.listeningExamIndex) ? window.listeningExamIndex : [];
-          data = [...reading, ...listening];
+          data = [...markType(reading, 'reading'), ...markType(listening, 'listening')];
         }
 
         // 规范化 type 字段
@@ -1333,7 +1384,7 @@
      * 构建备用路径
      */
     _buildFallbackPath(exam, kind) {
-      const base = window.HP_BASE_PREFIX || './';
+      const base = normalizeBasePath(window.HP_BASE_PREFIX) || inferRepoRootPrefix();
       const folder = exam.path || '';
       const file = kind === 'pdf'
         ? (exam.pdfFilename || exam.filename || '')
