@@ -1,0 +1,1031 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>IELTS Listening Practice - T31-40</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  /* --- V2.0 Core Styles & Base --- */
+  :root { --splitter-width: 5px; --splitter-color: #eaecef; }
+  html, body { height: 100%; margin: 0; overflow: hidden; scroll-behavior: smooth; }
+  body {
+    background-color: #f1f3f4;
+    font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+    font-size: 13pt; /* Default is now LARGE */
+    font-weight: 400;
+    color: #000;
+    transition: background-color 0.3s, color 0.3s, font-size 0.2s;
+    display: flex;
+    flex-direction: column;
+  }
+  body.font-regular { font-size: 10pt; }
+  body.font-xlarge { font-size: 16pt; }
+
+  .app-wrapper { 
+    display: flex; 
+    flex-grow: 1;
+    overflow: hidden;
+  }
+
+  .shell { background: #f6f7fb; display: flex; flex-direction: column; flex-grow: 1; min-width: 0; }
+  h1, h2, h3, h4 { font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif; font-weight: 600; color: #2E74B5; }
+  strong, b { font-weight: 600; }
+  
+  /* --- Layout & Panes --- */
+  #main-shell { display: flex; flex-grow: 1; overflow: hidden; }
+  #left-pane { flex: 1 1 100%; overflow-y: auto; background: #fff; transition: flex-basis 0.4s ease-in-out, background-color 0.3s; padding: 0 16px; box-sizing: border-box; }
+  #splitter { width: var(--splitter-width); background: var(--splitter-color); cursor: col-resize; display: none; }
+  #right-pane { flex: 0 0 0; overflow-y: auto; background: #fcfdff; display: none; padding: 0 24px; box-sizing: border-box; transition: background-color 0.3s; }
+  
+  #main-shell.split-view #left-pane { flex-basis: 60%; padding: 0 24px; }
+  #main-shell.split-view #splitter { display: block; }
+  #main-shell.split-view #right-pane { display: block; flex-basis: calc(40% - var(--splitter-width)); }
+
+  .test-page, .transcript-page { display: none; }
+  .test-page.active, .transcript-page.active { display: block; }
+
+  #sticky-header { 
+    position: relative;
+    z-index: 10; 
+    background: #fff; 
+    padding: 16px;
+    border-bottom: 1px solid #eaecef; 
+    box-sizing: border-box;
+    flex-shrink: 0;
+  }
+  .audio-player-wrapper { display: none; }
+  .audio-player-wrapper.active { display: block; }
+  .audio-player { display: flex; align-items: center; gap: 12px; width: 100%; }
+  .play-pause-btn { background: #3b82f6; color: white; border: none; border-radius: 50%; width: 36px; height: 36px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .progress-container { flex-grow: 1; }
+  .progress-bar-wrapper { width: 100%; height: 8px; background-color: #e0e0e0; border-radius: 4px; cursor: pointer; }
+  .progress-bar { width: 0; height: 100%; background-color: #3b82f6; border-radius: 4px; }
+  .time-display { font-size: 0.9em; min-width: 90px; text-align: center; flex-shrink: 0; }
+  .top-bar-button { height: 36px; padding: 0 12px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #fff; color: #374151; cursor: pointer; font-size: 10pt; font-family: inherit; flex-shrink: 0; }
+
+  /* --- Custom Select for Speed Control --- */
+  .speed-control { position: relative; flex-shrink: 0; }
+  .custom-select { appearance: none; -webkit-appearance: none; background-color: #f3f4f6; border: 1px solid #d1d5db; border-radius: 6px; padding: 6px 30px 6px 12px; font-size: 1em; font-weight: 500; cursor: pointer; min-width: 90px; }
+  .speed-control::after { content: '▾'; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; font-size: 1.2em; color: #6b7280; }
+
+  /* --- Bottom Bar & Buttons --- */
+  .bottom-bar { position: fixed; left: 0; right: 0; bottom: 0; height: 64px; background: #fff; border-top: 1px solid #eaecef; box-shadow: 0 -6px 18px rgba(0,0,0,.06); display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 16px; z-index: 100; transition: background-color 0.3s; box-sizing: border-box; }
+  .bb-left, .bb-center { display: flex; align-items: center; gap: 8px; }
+  .pills { display: flex; gap: 10px; align-items: center; }
+  .pill { padding: 6px 16px; border-radius: 18px; border: 1px solid #d1d5db; background: #f9fafb; color: #374151; font-size: 11pt; cursor: pointer; transition: all 0.2s ease; }
+  .pill.active { background: #2E74B5; border-color: #2E74B5; color: #fff; font-weight: 600; }
+  .bb-center button { height: 38px; padding: 0 16px; border: 1px solid #d1d5db; border-radius: 8px; background-color: #fff; color: #374151; cursor: pointer; font-size: 11pt; font-family: inherit; }
+  .btn-primary { background-color: #2563eb !important; color: white !important; border-color: #2563eb !important; font-weight: 600; }
+  button#clean-btn.has-save { background-color: #fee2e2 !important; color: #991b1b !important; border-color: #fecaca !important; font-weight: 600;}
+
+  /* MODIFIED: Timer display styles */
+  .timer-display-box { height: 36px; padding: 0 12px; border: 1px solid #d1d5db; border-radius: 8px; cursor: pointer; font-size: 13pt; font-family: inherit; display: flex; align-items: center; justify-content: center; min-width: 50px; transition: background-color 0.3s, border-color 0.3s; user-select: none; flex-shrink: 0; font-weight: 600; }
+  .timer-paused { background-color: #fef2f2; border-color: #fecaca; }
+
+  /* --- Question Styles --- */
+  .test-page { text-align: left; padding-top: 20px; padding-bottom: 80px; }
+  .group { border: 1px solid #eef0f6; border-radius: 12px; padding: 24px; margin: 0; }
+  .test-title-container { border-bottom: 1px solid #BFBFBF; padding-bottom: 6px; margin-bottom: 16px; }
+  .test-title { font-size: 1.2em; margin: 0; }
+  .date-info { font-size: 0.85em; color: #6b7280; font-style: italic; margin-top: 4px; }
+  .fill-in-question { margin-bottom: 12pt; line-height: 1.75; text-align: left; }
+  .fill-in-question input[type="text"] { width: 200px; font-size: 1.1em; padding: 4px 6px; border: 1px solid #9ca3af; border-radius: 4px; margin: 0 8px; vertical-align: baseline; }
+  input.error { border-color: #fca5a5 !important; background-color: #fef2f2 !important; }
+  input.correct { border-color: #86efac !important; background-color: #f0fdf4 !important; }
+
+  /* --- Transcript Styles --- */
+  .transcript-page h4 { font-size: 1.2em; border-bottom: 1px solid #BFBFBF; padding-bottom: 6px; margin-top: 24pt; margin-bottom: 12pt; }
+  .transcript-page ol { padding-left: 0; list-style: none; }
+  .transcript-page li { display: grid; grid-template-columns: 30px auto; gap: 8px; align-items: start; }
+  .transcript-page li:not(.translation) { margin-bottom: 0pt; }
+  .transcript-page li.translation { margin-bottom: 8pt; }
+  .transcript-page li .num { font-weight: bold; }
+  .transcript-page li.translation .num { visibility: hidden; }
+
+  /* --- Notes Panel & Highlighter --- */
+  #notes-splitter { width: var(--splitter-width); background: var(--splitter-color); cursor: col-resize; display: none; }
+  #notes { flex-basis: 0; display: none; flex-shrink: 0; width: auto; background: #fafbff; border-left: 1px solid #eaecef; flex-direction: column; overflow: hidden; }
+  body.notes-open #notes { display: flex; flex-basis: 420px; }
+  body.notes-open #notes-splitter { display: block; }
+  .side-panel-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-bottom: 1px solid #eaecef; background: #f8f9fa; flex-shrink: 0; }
+  .side-panel-close { background: transparent; border: none; font-size: 24px; cursor: pointer; }
+  #notes-list { overflow-y: auto; padding: 12px; flex-grow: 1; }
+  .note-card { background: #fff; border-radius: 10px; padding: 12px; margin: 0 0 10px; border: 1px solid #e6e9f3; }
+  .note-quote { background:#f6f8ff; border:1px solid #e5eafe; border-radius:8px; padding:8px 10px; margin: 6px 0 10px; font-size: 1rem; cursor: pointer; }
+  .note-card textarea { width: 100%; min-height: 64px; border: 1px solid #e1e4ef; border-radius: 8px; padding: 8px; box-sizing: border-box; font-size: 16px; }
+  .hl { background: #fff59d; }
+  .hl-blue { background: #bae6fd; cursor: pointer; }
+  
+  #selbar { position: absolute; background: #fff; border: 1px solid #eaecef; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: 6px; gap: 6px; display: inline-flex; z-index: 101; }
+  #selbar[hidden] { display: none; }
+  #selbar button { border: 1px solid #e1e4ef; border-radius: 6px; padding: 5px 10px; background: #fff; cursor: pointer; font-size: 0.9em; }
+
+  #settings-panel { position: absolute; background: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); border: 1px solid #e5e7eb; width: 200px; z-index: 101; padding: 6px; display: none; }
+  #settings-panel.active { display: block; }
+  .settings-section { padding: 6px; }
+  .settings-section h5 { margin: 0 0 8px; font-size: 0.8em; color: #6b7280; font-weight: 600; text-transform: uppercase; }
+  .settings-group button { width: 100%; background: #f3f4f6; border: 1px solid transparent; text-align: left; padding: 8px 12px; border-radius: 6px; cursor: pointer; margin-bottom: 4px; font-size: 1em; }
+  .settings-group button.selected { background: #e0e7ff; color: #4338ca; font-weight: 600; border-color: #c7d2fe; }
+  .settings-divider { border-top: 1px solid #e5e7eb; margin: 6px 0; }
+
+  /* --- Enhanced Results & History --- */
+  .results-in-page { margin-top: 30px; border-top: 2px solid #eef0f6; padding-top: 20px; }
+  .results-container { max-width: 650px; margin: 0 auto; }
+  .results-summary { font-size: 1.1em; font-weight: 600; margin-bottom: 16px; display: flex; justify-content: flex-start; gap: 3em; }
+  .results-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.95em; }
+  .results-table th, .results-table td { border: 1px solid #e1e4ef; padding: 8px 12px; text-align: left; }
+  .results-table th { background: #f8f9fa; font-weight: 600; }
+  .result-correct { color: #16a34a; font-weight: bold; }
+  .result-incorrect { color: #dc2626; font-weight: bold; }
+  .your-answer { font-style: italic; color: #4b5563; }
+  .no-answer { color: #9ca3af; font-style: italic; }
+
+  /* --- Dialogs & History Panel --- */
+  .dialog-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 200; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: opacity 0.2s, visibility 0.2s; }
+  #confirm-dialog-overlay, #clean-history-dialog-overlay { z-index: 300; }
+  .dialog-overlay.visible { opacity: 1; visibility: visible; }
+  .dialog-box { background: white; padding: 24px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 90%; max-width: 400px; text-align: center; transform: scale(0.95); transition: transform 0.2s; }
+  .dialog-overlay.visible .dialog-box { transform: scale(1); }
+  .dialog-box p { margin: 0 0 20px; font-size: 1.1em; }
+  .dialog-buttons { display: flex; gap: 12px; justify-content: center; }
+  .dialog-buttons.vertical { flex-direction: column; }
+  .dialog-buttons button { padding: 10px 20px; border-radius: 8px; font-size: 1em; cursor: pointer; border: 1px solid #d1d5db; }
+  #confirm-dialog-yes { background-color: #2563eb; color: white; border-color: #2563eb; }
+  #confirm-dialog-no { background-color: #fff; color: #374151; }
+  #history-panel { max-width: 700px; width: 90%; max-height: 80vh; display: flex; flex-direction: column; text-align: left; }
+  .history-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; border-bottom: 1px solid #eaecef; margin-bottom: 12px; }
+  .history-header h3 { margin: 0; }
+  .history-header .btn-clean { font-size: 10pt; height: 32px; padding: 0 12px; background-color: #fff; color: #2E74B5; border: 1px solid #d1d5db; font-weight: 600; }
+  #history-list { overflow-y: auto; padding-right: 10px; }
+  .history-item { border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 12px; }
+  .history-summary { padding: 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: #f9fafb; }
+  .history-summary:hover { background: #f3f4f6; }
+  .history-details { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; background: #fff; }
+  .history-details.visible { max-height: 500px; padding: 12px; border-top: 1px solid #e5e7eb;}
+  .history-item-delete-btn { background: transparent; border: none; font-size: 24px; cursor: pointer; color: #ef4444; padding: 4px 8px; line-height: 1; }
+  .mistake-table { width: 100%; margin-top: 10px; border-collapse: collapse; }
+  .mistake-table th, .mistake-table td { border: 1px solid #e1e4ef; padding: 8px; text-align: left; }
+  #clean-current-btn, #clean-all-btn { background-color: #fee2e2; color: #b91c1c; border-color: #fecaca; }
+  #clean-cancel-btn { background-color: #f3f4f6; color: #6b7280; border-color: #e5e7eb; }
+  
+  /* --- Auto-hiding scrollbar styles --- */
+  #left-pane::-webkit-scrollbar, #right-pane::-webkit-scrollbar, #notes-list::-webkit-scrollbar { width: 8px; }
+  #left-pane::-webkit-scrollbar-track, #right-pane::-webkit-scrollbar-track, #notes-list::-webkit-scrollbar-track { background: transparent; }
+  #left-pane::-webkit-scrollbar-thumb, #right-pane::-webkit-scrollbar-thumb, #notes-list::-webkit-scrollbar-thumb { background-color: transparent; border-radius: 4px; }
+  #left-pane:hover::-webkit-scrollbar-thumb, #right-pane:hover::-webkit-scrollbar-thumb, #notes-list:hover::-webkit-scrollbar-thumb { background-color: #ccc; }
+  .dark-mode #left-pane:hover::-webkit-scrollbar-thumb, .dark-mode #right-pane:hover::-webkit-scrollbar-thumb, .dark-mode #notes-list:hover::-webkit-scrollbar-thumb { background-color: #4b5563; }
+
+  /* --- Dark Mode --- */
+  body.dark-mode { background-color: #111827; color: #d1d5db; }
+  .dark-mode .shell, .dark-mode #left-pane, .dark-mode #sticky-header, .dark-mode .bottom-bar, .dark-mode #right-pane, .dark-mode #notes, .dark-mode .note-card, .dark-mode #settings-panel, .dark-mode .results-table th, .dark-mode .dialog-box { background-color: #1f2937; color: #d1d5db; border-color: #374151; }
+  .dark-mode h1, .dark-mode h2, .dark-mode h3, .dark-mode h4 { color: #93c5fd; }
+  .dark-mode .pill { background: #374151; color: #d1d5db; border-color: #4b5563; }
+  .dark-mode .pill.active { background: #60a5fa; border-color: #60a5fa; color: #111827; }
+  .dark-mode input[type="text"] { background: #374151; border-color: #4b5563; color: #d1d5db; }
+  .dark-mode input.error { background-color: #4b1924 !important; border-color: #991b1b !important; }
+  .dark-mode input.correct { background-color: #163b2d !important; border-color: #14532d !important; }
+  .dark-mode .note-quote { background: #374151; border-color: #4b5563; }
+  .dark-mode button, .dark-mode .dialog-buttons button, .dark-mode .top-bar-button { background-color: #374151; border-color: #4b5563; color: #d1d5db;}
+  .dark-mode .btn-primary { background-color: #3b82f6 !important; border-color: #3b82f6 !important; color: white !important;}
+  .dark-mode button#clean-btn.has-save { background-color: #450a0a !important; color: #fee2e2 !important; border-color: #991b1b !important;}
+  .dark-mode #confirm-dialog-yes { background-color: #3b82f6; border-color: #3b82f6;}
+  .dark-mode #confirm-dialog-no { background-color: #4b5563; border-color: #5a6676;}
+  .dark-mode .settings-group button { background: #374151; }
+  .dark-mode .settings-group button.selected { background: #312e81; color: #e0e7ff; border-color: #4f46e5;}
+  .dark-mode .custom-select { background-color: #374151; color: #d1d5db; border-color: #4b5563; }
+  .dark-mode .speed-control::after { color: #9ca3af; }
+  .dark-mode .your-answer { color: #9ca3af; }
+  .dark-mode .timer-paused { background-color: #450a0a; border-color: #991b1b;}
+  .dark-mode .history-summary { background: #1f2937; }
+  .dark-mode .history-summary:hover { background: #374151; }
+  .dark-mode .history-details { background: #111827; }
+  .dark-mode .history-header .btn-clean { background-color: #374151; color: #93c5fd; border-color: #4b5563; }
+  .dark-mode #clean-current-btn, .dark-mode #clean-all-btn { background-color: #450a0a; color: #fecaca; border-color: #991b1b; }
+  .dark-mode #clean-cancel-btn { background-color: #374151; color: #9ca3af; border-color: #4b5563; }
+</style>
+</head>
+<body class="font-large">
+
+<div id="sticky-header">
+  <div id="audio-player-container"></div>
+</div>
+
+<div class="app-wrapper">
+  <div class="shell">
+    <div id="main-shell">
+      <div id="left-pane">
+        <div id="test-pages-container"></div>
+      </div>
+      <div id="splitter"></div>
+      <div id="right-pane">
+        <div id="transcript-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="notes-splitter"></div>
+  <div id="notes">
+    <div class="side-panel-header"><span>My Notes</span><button id="notes-close" type="button" class="side-panel-close">&times;</button></div>
+    <div id="notes-list"></div>
+  </div>
+</div>
+
+<div class="bottom-bar">
+  <div class="bb-left"><div id="part-pills" class="pills"></div></div>
+  <div class="bb-center">
+    <button id="submit-btn" class="btn-primary" type="button">Submit</button>
+    <button id="reset-btn" type="button">Reset</button>
+    <button id="submit-all-btn" class="btn-primary" type="button">Submit All</button>
+    <button id="clean-btn" type="button">Clean</button>
+    <button id="history-btn" type="button">History</button>
+  </div>
+</div>
+
+<div id="selbar" hidden>
+    <button data-act="hl">Highlight</button>
+    <button data-act="note">Note</button>
+    <button data-act="del">Clear</button>
+</div>
+
+<div id="settings-panel">
+  <div class="settings-section">
+    <h5>Font Size</h5>
+    <div class="settings-group" id="font-size-group">
+      <button data-size="regular">Regular</button>
+      <button data-size="large" class="selected">Large</button>
+      <button data-size="xlarge">Extra Large</button>
+    </div>
+  </div>
+  <div class="settings-divider"></div>
+  <div class="settings-section">
+    <h5>Color Mode</h5>
+    <div class="settings-group" id="color-mode-group">
+      <button data-mode="light" class="selected">Black on White</button>
+      <button data-mode="dark">White on Black</button>
+    </div>
+  </div>
+</div>
+
+<div id="confirm-dialog-overlay" class="dialog-overlay">
+  <div id="confirm-dialog-box" class="dialog-box">
+    <p id="confirm-dialog-msg"></p>
+    <div class="dialog-buttons">
+      <button id="confirm-dialog-no">Cancel</button>
+      <button id="confirm-dialog-yes">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div id="history-panel-overlay" class="dialog-overlay">
+  <div id="history-panel" class="dialog-box">
+    <div class="history-header">
+      <h3 id="history-title">History</h3>
+      <button id="history-clean-btn" class="btn-clean">Clean</button>
+    </div>
+    <div id="history-list"></div>
+  </div>
+</div>
+
+<div id="clean-history-dialog-overlay" class="dialog-overlay">
+  <div id="clean-history-dialog-box" class="dialog-box">
+    <p>Choose a cleanup option:</p>
+    <div class="dialog-buttons vertical">
+      <button id="clean-current-btn">Clear History for This Test</button>
+      <button id="clean-all-btn">Clear All History</button>
+      <button id="clean-cancel-btn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+'use strict';
+
+const __safeStorage = (() => {
+    try {
+        return window.localStorage;
+    } catch (_) {
+        return null;
+    }
+})();
+
+const localStorage = {
+    getItem(key) {
+        if (!__safeStorage) return null;
+        try { return __safeStorage.getItem(key); } catch (_) { return null; }
+    },
+    setItem(key, value) {
+        if (!__safeStorage) return;
+        try { __safeStorage.setItem(key, String(value)); } catch (_) {}
+    },
+    removeItem(key) {
+        if (!__safeStorage) return;
+        try { __safeStorage.removeItem(key); } catch (_) {}
+    }
+};
+
+window.inputCache = {}; // 全局输入缓存
+window.App = {
+    state: { timerSecs: 0, timerInterval: null, paused: false, finishedSections: new Set(), confirmCallback: null, pageInitialized: new Set(),  },
+    templates: { content: {} },
+    answerKey: {},
+
+    init() {
+        this.populateContent(); 
+        this.buildLayout(); 
+        this.cacheElements(); 
+        this.bindEvents(); 
+        this.ensureSuiteButtonsForAll();
+        this.loadGlobalState();
+        this.startTimer(); 
+        this.showPage(localStorage.getItem('lastActivePage') || 'page-test31'); 
+        this.AudioPlayer.init(); 
+        this.Splitter.init(); 
+        this.Splitter.initNotes();
+        this.applySafeArea();
+        // 全局提交按钮绑定到当前激活套题
+        if (this.el.submitBtn) {
+            this.el.submitBtn.addEventListener('click', () => this.submitCurrentSuite());
+        }
+    },
+    resolveInitialPageId(preferredId) {
+        const hasPreferred = preferredId && this.templates.content && this.templates.content[preferredId];
+        return hasPreferred ? preferredId : this.getDefaultPageId();
+    },
+    getDefaultPageId() {
+        const keys = Object.keys(this.templates.content || {});
+        return keys.length ? keys[0] : 'page-test1';
+    },
+    ensureSuiteSubmitButton(pageId) {
+        const suitePage = document.getElementById(pageId);
+        if (!suitePage) return;
+        // 移除页面内的分题提交按钮（防止误导用户）
+        const existingContainer = suitePage.querySelector('.suite-submit-container');
+        if (existingContainer) existingContainer.remove();
+        // 不再创建页面内按钮，只使用底部栏的全局 Submit 按钮
+    },
+    ensureSuiteButtonsForAll() {
+        (Object.keys(this.templates.content || {})).forEach(id => this.ensureSuiteSubmitButton(id));
+    },
+    cacheElements() {
+        const $ = s => document.querySelector(s);
+        this.el = { 
+            body: $('body'), mainShell: $('#main-shell'), leftPane: $('#left-pane'), 
+            allPanes: [$('#left-pane'), $('#right-pane'), $('#notes')], 
+            submitBtn: $('#submit-btn'), resetBtn: $('#reset-btn'), 
+            audioContainer: $('#audio-player-container'), pagesContainer: $('#test-pages-container'), 
+            transcriptContainer: $('#transcript-content'), pillsContainer: $('#part-pills'), 
+            bottomBar: $('.bottom-bar'),
+            notes: $('#notes'), notesCloseBtn: $('#notes-close'), notesList: $('#notes-list'), 
+            selbar: $('#selbar'), settingsPanel: $('#settings-panel'),
+            submitAllBtn: $('#submit-all-btn'),
+            cleanBtn: $('#clean-btn'),
+            historyBtn: $('#history-btn'),
+            confirmDialog: {
+                overlay: $('#confirm-dialog-overlay'),
+                msg: $('#confirm-dialog-msg'),
+                yes: $('#confirm-dialog-yes'),
+                no: $('#confirm-dialog-no')
+            },
+            historyPanel: {
+                overlay: $('#history-panel-overlay'),
+                title: $('#history-title'),
+                list: $('#history-list'),
+                cleanBtn: $('#history-clean-btn')
+            },
+            cleanHistoryDialog: {
+                overlay: $('#clean-history-dialog-overlay'),
+                cleanCurrentBtn: $('#clean-current-btn'),
+                cleanAllBtn: $('#clean-all-btn'),
+                cancelBtn: $('#clean-cancel-btn')
+            }
+        };
+    },
+    buildLayout() {
+        const audioContainer = document.getElementById('audio-player-container'), pagesContainer = document.getElementById('test-pages-container'), transcriptContainer = document.getElementById('transcript-content'), pillsContainer = document.getElementById('part-pills');
+        let audioHTML = '', pagesHTML = '', transcriptHTML = '', pillsHTML = '';
+        for (const [id, data] of Object.entries(this.templates.content)) {
+            const pageNum = id.replace('page-test', '');
+            const suiteId = `set${pageNum}`;
+            audioHTML += `<div class="audio-player-wrapper" id="audio-${id}"><div class="audio-player">
+                <span class="timer-display-box" role="button">00:00</span>
+                <button class="play-pause-btn">&#9658;</button>
+                <div class="progress-container"><div class="progress-bar-wrapper"><div class="progress-bar"></div></div></div>
+                <div class="time-display">00:00 / 00:00</div>
+                <div class="speed-control"><select class="custom-select"><option value="0.5">0.5x</option><option value="0.75">0.75x</option><option value="0.9">0.9x</option><option value="1.0" selected>1.0x</option><option value="1.25">1.25x</option><option value="1.5">1.5x</option><option value="1.7">1.7x</option><option value="2.0">2.0x</option></select></div>
+                <button data-action="toggle-settings" class="top-bar-button">Settings</button>
+                <button data-action="toggle-notes" class="top-bar-button">Notes</button>
+                <audio class="listening-audio" src="${data.audioSrc}" preload="metadata"></audio>
+            </div></div>`;
+            pagesHTML += `<div class="test-page" id="${id}" data-suite-id="${suiteId}">${data.questions}</div>`;
+            transcriptHTML += `<div class="transcript-page" id="transcript-${id}"><h4>Transcript: T${pageNum} ${data.title}</h4><ol style="counter-reset: item-counter ${data.startNum - 1};">${data.transcript}</ol><p>&nbsp;</p><p>&nbsp;</p></div>`;
+            pillsHTML += `<div class="pill" data-target="${id}">T${pageNum}</div>`;
+        }
+        audioContainer.innerHTML = audioHTML; pagesContainer.innerHTML = pagesHTML; transcriptContainer.innerHTML = transcriptHTML; pillsContainer.innerHTML = pillsHTML;
+    },
+    bindEvents() {
+        this.el.pillsContainer.addEventListener('click', e => { 
+            if (!e.target.classList.contains('pill')) return;
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            
+            const current = document.querySelector('.test-page.active');
+            if (current) {
+                window.inputCache[current.id] = [];
+                current.querySelectorAll('input[type="text"]').forEach((input, i) => {
+                    window.inputCache[current.id][i] = input.value;
+                });
+            }
+            
+            const targetId = e.target.dataset.target;
+            document.querySelectorAll('.test-page, .audio-player-wrapper, .transcript-page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+            
+            document.getElementById(targetId).classList.add('active');
+            document.getElementById(`audio-${targetId}`).classList.add('active');
+            e.target.classList.add('active');
+            
+            localStorage.setItem('lastActivePage', targetId);
+
+            
+            const testPrefix = `t${targetId.replace('page-test', '')}`;
+
+            
+            const isFinished = this.state.finishedSections.has(testPrefix);
+
+            
+            this.el.mainShell.classList.toggle('split-view', isFinished);
+
+            
+            if (isFinished) {
+
+            
+                document.getElementById(`transcript-${targetId}`)?.classList.add('active');
+
+            
+            }
+
+            
+            const activeAudioWrapper = document.getElementById(`audio-${targetId}`);
+
+            
+            this.el.activeTimer = activeAudioWrapper ? activeAudioWrapper.querySelector('.timer-display-box') : null;
+
+            
+            if (this.el.submitBtn) this.el.submitBtn.disabled = isFinished;
+            
+            setTimeout(() => {
+                if (window.inputCache[targetId]) {
+                    document.getElementById(targetId).querySelectorAll('input[type="text"]').forEach((input, i) => {
+                        if (window.inputCache[targetId][i]) {
+                            input.value = window.inputCache[targetId][i];
+                        }
+                    });
+                }
+            }, 10);
+        });
+        // 使用事件委托监听套题提交按钮
+        this.el.pagesContainer.addEventListener('click', e => {
+            const submitBtn = e.target.closest('[data-submit-suite]');
+            if (submitBtn) {
+                const suiteId = submitBtn.dataset.submitSuite;
+                this.finishSuite(suiteId);
+            }
+        });
+        this.el.resetBtn.addEventListener('click', () => { this.showConfirm('确认重置当前练习吗？所有进度将丢失。', () => this.clearCurrentSectionState(true)); });
+        
+        this.el.audioContainer.addEventListener('click', e => {
+            const target = e.target;
+            if (target.classList.contains('timer-display-box')) this.togglePause();
+            if (target.dataset.action === 'toggle-settings') {
+                this.el.settingsPanel.classList.toggle('active');
+                if(this.el.settingsPanel.classList.contains('active')) {
+                    const rect = target.getBoundingClientRect();
+                    this.el.settingsPanel.style.top = `${rect.bottom + 8}px`;
+                    this.el.settingsPanel.style.right = `${window.innerWidth - rect.right}px`;
+                    this.el.settingsPanel.style.left = 'auto';
+                }
+            }
+            if (target.dataset.action === 'toggle-notes') this.notes.toggle();
+        });
+
+        document.addEventListener('click', e => {
+            const settingsBtn = e.target.closest('[data-action="toggle-settings"]');
+            if (!this.el.settingsPanel.contains(e.target) && !settingsBtn) {
+                this.el.settingsPanel.classList.remove('active');
+            }
+        });
+
+        this.el.settingsPanel.addEventListener('click', e => {
+            const button = e.target.closest('button');
+            if (!button) return;
+            const size = button.dataset.size;
+            const mode = button.dataset.mode;
+            if (size) {
+                this.el.body.classList.remove('font-regular', 'font-large', 'font-xlarge');
+                this.el.body.classList.add(`font-${size}`);
+                document.querySelectorAll('#font-size-group button').forEach(b => b.classList.remove('selected'));
+                button.classList.add('selected');
+            }
+            if (mode) {
+                this.el.body.classList.toggle('dark-mode', mode === 'dark');
+                document.querySelectorAll('#color-mode-group button').forEach(b => b.classList.remove('selected'));
+                button.classList.add('selected');
+            }
+        });
+
+        this.el.notesCloseBtn.addEventListener('click', () => this.notes.toggle(false));
+        document.addEventListener('mouseup', e => this.highlighter.handleMouseUp(e));
+        this.el.selbar.addEventListener('click', e => this.highlighter.handleAction(e));
+        
+        this.el.notesList.addEventListener('click', e => {
+            const delBtn = e.target.closest('button[data-act="del-note"]');
+            if (delBtn) {
+                const card = delBtn.closest('.note-card');
+                if (card) {
+                    const hid = card.dataset.hid;
+                    if (hid) {
+                        const elToUnwrap = document.querySelector(`span[data-hid="${hid}"]`);
+                        if (elToUnwrap) App.highlighter.unWrap(elToUnwrap);
+                    }
+                    card.remove();
+                }
+                return; 
+            }
+
+            const card = e.target.closest('.note-card');
+            if (card && e.target.closest('.note-quote')) {
+                const hid = card.dataset.hid;
+                if (hid) {
+                    const targetHighlight = document.querySelector(`span[data-hid="${hid}"]`);
+                    if (targetHighlight) {
+                        targetHighlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        targetHighlight.style.transition = 'background-color 0.2s';
+                        targetHighlight.style.backgroundColor = '#fecaca';
+                        setTimeout(() => { targetHighlight.style.backgroundColor = ''; }, 1200);
+                    }
+                }
+            }
+        });
+        
+        window.addEventListener('resize', () => this.applySafeArea());
+    
+        const dialog = this.el.confirmDialog;
+        dialog.yes.addEventListener('click', () => { if (this.state.confirmCallback) this.state.confirmCallback(); this.hideConfirm(); });
+        dialog.no.addEventListener('click', () => this.hideConfirm());
+        dialog.overlay.addEventListener('click', (e) => { if (e.target === dialog.overlay) this.hideConfirm(); });
+        this.el.submitAllBtn.addEventListener('click', () => this.showConfirm('确认提交全部套题吗?', () => this.submitAllSuites()));
+        this.el.cleanBtn.addEventListener('click', () => this.showConfirm('确认清除当前练习的存档吗?', () => this.clearCurrentSectionState(false)));
+
+        this.el.historyBtn.addEventListener('click', () => this.history.open());
+        this.el.historyPanel.overlay.addEventListener('click', (e) => { if(e.target.id === 'history-panel-overlay') this.history.close(); });
+        this.el.historyPanel.list.addEventListener('click', e => {
+            const summary = e.target.closest('.history-summary');
+            if (summary && !e.target.closest('.history-item-delete-btn')) {
+                const details = summary.nextElementSibling;
+                details.classList.toggle('visible');
+            }
+            const deleteBtn = e.target.closest('.history-item-delete-btn');
+            if (deleteBtn) {
+                const timestamp = deleteBtn.dataset.timestamp;
+                this.showConfirm('确认删除此条历史记录吗?', () => this.history.delete(timestamp));
+            }
+        });
+
+        const cleanDialog = this.el.cleanHistoryDialog;
+        this.el.historyPanel.cleanBtn.addEventListener('click', () => cleanDialog.overlay.classList.add('visible'));
+        cleanDialog.cancelBtn.addEventListener('click', () => cleanDialog.overlay.classList.remove('visible'));
+        cleanDialog.overlay.addEventListener('click', (e) => { if(e.target === cleanDialog.overlay) cleanDialog.overlay.classList.remove('visible'); });
+        cleanDialog.cleanCurrentBtn.addEventListener('click', () => this.history.cleanCurrent());
+        cleanDialog.cleanAllBtn.addEventListener('click', () => this.history.cleanAll());
+    },
+    showConfirm(message, onConfirm) {
+        this.el.confirmDialog.msg.textContent = message;
+        this.state.confirmCallback = onConfirm;
+        this.el.confirmDialog.overlay.classList.add('visible');
+    },
+    hideConfirm() {
+        this.el.confirmDialog.overlay.classList.remove('visible');
+        this.state.confirmCallback = null;
+    },
+    loadGlobalState() {},
+
+    snapshotActivePage() {
+        const activePage = this.el.pagesContainer.querySelector('.test-page.active');
+        if (!activePage) return;
+
+        // 将当前输入值写回 DOM 属性，避免切页时被 innerHTML 丢失
+        activePage.querySelectorAll('input[type="text"]').forEach(input => {
+            input.setAttribute('value', input.value);
+        });
+        activePage.querySelectorAll('textarea').forEach(textarea => {
+            textarea.innerHTML = textarea.value;
+        });
+
+        const pageId = activePage.id;
+        const transcriptPage = document.getElementById(`transcript-${pageId}`);
+        this.state.pageSnapshots.set(pageId, {
+            pageHTML: activePage.innerHTML,
+            transcriptHTML: transcriptPage ? transcriptPage.innerHTML : '',
+            notesHTML: this.el.notesList.innerHTML
+        });
+    },
+
+    restorePage(pageId) {
+        const snapshot = this.state.pageSnapshots.get(pageId);
+        if (!snapshot) return false;
+        const testPage = document.getElementById(pageId);
+        const transcriptPage = document.getElementById(`transcript-${pageId}`);
+        if (!testPage || !transcriptPage) return false;
+        testPage.innerHTML = snapshot.pageHTML;
+        transcriptPage.innerHTML = snapshot.transcriptHTML;
+        this.el.notesList.innerHTML = snapshot.notesHTML;
+        return true;
+    },
+
+    clearCurrentSectionState(isResetButton) {
+        const activePage = this.el.pagesContainer.querySelector('.test-page.active');
+        if (!activePage) return;
+        const pageId = activePage.id;
+        const testPrefix = `t${pageId.replace('page-test', '')}`;
+        this.state.finishedSections.delete(testPrefix);
+        this.state.pageInitialized.delete(testPrefix);
+        this.state.pageSnapshots.delete(pageId);
+
+        const template = this.templates.content[pageId];
+        if (template) {
+            activePage.innerHTML = template.questions;
+            const transcript = document.getElementById(`transcript-${pageId}`);
+            if (transcript) {
+                transcript.innerHTML = `<h4>Transcript: T${pageId.replace('page-test','')} ${template.title}</h4><ol style="counter-reset: item-counter ${template.startNum - 1};">${template.transcript}</ol><p>&nbsp;</p><p>&nbsp;</p>`;
+            }
+            this.el.notesList.innerHTML = '';
+        }
+
+        if (isResetButton) location.reload();
+        else this.showPage(pageId);
+    },
+
+    showPage(pageId) {
+        this.snapshotActivePage();
+        this.notes.toggle(false);
+        this.highlighter.hideSelbar();
+        document.querySelectorAll('.listening-audio').forEach(audio => audio.pause());
+
+        const resolvedPageId = (this.templates.content && this.templates.content[pageId]) ? pageId : this.getDefaultPageId();
+        if (!resolvedPageId) return;
+
+        const testPrefix = `t${resolvedPageId.replace('page-test', '')}`;
+        const testPage = document.getElementById(resolvedPageId);
+        const transcriptPage = document.getElementById(`transcript-${resolvedPageId}`);
+        if (!testPage || !transcriptPage) return;
+
+        const savedStateJSON = null;
+        const hasSavedState = !!savedStateJSON;
+        this.el.cleanBtn.classList.toggle('has-save', hasSavedState);
+
+        if (!this.state.pageInitialized.has(testPrefix) && savedStateJSON) {
+            try {
+                const state = JSON.parse(savedStateJSON);
+                testPage.innerHTML = state.pageHTML;
+                transcriptPage.innerHTML = state.transcriptHTML;
+                this.el.notesList.innerHTML = state.notesHTML;
+                if (state.isFinished) this.state.finishedSections.add(testPrefix);
+                else this.state.finishedSections.delete(testPrefix);
+            } catch (error) {
+                console.warn('恢复存档失败', error);
+            }
+            this.state.pageInitialized.add(testPrefix);
+        } else if (!this.state.pageInitialized.has(testPrefix)) {
+            this.state.pageInitialized.add(testPrefix);
+        } else {
+            this.restorePage(resolvedPageId);
+        }
+
+        document.querySelectorAll('.test-page, .audio-player-wrapper, .transcript-page').forEach(p => p.classList.remove('active'));
+        this.ensureSuiteSubmitButton(resolvedPageId);
+        testPage.classList.add('active');
+        const activeAudioWrapper = document.getElementById(`audio-${resolvedPageId}`);
+        if (activeAudioWrapper) {
+            activeAudioWrapper.classList.add('active');
+            this.el.activeTimer = activeAudioWrapper.querySelector('.timer-display-box');
+        } else {
+            this.el.activeTimer = null;
+        }
+
+        document.querySelectorAll('.pill').forEach(p => p.classList.toggle('active', p.dataset.target === resolvedPageId));
+        localStorage.setItem('lastActivePage', resolvedPageId);
+        const isFinished = this.state.finishedSections.has(testPrefix);
+        this.el.submitBtn.disabled = isFinished;
+        this.el.mainShell.classList.toggle('split-view', isFinished);
+        if (isFinished) document.getElementById(`transcript-${resolvedPageId}`)?.classList.add('active');
+    },
+    startTimer() {
+        if (this.state.timerInterval) clearInterval(this.state.timerInterval);
+        this.state.timerSecs = 0;
+        const updateTimerDisplay = () => {
+            if (!this.el.activeTimer) return;
+            const m = String(Math.floor(this.state.timerSecs / 60)).padStart(2, '0');
+            const s = String(this.state.timerSecs % 60).padStart(2, '0');
+            this.el.activeTimer.textContent = `${m}:${s}`;
+        };
+        updateTimerDisplay();
+        this.state.timerInterval = setInterval(() => { if (!this.state.paused) { this.state.timerSecs++; updateTimerDisplay(); } }, 1000);
+    },
+    togglePause() {
+        if (!this.el.activeTimer) return;
+        this.state.paused = !this.state.paused;
+        this.el.activeTimer.classList.toggle('timer-paused', this.state.paused);
+    },
+
+    submitCurrentSuite() {
+        const activePage = document.querySelector('.test-page.active');
+        if (!activePage) return;
+        const suiteId = activePage.dataset.suiteId;
+        if (suiteId) this.finishSuite(suiteId);
+    },
+
+    submitAllSuites() {
+        if (this.state && this.state.submittingAll) return;
+        const suiteIds = Array.from(document.querySelectorAll('.test-page[data-suite-id]'))
+            .map(page => page.dataset.suiteId)
+            .filter(Boolean);
+
+        if (!suiteIds.length) return;
+
+        if (this.state) this.state.submittingAll = true;
+        if (this.el && this.el.submitAllBtn) {
+            this.el.submitAllBtn.disabled = true;
+        }
+
+        suiteIds.forEach(id => this.finishSuite(id));
+
+        if (this.el && this.el.submitAllBtn) {
+            this.el.submitAllBtn.disabled = false;
+        }
+        if (this.state) this.state.submittingAll = false;
+    },
+
+    finishSuite(suiteId) {
+        // 通过 suiteId 找到对应的 test-page
+        const suitePage = document.querySelector(`[data-suite-id="${suiteId}"]`);
+        if (!suitePage) return;
+        
+        const pageId = suitePage.id;
+        const testPrefix = `t${pageId.replace('page-test', '')}`
+        if (this.state.finishedSections.has(testPrefix)) return;
+        
+        let tableHTML = `<table class="results-table"><thead><tr><th>Q</th><th>Your Answer</th><th>Correct Answer</th><th>Result</th></tr></thead><tbody>`;
+        const questionLabels = Array.from(suitePage.querySelectorAll('.fill-in-question b'));
+        let processedInputs = new Set();
+        const allAnswers = [];
+
+        questionLabels.forEach(label => {
+            const questionText = label.textContent.replace('.', '');
+            const parentP = label.closest('.fill-in-question');
+            const inputsForLabel = Array.from(parentP.querySelectorAll('input[type="text"]'));
+            if (inputsForLabel.length === 0 || processedInputs.has(inputsForLabel[0])) return;
+            
+            let userAnswers = [], correctAnswers = [], isCorrectArray = [];
+            
+            inputsForLabel.forEach(input => {
+                processedInputs.add(input);
+                const userAnswer = input.value.trim();
+                const correctAnswer = this.answerKey[input.name] || '';
+                userAnswers.push(userAnswer);
+                correctAnswers.push(correctAnswer);
+                const isCorrect = userAnswer !== '' && (userAnswer.toLowerCase().replace(/[\s\$\-€£,\.]/g, '') === correctAnswer.toLowerCase().replace(/[\s\$\-€£,\.]/g, ''));
+                
+                input.classList.add(isCorrect ? 'correct' : 'error');
+                isCorrectArray.push(isCorrect);
+                input.disabled = true;
+            });
+            
+            const isAllCorrectForLabel = isCorrectArray.every(Boolean);
+            allAnswers.push({ q: questionText, user: userAnswers.join(' / '), correct: correctAnswers.join(' / '), isCorrect: isAllCorrectForLabel });
+
+            const resultClass = isAllCorrectForLabel ? 'result-correct' : 'result-incorrect';
+            const resultIcon = isAllCorrectForLabel ? '✓' : '✗';
+            tableHTML += `<tr><td><b>${questionText}</b></td><td class="your-answer">${userAnswers.map(ua => ua || '<i class="no-answer">No Answer</i>').join(' / ')}</td><td>${correctAnswers.join(' / ')}</td><td class="${resultClass}">${resultIcon}</td></tr>`;
+        });
+        tableHTML += `</tbody></table>`;
+        
+        const totalQuestions = allAnswers.length;
+        const correctQuestions = allAnswers.filter(a => a.isCorrect).length;
+        const percentage = totalQuestions > 0 ? ((correctQuestions / totalQuestions) * 100).toFixed(0) : 0;
+        
+        const summaryHTML = `<div class="results-summary"><span>Score: ${correctQuestions} / ${totalQuestions}</span><span>Accuracy: ${percentage}%</span></div>`;
+        const resultsContainer = suitePage.querySelector('.results-in-page');
+        if(resultsContainer) {
+            resultsContainer.innerHTML = `<div class="results-container">${summaryHTML}${tableHTML}</div>`;
+            if (suitePage.classList.contains('active')) {
+                setTimeout(() => {
+                    resultsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100);
+            }
+        }
+
+        this.state.finishedSections.add(testPrefix);
+        
+        // 禁用该套题的提交按钮
+        const submitBtn = suitePage.querySelector('[data-submit-suite]');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Submitted';
+            submitBtn.style.opacity = '0.6';
+            submitBtn.style.cursor = 'not-allowed';
+        }
+
+        const isActiveSuite = suitePage.classList.contains('active');
+        if (isActiveSuite) {
+            this.el.mainShell.classList.add('split-view');
+            document.querySelectorAll('.transcript-page').forEach(p => p.classList.remove('active'));
+            document.getElementById(`transcript-${pageId}`)?.classList.add('active');
+            if (this.el.submitBtn) this.el.submitBtn.disabled = true;
+        }
+        
+        this.history.add(testPrefix, { score: correctQuestions, total: totalQuestions, accuracy: percentage, answers: allAnswers });
+        
+        // 检查是否所有套题都已完成
+        this.checkAllSuitesCompleted();
+    },
+    checkAllSuitesCompleted() {
+        const total = Object.keys(this.templates.content || {}).length;
+        if (total && this.state.finishedSections.size >= total) {
+            console.log('[PracticePage] 所有套题已提交');
+        }
+    },
+    applySafeArea() {
+        // The spacer div in the HTML is a more robust solution for the bottom bar issue.
+        // This function can be kept for future safe-area implementations (e.g., iPhone notches).
+    },
+    notes: {
+        toggle(forceOpen) {
+            const shouldOpen = forceOpen === undefined ? !document.body.classList.contains('notes-open') : forceOpen;
+            document.body.classList.toggle('notes-open', shouldOpen);
+        },
+        create(targetSpan) { if (!targetSpan) return; const hid = targetSpan.dataset.hid || `h_${Date.now()}`; targetSpan.dataset.hid = hid; const existed = App.el.notesList.querySelector(`.note-card[data-hid="${hid}"]`); if (existed) { this.toggle(true); existed.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); return; } const text = (targetSpan.textContent || '').trim(); const card = document.createElement('div'); card.className = 'note-card'; card.dataset.hid = hid; card.innerHTML = `<div class="note-quote">${text || '(empty)'}</div><textarea placeholder="..."></textarea><div class="note-actions"><button type="button" data-act="del-note">Delete</button></div>`; App.el.notesList.prepend(card); this.toggle(true); }
+    },
+    highlighter: {
+        unWrap(el) { if (el && el.parentNode) { const p = el.parentNode; while (el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); } }, hideSelbar() { if (App.el && App.el.selbar) App.el.selbar.hidden = true; }, positionToolbar(rect, w) { let left = rect.left + rect.width / 2 - w / 2; App.el.selbar.style.left = `${window.scrollX + left}px`; App.el.selbar.style.top = `${window.scrollY + rect.top}px`; App.el.selbar.style.transform = 'translateY(-100%) translateY(-8px)'; },
+        handleMouseUp(e) { if (e.target.closest('#selbar, #notes, .bottom-bar, #settings-panel, .dialog-overlay, #history-panel-overlay')) return; const clickedHl = e.target.closest('.hl,.hl-blue'); const s = window.getSelection(); App.el.selbar.targetElement = null; if (clickedHl && s.isCollapsed) { s.removeAllRanges(); App.el.selbar.querySelector('[data-act="hl"]').hidden = true; App.el.selbar.querySelector('[data-act="note"]').hidden = false; App.el.selbar.querySelector('[data-act="del"]').hidden = false; App.el.selbar.hidden = false; this.positionToolbar(clickedHl.getBoundingClientRect(), App.el.selbar.offsetWidth); App.el.selbar.targetElement = clickedHl; } else if (s && !s.isCollapsed) { const r = s.getRangeAt(0); if (!r.toString().trim()) return; const rect = r.getBoundingClientRect(); if (!rect || (!rect.width && !rect.height)) return this.hideSelbar(); App.el.selbar.querySelector('[data-act="hl"]').hidden = false; App.el.selbar.querySelector('[data-act="note"]').hidden = false; App.el.selbar.querySelector('[data-act="del"]').hidden = true; App.el.selbar.hidden = false; this.positionToolbar(rect, App.el.selbar.offsetWidth); } else { this.hideSelbar(); } },
+        handleAction(e) {
+            const act = e.target.closest('button')?.dataset.act;
+            if (!act) return;
+            if (act === 'hl' || act === 'note') {
+                const s = window.getSelection();
+                if (!s || s.isCollapsed) return;
+                const r = s.getRangeAt(0);
+                const span = document.createElement('span');
+                span.className = act === 'hl' ? 'hl' : 'hl-blue';
+                try { r.surroundContents(span); } catch { span.appendChild(r.extractContents()); r.insertNode(span); }
+                if (act === 'note') { span.dataset.hid = `h_${Date.now()}`; App.notes.create(span); }
+                if (window.getSelection) { window.getSelection().removeAllRanges(); } else if (document.selection) { document.selection.empty(); }
+            } else if (act === 'del' && App.el.selbar.targetElement) { this.unWrap(App.el.selbar.targetElement); }
+            this.hideSelbar();
+        }
+    },
+    AudioPlayer: {
+        init() {
+            document.getElementById('audio-player-container').addEventListener('click', e => {
+                const playerWrapper = e.target.closest('.audio-player-wrapper');
+                if (!playerWrapper) return;
+                const audio = playerWrapper.querySelector('.listening-audio');
+                if (e.target.classList.contains('play-pause-btn')) {
+                    document.querySelectorAll('.listening-audio').forEach(a => { if(a !== audio) a.pause(); });
+                    audio.paused ? audio.play() : audio.pause();
+                } else if (e.target.closest('.progress-bar-wrapper')) {
+                     if(audio.duration) {
+                        const pCont = playerWrapper.querySelector('.progress-bar-wrapper');
+                        const rect = pCont.getBoundingClientRect();
+                        audio.currentTime = ((e.clientX - rect.left) / rect.width) * audio.duration;
+                    }
+                }
+            });
+            document.getElementById('audio-player-container').addEventListener('change', e => {
+                const playerWrapper = e.target.closest('.audio-player-wrapper');
+                if (!playerWrapper || !e.target.classList.contains('custom-select')) return;
+                const audio = playerWrapper.querySelector('.listening-audio');
+                audio.playbackRate = parseFloat(e.target.value);
+            });
+            const format = t => { if(isNaN(t)) return "00:00"; const m=Math.floor(t/60),s=Math.floor(t%60); return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`; };
+            const updateAudioUI = (audio) => {
+                const playerWrapper = audio.closest('.audio-player-wrapper');
+                if (!playerWrapper) return;
+                const progress = playerWrapper.querySelector('.progress-bar');
+                const time = playerWrapper.querySelector('.time-display');
+                const btn = playerWrapper.querySelector('.play-pause-btn');
+                if(audio.duration) {
+                    progress.style.width = `${(audio.currentTime/audio.duration)*100}%`;
+                    time.textContent = `${format(audio.currentTime)} / ${format(audio.duration)}`;
+                }
+                btn.innerHTML = audio.paused ? '&#9658;' : '&#10074;&#10074;';
+            };
+            
+            setInterval(() => {
+                const activeAudio = document.querySelector('.audio-player-wrapper.active .listening-audio');
+                if (activeAudio) updateAudioUI(activeAudio);
+            }, 500);
+        }
+    },
+    Splitter: {
+        init() { const splitter = document.getElementById('splitter'), left = document.getElementById('left-pane'), right = document.getElementById('right-pane'); let drag = false; splitter.addEventListener('mousedown', () => { drag = true; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; }); window.addEventListener('mouseup', () => { drag = false; document.body.style.cursor = 'default'; document.body.style.userSelect = 'auto'; }); window.addEventListener('mousemove', e => { if (!drag) return; const total = left.parentElement.offsetWidth, newLeft = e.clientX, newRight = total - newLeft - splitter.offsetWidth; if (newLeft > 200 && newRight > 200) { left.style.flexBasis = `${newLeft}px`; right.style.flexBasis = `${newRight}px`; } }); },
+        initNotes() { const splitter = document.getElementById('notes-splitter'), shell = document.querySelector('.shell'), notes = document.getElementById('notes'); let drag = false; splitter.addEventListener('mousedown', () => { drag = true; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; }); window.addEventListener('mouseup', () => { drag = false; document.body.style.cursor = 'default'; document.body.style.userSelect = 'auto'; }); window.addEventListener('mousemove', e => { if (!drag) return; const total = document.querySelector('.app-wrapper').offsetWidth; const newNotesWidth = total - e.clientX; if (newNotesWidth > 200 && newNotesWidth < total - 300) { notes.style.flexBasis = `${newNotesWidth}px`; } }); }
+    },
+    history: {
+        getTestPrefix() {
+            const activePage = document.querySelector('.test-page.active');
+            if (!activePage) return null;
+            return `t${activePage.id.replace('page-test', '')}`;
+        },
+        load(testPrefix) { const data = localStorage.getItem(`ieltsHistory-${testPrefix}`); return data ? JSON.parse(data) : []; },
+        save(testPrefix, historyData) { localStorage.setItem(`ieltsHistory-${testPrefix}`, JSON.stringify(historyData)); },
+        add(testPrefix, result) { const historyData = this.load(testPrefix); const entry = { timestamp: Date.now(), ...result }; historyData.unshift(entry); this.save(testPrefix, historyData); },
+        delete(timestamp) {
+            const testPrefix = this.getTestPrefix();
+            if (!testPrefix || !timestamp) return;
+            let historyData = this.load(testPrefix);
+            historyData = historyData.filter(item => item.timestamp !== parseInt(timestamp));
+            this.save(testPrefix, historyData);
+            this.open();
+        },
+        open() {
+            const testPrefix = this.getTestPrefix();
+            if (!testPrefix) return;
+            const historyData = this.load(testPrefix);
+            const listEl = App.el.historyPanel.list;
+            App.el.historyPanel.title.textContent = `History for T${testPrefix.replace('t','')}`;
+            listEl.innerHTML = '';
+            if (historyData.length === 0) {
+                listEl.innerHTML = '<p style="text-align: center; color: #6b7280;">No history for this test yet.</p>';
+            } else {
+                historyData.forEach(item => {
+                    const date = new Date(item.timestamp).toLocaleString();
+                    const answersHTML = `<table class="mistake-table">
+                        <thead><tr><th>Q</th><th>Your Answer</th><th>Correct Answer</th></tr></thead>
+                        <tbody>
+                            ${(item.answers || []).map(ans => `
+                                <tr>
+                                    <td><b>${ans.q}</b></td>
+                                    <td class="${ans.isCorrect ? 'result-correct' : 'result-incorrect'}">${ans.user || '<i>empty</i>'}</td>
+                                    <td>${ans.correct}</td>
+                                </tr>`).join('')}
+                        </tbody>
+                    </table>`;
+                    listEl.innerHTML += `<div class="history-item"><div class="history-summary"><div><strong>${date}</strong><br><span>Score: ${item.score}/${item.total} (${item.accuracy}%)</span></div><button class="history-item-delete-btn" data-timestamp="${item.timestamp}">&times;</button></div><div class="history-details">${answersHTML}</div></div>`;
+                });
+            }
+            App.el.historyPanel.overlay.classList.add('visible');
+        },
+        close() { App.el.historyPanel.overlay.classList.remove('visible'); },
+        cleanCurrent() {
+            const testPrefix = this.getTestPrefix();
+            if (!testPrefix) return;
+            this.save(testPrefix, []);
+            this.open();
+            App.el.cleanHistoryDialog.overlay.classList.remove('visible');
+        },
+        cleanAll() {
+            for (let i = 1; i <= 8; i++) {
+                localStorage.removeItem(`ieltsHistory-t${i}`);
+            }
+            this.open(); // Refresh current view
+            App.el.cleanHistoryDialog.overlay.classList.remove('visible');
+        }
+    },
+    
+    populateContent() {
+        this.templates.content = {
+          'page-test31':{title:'Concert Enquiry', startNum:1, dates:'(2021.12.18/2018.8.18)', audioSrc:'./part1.31.Concert Enquiry.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T31: Concert Enquiry</h4><p class="date-info">(2021.12.18/2018.8.18)</p></div><p class="fill-in-question"><b>1.</b> ...next month gathering ins in <input type="text" name="t31_q1"></p><p class="fill-in-question"><b>2.</b> Children whose age under <input type="text" name="t31_q2"> will be free of charge</p><p class="fill-in-question"><b>3.</b> Venue of the city: <input type="text" name="t31_q3"></p><p class="fill-in-question"><b>4.</b> type: combined <input type="text" name="t31_q4"></p><p class="fill-in-question"><b>5.</b> problem they had: <input type="text" name="t31_q5"></p><p class="fill-in-question"><b>6.</b> It is important to bring a <input type="text" name="t31_q6"></p><p class="fill-in-question"><b>7.</b> When does the camp open: <input type="text" name="t31_q7"></p><p class="fill-in-question"><b>8.</b> Children can take part in a concert with <input type="text" name="t31_q8"></p></div><div class="results-in-page" id="results-page-test31"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">1.</span><span>...next month gathering ins in <strong>June</strong>;</span></li><li class="translation"><span></span><span>下个月的聚会在六月。</span></li><li><span class="num">2.</span><span>Children whose age under <strong>12</strong> will be free of charge.</span></li><li class="translation"><span></span><span>12岁以下的儿童将免费。</span></li><li><span class="num">3.</span><span>Venue of the city: <strong>Danlson</strong>, that's D-A-L-S-O-N.</span></li><li class="translation"><span></span><span>城市地点：丹尔森。</span></li><li><span class="num">4.</span><span>type: combined <strong>ticket</strong>.</span></li><li class="translation"><span></span><span>类型：组合票。</span></li><li><span class="num">5.</span><span>problem they had: <strong>headaches</strong>.</span></li><li class="translation"><span></span><span>他们遇到的问题：头痛。</span></li><li><span class="num">6.</span><span>It is important to bring a <strong>light</strong>.</span></li><li class="translation"><span></span><span>带上灯很重要。</span></li><li><span class="num">7.</span><span>When does the camp open: <strong>Thursday</strong>.</span></li><li class="translation"><span></span><span>营地何时开放：星期四。</span></li><li><span class="num">8.</span><span>Children can take part in a concert with <strong>musicians</strong>.</span></li><li class="translation"><span></span><span>孩子们可以和音乐家一起参加音乐会。</span></li>`},
+          'page-test32':{title:'Amateur Drama Society', startNum:1, dates:'(2022.4.23/2012.9.22)', audioSrc:'./part1.32.Amateur Drama Society.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T32: Amateur Drama Society</h4><p class="date-info">(2022.4.23/2012.9.22)</p></div><p class="fill-in-question"><b>1.</b> Rehearsal address: <input type="text" name="t32_q1"> house</p><p class="fill-in-question"><b>2.</b> want: <input type="text" name="t32_q2"> actors and singers (no experience required)</p><p class="fill-in-question"><b>3.</b> Transportation: shuttle services (need someone who is able to <input type="text" name="t32_q3">)</p><p class="fill-in-question"><b>4.</b> close time: during <input type="text" name="t32_q4"></p><p class="fill-in-question"><b>5.</b> meeting time: 6:00-8:00pm every <input type="text" name="t32_q5"></p><p class="fill-in-question"><b>6.</b> membership fee including <input type="text" name="t32_q6"></p><p class="fill-in-question"><b>7.</b> $<input type="text" name="t32_q7"> for retired or unemployed members (over 60 years)</p><p class="fill-in-question"><b>8.</b> minimum joining age: <input type="text" name="t32_q8"></p><p class="fill-in-question"><b>9.</b> <input type="text" name="t32_q9"> authors looking for new experiences to write about in their books</p><p class="fill-in-question"><b>10.</b> The children's <input type="text" name="t32_q10"> will get the money raised by the annual dinner.</p></div><div class="results-in-page" id="results-page-test32"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">1.</span><span>Rehearsal address: <strong>club</strong> house.</span></li><li class="translation"><span></span><span>排练地址：俱乐部。</span></li><li><span class="num">2.</span><span>want: <strong>male</strong> actors and singers (no experience required).</span></li><li class="translation"><span></span><span>招聘：男演员和歌手（无需经验）。</span></li><li><span class="num">3.</span><span>Transportation: shuttle services (need someone who is able to <strong>drive</strong>).</span></li><li class="translation"><span></span><span>交通：班车服务（需要会开车的人）。</span></li><li><span class="num">4.</span><span>close time: during <strong>August</strong>.</span></li><li class="translation"><span></span><span>关闭时间：八月期间。</span></li><li><span class="num">5.</span><span>meeting time: 6:00-8:00pm every <strong>Tuesday</strong>.</span></li><li class="translation"><span></span><span>会议时间：每周二下午6点至8点。</span></li><li><span class="num">6.</span><span>membership fee including <strong>dinner</strong>.</span></li><li class="translation"><span></span><span>会员费包含晚餐。</span></li><li><span class="num">7.</span><span>$<strong>25</strong> for retired or unemployed members (over 60 years).</span></li><li class="translation"><span></span><span>退休或失业会员（60岁以上）25美元。</span></li><li><span class="num">8.</span><span>minimum joining age: <strong>16</strong>.</span></li><li class="translation"><span></span><span>最低加入年龄：16岁。</span></li><li><span class="num">9.</span><span><strong>modern</strong> authors looking for new experiences to write about in their books.</span></li><li class="translation"><span></span><span>寻找新体验来写作的现代作家。</span></li><li><span class="num">10.</span><span>The children's <strong>hospital</strong> will get the money raised by the annual dinner.</span></li><li class="translation"><span></span><span>年度晚宴筹集的资金将捐给儿童医院。</span></li>`},
+          'page-test33':{title:'Chocolate Bean Collection', startNum:11, dates:'(2014.7.19)', audioSrc:'./part1.33.Chocolate Bean Collection.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T33: Chocolate Bean Collection</h4><p class="date-info">(2014.7.19)</p></div><p class="fill-in-question"><b>11.</b> Chocolate bean are <input type="text" name="t33_q11"> and then bags are shipped</p><p class="fill-in-question"><b>12.</b> Bags are then <input type="text" name="t33_q12"> and weighted by machines.</p><p class="fill-in-question"><b>13.</b> Next, chocolate beans are <input type="text" name="t33_q13"> in a hopper.</p><p class="fill-in-question"><b>14.</b> Boiled chocolate beans are <input type="text" name="t33_q14"> and cracked.</p><p class="fill-in-question"><b>15.</b> Roasted beans needs to be <input type="text" name="t33_q15"></p><p class="fill-in-question"><b>16.</b> Roasted beans are <input type="text" name="t33_q16"> in the pockets.</p></div><div class="results-in-page" id="results-page-test33"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">11.</span><span>Chocolate bean are <strong>harvested</strong> and then bags are shipped.</span></li><li class="translation"><span></span><span>可可豆被收获，然后装袋运输。</span></li><li><span class="num">12.</span><span>Bags are then <strong>opened</strong> and weighted by machines.</span></li><li class="translation"><span></span><span>袋子随后被打开并由机器称重。</span></li><li><span class="num">13.</span><span>Next, chocolate beans are <strong>cleaned</strong> in a hopper.</span></li><li class="translation"><span></span><span>接下来，可可豆在料斗中被清洗。</span></li><li><span class="num">14.</span><span>Boiled chocolate beans are <strong>expanded</strong> and cracked.</span></li><li class="translation"><span></span><span>煮过的可可豆会膨胀并裂开。</span></li><li><span class="num">15.</span><span>Roasted beans needs to be <strong>cooled</strong>.</span></li><li class="translation"><span></span><span>烘焙过的豆子需要冷却。</span></li><li><span class="num">16.</span><span>Roasted beans are <strong>sealed</strong> in the pockets.</span></li><li class="translation"><span></span><span>烘焙过的豆子被密封在袋子里。</span></li>`},
+          'page-test34':{title:'Waste Bins Recycle', startNum:1, dates:'(2014.2.13)', audioSrc:'./part1.34.Waste Bins Recycle.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T34: Waste Bins Recycle</h4><p class="date-info">(2014.2.13)</p></div><p class="fill-in-question"><b>1.</b> Frequency of newspaper collection: <input type="text" name="t34_q1"></p><p class="fill-in-question"><b>2.</b> Name: Peter <input type="text" name="t34_q2"></p><p class="fill-in-question"><b>3.</b> Address: No.168 <input type="text" name="t34_q3"> Road</p><p class="fill-in-question"><b>4.</b> E-mail: helpline@black<input type="text" name="t34_q4">.com</p><p class="fill-in-question"><b>5.</b> Postcode: <input type="text" name="t34_q5"></p><p class="fill-in-question"><b>6.</b> Newspaper: in a <input type="text" name="t34_q6"> box</p><p class="fill-in-question"><b>7.</b> Nearest rubbish collection centre: On the East Side of Central <input type="text" name="t34_q7"></p><p class="fill-in-question"><b>8.</b> Blue box: <input type="text" name="t34_q8"></p><p class="fill-in-question"><b>9.</b> Rubbish that cannot be recycled: <input type="text" name="t34_q9"></p><p class="fill-in-question"><b>10.</b> Name of a booklet: <input type="text" name="t34_q10"></p></div><div class="results-in-page" id="results-page-test34"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">1.</span><span>Frequency of newspaper collection: <strong>fortnight</strong>.</span></li><li class="translation"><span></span><span>报纸收集频率：每两周一次。</span></li><li><span class="num">2.</span><span>Name: Peter <strong>Wisrough</strong>, that's W-I-S-R-O-U-G-H.</span></li><li class="translation"><span></span><span>姓名：彼得·威斯洛夫。</span></li><li><span class="num">3.</span><span>Address: No.168 <strong>Bridge</strong> Road.</span></li><li class="translation"><span></span><span>地址：桥路168号。</span></li><li><span class="num">4.</span><span>E-mail: helpline@black<strong>eat</strong>.com.</span></li><li class="translation"><span></span><span>电子邮件：helpline@blackeat.com。</span></li><li><span class="num">5.</span><span>Postcode: <strong>BS97PU</strong>.</span></li><li class="translation"><span></span><span>邮政编码：BS97PU。</span></li><li><span class="num">6.</span><span>Newspaper: in a <strong>yellow</strong> box.</span></li><li class="translation"><span></span><span>报纸：放在一个黄色的箱子里。</span></li><li><span class="num">7.</span><span>Nearest rubbish collection centre: On the East Side of Central <strong>Park</strong>.</span></li><li class="translation"><span></span><span>最近的垃圾收集中心：在中央公园的东侧。</span></li><li><span class="num">8.</span><span>Blue box: <strong>metal</strong>.</span></li><li class="translation"><span></span><span>蓝色箱子：金属。</span></li><li><span class="num">9.</span><span>Rubbish that cannot be recycled: <strong>magazines</strong>.</span></li><li class="translation"><span></span><span>不可回收的垃圾：杂志。</span></li><li><span class="num">10.</span><span>Name of a booklet: <strong>Savvy</strong>, that's S-A-double V-Y.</span></li><li class="translation"><span></span><span>小册子名称：Savvy。</span></li>`},
+          'page-test35':{title:'Hardwoods Rental Agency', startNum:1, dates:'(2015.3.28)', audioSrc:'./part1.35.Hardwoods Rental Agency.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T35: Hardwoods Rental Agency</h4><p class="date-info">(2015.3.28)</p></div><p class="fill-in-question"><b>1.</b> phone number: 0213975<input type="text" name="t35_q1"></p><p class="fill-in-question"><b>2.</b> The rent price is around $<input type="text" name="t35_q2"> now</p><p class="fill-in-question"><b>3.</b> installed new <input type="text" name="t35_q3"></p><p class="fill-in-question"><b>4.</b> park vehicle at <input type="text" name="t35_q4"></p><p class="fill-in-question"><b>5.</b> opposite to a <input type="text" name="t35_q5"> for the children</p><p class="fill-in-question"><b>6.</b> no <input type="text" name="t35_q6"> in the villa</p><p class="fill-in-question"><b>7.</b> a view of <input type="text" name="t35_q7"></p><p class="fill-in-question"><b>8.</b> the requirement of a <input type="text" name="t35_q8"> for the agency</p><p class="fill-in-question"><b>9.</b> major <input type="text" name="t35_q9"></p><p class="fill-in-question"><b>10.</b> necessary <input type="text" name="t35_q10"></p></div><div class="results-in-page" id="results-page-test35"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">1.</span><span>phone number: 0213975<strong>671790</strong>.</span></li><li class="translation"><span></span><span>电话号码：0213975671790。</span></li><li><span class="num">2.</span><span>The rent price is around $<strong>550</strong> now.</span></li><li class="translation"><span></span><span>现在的租金价格大约是550美元。</span></li><li><span class="num">3.</span><span>installed new <strong>shower</strong>.</span></li><li class="translation"><span></span><span>安装了新的淋浴。</span></li><li><span class="num">4.</span><span>park vehicle at <strong>street</strong>.</span></li><li class="translation"><span></span><span>在街上停放车辆。</span></li><li><span class="num">5.</span><span>opposite to a <strong>playground</strong> for the children.</span></li><li class="translation"><span></span><span>对面是儿童游乐场。</span></li><li><span class="num">6.</span><span>no <strong>stairs</strong> in the villa.</span></li><li class="translation"><span></span><span>别墅里没有楼梯。</span></li><li><span class="num">7.</span><span>a view of <strong>lake</strong>.</span></li><li class="translation"><span></span><span>可以看到湖景。</span></li><li><span class="num">8.</span><span>the requirement of a <strong>fee</strong> for the agency.</span></li><li class="translation"><span></span><span>中介机构收取费用的要求。</span></li><li><span class="num">9.</span><span>major <strong>damage</strong>.</span></li><li class="translation"><span></span><span>主要损坏。</span></li><li><span class="num">10.</span><span>necessary <strong>cleaning</strong>.</span></li><li class="translation"><span></span><span>必要的清洁。</span></li>`},
+          'page-test36':{title:'Canoeing Course Enquiring', startNum:1, dates:'(2018.6.30)', audioSrc:'./part1.36.Canoeing Course Enquiring.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T36: Canoeing Course Enquiring</h4><p class="date-info">(2018.6.30)</p></div><p class="fill-in-question"><b>1.</b> basic requirement: swim <input type="text" name="t36_q1"> metres</p><p class="fill-in-question"><b>2.</b> <input type="text" name="t36_q2"> to follow</p><p class="fill-in-question"><b>3.</b> a vest and <input type="text" name="t36_q3"> provided</p><p class="fill-in-question"><b>4.</b> provide <input type="text" name="t36_q4"> afterwards</p><p class="fill-in-question"><b>5.</b> and prepare some spare <input type="text" name="t36_q5"></p><p class="fill-in-question"><b>6.</b> Fee: adult $<input type="text" name="t36_q6"> pounds for 6 classes</p><p class="fill-in-question"><b>7.</b> with <input type="text" name="t36_q7"> included</p><p class="fill-in-question"><b>8.</b> visit the <input type="text" name="t36_q8"> after class</p><p class="fill-in-question"><b>9.</b> take part in a <input type="text" name="t36_q9"></p><p class="fill-in-question"><b>10.</b> preferred date to start the course: Thursday, <input type="text" name="t36_q10"></p></div><div class="results-in-page" id="results-page-test36"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">1.</span><span>basic requirement: swim <strong>50</strong> metres.</span></li><li class="translation"><span></span><span>基本要求：游泳50米。</span></li><li><span class="num">2.</span><span><strong>rules</strong> to follow.</span></li><li class="translation"><span></span><span>需要遵守的规则。</span></li><li><span class="num">3.</span><span>a vest and <strong>helmet</strong> provided.</span></li><li class="translation"><span></span><span>提供救生衣和头盔。</span></li><li><span class="num">4.</span><span>provide <strong>shower</strong> afterwards.</span></li><li class="translation"><span></span><span>之后提供淋浴。</span></li><li><span class="num">5.</span><span>and prepare some spare <strong>clothes</strong>.</span></li><li class="translation"><span></span><span>并准备一些备用衣物。</span></li><li><span class="num">6.</span><span>Fee: adult $<strong>70</strong> pounds for 6 classes.</span></li><li class="translation"><span></span><span>费用：成人70英镑6节课。</span></li><li><span class="num">7.</span><span>with <strong>insurance</strong> included.</span></li><li class="translation"><span></span><span>包含保险。</span></li><li><span class="num">8.</span><span>visit the <strong>sea</strong> after class.</span></li><li class="translation"><span></span><span>课后去海边。</span></li><li><span class="num">9.</span><span>take part in a <strong>race</strong>.</span></li><li class="translation"><span></span><span>参加一场比赛。</span></li><li><span class="num">10.</span><span>preferred date to start the course: Thursday, <strong>5th, June</strong>.</span></li><li class="translation"><span></span><span>首选开课日期：6月5日，星期四。</span></li>`},
+          'page-test37':{title:'Apply for Part-time Volunteer Work', startNum:1, dates:'(2014.7.12)', audioSrc:'./part1.37.Apply for Part-time Volunteer Work.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T37: Apply for Part-time Volunteer Work</h4><p class="date-info">(2014.7.12)</p></div><p class="fill-in-question"><b>1.</b> type of work: <input type="text" name="t37_q1"></p><p class="fill-in-question"><b>2.</b> working hours per day: <input type="text" name="t37_q2"></p><p class="fill-in-question"><b>3.</b> response to: <input type="text" name="t37_q3"></p><p class="fill-in-question"><b>4.</b> advantage of the work: good <input type="text" name="t37_q4"> training</p><p class="fill-in-question"><b>5.</b> funding support: <input type="text" name="t37_q5"></p><p class="fill-in-question"><b>6.</b> work at project: cleaning <input type="text" name="t37_q6"></p><p class="fill-in-question"><b>7.</b> attend a <input type="text" name="t37_q7"></p><p class="fill-in-question"><b>8.</b> provide children <input type="text" name="t37_q8"></p><p class="fill-in-question"><b>9.</b> go on website and click on "<input type="text" name="t37_q9">"</p><p class="fill-in-question"><b>10.</b> must provide <input type="text" name="t37_q10"></p></div><div class="results-in-page" id="results-page-test37"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">1.</span><span>type of work: <strong>receptionist</strong>.</span></li><li class="translation"><span></span><span>工作类型：接待员。</span></li><li><span class="num">2.</span><span>working hours per day: <strong>4</strong>.</span></li><li class="translation"><span></span><span>每天工作小时：4小时。</span></li><li><span class="num">3.</span><span>response to: <strong>email</strong>.</span></li><li class="translation"><span></span><span>回复方式：电子邮件。</span></li><li><span class="num">4.</span><span>advantage of the work: good <strong>computer</strong> training.</span></li><li class="translation"><span></span><span>工作优势：良好的计算机培训。</span></li><li><span class="num">5.</span><span>funding support: <strong>bank</strong>.</span></li><li class="translation"><span></span><span>资金支持：银行。</span></li><li><span class="num">6.</span><span>work at project: cleaning <strong>river</strong>.</span></li><li class="translation"><span></span><span>项目工作：清理河流。</span></li><li><span class="num">7.</span><span>attend a <strong>workshop</strong>.</span></li><li class="translation"><span></span><span>参加一个研讨会。</span></li><li><span class="num">8.</span><span>provide children <strong>education</strong>.</span></li><li class="translation"><span></span><span>提供儿童教育。</span></li><li><span class="num">9.</span><span>go on website and click on "<strong>go</strong>".</span></li><li class="translation"><span></span><span>访问网站并点击“go”。</span></li><li><span class="num">10.</span><span>must provide <strong>reference</strong>.</span></li><li class="translation"><span></span><span>必须提供推荐信。</span></li>`},
+          'page-test38':{title:'Holiday Arrangement', startNum:1, dates:'(2017.12.17 北美)', audioSrc:'./part1.38.Holiday Arrangement.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T38: Holiday Arrangement</h4><p class="date-info">(2017.12.17 北美)</p></div><p class="fill-in-question"><b>1.</b> starting date of the travelling: <input type="text" name="t38_q1"></p><p class="fill-in-question"><b>2.</b> total number of people: <input type="text" name="t38_q2"></p><p class="fill-in-question"><b>3.</b> Client's first name: <input type="text" name="t38_q3"></p><p class="fill-in-question"><b>4.</b> Contact number: <input type="text" name="t38_q4"></p><p class="fill-in-question"><b>5.</b> a court to play <input type="text" name="t38_q5"></p><p class="fill-in-question"><b>6.</b> make sure the children's <input type="text" name="t38_q6"> will be open</p><p class="fill-in-question"><b>7.</b> sightseeing trip by <input type="text" name="t38_q7"></p><p class="fill-in-question"><b>8.</b> make a reservation for the <input type="text" name="t38_q8"> day of the holiday</p><p class="fill-in-question"><b>9.</b> special dietary requirement: no <input type="text" name="t38_q9"> for eldest child</p><p class="fill-in-question"><b>10.</b> Preferred transport to resort by <input type="text" name="t38_q10"></p></div><div class="results-in-page" id="results-page-test38"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">1.</span><span>starting date of the travelling: <strong>15th September</strong>.</span></li><li class="translation"><span></span><span>旅行开始日期：9月15日。</span></li><li><span class="num">2.</span><span>total number of people: <strong>4</strong>.</span></li><li class="translation"><span></span><span>总人数：4人。</span></li><li><span class="num">3.</span><span>Client's first name: <strong>Harcount</strong>, that's H-A-R-C-O-U-N-T.</span></li><li class="translation"><span></span><span>客户名字：哈考特。</span></li><li><span class="num">4.</span><span>Contact number: <strong>0125334470</strong>.</span></li><li class="translation"><span></span><span>联系电话：0125334470。</span></li><li><span class="num">5.</span><span>a court to play <strong>tennis</strong>.</span></li><li class="translation"><span></span><span>一个打网球的场地。</span></li><li><span class="num">6.</span><span>make sure the children's <strong>club</strong> will be open.</span></li><li class="translation"><span></span><span>确保儿童俱乐部会开放。</span></li><li><span class="num">7.</span><span>sightseeing trip by <strong>boat</strong>.</span></li><li class="translation"><span></span><span>乘船观光。</span></li><li><span class="num">8.</span><span>make a reservation for the <strong>second</strong> day of the holiday.</span></li><li class="translation"><span></span><span>为假期的第二天做预订。</span></li><li><span class="num">9.</span><span>special dietary requirement: no <strong>cheese</strong> for eldest child.</span></li><li class="translation"><span></span><span>特殊饮食要求：大孩子不吃奶酪。</span></li><li><span class="num">10.</span><span>Preferred transport to resort by <strong>taxi</strong>.</span></li><li class="translation"><span></span><span>首选前往度假村的交通工具：出租车。</span></li>`},
+          'page-test39':{title:'Amhurst Film Club', startNum:1, dates:'(2019.5.11)', audioSrc:'./part1.39.Amhurst Film Club.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T39: Amhurst Film Club</h4><p class="date-info">(2019.5.11)</p></div><p class="fill-in-question"><b>1.</b> The name of the suburb: <input type="text" name="t39_q1"></p><p class="fill-in-question"><b>2.</b> The special program is only for the <input type="text" name="t39_q2"> citizens</p><p class="fill-in-question"><b>3.</b> <input type="text" name="t39_q3"></p><p class="fill-in-question"><b>4.</b> recommend drama type: <input type="text" name="t39_q4"></p><p class="fill-in-question"><b>5.</b> is popular with <input type="text" name="t39_q5"></p><p class="fill-in-question"><b>6.</b> the most welcomed movie is a <input type="text" name="t39_q6"></p><p class="fill-in-question"><b>7.</b> the upper limit of the age: <input type="text" name="t39_q7"></p><p class="fill-in-question"><b>8.</b> <input type="text" name="t39_q8"></p><p class="fill-in-question"><b>9.</b> there is a <input type="text" name="t39_q9"> area in this neighborhood</p><p class="fill-in-question"><b>10.</b> <input type="text" name="t39_q10"></p></div><div class="results-in-page" id="results-page-test39"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">1.</span><span>The name of the suburb: <strong>Holbrook</strong>, That's H-O-L-O-B-R-double O-K.</span></li><li class="translation"><span></span><span>郊区名称：霍尔布鲁克。</span></li><li><span class="num">2.</span><span>The special program is only for the <strong>senior</strong> citizens.</span></li><li class="translation"><span></span><span>特别节目仅限老年公民。</span></li><li><span class="num">3.</span><span><strong>student</strong></span></li><li class="translation"><span></span><span>学生</span></li><li><span class="num">4.</span><span>recommend drama type: <strong>history</strong>.</span></li><li class="translation"><span></span><span>推荐戏剧类型：历史。</span></li><li><span class="num">5.</span><span>is popular with <strong>teenagers</strong>.</span></li><li class="translation"><span></span><span>受青少年欢迎。</span></li><li><span class="num">6.</span><span>the most welcomed movie is a <strong>horror</strong>.</span></li><li class="translation"><span></span><span>最受欢迎的电影是恐怖片。</span></li><li><span class="num">7.</span><span>the upper limit of the age: <strong>22</strong>.</span></li><li class="translation"><span></span><span>年龄上限：22岁。</span></li><li><span class="num">8.</span><span><strong>biography</strong></span></li><li class="translation"><span></span><span>传记</span></li><li><span class="num">9.</span><span>there is a <strong>parking</strong> area in this neighborhood.</span></li><li class="translation"><span></span><span>这个社区有一个停车区。</span></li><li><span class="num">10.</span><span><strong>software</strong></span></li><li class="translation"><span></span><span>软件</span></li>`},
+          'page-test40':{title:'Insurance Claim', startNum:1, dates:'(2018.10.20)', audioSrc:'./part1.40.Insurance Claim.mp3',questions:`<div class="group"><div class="test-title-container"><h4 class="test-title">T40: Insurance Claim</h4><p class="date-info">(2018.10.20)</p></div><p class="fill-in-question"><b>1.</b> policy reference No: J-X-Y-4-6-5-double <input type="text" name="t40_q1"></p><p class="fill-in-question"><b>2.</b> Name: <input type="text" name="t40_q2"></p><p class="fill-in-question"><b>3.</b> Address: 98 <input type="text" name="t40_q3"> Road</p><p class="fill-in-question"><b>4.</b> Postcode: <input type="text" name="t40_q4"></p><p class="fill-in-question"><b>5.</b> Previous claim: <input type="text" name="t40_q5"></p><p class="fill-in-question"><b>6.</b> Time: <input type="text" name="t40_q6"> ago</p><p class="fill-in-question"><b>7-8.</b> <input type="text" name="t40_q7_1"> and <input type="text" name="t40_q7_2"> in the bathroom</p><p class="fill-in-question"><b>9.</b> <input type="text" name="t40_q9"> in the bathroom</p><p class="fill-in-question"><b>10.</b> <input type="text" name="t40_q10"></p></div><div class="results-in-page" id="results-page-test40"></div><div style="height: 120px;"></div>`,transcript:`<li><span class="num">1.</span><span>policy reference No: J-X-Y-4-6-5-double <strong>7-3</strong>.</span></li><li class="translation"><span></span><span>保单参考号：J-X-Y-4-6-5-77-3。</span></li><li><span class="num">2.</span><span>Name: <strong>Troudfoot</strong>, that's T-R-O-U-D-F-double O-T.</span></li><li class="translation"><span></span><span>姓名：特劳德福特。</span></li><li><span class="num">3.</span><span>Address: 98 <strong>Crown</strong> Road.</span></li><li class="translation"><span></span><span>地址：皇冠路98号。</span></li><li><span class="num">4.</span><span>Postcode: <strong>PG32BK</strong>.</span></li><li class="translation"><span></span><span>邮政编码：PG32BK。</span></li><li><span class="num">5.</span><span>Previous claim: <strong>bicycle</strong>.</span></li><li class="translation"><span></span><span>之前的索赔：自行车。</span></li><li><span class="num">6.</span><span>Time: <strong>10 months</strong> ago.</span></li><li class="translation"><span></span><span>时间：10个月前。</span></li><li><span class="num">7-8.</span><span><strong>floor</strong> and <strong>wall</strong> in the bathroom.</span></li><li class="translation"><span></span><span>浴室的地板和墙壁。</span></li><li><span class="num">9.</span><span><strong>pipe</strong> in the bathroom.</span></li><li class="translation"><span></span><span>浴室的管道。</span></li><li><span class="num">10.</span><span><strong>supermarket</strong></span></li><li class="translation"><span></span><span>超市</span></li>`}
+        };
+        this.answerKey = {
+            't31_q1': 'june', 't31_q2': '12', 't31_q3': 'Danlson', 't31_q4': 'ticket', 't31_q5': 'headaches', 't31_q6': 'light', 't31_q7': 'Thursday', 't31_q8': 'musicians',
+            't32_q1': 'club', 't32_q2': 'male', 't32_q3': 'drive', 't32_q4': 'August', 't32_q5': 'Tuesday', 't32_q6': 'dinner', 't32_q7': '25', 't32_q8': '16', 't32_q9': 'modern', 't32_q10': 'hospital',
+            't33_q11': 'harvested', 't33_q12': 'opened', 't33_q13': 'cleaned', 't33_q14': 'expanded', 't33_q15': 'cooled', 't33_q16': 'sealed',
+            't34_q1': 'fortnight', 't34_q2': 'Wisrough', 't34_q3': 'Bridge', 't34_q4': 'eat', 't34_q5': 'BS97PU', 't34_q6': 'yellow', 't34_q7': 'Park', 't34_q8': 'metal', 't34_q9': 'magazines', 't34_q10': 'Savvy',
+            't35_q1': '671790', 't35_q2': '550', 't35_q3': 'shower', 't35_q4': 'street', 't35_q5': 'playground', 't35_q6': 'stairs', 't35_q7': 'lake', 't35_q8': 'fee', 't35_q9': 'damage', 't35_q10': 'cleaning',
+            't36_q1': '50', 't36_q2': 'rules', 't36_q3': 'helmet', 't36_q4': 'shower', 't36_q5': 'clothes', 't36_q6': '70', 't36_q7': 'insurance', 't36_q8': 'sea', 't36_q9': 'race', 't36_q10': '5th, June',
+            't37_q1': 'receptionist', 't37_q2': '4', 't37_q3': 'email', 't37_q4': 'computer', 't37_q5': 'bank', 't37_q6': 'river', 't37_q7': 'workshop', 't37_q8': 'education', 't37_q9': 'go', 't37_q10': 'reference',
+            't38_q1': '15th September', 't38_q2': '4', 't38_q3': 'Harcount', 't38_q4': '0125334470', 't38_q5': 'tennis', 't38_q6': 'club', 't38_q7': 'boat', 't38_q8': 'second', 't38_q9': 'cheese', 't38_q10': 'taxi',
+            't39_q1': 'Holbrook', 't39_q2': 'senior', 't39_q3': 'student', 't39_q4': 'history', 't39_q5': 'teenagers', 't39_q6': 'horror', 't39_q7': '22', 't39_q8': 'biography', 't39_q9': 'parking', 't39_q10': 'software',
+            't40_q1': '7-3', 't40_q2': 'Troudfoot', 't40_q3': 'Crown', 't40_q4': 'PG32BK', 't40_q5': 'bicycle', 't40_q6': '10 months', 't40_q7_1': 'floor', 't40_q7_2': 'wall', 't40_q9': 'pipe', 't40_q10': 'supermarket'
+        };
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => App.init());
+}());
+</script>
+
+<script src="../../../../js/practice-page-enhancer.js"></script>
+</body>
+</html>

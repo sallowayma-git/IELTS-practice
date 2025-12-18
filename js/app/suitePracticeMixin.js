@@ -11,6 +11,7 @@
             this._suiteModeReady = true;
             this.currentSuiteSession = null;
             this.suiteExamMap = new Map();
+            this.multiSuiteSessionsMap = new Map(); // 新增：存储多套题会话
             if (typeof this._clearSuiteHandshakes === 'function') {
                 this._clearSuiteHandshakes();
             }
@@ -124,6 +125,11 @@
         },
 
         async handleSuitePracticeComplete(examId, data) {
+            // 首先检查是否为多套题模式（通过suiteId字段判断）
+            if (data && data.suiteId) {
+                return await this.handleMultiSuitePracticeComplete(examId, data);
+            }
+
             if (!this.currentSuiteSession || !this.suiteExamMap || !this.suiteExamMap.has(examId)) {
                 return false;
             }
@@ -233,6 +239,405 @@
 
             window.showMessage && window.showMessage(`已完成 ${sequenceEntry.exam.title}，继续下一篇 ${nextEntry.exam.title}。`, 'success');
             return true;
+        },
+
+        /**
+         * 处理多套题练习完成（用于100 P1/P4等包含多套题的HTML页面）
+         * @param {string} examId - 考试ID（可能包含套题后缀）
+         * @param {object} suiteData - 套题数据
+         * @returns {boolean} 是否成功处理
+         */
+        async handleMultiSuitePracticeComplete(examId, suiteData) {
+            if (!suiteData || !suiteData.suiteId) {
+                console.warn('[MultiSuite] 缺少suiteId，无法处理多套题完成');
+                return false;
+            }
+
+            console.log('[MultiSuite] 处理套题完成:', examId, '套题ID:', suiteData.suiteId);
+
+            // 获取或创建多套题会话
+            const session = this.getOrCreateMultiSuiteSession(examId);
+
+            // 检查是否已经记录过这个套题
+            const alreadyRecorded = session.suiteResults.some(
+                result => result.suiteId === suiteData.suiteId
+            );
+
+            if (alreadyRecorded) {
+                console.warn('[MultiSuite] 套题已记录，跳过:', suiteData.suiteId);
+                return true;
+            }
+
+            // 添加套题结果到会话
+            const suiteResult = {
+                suiteId: suiteData.suiteId,
+                examId: examId,
+                answers: suiteData.answers || {},
+                correctAnswers: suiteData.correctAnswers || {},
+                answerComparison: suiteData.answerComparison || {},
+                scoreInfo: suiteData.scoreInfo || { correct: 0, total: 0, accuracy: 0, percentage: 0 },
+                spellingErrors: suiteData.spellingErrors || [],
+                timestamp: Date.now(),
+                duration: suiteData.duration || 0,
+                metadata: {
+                    sessionId: suiteData.sessionId,
+                    completedAt: new Date().toISOString()
+                },
+                rawData: (() => {
+                    try {
+                        return JSON.parse(JSON.stringify(suiteData));
+                    } catch (_) {
+                        return suiteData ? { ...suiteData } : null;
+                    }
+                })()
+            };
+
+            session.suiteResults.push(suiteResult);
+            session.lastUpdate = Date.now();
+
+            console.log('[MultiSuite] 已添加套题结果:', suiteData.suiteId, 
+                `当前进度: ${session.suiteResults.length} 套题`);
+
+            // 如果这是第一个套题，尝试从数据中确定预期套题数量
+            if (session.suiteResults.length === 1 && !session.expectedSuiteCount) {
+                session.expectedSuiteCount = this._detectExpectedSuiteCount(examId, suiteData);
+                console.log('[MultiSuite] 检测到预期套题数量:', session.expectedSuiteCount);
+            }
+
+            // 检查是否所有套题都已完成
+            if (this.isMultiSuiteComplete(session)) {
+                console.log('[MultiSuite] 所有套题已完成，开始聚合记录');
+                await this.finalizeMultiSuiteRecord(session);
+                return true;
+            }
+
+            // 还有套题未完成，保存当前进度
+            console.log('[MultiSuite] 等待更多套题完成...', 
+                `已完成: ${session.suiteResults.length}/${session.expectedSuiteCount || '?'}`);
+
+            return true;
+        },
+
+        /**
+         * 检测预期的套题数量
+         * @param {string} examId - 考试ID
+         * @param {object} suiteData - 套题数据
+         * @returns {number} 预期套题数量
+         */
+        _detectExpectedSuiteCount(examId, suiteData) {
+            // 尝试从suiteData中获取总套题数
+            if (suiteData.totalSuites && Number.isFinite(suiteData.totalSuites)) {
+                return suiteData.totalSuites;
+            }
+
+            // 尝试从metadata中获取
+            if (suiteData.metadata && suiteData.metadata.totalSuites) {
+                const count = Number(suiteData.metadata.totalSuites);
+                if (Number.isFinite(count) && count > 0) {
+                    return count;
+                }
+            }
+
+            // 根据examId推断（100 P1/P4 通常包含10套题）
+            const lowerExamId = (examId || '').toLowerCase();
+            if (lowerExamId.includes('100') && (lowerExamId.includes('p1') || lowerExamId.includes('p4'))) {
+                return 10; // 默认10套题
+            }
+
+            // 默认返回1（单套题）
+            return 1;
+        },
+
+        /**
+         * 完成并聚合多套题记录
+         * @param {object} session - 多套题会话
+         */
+        async finalizeMultiSuiteRecord(session) {
+            if (!session || !Array.isArray(session.suiteResults) || session.suiteResults.length === 0) {
+                console.warn('[MultiSuite] 无效的会话或无结果，跳过聚合');
+                return;
+            }
+
+            session.status = 'finalizing';
+            console.log('[MultiSuite] 开始聚合多套题记录:', session.id);
+
+            try {
+                const completionTime = Date.now();
+                const startTime = session.startTime || completionTime;
+
+                // 聚合分数
+                const aggregatedScores = this.aggregateScores(session.suiteResults);
+
+                // 聚合答案
+                const aggregatedAnswers = this.aggregateAnswers(session.suiteResults);
+
+                // 聚合答案比较
+                const aggregatedComparison = this.aggregateAnswerComparisons(session.suiteResults);
+
+                // 聚合拼写错误
+                const aggregatedSpellingErrors = this.aggregateSpellingErrors(session.suiteResults);
+
+                // 计算总时长
+                const totalDuration = session.suiteResults.reduce(
+                    (sum, result) => sum + (result.duration || 0), 
+                    0
+                );
+
+                // 生成记录标题
+                const dateLabel = this._formatSuiteDateLabel(startTime);
+                const source = session.metadata?.source || 'listening';
+                const sourceLabel = source.toUpperCase();
+                const displayTitle = `${dateLabel} ${sourceLabel} 多套题练习`;
+
+                // 构建聚合记录
+                const record = {
+                    id: session.id,
+                    examId: session.baseExamId,
+                    title: displayTitle,
+                    type: 'listening',
+                    multiSuite: true,
+                    date: new Date(completionTime).toISOString(),
+                    startTime: new Date(startTime).toISOString(),
+                    endTime: new Date(completionTime).toISOString(),
+                    duration: totalDuration,
+                    
+                    // 聚合的分数信息
+                    scoreInfo: aggregatedScores,
+                    totalQuestions: aggregatedScores.total,
+                    correctAnswers: aggregatedScores.correct,
+                    accuracy: aggregatedScores.accuracy,
+                    percentage: aggregatedScores.percentage,
+                    
+                    // 聚合的答案数据
+                    answers: aggregatedAnswers,
+                    answerComparison: aggregatedComparison,
+                    
+                    // 套题详情
+                    suiteEntries: session.suiteResults.map(result => ({
+                        suiteId: result.suiteId,
+                        examId: result.examId,
+                        scoreInfo: result.scoreInfo,
+                        answers: result.answers,
+                        answerComparison: result.answerComparison,
+                        spellingErrors: result.spellingErrors || [],
+                        duration: result.duration || 0,
+                        timestamp: result.timestamp,
+                        rawData: result.rawData || null
+                    })),
+                    
+                    // 拼写错误汇总
+                    spellingErrors: aggregatedSpellingErrors,
+                    
+                    // 元数据
+                    metadata: {
+                        examTitle: displayTitle,
+                        category: sourceLabel,
+                        source: source,
+                        frequency: 'multi-suite',
+                        suiteCount: session.suiteResults.length,
+                        expectedSuiteCount: session.expectedSuiteCount,
+                        sessionId: session.id,
+                        startedAt: new Date(startTime).toISOString(),
+                        completedAt: new Date(completionTime).toISOString()
+                    },
+                    
+                    realData: {
+                        isRealData: true,
+                        source: 'multi_suite_mode',
+                        duration: totalDuration,
+                        correct: aggregatedScores.correct,
+                        total: aggregatedScores.total,
+                        accuracy: aggregatedScores.accuracy,
+                        percentage: aggregatedScores.percentage,
+                        suiteCount: session.suiteResults.length
+                    }
+                };
+
+                // 保存聚合记录
+                await this._saveSuitePracticeRecord(record);
+
+                // 保存拼写错误到词表
+                if (aggregatedSpellingErrors.length > 0 && window.spellingErrorCollector) {
+                    try {
+                        await window.spellingErrorCollector.saveErrors(aggregatedSpellingErrors);
+                        console.log('[MultiSuite] 已保存拼写错误到词表:', aggregatedSpellingErrors.length);
+                    } catch (error) {
+                        console.warn('[MultiSuite] 保存拼写错误失败:', error);
+                    }
+                }
+
+                // 更新状态
+                await this._updatePracticeRecordsState();
+                this.refreshOverviewData && this.refreshOverviewData();
+
+                // 清理会话
+                this.multiSuiteSessionsMap.delete(session.baseExamId);
+                session.status = 'completed';
+
+                window.showMessage && window.showMessage(
+                    `多套题练习已完成！共完成 ${session.suiteResults.length} 套题，记录已保存。`, 
+                    'success'
+                );
+
+                console.log('[MultiSuite] 聚合记录已保存:', record.id);
+
+            } catch (error) {
+                console.error('[MultiSuite] 聚合记录失败:', error);
+                session.status = 'error';
+                window.showMessage && window.showMessage('保存多套题记录失败，请稍后重试。', 'error');
+            }
+        },
+
+        /**
+         * 聚合多套题的分数
+         * @param {Array} suiteResults - 套题结果数组
+         * @returns {object} 聚合的分数信息
+         */
+        aggregateScores(suiteResults) {
+            if (!Array.isArray(suiteResults) || suiteResults.length === 0) {
+                return { correct: 0, total: 0, accuracy: 0, percentage: 0 };
+            }
+
+            let totalCorrect = 0;
+            let totalQuestions = 0;
+
+            suiteResults.forEach(result => {
+                const scoreInfo = result.scoreInfo || {};
+                totalCorrect += Number(scoreInfo.correct) || 0;
+                totalQuestions += Number(scoreInfo.total) || 0;
+            });
+
+            const accuracy = totalQuestions > 0 ? totalCorrect / totalQuestions : 0;
+            const percentage = Math.round(accuracy * 100);
+
+            return {
+                correct: totalCorrect,
+                total: totalQuestions,
+                accuracy: accuracy,
+                percentage: percentage,
+                source: 'multi_suite_aggregated'
+            };
+        },
+
+        /**
+         * 聚合多套题的答案
+         * @param {Array} suiteResults - 套题结果数组
+         * @returns {object} 聚合的答案对象
+         */
+        aggregateAnswers(suiteResults) {
+            const aggregated = {};
+
+            if (!Array.isArray(suiteResults)) {
+                return aggregated;
+            }
+
+            suiteResults.forEach(result => {
+                const suiteId = result.suiteId || 'unknown';
+                const answers = result.answers || {};
+
+                Object.entries(answers).forEach(([questionId, answer]) => {
+                    const normalizedQuestionId = questionId == null ? '' : String(questionId);
+                    if (!normalizedQuestionId) {
+                        return;
+                    }
+
+                    // 使用 "套题ID::问题ID" 格式，兼容子页面已带前缀的情况
+                    const key = normalizedQuestionId.startsWith(`${suiteId}::`)
+                        ? normalizedQuestionId
+                        : `${suiteId}::${normalizedQuestionId}`;
+                    aggregated[key] = answer;
+                });
+            });
+
+            return aggregated;
+        },
+
+        /**
+         * 聚合多套题的答案比较
+         * @param {Array} suiteResults - 套题结果数组
+         * @returns {object} 聚合的答案比较对象
+         */
+        aggregateAnswerComparisons(suiteResults) {
+            const aggregated = {};
+
+            if (!Array.isArray(suiteResults)) {
+                return aggregated;
+            }
+
+            suiteResults.forEach(result => {
+                const suiteId = result.suiteId || 'unknown';
+                const comparison = result.answerComparison || {};
+
+                Object.entries(comparison).forEach(([questionId, comparisonData]) => {
+                    const normalizedQuestionId = questionId == null ? '' : String(questionId);
+                    if (!normalizedQuestionId) {
+                        return;
+                    }
+
+                    // 使用 "套题ID::问题ID" 格式，兼容子页面已带前缀的情况
+                    const key = normalizedQuestionId.startsWith(`${suiteId}::`)
+                        ? normalizedQuestionId
+                        : `${suiteId}::${normalizedQuestionId}`;
+                    aggregated[key] = comparisonData;
+                });
+            });
+
+            return aggregated;
+        },
+
+        /**
+         * 聚合多套题的拼写错误
+         * @param {Array} suiteResults - 套题结果数组
+         * @returns {Array} 聚合的拼写错误数组
+         */
+        aggregateSpellingErrors(suiteResults) {
+            const aggregated = [];
+            const errorMap = new Map(); // 用于去重和合并相同单词的错误
+
+            if (!Array.isArray(suiteResults)) {
+                return aggregated;
+            }
+
+            suiteResults.forEach(result => {
+                const errors = result.spellingErrors || [];
+                
+                errors.forEach(error => {
+                    if (!error || !error.word) {
+                        return;
+                    }
+
+                    const key = error.word.toLowerCase();
+
+                    if (errorMap.has(key)) {
+                        // 更新已存在的错误记录
+                        const existing = errorMap.get(key);
+                        existing.errorCount = (existing.errorCount || 1) + 1;
+                        existing.timestamp = Math.max(existing.timestamp || 0, error.timestamp || 0);
+                        
+                        // 保留最新的用户输入
+                        if (error.timestamp > (existing.timestamp || 0)) {
+                            existing.userInput = error.userInput;
+                        }
+                    } else {
+                        // 添加新的错误记录
+                        errorMap.set(key, {
+                            word: error.word,
+                            userInput: error.userInput,
+                            questionId: error.questionId,
+                            suiteId: error.suiteId || result.suiteId,
+                            examId: error.examId || result.examId,
+                            timestamp: error.timestamp || Date.now(),
+                            errorCount: error.errorCount || 1,
+                            source: error.source || this._detectMultiSuiteSource(result.examId)
+                        });
+                    }
+                });
+            });
+
+            // 转换为数组
+            errorMap.forEach(error => aggregated.push(error));
+
+            return aggregated;
         },
 
         async finalizeSuiteRecord(session) {
@@ -461,6 +866,26 @@
         },
 
         async _saveSuitePracticeRecord(record) {
+            const recorderAvailable = this.components
+                && this.components.practiceRecorder
+                && typeof this.components.practiceRecorder.savePracticeRecord === 'function';
+
+            if (recorderAvailable) {
+                try {
+                    await this.components.practiceRecorder.savePracticeRecord(record);
+                    await this._cleanupSuiteEntryRecords(record).catch(error => {
+                        console.warn('[SuitePractice] 清理套题子记录失败:', error);
+                    });
+                    return;
+                } catch (error) {
+                    console.warn('[SuitePractice] PracticeRecorder 保存套题记录失败，改用降级存储:', error);
+                }
+            }
+
+            await this._saveSuitePracticeRecordFallback(record);
+        },
+
+        async _saveSuitePracticeRecordFallback(record) {
             let practiceRecords = await storage.get('practice_records', []);
             if (!Array.isArray(practiceRecords)) {
                 practiceRecords = [];
@@ -1012,6 +1437,139 @@
                     this._suiteHandshakeWaiters.clear();
                 } catch (_) {}
             }
+        },
+
+        /**
+         * 获取或创建多套题会话
+         * @param {string} examId - 考试ID（基础ID，不含套题后缀）
+         * @returns {object} 多套题会话对象
+         */
+        getOrCreateMultiSuiteSession(examId) {
+            if (!this.multiSuiteSessionsMap) {
+                this.multiSuiteSessionsMap = new Map();
+            }
+
+            // 提取基础examId（移除可能的套题后缀如 _set1, _suite1 等）
+            const baseExamId = this._extractBaseExamId(examId);
+
+            if (this.multiSuiteSessionsMap.has(baseExamId)) {
+                return this.multiSuiteSessionsMap.get(baseExamId);
+            }
+
+            // 创建新的多套题会话
+            const session = {
+                id: this._generateMultiSuiteSessionId(baseExamId),
+                baseExamId: baseExamId,
+                status: 'active',
+                startTime: Date.now(),
+                suiteResults: [],
+                expectedSuiteCount: null, // 将在第一次提交时确定
+                metadata: {
+                    source: this._detectMultiSuiteSource(baseExamId),
+                    createdAt: new Date().toISOString()
+                }
+            };
+
+            this.multiSuiteSessionsMap.set(baseExamId, session);
+            console.log('[MultiSuite] 创建新会话:', session.id, '基础ID:', baseExamId);
+
+            return session;
+        },
+
+        /**
+         * 检查多套题是否全部完成
+         * @param {object} session - 多套题会话对象
+         * @returns {boolean} 是否所有套题都已完成
+         */
+        isMultiSuiteComplete(session) {
+            if (!session || !Array.isArray(session.suiteResults)) {
+                return false;
+            }
+
+            // 如果还没有确定预期套题数量，则未完成
+            if (!session.expectedSuiteCount || session.expectedSuiteCount <= 0) {
+                return false;
+            }
+
+            // 检查已完成的套题数量是否达到预期
+            const completedCount = session.suiteResults.length;
+            const isComplete = completedCount >= session.expectedSuiteCount;
+
+            if (isComplete) {
+                console.log('[MultiSuite] 会话完成:', session.id, 
+                    `已完成 ${completedCount}/${session.expectedSuiteCount} 套题`);
+            }
+
+            return isComplete;
+        },
+
+        /**
+         * 提取基础examId（移除套题后缀）
+         * @param {string} examId - 完整的examId
+         * @returns {string} 基础examId
+         */
+        _extractBaseExamId(examId) {
+            if (!examId || typeof examId !== 'string') {
+                return examId;
+            }
+
+            // 移除常见的套题后缀模式：_set1, _suite1, _s1, ::set1 等
+            const patterns = [
+                /_set\d+$/i,
+                /_suite\d+$/i,
+                /_s\d+$/i,
+                /::set\d+$/i,
+                /::suite\d+$/i,
+                /-set\d+$/i,
+                /-suite\d+$/i
+            ];
+
+            let baseId = examId;
+            for (const pattern of patterns) {
+                baseId = baseId.replace(pattern, '');
+            }
+
+            return baseId;
+        },
+
+        /**
+         * 生成多套题会话ID
+         * @param {string} baseExamId - 基础examId
+         * @returns {string} 会话ID
+         */
+        _generateMultiSuiteSessionId(baseExamId) {
+            const timestamp = Date.now().toString(36);
+            const random = Math.random().toString(16).slice(2, 8);
+            const prefix = baseExamId ? `${baseExamId}_` : '';
+            return `multi_${prefix}${timestamp}_${random}`;
+        },
+
+        /**
+         * 检测多套题来源（P1/P4等）
+         * @param {string} examId - 考试ID
+         * @returns {string} 来源标识
+         */
+        _detectMultiSuiteSource(examId) {
+            if (!examId || typeof examId !== 'string') {
+                return 'unknown';
+            }
+
+            const lowerExamId = examId.toLowerCase();
+
+            if (lowerExamId.includes('p1') || lowerExamId.includes('part1')) {
+                return 'p1';
+            }
+            if (lowerExamId.includes('p4') || lowerExamId.includes('part4')) {
+                return 'p4';
+            }
+            if (lowerExamId.includes('p2') || lowerExamId.includes('part2')) {
+                return 'p2';
+            }
+            if (lowerExamId.includes('p3') || lowerExamId.includes('part3')) {
+                return 'p3';
+            }
+
+            return 'listening';
         }
     };
 

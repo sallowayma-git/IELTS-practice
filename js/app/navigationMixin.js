@@ -61,8 +61,12 @@
                 case 'browse':
                     // 如果存在待应用的筛选，则优先应用而不重置
                     if (window.__pendingBrowseFilter && typeof window.applyBrowseFilter === 'function') {
-                        const { category, type } = window.__pendingBrowseFilter;
-                        try { window.applyBrowseFilter(category, type); } finally { delete window.__pendingBrowseFilter; }
+                        const { category, type, filterMode, path } = window.__pendingBrowseFilter;
+                        try {
+                            window.applyBrowseFilter(category, type, filterMode, path);
+                        } finally {
+                            delete window.__pendingBrowseFilter;
+                        }
                     } else if (typeof window.initializeBrowseView === 'function') {
                         window.initializeBrowseView();
                     }
@@ -101,13 +105,13 @@
         /**
          * 浏览分类题目
          */
-        browseCategory(category, type = null) {
+        browseCategory(category, type = null, filterMode = null, path = null) {
             try {
-                // 记录待应用筛选（可显式传入类型，如 'reading' 或 'listening'）
-                window.__pendingBrowseFilter = { category, type };
+                // 记录待应用筛选（可显式传入类型、filterMode 和 path）
+                window.__pendingBrowseFilter = { category, type, filterMode, path };
                 const descriptor = Object.getOwnPropertyDescriptor(window, '__browseFilter');
                 if (!descriptor || typeof descriptor.set !== 'function') {
-                    window.__browseFilter = { category, type };
+                    window.__browseFilter = { category, type, filterMode, path };
                 }
             } catch (_) {}
 
@@ -123,7 +127,7 @@
             // 立即尝试应用（如果浏览视图已在当前激活）
             try {
                 if (typeof window.applyBrowseFilter === 'function' && document.getElementById('browse-view')?.classList.contains('active')) {
-                    window.applyBrowseFilter(category, type);
+                    window.applyBrowseFilter(category, type, filterMode, path);
                     delete window.__pendingBrowseFilter;
                 }
             } catch (_) {}

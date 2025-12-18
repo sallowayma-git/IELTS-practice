@@ -14,8 +14,19 @@
     <script src="../../js/boot-fallbacks.js"></script>
     <script src="../../js/utils/storage.js"></script>
     <script src="../../js/utils/dataBackupManager.js"></script>
+    <!-- 主题适配器 -->
+    <script src="../../js/plugins/themes/theme-adapter-base.js"></script>
+    <script src="../../js/plugins/themes/melody/melody-adapter.js"></script>
     <script>
     if (window.storage && storage.setNamespace) storage.setNamespace('exam_system');
+    // 初始化 Melody 适配器
+    if (window.MelodyAdapter) {
+        window.MelodyAdapter.init().then(function() {
+            console.log('[Melody] 适配器初始化完成');
+        }).catch(function(err) {
+            console.error('[Melody] 适配器初始化失败:', err);
+        });
+    }
     </script>
     <style>
         /* 美乐蒂主题色彩 */
@@ -2663,11 +2674,21 @@
             filterExams() {
                 const typeFilter = document.getElementById('typeFilter')?.value || 'all';
                 const difficultyFilter = document.getElementById('difficultyFilter')?.value || 'all';
-                const searchTerm = document.getElementById('searchBox')?.value.toLowerCase() || '';
+                const searchTerm = (document.getElementById('searchBox')?.value || '').toLowerCase().trim();
                 const candidate = document.getElementById('examGrid');
                 const sections = document.querySelectorAll('#browse .category-section');
-                if (candidate) candidate.style.display = searchTerm ? 'block' : 'none';
-                sections.forEach(sec => { sec.style.display = searchTerm ? 'none' : ''; });
+
+                if (!searchTerm) {
+                    if (candidate) {
+                        candidate.innerHTML = '';
+                        candidate.style.display = 'none';
+                    }
+                    sections.forEach(sec => { sec.style.display = ''; });
+                    return;
+                }
+
+                if (candidate) candidate.style.display = 'block';
+                sections.forEach(sec => { sec.style.display = 'none'; });
 
                 let filtered = this.examData.filter(exam => {
                     const typeMatch = typeFilter === 'all' || exam.type === typeFilter;
@@ -4644,30 +4665,51 @@
 
         // 构建资源路径
         function buildResourcePath(exam, kind = 'html') {
+            try {
+                const adapter = window.themeAdapter || window.MelodyAdapter;
+                if (adapter && typeof adapter.buildResourcePath === 'function') {
+                    return adapter.buildResourcePath(exam, kind);
+                }
+            } catch (_) {}
+
             if (!exam) {
                 console.warn('[Resource] Invalid exam data:', exam);
                 return '#';
             }
 
-            const type = String(exam.type || '').toLowerCase().trim();
-            let basePath = String(exam.path || '').replace(/\\/g, '/');
-            if (basePath && !basePath.endsWith('/')) basePath += '/';
+            const normalizePart = (value, trimLeading) => {
+                if (!value) return '';
+                let v = String(value).replace(/\\/g, '/');
+                if (trimLeading) v = v.replace(/^\/+/, '');
+                return v.replace(/\/+$/g, '');
+            };
 
-            // base标签="../../"已设置，基准路径为项目根目录
-            // 因此路径应该从根目录开始
-            let root;
-            if (type === 'listening') {
-                root = ''; // ListeningPractice已经在exam.path中
-            } else {
-                root = '睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/';
-            }
+            const inferPrefix = () => {
+                try {
+                    const p = String(location.pathname || '').replace(/\\/g, '/');
+                    const anchor = '/.superdesign/design_iterations/';
+                    const idx = p.indexOf(anchor);
+                    if (idx === -1) return './';
+                    const after = p.slice(idx + anchor.length);
+                    const parts = after.split('/').filter(Boolean);
+                    const depth = Math.max(0, parts.length - 1);
+                    const ups = new Array(2 + depth).fill('..');
+                    return ups.join('/');
+                } catch (_) {
+                    return './';
+                }
+            };
 
-            let fileName;
-            if (kind === 'html') fileName = exam.filename || exam.fileName || 'index.html';
-            else fileName = exam.pdfFilename || exam.fileName || 'content.pdf';
+            const base = normalizePart(window.HP_BASE_PREFIX, false) || inferPrefix();
+            const folder = normalizePart(exam.path || '', true);
+            const fileName = (kind === 'pdf')
+                ? (exam.pdfFilename || exam.filename || exam.fileName || '')
+                : (exam.filename || exam.fileName || '');
 
-            const fullPath = root + basePath + fileName;
-            console.log('[Resource] Building path:', { type, basePath, root, fileName, fullPath, baseHref: document.baseURI });
+            const fullPath = [normalizePart(base, false), folder, normalizePart(fileName, true)]
+                .filter(Boolean)
+                .join('/');
+
             return encodeURI(fullPath);
         }
 
@@ -6244,33 +6286,58 @@
     };
   };
 
-  // Clean syncSharedPracticeRecords: read/map/update UI/mirror local, ensure full sync incl. deletions
+  // syncSharedPracticeRecords: 使用 MelodyAdapter 同步练习记录
   window.syncSharedPracticeRecords = async function() {
+    try {
+      // 优先使用 MelodyAdapter
+      if (window.MelodyAdapter && window.MelodyAdapter.isReady) {
+        const records = window.MelodyAdapter.getPracticeRecords();
+        const mapped = Array.isArray(records) ? records.map(window.mapToMelodyModel).filter(Boolean) : [];
+        
+        // 更新 app/UI
+        if (window.app && Array.isArray(window.app.practiceRecords)) {
+          const merged = [...mapped];
+          app.practiceRecords.forEach(old => {
+            if (!merged.find(r => r.id === old.id || r.examId === old.examId)) {
+              merged.push(old);
+            }
+          });
+          merged.sort((a, b) => new Date(b.date) - new Date(a.date));
+          app.practiceRecords = merged;
+          if (typeof window.app.updateUI === 'function') window.app.updateUI();
+          if (typeof window.app.updatePractice === 'function') window.app.updatePractice();
+        }
+        
+        // 镜像到 localStorage（兼容性）
+        try {
+          localStorage.setItem('myMelodyPracticeRecords', JSON.stringify(mapped));
+        } catch (e) {
+          console.warn('[Sync] Local mirror failed:', e);
+        }
+        
+        console.log('[Sync] 通过适配器同步', mapped.length, '条记录');
+        return;
+      }
+      
+      // 回退到直接存储访问
       if (typeof window.storage !== 'object') {
         console.warn('[Sync] Storage unavailable');
         return;
       }
-      try {
-        // 1. Read primary: practice_records (array)
-        let list = await window.storage.get('practice_records', []);
-        console.log('[Record] syncSharedPracticeRecords list type:', typeof list, 'isArray:', Array.isArray(list));
-        if (!Array.isArray(list)) list = [];
-
-      // 2. Fallback to nested: exam_system_practice_records.data (array)
+      
+      let list = await window.storage.get('practice_records', []);
+      if (!Array.isArray(list)) list = [];
+      
       if (list.length === 0) {
         const nested = await window.storage.get('exam_system_practice_records', null);
         if (nested && Array.isArray(nested.data)) {
           list = nested.data;
         }
       }
-      if (!Array.isArray(list)) list = [];
-
-      // 3. Map all to Melody model (handles derivation/fix)
+      
       const mapped = Array.isArray(list) ? list.map(window.mapToMelodyModel).filter(Boolean) : [];
-
-      // 4. Update app/UI if available
+      
       if (window.app && Array.isArray(window.app.practiceRecords)) {
-        console.log('[Sync] Before merge: storageRecords.length =', mapped.length, ', app.practiceRecords.length =', app.practiceRecords.length);
         const merged = [...mapped];
         app.practiceRecords.forEach(old => {
           if (!merged.find(r => r.id === old.id || r.examId === old.examId)) {
@@ -6279,48 +6346,17 @@
         });
         merged.sort((a, b) => new Date(b.date) - new Date(a.date));
         app.practiceRecords = merged;
-        console.log('[Sync] After: merged.length =', merged.length);
         if (typeof window.app.updateUI === 'function') window.app.updateUI();
         if (typeof window.app.updatePractice === 'function') window.app.updatePractice();
       }
-
-      // 5. Mirror to localStorage (myMelodyPracticeRecords) for legacy compat
+      
       try {
         localStorage.setItem('myMelodyPracticeRecords', JSON.stringify(mapped));
       } catch (e) {
         console.warn('[Sync] Local mirror failed:', e);
-        // If localStorage is full, try to clear some space
-        if (e.name === 'QuotaExceededError') {
-          try {
-            // Try to remove old cached data to free up space
-            const keysToRemove = [];
-            for (let i = 0; i < localStorage.length; i++) {
-              const key = localStorage.key(i);
-              if (key && key.startsWith('cached_') || key.startsWith('temp_')) {
-                keysToRemove.push(key);
-              }
-            }
-            keysToRemove.forEach(key => localStorage.removeItem(key));
-
-            // Try again after clearing cache
-            localStorage.setItem('myMelodyPracticeRecords', JSON.stringify(mapped));
-          } catch (e2) {
-            console.warn('[Sync] Still failed after cache cleanup:', e2);
-          }
-        }
       }
-
-      // 6. Back-sync to nested if primary changed (ensure consistency)
-      if (list.length !== mapped.length) {
-        const nestedKey = 'exam_system_practice_records';
-        const currentNested = await window.storage.get(nestedKey, null);
-        if (currentNested && typeof currentNested === 'object') {
-          currentNested.data = mapped; // Update nested.data
-          await window.storage.set(nestedKey, currentNested);
-        }
-      }
-
-      console.log('[Sync] Synced', mapped.length, 'records (full incl. deletions)');
+      
+      console.log('[Sync] 同步', mapped.length, '条记录');
     } catch (e) {
       console.error('[Sync] Error:', e);
     }
