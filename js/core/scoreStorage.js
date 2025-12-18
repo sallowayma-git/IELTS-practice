@@ -9,6 +9,9 @@ class ScoreStorage {
             throw new Error('数据仓库未初始化，无法构建 ScoreStorage');
         }
 
+        this.initializationError = null;
+        this.initializing = true;
+
         this.storageKeys = {
             practiceRecords: 'practice_records',
             userStats: 'user_stats',
@@ -20,7 +23,27 @@ class ScoreStorage {
         this.maxRecords = 1000;
         this.storage = this.createStorageAdapter();
 
-        this.initialize();
+        this.ready = this.initialize()
+            .catch((error) => {
+                this.initializationError = error;
+                return Promise.reject(error);
+            })
+            .finally(() => {
+                this.initializing = false;
+            });
+    }
+
+    async ensureReady(options = {}) {
+        const { allowDuringInit = false } = options;
+        if (this.initializationError) {
+            throw this.initializationError;
+        }
+        if (this.initializing && allowDuringInit) {
+            return;
+        }
+        if (this.ready) {
+            await this.ready;
+        }
     }
 
     normalizePracticeType(rawType) {
@@ -60,6 +83,32 @@ class ScoreStorage {
             }
         }
         return now;
+    }
+
+    inferExamId(recordData = {}) {
+        if (!recordData || typeof recordData !== 'object') {
+            return null;
+        }
+        if (recordData.examId) {
+            return recordData.examId;
+        }
+        if (recordData.metadata?.examId) {
+            return recordData.metadata.examId;
+        }
+        if (Array.isArray(recordData.suiteEntries)) {
+            const suiteExam = recordData.suiteEntries.find(entry => entry && entry.examId);
+            if (suiteExam) {
+                return suiteExam.examId;
+            }
+        }
+        const recordId = recordData.id;
+        if (typeof recordId === 'string') {
+            const match = recordId.match(/^record_([^_]+)_/);
+            if (match && match[1]) {
+                return match[1];
+            }
+        }
+        return null;
     }
 
     buildMetadata(recordData = {}, type) {
@@ -141,7 +190,24 @@ class ScoreStorage {
             typeof recordData.correctAnswers === 'object' &&
             !Array.isArray(recordData.correctAnswers)
         ) {
-            return Object.keys(recordData.correctAnswers).length;
+            let hasBooleanFlag = false;
+            const correctCount = Object.values(recordData.correctAnswers).reduce((count, value) => {
+                if (typeof value === 'boolean') {
+                    hasBooleanFlag = true;
+                    return value ? count + 1 : count;
+                }
+                if (value && typeof value === 'object') {
+                    const flag = value.isCorrect ?? value.correct;
+                    if (typeof flag === 'boolean') {
+                        hasBooleanFlag = true;
+                        return flag ? count + 1 : count;
+                    }
+                }
+                return count;
+            }, 0);
+            if (hasBooleanFlag) {
+                return correctCount;
+            }
         }
 
         if (Array.isArray(answers) && answers.length > 0) {
@@ -290,16 +356,97 @@ class ScoreStorage {
      * 初始化存储系统
      */
     async initialize() {
-        console.log('[ScoreStorage] 初始化完成');
+        try {
+            console.log('ScoreStorage initialized');
 
-        // 检查存储版本并迁移数据
-        await this.checkStorageVersion();
+            // 检查存储版本并迁移数据
+            await this.checkStorageVersion();
 
-        // 初始化数据结构
-        await this.initializeDataStructures();
+            // 初始化数据结构
+            await this.initializeDataStructures();
 
-        // 暂时禁用清理过期数据，避免误删新记录
-        // await this.cleanupExpiredData();
+            // 尝试迁移 legacy StorageManager 中的 practice_records 到统一仓库
+            await this.migrateLegacyPracticeRecords();
+
+            // 暂时禁用清理过期数据，避免误删新记录
+            // await this.cleanupExpiredData();
+        } catch (error) {
+            this.initializationError = error;
+            console.error('[ScoreStorage] 初始化失败', error);
+            throw error;
+        }
+    }
+
+    /**
+     * 将旧版 StorageManager 的 practice_records 数据迁移到统一仓库
+     * 只运行一次，避免重复写入
+     */
+    async migrateLegacyPracticeRecords() {
+        try {
+            const migrationFlagKey = 'legacy_practice_records_migrated';
+            const alreadyMigrated = await this.storage.get(migrationFlagKey, false);
+            if (alreadyMigrated) {
+                return;
+            }
+
+            const legacyStorage = typeof window !== 'undefined' ? window.storage : null;
+            if (!legacyStorage || typeof legacyStorage.get !== 'function') {
+                await this.storage.set(migrationFlagKey, true);
+                return;
+            }
+
+            const legacyRecords = await legacyStorage.get('practice_records', []);
+            if (!Array.isArray(legacyRecords) || legacyRecords.length === 0) {
+                await this.storage.set(migrationFlagKey, true);
+                return;
+            }
+
+            const existing = await this.storage.get(this.storageKeys.practiceRecords, []);
+            const merged = this.mergeRecordsById(existing, legacyRecords);
+
+            if (merged.length !== existing.length) {
+                console.log(`[ScoreStorage] 迁移 legacy practice_records: +${merged.length - existing.length} 条`);
+                await this.storage.set(this.storageKeys.practiceRecords, merged);
+            } else {
+                console.log('[ScoreStorage] 迁移 legacy practice_records: 无新增记录');
+            }
+
+            await this.storage.set(migrationFlagKey, true);
+        } catch (error) {
+            console.warn('[ScoreStorage] 迁移 legacy practice_records 失败，跳过:', error);
+        }
+    }
+
+    /**
+     * 合并记录，按 id/sessonId 去重，优先使用更新时间较新的记录
+     */
+    mergeRecordsById(current = [], incoming = []) {
+        const toTs = (item) => {
+            const candidates = [
+                item?.updatedAt,
+                item?.createdAt,
+                item?.timestamp,
+                item?.endTime,
+                item?.date
+            ];
+            for (const c of candidates) {
+                const n = Number(new Date(c));
+                if (!Number.isNaN(n)) return n;
+            }
+            return 0;
+        };
+
+        const map = new Map();
+        [...current, ...incoming].forEach((item) => {
+            if (!item) return;
+            const key = item.id || item.sessionId || `ts_${toTs(item)}`;
+            const existing = map.get(key);
+            if (!existing || toTs(item) >= toTs(existing)) {
+                map.set(key, item);
+            }
+        });
+
+        return Array.from(map.values()).sort((a, b) => toTs(b) - toTs(a));
     }
 
     /**
@@ -338,7 +485,7 @@ class ScoreStorage {
 
         try {
             // 备份当前数据
-            await this.createBackup('migration_backup');
+            await this.createBackup('migration_backup', { allowDuringInit: true });
 
             // 根据版本执行相应的迁移逻辑
             if (fromVersion < '1.0.0') {
@@ -353,7 +500,7 @@ class ScoreStorage {
             console.error('Data migration failed:', error);
             // 恢复备份数据
             try {
-                await this.restoreBackup('migration_backup');
+                await this.restoreBackup('migration_backup', { allowDuringInit: true });
             } catch (restoreError) {
                 console.error('Failed to restore backup:', restoreError);
             }
@@ -370,7 +517,7 @@ class ScoreStorage {
         await this.storage.set(this.storageKeys.practiceRecords, standardizedRecords);
 
         // 重新计算用户统计
-        await this.recalculateUserStats();
+        await this.recalculateUserStats({ allowDuringInit: true });
     }
 
     /**
@@ -422,10 +569,10 @@ class ScoreStorage {
      * 保存练习记录
      */
     async savePracticeRecord(recordData) {
-        let standardizedRecord;
         try {
+            await this.ensureReady();
             // 标准化记录格式
-            standardizedRecord = this.standardizeRecord(recordData);
+            const standardizedRecord = this.standardizeRecord(recordData);
             
             // 验证记录数据
             this.validateRecord(standardizedRecord);
@@ -434,18 +581,56 @@ class ScoreStorage {
             let records = await this.storage.get(this.storageKeys.practiceRecords, []);
             records = Array.isArray(records) ? records.slice() : [];
 
-            let sanitizedCount = 0;
+            const extractSessionId = (record) => {
+                if (!record || typeof record !== 'object') {
+                    return null;
+                }
+                const rawId =
+                    record.sessionId ||
+                    record.realData?.sessionId ||
+                    record.metadata?.sessionId ||
+                    null;
+                if (!rawId) {
+                    return null;
+                }
+                return String(rawId).trim() || null;
+            };
+
+            const dedupeBySession = (list, contextLabel) => {
+                const seen = new Set();
+                const cleaned = [];
+                list.forEach((item) => {
+                    const sessionId = extractSessionId(item);
+                    if (!sessionId) {
+                        cleaned.push(item);
+                        return;
+                    }
+                    if (seen.has(sessionId)) {
+                        try {
+                            console.warn(`[ScoreStorage] 移除了重复的练习记录 (sessionId=${sessionId}, id=${item?.id || 'unknown'})${contextLabel ? ' during ' + contextLabel : ''}`);
+                        } catch (_) {}
+                        return;
+                    }
+                    seen.add(sessionId);
+                    cleaned.push(item);
+                });
+                return cleaned;
+            };
+
+            let legacyPatched = false;
             records = records.map(record => {
                 if (!this.needsRecordSanitization(record)) {
                     return record;
                 }
-                sanitizedCount += 1;
+                legacyPatched = true;
                 return this.normalizeLegacyRecord(record);
             });
 
-            if (sanitizedCount > 0) {
-                console.log(`[ScoreStorage] 已自动修复 ${sanitizedCount} 条历史练习记录字段缺失或格式问题`);
+            if (legacyPatched) {
+                console.log('[ScoreStorage] 已自动修复历史练习记录字段缺失问题');
             }
+
+            records = dedupeBySession(records, 'initial-pass');
 
             // 检查是否已存在相同ID的记录
             const existingIndex = records.findIndex(r => r.id === standardizedRecord.id);
@@ -456,6 +641,25 @@ class ScoreStorage {
                 // 添加新记录到开头（保持最新记录在前）
                 records.unshift(standardizedRecord);
             }
+
+            const newSessionId = extractSessionId(standardizedRecord);
+            if (newSessionId) {
+                records = records.filter((record, index) => {
+                    if (index === 0) {
+                        return true;
+                    }
+                    const sessionId = extractSessionId(record);
+                    if (sessionId && sessionId === newSessionId && record.id !== standardizedRecord.id) {
+                        try {
+                            console.warn(`[ScoreStorage] 移除了旧的 session 记录 (sessionId=${sessionId}, id=${record?.id || 'unknown'}) 以保留最新结果`);
+                        } catch (_) {}
+                        return false;
+                    }
+                    return true;
+                });
+            }
+
+            records = dedupeBySession(records, 'post-insert');
 
             // 维护记录数量限制
             if (records.length > this.maxRecords) {
@@ -475,13 +679,7 @@ class ScoreStorage {
             return standardizedRecord;
             
         } catch (error) {
-            console.error('Failed to save practice record:', {
-                recordId: recordData?.id || standardizedRecord?.id,
-                examId: recordData?.examId || standardizedRecord?.examId,
-                type: recordData?.type || standardizedRecord?.type,
-                correctAnswers: recordData?.correctAnswers,
-                validationErrors: error?.validationErrors || null
-            }, error);
+            console.error('Failed to save practice record:', error);
             throw error;
         }
     }
@@ -512,7 +710,6 @@ class ScoreStorage {
             patched.type
         );
         patched.metadata = normalizedMetadata;
-
         const normalizedAnswers = this.standardizeAnswers(patched.answers || patched.answerList || []);
         patched.answers = normalizedAnswers;
         patched.answerList = normalizedAnswers;
@@ -592,14 +789,28 @@ class ScoreStorage {
         const now = new Date().toISOString();
         const type = this.inferPracticeType(recordData);
         const recordDate = this.resolveRecordDate(recordData, now);
-        const metadata = this.buildMetadata(recordData, type);
+        const resolvedExamId = this.inferExamId(recordData);
+        const metadata = this.buildMetadata(
+            Object.assign({}, recordData, { examId: resolvedExamId }),
+            type
+        );
+        const comparisonSource = recordData.answerComparison
+            || recordData.realData?.answerComparison
+            || null;
         const normalizedAnswers = this.standardizeAnswers(recordData.answers || recordData.answerList || []);
-        const answerMap = normalizedAnswers.reduce((map, item) => {
+        let answerMap = normalizedAnswers.reduce((map, item) => {
             if (item && item.questionId) {
                 map[item.questionId] = item.answer || '';
             }
             return map;
         }, {});
+        // 如果 answers 为空，尝试从 answerComparison 补齐 userAnswer
+        if ((!answerMap || Object.keys(answerMap).length === 0) && comparisonSource) {
+            const fromComparison = this.convertComparisonToMap(comparisonSource, 'userAnswer');
+            if (Object.keys(fromComparison).length > 0) {
+                answerMap = fromComparison;
+            }
+        }
         const suiteSessionId = recordData.suiteSessionId
             || recordData.metadata?.suiteSessionId
             || null;
@@ -610,24 +821,39 @@ class ScoreStorage {
         if (frequency && !metadata.frequency) {
             metadata.frequency = frequency;
         }
-        const normalizedCorrectMap = (
+        let normalizedCorrectMap = (
             recordData.correctAnswerMap && typeof recordData.correctAnswerMap === 'object'
         )
             ? recordData.correctAnswerMap
             : (recordData.realData?.correctAnswers && typeof recordData.realData.correctAnswers === 'object'
                 ? recordData.realData.correctAnswers
                 : {});
+        if ((!normalizedCorrectMap || Object.keys(normalizedCorrectMap).length === 0) && comparisonSource) {
+            const fromComparison = this.convertComparisonToMap(comparisonSource, 'correctAnswer');
+            if (Object.keys(fromComparison).length > 0) {
+                normalizedCorrectMap = fromComparison;
+            }
+        }
         const derivedTotalQuestions = this.deriveTotalQuestionCount(recordData, normalizedAnswers.length);
         const derivedCorrectAnswers = this.deriveCorrectAnswerCount(recordData, normalizedAnswers);
         const totalQuestions = this.ensureNumber(recordData.totalQuestions, derivedTotalQuestions);
         const correctAnswers = this.ensureNumber(recordData.correctAnswers, derivedCorrectAnswers);
-        const accuracy = this.ensureNumber(
+        let accuracy = this.ensureNumber(
             recordData.accuracy,
             totalQuestions > 0 ? correctAnswers / totalQuestions : 0
         );
+        if (accuracy > 1 && accuracy <= 100) {
+            accuracy = accuracy / 100; // 容错百分比形式
+        }
+        if (!Number.isFinite(accuracy) || accuracy < 0) {
+            accuracy = 0;
+        } else if (accuracy > 1) {
+            accuracy = 1;
+        }
         const detailSource = recordData.answerDetails
             || recordData.scoreInfo?.details
             || recordData.realData?.scoreInfo?.details
+            || (comparisonSource ? this.convertComparisonToDetails(comparisonSource) : null)
             || this.buildAnswerDetailsFromMaps(answerMap, normalizedCorrectMap);
 
         const startTime = recordData.startTime && !Number.isNaN(new Date(recordData.startTime).getTime())
@@ -643,14 +869,14 @@ class ScoreStorage {
             || recordData.examId
             || '未命名练习';
         const normalizedSuiteEntries = this.standardizeSuiteEntries(recordData.suiteEntries || []);
-        const normalizedComparison = (recordData.answerComparison && typeof recordData.answerComparison === 'object')
-            ? this.clonePlainObject(recordData.answerComparison)
+        const normalizedComparison = comparisonSource && typeof comparisonSource === 'object'
+            ? this.clonePlainObject(comparisonSource)
             : null;
 
         return {
             // 基础信息
             id: recordData.id || this.generateRecordId(),
-            examId: recordData.examId,
+            examId: resolvedExamId,
             sessionId: recordData.sessionId,
             title: resolvedTitle,
             type,
@@ -746,6 +972,37 @@ class ScoreStorage {
                 : entry;
         });
         return clone;
+    }
+
+    convertComparisonToMap(comparison, key = 'correctAnswer') {
+        if (!comparison || typeof comparison !== 'object') {
+            return {};
+        }
+        const map = {};
+        Object.entries(comparison).forEach(([questionId, entry]) => {
+            if (!entry || typeof entry !== 'object') return;
+            const value = entry[key] ?? (key === 'correctAnswer' ? entry.correct : entry.user);
+            if (value != null && String(value).trim() !== '') {
+                map[questionId] = value;
+            }
+        });
+        return map;
+    }
+
+    convertComparisonToDetails(comparison) {
+        if (!comparison || typeof comparison !== 'object') {
+            return null;
+        }
+        const details = {};
+        Object.entries(comparison).forEach(([questionId, entry]) => {
+            if (!entry || typeof entry !== 'object') return;
+            details[questionId] = {
+                userAnswer: entry.userAnswer ?? entry.user ?? '',
+                correctAnswer: entry.correctAnswer ?? entry.correct ?? '',
+                isCorrect: typeof entry.isCorrect === 'boolean' ? entry.isCorrect : null
+            };
+        });
+        return details;
     }
 
     standardizeSuiteEntries(entries) {
@@ -851,72 +1108,55 @@ class ScoreStorage {
         }
         
         // 验证数值范围
-        if (record.accuracy < 0 || record.accuracy > 1) {
-            throw new Error('Accuracy must be between 0 and 1');
-        }
+        record.accuracy = Math.max(0, Math.min(1, Number(record.accuracy) || 0));
         
-        if (record.duration < 0) {
-            throw new Error('Duration cannot be negative');
-        }
+        record.duration = Number.isFinite(record.duration) && record.duration >= 0
+            ? record.duration
+            : 0;
     }
 
     /**
      * 更新用户统计
      */
-    async updateUserStats(practiceRecord) {
+    async updateUserStats(practiceRecord, options = {}) {
+        const { allowDuringInit = false } = options;
+        await this.ensureReady({ allowDuringInit });
         const stats = await this.storage.get(this.storageKeys.userStats, this.getDefaultUserStats());
+        this.applyRecordToStats(stats, practiceRecord);
+        await this.storage.set(this.storageKeys.userStats, stats);
+        console.log('User stats updated');
+    }
+
+    applyRecordToStats(stats, practiceRecord) {
+        if (!stats || typeof stats !== 'object') {
+            return;
+        }
 
         const duration = Number(practiceRecord.duration) || 0;
         const accuracy = Number(practiceRecord.accuracy) || 0;
         const normalizedRecord = { ...practiceRecord, duration, accuracy };
-        if (!stats.categoryStats || typeof stats.categoryStats !== 'object') {
-            stats.categoryStats = {};
-        }
-        if (!stats.questionTypeStats || typeof stats.questionTypeStats !== 'object') {
-            stats.questionTypeStats = {};
-        }
 
-        // 更新基础统计
+        stats.categoryStats = stats.categoryStats && typeof stats.categoryStats === 'object' ? stats.categoryStats : {};
+        stats.questionTypeStats = stats.questionTypeStats && typeof stats.questionTypeStats === 'object' ? stats.questionTypeStats : {};
+
         stats.totalPractices += 1;
         stats.totalTimeSpent += duration;
 
-        // 计算平均分数
         const totalScore = (stats.averageScore * (stats.totalPractices - 1)) + accuracy;
-        stats.averageScore = totalScore / stats.totalPractices;
+        stats.averageScore = stats.totalPractices > 0 ? totalScore / stats.totalPractices : 0;
 
-        // 更新分类统计
         this.updateCategoryStats(stats, normalizedRecord);
-
-        // 更新题型统计
         this.updateQuestionTypeStats(stats, normalizedRecord);
-
-        // 更新连续学习天数
         this.updateStreakDays(stats, normalizedRecord);
-
-        // 检查成就
         this.checkAchievements(stats, normalizedRecord);
-        
-        // 更新时间戳
+
         stats.updatedAt = new Date().toISOString();
-        
-        // 保存统计数据
-        await this.storage.set(this.storageKeys.userStats, stats);
-        
-        console.log('User stats updated');
     }
 
     /**
      * 更新分类统计
      */
     updateCategoryStats(stats, practiceRecord) {
-        if (!stats || typeof stats !== 'object') {
-            return;
-        }
-
-        if (!stats.categoryStats || typeof stats.categoryStats !== 'object') {
-            stats.categoryStats = {};
-        }
-
         const category = practiceRecord?.metadata?.category;
         if (!category) return;
         
@@ -947,14 +1187,6 @@ class ScoreStorage {
      * 更新题型统计
      */
     updateQuestionTypeStats(stats, practiceRecord) {
-        if (!stats || typeof stats !== 'object') {
-            return;
-        }
-
-        if (!stats.questionTypeStats || typeof stats.questionTypeStats !== 'object') {
-            stats.questionTypeStats = {};
-        }
-
         if (!practiceRecord.questionTypePerformance) return;
         
         Object.entries(practiceRecord.questionTypePerformance).forEach(([type, performance]) => {
@@ -1094,6 +1326,7 @@ class ScoreStorage {
      * 获取练习记录
      */
     async getPracticeRecords(filters = {}) {
+        await this.ensureReady();
         const raw = await this.storage.get(this.storageKeys.practiceRecords, []);
         const base = Array.isArray(raw) ? raw : [];
         // Normalize each record to ensure UI can rely on a stable shape
@@ -1129,22 +1362,26 @@ class ScoreStorage {
      * 获取用户统计
      */
     async getUserStats() {
+        await this.ensureReady();
         return await this.storage.get(this.storageKeys.userStats, this.getDefaultUserStats());
     }
 
     /**
      * 重新计算用户统计
      */
-    async recalculateUserStats() {
+    async recalculateUserStats(options = {}) {
+        const { allowDuringInit = false } = options;
+        await this.ensureReady({ allowDuringInit });
         console.log('Recalculating user stats...');
 
         const records = (await this.storage.get(this.storageKeys.practiceRecords, []) || []).map(r => this.normalizeRecordFields(r));
         const stats = this.getDefaultUserStats();
 
-        // 重新计算所有统计数据
         for (const record of records) {
-            await this.updateUserStats(record);
+            this.applyRecordToStats(stats, record);
         }
+
+        await this.storage.set(this.storageKeys.userStats, stats);
 
         console.log('User stats recalculated');
     }
@@ -1249,11 +1486,28 @@ class ScoreStorage {
                 });
                 rd.answers = rdMap;
             }
+            const comparisonSource = r.answerComparison || rd.answerComparison || null;
+            if ((!r.answers || Object.keys(r.answers).length === 0) && comparisonSource) {
+                const fromComparison = this.convertComparisonToMap(comparisonSource, 'userAnswer');
+                if (Object.keys(fromComparison).length > 0) {
+                    r.answers = fromComparison;
+                }
+            }
             if (!r.correctAnswerMap || Object.keys(r.correctAnswerMap || {}).length === 0) {
-                r.correctAnswerMap = this.deriveCorrectMapFromDetails(r.answerDetails || r.scoreInfo?.details || rd.scoreInfo?.details);
+                if (comparisonSource) {
+                    r.correctAnswerMap = this.convertComparisonToMap(comparisonSource, 'correctAnswer');
+                }
+                if (!r.correctAnswerMap || Object.keys(r.correctAnswerMap || {}).length === 0) {
+                    r.correctAnswerMap = this.deriveCorrectMapFromDetails(r.answerDetails || r.scoreInfo?.details || rd.scoreInfo?.details);
+                }
             }
             if (!r.answerDetails) {
-                r.answerDetails = r.scoreInfo?.details || this.buildAnswerDetailsFromMaps(r.answers, r.correctAnswerMap);
+                if (comparisonSource) {
+                    r.answerDetails = this.convertComparisonToDetails(comparisonSource);
+                }
+                if (!r.answerDetails) {
+                    r.answerDetails = r.scoreInfo?.details || this.buildAnswerDetailsFromMaps(r.answers, r.correctAnswerMap);
+                }
             }
 
             // 正确/总题数归一
@@ -1307,7 +1561,9 @@ class ScoreStorage {
     /**
      * 创建数据备份 - 使用DataBackupManager
      */
-    async createBackup(backupName = null) {
+    async createBackup(backupName = null, options = {}) {
+        const { allowDuringInit = false } = options;
+        await this.ensureReady({ allowDuringInit });
         if (window.DataBackupManager) {
             const backupManager = new DataBackupManager();
             const practiceRecords = await this.storage.get(this.storageKeys.practiceRecords, []);
@@ -1347,8 +1603,10 @@ class ScoreStorage {
     /**
      * 恢复数据备份 - 直接操作manual_backups存储
      */
-    async restoreBackup(backupId) {
+    async restoreBackup(backupId, options = {}) {
         try {
+            const { allowDuringInit = false } = options;
+            await this.ensureReady({ allowDuringInit });
             const backups = await this.storage.get('manual_backups', []);
             const backup = backups.find(b => b.id === backupId);
 
@@ -1377,6 +1635,7 @@ class ScoreStorage {
      */
     async getBackups() {
         try {
+            await this.ensureReady();
             const backups = await this.storage.get('manual_backups', []);
             // 只返回score_storage类型的备份，按时间倒序排列
             return backups
@@ -1392,6 +1651,7 @@ class ScoreStorage {
      * 导出数据
      */
     async exportData(format = 'json') {
+        await this.ensureReady();
         const exportData = {
             exportDate: new Date().toISOString(),
             version: this.currentVersion,
@@ -1448,50 +1708,90 @@ class ScoreStorage {
      */
     async importData(importData, options = {}) {
         try {
-            const data = typeof importData === 'string' ? JSON.parse(importData) : importData;
-            
-            // 验证数据格式
-            if (!data.practiceRecords || !Array.isArray(data.practiceRecords)) {
-                throw new Error('Invalid import data format');
+            await this.ensureReady();
+            const payload = typeof importData === 'string' ? JSON.parse(importData) : importData;
+
+            const records = this.extractPracticeRecordsFromPayload(payload);
+            const stats = this.extractUserStatsFromPayload(payload);
+
+            if (!Array.isArray(records) || records.length === 0) {
+                throw new Error('Invalid import data format: no practice records found');
             }
-            
+
+            // 标准化记录，避免字段缺失
+            const standardizedRecords = records.map((r) => {
+                try {
+                    return this.standardizeRecord(r);
+                } catch (e) {
+                    console.warn('[ScoreStorage] 标准化导入记录失败，跳过:', r && r.id, e);
+                    return null;
+                }
+            }).filter(Boolean);
+
             // 创建备份
-            const backupId = await this.createBackup('pre_import_backup');
-            
+            await this.createBackup('pre_import_backup');
+
             if (options.merge) {
-                // 合并模式：添加新记录
+                // 合并模式：按 id 去重，保留导入集中的最新（后出现的覆盖）
                 const existingRecords = await this.storage.get(this.storageKeys.practiceRecords, []);
-                const existingIds = new Set(existingRecords.map(r => r.id));
-
-                const newRecords = data.practiceRecords.filter(r => !existingIds.has(r.id));
-                const mergedRecords = [...existingRecords, ...newRecords];
-
+                const mergedMap = new Map();
+                existingRecords.forEach((rec) => {
+                    if (rec && rec.id) mergedMap.set(rec.id, rec);
+                });
+                standardizedRecords.forEach((rec) => {
+                    if (rec && rec.id) mergedMap.set(rec.id, rec);
+                });
+                const mergedRecords = Array.from(mergedMap.values());
                 await this.storage.set(this.storageKeys.practiceRecords, mergedRecords);
 
                 // 重新计算统计
                 await this.recalculateUserStats();
-
-                console.log(`Imported ${newRecords.length} new records`);
+                console.log(`Imported ${standardizedRecords.length} records (merge mode), total ${mergedRecords.length}`);
 
             } else {
                 // 替换模式：完全替换数据
-                await this.storage.set(this.storageKeys.practiceRecords, data.practiceRecords);
+                await this.storage.set(this.storageKeys.practiceRecords, standardizedRecords);
 
-                if (data.userStats) {
-                    await this.storage.set(this.storageKeys.userStats, data.userStats);
+                if (stats) {
+                    await this.storage.set(this.storageKeys.userStats, stats);
                 } else {
                     await this.recalculateUserStats();
                 }
 
-                console.log(`Imported ${data.practiceRecords.length} records (replace mode)`);
+                console.log(`Imported ${standardizedRecords.length} records (replace mode)`);
             }
-            
+
             return true;
-            
+
         } catch (error) {
             console.error('Failed to import data:', error);
             throw error;
         }
+    }
+
+    extractPracticeRecordsFromPayload(payload) {
+        if (!payload) return [];
+        if (Array.isArray(payload)) return payload;
+        if (Array.isArray(payload.practiceRecords)) return payload.practiceRecords;
+        if (Array.isArray(payload.practice_records)) return payload.practice_records;
+        if (Array.isArray(payload.data?.practice_records)) return payload.data.practice_records;
+        if (Array.isArray(payload.data?.practiceRecords)) return payload.data.practiceRecords;
+        if (payload.data?.exam_system_practice_records && Array.isArray(payload.data.exam_system_practice_records.data)) {
+            return payload.data.exam_system_practice_records.data;
+        }
+        if (payload.exam_system_practice_records && Array.isArray(payload.exam_system_practice_records.data)) {
+            return payload.exam_system_practice_records.data;
+        }
+        return [];
+    }
+
+    extractUserStatsFromPayload(payload) {
+        if (!payload || typeof payload !== 'object') return null;
+        return payload.userStats
+            || payload.user_stats
+            || payload.data?.userStats
+            || payload.data?.user_stats
+            || null;
     }
 
     // Note: 备份相关方法已移除，现在使用DataBackupManager
@@ -1507,6 +1807,7 @@ class ScoreStorage {
      * 获取存储统计信息
      */
     async getStorageStats() {
+        await this.ensureReady();
         const records = await this.storage.get(this.storageKeys.practiceRecords, []);
         const backups = await this.storage.get(this.storageKeys.backupData, []);
 
@@ -1524,6 +1825,7 @@ class ScoreStorage {
      * 估算存储大小
      */
     async estimateStorageSize() {
+        await this.ensureReady();
         const data = {
             practiceRecords: await this.storage.get(this.storageKeys.practiceRecords, []),
             userStats: await this.storage.get(this.storageKeys.userStats, {}),
