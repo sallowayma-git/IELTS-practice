@@ -33,7 +33,9 @@
             sidePanelManual: null,
             lastFocus: null,
             importing: false,
-            exporting: false
+            exporting: false,
+            listSwitcher: null,
+            listSwitcherListenerAttached: false
         },
         session: {
             stage: 'loading',
@@ -191,6 +193,7 @@
                         </div>
                     </div>
                     <div class="vocab-topbar__section vocab-topbar__section--right">
+                        <div class="vocab-topbar__list-switcher" data-vocab-role="list-switcher"></div>
                         <button class="btn btn-primary" type="button" data-action="primary-cta">开始复习</button>
                         <div class="vocab-topbar__menu">
                             <button class="btn btn-ghost btn-icon" type="button" data-action="toggle-menu" aria-haspopup="true" aria-expanded="false">⋮</button>
@@ -297,6 +300,7 @@
             progressStats: layout.querySelector('[data-vocab-role=\"progress-stats\"]'),
             menuButton: layout.querySelector('[data-action=\"toggle-menu\"]'),
             menu: layout.querySelector('[data-vocab-role=\"menu\"]'),
+            listSwitcher: layout.querySelector('[data-vocab-role=\"list-switcher\"]'),
             dueBanner: layout.querySelector('[data-vocab-role=\"due-banner\"]'),
             dueText: layout.querySelector('[data-vocab-role=\"due-text\"]'),
             sessionCard: layout.querySelector('[data-vocab-role=\"session-card\"]'),
@@ -320,6 +324,44 @@
         state.elements.sideBody = state.elements.sideSurface;
         setSidePanelExpanded(false);
     }
+
+    function handleListSwitch(event) {
+        if (!event || !event.detail) {
+            return;
+        }
+        resetSessionState();
+        prepareSessionQueue();
+        showDueBanner(state.session.duePending);
+        if (state.session.stage === 'empty') {
+            render();
+            return;
+        }
+        startBatch(true);
+    }
+
+    function ensureListSwitcher() {
+        const container = state.elements.listSwitcher;
+        const Switcher = window.VocabListSwitcher;
+        if (!container || !Switcher || !state.store) {
+            return;
+        }
+
+        if (!state.ui.listSwitcher) {
+            try {
+                state.ui.listSwitcher = new Switcher(state.store);
+                state.ui.listSwitcher.render(container);
+            } catch (error) {
+                console.warn('[VocabSessionView] 词表切换器初始化失败:', error);
+                state.ui.listSwitcher = null;
+            }
+        }
+
+        if (!state.ui.listSwitcherListenerAttached) {
+            container.addEventListener('vocabListSwitch', handleListSwitch);
+            state.ui.listSwitcherListenerAttached = true;
+        }
+    }
+
     function navigateToMoreView() {
         const moreView = document.getElementById('more-view');
         const vocabView = document.getElementById('vocab-view');
@@ -1886,6 +1928,7 @@
             }
             return;
         }
+        ensureListSwitcher();
         prepareSessionQueue();
         showDueBanner(state.session.duePending);
         if (state.session.stage === 'empty') {

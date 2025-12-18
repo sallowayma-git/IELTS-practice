@@ -106,6 +106,13 @@
                 validators: [
                     (value) => Array.isArray(value) || 'vocab_review_queue 必须为数组'
                 ]
+            },
+            legacy_practice_records_migrated: {
+                defaultValue: () => false,
+                validators: [
+                    (value) => typeof value === 'boolean' || 'legacy_practice_records_migrated 必须为布尔值'
+                ],
+                cloneOnRead: false
             }
         });
 
