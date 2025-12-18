@@ -1,4 +1,4 @@
-(function(global) {
+(function (global) {
     const mixin = {
         /**
          * 检查必要的依赖
@@ -12,9 +12,9 @@
                 throw new Error(`Missing required dependencies: ${missing.join(', ')}`);
             }
             // 软依赖提示但不阻断
-            if (!window.Utils) {
-                console.warn('[App] Optional dependency missing: Utils (continuing)');
-            }
+            // if (!window.Utils) {
+            //     console.warn('[App] Optional dependency missing: Utils (continuing)');
+            // }
         },
 
         /**
@@ -130,21 +130,6 @@
                 { name: 'SpecializedPractice', init: () => new SpecializedPractice() },
                 { name: 'QuestionTypePractice', init: () => new QuestionTypePractice() },
                 {
-                    name: 'DataManagementPanel', init: () => {
-                        const container = document.createElement('div');
-                        container.id = 'dataManagementPanel';
-                        if (typeof window.DOM !== 'undefined' && window.DOM.hide) {
-                            window.DOM.hide(container);
-                        } else {
-                            container.style.display = 'none';
-                        }
-                        document.body.appendChild(container);
-                        const instance = new DataManagementPanel(container);
-                        window.dataManagementPanel = instance;
-                        return instance;
-                    }
-                },
-                {
                     name: 'SystemMaintenancePanel', init: () => {
                         const container = document.createElement('div');
                         container.id = 'systemMaintenancePanel';
@@ -182,19 +167,16 @@
 
             // 只初始化已经加载的组件
             const availableComponents = [
-                // ExamBrowser已移除，使用内置的题目列表功能
-                // PracticeHistory and ExamScanner were removed
             ].filter(name => window[name]);
 
             if (availableComponents.length > 0) {
 
-                // 使用相同的初始化逻辑，但只处理可用的组件
+
                 await this.initializeOptionalComponents();
             } else {
                 console.warn('[App] 没有发现可用的可选组件');
             }
 
-            // ExamBrowser组件已移除，使用内置的题目列表功能
         },
 
         /**
