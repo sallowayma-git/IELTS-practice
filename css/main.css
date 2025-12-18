@@ -730,6 +730,104 @@ body.no-scroll {
     position: relative;
 }
 
+.vocab-topbar__list-switcher {
+    position: relative;
+}
+
+.vocab-list-switcher {
+    position: relative;
+}
+
+.vocab-list-switcher .switcher-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: var(--border-radius-lg, var(--radius-md, 12px));
+    border: 1px solid rgba(226, 232, 240, 0.9);
+    background: rgba(255, 255, 255, 0.76);
+    color: var(--text, #1f2937);
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.vocab-list-switcher .switcher-btn:hover {
+    border-color: rgba(148, 163, 184, 0.9);
+    background: rgba(255, 255, 255, 0.92);
+}
+
+.vocab-list-switcher .current-list-name {
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.vocab-list-switcher .switcher-dropdown {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    min-width: 240px;
+    background: #fff;
+    border: 1px solid rgba(226, 232, 240, 0.9);
+    border-radius: 14px;
+    box-shadow: 0 14px 38px rgba(15, 23, 42, 0.18);
+    overflow: hidden;
+    z-index: 120;
+}
+
+.vocab-list-switcher .dropdown-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px;
+}
+
+.vocab-list-switcher .list-option {
+    display: grid;
+    grid-template-columns: 20px 1fr auto 18px;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    cursor: pointer;
+    color: var(--text, #1f2937);
+    font-size: 13px;
+}
+
+.vocab-list-switcher .list-option:hover {
+    background: rgba(99, 102, 241, 0.08);
+}
+
+.vocab-list-switcher .list-option.active {
+    background: rgba(99, 102, 241, 0.12);
+}
+
+.vocab-list-switcher .list-count {
+    font-variant-numeric: tabular-nums;
+    color: var(--muted, #6b7280);
+}
+
+.vocab-list-switcher .active-indicator {
+    color: var(--accent, #6c63ff);
+    font-weight: 700;
+}
+
+@media (max-width: 768px) {
+    .vocab-list-switcher .current-list-name {
+        display: none;
+    }
+
+    .vocab-list-switcher .switcher-btn {
+        padding: 8px 10px;
+    }
+
+    .vocab-list-switcher .switcher-dropdown {
+        min-width: 200px;
+    }
+}
+
 .vocab-view-shell .btn {
     display: inline-flex;
     align-items: center;

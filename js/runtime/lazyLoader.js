@@ -13,6 +13,7 @@
 
         manifest['practice-suite'] = [
             // 练习记录功能与存储相关，需按用户行为加载
+            'js/app/spellingErrorCollector.js',
             'js/utils/markdownExporter.js',
             'js/components/practiceRecordModal.js',
             'js/components/practiceHistoryEnhancer.js',
@@ -48,6 +49,7 @@
             'js/utils/vocabDataIO.js',
             'js/core/vocabScheduler.js',
             'js/core/vocabStore.js',
+            'js/app/vocabListSwitcher.js',
             'js/components/vocabDashboardCards.js',
             'js/components/vocabSessionView.js',
             'js/utils/dataBackupManager.js',
