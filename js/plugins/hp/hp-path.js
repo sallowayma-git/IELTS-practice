@@ -46,7 +46,7 @@
   const STORAGE_KEY = 'hp.basePrefix';
   const DEFAULT_MAP = {
     reading: {
-      root: '睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/',
+      root: '睡着过项目组/2. 所有文章(11.20)[192篇]/',
       exceptions: { 'special-cases': [] }
     },
     listening: {

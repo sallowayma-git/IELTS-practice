@@ -18,6 +18,44 @@ class DataBackupManager {
         this.initialize();
     }
 
+    sanitizeExamTitle(title) {
+        if (!title) return '';
+        const str = String(title).trim();
+        if (!str) return '';
+        const pattern = /ielts\s+listening\s+practice\s*-\s*part\s*\d+\s*[:\-]?\s*(.+)$/i;
+        const match = str.match(pattern);
+        if (match && match[1]) {
+            return match[1].trim();
+        }
+        if (str.includes(' - ')) {
+            const segments = str.split(' - ').map((s) => s.trim()).filter(Boolean);
+            if (segments.length > 1) {
+                return segments[segments.length - 1];
+            }
+        }
+        return str;
+    }
+
+    sanitizeRecord(record) {
+        if (!record || typeof record !== 'object') {
+            return record;
+        }
+        const clone = { ...record };
+        const metadata = (clone.metadata && typeof clone.metadata === 'object') ? { ...clone.metadata } : {};
+        const baseTitle = metadata.examTitle || metadata.title || clone.title || clone.examTitle;
+        const cleanedTitle = this.sanitizeExamTitle(baseTitle);
+        if (cleanedTitle) {
+            metadata.examTitle = cleanedTitle;
+            metadata.title = metadata.title || cleanedTitle;
+            clone.title = cleanedTitle;
+            if (!clone.examTitle) {
+                clone.examTitle = cleanedTitle;
+            }
+            clone.metadata = metadata;
+        }
+        return clone;
+    }
+
     async initialize() {
         try {
             await this.initializeSettings();
@@ -199,16 +237,31 @@ class DataBackupManager {
         const normalized = this.normalizeImportPayload(payload, { preserveIds });
         console.log('[DataBackupManager] Normalized records:', normalized.practiceRecords.length);
 
-        // 添加对根级数组的支持
-        if (Array.isArray(payload)) {
-            normalized.practiceRecords = payload;
-        } else {
-            normalized.practiceRecords = payload.practiceRecords || payload.records || [];
+        // 优先使用标准化提取结果，必要时再回退到原始载荷路径
+        let practiceRecords = Array.isArray(normalized.practiceRecords) ? normalized.practiceRecords : [];
+
+        if (!practiceRecords.length) {
+            if (Array.isArray(payload)) {
+                practiceRecords = payload;
+            } else {
+                practiceRecords = payload.practiceRecords
+                    || payload.practice_records
+                    || (payload.data && payload.data.practice_records)
+                    || (payload.data && payload.data.practiceRecords)
+                    || (payload.data && payload.data.exam_system_practice_records && payload.data.exam_system_practice_records.data)
+                    || (payload.exam_system_practice_records && payload.exam_system_practice_records.data)
+                    || payload.records
+                    || [];
+            }
         }
 
-        if (!normalized.practiceRecords.length) {
+        if (!practiceRecords.length) {
             throw new Error('Import file does not contain any practice records.');
         }
+
+        practiceRecords = practiceRecords.map((r) => this.sanitizeRecord(r));
+        normalized.practiceRecords = practiceRecords;
+        console.log('[DataBackupManager] After sanitize, records:', normalized.practiceRecords.length);
 
         const originalLength = normalized.practiceRecords.length;
         if (validateData) {
@@ -221,15 +274,20 @@ class DataBackupManager {
         let backupId = null;
         if (createBackup) {
             backupId = await this.createPreImportBackup();
+            console.log('[DataBackupManager] Pre-import backup created:', backupId);
         }
 
         let mergeResult;
         try {
-            mergeResult = await this.mergePracticeRecords(normalized.practiceRecords, mergeMode);
-            console.log('[DataBackupManager] Saving to storage');
+            mergeResult = await this.mergeWithScoreStorageIfAvailable(normalized.practiceRecords, normalized.userStats, mergeMode);
+            if (!mergeResult) {
+                console.log('[DataBackupManager] Fallback to legacy storage merge');
+                mergeResult = await this.mergePracticeRecords(normalized.practiceRecords, mergeMode);
+                console.log('[DataBackupManager] Saving to storage');
 
-            if (normalized.userStats) {
-                await this.mergeUserStats(normalized.userStats, mergeMode);
+                if (normalized.userStats) {
+                    await this.mergeUserStats(normalized.userStats, mergeMode);
+                }
             }
         } catch (error) {
             if (backupId) {
@@ -502,6 +560,82 @@ class DataBackupManager {
 
         if (records.length === 0 && skippedCount > 0) {
             throw new Error('All records were invalid after validation.');
+        }
+    }
+
+    getScoreStorageInstance() {
+        return window.app?.components?.practiceRecorder?.scoreStorage
+            || window.practiceRecorder?.scoreStorage
+            || window.scoreStorage
+            || null;
+    }
+
+    async mergeWithScoreStorageIfAvailable(records, userStats, mergeMode = 'merge') {
+        const scoreStorage = this.getScoreStorageInstance();
+        if (!scoreStorage || typeof scoreStorage.importData !== 'function') {
+            return null;
+        }
+
+        try {
+            console.log('[DataBackupManager] Using ScoreStorage import path, mode:', mergeMode, 'records:', Array.isArray(records) ? records.length : 0);
+            const existingList = (typeof scoreStorage.getPracticeRecords === 'function')
+                ? await scoreStorage.getPracticeRecords({})
+                : [];
+            const existing = Array.isArray(existingList) ? existingList : [];
+            const existingMap = new Map(
+                existing
+                    .filter(record => record && record.id)
+                    .map(record => [String(record.id), record])
+            );
+
+            let incoming = Array.isArray(records) ? records.slice() : [];
+            const originalLength = incoming.length;
+
+            if (mergeMode === 'skip' && incoming.length) {
+                incoming = incoming.filter(record => record && !existingMap.has(String(record.id)));
+            }
+
+            if (mergeMode === 'skip' && incoming.length === 0) {
+                return {
+                    importedCount: 0,
+                    updatedCount: 0,
+                    skippedCount: originalLength,
+                    finalCount: existing.length
+                };
+            }
+
+            const payload = { practiceRecords: incoming };
+            if (userStats) {
+                payload.userStats = userStats;
+            }
+
+            await scoreStorage.importData(payload, { merge: mergeMode !== 'replace' });
+
+            const finalRecords = (typeof scoreStorage.getPracticeRecords === 'function')
+                ? await scoreStorage.getPracticeRecords({})
+                : [];
+            const finalCount = Array.isArray(finalRecords) ? finalRecords.length : incoming.length;
+
+            const importedCount = mergeMode === 'replace'
+                ? incoming.length
+                : incoming.filter(record => record && !existingMap.has(String(record.id))).length;
+            const updatedCount = mergeMode === 'replace'
+                ? existingMap.size
+                : (mergeMode === 'skip' ? 0 : incoming.length - importedCount);
+            const skippedCount = mergeMode === 'skip' ? (originalLength - incoming.length) : 0;
+
+            console.log('[DataBackupManager] ScoreStorage import finished', {
+                mergeMode,
+                importedCount,
+                updatedCount,
+                skippedCount,
+                finalCount
+            });
+
+            return { importedCount, updatedCount, skippedCount, finalCount };
+        } catch (error) {
+            console.warn('[DataBackupManager] ScoreStorage import failed, fallback to storage', error);
+            return null;
         }
     }
 
