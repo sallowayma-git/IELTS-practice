@@ -1290,11 +1290,21 @@ class StorageManager {
         const { skipReady = false } = options;
         await this.waitForInitialization(skipReady);
         console.log('[Storage] 开始从备份恢复数据');
+
+        const backupPath = 'assets/data/backup-practice-records.json';
+        const isFileProtocol = typeof window !== 'undefined'
+            && window.location
+            && window.location.protocol === 'file:';
+
+        // Chromium 下 fetch(file://...) 会直接抛错；备份属于可选项，跳过即可。
+        if (isFileProtocol) {
+            console.info('[Storage] file:// 环境跳过内置备份恢复');
+            return false;
+        }
+
         try {
-            const backupPath = 'assets/data/backup-practice-records.json';
             const response = await fetch(backupPath);
             if (!response.ok) {
-                console.warn('[Storage] 无备份可用，数据可能丢失，请手动恢复');
                 return false;
             }
             const backupData = await response.json();
@@ -1307,8 +1317,7 @@ class StorageManager {
             console.log('[Storage] 从备份恢复 practice_records 成功');
             return true;
         } catch (error) {
-            console.error('[Storage] 备份恢复失败:', error);
-            console.warn('[Storage] 无备份可用，数据可能丢失，请手动恢复');
+            console.warn('[Storage] 备份恢复失败，已跳过:', error);
             return false;
         }
     }
