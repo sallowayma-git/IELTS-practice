@@ -1040,6 +1040,56 @@
         },
 
         /**
+         * 动态资源页（例如 100 P1/P4）会在 DOMContentLoaded 之后才渲染 .test-page。
+         * 初始化阶段若误判为单套题，会导致全页收集把 tX_qY 归一成 qY，直接串页污染。
+         * 这里做运行时兜底：只允许从单套题切到多套题，并清理遗留的未分套题缓存。
+         */
+        ensureMultiSuiteMode: function () {
+            if (this.isMultiSuite) {
+                return;
+            }
+
+            let detected = false;
+            try {
+                detected = this.detectMultiSuiteStructure();
+            } catch (error) {
+                console.warn('[PracticeEnhancer] 多套题检测失败，保持单套题模式:', error);
+                detected = false;
+            }
+
+            if (!detected) {
+                return;
+            }
+
+            this.isMultiSuite = true;
+            this.purgeUnscopedAnswerCaches();
+            console.log('[PracticeEnhancer] 运行时检测到多套题结构，已切换为多套题模式');
+        },
+
+        purgeUnscopedAnswerCaches: function () {
+            const purgeMap = (map, label) => {
+                if (!map || typeof map !== 'object') {
+                    return 0;
+                }
+                let removed = 0;
+                Object.keys(map).forEach((key) => {
+                    if (!key || key.includes('::')) {
+                        return;
+                    }
+                    delete map[key];
+                    removed += 1;
+                });
+                if (removed > 0) {
+                    console.warn(`[PracticeEnhancer] 已清理未分套题的${label}: ${removed}`);
+                }
+                return removed;
+            };
+
+            purgeMap(this.answers, '答案缓存');
+            purgeMap(this.correctAnswers, '正确答案缓存');
+        },
+
+        /**
          * 从DOM元素中提取套题标识
          * @param {HTMLElement} element - 要提取套题ID的元素
          * @returns {string|null} 套题ID，如果无法提取则返回null
@@ -2270,8 +2320,7 @@
             // 拖拽事件监听
             document.addEventListener('drop', function (e) {
                 setTimeout(function () {
-                    self.collectDropzoneAnswers();
-                    self.collectAllAnswers(); // 全面收集一次
+                    self.collectAllAnswers(); // 全面收集一次（多套题/单套题内部会自行处理拖拽答案）
                 }, 100);
             });
 
@@ -2349,6 +2398,8 @@
         recordAnswer: function (element) {
             if (!element || this.isExcludedControl(element)) return;
 
+            this.ensureMultiSuiteMode();
+
             const questionId = this.getQuestionId(element);
             if (!questionId) {
                 return;
@@ -2360,7 +2411,16 @@
                 return;
             }
 
-            const normalizedId = this.addAnswer(questionId, value);
+            let scopedQuestionId = questionId;
+            if (this.isMultiSuite) {
+                const suiteId = this.extractSuiteId(element);
+                if (!suiteId) {
+                    return;
+                }
+                scopedQuestionId = `${suiteId}::${questionId}`;
+            }
+
+            const normalizedId = this.addAnswer(scopedQuestionId, value);
             if (!normalizedId) return;
             console.log('[PracticeEnhancer] 记录答案:', normalizedId, '=', value);
 
@@ -2738,8 +2798,8 @@
 
             questionIds.forEach((questionId) => {
                 const prefixedKey = `${suiteId}::${questionId}`;
-                const userAnswer = this.answers[prefixedKey] ?? this.answers[questionId] ?? null;
-                const correctAnswer = this.correctAnswers[prefixedKey] ?? this.correctAnswers[questionId] ?? null;
+                const userAnswer = this.answers[prefixedKey] ?? null;
+                const correctAnswer = this.correctAnswers[prefixedKey] ?? null;
 
                 comparison[questionId] = {
                     userAnswer,
@@ -2955,6 +3015,7 @@
             this.captureQuestionSet();
 
             // 如果是多套题模式，按套题分组收集
+            this.ensureMultiSuiteMode();
             if (this.isMultiSuite) {
                 console.log('[PracticeEnhancer] 多套题模式：按套题分组收集答案');
                 this.collectMultiSuiteAnswers();
