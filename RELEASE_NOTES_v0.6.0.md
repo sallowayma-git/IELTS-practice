@@ -67,6 +67,6 @@
 
 ---
 
-**发布团队**: Sallowaymmm / 阿橙  
+**发布团队**: Sallowaymmm 
 **发布地址**: https://github.com/sallowayma-git/IELTS-practice/releases/tag/v0.6.0
 
