@@ -1,61 +1,120 @@
 {
   "name": "ielts-practice",
-  "version": "0.3.1",
+  "version": "0.6.0",
   "description": "IELTS Practice Application",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
-    "start": "npm run build:writing && electron .",
-    "build:writing": "cd apps/writing-vue && npm run build",
-    "pack": "npm run build:writing && electron-builder --dir",
-    "dist": "npm run build:writing && electron-builder"
+    "start": "electron .",
+    "start:electron": "electron .",
+    "release:build": "electron-builder --publish never",
+    "release:publish": "electron-builder --publish onTag",
+    "build:resource-release": "node scripts/build-resource-release.mjs",
+    "check:update-syntax": "node scripts/check-update-syntax.mjs",
+    "verify:release-client-smoke": "node developer/tests/update/release-client-smoke.cjs",
+    "verify:resource-release": "node scripts/verify-resource-release.mjs",
+    "verify:resource-release-smoke": "node developer/tests/update/resource-release-smoke.mjs",
+    "verify:shell-release": "node scripts/verify-shell-release.mjs",
+    "verify:shell-release-smoke": "node developer/tests/update/shell-release-smoke.mjs",
+    "verify:shell-support-smoke": "node developer/tests/update/shell-support-smoke.cjs",
+    "verify:update-runtime": "node developer/tests/update/renderer-ready-smoke.cjs"
   },
-  "dependencies": {
-    "better-sqlite3": "^12.6.2",
-    "express": "^4.21.2",
-    "uuid": "^13.0.0"
-  },
-  "devDependencies": {
-    "electron": "^40.1.0",
-    "electron-builder": "^25.1.8"
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sallowayma-git/IELTS-practice.git"
   },
   "build": {
-    "appId": "com.ielts.practice",
+    "appId": "com.sallowayma.ieltspractice",
     "productName": "IELTS Practice",
+    "directories": {
+      "output": "dist/electron"
+    },
+    "electronDownload": {
+      "mirror": "https://npmmirror.com/mirrors/electron/"
+    },
     "files": [
       "electron/**/*",
-      "dist/writing/**/*",
       "index.html",
       "css/**/*",
       "js/**/*",
+      "templates/**/*",
       "assets/**/*",
-      "!ListeningPractice/**/*",
-      "!睡着过项目组/**/*"
+      "ListeningPractice/**/*",
+      "README.md",
+      "LICENSE",
+      "package.json"
     ],
-    "extraResources": [
+    "publish": [
       {
-        "from": "README.md",
-        "to": "README.md"
+        "provider": "github",
+        "owner": "sallowayma-git",
+        "repo": "IELTS-practice",
+        "releaseType": "release"
       }
     ],
     "mac": {
       "category": "public.app-category.education",
+      "artifactName": "ielts-practice-${version}-macos-${arch}.${ext}",
+      "hardenedRuntime": true,
+      "strictVerify": true,
+      "gatekeeperAssess": false,
       "target": [
         "dmg",
         "zip"
       ]
     },
-    "win": {
-      "target": [
-        "nsis",
-        "portable"
+    "dmg": {
+      "artifactName": "ielts-practice-${version}-macos-${arch}.${ext}",
+      "title": "Install IELTS Practice",
+      "iconSize": 128,
+      "internetEnabled": false,
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "contents": [
+        {
+          "x": 150,
+          "y": 190,
+          "type": "file"
+        },
+        {
+          "x": 390,
+          "y": 190,
+          "type": "link",
+          "path": "/Applications"
+        }
       ]
     },
-    "linux": {
+    "win": {
+      "artifactName": "ielts-practice-${version}-windows-${arch}-setup.${ext}",
       "target": [
-        "AppImage",
-        "deb"
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "selectPerMachineByDefault": false,
+      "allowToChangeInstallationDirectory": true,
+      "differentialPackage": true
+    },
+    "extraMetadata": {
+      "main": "electron/main.js"
     }
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "electron-updater": "^6.3.9",
+    "semver": "^7.6.3"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
   }
 }
