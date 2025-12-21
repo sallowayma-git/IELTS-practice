@@ -218,6 +218,14 @@
                     </div>
                     <div class="tool-card-arrow">进入</div>
                 </button>
+                <button class="tool-card" type="button" onclick="showAchievements()">
+                    <div class="tool-card-icon">🏆</div>
+                    <div class="tool-card-content">
+                        <h3>成就系统</h3>
+                        <p>查看你解锁的徽章和荣誉。</p>
+                    </div>
+                    <div class="tool-card-arrow">查看</div>
+                </button>
             </div>
         </div>
         <section id="vocab-view" class="view" data-view="vocab" hidden>
@@ -469,6 +477,22 @@
     <script src="js/app/suitePracticeMixin.js"></script>
     <script src="js/app/fallbackMixin.js"></script>
     <script src="js/app.js"></script>
+    <script src="js/services/achievementManager.js"></script>
+
+    <!-- 成就系统模态框 -->
+    <div id="achievements-modal" class="theme-modal">
+        <div class="theme-modal-content" style="max-width: 600px;">
+            <div class="theme-modal-header">
+                <h3>🏆 我的成就</h3>
+                <button class="theme-modal-close" onclick="hideAchievements()">×</button>
+            </div>
+            <div class="theme-modal-body">
+                <div class="achievements-grid" id="achievements-list">
+                    <!-- JavaScript will populate this -->
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>
