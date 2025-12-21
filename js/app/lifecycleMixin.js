@@ -191,38 +191,6 @@
          * 初始化响应式功能
          */
         initializeResponsiveFeatures() {
-            // 初始化响应式管理器
-            if (window.ResponsiveManager) {
-                this.responsiveManager = new ResponsiveManager();
-            }
-
-            // 初始化触摸处理器
-            if (window.TouchHandler) {
-                this.touchHandler = new TouchHandler();
-            }
-
-            // 初始化主题管理器
-            if (window.ThemeManager) {
-                this.themeManager = new ThemeManager();
-            }
-
-            // 初始化键盘快捷键
-            if (window.KeyboardShortcuts) {
-                this.keyboardShortcuts = new KeyboardShortcuts();
-            }
-
-
-
-            // 初始化教程系统
-            if (window.TutorialSystem) {
-                this.tutorialSystem = new TutorialSystem();
-            }
-
-            // 初始化设置面板
-            if (window.SettingsPanel) {
-                this.settingsPanel = new SettingsPanel();
-            }
-
             // 设置响应式事件监听
             this.setupResponsiveEvents();
         },
