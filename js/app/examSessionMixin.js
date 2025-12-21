@@ -1,4 +1,4 @@
-(function(global) {
+(function (global) {
     const MAX_LEGACY_PRACTICE_RECORDS = 1000;
     const isFileProtocol = !!(global && global.location && global.location.protocol === 'file:');
     const PRACTICE_ENHANCER_SCRIPT_PATH = './js/practice-page-enhancer.js';
@@ -19,7 +19,7 @@
                         return state.slice();
                     }
                 }
-            } catch (_) {}
+            } catch (_) { }
         }
 
         let activeKey = 'exam_index';
@@ -41,7 +41,7 @@
                 if (storedKey && typeof storedKey === 'string' && storedKey.trim()) {
                     activeKey = storedKey.trim();
                 }
-            } catch (_) {}
+            } catch (_) { }
         }
 
         let dataset = await storage.get(activeKey, []) || [];
@@ -103,7 +103,7 @@
                 if (exam.hasHtml === false) {
                     const pdfUrl = (typeof window.buildResourcePath === 'function')
                         ? window.buildResourcePath(exam, 'pdf')
-                        : ((exam.path || '').replace(/\\/g,'/').replace(/\/+\//g,'/') + (exam.pdfFilename || '') );
+                        : ((exam.path || '').replace(/\\/g, '/').replace(/\/+\//g, '/') + (exam.pdfFilename || ''));
                     const resolvedPdfUrl = this._ensureAbsoluteUrl(pdfUrl);
                     let pdfWin = null;
 
@@ -121,11 +121,11 @@
                         if (options.target === 'tab') {
                             try {
                                 pdfWin = window.open(resolvedPdfUrl, '_blank');
-                            } catch (_) {}
+                            } catch (_) { }
                         } else {
                             try {
                                 pdfWin = window.open(resolvedPdfUrl, `pdf_${exam.id}`, 'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes');
-                            } catch (_) {}
+                            } catch (_) { }
                         }
                     }
 
@@ -226,7 +226,7 @@
                     if (tabWindow && typeof tabWindow.focus === 'function') {
                         tabWindow.focus();
                     }
-                } catch (_) {}
+                } catch (_) { }
 
                 if (tabWindow) {
                     return tabWindow;
@@ -244,7 +244,7 @@
                     `exam_${exam.id}`,
                     windowFeatures
                 );
-            } catch (_) {}
+            } catch (_) { }
 
             // 弹窗被拦截时，降级为当前窗口打开，确保用户可进入练习页
             if (!examWindow) {
@@ -527,7 +527,7 @@
                         if (doc.getElementById('complete-exam-btn') && doc.getElementById('force-ready-btn')) {
                             return;
                         }
-                    } catch (_) {}
+                    } catch (_) { }
 
                     const host = doc.head || doc.body;
                     const scriptEl = doc.createElement('script');
@@ -1429,6 +1429,11 @@
 
                         await storage.set('practice_records', records);
 
+                        // 检查成就
+                        if (window.AchievementManager) {
+                            window.AchievementManager.check(practiceRecord).catch(console.warn);
+                        }
+
                         return practiceRecord;
                     } catch (error) {
                         console.error('[FallbackRecorder] 保存失败:', error);
@@ -1787,7 +1792,7 @@
                     clearInterval(this._handshakeTimers.get(examId));
                     this._handshakeTimers.delete(examId);
                 }
-            } catch (_) {}
+            } catch (_) { }
 
             // 可以在这里发送额外的配置信息给数据采集器
             // 例如题目信息、特殊设置等
@@ -1917,6 +1922,11 @@
 
                 // 显示完成通知（使用真实数据）
                 this.showRealCompletionNotification(examId, data);
+
+                // 检查成就
+                if (window.AchievementManager) {
+                    window.AchievementManager.check(data?.realData).catch(console.warn);
+                }
 
                 // 刷新练习记录显示
                 if (typeof updatePracticeView === 'function') {
@@ -2102,18 +2112,18 @@
 
                     // 真实数据
                     realData: {
-                       score: realData.scoreInfo?.correct || 0,
-                       totalQuestions: realData.scoreInfo?.total || 0,
-                       accuracy: realData.scoreInfo?.accuracy || 0,
-                       percentage: realData.scoreInfo?.percentage || 0,
-                       duration: realData.duration,
-                       answers: normalizedAnswers,
-                       correctAnswers: normalizedCorrectMap,
-                       answerHistory: realData.answerHistory,
-                       interactions: realData.interactions,
-                       isRealData: true,
-                       source: realData.scoreInfo?.source || 'unknown'
-                   },
+                        score: realData.scoreInfo?.correct || 0,
+                        totalQuestions: realData.scoreInfo?.total || 0,
+                        accuracy: realData.scoreInfo?.accuracy || 0,
+                        percentage: realData.scoreInfo?.percentage || 0,
+                        duration: realData.duration,
+                        answers: normalizedAnswers,
+                        correctAnswers: normalizedCorrectMap,
+                        answerHistory: realData.answerHistory,
+                        interactions: realData.interactions,
+                        isRealData: true,
+                        source: realData.scoreInfo?.source || 'unknown'
+                    },
 
                     // 数据来源标识
                     dataSource: 'real',
@@ -2690,7 +2700,7 @@
             }
 
             this.cleanupExamSession(examId);
-                    window.showMessage('会话已结束', 'info');
+            window.showMessage('会话已结束', 'info');
         },
 
         /**
@@ -2724,7 +2734,7 @@
             return;
             // 每30秒检查一次活动会话
             this.sessionMonitorInterval = setInterval(() => {
-                            this.cleanupClosedWindows();
+                this.cleanupClosedWindows();
             }, 30000);
         },
 
