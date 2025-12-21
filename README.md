@@ -43,10 +43,9 @@
 
 ### 📝 练习记录与统计
 自动记录练习会话（通过 PracticeRecorder），存储在 localStorage（`exam_system_practice_records` 数组），支持分析和导出。核心字段：id、examId、title、category、date、duration、percentage、realData（答案/交互/scoreInfo）。
-- **统计总览**：卡片显示“已练习题目”（total-practiced）、“平均正确率”（avg-score %）、“学习时长”（study-time 分钟）、“连续学习天数”（streak-days）。基于 ScoreAnalyzer 计算：总练习/平均分数/趋势（线性回归）。
+- **统计总览**：卡片显示“已练习题目”（total-practiced）、“平均正确率”（avg-score %）、“学习时长”（study-time 分钟）、“连续学习天数”（streak-days）。基于练习记录汇总统计（总练习/平均分数/趋势）。
 - **历史列表**：时间线显示记录，支持过滤“全部/阅读/听力”；点击展开详情（分数、时间、笔记）。批量操作：选中后“📝 批量删除”；“📄 导出 Markdown” 生成报告（标题/日期/分数/解析）。
 - **数据管理**：导入 JSON 记录（合并去重）；清除记录（clearPracticeData()）。益处：趋势分析（如最近 30 天进步率），识别弱分类/题型（e.g., P3 准确率 60%）。
-- **高级分析**：通过 ScoreAnalyzer 生成雷达图数据（分类/题型准确率/稳定性）；RecommendationEngine 建议针对弱点（如“练习 P3 总结题”）。
 - **场景**：练习后自动保存，查看“练习历史” 筛选本周阅读，导出 Markdown 分享进度。
 
 ### ⚙️ 系统设置与维护
@@ -65,8 +64,6 @@
 - **其他**：开发团队弹窗（睡着过成员列表）；隐私：所有数据本地，无外部传输。
 - **场景**：每月备份，导入旧记录；切换主题优化视觉（如 Melody 粉色 UI）。
 
-### 📈 推荐与优化（内置引擎）
-基于 RecommendationEngine，自动生成练习建议：分析弱点（低准确率分类/题型）、难度调整（±0.1 基于最近平均）、多样性过滤（max 30% 同类型）。在总览/记录中显示“推荐练习：P3 总结题”。
 
 ## 详细使用指南
 
@@ -98,7 +95,7 @@
 - **时间管理**：严格 20 分钟/文章，记录 duration 分析效率。
 - **错误反思**：查看 realData.answerComparison（用户 vs 正确答案），笔记同义替换/陷阱。
 - **进度追踪**：监控 streak-days 和 avg-score，目标 Band 7+（准确率 70%+）；每周导出 Markdown 回顾。
-- **优化**：使用推荐引擎建议，结合官方 IELTS 标准自评；移动练习 PDF 模式通勤。
+- **优化**：结合官方 IELTS 标准自评；移动练习 PDF 模式通勤。
 
 ## 故障排除
 

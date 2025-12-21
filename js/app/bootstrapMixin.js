@@ -114,37 +114,7 @@
          */
         async initializeOptionalComponents() {
 
-            const componentInitializers = [
-                // ExamBrowser组件已移除，使用内置的题目列表功能
-                // PracticeHistory组件已移除，使用简单的练习记录界面
-
-                { name: 'RecommendationDisplay', init: () => new RecommendationDisplay() },
-                {
-                    name: 'GoalSettings', init: () => {
-                        const instance = new GoalSettings();
-                        window.goalSettings = instance;
-                        return instance;
-                    }
-                },
-                { name: 'ProgressTracker', init: () => new ProgressTracker() },
-                { name: 'SpecializedPractice', init: () => new SpecializedPractice() },
-                { name: 'QuestionTypePractice', init: () => new QuestionTypePractice() },
-                {
-                    name: 'SystemMaintenancePanel', init: () => {
-                        const container = document.createElement('div');
-                        container.id = 'systemMaintenancePanel';
-                        if (typeof window.DOM !== 'undefined' && window.DOM.hide) {
-                            window.DOM.hide(container);
-                        } else {
-                            container.style.display = 'none';
-                        }
-                        document.body.appendChild(container);
-                        const instance = new SystemMaintenancePanel(container);
-                        window.systemMaintenancePanel = instance;
-                        return instance;
-                    }
-                }
-            ];
+            const componentInitializers = [];
 
             for (const { name, init } of componentInitializers) {
                 if (window[name]) {
