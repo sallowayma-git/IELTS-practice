@@ -5860,3 +5860,26 @@ body.theme-blue ::-webkit-scrollbar-thumb {
     color: var(--color-gray-500);
     line-height: 1.3;
 }
+
+/* Achievement Tiers */
+.achievement-card.tier-1.unlocked {
+    border-color: #cd7f32; /* Bronze */
+    box-shadow: 0 4px 12px rgba(205, 127, 50, 0.2);
+    background: linear-gradient(145deg, #fff, #fff0e0);
+}
+
+.achievement-card.tier-2.unlocked {
+    border-color: #c0c0c0; /* Silver */
+    box-shadow: 0 4px 12px rgba(192, 192, 192, 0.2);
+    background: linear-gradient(145deg, #fff, #f0f0f0);
+}
+
+.achievement-card.tier-3.unlocked {
+    border-color: #ffd700; /* Gold */
+    box-shadow: 0 4px 12px rgba(255, 215, 0, 0.2);
+    background: linear-gradient(145deg, #fff, #fff8dc);
+}
+
+.achievement-card.tier-1 .achievement-icon { text-shadow: 0 2px 4px rgba(205, 127, 50, 0.3); }
+.achievement-card.tier-2 .achievement-icon { text-shadow: 0 2px 4px rgba(192, 192, 192, 0.3); }
+.achievement-card.tier-3 .achievement-icon { text-shadow: 0 2px 4px rgba(255, 215, 0, 0.3); }

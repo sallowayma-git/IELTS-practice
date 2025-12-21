@@ -17,11 +17,6 @@
             if (this.initialized) return;
 
             try {
-                // Ensure Storage is available (using our app's storage abstraction if possible, fallback to localStorage)
-                // For simplicity in this standalone service, we'll try to use the global 'storage' if present, 
-                // but since it might not be ready, we design this to vary. 
-                // Let's assume global 'storage' object from js/utils/storage.js is available as per index.html order.
-
                 this.unlocked = await this._loadUnlockedState();
                 console.log('[AchievementManager] Initialized. Unlocked:', Object.keys(this.unlocked).length);
                 this.initialized = true;
@@ -36,75 +31,134 @@
          */
         _defineAchievements() {
             return [
+                // --- Practice Count Milestones ---
                 {
-                    id: 'first_step',
+                    id: 'practice_bronze',
                     title: '初出茅庐',
-                    description: '完成第一次练习',
-                    icon: '🌱',
-                    condition: (stats, lastRecord) => stats.totalPracticed >= 1
-                },
-                {
-                    id: 'getting_started',
-                    title: '渐入佳境',
                     description: '累计完成 10 次练习',
-                    icon: '🚀',
-                    condition: (stats, lastRecord) => stats.totalPracticed >= 10
+                    icon: '🥉',
+                    tier: 1,
+                    condition: (stats) => stats.totalPracticed >= 10
                 },
                 {
-                    id: 'centurion',
+                    id: 'practice_silver',
+                    title: '渐入佳境',
+                    description: '累计完成 50 次练习',
+                    icon: '🥈',
+                    tier: 2,
+                    condition: (stats) => stats.totalPracticed >= 50
+                },
+                {
+                    id: 'practice_gold',
                     title: '百炼成钢',
                     description: '累计完成 100 次练习',
-                    icon: '💯',
-                    condition: (stats, lastRecord) => stats.totalPracticed >= 100
+                    icon: '🥇',
+                    tier: 3,
+                    condition: (stats) => stats.totalPracticed >= 100
                 },
+
+                // --- Streak Milestones ---
                 {
-                    id: 'accuracy_master',
-                    title: '神射手',
-                    description: '在一次练习中获得 100% 正确率',
-                    icon: '🎯',
-                    condition: (stats, lastRecord) => stats.hasPerfectAccuracy
-                },
-                {
-                    id: 'accuracy_expert',
-                    title: '精准打击',
-                    description: '在一次练习中获得 90% 以上正确率',
-                    icon: '🏹',
-                    condition: (stats, lastRecord) => stats.hasHighAccuracy
-                },
-                {
-                    id: 'persistent_learner',
+                    id: 'streak_bronze',
                     title: '持之以恒',
                     description: '连续学习 3 天',
                     icon: '🔥',
-                    condition: (stats, lastRecord) => stats.streakDays >= 3
+                    tier: 1,
+                    condition: (stats) => stats.streakDays >= 3
                 },
                 {
-                    id: 'weekly_warrior',
-                    title: '周更战士',
+                    id: 'streak_silver',
+                    title: '习惯养成',
                     description: '连续学习 7 天',
-                    icon: '📅',
-                    condition: (stats, lastRecord) => stats.streakDays >= 7
+                    icon: '🔥',
+                    tier: 2,
+                    condition: (stats) => stats.streakDays >= 7
+                },
+                {
+                    id: 'streak_gold',
+                    title: '意志如铁',
+                    description: '连续学习 30 天',
+                    icon: '🔥',
+                    tier: 3,
+                    condition: (stats) => stats.streakDays >= 30
+                },
+
+                // --- Category Mastery: Listening ---
+                {
+                    id: 'listening_bronze',
+                    title: '顺风耳 (铜)',
+                    description: '累计完成 10 篇听力练习',
+                    icon: '👂',
+                    tier: 1,
+                    condition: (stats) => stats.listeningCount >= 10
+                },
+                {
+                    id: 'listening_silver',
+                    title: '顺风耳 (银)',
+                    description: '累计完成 50 篇听力练习',
+                    icon: '👂',
+                    tier: 2,
+                    condition: (stats) => stats.listeningCount >= 50
+                },
+                {
+                    id: 'listening_gold',
+                    title: '顺风耳 (金)',
+                    description: '累计完成 100 篇听力练习',
+                    icon: '👂',
+                    tier: 3,
+                    condition: (stats) => stats.listeningCount >= 100
+                },
+
+                // --- Category Mastery: Reading ---
+                {
+                    id: 'reading_bronze',
+                    title: '火眼金睛 (铜)',
+                    description: '累计完成 10 篇阅读练习',
+                    icon: '👁️',
+                    tier: 1,
+                    condition: (stats) => stats.readingCount >= 10
+                },
+                {
+                    id: 'reading_silver',
+                    title: '火眼金睛 (银)',
+                    description: '累计完成 50 篇阅读练习',
+                    icon: '👁️',
+                    tier: 2,
+                    condition: (stats) => stats.readingCount >= 50
+                },
+                {
+                    id: 'reading_gold',
+                    title: '火眼金睛 (金)',
+                    description: '累计完成 100 篇阅读练习',
+                    icon: '👁️',
+                    tier: 3,
+                    condition: (stats) => stats.readingCount >= 100
+                },
+
+                // --- Special Achievements ---
+                {
+                    id: 'first_step',
+                    title: '迈出第一步',
+                    description: '完成第一次练习',
+                    icon: '🌱',
+                    tier: 1,
+                    condition: (stats) => stats.totalPracticed >= 1
+                },
+                {
+                    id: 'accuracy_perfect',
+                    title: '神射手',
+                    description: '单次练习获得 100% 正确率',
+                    icon: '🎯',
+                    tier: 3,
+                    condition: (stats) => stats.hasPerfectAccuracy
                 },
                 {
                     id: 'speed_demon',
                     title: '唯快不破',
-                    description: '在 5 分钟内完成一次高分练习 (正确率>80%)',
+                    description: '5分钟内完成高分练习',
                     icon: '⚡',
-                    condition: (stats, lastRecord) => stats.hasSpeedDemon
-                },
-                {
-                    id: 'listening_ear',
-                    title: '顺风耳',
-                    description: '累计完成 50 篇听力练习',
-                    icon: '👂',
-                    condition: (stats, lastRecord) => stats.listeningCount >= 50
-                },
-                {
-                    id: 'reading_eye',
-                    title: '火眼金睛',
-                    description: '累计完成 50 篇阅读练习',
-                    icon: '👁️',
-                    condition: (stats, lastRecord) => stats.readingCount >= 50
+                    tier: 3,
+                    condition: (stats) => stats.hasSpeedDemon
                 }
             ];
         }
@@ -115,10 +169,9 @@
         async _loadUnlockedState() {
             if (window.storage) {
                 return await window.storage.get(this.storageKey, {});
-            } else {
-                const raw = localStorage.getItem(this.storageKey);
-                return raw ? JSON.parse(raw) : {};
             }
+            const raw = localStorage.getItem(this.storageKey);
+            return raw ? JSON.parse(raw) : {};
         }
 
         /**
@@ -127,9 +180,9 @@
         async _saveUnlockedState() {
             if (window.storage) {
                 await window.storage.set(this.storageKey, this.unlocked);
-            } else {
-                localStorage.setItem(this.storageKey, JSON.stringify(this.unlocked));
+                return;
             }
+            localStorage.setItem(this.storageKey, JSON.stringify(this.unlocked));
         }
 
         _getDefaultUserStats() {
@@ -206,7 +259,6 @@
                 listeningCount: this._getCategoryPracticeCount(stats, 'listening'),
                 readingCount: this._getCategoryPracticeCount(stats, 'reading'),
                 hasPerfectAccuracy: false,
-                hasHighAccuracy: false,
                 hasSpeedDemon: false
             };
         }
@@ -221,9 +273,6 @@
 
             if (accuracy >= 1) {
                 derived.hasPerfectAccuracy = true;
-            }
-            if (accuracy >= 0.9) {
-                derived.hasHighAccuracy = true;
             }
             if (duration > 0 && duration <= 300 && accuracy > 0.8) {
                 derived.hasSpeedDemon = true;
@@ -284,11 +333,9 @@
         /**
          * Check for new achievements based on latest activity
          * @param {Object} latestRecord - The practice record just completed
-         * @param {Object} allStats - Aggregated stats (optional, will calculate if missing)
          */
         async check(latestRecord) {
             if (!this.initialized) await this.init();
-
             return this.syncFromScoreStorage({ latestRecord, notify: true });
         }
 
@@ -296,13 +343,11 @@
          * Notify listeners (UI) about new unlocks
          */
         _notify(newAchievements) {
-            // Dispatch custom event
             const event = new CustomEvent('achievements-unlocked', {
                 detail: { achievements: newAchievements }
             });
             window.dispatchEvent(event);
 
-            // Also use global message if available
             if (window.showMessage) {
                 newAchievements.forEach(a => {
                     const msg = `🏆 解锁成就：${a.title} - ${a.description}`;
@@ -340,7 +385,6 @@
         const list = document.getElementById('achievements-list');
         if (!modal || !list) return;
 
-        // Ensure init
         if (!window.AchievementManager.initialized) {
             try {
                 await window.AchievementManager.init();
@@ -352,7 +396,7 @@
         await window.AchievementManager.syncFromScoreStorage({ includeRecords: true, notify: false });
         const all = window.AchievementManager.getAll();
         list.innerHTML = all.map(a => `
-            <div class="achievement-card ${a.isUnlocked ? 'unlocked' : ''}">
+            <div class="achievement-card ${a.isUnlocked ? 'unlocked' : ''} ${a.tier ? 'tier-' + a.tier : ''}">
                 <span class="achievement-icon">${a.icon}</span>
                 <div class="achievement-title">${a.title}</div>
                 <div class="achievement-desc">${a.description}</div>
