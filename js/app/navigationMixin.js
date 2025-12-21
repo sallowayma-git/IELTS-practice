@@ -71,16 +71,6 @@
                         window.initializeBrowseView();
                     }
                     break;
-                case 'specialized-practice':
-                    if (this.components.specializedPractice) {
-                        this.components.specializedPractice.updateSpecializedProgress();
-                    }
-                    break;
-                case 'question-type-practice':
-                    if (this.components.questionTypePractice) {
-                        this.components.questionTypePractice.updateQuestionTypesDisplay();
-                    }
-                    break;
                 case 'practice':
                     // 练习视图已由其他组件处理
                     console.log('[App] 练习视图已激活');
