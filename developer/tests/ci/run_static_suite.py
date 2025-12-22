@@ -641,6 +641,7 @@ def run_checks() -> Tuple[List[dict], bool]:
         ("多套题提交流程集成测试", REPO_ROOT / "developer" / "tests" / "js" / "integration" / "multiSuiteSubmission.test.js"),
         ("拼写错误收集流程集成测试", REPO_ROOT / "developer" / "tests" / "js" / "integration" / "spellingErrorCollection.test.js"),
         ("词表切换流程集成测试", REPO_ROOT / "developer" / "tests" / "js" / "integration" / "vocabListSwitching.test.js"),
+        ("Vocab session view flow integration test", REPO_ROOT / "developer" / "tests" / "js" / "integration" / "vocabSessionView.test.js"),
     ]
 
     for test_name, test_path in integration_tests:

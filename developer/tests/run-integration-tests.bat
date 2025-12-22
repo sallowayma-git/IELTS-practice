@@ -26,6 +26,14 @@ if %ERRORLEVEL% NEQ 0 (
 )
 echo.
 
+echo Test 4: Vocab Session View Flow
+node developer\tests\js\integration\vocabSessionView.test.js
+if %ERRORLEVEL% NEQ 0 (
+    echo FAILED: Vocab Session View Test
+    exit /b 1
+)
+echo.
+
 echo All integration tests passed!
 echo.
 
