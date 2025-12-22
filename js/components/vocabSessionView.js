@@ -383,7 +383,7 @@
     }
 
     function closeMenu() {
-        if (!state.menuOpen || !state.elements.menu) {
+        if (!state.elements.menu) {
             return;
         }
         state.menuOpen = false;
@@ -422,6 +422,32 @@
             return;
         }
         state.elements.sidePanel.dataset.mobile = state.viewport.isMobile ? 'true' : 'false';
+    }
+
+    function triggerCardAction(action) {
+        if (!state.elements.sessionCard || !action) {
+            return false;
+        }
+        const trigger = state.elements.sessionCard.querySelector(`[data-action="${action}"]`);
+        if (!trigger || trigger.disabled) {
+            return false;
+        }
+        trigger.click();
+        return true;
+    }
+
+    function triggerPrimaryCardAction() {
+        const stage = state.session.stage;
+        if (stage === 'feedback') {
+            return triggerCardAction('next-word');
+        }
+        if (stage === 'batch-finished') {
+            return triggerCardAction('next-batch') || triggerCardAction('end-session');
+        }
+        if (stage === 'complete') {
+            return triggerCardAction('end-session');
+        }
+        return false;
     }
 
     function bindEvents() {
@@ -504,20 +530,36 @@
                     }
                     return;
                 }
-                if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName) && command !== 'submit' && command !== 'reveal') {
-                    return;
+                const activeTag = document.activeElement?.tagName;
+                const isFieldActive = ['INPUT', 'TEXTAREA'].includes(activeTag);
+                if (isFieldActive && !(command === 'submit' && state.session.stage === 'spelling')) {
+                    if (!(command === 'reveal' && state.session.stage === 'recognition')) {
+                        return;
+                    }
                 }
-                if (command === 'submit' && state.session.stage === 'spelling') {
-                    event.preventDefault();
-                    submitSpelling();
-                } else if (command === 'reveal' && state.session.stage === 'recognition') {
+                if (command === 'submit') {
+                    if (state.session.stage === 'spelling') {
+                        event.preventDefault();
+                        submitSpelling();
+                        return;
+                    }
+                    if (triggerPrimaryCardAction()) {
+                        event.preventDefault();
+                        return;
+                    }
+                }
+                if (command === 'reveal' && state.session.stage === 'recognition') {
                     event.preventDefault();
                     revealMeaning();
-                } else if (command === 'escape') {
+                    return;
+                }
+                if (command === 'escape') {
                     if (state.menuOpen) {
                         event.preventDefault();
                         closeMenu();
-                    } else if (state.viewport.isMobile && state.elements.sidePanel?.dataset.expanded === 'true') {
+                        return;
+                    }
+                    if (state.viewport.isMobile && state.elements.sidePanel?.dataset.expanded === 'true') {
                         event.preventDefault();
                         toggleSidePanel(false);
                     }
