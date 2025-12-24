@@ -8,6 +8,7 @@
     <link rel="icon" type="image/svg+xml" href="assets/images/favicon.svg">
     <link rel="stylesheet" href="css/main.css">
     <link rel="stylesheet" href="css/heroui-bridge.css">
+    <link rel="stylesheet" href="css/theme-festive.css">
 </head>
 
 <body class="hero-body boot-active" data-theme="heroui">
@@ -423,11 +424,22 @@
                                 style="background: linear-gradient(120deg, #ffe08a, #ffc83d); border-color: #fbbf24; color: #3b2400;"
                                 onclick="navigateToThemePortal('.superdesign/design_iterations/xiaodaidai_dashboard_1.html', { label: 'XiaoDaiDai', theme: 'xiaodaidai' })">切换</button>
                         </div>
+                        <div class="theme-option">
+                            <div class="theme-info">
+                                <div class="theme-name" style="color: #c0392b;">🎄 Festival</div>
+                                <div class="theme-desc" style="color: #27ae60;">节日限定 丑毛衣风</div>
+                            </div>
+                            <button class="btn btn-sm" style="background: #c0392b; border-color: #27ae60;"
+                                onclick="applyTheme('festive')">切换</button>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- 主题切换器（需要在DOM准备好后尽早加载） -->
+    <script src="js/theme-switcher.js"></script>
 
     <!-- 启动与懒加载工具 -->
     <script src="js/presentation/shuiBackground.js" defer></script>

@@ -81,19 +81,19 @@ const themePreferenceController = {
             if (typeof document !== 'undefined' && document.baseURI) {
                 bases.push(document.baseURI);
             }
-        } catch (_) {}
+        } catch (_) { }
 
         try {
             if (typeof window !== 'undefined' && window.__APP_FRAME_BASE_HREF__) {
                 bases.push(window.__APP_FRAME_BASE_HREF__);
             }
-        } catch (_) {}
+        } catch (_) { }
 
         try {
             if (typeof window !== 'undefined' && window.location && window.location.href) {
                 bases.push(window.location.href);
             }
-        } catch (_) {}
+        } catch (_) { }
 
         for (var i = 0; i < bases.length; i += 1) {
             var base = bases[i];
@@ -213,6 +213,7 @@ function applyTheme(theme) {
     try {
         root.setAttribute('data-theme', theme);
         document.body.classList.toggle('theme-blue', theme === 'blue');
+        document.body.classList.toggle('theme-festive', theme === 'festive');
         // Avoid style conflicts with Bloom's dark mode when using Blue theme
         if (theme === 'blue') {
             document.body.classList.remove('bloom-dark-mode');
@@ -223,7 +224,7 @@ function applyTheme(theme) {
         // Update switcher buttons
         updateBloomThemeButton();
         updateBlueThemeButton();
-    } catch (e) {}
+    } catch (e) { }
 }
 
 function applyDefaultTheme() {
@@ -231,6 +232,7 @@ function applyDefaultTheme() {
     try {
         root.removeAttribute('data-theme');
         document.body.classList.remove('theme-blue');
+        document.body.classList.remove('theme-festive');
         document.body.classList.remove('blue-dark-mode');
         localStorage.removeItem('theme');
         themePreferenceController.recordInternalTheme('default');
@@ -241,7 +243,7 @@ function applyDefaultTheme() {
         } else {
             document.body.classList.remove('bloom-dark-mode');
         }
-    } catch (e) {}
+    } catch (e) { }
     updateBloomThemeButton();
     updateBlueThemeButton();
 }
@@ -287,7 +289,7 @@ function updateBloomThemeButton() {
     if (currentTheme === 'blue') {
         button.classList.remove('btn-bloom-dark', 'btn-bloom-light');
         button.textContent = '切换';
-        button.onclick = function() { applyDefaultTheme(); };
+        button.onclick = function () { applyDefaultTheme(); };
         return;
     }
 
@@ -301,7 +303,7 @@ function updateBloomThemeButton() {
         button.classList.add('btn-bloom-dark');
         button.textContent = '黑暗';
     }
-    button.onclick = function() { toggleBloomDarkMode(); };
+    button.onclick = function () { toggleBloomDarkMode(); };
 }
 
 // Initialize bloom theme mode on page load
@@ -340,10 +342,10 @@ function updateBlueThemeButton() {
     if (currentTheme === 'blue') {
         const isDark = document.body.classList.contains('blue-dark-mode');
         button.textContent = isDark ? '明亮' : '黑暗';
-        button.onclick = function() { toggleBlueDarkMode(); };
+        button.onclick = function () { toggleBlueDarkMode(); };
     } else {
         button.textContent = '切换';
-        button.onclick = function() { applyTheme('blue'); };
+        button.onclick = function () { applyTheme('blue'); };
     }
 }
 
@@ -404,7 +406,7 @@ function navigateToThemePortal(url, options = {}) {
         try {
             document.documentElement.setAttribute('data-theme', meta.theme);
             localStorage.setItem('theme', meta.theme);
-        } catch (_) {}
+        } catch (_) { }
     }
     if (typeof meta.onBeforeNavigate === 'function') {
         try {
@@ -433,12 +435,33 @@ if (typeof window !== 'undefined') {
 }
 
 // Initialize theme switcher when DOM is ready
-document.addEventListener('DOMContentLoaded', function() {
-    // Restore general theme (e.g., 'blue', 'harry', etc.)
-    try {
-        const savedTheme = localStorage.getItem('theme');
-        if (savedTheme) applyTheme(savedTheme);
-    } catch (e) {}
+document.addEventListener('DOMContentLoaded', function () {
+    // --- Festival Theme Auto-Activation (Dec 24 - Jan 13) ---
+    function isFestiveSeasonActive() {
+        const now = new Date();
+        const month = now.getMonth(); // 0-indexed (11 = December, 0 = January)
+        const day = now.getDate();
+        // Dec 24 to Dec 31
+        if (month === 11 && day >= 24) {
+            return true;
+        }
+        // Jan 1 to Jan 13
+        if (month === 0 && day <= 13) {
+            return true;
+        }
+        return false;
+    }
+
+    if (isFestiveSeasonActive()) {
+        console.log('[Theme] 🎄 节日主题已自动激活 (12/24 - 1/13)');
+        applyTheme('festive');
+    } else {
+        // Restore general theme (e.g., 'blue', 'harry', etc.)
+        try {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme) applyTheme(savedTheme);
+        } catch (e) { }
+    }
 
     // Initialize bloom theme mode (independent dark/light toggle)
     initializeBloomTheme();
@@ -452,14 +475,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.body.classList.add('blue-dark-mode');
             }
         }
-    } catch (e) {}
+    } catch (e) { }
 
     // Sync switcher buttons on load
     updateBlueThemeButton();
     updateBloomThemeButton();
 
     // Close modal when clicking outside
-    document.addEventListener('click', function(event) {
+    document.addEventListener('click', function (event) {
         const modal = document.getElementById('theme-switcher-modal');
         if (modal && modal.classList.contains('show')) {
             if (!modal.contains(event.target) && !event.target.closest('button[onclick="showThemeSwitcherModal()"]')) {
@@ -469,7 +492,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Close modal with Escape key
-    document.addEventListener('keydown', function(event) {
+    document.addEventListener('keydown', function (event) {
         if (event.key === 'Escape') {
             const modal = document.getElementById('theme-switcher-modal');
             if (modal && modal.classList.contains('show')) {

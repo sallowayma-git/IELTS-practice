@@ -1,0 +1,195 @@
+/* Festival Special Theme - Auto-Activated & Polished (Modern Retro) */
+
+/* 1. Global Reset & Background Fixes */
+.theme-festive {
+    /* Refined Palette: More vibrant, less muddy */
+    --festive-red: #ea4c4c;
+    /* Brighter, more cheerful red */
+    --festive-green: #2e8b57;
+    /* SeaGreen: classy, not generic green */
+    --festive-gold: #f1c40f;
+    /* Bright flat gold */
+    --festive-white: #ffffff;
+    --festive-dark: #1a1a1a;
+
+    /* Card Backgrounds: Glassmorphism + Texture */
+    --card-bg-red: rgba(234, 76, 76, 0.15);
+    --card-bg-green: rgba(46, 139, 87, 0.15);
+    --card-bg-glass: rgba(255, 255, 255, 0.1);
+
+    --text-primary: #fff;
+    --font-family-festive: 'Courier New', Courier, monospace;
+}
+
+/* Force hide WebGL */
+html[data-theme="festive"] #shui-bg-canvas,
+.theme-festive #shui-bg-canvas {
+    display: none !important;
+}
+
+/* Background Setup */
+html[data-theme="festive"] {
+    background: url('../assets/images/festive_background.png') no-repeat center center fixed !important;
+    background-size: cover !important;
+    min-height: 100vh;
+}
+
+html[data-theme="festive"] body,
+body.theme-festive {
+    background: transparent !important;
+}
+
+/* 2. Modern Festive Cards */
+
+/* Main Containers: Clean Glass Look */
+.theme-festive #overview-view,
+.theme-festive #browse-view,
+.theme-festive .view {
+    background: rgba(0, 0, 0, 0.3) !important;
+    backdrop-filter: blur(12px);
+    /* Stronger blur for modern feel */
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+/* Cards: Frosted Glass with "Stitched" border accent */
+.theme-festive .hero-panel,
+.theme-festive .hero-card,
+.theme-festive .exam-item,
+.theme-festive .category-card,
+.theme-festive .tool-card {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.05));
+    border: 2px dashed rgba(255, 255, 255, 0.6);
+    /* Thinner, subtler stitch */
+    border-radius: 16px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    color: var(--text-primary);
+}
+
+/* Hover Effect: Glow */
+.theme-festive .hero-card:hover,
+.theme-festive .exam-item:hover,
+.theme-festive .category-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 25px rgba(241, 196, 15, 0.2);
+    /* Golden glow */
+    border-color: var(--festive-gold);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0.1));
+}
+
+/* Special styling for Stats to pop */
+.theme-festive .hero-card--stat {
+    border-style: solid;
+    /* Solid border for key stats */
+    border-width: 2px;
+}
+
+.theme-festive .hero-card--stat:nth-child(1) {
+    border-color: var(--festive-gold);
+}
+
+.theme-festive .hero-card--stat:nth-child(2) {
+    border-color: var(--festive-green);
+}
+
+.theme-festive .hero-card--stat:nth-child(3) {
+    border-color: var(--festive-red);
+}
+
+/* 3. Typography & Details */
+.theme-festive h1,
+.theme-festive h2,
+.theme-festive h3,
+.theme-festive .hero-panel__title,
+.theme-festive .hero-card__value {
+    font-family: var(--font-family-festive);
+    color: #fff !important;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+    font-weight: 800;
+    letter-spacing: 0.5px;
+}
+
+/* Focus color for titles */
+.theme-festive h1 {
+    color: var(--festive-gold) !important;
+}
+
+.theme-festive .hero-card__label,
+.theme-festive .hero-card__meta,
+.theme-festive p,
+.theme-festive .text-muted,
+.theme-festive .hero-panel__muted {
+    color: rgba(255, 255, 255, 0.9) !important;
+    font-weight: 500;
+}
+
+
+/* 4. Buttons - Modern "Cookie" Style */
+.theme-festive .btn,
+.theme-festive .hero-btn,
+.theme-festive .nav-btn {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff !important;
+    border: 2px solid rgba(255, 255, 255, 0.8);
+    border-radius: 50px;
+    /* Rounded pill shape */
+    backdrop-filter: blur(4px);
+    font-weight: 600;
+    transition: all 0.2s;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.theme-festive .btn:hover,
+.theme-festive .hero-btn:hover {
+    background: var(--festive-white);
+    color: var(--festive-red) !important;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Primary Action Buttons */
+.theme-festive .btn-primary,
+.theme-festive .hero-btn:not(.hero-btn--ghost) {
+    background: var(--festive-red);
+    border-color: var(--festive-red);
+}
+
+.theme-festive .btn-primary:hover {
+    background: #ff6b6b;
+    color: white !important;
+}
+
+/* Navigation - Frosted Bar */
+.theme-festive .main-nav {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    padding: 8px;
+    border-radius: 100px;
+    backdrop-filter: blur(10px);
+}
+
+.theme-festive .nav-btn.active {
+    background: var(--festive-gold);
+    color: #1a1a1a !important;
+    border-color: var(--festive-gold);
+    box-shadow: 0 4px 10px rgba(241, 196, 15, 0.4);
+}
+
+/* 5. Inputs */
+.theme-festive .search-input {
+    background: rgba(255, 255, 255, 0.9);
+    border: none;
+    border-radius: 10px;
+    padding: 12px 20px;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+    color: #333;
+}
+
+/* Settings view text and background color */
+#settings-view>div>div:nth-child(3)>div.hero-surface {
+    color: #2d2c2c !important;
+    fill: #292828 !important;
+}
