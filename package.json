@@ -2,5 +2,9 @@
   "name": "ielts-practice",
   "version": "0.3.1",
   "description": "IELTS Practice Application",
-  "private": true
+  "private": true,
+  "dependencies": {
+    "better-sqlite3": "^12.6.2",
+    "uuid": "^13.0.0"
+  }
 }

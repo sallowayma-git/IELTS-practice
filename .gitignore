@@ -34,6 +34,24 @@ developer/tests/e2e/reports/static-ci-report.json
 # 忽略 E2E 运行产物
 developer/tests/e2e/reports/suite-practice-flow-report.json
 developer/tests/e2e/reports/*.png
+# Playwright 浏览器二进制缓存（由 E2E fallback runner 使用）
+developer/tests/e2e/.pw-browsers/
 # 允许路径兼容性测试夹具
 !developer/tests/e2e/fixtures/睡着过项目组(9.4)\[134篇]/
 !developer/tests/e2e/fixtures/睡着过项目组(9.4)\[134篇]/**
+
+# Phase 02: 写作模块开发环境文件
+# SQLite 数据库文件
+*.db
+*.db-shm
+*.db-wal
+# Node.js 依赖
+node_modules/
+package-lock.json
+# Electron 构建产物
+dist/
+out/
+build/
+# 日志文件 (electron/utils/logger.js 生成)
+logs/
+*.log
