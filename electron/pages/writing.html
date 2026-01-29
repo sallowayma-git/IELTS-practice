@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>写作评判 - IELTS Practice</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+        }
+
+        .container {
+            text-align: center;
+            padding: 40px;
+            max-width: 800px;
+        }
+
+        .logo {
+            font-size: 4em;
+            margin-bottom: 20px;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            font-size: 1.2em;
+            margin-bottom: 40px;
+            opacity: 0.9;
+        }
+
+        .placeholder-box {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 40px;
+            margin-bottom: 40px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .placeholder-text {
+            font-size: 1.1em;
+            line-height: 1.8;
+            margin-bottom: 20px;
+        }
+
+        .feature-list {
+            text-align: left;
+            display: inline-block;
+            margin: 20px auto;
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: center;
+            margin: 12px 0;
+            font-size: 1em;
+        }
+
+        .feature-icon {
+            font-size: 1.5em;
+            margin-right: 12px;
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.9);
+            color: #667eea;
+            border: none;
+            padding: 16px 40px;
+            font-size: 1.1em;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn:hover {
+            background: #fff;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .phase-badge {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            margin-top: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="logo">✍️</div>
+        <h1>雅思写作 AI 评判</h1>
+        <p class="subtitle">IELTS Writing AI Evaluation</p>
+
+        <div class="placeholder-box">
+            <p class="placeholder-text">
+                <strong>🚧 占位页面 - Phase 01 完成</strong>
+            </p>
+            <p class="placeholder-text">
+                本页面将在 <strong>Phase 03</strong> 替换为完整的 Vue 写作评判系统
+            </p>
+
+            <div class="feature-list">
+                <div class="feature-item">
+                    <span class="feature-icon">🤖</span>
+                    <span>AI 智能评分（Task 1 & Task 2）</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">📊</span>
+                    <span>四项评分标准详细分析</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">✏️</span>
+                    <span>语法错误实时标注</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">📝</span>
+                    <span>富文本编辑与题库管理</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">📈</span>
+                    <span>历史记录与进步追踪</span>
+                </div>
+            </div>
+
+            <div class="phase-badge">
+                Phase 01: Electron 壳与导航切换 ✅
+            </div>
+        </div>
+
+        <button class="btn" onclick="goBackToLegacy()">
+            ← 返回练习
+        </button>
+    </div>
+
+    <script>
+        /**
+         * 返回到 Legacy 练习页面
+         * 注意：页面会重新加载，瞬态状态会重置（但练习数据已保存在 localStorage）
+         */
+        function goBackToLegacy() {
+            if (window.electronAPI && window.electronAPI.openLegacy) {
+                window.electronAPI.openLegacy();
+            } else {
+                alert('此功能仅在 Electron 桌面应用中可用');
+            }
+        }
+    </script>
+</body>
+
+</html>
+

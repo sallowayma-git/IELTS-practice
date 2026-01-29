@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPC 测试 - Phase 02</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #007aff;
+            padding-bottom: 10px;
+        }
+
+        .section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        button {
+            background: #007aff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+
+        button:hover {
+            background: #0051d5;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        .input-group {
+            margin: 10px 0;
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        textarea {
+            min-height: 100px;
+            font-family: monospace;
+        }
+
+        .output {
+            background: #f8f8f8;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+            border-left: 3px solid #007aff;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+
+        .success {
+            color: #28a745;
+        }
+
+        .error {
+            color: #dc3545;
+        }
+
+        .event-log {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+
+        .event-log .timestamp {
+            color: #858585;
+        }
+
+        .event-log .type-progress {
+            color: #4fc3f7;
+        }
+
+        .event-log .type-score {
+            color: #81c784;
+        }
+
+        .event-log .type-sentence {
+            color: #fff176;
+        }
+
+        .event-log .type-feedback {
+            color: #ba68c8;
+        }
+
+        .event-log .type-complete {
+            color: #66bb6a;
+        }
+
+        .event-log .type-error {
+            color: #e57373;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Phase 02 IPC 测试页面</h1>
+
+    <!-- API 配置测试 -->
+    <div class="section">
+        <h2>API 配置管理</h2>
+
+        <button onclick="testConfigsList()">获取配置列表</button>
+        <button onclick="testConfigsCreate()">创建测试配置</button>
+        <button onclick="testConfigsTest()">测试连接</button>
+
+        <div class="input-group">
+            <label>配置名称:</label>
+            <input type="text" id="configName" value="测试配置 OpenAI" placeholder="配置名称">
+
+            <label>Provider:</label>
+            <select id="configProvider">
+                <option value="openai">OpenAI</option>
+                <option value="openrouter">OpenRouter</option>
+                <option value="deepseek">DeepSeek</option>
+            </select>
+
+            <label>Base URL:</label>
+            <input type="text" id="configBaseUrl" value="https://api.openai.com/v1" placeholder="Base URL">
+
+            <label>API Key:</label>
+            <input type="password" id="configApiKey" placeholder="sk-xxx">
+
+            <label>Model:</label>
+            <input type="text" id="configModel" value="gpt-4-turbo" placeholder="模型名称">
+        </div>
+
+        <div class="output" id="configOutput">结果将显示在这里...</div>
+    </div>
+
+    <!-- 提示词测试 -->
+    <div class="section">
+        <h2>提示词管理</h2>
+
+        <button onclick="testPromptsGetActive('task1')">获取 Task1 提示词</button>
+        <button onclick="testPromptsGetActive('task2')">获取 Task2 提示词</button>
+        <button onclick="testPromptsExport()">导出激活提示词</button>
+
+        <div class="output" id="promptOutput">结果将显示在这里...</div>
+    </div>
+
+    <!-- 评测测试 -->
+    <div class="section">
+        <h2>评测功能</h2>
+
+        <div class="input-group">
+            <label>Task Type:</label>
+            <select id="evalTaskType">
+                <option value="task1">Task 1</option>
+                <option value="task2">Task 2</option>
+            </select>
+
+            <label>作文内容:</label>
+            <textarea id="evalContent"
+                placeholder="输入作文内容...">The chart shows the population growth from 2020 to 2023. According to the data, the population increase significantly during this period.</textarea>
+
+            <label>字数:</label>
+            <input type="number" id="evalWordCount" value="180">
+        </div>
+
+        <button onclick="testEvaluateStart()">开始评测</button>
+        <button onclick="testEvaluateCancel()">取消评测</button>
+
+        <div class="output" id="evalOutput">会话 ID 将显示在这里...</div>
+
+        <h3>评测事件流</h3>
+        <div class="event-log" id="evalEvents">等待评测事件...</div>
+    </div>
+
+    <script>
+        let currentSessionId = null;
+
+        // 输出辅助函数
+        function output(elementId, content, isError = false) {
+            const el = document.getElementById(elementId);
+            const className = isError ? 'error' : 'success';
+            el.innerHTML = `<span class="${className}">${JSON.stringify(content, null, 2)}</span>`;
+        }
+
+        function logEvent(data) {
+            const el = document.getElementById('evalEvents');
+            const timestamp = new Date().toLocaleTimeString();
+            const typeClass = `type-${data.type}`;
+            const line = `<div><span class="timestamp">[${timestamp}]</span> <span class="${typeClass}">${data.type.toUpperCase()}</span>: ${JSON.stringify(data.data || {})}</div>`;
+            el.innerHTML += line;
+            el.scrollTop = el.scrollHeight;
+        }
+
+        // API 配置测试
+        async function testConfigsList() {
+            try {
+                const result = await window.writingAPI.configs.list();
+                output('configOutput', result);
+            } catch (error) {
+                output('configOutput', error, true);
+            }
+        }
+
+        async function testConfigsCreate() {
+            try {
+                const data = {
+                    config_name: document.getElementById('configName').value,
+                    provider: document.getElementById('configProvider').value,
+                    base_url: document.getElementById('configBaseUrl').value,
+                    api_key: document.getElementById('configApiKey').value,
+                    default_model: document.getElementById('configModel').value
+                };
+                const result = await window.writingAPI.configs.create(data);
+                output('configOutput', result);
+            } catch (error) {
+                output('configOutput', error, true);
+            }
+        }
+
+        async function testConfigsTest() {
+            try {
+                // 先获取列表,测试第一个
+                const listResult = await window.writingAPI.configs.list();
+                if (listResult.success && listResult.data.length > 0) {
+                    const configId = listResult.data[0].id;
+                    const testResult = await window.writingAPI.configs.test(configId);
+                    output('configOutput', testResult);
+                } else {
+                    output('configOutput', '没有可测试的配置', true);
+                }
+            } catch (error) {
+                output('configOutput', error, true);
+            }
+        }
+
+        // 提示词测试
+        async function testPromptsGetActive(taskType) {
+            try {
+                const result = await window.writingAPI.prompts.getActive(taskType);
+                output('promptOutput', result);
+            } catch (error) {
+                output('promptOutput', error, true);
+            }
+        }
+
+        async function testPromptsExport() {
+            try {
+                const result = await window.writingAPI.prompts.exportActive();
+                output('promptOutput', result);
+            } catch (error) {
+                output('promptOutput', error, true);
+            }
+        }
+
+        // 评测测试
+        async function testEvaluateStart() {
+            try {
+                const payload = {
+                    task_type: document.getElementById('evalTaskType').value,
+                    content: document.getElementById('evalContent').value,
+                    word_count: parseInt(document.getElementById('evalWordCount').value),
+                    topic_id: null
+                };
+
+                const result = await window.writingAPI.evaluate.start(payload);
+
+                if (result.success) {
+                    currentSessionId = result.data.sessionId;
+                    output('evalOutput', { sessionId: currentSessionId });
+
+                    // 清空事件日志
+                    document.getElementById('evalEvents').innerHTML = '';
+                } else {
+                    output('evalOutput', result, true);
+                }
+            } catch (error) {
+                output('evalOutput', error, true);
+            }
+        }
+
+        async function testEvaluateCancel() {
+            if (!currentSessionId) {
+                output('evalOutput', '没有活动的评测会话', true);
+                return;
+            }
+
+            try {
+                const result = await window.writingAPI.evaluate.cancel(currentSessionId);
+                output('evalOutput', result);
+            } catch (error) {
+                output('evalOutput', error, true);
+            }
+        }
+
+        // 监听评测事件
+        window.writingAPI.evaluate.onEvent((data) => {
+            console.log('Evaluate event:', data);
+            logEvent(data);
+        });
+    </script>
+</body>
+
+</html>

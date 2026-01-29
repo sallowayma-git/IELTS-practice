@@ -1,0 +1,141 @@
+/* 全局样式 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  line-height: 1.6;
+  color: #333;
+}
+
+/* CSS 变量 */
+:root {
+  --primary-color: #667eea;
+  --primary-dark: #5a6fd6;
+  --secondary-color: #764ba2;
+  --success-color: #67C23A;
+  --warning-color: #E6A23C;
+  --danger-color: #F56C6C;
+  --info-color: #409EFF;
+  
+  /* 错误类型颜色 */
+  --error-grammar: #F56C6C;
+  --error-spelling: #E6A23C;
+  --error-word-choice: #409EFF;
+  --error-sentence-structure: #9C27B0;
+  --error-coherence: #67C23A;
+  
+  --text-primary: #303133;
+  --text-secondary: #606266;
+  --text-muted: #909399;
+  
+  --bg-white: #ffffff;
+  --bg-light: #f5f7fa;
+  --border-color: #dcdfe6;
+  --border-radius: 8px;
+  --shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* 通用卡片样式 */
+.card {
+  background: var(--bg-white);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow);
+  padding: 20px;
+}
+
+/* 按钮样式 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--primary-color);
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--primary-dark);
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background: var(--bg-light);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #e4e7ed;
+}
+
+.btn-danger {
+  background: var(--danger-color);
+  color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #f33;
+}
+
+/* 输入框样式 */
+.textarea {
+  width: 100%;
+  padding: 16px;
+  font-size: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.8;
+}
+
+.textarea:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+}
+
+/* 进度条 */
+.progress-bar {
+  height: 8px;
+  background: var(--bg-light);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+  transition: width 0.3s ease;
+}
+
+/* 分数显示 */
+.score-display {
+  font-size: 48px;
+  font-weight: 700;
+  color: var(--primary-color);
+}
+
+.score-label {
+  font-size: 14px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
