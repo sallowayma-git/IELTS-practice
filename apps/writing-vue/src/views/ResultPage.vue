@@ -176,7 +176,8 @@ const ERROR_TYPE_LABELS = {
 }
 
 onMounted(() => {
-  // 从 sessionStorage 读取评测结果
+  // 【临时方案】从 sessionStorage 读取评测结果
+  // Phase 4+ 应改为 DB 持久层存储
   const stored = sessionStorage.getItem(`evaluation_${props.sessionId}`)
   if (stored) {
     const data = JSON.parse(stored)
@@ -190,6 +191,19 @@ function getErrorTypeLabel(type) {
   return ERROR_TYPE_LABELS[type] || type
 }
 
+/**
+ * 提取错误的起止位置
+ * 兼容两种格式：
+ * - 新格式: { range: { start, end, unit: 'utf16' } }
+ * - 旧格式: { start_pos, end_pos }
+ */
+function getErrorRange(err) {
+  if (err.range && typeof err.range.start === 'number') {
+    return { start: err.range.start, end: err.range.end }
+  }
+  return { start: err.start_pos, end: err.end_pos }
+}
+
 function highlightErrors(sentence) {
   if (!sentence.errors || sentence.errors.length === 0) {
     return escapeHtml(sentence.original)
@@ -199,21 +213,31 @@ function highlightErrors(sentence) {
   let result = ''
   let lastIndex = 0
 
-  // 按位置排序错误
-  const sortedErrors = [...sentence.errors].sort((a, b) => a.start_pos - b.start_pos)
+  // 按位置排序错误（兼容两种格式）
+  const sortedErrors = [...sentence.errors].sort((a, b) => {
+    const rangeA = getErrorRange(a)
+    const rangeB = getErrorRange(b)
+    return rangeA.start - rangeB.start
+  })
 
   for (const err of sortedErrors) {
+    const range = getErrorRange(err)
+    
+    // 边界检查：防止越界
+    const startPos = Math.max(0, Math.min(range.start, text.length))
+    const endPos = Math.max(startPos, Math.min(range.end, text.length))
+    
     // 添加错误前的普通文本
-    if (err.start_pos > lastIndex) {
-      result += escapeHtml(text.substring(lastIndex, err.start_pos))
+    if (startPos > lastIndex) {
+      result += escapeHtml(text.substring(lastIndex, startPos))
     }
     
     // 添加高亮的错误词
-    const errorWord = text.substring(err.start_pos, err.end_pos)
+    const errorWord = text.substring(startPos, endPos)
     const colorClass = `highlight-${err.type}`
     result += `<span class="${colorClass}" title="${escapeHtml(err.reason)}">${escapeHtml(errorWord)}</span>`
     
-    lastIndex = err.end_pos
+    lastIndex = endPos
   }
 
   // 添加剩余文本

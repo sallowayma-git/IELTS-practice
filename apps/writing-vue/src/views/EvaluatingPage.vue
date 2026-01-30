@@ -143,7 +143,8 @@ function handleEvent(event) {
     case 'complete':
       progress.value = 100
       statusMessage.value = '评分完成！'
-      // 存储结果到 sessionStorage 供结果页使用
+      // 【临时方案】存储结果到 sessionStorage 供结果页使用
+      // Phase 4+ 应改为 DB 持久层存储（同步 evaluation_records 表）
       sessionStorage.setItem(
         `evaluation_${props.sessionId}`,
         JSON.stringify(fullResult.value)
@@ -158,9 +159,10 @@ function handleEvent(event) {
       break
 
     case 'error':
+      // 【错误展示优先级】优先使用 message，回退到 code 映射
       error.value = {
         code: event.data.code,
-        message: getErrorMessage(event.data.code)
+        message: event.data.message || getErrorMessage(event.data.code)
       }
       break
   }
