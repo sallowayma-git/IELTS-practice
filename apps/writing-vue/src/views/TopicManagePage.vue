@@ -1,33 +1,41 @@
 <template>
   <div class="topic-manage-page">
+    <!-- 页面头部 -->
     <div class="page-header">
-      <h1>📚 题目管理</h1>
+      <div class="header-content">
+        <h2 class="page-title">
+          <span class="icon">📚</span> 
+          题目管理
+          <span class="count-badge" v-if="total > 0">{{ total }}</span>
+        </h2>
+        <p class="page-subtitle">管理所有的写作题目，支持 Task 1 图表与 Task 2 话题</p>
+      </div>
       <div class="header-actions">
-        <button class="btn btn-secondary" @click="showImportDialog = true">
-          📥 批量导入
+        <button class="btn btn-secondary glass-btn" @click="showImportDialog = true">
+          <span class="icon">📥</span> 批量导入
         </button>
         <button class="btn btn-primary" @click="openEditor()">
-          ➕ 添加题目
+          <span class="icon">➕</span> 添加题目
         </button>
       </div>
     </div>
 
-    <!-- 筛选面板 -->
-    <div class="filter-panel card">
-      <div class="filter-row">
+    <!-- 筛选工具栏 (Glass Toolbar) -->
+    <div class="filter-toolbar card">
+      <div class="filter-group">
         <div class="filter-item">
-          <label>任务类型</label>
-          <select v-model="filters.type">
-            <option value="">全部</option>
-            <option value="task1">Task 1</option>
-            <option value="task2">Task 2</option>
+          <span class="filter-icon">🎯</span>
+          <select v-model="filters.type" class="glass-select">
+            <option value="">全部类型</option>
+            <option value="task1">Task 1 (小作文)</option>
+            <option value="task2">Task 2 (大作文)</option>
           </select>
         </div>
 
         <div class="filter-item">
-          <label>分类</label>
-          <select v-model="filters.category">
-            <option value="">全部</option>
+          <span class="filter-icon">🏷️</span>
+          <select v-model="filters.category" class="glass-select">
+            <option value="">全部分类</option>
             <optgroup v-if="!filters.type || filters.type === 'task1'" label="Task 1">
               <option value="bar_chart">柱状图</option>
               <option value="pie_chart">饼图</option>
@@ -52,58 +60,77 @@
         </div>
 
         <div class="filter-item">
-          <label>难度</label>
-          <select v-model.number="filters.difficulty">
-            <option :value="0">全部</option>
-            <option :value="1">⭐</option>
-            <option :value="2">⭐⭐</option>
-            <option :value="3">⭐⭐⭐</option>
-            <option :value="4">⭐⭐⭐⭐</option>
-            <option :value="5">⭐⭐⭐⭐⭐</option>
+          <span class="filter-icon">⭐</span>
+          <select v-model.number="filters.difficulty" class="glass-select">
+            <option :value="0">全部难度</option>
+            <option :value="1">⭐ 入门</option>
+            <option :value="2">⭐⭐ 基础</option>
+            <option :value="3">⭐⭐⭐ 进阶</option>
+            <option :value="4">⭐⭐⭐⭐ 挑战</option>
+            <option :value="5">⭐⭐⭐⭐⭐ 专家</option>
           </select>
         </div>
-
-        <button class="btn btn-secondary" @click="resetFilters">重置筛选</button>
       </div>
+      
+      <button v-if="hasActiveFilters" class="btn-text" @click="resetFilters">
+        ✕ 重置筛选
+      </button>
     </div>
 
-    <!-- 题目列表 -->
-    <div v-if="loading" class="loading">加载中...</div>
+    <!-- 题目列表 (Grid Layout) -->
+    <div v-if="loading" class="loading-state">
+      <div class="spinner"></div>
+      <p>正在加载题库...</p>
+    </div>
     
     <div v-else-if="topics.length === 0" class="empty-state card">
-      <p>📝 暂无题目，点击右上角"添加题目"开始创建</p>
+      <div class="empty-icon">📝</div>
+      <h3>暂无题目数据</h3>
+      <p>当前筛选条件下没有找到题目，尝试调整筛选或添加新题目</p>
+      <button class="btn btn-primary" @click="openEditor()">
+        创建第一道题目
+      </button>
     </div>
 
     <div v-else class="topic-grid">
       <div v-for="topic in topics" :key="topic.id" class="topic-card card">
-        <div class="topic-header">
-          <span :class="['topic-type-badge', topic.type]">
-            {{ topic.type === 'task1' ? 'Task 1' : 'Task 2' }}
-          </span>
-          <span class="topic-difficulty">
+        <!-- 卡片头部 -->
+        <div class="card-header">
+          <div class="badges">
+            <span :class="['badge', topic.type]">
+              {{ topic.type === 'task1' ? 'Task 1' : 'Task 2' }}
+            </span>
+            <span class="category-badge">{{ getCategoryLabel(topic.category) }}</span>
+          </div>
+          <div class="difficulty">
             {{ '⭐'.repeat(topic.difficulty || 0) }}
-          </span>
+          </div>
         </div>
 
+        <!-- 图片预览 (仅 Task 1) -->
         <div v-if="topic.image_url && topic.type === 'task1'" class="topic-image">
-          <img :src="topic.image_url" :alt="topic.category" />
+          <img :src="topic.image_url" loading="lazy" :alt="topic.category" />
         </div>
 
-        <div class="topic-content">
-          <div class="topic-category">{{ getCategoryLabel(topic.category) }}</div>
+        <!-- 题目内容 -->
+        <div class="topic-body">
           <div class="topic-title" v-html="renderTitle(topic.title_json)"></div>
         </div>
 
-        <div class="topic-footer">
-          <span class="usage-count">使用 {{ topic.usage_count || 0 }} 次</span>
-          <div class="topic-actions">
-            <button class="btn-icon" @click="openEditor(topic)" title="编辑">✏️</button>
+        <!-- 卡片底部 -->
+        <div class="card-footer">
+          <span class="usage-info">
+            🔥 使用 {{ topic.usage_count || 0 }} 次
+          </span>
+          <div class="actions">
+            <button class="action-btn edit" @click="openEditor(topic)" title="编辑">
+              ✏️
+            </button>
             <button 
-              class="btn-icon" 
+              class="action-btn delete" 
               @click="deleteTopic(topic)" 
               :title="topic.is_official ? '官方题目不可删除' : '删除'"
               :disabled="topic.is_official"
-              :style="{ opacity: topic.is_official ? 0.3 : 1 }"
             >
               🗑️
             </button>
@@ -112,160 +139,166 @@
       </div>
     </div>
 
-    <!-- 分页 -->
-    <div v-if="total > pagination.limit" class="pagination">
+    <!-- 分页控件 -->
+    <div v-if="total > pagination.limit" class="pagination-glass">
       <button 
-        class="btn btn-secondary"
+        class="page-btn"
         :disabled="pagination.page === 1"
         @click="pagination.page--"
       >
-        上一页
+        ← 上一页
       </button>
       <span class="page-info">
-        第 {{ pagination.page }} / {{ totalPages }} 页（共 {{ total }} 条）
+        <span class="current">{{ pagination.page }}</span> 
+        <span class="sep">/</span> 
+        <span class="total">{{ totalPages }}</span>
       </span>
       <button 
-        class="btn btn-secondary"
+        class="page-btn"
         :disabled="pagination.page >= totalPages"
         @click="pagination.page++"
       >
-        下一页
+        下一页 →
       </button>
     </div>
 
     <!-- 编辑器弹窗 -->
     <div v-if="showEditor" class="dialog-overlay" @click.self="closeEditor">
+      <!-- (弹窗内容保持原有结构，样式由 main.css 控制) -->
       <div class="dialog card editor-dialog">
-        <h3>{{ editingTopic ? '编辑题目' : '添加题目' }}</h3>
+        <h3>{{ editingTopic ? '✏️ 编辑题目' : '✨ 添加新题目' }}</h3>
         
-        <div class="form-group">
-          <label>任务类型 *</label>
-          <div class="radio-group">
-            <label>
-              <input type="radio" v-model="editorForm.type" value="task1" />
-              Task 1
-            </label>
-            <label>
-              <input type="radio" v-model="editorForm.type" value="task2" />
-              Task 2
-            </label>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label>分类 *</label>
-          <select v-model="editorForm.category" required>
-            <option value="">请选择分类</option>
-            <optgroup v-if="editorForm.type === 'task1'" label="Task 1 类型">
-              <option value="bar_chart">柱状图</option>
-              <option value="pie_chart">饼图</option>
-              <option value="line_chart">折线图</option>
-              <option value="flow_chart">流程图</option>
-              <option value="map">地图</option>
-              <option value="table">表格</option>
-              <option value="process">过程</option>
-              <option value="mixed">混合图</option>
-            </optgroup>
-            <optgroup v-if="editorForm.type === 'task2'" label="Task 2 话题">
-              <option value="education">教育</option>
-              <option value="technology">科技</option>
-              <option value="society">社会</option>
-              <option value="environment">环境</option>
-              <option value="health">健康</option>
-              <option value="culture">文化</option>
-              <option value="government">政府</option>
-              <option value="economy">经济</option>
-            </optgroup>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label>难度 *</label>
-          <div class="star-selector">
-            <span 
-              v-for="star in 5" 
-              :key="star"
-              class="star"
-              :class="{ active: star <= editorForm.difficulty }"
-              @click="editorForm.difficulty = star"
-            >
-              ⭐
-            </span>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label>题目内容 *</label>
-          <textarea 
-            v-model="editorForm.title"
-            rows="6"
-            placeholder="输入题目描述..."
-            class="textarea"
-          ></textarea>
-        </div>
-
-        <div v-if="editorForm.type === 'task1'" class="form-group">
-          <label>图片上传（可选）</label>
-          <div class="upload-area">
-            <div v-if="editorForm.imagePreview" class="image-preview">
-              <img :src="editorForm.imagePreview" alt="预览" />
-              <button class="btn-remove" @click="removeImage">✕</button>
+        <div class="form-scroll-area">
+          <div class="form-group">
+            <label>任务类型</label>
+            <div class="radio-cards">
+              <label class="radio-card" :class="{ active: editorForm.type === 'task1' }">
+                <input type="radio" v-model="editorForm.type" value="task1" />
+                <span class="radio-icon">📊</span>
+                <span class="radio-label">Task 1 (小作文)</span>
+              </label>
+              <label class="radio-card" :class="{ active: editorForm.type === 'task2' }">
+                <input type="radio" v-model="editorForm.type" value="task2" />
+                <span class="radio-icon">📝</span>
+                <span class="radio-label">Task 2 (大作文)</span>
+              </label>
             </div>
-            <div v-else class="upload-placeholder" @click="triggerFileInput">
-              <p>📷 点击上传图片</p>
-              <p class="upload-hint">支持 PNG/JPG，最大 5MB</p>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group half">
+              <label>题目分类</label>
+              <select v-model="editorForm.category" required class="select">
+                <option value="">请选择分类...</option>
+                <optgroup v-if="editorForm.type === 'task1'" label="Task 1 类型">
+                  <option value="bar_chart">柱状图</option>
+                  <option value="pie_chart">饼图</option>
+                  <option value="line_chart">折线图</option>
+                  <option value="flow_chart">流程图</option>
+                  <option value="map">地图</option>
+                  <option value="table">表格</option>
+                  <option value="process">过程</option>
+                  <option value="mixed">混合图</option>
+                </optgroup>
+                <optgroup v-if="editorForm.type === 'task2'" label="Task 2 话题">
+                  <option value="education">教育</option>
+                  <option value="technology">科技</option>
+                  <option value="society">社会</option>
+                  <option value="environment">环境</option>
+                  <option value="health">健康</option>
+                  <option value="culture">文化</option>
+                  <option value="government">政府</option>
+                  <option value="economy">经济</option>
+                </optgroup>
+              </select>
+            </div>
+
+            <div class="form-group half">
+              <label>难度等级</label>
+              <div class="star-rating">
+                <span 
+                  v-for="star in 5" 
+                  :key="star"
+                  class="star"
+                  :class="{ active: star <= editorForm.difficulty }"
+                  @click="editorForm.difficulty = star"
+                >⭐</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>题目描述</label>
+            <textarea 
+              v-model="editorForm.title"
+              rows="6"
+              placeholder="请输入完整的题目描述..."
+              class="textarea"
+            ></textarea>
+          </div>
+
+          <div v-if="editorForm.type === 'task1'" class="form-group">
+            <label>题目图片</label>
+            <div class="image-uploader" @click="triggerFileInput" :class="{ 'has-image': editorForm.imagePreview }">
+              <div v-if="editorForm.imagePreview" class="preview-container">
+                <img :src="editorForm.imagePreview" />
+                <button class="remove-btn" @click.stop="removeImage">✕</button>
+              </div>
+              <div v-else class="upload-placeholder">
+                <span class="upload-icon">📷</span>
+                <p>点击上传图片 (PNG/JPG)</p>
+              </div>
             </div>
             <input 
               ref="fileInput"
               type="file"
               accept="image/png,image/jpeg,image/jpg"
               @change="handleFileSelect"
-              style="display: none"
+              hidden
             />
           </div>
         </div>
 
-        <div v-if="editorError" class="error-message">
+        <div v-if="editorError" class="error-banner">
           ⚠️ {{ editorError }}
         </div>
 
         <div class="dialog-actions">
           <button class="btn btn-secondary" @click="closeEditor">取消</button>
           <button class="btn btn-primary" @click="saveTopic" :disabled="!isEditorValid">
-            {{ editingTopic ? '保存' : '创建' }}
+            {{ editingTopic ? '保存修改' : '立即创建' }}
           </button>
         </div>
       </div>
     </div>
 
-    <!-- 批量导入弹窗 -->
+    <!-- 批量导入弹窗 (保持逻辑，简化样式引用) -->
     <div v-if="showImportDialog" class="dialog-overlay" @click.self="showImportDialog = false">
       <div class="dialog card">
-        <h3>批量导入题目</h3>
-        <p class="hint">请选择 JSON 文件（格式参考文档）</p>
+        <h3>📥 批量导入题目</h3>
+        <p class="dialog-hint">请上传符合格式要求的 JSON 文件</p>
         
-        <input 
-          type="file"
-          accept=".json"
-          @change="handleImportFile"
-          ref="importFileInput"
-        />
-
-        <div v-if="importPreview" class="import-preview">
-          <p>📊 将导入 {{ importPreview.length }} 道题目</p>
+        <div class="file-drop-zone">
+          <input 
+            type="file"
+            accept=".json"
+            @change="handleImportFile"
+            ref="importFileInput"
+          />
+          <p>点击选择文件</p>
         </div>
 
-        <div v-if="importError" class="error-message">
+        <div v-if="importPreview" class="import-preview">
+          ✅ 即将导入 <strong>{{ importPreview.length }}</strong> 道题目
+        </div>
+
+        <div v-if="importError" class="error-banner">
           {{ importError }}
         </div>
 
         <div class="dialog-actions">
           <button class="btn btn-secondary" @click="showImportDialog = false">取消</button>
-          <button 
-            class="btn btn-primary" 
-            @click="confirmImport"
-            :disabled="!importPreview"
-          >
+          <button class="btn btn-primary" @click="confirmImport" :disabled="!importPreview">
             确认导入
           </button>
         </div>
@@ -627,318 +660,470 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+/* 页面容器 */
 .topic-manage-page {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 20px;
+  animation: fadeIn 0.4s ease-out;
 }
 
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 头部区域 */
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
+  align-items: flex-start;
+  margin-bottom: 32px;
 }
 
-.page-header h1 {
-  font-size: 28px;
-  color: var(--text-primary);
+.page-title {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #fff; /* 在深色背景上使用白色 */
+  text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.page-subtitle {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.95rem;
+}
+
+.count-badge {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  vertical-align: middle;
 }
 
 .header-actions {
   display: flex;
-  gap: 12px;
-}
-
-/* 筛选面板 */
-.filter-panel {
-  margin-bottom: 20px;
-  padding: 16px;
-}
-
-.filter-row {
-  display: flex;
   gap: 16px;
-  align-items: flex-end;
 }
 
-.filter-item {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.glass-btn {
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
-.filter-item label {
-  font-size: 14px;
-  color: var(--text-secondary);
-  font-weight: 500;
+.glass-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-2px);
 }
 
-.filter-item select {
-  padding: 8px 12px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius);
-  font-size: 14px;
-}
-
-/* 题目网格 */
-.topic-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 20px;
-  margin-bottom: 24px;
-}
-
-.topic-card {
-  padding: 16px;
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.topic-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.topic-header {
+/* 筛选工具栏 (HeroUI Capsular Style) */
+.filter-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  padding: 12px 24px;
+  margin-bottom: 32px;
+  background: rgba(255, 255, 255, 0.65) !important; /* 更通透的背景 */
+  border-radius: 999px !important; /* 胶囊形全圆角 */
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 10px 30px -10px rgba(0,0,0,0.1); /* 浮起感 */
+  backdrop-filter: blur(24px) saturate(120%);
+  max-width: fit-content;
+  min-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
-.topic-type-badge {
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 12px;
+.filter-group {
+  display: flex;
+  gap: 12px;
+}
+
+.filter-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.filter-icon {
+  display: none; /* HeroUI 风格通常隐藏图标，追求简洁 */
+}
+
+.glass-select {
+  appearance: none;
+  padding: 8px 36px 8px 16px;
+  border: 1px solid transparent; /* 移除默认边框 */
+  border-radius: 999px; /* 内部也是胶囊形 */
+  background: rgba(255, 255, 255, 0.5) url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23666%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E") no-repeat right 12px center;
+  background-size: 10px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+  min-width: 140px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+}
+
+.glass-select:hover {
+  background-color: rgba(255, 255, 255, 0.85);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.glass-select:focus {
+  background-color: white;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.25);
+  outline: none;
+}
+
+.btn-text {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
   font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  transition: all 0.2s;
 }
 
-.topic-type-badge.task1 {
-  background: #E3F2FD;
-  color: #1976D2;
+.btn-text:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--danger-color);
 }
 
-.topic-type-badge.task2 {
-  background: #F3E5F5;
-  color: #7B1FA2;
+/* 题目 Grid */
+.topic-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 24px;
+  margin-bottom: 40px;
 }
 
-.topic-difficulty {
-  font-size: 14px;
+.topic-card {
+  display: flex;
+  flex-direction: column;
+  padding: 0; /* 重置 padding，由内部元素控制 */
+  overflow: hidden;
+  height: 100%;
+}
+
+.card-header {
+  padding: 20px 20px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 12px;
+  text-transform: uppercase;
+}
+
+.badge.task1 { background: #e0f2fe; color: #0284c7; }
+.badge.task2 { background: #f3e8ff; color: #9333ea; }
+
+.category-badge {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  background: rgba(0,0,0,0.03);
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.difficulty {
+  color: #fbbf24;
+  font-size: 0.9rem;
+  letter-spacing: 2px;
 }
 
 .topic-image {
-  margin-bottom: 12px;
-  border-radius: var(--border-radius);
+  height: 160px;
   overflow: hidden;
-  aspect-ratio: 16/9;
-  background: var(--bg-light);
+  border-bottom: 1px solid rgba(0,0,0,0.05);
 }
 
 .topic-image img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: transform 0.3s;
 }
 
-.topic-content {
-  margin-bottom: 12px;
+.topic-card:hover .topic-image img {
+  transform: scale(1.05);
 }
 
-.topic-category {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-bottom: 8px;
+.topic-body {
+  padding: 16px 20px;
+  flex: 1;
 }
 
 .topic-title {
-  font-size: 14px;
+  font-size: 1rem;
+  line-height: 1.6;
   color: var(--text-primary);
-  line-height: 1.5;
-  max-height: 3.6em;
-  overflow: hidden;
-  text-overflow: ellipsis;
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
-.topic-footer {
+.card-footer {
+  padding: 16px 20px;
+  border-top: 1px solid rgba(0,0,0,0.05);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-top: 12px;
-  border-top: 1px solid var(--border-color);
+  background: rgba(250, 250, 250, 0.5);
 }
 
-.usage-count {
-  font-size: 12px;
+.usage-info {
+  font-size: 0.8rem;
   color: var(--text-muted);
+  font-weight: 500;
 }
 
-.topic-actions {
+.actions {
   display: flex;
   gap: 8px;
 }
 
-.btn-icon {
-  padding: 6px;
-  background: transparent;
-  border: none;
+.action-btn {
+  background: white;
+  border: 1px solid rgba(0,0,0,0.1);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  font-size: 16px;
-  opacity: 0.7;
-  transition: opacity 0.2s;
+  transition: all 0.2s;
+  font-size: 0.9rem;
 }
 
-.btn-icon:hover:not(:disabled) {
-  opacity: 1;
+.action-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
-.btn-icon:disabled {
-  cursor: not-allowed;
-  opacity: 0.3;
-}
+.action-btn.edit:hover { background: #eff6ff; border-color: #3b82f6; }
+.action-btn.delete:hover { background: #fef2f2; border-color: #ef4444; }
+.action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-/* 空状态 */
-.empty-state {
-  text-align: center;
-  padding: 60px 20px;
-  color: var(--text-muted);
-}
-
-.loading {
-  text-align: center;
-  padding: 60px 20px;
-  color: var(--text-muted);
-}
-
-/* 分页 */
-.pagination {
+/* 分页控件 */
+.pagination-glass {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 16px;
-  margin-top: 24px;
+  gap: 20px;
+  padding: 24px;
+}
+
+.page-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.page-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.page-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .page-info {
-  font-size: 14px;
-  color: var(--text-secondary);
-}
-
-/* 编辑器弹窗 */
-.editor-dialog {
-  max-width: 600px;
-  width: 90%;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.form-group {
-  margin-bottom: 20px;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 8px;
+  color: white;
+  font-size: 1rem;
   font-weight: 500;
-  color: var(--text-primary);
 }
 
-.radio-group {
+/* 编辑器特定样式 */
+.editor-dialog {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 8px;
+  margin: -4px -8px -4px 0; /* 调整滚动条间距 */
+}
+
+.radio-cards {
+  display: flex;
+  gap: 16px;
+}
+
+.radio-card {
+  flex: 1;
+  border: 2px solid transparent;
+  background: rgba(0,0,0,0.03);
+  padding: 16px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.radio-card input { position: absolute; opacity: 0; }
+
+.radio-card.active {
+  background: #eff6ff;
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.radio-icon { font-size: 1.5rem; }
+.radio-label { font-weight: 600; font-size: 0.95rem; }
+
+.form-row {
   display: flex;
   gap: 20px;
 }
 
-.radio-group label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-}
+.form-group.half { flex: 1; }
 
-.star-selector {
+.star-rating {
   display: flex;
-  gap: 8px;
-  font-size: 24px;
+  gap: 4px;
+  font-size: 1.5rem;
+  cursor: pointer;
 }
 
 .star {
-  cursor: pointer;
   opacity: 0.3;
-  transition: opacity 0.2s;
+  transition: transform 0.2s;
 }
+.star:hover { transform: scale(1.2); }
+.star.active { opacity: 1; }
 
-.star.active {
-  opacity: 1;
-}
-
-.star:hover {
-  opacity: 0.7;
-}
-
-/* 图片上传 */
-.upload-area {
-  border: 2px dashed var(--border-color);
-  border-radius: var(--border-radius);
+.image-uploader {
+  border: 2px dashed #ddd;
+  border-radius: 12px;
   padding: 20px;
   text-align: center;
   cursor: pointer;
-  transition: border-color 0.2s;
+  transition: all 0.2s;
+  background: #fafafa;
 }
 
-.upload-area:hover {
+.image-uploader:hover {
   border-color: var(--primary-color);
+  background: #f0f4ff;
 }
 
-.upload-placeholder p {
-  margin: 8px 0;
-  color: var(--text-secondary);
-}
+.upload-icon { font-size: 2rem; display: block; margin-bottom: 8px; }
 
-.upload-hint {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.image-preview {
+.preview-container {
   position: relative;
-  max-width: 300px;
-  margin: 0 auto;
+  display: inline-block;
 }
 
-.image-preview img {
-  width: 100%;
-  border-radius: var(--border-radius);
+.preview-container img {
+  max-height: 200px;
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
 }
 
-.btn-remove {
+.remove-btn {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 28px;
-  height: 28px;
-  background: rgba(0, 0, 0, 0.6);
-  color: white;
-  border: none;
+  top: -10px;
+  right: -10px;
+  background: white;
+  border: 1px solid #ddd;
   border-radius: 50%;
+  width: 24px;
+  height: 24px;
   cursor: pointer;
-  font-size: 18px;
-  line-height: 1;
+  box-shadow: var(--shadow-sm);
+}
+
+.error-banner {
+  background: #fef2f2;
+  color: #ef4444;
+  padding: 12px;
+  border-radius: 8px;
+  margin-top: 16px;
+  border: 1px solid #fecaca;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-drop-zone {
+  border: 2px dashed #cbd5e1;
+  padding: 40px;
+  text-align: center;
+  border-radius: 12px;
+  background: #f8fafc;
+  cursor: pointer;
+  position: relative;
+  margin-bottom: 16px;
+}
+.file-drop-zone input {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .import-preview {
+  background: #f0fdf4;
+  color: #15803d;
   padding: 12px;
-  background: var(--bg-light);
-  border-radius: var(--border-radius);
-  margin: 12px 0;
+  border-radius: 8px;
+  text-align: center;
+  margin-bottom: 16px;
+  border: 1px solid #bbf7d0;
 }
 
-.hint {
-  font-size: 14px;
-  color: var(--text-secondary);
-  margin: 12px 0;
+.loading-state, .empty-state {
+  text-align: center;
+  padding: 60px;
+  background: rgba(255,255,255,0.5);
+  border-radius: 16px;
+  color: white;
+}
+.empty-icon { font-size: 3rem; margin-bottom: 16px; }
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(255,255,255,0.3);
+  border-radius: 50%;
+  border-top-color: white;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 16px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 </style>

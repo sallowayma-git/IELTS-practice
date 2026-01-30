@@ -1,5 +1,6 @@
 <template>
   <div class="app-container">
+    <ShuiBackground />
     <NavBar />
     <main class="main-content">
       <router-view v-slot="{ Component }">
@@ -13,6 +14,7 @@
 
 <script setup>
 import NavBar from './components/NavBar.vue'
+import ShuiBackground from './components/ShuiBackground.vue'
 </script>
 
 <style scoped>
@@ -20,22 +22,29 @@ import NavBar from './components/NavBar.vue'
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  /* 背景透明，让下层 WebGL Canvas 透出 */
+  background: transparent;
+  color: var(--text-primary);
+  position: relative;
 }
 
 .main-content {
   flex: 1;
-  padding: 20px;
+  padding: 24px 40px; /* 增加页面两侧留白 */
   overflow-y: auto;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.2s ease;
+  transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+  transform: translateY(10px); /* 增加微弱的上浮进入效果 */
 }
 </style>
