@@ -111,10 +111,158 @@ export const evaluate = {
     }
 }
 
+// 题目管理相关
+export const topics = {
+    async list(filters = {}, pagination = { page: 1, limit: 20 }) {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.topics.list(filters, pagination)
+        return handleResponse(response)
+    },
+
+    async getById(id) {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.topics.getById(id)
+        return handleResponse(response)
+    },
+
+    async create(topicData) {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.topics.create(topicData)
+        return handleResponse(response)
+    },
+
+    async update(id, updates) {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.topics.update(id, updates)
+        return handleResponse(response)
+    },
+
+    async delete(id) {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.topics.delete(id)
+        return handleResponse(response)
+    },
+
+    async batchImport(topicsArray) {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.topics.batchImport(topicsArray)
+        return handleResponse(response)
+    },
+
+    async getStatistics() {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.topics.getStatistics()
+        return handleResponse(response)
+    }
+}
+
+// 作文/历史记录相关
+export const essays = {
+    async list(filters = {}, pagination = { page: 1, limit: 20 }) {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.essays.list(filters, pagination)
+        return handleResponse(response)
+    },
+
+    async getById(id) {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.essays.getById(id)
+        return handleResponse(response)
+    },
+
+    async create(essayData) {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.essays.create(essayData)
+        return handleResponse(response)
+    },
+
+    async delete(id) {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.essays.delete(id)
+        return handleResponse(response)
+    },
+
+    async batchDelete(ids) {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.essays.batchDelete(ids)
+        return handleResponse(response)
+    },
+
+    async deleteAll() {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.essays.deleteAll()
+        return handleResponse(response)
+    },
+
+    async getStatistics(range = 'all', taskType = null) {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.essays.getStatistics(range, taskType)
+        return handleResponse(response)
+    },
+
+    async exportCSV(filters = {}) {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.essays.exportCSV(filters)
+        return handleResponse(response)
+    }
+}
+
+// 设置相关
+export const settings = {
+    async getAll() {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.settings.getAll()
+        return handleResponse(response)
+    },
+
+    async get(key) {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.settings.get(key)
+        return handleResponse(response)
+    },
+
+    async update(updates) {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.settings.update(updates)
+        return handleResponse(response)
+    },
+
+    async reset() {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.settings.reset()
+        return handleResponse(response)
+    }
+}
+
+// 图片上传相关
+export const upload = {
+    async uploadImage(fileData) {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.upload.uploadImage(fileData)
+        return handleResponse(response)
+    },
+
+    async deleteImage(filename) {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.upload.deleteImage(filename)
+        return handleResponse(response)
+    },
+
+    async getImagePath(filename) {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.upload.getImagePath(filename)
+        return handleResponse(response)
+    }
+}
+
 export default {
     configs,
     prompts,
     evaluate,
+    topics,
+    essays,
+    settings,
+    upload,
     getErrorMessage,
     isAPIAvailable
 }

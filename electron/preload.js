@@ -65,6 +65,52 @@ contextBridge.exposeInMainWorld('writingAPI', {
         removeEventListener: () => {
             ipcRenderer.removeAllListeners('evaluate:event');
         }
+    },
+
+    /**
+     * 题目管理
+     */
+    topics: {
+        list: (filters, pagination) => ipcRenderer.invoke('topics:list', filters, pagination),
+        getById: (id) => ipcRenderer.invoke('topics:getById', id),
+        create: (topicData) => ipcRenderer.invoke('topics:create', topicData),
+        update: (id, updates) => ipcRenderer.invoke('topics:update', id, updates),
+        delete: (id) => ipcRenderer.invoke('topics:delete', id),
+        batchImport: (topics) => ipcRenderer.invoke('topics:batchImport', topics),
+        getStatistics: () => ipcRenderer.invoke('topics:getStatistics')
+    },
+
+    /**
+     * 作文记录/历史管理
+     */
+    essays: {
+        list: (filters, pagination) => ipcRenderer.invoke('essays:list', filters, pagination),
+        getById: (id) => ipcRenderer.invoke('essays:getById', id),
+        create: (essayData) => ipcRenderer.invoke('essays:create', essayData),
+        delete: (id) => ipcRenderer.invoke('essays:delete', id),
+        batchDelete: (ids) => ipcRenderer.invoke('essays:batchDelete', ids),
+        deleteAll: () => ipcRenderer.invoke('essays:deleteAll'),
+        getStatistics: (range, taskType) => ipcRenderer.invoke('essays:getStatistics', range, taskType),
+        exportCSV: (filters) => ipcRenderer.invoke('essays:exportCSV', filters)
+    },
+
+    /**
+     * 应用设置
+     */
+    settings: {
+        getAll: () => ipcRenderer.invoke('settings:getAll'),
+        get: (key) => ipcRenderer.invoke('settings:get', key),
+        update: (updates) => ipcRenderer.invoke('settings:update', updates),
+        reset: () => ipcRenderer.invoke('settings:reset')
+    },
+
+    /**
+     * 图片上传
+     */
+    upload: {
+        uploadImage: (fileData) => ipcRenderer.invoke('upload:image', fileData),
+        deleteImage: (filename) => ipcRenderer.invoke('upload:deleteImage', filename),
+        getImagePath: (filename) => ipcRenderer.invoke('upload:getImagePath', filename)
     }
 });
 

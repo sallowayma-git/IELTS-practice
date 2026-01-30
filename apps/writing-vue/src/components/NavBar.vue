@@ -5,6 +5,15 @@
       <h1 class="title">雅思写作 AI 评判</h1>
     </div>
     <div class="navbar-right">
+      <router-link to="/" class="nav-link">
+        ✍️ 作文输入
+      </router-link>
+      <router-link to="/topics" class="nav-link">
+        📚 题目管理
+      </router-link>
+      <router-link to="/history" class="nav-link">
+        📋 历史记录
+      </router-link>
       <button class="btn btn-secondary" @click="goBackToLegacy">
         ← 返回练习
       </button>
@@ -47,6 +56,27 @@ function goBackToLegacy() {
   font-size: 20px;
   font-weight: 600;
   color: white;
+}
+
+.navbar-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.nav-link {
+  padding: 8px 16px;
+  color: white;
+  text-decoration: none;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: background 0.2s;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.nav-link:hover,
+.nav-link.router-link-active {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .navbar-right .btn {
