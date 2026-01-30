@@ -276,7 +276,7 @@
 
 <script setup>
 import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue'
-import { topics, upload } from '@/api/client.js'
+import { topics as topicsApi, upload } from '@/api/client.js'
 
 // Debounce 工具函数
 function debounce(fn, delay) {
@@ -338,7 +338,7 @@ async function loadTopics() {
     if (filters.value.category) activeFilters.category = filters.value.category
     if (filters.value.difficulty > 0) activeFilters.difficulty = filters.value.difficulty
 
-    const result = await topics.list(activeFilters, pagination.value)
+    const result = await topicsApi.list(activeFilters, pagination.value)
     
     // 批量加载图片 URL（同步化）
     const topicsWithUrls = await Promise.all(
@@ -439,9 +439,9 @@ async function saveTopic() {
     }
 
     if (editingTopic.value) {
-      await topics.update(editingTopic.value.id, topicData)
+      await topicsApi.update(editingTopic.value.id, topicData)
     } else {
-      await topics.create(topicData)
+      await topicsApi.create(topicData)
     }
 
     closeEditor()
@@ -464,7 +464,7 @@ async function deleteTopic(topic) {
   }
 
   try {
-    await topics.delete(topic.id)
+    await topicsApi.delete(topic.id)
     await loadTopics()
   } catch (error) {
     console.error('删除题目失败:', error)
@@ -544,7 +544,7 @@ async function confirmImport() {
   if (!importPreview.value) return
 
   try {
-    const result = await topics.batchImport(importPreview.value)
+    const result = await topicsApi.batchImport(importPreview.value)
     alert(`成功导入 ${result.success} 道题目${result.failed > 0 ? `，失败 ${result.failed} 道` : ''}`)
     showImportDialog.value = false
     importPreview.value = null

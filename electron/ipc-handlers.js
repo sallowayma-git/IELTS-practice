@@ -107,6 +107,7 @@ class IPCHandlers {
      * 注册所有 IPC handlers
      */
     register() {
+        this._registerAppHandlers();
         this._registerConfigHandlers();
         this._registerPromptHandlers();
         this._registerEvaluateHandlers();
@@ -116,6 +117,15 @@ class IPCHandlers {
         this._registerUploadHandlers();
 
         logger.info('All IPC handlers registered');
+    }
+
+    /**
+     * 注册 app.* handlers（系统级API）
+     */
+    _registerAppHandlers() {
+        ipcMain.handle('app:getUserDataPath', async () => {
+            return { success: true, data: app.getPath('userData') };
+        });
     }
 
     /**

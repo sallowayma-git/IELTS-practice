@@ -9,7 +9,7 @@ const { contextBridge, ipcRenderer } = require('electron');
  * 3. 使用 contextBridge 进行安全的上下文隔离
  */
 
-// Legacy 导航 API
+// Legacy 导航 API + 系统信息
 contextBridge.exposeInMainWorld('electronAPI', {
     /**
      * 切换到写作评判页面
@@ -23,7 +23,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
      */
     openLegacy: () => {
         ipcRenderer.send('navigate-to-legacy');
-    }
+    },
+
+    /**
+     * 获取版本信息（安全方式）
+     */
+    getVersions: () => {
+        return {
+            electron: process.versions.electron || 'N/A',
+            node: process.versions.node || 'N/A',
+            chrome: process.versions.chrome || 'N/A'
+        };
+    },
+
+    /**
+     * 获取用户数据路径
+     */
+    getUserDataPath: () => ipcRenderer.invoke('app:getUserDataPath')
 });
 
 // 写作模块 API

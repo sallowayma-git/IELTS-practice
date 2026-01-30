@@ -1,5 +1,24 @@
 <template>
   <div class="compose-page">
+    <!-- Draft Recovery Notification -->
+    <div v-if="showDraftNotification" class="draft-notification card">
+      <div class="notification-content">
+        <div class="notification-icon">💾</div>
+        <div class="notification-text">
+          <strong>检测到未保存的草稿</strong>
+          <p>要恢复上次编辑的内容吗?</p>
+        </div>
+      </div>
+      <div class="notification-actions">
+        <button class="btn btn-secondary" @click="handleDiscardDraft">
+          放弃
+        </button>
+        <button class="btn btn-primary" @click="handleRecoverDraft">
+          恢复草稿
+        </button>
+      </div>
+    </div>
+
     <div class="compose-container card">
       <div class="compose-header">
         <h2>作文输入</h2>
@@ -78,9 +97,10 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { evaluate, getErrorMessage } from '@/api/client.js'
+import { useDraft } from '@/composables/useDraft.js'
 
 const router = useRouter()
 
@@ -89,6 +109,51 @@ const content = ref('')
 const isSubmitting = ref(false)
 const error = ref('')
 const showConfirmDialog = ref(false)
+
+// Draft management
+const {
+  hasDraft,
+  loadDraft,
+  saveDraft,
+  clearDraft,
+  stopAutoSave
+} = useDraft('compose-essay', content)
+
+const showDraftNotification = ref(false)
+
+// Load draft on mount
+onMounted(() => {
+  if (hasDraft()) {
+    showDraftNotification.value = true
+  }
+})
+
+// Auto-save when content or taskType changes
+watch([content, taskType], () => {
+  saveDraft({
+    taskType: taskType.value,
+    content: content.value
+  })
+})
+
+// Handle draft recovery
+function handleRecoverDraft() {
+  const draft = loadDraft()
+  if (draft) {
+    if (draft.taskType) {
+      taskType.value = draft.taskType
+    }
+    if (draft.content) {
+      content.value = draft.content
+    }
+  }
+  showDraftNotification.value = false
+}
+
+function handleDiscardDraft() {
+  clearDraft()
+  showDraftNotification.value = false
+}
 
 // 计算属性
 const wordCount = computed(() => {
@@ -142,6 +207,10 @@ async function submitEssay() {
       word_count: wordCount.value
     })
     
+    // Clear draft on successful submission
+    clearDraft()
+    stopAutoSave()
+    
     // 跳转到评测进度页
     router.push({
       name: 'Evaluating',
@@ -161,6 +230,81 @@ async function submitEssay() {
   max-width: 900px;
   margin: 0 auto;
 }
+
+/* Draft Notification */
+.draft-notification {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  margin-bottom: 20px;
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.notification-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.notification-icon {
+  font-size: 32px;
+}
+
+.notification-text strong {
+  display: block;
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+
+.notification-text p {
+  margin: 0;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.notification-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.notification-actions .btn {
+  padding: 8px 16px;
+  font-size: 14px;
+  border: 1px solid white;
+}
+
+.notification-actions .btn-secondary {
+  background: transparent;
+  color: white;
+}
+
+.notification-actions .btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.notification-actions .btn-primary {
+  background: white;
+  color: #667eea;
+}
+
+.notification-actions .btn-primary:hover {
+  background: rgba(255, 255, 255, 0.9);
+}
+
 
 .compose-container {
   background: white;

@@ -3,8 +3,58 @@
   "version": "0.3.1",
   "description": "IELTS Practice Application",
   "private": true,
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "npm run build:writing && electron .",
+    "build:writing": "cd apps/writing-vue && npm run build",
+    "pack": "npm run build:writing && electron-builder --dir",
+    "dist": "npm run build:writing && electron-builder"
+  },
   "dependencies": {
     "better-sqlite3": "^12.6.2",
     "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "electron": "^40.1.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.ielts.practice",
+    "productName": "IELTS Practice",
+    "files": [
+      "electron/**/*",
+      "dist/writing/**/*",
+      "index.html",
+      "css/**/*",
+      "js/**/*",
+      "assets/**/*",
+      "!ListeningPractice/**/*",
+      "!睡着过项目组/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "README.md",
+        "to": "README.md"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.education",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ]
+    }
   }
 }

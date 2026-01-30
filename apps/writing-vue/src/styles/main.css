@@ -1,4 +1,4 @@
-/* 全局样式 */
+/* 全局样式 - Phase 05: 统一设计系统 (继承自 Legacy) */
 * {
   margin: 0;
   padding: 0;
@@ -11,32 +11,85 @@ body {
   color: #333;
 }
 
-/* CSS 变量 */
+/* CSS 变量 - 继承自 Legacy css/main.css */
 :root {
+  /* Legacy Brand Colors - 保持一致的品牌色 */
   --primary-color: #667eea;
   --primary-dark: #5a6fd6;
   --secondary-color: #764ba2;
-  --success-color: #67C23A;
-  --warning-color: #E6A23C;
-  --danger-color: #F56C6C;
-  --info-color: #409EFF;
-  
-  /* 错误类型颜色 */
-  --error-grammar: #F56C6C;
-  --error-spelling: #E6A23C;
-  --error-word-choice: #409EFF;
-  --error-sentence-structure: #9C27B0;
-  --error-coherence: #67C23A;
-  
-  --text-primary: #303133;
-  --text-secondary: #606266;
-  --text-muted: #909399;
-  
+
+  /* Semantic Colors - 继承 Legacy 语义色 */
+  --success-color: #10b981;
+  --warning-color: #f59e0b;
+  --danger-color: #ef4444;
+  --info-color: #3b82f6;
+
+  /* Text Colors - 继承 Legacy 文本色 */
+  --text-primary: #1f2937;
+  --text-secondary: #4b5563;
+  --text-muted: #6b7280;
+
+  /* Background & Surface - 继承 Legacy 背景色 */
   --bg-white: #ffffff;
-  --bg-light: #f5f7fa;
-  --border-color: #dcdfe6;
+  --bg-light: #f8fafc;
+  --border-color: #e2e8f0;
+
+  /* Border Radius - 继承 Legacy 圆角系统 */
   --border-radius: 8px;
+  --border-radius-sm: 4px;
+  --border-radius-lg: 12px;
+
+  /* Shadow - 继承 Legacy 阴影系统 */
   --shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+
+  /* Spacing - Legacy 间距系统 */
+  --space-xs: 0.25rem;
+  /* 4px */
+  --space-sm: 0.5rem;
+  /* 8px */
+  --space-md: 1rem;
+  /* 16px */
+  --space-lg: 1.5rem;
+  /* 24px */
+  --space-xl: 2rem;
+  /* 32px */
+  --space-2xl: 3rem;
+  /* 48px */
+
+  /* Font Sizes - Legacy 字体系统 */
+  --font-size-xs: 0.75rem;
+  /* 12px */
+  --font-size-sm: 0.875rem;
+  /* 14px */
+  --font-size-base: 1rem;
+  /* 16px */
+  --font-size-lg: 1.125rem;
+  /* 18px */
+  --font-size-xl: 1.25rem;
+  /* 20px */
+  --font-size-2xl: 1.5rem;
+  /* 24px */
+
+  /* Font Weights - Legacy 字重系统 */
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* Transitions - Legacy 过渡系统 */
+  --transition-fast: 150ms ease-out;
+  --transition-normal: 200ms ease-out;
+  --transition-slow: 300ms ease-out;
+
+  /* 写作专用语义色 (保留功能性，但使用 Legacy 色系) */
+  --error-grammar: #ef4444;
+  --error-spelling: #f59e0b;
+  --error-word-choice: #3b82f6;
+  --error-sentence-structure: #9c27b0;
+  --error-coherence: #10b981;
 }
 
 /* 通用卡片样式 */
@@ -44,21 +97,21 @@ body {
   background: var(--bg-white);
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
-  padding: 20px;
+  padding: var(--space-lg);
 }
 
-/* 按钮样式 */
+/* 按钮样式 - 继承 Legacy 按钮设计 */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 12px 24px;
-  font-size: 16px;
-  font-weight: 600;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
   border: none;
   border-radius: var(--border-radius);
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all var(--transition-normal);
 }
 
 .btn:disabled {
@@ -67,13 +120,13 @@ body {
 }
 
 .btn-primary {
-  background: var(--primary-color);
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
   color: white;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--primary-dark);
   transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
 }
 
 .btn-secondary {
@@ -83,7 +136,7 @@ body {
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: #e4e7ed;
+  background: #e2e8f0;
 }
 
 .btn-danger {
@@ -92,14 +145,20 @@ body {
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: #f33;
+  background: #dc2626;
+  box-shadow: var(--shadow-md);
 }
 
-/* 输入框样式 */
+.btn-sm {
+  padding: 8px 16px;
+  font-size: var(--font-size-sm);
+}
+
+/* 输入框样式 - 继承 Legacy 输入样式 */
 .textarea {
   width: 100%;
-  padding: 16px;
-  font-size: 16px;
+  padding: var(--space-md);
+  font-size: var(--font-size-base);
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius);
   resize: vertical;
@@ -113,29 +172,72 @@ body {
   box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
 }
 
-/* 进度条 */
-.progress-bar {
-  height: 8px;
-  background: var(--bg-light);
-  border-radius: 4px;
-  overflow: hidden;
+.input {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: var(--font-size-base);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
 }
 
-.progress-bar-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
-  transition: width 0.3s ease;
+.input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
 }
 
-/* 分数显示 */
-.score-display {
-  font-size: 48px;
-  font-weight: 700;
-  color: var(--primary-color);
+/* 弹窗样式 - Legacy 风格 */
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
 }
 
-.score-label {
-  font-size: 14px;
+.dialog {
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+  margin: var(--space-lg);
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-md);
+  margin-top: var(--space-lg);
+}
+
+/* 状态标签 */
+.empty-state,
+.loading {
+  text-align: center;
+  padding: var(--space-2xl);
   color: var(--text-muted);
-  text-transform: uppercase;
+}
+
+.error-state {
+  text-align: center;
+  padding: var(--space-2xl);
+  color: var(--danger-color);
+}
+
+/* 分页组件 */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  margin-top: var(--space-lg);
+}
+
+.page-info {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
 }

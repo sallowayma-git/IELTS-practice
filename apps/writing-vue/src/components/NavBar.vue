@@ -14,6 +14,9 @@
       <router-link to="/history" class="nav-link">
         📋 历史记录
       </router-link>
+      <router-link to="/settings" class="nav-link">
+        ⚙️ 设置
+      </router-link>
       <button class="btn btn-secondary" @click="goBackToLegacy">
         ← 返回练习
       </button>
