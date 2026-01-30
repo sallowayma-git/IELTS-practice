@@ -88,6 +88,104 @@
       </div>
     </div>
 
+    <!-- 统计分析区域 -->
+    <div v-if="total > 0" class="statistics-section card">
+      <div class="section-header">
+        <h2>📊 历史统计与对比</h2>
+        <div class="range-selector">
+          <label>对比范围：</label>
+          <select v-model="statisticsRange" @change="loadStatistics">
+            <option value="all">全部历史</option>
+            <option value="recent10">最近10次</option>
+            <option value="thisMonth">本月</option>
+            <option value="task1">Task 1专项</option>
+            <option value="task2">Task 2专项</option>
+          </select>
+        </div>
+      </div>
+
+      <div v-if="statistics" class="statistics-content">
+        <div class="stat-grid">
+          <!-- 雷达图 -->
+          <div class="stat-chart">
+            <h3>四项评分对比</h3>
+            <RadarChart 
+              v-if="statistics.count > 0"
+              :currentScores="statistics.latest"
+              :averageScores="statistics.average"
+              :taskType="statistics.latest_task_type"
+            />
+            <div v-else class="empty-chart">
+              <p>暂无可对比的数据</p>
+            </div>
+          </div>
+
+          <!-- 对比表格 -->
+          <div class="stat-comparison">
+            <h3>详细对比数据</h3>
+            <table v-if="statistics.count > 0" class="comparison-table">
+              <thead>
+                <tr>
+                  <th>评分项</th>
+                  <th>最新</th>
+                  <th>平均</th>
+                  <th>差值</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>{{ statistics.latest_task_type === 'task1' ? 'Task Achievement' : 'Task Response' }}</td>
+                  <td>{{ statistics.latest.tr_ta }}</td>
+                  <td>{{ statistics.average.tr_ta }}</td>
+                  <td :class="getDifferenceClass(statistics.latest.tr_ta - statistics.average.tr_ta)">
+                    {{ formatDifference(statistics.latest.tr_ta - statistics.average.tr_ta) }}
+                  </td>
+                </tr>
+                <tr>
+                  <td>Coherence & Cohesion</td>
+                  <td>{{ statistics.latest.cc }}</td>
+                  <td>{{ statistics.average.cc }}</td>
+                  <td :class="getDifferenceClass(statistics.latest.cc - statistics.average.cc)">
+                    {{ formatDifference(statistics.latest.cc - statistics.average.cc) }}
+                  </td>
+                </tr>
+                <tr>
+                  <td>Lexical Resource</td>
+                  <td>{{ statistics.latest.lr }}</td>
+                  <td>{{ statistics.average.lr }}</td>
+                  <td :class="getDifferenceClass(statistics.latest.lr - statistics.average.lr)">
+                    {{ formatDifference(statistics.latest.lr - statistics.average.lr) }}
+                  </td>
+                </tr>
+                <tr>
+                  <td>Grammatical Range</td>
+                  <td>{{ statistics.latest.gra }}</td>
+                  <td>{{ statistics.average.gra }}</td>
+                  <td :class="getDifferenceClass(statistics.latest.gra - statistics.average.gra)">
+                    {{ formatDifference(statistics.latest.gra - statistics.average.gra) }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div v-else class="empty-comparison">
+              <p>{{ getRangeDescription() }}下暂无数据</p>
+            </div>
+            
+            <div v-if="statistics.count > 0" class="stat-summary">
+              <p><strong>统计范围：</strong>{{ getRangeDescription() }}</p>
+              <p><strong>记录数量：</strong>{{ statistics.count }} 次</p>
+              <p><strong>最新提交：</strong>{{ formatDate(statistics.latest_date) }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-else-if="loadingStatistics" class="loading">加载统计数据中...</div>
+      <div v-else class="statistics-empty">
+        <p>暂无统计数据</p>
+      </div>
+    </div>
+
     <!-- 批量操作栏 -->
     <div v-if="selectedIds.length > 0" class="batch-actions card">
       <span class="selection-count">已选择 {{ selectedIds.length }} 条记录</span>
@@ -283,8 +381,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
-import { essays } from '@/api/client.js'
+import {ref, computed, onMounted, watch } from 'vue'
+import { essays as essaysApi } from '@/api/client.js'
+import RadarChart from '@/components/RadarChart.vue'
 
 // Debounce 工具函数
 function debounce(fn, delay) {
@@ -302,6 +401,11 @@ const essaysList = ref([])
 const total = ref(0)
 const pagination = ref({ page: 1, limit: 20 })
 const today = new Date().toISOString().split('T')[0]
+
+// Statistics state
+const loadingStatistics = ref(false)
+const statistics = ref(null)
+const statisticsRange = ref('all')
 
 // 筛选条件（严格按照后端契约）
 const filters = ref({
@@ -399,7 +503,7 @@ async function loadEssays() {
     }
     // search 暂不传递（后端 DAO 未实现 LIKE 查询）
     
-    const result = await essays.list(apiFilters, pagination.value)
+    const result = await essaysApi.list(apiFilters, pagination.value)
     essaysList.value = result.data
     total.value = result.total
   } catch (err) {
@@ -446,7 +550,7 @@ async function viewDetail(id) {
   loadingDetail.value = true
   
   try {
-    detailData.value = await essays.getById(id)
+    detailData.value = await essaysApi.getById(id)
   } catch (err) {
     console.error('加载详情失败:', err)
     alert('加载详情失败: ' + err.message)
@@ -483,12 +587,12 @@ function confirmDeleteAll() {
 async function executeDelete() {
   try {
     if (deleteMode.value === 'single') {
-      await essays.delete(deleteTarget.value)
+      await essaysApi.delete(deleteTarget.value)
     } else if (deleteMode.value === 'batch') {
-      await essays.batchDelete(selectedIds.value)
+      await essaysApi.batchDelete(selectedIds.value)
       selectedIds.value = []
     } else if (deleteMode.value === 'all') {
-      await essays.deleteAll()
+      await essaysApi.deleteAll()
     }
     
     showDeleteConfirm.value = false
@@ -514,7 +618,7 @@ async function exportCSV() {
       apiFilters.max_score = filters.value.max_score
     }
     
-    const csvContent = await essays.exportCSV(apiFilters)
+    const csvContent = await essaysApi.exportCSV(apiFilters)
     
     // 生成带筛选范围的文件名
     const dateStr = new Date().toISOString().split('T')[0]
@@ -570,6 +674,80 @@ function getScoreClass(score) {
   return 'low'
 }
 
+// Statistics functions
+async function loadStatistics() {
+  if (total.value === 0) return
+  
+  loadingStatistics.value = true
+  
+  try {
+    // Determine range and taskType based on selector
+    let range = statisticsRange.value
+    let taskType = null
+    
+    // Map frontend range to backend protocol
+    if (range === 'task1' || range === 'task2') {
+      range = statisticsRange.value  // 'task1' or 'task2' for backend
+    } else if (range === 'thisMonth') {
+      range = 'monthly'  // Backend expects 'monthly'
+    }
+    // 'all' and 'recent10' pass through
+    
+    const result = await essaysApi.getStatistics(range, taskType)
+    
+    if (result && result.count > 0) {
+      // STRICT PROTOCOL: Use only tr_ta field (no fallback)
+      statistics.value = {
+        count: result.count,
+        latest: {
+          tr_ta: parseFloat(result.latest.tr_ta || 0),  // PROTOCOL: Always tr_ta
+          cc: parseFloat(result.latest.cc || 0),
+          lr: parseFloat(result.latest.lr || 0),
+          gra: parseFloat(result.latest.gra || 0)
+        },
+        average: {
+          tr_ta: parseFloat(result.average.avg_tr_ta || 0),  // PROTOCOL: Always avg_tr_ta
+          cc: parseFloat(result.average.avg_cc || 0),
+          lr: parseFloat(result.average.avg_lr || 0),
+          gra: parseFloat(result.average.avg_gra || 0)
+        },
+        latest_task_type: result.latest.task_type || 'task2',
+        latest_date: result.latest.submitted_at
+      }
+    } else {
+      statistics.value = { count: 0 }
+    }
+  } catch (err) {
+    console.error('加载统计数据失败:', err)
+    statistics.value = null
+  } finally {
+    loadingStatistics.value = false
+  }
+}
+
+function formatDifference(diff) {
+  if (diff > 0) return `+${diff.toFixed(1)}`
+  if (diff < 0) return diff.toFixed(1)
+  return '0.0'
+}
+
+function getDifferenceClass(diff) {
+  if (diff > 0) return 'positive'
+  if (diff < 0) return 'negative'
+  return 'neutral'
+}
+
+function getRangeDescription() {
+  const descriptions = {
+    all: '全部历史',
+    recent10: '最近10次',
+    thisMonth: '本月',
+    task1: 'Task 1专项',
+    task2: 'Task 2专项'
+  }
+  return descriptions[statisticsRange.value] || '全部历史'
+}
+
 // 监听筛选和分页变化
 watch(filters, () => {
   pagination.value.page = 1
@@ -583,6 +761,8 @@ watch(() => pagination.value.page, () => {
 // 初始化
 onMounted(() => {
   loadEssays()
+  // Load statistics after essays are loaded
+  setTimeout(() => loadStatistics(), 500)
 })
 </script>
 
@@ -614,6 +794,133 @@ onMounted(() => {
 .filter-panel {
   margin-bottom: 20px;
   padding: 16px;
+}
+
+/* 统计分析区域 */
+.statistics-section {
+  margin-bottom: 20px;
+  padding: 24px;
+}
+
+.statistics-section .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.statistics-section h2 {
+  font-size: 20px;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.range-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.range-selector label {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.range-selector select {
+  padding: 6px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  font-size: 14px;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 1000px) {
+  .stat-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.stat-chart,
+.stat-comparison {
+  padding: 16px;
+  background: var(--bg-light);
+  border-radius: var(--border-radius);
+}
+
+.stat-chart h3,
+.stat-comparison h3 {
+  font-size: 16px;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+}
+
+.empty-chart,
+.empty-comparison,
+.statistics-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+}
+
+.comparison-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 16px;
+}
+
+.comparison-table th,
+.comparison-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.comparison-table th {
+  background: var(--bg-light);
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.comparison-table td {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.comparison-table td.positive {
+  color: #4CAF50;
+  font-weight: 600;
+}
+
+.comparison-table td.negative {
+  color: #F44336;
+  font-weight: 600;
+}
+
+.comparison-table td.neutral {
+  color: var(--text-muted);
+}
+
+.stat-summary {
+  padding: 16px;
+  background: white;
+  border-radius: var(--border-radius);
+  border: 1px solid var(--border-color);
+}
+
+.stat-summary p {
+  margin: 8px 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.stat-summary strong {
+  color: var(--text-primary);
 }
 
 .filter-row {

@@ -984,6 +984,9 @@
                 this.isInitialized = true;
                 console.log('[PracticeEnhancer] 初始化完成');
 
+                // 注入返回主页按钮
+                this.injectBackToHomeButton();
+
                 // 页面加载完成后进行一次初始收集
                 if (document.readyState === 'complete') {
                     setTimeout(() => this.collectAllAnswers(), 1000);
@@ -1330,6 +1333,158 @@
             } catch (error) {
                 console.error('[PracticeEnhancer] 存储初始化失败，跳过命名空间设置', error);
             }
+        },
+
+        /**
+         * 【Phase 05 重构】在题目页面注入返回主页按钮
+         * 
+         * 原有问题：hard-coded `.practice-nav .controls` 容器假设
+         * 解决方案：多布局容器解析 + 浮层兜底 + 样式自适应
+         */
+        injectBackToHomeButton: function () {
+            // 检查是否在 Electron 环境中
+            const hasElectronAPI = typeof window.electronAPI !== 'undefined'
+                && window.electronAPI
+                && typeof window.electronAPI.openLegacy === 'function';
+
+            if (!hasElectronAPI) {
+                console.log('[PracticeEnhancer] 非 Electron 环境，跳过返回按钮注入');
+                return;
+            }
+
+            // 检查是否已经存在返回按钮
+            if (document.getElementById('back-to-home-btn')) {
+                console.log('[PracticeEnhancer] 返回按钮已存在，跳过注入');
+                return;
+            }
+
+            // 【核心】多布局容器解析策略
+            const resolveBackButtonHost = () => {
+                // 优先级依次尝试
+                const strategies = [
+                    { selector: '.practice-nav .controls', name: 'practice-nav (Writing/Speaking)' },
+                    { selector: '.bottom-bar .bb-left', name: 'bottom-bar left (Listening/Reading)' },
+                    { selector: '.bottom-bar .bb-center', name: 'bottom-bar center' },
+                    { selector: '.bottom-bar', name: 'bottom-bar basic' }
+                ];
+
+                for (const strategy of strategies) {
+                    const container = document.querySelector(strategy.selector);
+                    if (container) {
+                        console.log(`[PracticeEnhancer] 使用容器策略: ${strategy.name}`);
+                        return { container, isFloating: false };
+                    }
+                }
+
+                // 最后兜底：创建固定浮层
+                console.log('[PracticeEnhancer] 所有容器策略失败，使用浮层兜底');
+                const floatingContainer = document.createElement('div');
+                floatingContainer.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    z-index: 9999;
+                `;
+                document.body.appendChild(floatingContainer);
+                return { container: floatingContainer, isFloating: true };
+            };
+
+            // 获取容器
+            const { container, isFloating } = resolveBackButtonHost();
+            if (!container) {
+                console.error('[PracticeEnhancer] 无法解析返回按钮容器');
+                return;
+            }
+
+            // 【样式自适应】检测容器已有按钮样式
+            const getAdaptiveButtonStyle = () => {
+                // 尝试从容器内已有按钮复制样式类
+                const existingButton = container.querySelector('button, .btn, .button, .top-bar-button');
+                if (existingButton) {
+                    const classList = Array.from(existingButton.classList);
+                    console.log('[PracticeEnhancer] 复用现有按钮样式:', classList);
+                    return {
+                        useClasses: true,
+                        classes: classList.filter(cls => !cls.includes('active') && !cls.includes('disabled'))
+                    };
+                }
+
+                // Fallback: 内联样式（适用于浮层或无样式容器）
+                return {
+                    useClasses: false,
+                    inlineStyle: `
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        border: none;
+                        border-radius: 6px;
+                        padding: ${isFloating ? '10px 16px' : '6px 12px'};
+                        font-size: 14px;
+                        cursor: pointer;
+                        transition: all 0.2s;
+                        font-weight: 500;
+                        box-shadow: ${isFloating ? '0 2px 8px rgba(0,0,0,0.15)' : 'none'};
+                    `
+                };
+            };
+
+            const styleConfig = getAdaptiveButtonStyle();
+
+            // 创建返回按钮
+            const backButton = document.createElement('button');
+            backButton.id = 'back-to-home-btn';
+            backButton.textContent = '🏠 返回主页';
+            backButton.title = '返回考试总览系统';
+
+            if (styleConfig.useClasses) {
+                backButton.className = styleConfig.classes.join(' ');
+                // 补充必要样式（避免继承破坏）
+                backButton.style.marginRight = '8px';
+            } else {
+                backButton.style.cssText = styleConfig.inlineStyle;
+            }
+
+            // 悬停效果（仅浮层或内联样式）
+            if (!styleConfig.useClasses || isFloating) {
+                backButton.addEventListener('mouseenter', () => {
+                    backButton.style.transform = 'translateY(-1px)';
+                    backButton.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)';
+                });
+                backButton.addEventListener('mouseleave', () => {
+                    backButton.style.transform = 'translateY(0)';
+                    backButton.style.boxShadow = isFloating ? '0 2px 8px rgba(0,0,0,0.15)' : 'none';
+                });
+            }
+
+            // 点击事件：返回主页
+            backButton.addEventListener('click', (event) => {
+                event.preventDefault();
+
+                // 确认是否要离开（如果有未提交的答案）
+                const hasUnsavedAnswers = Object.keys(this.answers || {}).length > 0;
+                if (hasUnsavedAnswers) {
+                    const confirmLeave = confirm('您还有未提交的答案，确定要返回主页吗？');
+                    if (!confirmLeave) {
+                        return;
+                    }
+                }
+
+                // 调用 Electron API 返回主页（统一入口）
+                try {
+                    window.electronAPI.openLegacy();
+                    console.log('[PracticeEnhancer] 正在返回主页...');
+                } catch (error) {
+                    console.error('[PracticeEnhancer] 返回主页失败:', error);
+                }
+            });
+
+            // 将按钮插入到容器
+            if (isFloating) {
+                container.appendChild(backButton);
+            } else {
+                container.insertBefore(backButton, container.firstChild);
+            }
+
+            console.log(`[PracticeEnhancer] 返回主页按钮已注入（${isFloating ? '浮层' : '容器内'}）`);
         },
 
         cleanup: function () {

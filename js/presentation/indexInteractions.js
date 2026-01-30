@@ -199,7 +199,15 @@
             ['create-backup-btn', function () { return typeof global.createManualBackup === 'function' && global.createManualBackup(); }],
             ['backup-list-btn', function () { return typeof global.showBackupList === 'function' && global.showBackupList(); }],
             ['export-data-btn', function () { return typeof global.exportAllData === 'function' && global.exportAllData(); }],
-            ['import-data-btn', function () { return typeof global.importData === 'function' && global.importData(); }]
+            ['import-data-btn', function () { return typeof global.importData === 'function' && global.importData(); }],
+            ['writing-entry-btn', function () {
+                // Navigate to writing module via Electron IPC
+                if (typeof global.electronAPI !== 'undefined' && global.electronAPI && typeof global.electronAPI.openWriting === 'function') {
+                    global.electronAPI.openWriting();
+                } else if (typeof global.showMessage === 'function') {
+                    global.showMessage('写作模块需要在 Electron 环境中运行', 'warning');
+                }
+            }]
         ];
 
         bindings.forEach(function (pair) {
