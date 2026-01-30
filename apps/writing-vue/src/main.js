@@ -23,6 +23,16 @@ const router = createRouter({
             name: 'Result',
             component: () => import('./views/ResultPage.vue'),
             props: true
+        },
+        {
+            path: '/topics',
+            name: 'TopicManage',
+            component: () => import('./views/TopicManagePage.vue')
+        },
+        {
+            path: '/history',
+            name: 'History',
+            component: () => import('./views/HistoryPage.vue')
         }
     ]
 })
