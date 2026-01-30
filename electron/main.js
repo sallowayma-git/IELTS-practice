@@ -69,11 +69,28 @@ async function createMainWindow() {
         mainWindow.show();
     });
 
-    // 【安全加固】拦截页面内导航/重定向，只允许我们主动的 loadFile
+    // 【安全加固】拦截页面内导航/重定向
+    // 允许本地 file:// 协议导航（Legacy 题目页面需要）
+    // 阻止外部 http/https 导航
     mainWindow.webContents.on('will-navigate', (event, url) => {
-        // 阻止所有页面内导航，只允许通过 loadFile 控制
+        // 允许本地 file:// 协议导航（项目内的 HTML 文件）
+        if (url.startsWith('file://')) {
+            // 检查是否在项目目录内
+            const projectDir = path.resolve(__dirname, '..');
+            try {
+                const normalizedUrl = decodeURIComponent(url.replace('file://', ''));
+                if (normalizedUrl.startsWith(projectDir)) {
+                    console.log(`[Navigation] Allowing local file: ${url.substring(0, 100)}...`);
+                    return; // 允许导航
+                }
+            } catch (e) {
+                console.warn(`[Security] Failed to parse navigation URL: ${e.message}`);
+            }
+        }
+
+        // 阻止其他所有导航（外部链接等）
         event.preventDefault();
-        console.warn(`[Security] Prevented navigation to: ${url}`);
+        console.warn(`[Security] Prevented navigation to: ${url.substring(0, 100)}...`);
     });
 
     // 【安全加固】拦截 new-window 和 window.open，防止随意打开新窗口
@@ -115,23 +132,38 @@ function loadLegacyPage() {
 }
 
 /**
- * 加载写作页面（Vue 构建产物 或 占位页）
- * Phase 03: 优先加载 Vue 构建产物
+ * 加载写作页面（Vue 构建产物 或 回退到 Legacy）
+ * Phase 05: 增强错误处理，缺失时明确提示并回退 Legacy
  */
 function loadWritingPage() {
     if (!mainWindow) return;
 
     const fs = require('fs');
+    const { dialog } = require('electron');
 
     // 优先尝试加载 Vue 构建产物
     const vueBuildPath = path.join(__dirname, '..', 'dist', 'writing', 'index.html');
 
     if (fs.existsSync(vueBuildPath)) {
+        console.log('[Navigation] Loading Vue writing module:', vueBuildPath);
         mainWindow.loadFile(vueBuildPath);
     } else {
-        // 后备：加载占位页
-        const writingPath = path.join(__dirname, 'pages', 'writing.html');
-        mainWindow.loadFile(writingPath);
+        // 构建产物缺失：弹窗提示用户并回退到 Legacy
+        console.error('[Navigation] Writing module build missing at:', vueBuildPath);
+        
+        dialog.showMessageBox(mainWindow, {
+            type: 'warning',
+            title: '写作模块未构建',
+            message: '写作模块构建文件缺失，将返回主界面',
+            detail: '请运行 "npm run build:writing" 构建写作模块，或使用 "npm start" 启动应用。',
+            buttons: ['确定']
+        }).then(() => {
+            // 回退到 Legacy 主界面
+            loadLegacyPage();
+        }).catch(err => {
+            console.error('[Navigation] Dialog error:', err);
+            loadLegacyPage();
+        });
     }
 }
 

@@ -99,13 +99,75 @@ class EssayService {
     }
 
     /**
-     * 获取统计数据
-     * @param {string} range - 'all' | 'recent10' | 'monthly' | 'task1' | 'task2'
-     * @param {string} taskType - 可选的任务类型筛选
+     * Get statistics with strict protocol contract
+     * PROTOCOL (LOCKED):
+     * Returns: {
+     *   count: number,
+     *   latest: { task_type, tr_ta, cc, lr, gra, submitted_at },
+     *   average: { avg_tr_ta, avg_cc, avg_lr, avg_gra }
+     * }
+     * Field naming: ALWAYS tr_ta (never task_response/task_achievement split)
      */
     async getStatistics(range = 'all', taskType = null) {
         try {
-            return this.dao.getStatistics(range, taskType);
+            const stats = this.dao.getStatistics(range, taskType);
+
+            if (stats.count === 0) {
+                return { count: 0 };
+            }
+
+            // Build WHERE clause for latest essay
+            const conditions = [];
+            const params = [];
+
+            if (range === 'task1') {
+                conditions.push("task_type = 'task1'");
+            } else if (range === 'task2') {
+                conditions.push("task_type = 'task2'");
+            } else if (taskType) {
+                conditions.push('task_type = ?');
+                params.push(taskType);
+            }
+
+            if (range === 'monthly') {
+                conditions.push("submitted_at >= date('now', 'start of month')");
+            }
+
+            const whereClause = conditions.length > 0
+                ? 'WHERE ' + conditions.join(' AND ')
+                : '';
+
+            const limitClause = range === 'recent10' ? 'LIMIT 1 OFFSET 0' : 'LIMIT 1';
+
+            const latest = this.dao.db.prepare(`
+                SELECT * FROM essays 
+                ${whereClause}
+                ORDER BY submitted_at DESC 
+                ${limitClause}
+            `).get(...params);
+
+            if (!latest) {
+                return { count: 0 };
+            }
+
+            // Return with LOCKED protocol
+            return {
+                count: stats.count,
+                latest: {
+                    task_type: latest.task_type,
+                    tr_ta: latest.task_achievement,  // PROTOCOL: Always tr_ta, DB stores as task_achievement
+                    cc: latest.coherence_cohesion,
+                    lr: latest.lexical_resource,
+                    gra: latest.grammatical_range,
+                    submitted_at: latest.submitted_at
+                },
+                average: {
+                    avg_tr_ta: stats.average_task_achievement,  // PROTOCOL: Always avg_tr_ta
+                    avg_cc: stats.average_coherence_cohesion,
+                    avg_lr: stats.average_lexical_resource,
+                    avg_gra: stats.average_grammatical_range
+                }
+            };
         } catch (error) {
             logger.error('EssayService.getStatistics failed', error);
             throw error;

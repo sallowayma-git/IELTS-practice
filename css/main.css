@@ -680,7 +680,7 @@ body.no-scroll {
     pointer-events: none;
 }
 
-.vocab-view-shell > * {
+.vocab-view-shell>* {
     position: relative;
     z-index: 1;
 }
@@ -690,6 +690,7 @@ body.no-scroll {
         opacity: 0;
         transform: translateY(12px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -1175,7 +1176,7 @@ body.no-scroll {
     pointer-events: none;
 }
 
-.vocab-card > * {
+.vocab-card>* {
     position: relative;
     z-index: 1;
 }
@@ -5438,13 +5439,13 @@ body.theme-blue.blue-dark-mode .category-meta {
 }
 
 /* Blue dark mode text color - precise selectors only */
-body.theme-blue.blue-dark-mode .view > h2,
+body.theme-blue.blue-dark-mode .view>h2,
 body.theme-blue.blue-dark-mode .more-view-subtitle,
 body.theme-blue.blue-dark-mode .overview-section-title,
 body.theme-blue.blue-dark-mode .overview-section-label,
 body.theme-blue.blue-dark-mode .tool-card-content h3,
 body.theme-blue.blue-dark-mode .tool-card-content p,
-body.theme-blue.blue-dark-mode .practice-history > div:first-child,
+body.theme-blue.blue-dark-mode .practice-history>div:first-child,
 body.theme-blue.blue-dark-mode .browse-title-bar h2,
 body.theme-blue.blue-dark-mode #browse-title,
 body.theme-blue.blue-dark-mode .hero-header h1,
@@ -5456,13 +5457,13 @@ body.theme-blue.blue-dark-mode .hero-surface,
 body.theme-blue.blue-dark-mode .system-management-panel h3,
 body.theme-blue.blue-dark-mode .data-management-panel h3,
 body.theme-blue.blue-dark-mode .hero-settings-group h3,
-:root[data-theme="blue"] body.blue-dark-mode .view > h2,
+:root[data-theme="blue"] body.blue-dark-mode .view>h2,
 :root[data-theme="blue"] body.blue-dark-mode .more-view-subtitle,
 :root[data-theme="blue"] body.blue-dark-mode .overview-section-title,
 :root[data-theme="blue"] body.blue-dark-mode .overview-section-label,
 :root[data-theme="blue"] body.blue-dark-mode .tool-card-content h3,
 :root[data-theme="blue"] body.blue-dark-mode .tool-card-content p,
-:root[data-theme="blue"] body.blue-dark-mode .practice-history > div:first-child,
+:root[data-theme="blue"] body.blue-dark-mode .practice-history>div:first-child,
 :root[data-theme="blue"] body.blue-dark-mode .browse-title-bar h2,
 :root[data-theme="blue"] body.blue-dark-mode #browse-title,
 :root[data-theme="blue"] body.blue-dark-mode .hero-header h1,
@@ -6096,23 +6097,65 @@ body.theme-blue ::-webkit-scrollbar-thumb {
 
 /* Achievement Tiers */
 .achievement-card.tier-1.unlocked {
-    border-color: #cd7f32; /* Bronze */
+    border-color: #cd7f32;
+    /* Bronze */
     box-shadow: 0 4px 12px rgba(205, 127, 50, 0.2);
     background: linear-gradient(145deg, #fff, #fff0e0);
 }
 
 .achievement-card.tier-2.unlocked {
-    border-color: #c0c0c0; /* Silver */
+    border-color: #c0c0c0;
+    /* Silver */
     box-shadow: 0 4px 12px rgba(192, 192, 192, 0.2);
     background: linear-gradient(145deg, #fff, #f0f0f0);
 }
 
 .achievement-card.tier-3.unlocked {
-    border-color: #ffd700; /* Gold */
+    border-color: #ffd700;
+    /* Gold */
     box-shadow: 0 4px 12px rgba(255, 215, 0, 0.2);
     background: linear-gradient(145deg, #fff, #fff8dc);
 }
 
-.achievement-card.tier-1 .achievement-icon { text-shadow: 0 2px 4px rgba(205, 127, 50, 0.3); }
-.achievement-card.tier-2 .achievement-icon { text-shadow: 0 2px 4px rgba(192, 192, 192, 0.3); }
-.achievement-card.tier-3 .achievement-icon { text-shadow: 0 2px 4px rgba(255, 215, 0, 0.3); }
+.achievement-card.tier-1 .achievement-icon {
+    text-shadow: 0 2px 4px rgba(205, 127, 50, 0.3);
+}
+
+.achievement-card.tier-2 .achievement-icon {
+    text-shadow: 0 2px 4px rgba(192, 192, 192, 0.3);
+}
+
+.achievement-card.tier-3 .achievement-icon {
+    text-shadow: 0 2px 4px rgba(255, 215, 0, 0.3);
+}
+
+/* Featured Tool Card - Writing Module Entry */
+.tool-card--featured {
+    background: linear-gradient(160deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.12) 100%);
+    border-color: rgba(102, 126, 234, 0.5);
+    position: relative;
+    overflow: hidden;
+}
+
+.tool-card--featured::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+}
+
+.tool-card--featured:hover {
+    border-color: rgba(102, 126, 234, 0.8);
+    box-shadow: 0 12px 24px rgba(102, 126, 234, 0.25);
+}
+
+.tool-card--featured .tool-card-icon {
+    font-size: 3rem;
+}
+
+.tool-card--featured .tool-card-content h3 {
+    color: #4c5fd5;
+}
