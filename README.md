@@ -1,5 +1,5 @@
 # IELTS 练习系统使用说明
-
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/sallowayma-git/IELTS-practice)
 ## 系统简介
 
 这是一个本地化的 IELTS（雅思）练习系统，专为阅读和听力部分设计，支持 P1、P2、P3 难度级别。系统是纯前端应用，使用 HTML5、CSS3 和 JavaScript ES6+ 构建，无需服务器部署，直接在浏览器中运行。核心功能包括题库浏览、练习记录管理、数据备份/导入和系统设置。题库基于静态文件（HTML 交互式和 PDF 静态），通过 localStorage 持久化用户数据，支持跨窗口通信（postMessage）采集练习结果。当前版本 v1.0.0，总题目约 147 篇（包括阅读和听力），自动扫描题库路径，确保离线可用。
