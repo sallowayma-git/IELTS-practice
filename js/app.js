@@ -84,13 +84,33 @@ class ExamSystemApp {
 // 新增修复3E：在js/app.js的DOMContentLoaded初始化中去除顶层await
 // 应用启动
 document.addEventListener('DOMContentLoaded', () => {
+    const signalAppCoreReady = () => {
+        try {
+            window.dispatchEvent(new CustomEvent('appCoreReady'));
+        } catch (_) { }
+    };
+
     const startApp = () => {
         try {
             const mixinGlue = window.ExamSystemAppMixins && window.ExamSystemAppMixins.__applyToApp;
             if (typeof mixinGlue === 'function') {
                 mixinGlue();
             }
-            (function(){ try { window.app = new ExamSystemApp(); window.app.initialize(); } catch(e) { console.error('[App] 初始化失败:', e); } })();
+            (function () {
+                try {
+                    window.app = new ExamSystemApp();
+                    Promise.resolve(window.app.initialize())
+                        .catch((error) => {
+                            console.error('[App] 初始化失败:', error);
+                        })
+                        .finally(() => {
+                            signalAppCoreReady();
+                        });
+                } catch (e) {
+                    console.error('[App] 初始化失败:', e);
+                    signalAppCoreReady();
+                }
+            })();
         } catch (error) {
             console.error('Failed to start application:', error);
             if (window.handleError) {
@@ -109,18 +129,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     // no-op
                 }
             }
+            signalAppCoreReady();
         }
     };
 
-    const awaitBrowse = window.AppEntry && typeof window.AppEntry.browseReady === 'function'
-        ? window.AppEntry.browseReady()
-        : null;
-
-    if (awaitBrowse && typeof awaitBrowse.then === 'function') {
-        awaitBrowse.then(() => startApp()).catch(() => startApp());
-    } else {
-        startApp();
-    }
+    startApp();
 });
 
 // 页面卸载时清理
