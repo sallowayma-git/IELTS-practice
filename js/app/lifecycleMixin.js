@@ -53,7 +53,9 @@
                 // 显示活动会话指示器
 
                 // 定期更新活动会话
-                this.startSessionMonitoring();
+                if (typeof this.startSessionMonitoring === 'function') {
+                    this.startSessionMonitoring();
+                }
 
                 // 设置全局错误处理
                 this.setupGlobalErrorHandling();
@@ -406,6 +408,7 @@
 
             // 更新分类统计
             this.updateCategoryStats(examIndex, practiceRecords);
+            this.renderOverviewCards(examIndex);
         },
 
         /**
@@ -474,6 +477,78 @@
             });
         },
 
+        renderOverviewCards(examIndex) {
+            const list = Array.isArray(examIndex) ? examIndex : [];
+            const statsService = window.AppServices && window.AppServices.overviewStats;
+            const OverviewView = window.AppViews && window.AppViews.OverviewView;
+            const container = document.getElementById('category-overview');
+
+            if (!container || !statsService || typeof statsService.calculate !== 'function' || typeof OverviewView !== 'function') {
+                return;
+            }
+
+            if (!this._overviewViewInstance) {
+                this._overviewViewInstance = new OverviewView({ containerSelector: '#category-overview' });
+            }
+
+            const stats = statsService.calculate(list);
+            const app = this;
+            this._overviewViewInstance.render(stats, {
+                container,
+                actions: {
+                    onBrowseCategory(category, type, filterMode, path) {
+                        if (typeof window.browseCategory === 'function') {
+                            window.browseCategory(category, type, filterMode, path);
+                            return;
+                        }
+                        if (app && typeof app.browseCategory === 'function') {
+                            app.browseCategory(category, type, filterMode, path);
+                            return;
+                        }
+                        try {
+                            window.__pendingBrowseFilter = {
+                                category: category || 'all',
+                                type: type || 'all',
+                                filterMode: filterMode || null,
+                                path: path || null
+                            };
+                        } catch (_) { }
+                        if (typeof window.showView === 'function') {
+                            window.showView('browse', false);
+                        }
+                    },
+                    onRandomPractice(category, type, filterMode, path) {
+                        if (window.AppActions && typeof window.AppActions.startRandomPractice === 'function') {
+                            window.AppActions.startRandomPractice(category, type, filterMode, path);
+                            return;
+                        }
+                        if (typeof window.showMessage === 'function') {
+                            window.showMessage('随机练习模块未就绪', 'warning');
+                        }
+                    },
+                    onStartSuite() {
+                        const ensureSuiteReady = window.AppEntry && typeof window.AppEntry.ensureSessionSuiteReady === 'function'
+                            ? window.AppEntry.ensureSessionSuiteReady()
+                            : Promise.resolve();
+                        Promise.resolve(ensureSuiteReady).then(() => {
+                            if (window.AppActions && typeof window.AppActions.startSuitePractice === 'function') {
+                                window.AppActions.startSuitePractice();
+                                return;
+                            }
+                            if (typeof window.showMessage === 'function') {
+                                window.showMessage('套题模块未就绪', 'warning');
+                            }
+                        }).catch((error) => {
+                            console.error('[App] 套题模块加载失败:', error);
+                            if (typeof window.showMessage === 'function') {
+                                window.showMessage('套题模块加载失败，请稍后重试', 'error');
+                            }
+                        });
+                    }
+                }
+            });
+        },
+
         /**
          * 刷新总览数据
          */
@@ -486,6 +561,17 @@
          */
 
 
+
+        /**
+         * 处理窗口大小变化
+         */
+        isMobile() {
+            try {
+                return Number(window.innerWidth) <= 768;
+            } catch (_) {
+                return false;
+            }
+        },
 
         /**
          * 处理窗口大小变化
