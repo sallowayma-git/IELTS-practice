@@ -1,924 +1,601 @@
 # IELTS Practice System Overview
 
 > **Relevant source files**
-> * [.superdesign/design_iterations/ielts_academic_functional_2.html](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/.superdesign/design_iterations/ielts_academic_functional_2.html)
-> * [.superdesign/design_iterations/my_melody_ielts_1.html](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/.superdesign/design_iterations/my_melody_ielts_1.html)
-> * [AGENTS.md](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/AGENTS.md)
-> * [css/main.css](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/css/main.css)
-> * [css/practice-record-modal.css](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/css/practice-record-modal.css)
-> * [index.html](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/index.html)
-> * [js/app.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app.js)
-> * [js/app/examSessionMixin.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js)
-> * [js/app/suitePracticeMixin.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js)
-> * [js/core/practiceRecorder.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/practiceRecorder.js)
-> * [js/core/scoreStorage.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/scoreStorage.js)
-> * [js/main.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js)
-> * [js/theme-switcher.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/theme-switcher.js)
-> * [js/utils/environmentDetector.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/environmentDetector.js)
-> * [js/utils/logger.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/logger.js)
+> * [.gitignore](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/.gitignore)
+> * [.superdesign/design_iterations/ielts_academic_functional_2.html](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/.superdesign/design_iterations/ielts_academic_functional_2.html)
+> * [.superdesign/design_iterations/my_melody_ielts_1.html](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/.superdesign/design_iterations/my_melody_ielts_1.html)
+> * [css/heroui-bridge.css](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/css/heroui-bridge.css)
+> * [css/main.css](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/css/main.css)
+> * [index.html](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/index.html)
+> * [js/app.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app.js)
+> * [js/app/examSessionMixin.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/examSessionMixin.js)
+> * [js/app/suitePracticeMixin.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/suitePracticeMixin.js)
+> * [js/boot-fallbacks.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/boot-fallbacks.js)
+> * [js/main.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/main.js)
+> * [js/practice-page-enhancer.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/practice-page-enhancer.js)
+> * [js/services/GlobalStateService.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/services/GlobalStateService.js)
+> * [js/utils/answerComparisonUtils.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/answerComparisonUtils.js)
 
-## System Purpose and Scope
+## Purpose and Scope
 
-The IELTS Practice System is a browser-based application for IELTS reading and listening practice, built entirely as a client-side application with no server dependencies. The system manages approximately 147 practice exercises across reading (P1, P2, P3 difficulty levels) and listening sections, providing comprehensive practice tracking, statistical analysis, and multi-format data export.
+This document provides a high-level technical overview of the IELTS Practice System, a web-based application for IELTS exam practice with sophisticated data management, multi-theme support, and cross-window practice sessions. It introduces the major subsystems, architectural patterns, and entry points that compose the system.
 
-**Technology Stack:** Vanilla JavaScript ES6+, HTML5, CSS3
-**Architecture Pattern:** Layered architecture with mixin-based composition
-**Storage:** localStorage, IndexedDB (via `StorageManager`)
-**Testing:** Playwright E2E, Node.js test suite, static analysis
+For detailed information on specific subsystems:
 
-### Related Documentation
+* Application initialization and state management: see [Core Application Architecture](/sallowayma-git/IELTS-practice/3-core-application-architecture)
+* Data persistence and backup: see [Data Management System](/sallowayma-git/IELTS-practice/4-data-management-system)
+* Practice session lifecycle and cross-window communication: see [Practice Session System](/sallowayma-git/IELTS-practice/5-practice-session-system)
+* Theme variants and UI components: see [Theme System & UI Architecture](/sallowayma-git/IELTS-practice/7-theme-system-and-ui-architecture)
+* Performance optimization strategies: see [Performance & Optimization](/sallowayma-git/IELTS-practice/10-performance-and-optimization)
 
-* [Getting Started](/sallowayma-git/IELTS-practice/2-getting-started) - Installation and initial configuration
-* [Core Application Architecture](/sallowayma-git/IELTS-practice/3-core-application-architecture) - `ExamSystemApp` and state management
-* [Data Management System](/sallowayma-git/IELTS-practice/4-data-management-system) - Repository pattern and persistence
-* [Practice Session System](/sallowayma-git/IELTS-practice/5-practice-session-system) - Session recording and cross-window communication
-* [Exam Content & Data System](/sallowayma-git/IELTS-practice/6-vocabulary-learning-system) - Exam indexing and path resolution
-* [Theme System & Visual Design](/sallowayma-git/IELTS-practice/7-exam-content-and-data-system) - UI customization and theme portals
-* [Testing & Quality Assurance](/sallowayma-git/IELTS-practice/10-user-interface-components) - E2E tests and validation
+---
 
-Sources: [README.md L1-L24](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/README.md#L1-L24)
+## System Purpose and Capabilities
 
- [index.html L1-L50](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/index.html#L1-L50)
+The IELTS Practice System is a browser-based application that provides:
 
-## System Architecture Overview
+1. **Exam Practice Management**: Opens IELTS reading and listening exams in separate windows, collects user answers, and calculates scores by comparing with correct answers
+2. **Multi-Tier Data Persistence**: Stores practice records, exam metadata, and settings across IndexedDB, localStorage, sessionStorage, and in-memory storage with automatic failover
+3. **Suite Practice Mode**: Supports sequential exam sessions (e.g., P1 → P2 → P3) with automatic navigation and aggregated results
+4. **Theme System**: Provides multiple visual themes (Academic, Melody, HP, XiaoDai) through a unified adapter interface
+5. **Cross-Window Communication**: Coordinates between main application and exam windows using `postMessage` protocol
+6. **Lazy Loading**: Progressive code loading with script groups to optimize initial load time
 
-The system implements a five-layer architecture with clear separation of concerns, progressive enhancement capabilities, and comprehensive testing infrastructure.
+**Sources**: [index.html L1-L473](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/index.html#L1-L473)
 
-### Five-Layer Architecture
+ [js/app.js L1-L132](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app.js#L1-L132)
 
-**Five-Layer System Architecture**
+ [js/main.js L1-L96](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/main.js#L1-L96)
+
+---
+
+## High-Level Architecture
+
+The system is organized into five major layers:
 
 ```mermaid
 flowchart TD
 
-THEMES["Theme Portals<br>ielts_academic_functional_2.html<br>my_melody_ielts_1.html<br>HarryPoter.html"]
-MAIN["index.html<br>Welcome.html"]
-VIEWS["Core Views<br>overview, browse, practice, settings"]
-ESA["ExamSystemApp<br>js/app.js"]
-MIXINS["Mixins<br>stateMixin.js<br>navigationMixin.js<br>examSessionMixin.js<br>suitePracticeMixin.js"]
-STATE["State Management<br>AppStateService<br>LegacyStateAdapter"]
-RECORDER["PracticeRecorder<br>js/core/practiceRecorder.js"]
-SCORER["ScoreStorage<br>js/core/scoreStorage.js"]
-ENHANCER["practicePageEnhancer<br>js/practice-page-enhancer.js"]
-SUITE["Suite Practice<br>suitePracticeMixin.js"]
-REPOS["Data Repositories<br>PracticeRepository<br>SettingsRepository<br>BackupRepository<br>MetaRepository"]
-STORAGE["StorageManager<br>js/utils/storage.js"]
-INTEGRITY["DataIntegrityManager<br>js/components/DataIntegrityManager.js"]
-BACKUP["DataBackupManager<br>js/utils/dataBackupManager.js"]
-EXAMINDEX["Exam Index<br>complete-exam-data.js<br>listening-exam-data.js"]
-PATHSYS["Path Resolution<br>hp-path.js<br>path-map.json"]
-PDFH["PDFHandler<br>js/components/PDFHandler.js"]
+HTML["HTML Entry Points<br>(index.html, theme variants)"]
+MainEntry["main-entry.js<br>AppLazyLoader"]
+BootFallback["boot-fallbacks.js<br>Resilience Functions"]
+App["ExamSystemApp<br>(app.js)"]
+Mixins["Mixins:<br>lifecycleMixin<br>examSessionMixin<br>suitePracticeMixin"]
+StateService["AppStateService<br>LegacyStateAdapter"]
+Navigation["NavigationController<br>showView()"]
+PracticeRecorder["PracticeRecorder<br>Session Management"]
+ScoreStorage["ScoreStorage<br>Validation & Stats"]
+StorageManager["StorageManager<br>Multi-backend Persistence"]
+Repositories["DataRepositoryRegistry<br>PracticeRepository<br>MetaRepository<br>BackupRepository"]
+ExamSession["examSessionMixin.openExam()"]
+Enhancer["practicePageEnhancer<br>Data Collection"]
+PostMessage["postMessage Protocol<br>PRACTICE_COMPLETE"]
+AnswerComp["AnswerComparisonUtils<br>Score Calculation"]
+Themes["ThemeAdapterBase<br>MelodyAdapter<br>AcademicAdapter<br>hpCore"]
+Views["View Components:<br>BrowseController<br>PracticeHistory<br>SettingsPanel"]
+LegacyBundle["LegacyViewBundle<br>Dashboard & Stats"]
 
-VIEWS --> ESA
-ESA --> RECORDER
-ESA --> SUITE
-SCORER --> REPOS
-ESA --> EXAMINDEX
-ESA --> PATHSYS
+MainEntry -.-> App
+BootFallback -.-> Navigation
+Mixins -.-> ExamSession
+AnswerComp -.-> PracticeRecorder
+Navigation -.-> Views
+StateService -.-> StorageManager
 
-subgraph CONTENT ["Content Management"]
-    EXAMINDEX
-    PATHSYS
-    PDFH
-    EXAMINDEX --> PATHSYS
+subgraph UI ["UI & Theme Layer"]
+    Themes
+    Views
+    LegacyBundle
+    Themes -.-> Views
+    Views -.-> LegacyBundle
 end
 
-subgraph DATA ["Data Layer"]
-    REPOS
-    STORAGE
-    INTEGRITY
-    BACKUP
-    REPOS --> STORAGE
-    INTEGRITY --> REPOS
-    BACKUP --> REPOS
+subgraph Session ["Practice Session Layer"]
+    ExamSession
+    Enhancer
+    PostMessage
+    AnswerComp
+    ExamSession -.->|"sync"| Enhancer
+    Enhancer -.-> PostMessage
+    PostMessage -.-> AnswerComp
 end
 
-subgraph PRACTICE ["Practice System"]
-    RECORDER
-    SCORER
-    ENHANCER
-    SUITE
-    RECORDER --> SCORER
-    RECORDER --> ENHANCER
+subgraph Data ["Data Management Layer"]
+    PracticeRecorder
+    ScoreStorage
+    StorageManager
+    Repositories
+    PracticeRecorder -.-> ScoreStorage
+    ScoreStorage -.-> Repositories
+    Repositories -.-> StorageManager
 end
 
-subgraph APP ["Application Core"]
-    ESA
-    MIXINS
-    STATE
-    ESA --> MIXINS
-    ESA --> STATE
+subgraph Core ["Core Application Layer"]
+    App
+    Mixins
+    StateService
+    Navigation
+    App -.-> Mixins
+    App -.-> StateService
+    App -.-> Navigation
 end
 
-subgraph UI ["User Interface Layer"]
-    THEMES
-    MAIN
-    VIEWS
-    THEMES --> MAIN
-    MAIN --> VIEWS
+subgraph Entry ["Entry Layer"]
+    HTML
+    MainEntry
+    BootFallback
+    HTML -.->|"fallback"| MainEntry
 end
 ```
 
-Sources: [js/app.js L1-L120](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app.js#L1-L120)
+**Sources**: [js/app.js L6-L62](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app.js#L6-L62)
 
- [js/main.js L1-L100](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L1-L100)
+ [js/main.js L49-L83](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/main.js#L49-L83)
 
- [js/core/practiceRecorder.js L1-L50](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/practiceRecorder.js#L1-L50)
+ [js/app/examSessionMixin.js L1-L6](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/examSessionMixin.js#L1-L6)
 
- [js/core/scoreStorage.js L1-L50](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/scoreStorage.js#L1-L50)
+ [js/practice-page-enhancer.js L1-L18](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/practice-page-enhancer.js#L1-L18)
 
- [complete-exam-data.js L1-L50](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/complete-exam-data.js#L1-L50)
+---
 
- [listening-exam-data.js L1-L50](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/listening-exam-data.js#L1-L50)
+## Bootstrap and Initialization Sequence
 
-### Layer Responsibilities
-
-| Layer | Components | Responsibilities |
-| --- | --- | --- |
-| **UI Layer** | Theme portals, `index.html`, core views | User interaction, theme switching, view rendering |
-| **Application Core** | `ExamSystemApp`, mixins, `AppStateService` | Application orchestration, state management, navigation |
-| **Practice System** | `PracticeRecorder`, `ScoreStorage`, `practicePageEnhancer` | Session management, data collection, scoring |
-| **Data Layer** | Repositories, `StorageManager`, `DataIntegrityManager` | Persistence, data validation, backup/restore |
-| **Content Management** | Exam indexes, path resolution, `PDFHandler` | Exam metadata, resource location, content delivery |
-
-Sources: [js/app.js L6-L62](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app.js#L6-L62)
-
- [js/core/practiceRecorder.js L1-L100](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/practiceRecorder.js#L1-L100)
-
- [js/data/repositories/practiceRepository.js L1-L50](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/data/repositories/practiceRepository.js#L1-L50)
-
- [assets/scripts/complete-exam-data.js L1-L20](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/assets/scripts/complete-exam-data.js#L1-L20)
-
-### Application Initialization Flow
-
-**Bootstrap and Initialization Sequence**
+The application initializes through a three-phase process:
 
 ```mermaid
 sequenceDiagram
-  participant Browser
-  participant index_html["index.html"]
-  participant boot_fallbacks["boot-fallbacks.js"]
-  participant data_index["js/data/index.js"]
-  participant StorageManager
-  participant ExamSystemApp
-  participant DIM["DataIntegrityManager"]
-  participant index_html
-  participant boot_fallbacks
-  participant data_index
-  participant DIM
+  participant p1 as Browser
+  participant p2 as boot-fallbacks.js
+  participant p3 as main-entry.js
+  participant p4 as AppLazyLoader
+  participant p5 as ExamSystemApp
+  participant p6 as StorageManager
+  participant p7 as AppStateService
 
-  Browser->>index_html: "DOMContentLoaded"
-  index_html->>boot_fallbacks: "Load & Execute"
-  boot_fallbacks->>StorageManager: "Ensure window.storage"
-  index_html->>data_index: "Load & Execute"
-  data_index->>StorageManager: "Check availability"
-  loop [Storage Ready]
-    data_index->>data_index: "Create repositories"
-    data_index->>Browser: "window.dataRepositories ready"
-    data_index->>data_index: "Retry after 100ms"
-    index_html->>ExamSystemApp: "new ExamSystemApp()"
-    ExamSystemApp->>ExamSystemApp: "Apply mixins"
-    ExamSystemApp->>ExamSystemApp: "initialize()"
-    ExamSystemApp->>ExamSystemApp: "initializeLegacyComponents()"
-    ExamSystemApp->>ExamSystemApp: "loadLibrary()"
-    ExamSystemApp->>ExamSystemApp: "syncPracticeRecords()"
-    DIM->>DIM: "attachRepositories()"
-    DIM->>DIM: "runConsistencyChecks()"
-    DIM->>DIM: "startAutoBackup()"
-  end
-  ExamSystemApp->>Browser: "Application Ready"
+  p1->>p2: Load immediately
+  p2->>p2: Register showView() fallback
+  p2->>p2: Register navigation handlers
+  p1->>p3: DOMContentLoaded
+  p3->>p6: setNamespace('exam_system')
+  p3->>p4: Pre-load critical groups
+  p3->>p5: new ExamSystemApp()
+  p5->>p5: Apply mixins
+  p5->>p7: getInstance()
+  p7-->>p5: State ready
+  p5->>p5: initialize()
+  p5->>p6: Load exam_index
+  p5->>p6: Load practice_records
+  p6-->>p5: Initial data
+  p5->>p5: initializeLegacyComponents()
+  p5->>p5: setupGlobalErrorHandling()
+  p1->>p3: examIndexLoaded event
+  p3->>p4: ensureBrowseGroup()
+  p4->>p4: Load browse-view scripts
+  p3->>p5: loadExamList()
+  p5->>p1: Display UI
+  note over p3,p4: Background: load non-critical modules
 ```
 
-The initialization process implements a multi-phase bootstrap with retry mechanisms and parallel component initialization. Key phases include:
+### Initialization Phases
 
-1. **Foundation Phase**: `boot-fallbacks.js` ensures `window.storage` exists
-2. **Data Layer Phase**: `js/data/index.js` creates repository layer with 100ms retry polling
-3. **Application Core Phase**: `ExamSystemApp` loads, applies mixins, initializes state service
-4. **Parallel Initialization**: App components, legacy fallback system, and data integrity manager initialize simultaneously
-
-Sources: [index.html L298-L404](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/index.html#L298-L404)
-
- [js/boot-fallbacks.js L1-L50](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/boot-fallbacks.js#L1-L50)
-
- [js/data/index.js L15-L89](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/data/index.js#L15-L89)
-
- [js/app.js L86-L112](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app.js#L86-L112)
-
- [js/main.js L254-L323](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L254-L323)
-
-## Application Core Layer
-
-### ExamSystemApp - Central Orchestrator
-
-The `ExamSystemApp` class (defined in [js/app.js L6-L62](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app.js#L6-L62)
-
-) serves as the central orchestrator, composed through mixin-based architecture for modular functionality.
-
-**ExamSystemApp Architecture and Composition**
-
-```mermaid
-flowchart TD
-
-ESA2["ExamSystemApp<br>js/app.js:6-62"]
-STATE2["state object<br>exam, practice, ui, components"]
-STATEMIXIN["stateMixin.js<br>getExamIndex()<br>setPracticeRecords()"]
-NAVMIXIN["navigationMixin.js<br>navigateToView()<br>showView()"]
-BOOTMIXIN["bootstrapMixin.js<br>initialize()<br>loadLibrary()"]
-SESSMIXIN["examSessionMixin.js<br>openExam()<br>handleSessionMessage()"]
-SUITEMIXIN["suitePracticeMixin.js<br>startSuitePractice()"]
-FALLMIXIN["fallbackMixin.js<br>bootstrapFallbackRuntime()"]
-PR3["PracticeRecorder"]
-DIM3["DataIntegrityManager"]
-PDF["PDFHandler"]
-BSM["BrowseStateManager"]
-
-STATEMIXIN --> ESA2
-NAVMIXIN --> ESA2
-BOOTMIXIN --> ESA2
-SESSMIXIN --> ESA2
-SUITEMIXIN --> ESA2
-FALLMIXIN --> ESA2
-ESA2 --> PR3
-ESA2 --> DIM3
-ESA2 --> PDF
-ESA2 --> BSM
-
-subgraph Components ["Core Components"]
-    PR3
-    DIM3
-    PDF
-    BSM
-end
-
-subgraph Mixins ["Mixin Composition"]
-    STATEMIXIN
-    NAVMIXIN
-    BOOTMIXIN
-    SESSMIXIN
-    SUITEMIXIN
-    FALLMIXIN
-end
-
-subgraph Core ["ExamSystemApp Core"]
-    ESA2
-    STATE2
-    ESA2 --> STATE2
-end
-```
-
-### State Management Architecture
-
-The system implements dual-path state management bridging modern and legacy code:
-
-| Component | Type | Purpose |
-| --- | --- | --- |
-| `AppStateService` | Modern API | Centralized state with change notifications |
-| `LegacyStateAdapter` | Bridge | Synchronizes with global variables |
-| `LegacyStateBridge` | Cache | Replays state changes before app initialization |
-| `localFallbackState` | Fallback | In-memory state when service unavailable |
-
-**State Management Flow**
-
-```mermaid
-flowchart TD
-
-ASS2["AppStateService<br>js/app/state-service.js"]
-GETTERS["getExamIndex()<br>getPracticeRecords()<br>getBrowseFilter()"]
-SETTERS["setExamIndex()<br>setPracticeRecords()<br>setBrowseFilter()"]
-LSA2["LegacyStateAdapter<br>js/utils/legacyStateAdapter.js"]
-LSB2["LegacyStateBridge<br>js/core/legacyStateBridge.js"]
-GLOBALS["window.examIndex<br>window.practiceRecords<br>window.__browseFilter"]
-LOCAL["localFallbackState<br>js/main.js:42-46"]
-FUNCS["getExamIndexState()<br>getPracticeRecordsState()<br>getBrowseFilterState()"]
-
-ASS2 --> LSA2
-LSB2 --> ASS2
-FUNCS --> ASS2
-
-subgraph Fallback ["Fallback State"]
-    LOCAL
-    FUNCS
-    FUNCS --> LOCAL
-end
-
-subgraph Legacy ["Legacy Compatibility"]
-    LSA2
-    LSB2
-    GLOBALS
-    LSA2 --> GLOBALS
-end
-
-subgraph Modern ["Modern State Path"]
-    ASS2
-    GETTERS
-    SETTERS
-    ASS2 --> GETTERS
-    ASS2 --> SETTERS
-end
-```
-
-Sources: [js/app.js L6-L62](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app.js#L6-L62)
-
- [js/app.js L64-L81](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app.js#L64-L81)
-
- [js/app/stateMixin.js L1-L100](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/stateMixin.js#L1-L100)
-
- [js/app/state-service.js L1-L50](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/state-service.js#L1-L50)
-
- [js/utils/legacyStateAdapter.js L1-L50](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/legacyStateAdapter.js#L1-L50)
-
- [js/main.js L42-L193](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L42-L193)
-
-### Mixin-Based Composition Pattern
-
-The `ExamSystemApp` uses mixins to achieve modular composition without deep inheritance hierarchies. Mixins are applied in [js/app.js L64-L81](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app.js#L64-L81)
-
-:
-
-```
-// Mixin application pattern (js/app.js:64-81)
-Object.assign(ExamSystemApp.prototype,
-    mixins.state || {},           // State access methods
-    mixins.bootstrap || {},       // Initialization logic
-    mixins.lifecycle || {},       // Component lifecycle
-    mixins.navigation || {},      // View management
-    mixins.examSession || {},     // Practice session handling
-    mixins.suitePractice || {},   // Suite mode functionality
-    mixins.fallback || {}         // Legacy compatibility
-);
-```
-
-**Mixin Responsibilities:**
-
-| Mixin | File | Key Methods | Purpose |
+| Phase | Module | Timing | Purpose |
 | --- | --- | --- | --- |
-| State | `stateMixin.js` | `getExamIndex()`, `setPracticeRecords()` | State access abstraction |
-| Bootstrap | `bootstrapMixin.js` | `initialize()`, `loadLibrary()` | App initialization |
-| Lifecycle | `lifecycleMixin.js` | `destroy()`, `handleResize()` | Component lifecycle |
-| Navigation | `navigationMixin.js` | `navigateToView()`, `showView()` | View routing |
-| Exam Session | `examSessionMixin.js` | `openExam()`, `handlePracticeComplete()` | Practice sessions |
-| Suite Practice | `suitePracticeMixin.js` | `startSuitePractice()`, `openNextInSuite()` | Multi-exam sessions |
-| Fallback | `fallbackMixin.js` | `bootstrapFallbackRuntime()` | Degraded-mode support |
+| **Phase 1: Resilience** | `boot-fallbacks.js` | Immediate (before DOM ready) | Provides baseline navigation and message functions |
+| **Phase 2: Core Init** | `main-entry.js`, `app.js` | DOMContentLoaded | Creates app instance, loads critical data |
+| **Phase 3: Progressive** | `AppLazyLoader` | On-demand / Idle | Loads browse, practice-suite, more-tools groups |
 
-Sources: [js/app.js L64-L81](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app.js#L64-L81)
+**Sources**: [js/boot-fallbacks.js L1-L60](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/boot-fallbacks.js#L1-L60)
 
- [js/app/stateMixin.js L1-L50](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/stateMixin.js#L1-L50)
+ [js/app.js L86-L124](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app.js#L86-L124)
 
- [js/app/bootstrapMixin.js L1-L50](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/bootstrapMixin.js#L1-L50)
+ [index.html L424-L461](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/index.html#L424-L461)
 
- [js/app/navigationMixin.js L1-L50](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/navigationMixin.js#L1-L50)
+---
 
- [js/app/examSessionMixin.js L1-L50](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L1-L50)
+## Core Application Components
 
- [js/app/suitePracticeMixin.js L1-L50](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L1-L50)
+### ExamSystemApp Class
 
-## Data Layer Architecture
-
-### Repository Pattern and Storage Abstraction
-
-The data layer implements a repository pattern with centralized registration and dependency injection:
-
-**Repository Layer and Storage Backend**
+The `ExamSystemApp` class serves as the main application controller, composed via mixins:
 
 ```mermaid
-flowchart TD
-
-REG["DataRepositoryRegistry<br>js/data/repositories/<br>dataRepositoryRegistry.js"]
-PR4["PracticeRepository<br>practiceRepository.js<br>max: 1000 records"]
-SR["SettingsRepository<br>settingsRepository.js"]
-BR["BackupRepository<br>backupRepository.js<br>max: 20 backups"]
-MR["MetaRepository<br>metaRepository.js<br>schema-driven"]
-DIM4["DataIntegrityManager<br>DataIntegrityManager.js<br>Auto-backup every 10min"]
-DBM["DataBackupManager<br>dataBackupManager.js<br>Export JSON/CSV"]
-SSW["SimpleStorageWrapper<br>simpleStorageWrapper.js<br>Legacy adapter"]
-SM3["StorageManager<br>storage.js<br>window.storage"]
-LS3["localStorage"]
-IDB2["IndexedDB"]
-
-REG --> SM3
-DIM4 --> REG
-DBM --> REG
-SSW --> REG
-
-subgraph Storage ["Storage Backend"]
-    SM3
-    LS3
-    IDB2
-    SM3 --> LS3
-    SM3 --> IDB2
-end
-
-subgraph DataManagers ["Data Managers"]
-    DIM4
-    DBM
-    SSW
-end
-
-subgraph Repositories ["Repository Layer"]
-    REG
-    PR4
-    SR
-    BR
-    MR
-    PR4 --> REG
-    SR --> REG
-    BR --> REG
-    MR --> REG
-end
+classDiagram
+    class ExamSystemApp {
+        +state: Object
+        +currentView: string
+        +components: Object
+        +isInitialized: boolean
+        +initialize()
+        +destroy()
+        +handleResize()
+    }
+    class lifecycleMixin {
+        +initialize()
+        +destroy()
+        +setupGlobalErrorHandling()
+    }
+    class examSessionMixin {
+        +openExam(examId, options)
+        +buildExamUrl(exam)
+        +openExamWindow(url, exam, options)
+        +injectDataCollectionScript(window, examId)
+        +startPracticeSession(examId)
+    }
+    class suitePracticeMixin {
+        +initializeSuiteMode()
+        +startSuitePractice()
+        +handleSuitePracticeComplete(examId, data)
+        +finalizeSuiteRecord(session)
+    }
+    class navigationMixin {
+        +navigateToView(viewName)
+        +showView(viewName, resetCategory)
+    }
+    class stateMixin {
+        +getState(path)
+        +setState(path, value)
+    }
+    lifecycleMixin <|.. ExamSystemApp
+    examSessionMixin <|.. ExamSystemApp
+    suitePracticeMixin <|.. ExamSystemApp
+    navigationMixin <|.. ExamSystemApp
+    stateMixin <|.. ExamSystemApp
 ```
 
-### Storage Keys and Namespacing
+### State Management
 
-All storage keys use the `exam_system_` namespace prefix:
+The application uses `AppStateService` for canonical state and `LegacyStateAdapter` for backward compatibility:
 
-| Storage Key | Repository | Max Records | Purpose |
+| State Accessor | Module | Storage Key | Purpose |
 | --- | --- | --- | --- |
-| `exam_system_practice_records` | `PracticeRepository` | 1000 | Practice session data |
-| `exam_system_settings` | `SettingsRepository` | 1 | User preferences |
-| `exam_system_backups` | `BackupRepository` | 20 | Automatic backups |
-| `exam_system_user_stats` | `MetaRepository` | 1 | Aggregated statistics |
-| `exam_system_active_sessions` | `MetaRepository` | 10 | Active practice sessions |
-| `exam_index` | Direct storage | N/A | Exam catalog (legacy key) |
+| `getExamIndexState()` | `GlobalStateService.js` | `exam_index` | Exam metadata list |
+| `getPracticeRecordsState()` | `GlobalStateService.js` | `practice_records` | Practice history |
+| `getBrowseFilterState()` | `GlobalStateService.js` | Memory | Current filter (category, type) |
+| `getSelectedRecordsState()` | `GlobalStateService.js` | Memory | Bulk delete selection |
 
-Sources: [js/utils/storage.js L1-L100](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/storage.js#L1-L100)
+**Sources**: [js/app.js L6-L62](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app.js#L6-L62)
 
- [js/data/repositories/dataRepositoryRegistry.js L1-L50](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/data/repositories/dataRepositoryRegistry.js#L1-L50)
+ [js/services/GlobalStateService.js L1-L217](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/services/GlobalStateService.js#L1-L217)
 
- [js/data/repositories/practiceRepository.js L1-L100](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/data/repositories/practiceRepository.js#L1-L100)
+ [js/main.js L8-L79](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/main.js#L8-L79)
 
- [js/data/repositories/backupRepository.js L1-L50](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/data/repositories/backupRepository.js#L1-L50)
+---
 
- [js/data/repositories/metaRepository.js L1-L50](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/data/repositories/metaRepository.js#L1-L50)
+## Data Management Architecture
 
-### Data Integrity and Backup System
-
-**Data Integrity Management Flow**
+The data layer implements a multi-tier storage strategy with repositories and transactions:
 
 ```mermaid
 flowchart TD
 
-DETECT["QuotaExceededError"]
-EXPORT["exportToFile()"]
-CLEANUP["removeOldRecords()"]
-CHECK["runConsistencyChecks()"]
-ORPHAN["detectOrphanedRecords()"]
-REPAIR["repairData()"]
-TIMER["10-minute timer"]
-CREATE["createBackup()"]
-PRUNE["pruneOldBackups()"]
+PracticeRecorder["PracticeRecorder<br>startSession()<br>completeSession()"]
+ScoreStorage["ScoreStorage<br>savePracticeRecord()<br>validateRecord()"]
+Registry["DataRepositoryRegistry"]
+PracticeRepo["PracticeRepository<br>save()<br>findAll()"]
+MetaRepo["MetaRepository<br>saveMeta()"]
+BackupRepo["BackupRepository<br>createBackup()"]
+SettingsRepo["SettingsRepository<br>saveSettings()"]
+StorageDS["StorageDataSource<br>Queue & Cache"]
+StorageManager["StorageManager<br>get/set/remove"]
+IDB["IndexedDB<br>(Primary)"]
+LS["localStorage<br>(Mirror)"]
+SS["sessionStorage<br>(Volatile)"]
+Memory["In-Memory<br>(Fallback)"]
 
-subgraph QuotaHandling ["Quota Management"]
-    DETECT
-    EXPORT
-    CLEANUP
-    DETECT --> EXPORT
-    DETECT --> CLEANUP
+ScoreStorage -.-> PracticeRepo
+PracticeRepo -.-> StorageDS
+MetaRepo -.-> StorageDS
+BackupRepo -.-> StorageDS
+SettingsRepo -.-> StorageDS
+StorageDS -.-> StorageManager
+
+subgraph Storage ["Storage Layer"]
+    StorageManager
+    IDB
+    LS
+    SS
+    Memory
+    StorageManager -.-> IDB
+    StorageManager -.-> LS
+    StorageManager -.-> SS
+    StorageManager -.-> Memory
 end
 
-subgraph Validation ["Consistency Checks"]
-    CHECK
-    ORPHAN
-    REPAIR
-    CHECK --> ORPHAN
-    ORPHAN --> REPAIR
+subgraph DataSource ["Data Source Layer"]
+    StorageDS
 end
 
-subgraph AutoBackup ["Automatic Backup"]
-    TIMER
-    CREATE
-    PRUNE
-    TIMER --> CREATE
-    CREATE --> PRUNE
+subgraph Repository ["Repository Layer"]
+    Registry
+    PracticeRepo
+    MetaRepo
+    BackupRepo
+    SettingsRepo
+    Registry -.-> PracticeRepo
+    Registry -.-> MetaRepo
+    Registry -.-> BackupRepo
+    Registry -.-> SettingsRepo
+end
+
+subgraph Business ["Business Logic"]
+    PracticeRecorder
+    ScoreStorage
+    PracticeRecorder -.-> ScoreStorage
 end
 ```
 
-The `DataIntegrityManager` [js/components/DataIntegrityManager.js L1-L200](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/components/DataIntegrityManager.js#L1-L200)
+### Storage Hierarchy
 
- provides:
+The `StorageManager` attempts storage in this order:
 
-* **Automatic backups** every 10 minutes
-* **Consistency checks** on startup (orphaned records, schema validation)
-* **Quota handling** with automatic file export when localStorage is full
-* **Backup pruning** maintains maximum 20 backups
+1. **IndexedDB**: Primary persistent storage with structured data
+2. **localStorage**: Mirror for cross-tab sync and fallback
+3. **sessionStorage**: Temporary storage for single-session data
+4. **In-Memory**: Last resort when all persistent storage fails
 
-Sources: [js/components/DataIntegrityManager.js L1-L200](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/components/DataIntegrityManager.js#L1-L200)
+**Sources**: [js/utils/storage.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/storage.js)
 
- [js/utils/dataBackupManager.js L1-L300](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/dataBackupManager.js#L1-L300)
+ [js/data/dataSources/storageDataSource.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/data/dataSources/storageDataSource.js)
 
-### Practice Record Structure
+ [js/data/repositories/practiceRepository.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/data/repositories/practiceRepository.js)
 
-Practice records contain comprehensive session data with both basic metadata and detailed interaction information:
+---
 
-```yaml
-// Core practice record structure (js/main.js:272-303)
-{
-  id: "unique-timestamp",
-  examId: "exam-identifier", 
-  title: "exam-title",
-  category: "P1|P2|P3",
-  dataSource: "real|simulated",
-  date: "ISO-timestamp",
-  duration: "seconds",
-  percentage: "score-percentage",
-  realData: {
-    answers: {},
-    correctAnswers: {},
-    scoreInfo: {},
-    interactions: []
-  }
-}
-```
+## Practice Session System
 
-Sources: [js/main.js L272-L313](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L272-L313)
-
- [js/components/practiceRecordModal.js L69-L87](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/components/practiceRecordModal.js#L69-L87)
-
-## Practice System Layer
-
-### End-to-End Practice Session Flow
-
-The practice system orchestrates session management, data collection, and result storage through cross-window communication:
-
-**Complete Practice Session Flow**
-
-```
-
-```
-
-### Practice Data Collection
-
-The `practicePageEnhancer` [js/practice-page-enhancer.js L1-L1200](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/practice-page-enhancer.js#L1-L1200)
-
- injects data collection into practice windows:
-
-**Data Collection Capabilities:**
-
-| Collected Data | Source | Purpose |
-| --- | --- | --- |
-| User answers | Input/select elements | Score calculation |
-| Interaction events | Click/change/drop handlers | Behavior analysis |
-| Session timing | Start/end timestamps | Duration tracking |
-| Score information | Answer comparison | Accuracy metrics |
-| Question metadata | HTML structure parsing | Context preservation |
-
-**Message Types:**
-
-```yaml
-// INIT_SESSION: Main window → Practice window
-{
-  type: 'INIT_SESSION',
-  sessionId: 'unique-id',
-  examId: 'exam-identifier',
-  examData: { /* exam metadata */ }
-}
-
-// SESSION_READY: Practice window → Main window
-{
-  type: 'SESSION_READY',
-  sessionId: 'unique-id'
-}
-
-// PRACTICE_COMPLETE: Practice window → Main window
-{
-  type: 'PRACTICE_COMPLETE',
-  sessionId: 'unique-id',
-  answers: { /* user answers */ },
-  scoreInfo: { correct, total, percentage },
-  interactions: [ /* user interactions */ ],
-  duration: seconds
-}
-```
-
-Sources: [js/app/examSessionMixin.js L1-L868](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L1-L868)
-
- [js/practice-page-enhancer.js L1-L1200](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/practice-page-enhancer.js#L1-L1200)
-
- [js/core/practiceRecorder.js L1-L400](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/practiceRecorder.js#L1-L400)
-
- [js/core/scoreStorage.js L1-L403](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/scoreStorage.js#L1-L403)
-
-### Suite Practice Mode
-
-Suite Practice Mode allows users to practice multiple exams in sequence (typically three reading passages in one session):
-
-**Suite Mode Session Management**
+The practice session system coordinates between the main window and exam windows:
 
 ```mermaid
-flowchart TD
+sequenceDiagram
+  participant p1 as User
+  participant p2 as Main Window<br/>(ExamSystemApp)
+  participant p3 as Exam Window
+  participant p4 as practicePageEnhancer
+  participant p5 as PracticeRecorder
+  participant p6 as StorageManager
 
-START["startSuitePractice()<br>suitePracticeMixin.js"]
-SELECT["selectSuiteExams()"]
-GUARD["registerSuiteWindowGuard()"]
-OPEN1["openNextInSuite()<br>exam 1"]
-WAIT1["Wait for PRACTICE_COMPLETE"]
-OPEN2["openNextInSuite()<br>exam 2"]
-WAIT2["Wait for PRACTICE_COMPLETE"]
-OPEN3["openNextInSuite()<br>exam 3"]
-WAIT3["Wait for PRACTICE_COMPLETE"]
-AGGREGATE["aggregateSuiteResults()"]
-SAVE["saveSuiteSession()"]
-NOTIFY["showCompletionMessage()"]
-
-GUARD --> OPEN1
-WAIT3 --> AGGREGATE
-
-subgraph Completion ["Suite Completion"]
-    AGGREGATE
-    SAVE
-    NOTIFY
-    AGGREGATE --> SAVE
-    SAVE --> NOTIFY
-end
-
-subgraph ExamFlow ["Exam Flow"]
-    OPEN1
-    WAIT1
-    OPEN2
-    WAIT2
-    OPEN3
-    WAIT3
-    OPEN1 --> WAIT1
-    WAIT1 --> OPEN2
-    OPEN2 --> WAIT2
-    WAIT2 --> OPEN3
-    OPEN3 --> WAIT3
-end
-
-subgraph SuiteSetup ["Suite Setup"]
-    START
-    SELECT
-    GUARD
-    START --> SELECT
-    SELECT --> GUARD
-end
+  p1->>p2: Click exam card
+  p2->>p2: openExam(examId)
+  p2->>p3: window.open(examUrl)
+  p2->>p3: injectDataCollectionScript()
+  p2->>p5: startPracticeSession(examId)
+  p5->>p6: Save session start
+  p3->>p4: Script loads
+  p4->>p4: collectAllAnswers()
+  p4->>p4: extractCorrectAnswers()
+  p1->>p3: Submit answers
+  p3->>p4: interceptSubmit()
+  p4->>p4: buildPayload()
+  p4->>p2: postMessage(PRACTICE_COMPLETE)
+  p2->>p2: handlePracticeComplete()
+  p2->>p2: normalizePracticeCompletePayload()
+  p2->>p2: AnswerComparisonUtils.compareAnswers()
+  p2->>p5: savePracticeRecord(data)
+  p5->>p6: Persist record
+  p2->>p1: Show completion message
+  p2->>p2: syncPracticeRecords()
 ```
 
-**Suite Mode Features:**
+### postMessage Protocol
 
-* **Window Guard**: Prevents closing incomplete suite sessions
-* **Sequential Flow**: Automatic progression through selected exams
-* **Aggregate Scoring**: Combined results across all suite exams
-* **Session Persistence**: Saves entire suite as single meta-record
+The system uses typed messages for cross-window communication:
 
-Sources: [js/app/suitePracticeMixin.js L1-L500](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L1-L500)
-
- [developer/tests/js/suiteModeFlow.test.js L1-L200](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/developer/tests/js/suiteModeFlow.test.js#L1-L200)
-
-## Content Management Layer
-
-### Exam Index and Metadata System
-
-The system maintains exam catalogs through static data files that are loaded on initialization:
-
-**Exam Index Structure**
-
-| Data File | Content Type | Exam Count | Structure |
+| Message Type | Direction | Payload | Purpose |
 | --- | --- | --- | --- |
-| `complete-exam-data.js` | Reading exams | ~134 | `window.completeExamIndex[]` |
-| `listening-exam-data.js` | Listening exams | ~13 | `window.listeningExamIndex[]` |
+| `INIT_SESSION` | Main → Exam | `{sessionId, examId}` | Initialize data collector |
+| `SESSION_READY` | Exam → Main | `{sessionId}` | Confirm handshake |
+| `PROGRESS_UPDATE` | Exam → Main | `{answers}` | Periodic answer snapshot |
+| `PRACTICE_COMPLETE` | Exam → Main | `{answers, correctAnswers, scoreInfo}` | Final results |
+| `SUITE_NAVIGATE` | Main → Exam | `{nextExamUrl}` | Navigate to next exam in suite |
 
-```yaml
-// Exam index entry structure (complete-exam-data.js)
-{
-  id: "p1-09",
-  title: "Listening to the Ocean 海洋探测",
-  category: "P1_reading",
-  frequency: "mid",
-  pathRoot: "睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/",
-  filename: "P1 - Listening to the Ocean 海洋探测.html",
-  pdfPath: "P1 - Listening to the Ocean 海洋探测.pdf"
-}
-```
+**Sources**: [js/app/examSessionMixin.js L87-L184](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/examSessionMixin.js#L87-L184)
 
-### Path Resolution System
+ [js/practice-page-enhancer.js L1-L50](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/practice-page-enhancer.js#L1-L50)
 
-The system resolves exam file paths dynamically to handle non-ASCII characters and diverse file structures:
+ [js/main.js L652-L710](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/main.js#L652-L710)
 
-**Path Resolution Flow**
+---
+
+## Theme System
+
+The application supports multiple themes through the `ThemeAdapterBase` interface:
 
 ```mermaid
 flowchart TD
 
-BUILD["buildResourcePath()<br>js/main.js:863-880"]
-BASE["resolveExamBasePath()<br>js/main.js:814-833"]
-MAP["getPathMap()<br>js/main.js:834-861"]
-SANITIZE["sanitizeFilename()<br>js/main.js:869-880"]
-READING["reading.root:<br>'睡着过项目组.../3. 所有文章...'"]
-LISTENING["listening.root:<br>'ListeningPractice/'"]
-PATHMAP["path-map.json"]
-HPPATH["hp-path.js<br>js/plugins/hp/hp-path.js"]
-HPBRIDGE["hp-core-bridge.js"]
+Index["index.html<br>HeroUI Theme"]
+Melody[".superdesign/.../my_melody_ielts_1.html<br>My Melody Theme"]
+Academic[".superdesign/.../ielts_academic_functional_2.html<br>Academic Theme"]
+HP[".superdesign/.../HarryPoter.html<br>HP Theme"]
+HeroAdapter["Built-in<br>(Direct Integration)"]
+MelodyAdapter["MelodyAdapter<br>js/plugins/themes/melody/"]
+AcademicAdapter["AcademicAdapter<br>js/plugins/themes/academic/"]
+HPCore["hpCore Bridge<br>js/plugins/themes/hp/"]
+ThemeBase["ThemeAdapterBase<br>getExamIndex()<br>getPracticeRecords()<br>getEventBus()"]
 
-MAP --> READING
-MAP --> LISTENING
-MAP --> PATHMAP
-HPBRIDGE --> BUILD
+Index -.-> HeroAdapter
+Melody -.-> MelodyAdapter
+Academic -.-> AcademicAdapter
+HP -.-> HPCore
+MelodyAdapter -.-> ThemeBase
+AcademicAdapter -.-> ThemeBase
+HPCore -.-> ThemeBase
 
-subgraph HPSystem ["HP Theme Path System"]
-    HPPATH
-    HPBRIDGE
-    HPPATH --> HPBRIDGE
+subgraph Base ["Base Interface"]
+    ThemeBase
 end
 
-subgraph PathConfig ["Path Configuration"]
-    READING
-    LISTENING
-    PATHMAP
+subgraph Adapters ["Theme Adapters"]
+    HeroAdapter
+    MelodyAdapter
+    AcademicAdapter
+    HPCore
 end
 
-subgraph PathResolution ["Path Resolution"]
-    BUILD
-    BASE
-    MAP
-    SANITIZE
-    BUILD --> BASE
-    BASE --> MAP
-    BUILD --> SANITIZE
-end
-```
-
-The path resolution system supports:
-
-* **Non-ASCII paths**: Chinese characters and special symbols
-* **Multiple root directories**: Separate paths for reading/listening
-* **Theme-specific overrides**: HP theme uses custom path resolver
-* **Fallback mechanisms**: Multiple path attempts with error recovery
-
-Sources: [complete-exam-data.js L1-L500](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/complete-exam-data.js#L1-L500)
-
- [listening-exam-data.js L1-L100](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/listening-exam-data.js#L1-L100)
-
- [js/main.js L814-L880](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L814-L880)
-
- [js/plugins/hp/hp-path.js L1-L200](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/plugins/hp/hp-path.js#L1-L200)
-
- [path-map.json L1-L50](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/path-map.json#L1-L50)
-
-### PDF Handling
-
-The `PDFHandler` [js/components/PDFHandler.js L1-L200](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/components/PDFHandler.js#L1-L200)
-
- provides PDF viewing and download capabilities:
-
-```python
-// PDF operations (js/components/PDFHandler.js)
-class PDFHandler {
-  openPDF(examId)      // Opens PDF in new window
-  downloadPDF(examId)  // Triggers download
-  previewPDF(examId)   // Shows PDF in modal
-}
-```
-
-Sources: [js/components/PDFHandler.js L1-L200](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/components/PDFHandler.js#L1-L200)
-
- [js/main.js L271-L274](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L271-L274)
-
-## Theme System and UI Layer
-
-### Multi-Theme Architecture
-
-The system supports two theme strategies: complete UI redesign portals and runtime CSS variants.
-
-**Theme System Overview**
-
-```mermaid
-flowchart TD
-
-BLUE["Blue Theme<br>CSS variables"]
-XIAODAIDAI["Xiaodaidai Theme<br>Dashboard variant"]
-CONTRAST["High Contrast Mode<br>Accessibility"]
-ACADEMIC["ielts_academic_functional_2.html<br>Professional design"]
-MELODY["my_melody_ielts_1.html<br>Pastel & cute design"]
-HP2["HarryPoter.html + Welcome.html<br>Map-based navigation"]
-BLOOM["Bloom Theme<br>Floral design"]
-TPC["themePreferenceController<br>js/theme-switcher.js"]
-TM2["ThemeManager<br>js/utils/themeManager.js"]
-STORAGE2["localStorage theme_preference"]
-INDEX2["index.html<br>Main entry"]
-MAINCSS["main.css<br>Base styles"]
-
-INDEX2 --> TPC
-
-subgraph Default ["Default Application"]
-    INDEX2
-    MAINCSS
-end
-
-subgraph Management ["Theme Management"]
-    TPC
-    TM2
-    STORAGE2
-    TPC --> STORAGE2
-end
-
-subgraph Runtime ["Runtime Theme Variants"]
-    BLUE
-    XIAODAIDAI
-    CONTRAST
-end
-
-subgraph Portals ["Theme Portals (Complete Redesigns)"]
-    ACADEMIC
-    MELODY
-    HP2
-    BLOOM
+subgraph Themes ["Theme Entry Points"]
+    Index
+    Melody
+    Academic
+    HP
 end
 ```
 
-### Theme Portal Features
+### Theme Switching
 
-| Theme Portal | File | Key Features |
+Themes are switched by navigating to different HTML entry points. Each theme HTML file:
+
+1. Loads theme-specific CSS variables
+2. Initializes theme-specific adapter
+3. Shares core application logic via `main.js`
+4. Uses theme-specific UI components while maintaining data compatibility
+
+**Sources**: [index.html L1-L30](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/index.html#L1-L30)
+
+ [.superdesign/design_iterations/my_melody_ielts_1.html L1-L50](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/.superdesign/design_iterations/my_melody_ielts_1.html#L1-L50)
+
+ [.superdesign/design_iterations/ielts_academic_functional_2.html L1-L50](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/.superdesign/design_iterations/ielts_academic_functional_2.html#L1-L50)
+
+---
+
+## Lazy Loading and Code Splitting
+
+The `AppLazyLoader` organizes scripts into groups for progressive loading:
+
+### Script Groups
+
+| Group Name | Loading Strategy | Modules Included |
 | --- | --- | --- |
-| Academic | `ielts_academic_functional_2.html` | Professional typography, structured layouts |
-| Melody | `my_melody_ielts_1.html` | Pastel colors, cute design elements |
-| Harry Potter | `HarryPoter.html`, `HP/Welcome.html` | Marauder's Map navigation, pixel-perfect image maps |
-| Bloom | Bloom theme CSS | Floral patterns, autumn color scheme |
+| `exam-data` | Pre-load on init | Exam index data, library manager |
+| `practice-suite` | Pre-load on init | Practice recorder, score storage, answer comparison |
+| `browse-view` | On first browse view | Exam list view, browse controller, filter system |
+| `more-tools` | Idle time | Vocabulary system, clock, games |
+| `theme-tools` | On-demand | Theme switcher, accessibility settings |
 
-### Theme Preference Controller
+### Lazy Proxy Pattern
 
-The `themePreferenceController` [js/theme-switcher.js L1-L500](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/theme-switcher.js#L1-L500)
+Functions that depend on lazily-loaded modules are wrapped in proxies:
 
- manages theme persistence and auto-redirect:
+```javascript
+// Example from main-entry.js (conceptual)
+window.ensurePracticeSuiteReady = function() {
+    return AppLazyLoader.ensureGroup('practice-suite');
+};
 
-```
-// Theme preference management (js/theme-switcher.js)
-{
-  maybeAutoRedirect()       // Redirects to preferred portal on load
-  setPreference(theme)      // Saves theme selection
-  clearPreference()         // Resets to default
-  navigateToThemePortal()   // Navigates to portal with state preservation
-}
-```
-
-**Auto-Redirect Logic:**
-
-1. Check `localStorage.theme_preference`
-2. Check `sessionStorage.redirect_loop_guard` (prevents infinite loops)
-3. If preference exists and no loop guard, redirect to portal
-4. Portal can navigate back to `index.html?theme=reset` to clear preference
-
-Sources: [js/theme-switcher.js L1-L500](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/theme-switcher.js#L1-L500)
-
- [js/utils/themeManager.js L1-L200](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/themeManager.js#L1-L200)
-
- [.superdesign/design_iterations/ielts_academic_functional_2.html L1-L100](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/.superdesign/design_iterations/ielts_academic_functional_2.html#L1-L100)
-
- [.superdesign/design_iterations/my_melody_ielts_1.html L1-L100](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/.superdesign/design_iterations/my_melody_ielts_1.html#L1-L100)
-
- [.superdesign/design_iterations/HarryPoter.html L1-L100](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/.superdesign/design_iterations/HarryPoter.html#L1-L100)
-
-## Error Handling and Recovery
-
-### Global Error Management
-
-The system implements comprehensive error handling with automatic recovery mechanisms:
-
-```mermaid
-flowchart TD
-
-globalHandler["setupGlobalErrorHandling()<br>(js/app.js:112)"]
-promiseRejection["unhandledrejection listener"]
-jsErrors["error listener"]
-handleGlobalError["handleGlobalError()<br>(line 132)"]
-errorLog["globalErrors array"]
-rateLimiting["Error frequency analysis"]
-fallbackUI["showFallbackUI()"]
-userMessage["showUserMessage()"]
-systemRestart["Suggested page refresh"]
-
-promiseRejection --> handleGlobalError
-jsErrors --> handleGlobalError
-rateLimiting --> fallbackUI
-rateLimiting --> userMessage
-rateLimiting --> systemRestart
-
-subgraph subGraph2 ["Recovery Actions"]
-    fallbackUI
-    userMessage
-    systemRestart
-end
-
-subgraph subGraph1 ["Error Processing"]
-    handleGlobalError
-    errorLog
-    rateLimiting
-    handleGlobalError --> errorLog
-    errorLog --> rateLimiting
-end
-
-subgraph subGraph0 ["Error Handling Layers"]
-    globalHandler
-    promiseRejection
-    jsErrors
-    globalHandler --> promiseRejection
-    globalHandler --> jsErrors
-end
+window.startPracticeSession = function(examId) {
+    return ensurePracticeSuiteReady().then(() => {
+        return window.PracticeRecorder.startSession(examId);
+    });
+};
 ```
 
-Sources: [js/app.js L112-L127](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app.js#L112-L127)
+**Sources**: [js/runtime/lazyLoader.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/runtime/lazyLoader.js)
 
- [js/app.js L132-L167](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app.js#L132-L167)
+ [js/app/main-entry.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/main-entry.js)
 
- [js/app.js L78-L107](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app.js#L78-L107)
+ [js/main.js L85-L119](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/main.js#L85-L119)
 
-This overview establishes the foundation for understanding the IELTS Practice System's architecture and core components. For detailed implementation specifics, refer to the specialized documentation sections covering each subsystem.
+---
+
+## Key Architectural Patterns
+
+### 1. Mixin Composition
+
+The `ExamSystemApp` class uses mixins for modular functionality:
+
+* **lifecycleMixin**: Initialization and cleanup
+* **examSessionMixin**: Single exam sessions
+* **suitePracticeMixin**: Sequential exam sessions
+* **navigationMixin**: View switching
+* **fallbackMixin**: Fallback session tracking
+
+Mixins are applied in `app.js` using `Object.assign()`.
+
+**Sources**: [js/app.js L64-L81](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app.js#L64-L81)
+
+### 2. Repository Pattern
+
+Data access is abstracted through repositories:
+
+* `PracticeRepository`: CRUD for practice records
+* `MetaRepository`: Application metadata
+* `BackupRepository`: Backup management
+* `SettingsRepository`: User settings
+
+Each repository extends `BaseRepository` and uses `StorageDataSource` for queue and cache.
+
+**Sources**: [js/data/repositories/baseRepository.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/data/repositories/baseRepository.js)
+
+ [js/data/repositories/practiceRepository.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/data/repositories/practiceRepository.js)
+
+### 3. Adapter Pattern
+
+The theme system uses adapters to provide unified data access across different theme implementations while allowing theme-specific UI customization.
+
+**Sources**: [js/plugins/themes/theme-adapter-base.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/plugins/themes/theme-adapter-base.js)
+
+### 4. Event Bus
+
+Cross-component communication uses custom events:
+
+* `examIndexLoaded`: Triggered when exam index loads
+* `storage-sync`: Triggered on cross-tab storage changes
+* `message`: Browser native for cross-window communication
+
+**Sources**: [js/main.js L652-L710](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/main.js#L652-L710)
+
+ [js/main.js L702-L710](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/main.js#L702-L710)
+
+### 5. Fallback Chain
+
+Critical functions have multiple fallback strategies:
+
+1. Try primary implementation (e.g., `AppStateService`)
+2. Fall back to legacy implementation (e.g., global variables)
+3. Fall back to minimal implementation (e.g., `boot-fallbacks.js`)
+
+**Sources**: [js/boot-fallbacks.js L1-L60](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/boot-fallbacks.js#L1-L60)
+
+ [js/main.js L8-L79](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/main.js#L8-L79)
+
+---
+
+## Entry Points Summary
+
+| Entry Point | Theme | Target Audience | Key Features |
+| --- | --- | --- | --- |
+| `index.html` | HeroUI | General | Gradient background, glassmorphism, developer credits |
+| `my_melody_ielts_1.html` | My Melody | Kawaii aesthetic | Pink gradient, particle effects, emoji decorations |
+| `ielts_academic_functional_2.html` | Academic | Professional | Sidebar navigation, serif fonts, parchment colors |
+| `HarryPoter.html` | Harry Potter | Themed experience | Magical aesthetic, house colors, wand cursor |
+| `xiaodaidai_dashboard_1.html` | XiaoDai | Playful | Yellow/orange palette, pig mascot, casual tone |
+
+All entry points share:
+
+* Core application logic via `main.js` and `app.js`
+* Data management via `StorageManager` and repositories
+* Practice session system via `examSessionMixin` and `practicePageEnhancer`
+
+**Sources**: [index.html L1-L473](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/index.html#L1-L473)
+
+ [.superdesign/design_iterations/my_melody_ielts_1.html L1-L100](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/.superdesign/design_iterations/my_melody_ielts_1.html#L1-L100)
+
+ [.superdesign/design_iterations/ielts_academic_functional_2.html L1-L100](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/.superdesign/design_iterations/ielts_academic_functional_2.html#L1-L100)
+
+---
+
+## Technology Stack
+
+| Layer | Technologies |
+| --- | --- |
+| **Frontend** | Vanilla JavaScript (ES6+), HTML5, CSS3 with CSS Custom Properties |
+| **Storage** | IndexedDB, localStorage, sessionStorage, in-memory fallback |
+| **Architecture** | Mixin-based composition, Repository pattern, Event-driven |
+| **Communication** | postMessage API for cross-window, CustomEvent for internal |
+| **Performance** | Lazy loading, virtual scrolling, event delegation, debouncing |
+| **Testing** | Playwright for E2E tests |
+
+**Sources**: [index.html L424-L461](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/index.html#L424-L461)
+
+ [js/app.js L1-L132](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app.js#L1-L132)
+
+ [js/utils/storage.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/storage.js)

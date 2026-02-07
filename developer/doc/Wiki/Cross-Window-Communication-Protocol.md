@@ -1,17 +1,17 @@
 # Cross-Window Communication Protocol
 
 > **Relevant source files**
-> * [AGENTS.md](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/AGENTS.md)
-> * [js/app/examSessionMixin.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js)
-> * [js/app/suitePracticeMixin.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js)
-> * [js/practice-page-enhancer.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/practice-page-enhancer.js)
-> * [js/utils/environmentDetector.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/environmentDetector.js)
+> * [js/app/examSessionMixin.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/examSessionMixin.js)
+> * [js/app/suitePracticeMixin.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/suitePracticeMixin.js)
+> * [js/practice-page-enhancer.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/practice-page-enhancer.js)
+> * [js/services/GlobalStateService.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/services/GlobalStateService.js)
+> * [js/utils/answerComparisonUtils.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/answerComparisonUtils.js)
 
 ## Purpose and Scope
 
 This document describes the `postMessage`-based communication protocol between the parent application window (main app) and child exam windows (opened popups or tabs). The protocol enables session initialization, answer data collection, and suite practice orchestration across window boundaries.
 
-For information about the data collection mechanisms that operate within exam windows, see [Practice Page Enhancement & Data Collection](/sallowayma-git/IELTS-practice/5.2-practice-page-enhancement-and-data-collection). For details on suite practice orchestration and window management, see [Suite Practice Mode](/sallowayma-git/IELTS-practice/5.4-suite-practice-mode). For session lifecycle management and persistence, see [PracticeRecorder & ScoreStorage](/sallowayma-git/IELTS-practice/5.1-practicerecorder-and-scorestorage).
+For information about the data collection mechanisms that operate within exam windows, see [Practice Page Enhancement & Data Collection](/sallowayma-git/IELTS-practice/5.2-practice-page-enhancement-and-data-collection). For details on suite practice orchestration and window management, see [Suite Practice Mode](/sallowayma-git/IELTS-practice/5.4-exam-window-management-and-resource-resolution). For session lifecycle management and persistence, see [PracticeRecorder & ScoreStorage](/sallowayma-git/IELTS-practice/5.1-practice-session-lifecycle-and-management).
 
 ---
 
@@ -35,9 +35,9 @@ All messages follow a standardized envelope structure:
 
 Messages are sent to the wildcard origin `'*'` to support both local file protocol and HTTP(S) deployments.
 
-**Sources**: [js/app/examSessionMixin.js L852-L855](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L852-L855)
+**Sources**: [js/app/examSessionMixin.js L852-L855](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/examSessionMixin.js#L852-L855)
 
- [js/practice-page-enhancer.js L379-L416](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/practice-page-enhancer.js#L379-L416)
+ [js/practice-page-enhancer.js L379-L416](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/practice-page-enhancer.js#L379-L416)
 
 ---
 
@@ -60,11 +60,11 @@ Messages are sent to the wildcard origin `'*'` to support both local file protoc
 | `SUITE_CLOSE_ATTEMPT` | Child → Parent | Notify parent of close/navigation attempt | `examId`, `suiteSessionId`, `reason`, `timestamp` |
 | `SUITE_FORCE_CLOSE` | Parent → Child | Tear down guards and allow window close | `suiteSessionId` |
 
-**Sources**: [js/app/examSessionMixin.js L843-L855](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L843-L855)
+**Sources**: [js/app/examSessionMixin.js L843-L855](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/examSessionMixin.js#L843-L855)
 
- [js/practice-page-enhancer.js L385-L416](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/practice-page-enhancer.js#L385-L416)
+ [js/practice-page-enhancer.js L385-L416](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/practice-page-enhancer.js#L385-L416)
 
- [js/app/suitePracticeMixin.js L759-L764](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L759-L764)
+ [js/app/suitePracticeMixin.js L759-L764](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/suitePracticeMixin.js#L759-L764)
 
 ---
 
@@ -74,52 +74,50 @@ Messages are sent to the wildcard origin `'*'` to support both local file protoc
 
 ```mermaid
 sequenceDiagram
-  participant Parent Window
-  participant (examSessionMixin)
-  participant Child Window
-  participant (practice-page-enhancer)
+  participant p1 as Parent Window<br/>(examSessionMixin)
+  participant p2 as Child Window<br/>(practice-page-enhancer)
 
-  note over Parent Window,(examSessionMixin): User clicks "Start Exam"
-  Parent Window->>Parent Window: "openExam(examId)"
-  Parent Window->>Child Window: "window.open(examUrl)"
-  Parent Window->>Parent Window: "injectDataCollectionScript()"
-  note over Child Window,(practice-page-enhancer): Script injection detected
-  Child Window->>Child Window: "initialize()"
-  Child Window->>Child Window: "startInitRequestLoop()"
-  Child Window->>Parent Window: "postMessage(REQUEST_INIT)"
-  note over Child Window,(practice-page-enhancer): Retry every 2s until initialized
-  Parent Window->>Child Window: "postMessage(INIT_SESSION)"
-  note over Child Window,(practice-page-enhancer): Receive sessionId & examId
-  Child Window->>Child Window: "stopInitRequestLoop()"
-  Child Window->>Child Window: "Store sessionId, examId"
-  Child Window->>Parent Window: "postMessage(SESSION_READY)"
-  note over Parent Window,(examSessionMixin): Store window reference
-  note over Child Window,(practice-page-enhancer): User answers questions
-  note over Child Window,(practice-page-enhancer): User clicks Submit
-  Child Window->>Child Window: "extractCorrectAnswers()"
-  Child Window->>Child Window: "generateAnswerComparison()"
-  Child Window->>Parent Window: "postMessage(PRACTICE_COMPLETE)"
-  note over Parent Window,(examSessionMixin): Pass to PracticeRecorder
+  note over p1: User clicks "Start Exam"
+  p1->>p1: "openExam(examId)"
+  p1->>p2: "window.open(examUrl)"
+  p1->>p1: "injectDataCollectionScript()"
+  note over p2: Script injection detected
+  p2->>p2: "initialize()"
+  p2->>p2: "startInitRequestLoop()"
+  p2->>p1: "postMessage(REQUEST_INIT)"
+  note over p2: Retry every 2s until initialized
+  p1->>p2: "postMessage(INIT_SESSION)"
+  note over p2: Receive sessionId & examId
+  p2->>p2: "stopInitRequestLoop()"
+  p2->>p2: "Store sessionId, examId"
+  p2->>p1: "postMessage(SESSION_READY)"
+  note over p1: Store window reference<br/>Mark session as initialized
+  note over p2: User answers questions
+  note over p2: User clicks Submit
+  p2->>p2: "extractCorrectAnswers()"
+  p2->>p2: "generateAnswerComparison()"
+  p2->>p1: "postMessage(PRACTICE_COMPLETE)"
+  note over p1: Pass to PracticeRecorder<br/>Persist to storage
 ```
 
 **Detailed Flow**:
 
-1. **Window Creation** [js/app/examSessionMixin.js L89-L176](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L89-L176) * Parent calls `openExam(examId)` in response to user action * `openExamWindow()` creates popup/tab with user gesture to avoid popup blockers * Window reference stored in `this.examWindows` Map
-2. **Script Injection** [js/app/examSessionMixin.js L460-L533](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L460-L533) * Parent calls `injectDataCollectionScript(examWindow, examId)` * Waits for `document.readyState === 'complete'` or `'interactive'` * Fetches and injects `practice-page-enhancer.js` into child window * Falls back to inline script injection if fetch fails
-3. **Initialization Request Loop** [js/practice-page-enhancer.js L420-L449](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/practice-page-enhancer.js#L420-L449) * Child starts `initRequestTimer` sending `REQUEST_INIT` every 2 seconds * Includes `derivedExamId` extracted from URL path and `title` * Continues until `sessionId` is received or window closes
-4. **Session Initialization** [js/app/examSessionMixin.js L813-L887](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L813-L887) * Parent calls `initializePracticeSession(examWindow, examId)` * Generates unique `sessionId = ${examId}_${Date.now()}` * Resolves `suiteSessionId` from `currentSuiteSession` if suite mode active * Sends `INIT_SESSION` with payload containing `sessionId`, `examId`, `suiteSessionId`
-5. **Session Confirmation** [js/practice-page-enhancer.js L385-L401](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/practice-page-enhancer.js#L385-L401) * Child receives `INIT_SESSION`, stores `sessionId` and `examId` * Stops retry loop via `stopInitRequestLoop()` * Enables suite guards if `suiteSessionId` present * Responds with `SESSION_READY` including `pageType` and `url`
-6. **Completion Notification** [js/practice-page-enhancer.js L1290-L1340](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/practice-page-enhancer.js#L1290-L1340) * Child intercepts submit button or `gradeAnswers()` function * Extracts correct answers from DOM/scripts * Generates `answerComparison` mapping each question to correctness * Sends `PRACTICE_COMPLETE` with complete session data
+1. **Window Creation** [js/app/examSessionMixin.js L89-L176](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/examSessionMixin.js#L89-L176) * Parent calls `openExam(examId)` in response to user action * `openExamWindow()` creates popup/tab with user gesture to avoid popup blockers * Window reference stored in `this.examWindows` Map
+2. **Script Injection** [js/app/examSessionMixin.js L460-L533](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/examSessionMixin.js#L460-L533) * Parent calls `injectDataCollectionScript(examWindow, examId)` * Waits for `document.readyState === 'complete'` or `'interactive'` * Fetches and injects `practice-page-enhancer.js` into child window * Falls back to inline script injection if fetch fails
+3. **Initialization Request Loop** [js/practice-page-enhancer.js L420-L449](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/practice-page-enhancer.js#L420-L449) * Child starts `initRequestTimer` sending `REQUEST_INIT` every 2 seconds * Includes `derivedExamId` extracted from URL path and `title` * Continues until `sessionId` is received or window closes
+4. **Session Initialization** [js/app/examSessionMixin.js L813-L887](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/examSessionMixin.js#L813-L887) * Parent calls `initializePracticeSession(examWindow, examId)` * Generates unique `sessionId = ${examId}_${Date.now()}` * Resolves `suiteSessionId` from `currentSuiteSession` if suite mode active * Sends `INIT_SESSION` with payload containing `sessionId`, `examId`, `suiteSessionId`
+5. **Session Confirmation** [js/practice-page-enhancer.js L385-L401](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/practice-page-enhancer.js#L385-L401) * Child receives `INIT_SESSION`, stores `sessionId` and `examId` * Stops retry loop via `stopInitRequestLoop()` * Enables suite guards if `suiteSessionId` present * Responds with `SESSION_READY` including `pageType` and `url`
+6. **Completion Notification** [js/practice-page-enhancer.js L1290-L1340](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/practice-page-enhancer.js#L1290-L1340) * Child intercepts submit button or `gradeAnswers()` function * Extracts correct answers from DOM/scripts * Generates `answerComparison` mapping each question to correctness * Sends `PRACTICE_COMPLETE` with complete session data
 
-**Sources**: [js/app/examSessionMixin.js L89-L176](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L89-L176)
+**Sources**: [js/app/examSessionMixin.js L89-L176](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/examSessionMixin.js#L89-L176)
 
- [js/app/examSessionMixin.js L460-L533](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L460-L533)
+ [js/app/examSessionMixin.js L460-L533](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/examSessionMixin.js#L460-L533)
 
- [js/app/examSessionMixin.js L813-L887](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L813-L887)
+ [js/app/examSessionMixin.js L813-L887](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/examSessionMixin.js#L813-L887)
 
- [js/practice-page-enhancer.js L379-L416](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/practice-page-enhancer.js#L379-L416)
+ [js/practice-page-enhancer.js L379-L416](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/practice-page-enhancer.js#L379-L416)
 
- [js/practice-page-enhancer.js L1290-L1340](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/practice-page-enhancer.js#L1290-L1340)
+ [js/practice-page-enhancer.js L1290-L1340](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/practice-page-enhancer.js#L1290-L1340)
 
 ---
 
@@ -140,7 +138,7 @@ this.examWindows.set(examId, {
 });
 ```
 
-**Initialization Payload** [js/app/examSessionMixin.js L843-L855](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L843-L855)
+**Initialization Payload** [js/app/examSessionMixin.js L843-L855](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/examSessionMixin.js#L843-L855)
 
 :
 
@@ -176,7 +174,7 @@ window.practicePageEnhancer = {
 };
 ```
 
-**Response Payload** [js/practice-page-enhancer.js L394-L400](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/practice-page-enhancer.js#L394-L400)
+**Response Payload** [js/practice-page-enhancer.js L394-L400](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/practice-page-enhancer.js#L394-L400)
 
 :
 
@@ -190,9 +188,9 @@ this.sendMessage('SESSION_READY', {
 });
 ```
 
-**Sources**: [js/app/examSessionMixin.js L814-L883](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L814-L883)
+**Sources**: [js/app/examSessionMixin.js L814-L883](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/examSessionMixin.js#L814-L883)
 
- [js/practice-page-enhancer.js L298-L361](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/practice-page-enhancer.js#L298-L361)
+ [js/practice-page-enhancer.js L298-L361](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/practice-page-enhancer.js#L298-L361)
 
 ---
 
@@ -204,47 +202,45 @@ Suite practice mode adds additional protocol layers to coordinate multi-exam seq
 
 ```mermaid
 sequenceDiagram
-  participant Parent Window
-  participant (suitePracticeMixin)
-  participant Child Window
-  participant (enhancer + guards)
+  participant p1 as Parent Window<br/>(suitePracticeMixin)
+  participant p2 as Child Window<br/>(enhancer + guards)
 
-  note over Parent Window,(suitePracticeMixin): startSuitePractice()
-  Parent Window->>Parent Window: "Generate suiteSessionId"
-  Parent Window->>Parent Window: "Select 3 random exams (P1,P2,P3)"
-  Parent Window->>Child Window: "openExam(firstExam, {suiteSessionId})"
-  Parent Window->>Child Window: "postMessage(INIT_SESSION)"
-  note over Parent Window,(enhancer + guards): Standard handshake includes suiteSessionId
-  Child Window->>Child Window: "enableSuiteMode()"
-  Child Window->>Child Window: "installSuiteGuards()"
-  note over Child Window,(enhancer + guards): Override window.close()
-  Child Window->>Parent Window: "postMessage(SESSION_READY)"
-  Parent Window->>Parent Window: "Store window guard reference"
-  note over Child Window,(enhancer + guards): User attempts window.close()
-  Child Window->>Child Window: "guardClose() - Block close"
-  Child Window->>Parent Window: "postMessage(SUITE_CLOSE_ATTEMPT)"
-  note over Parent Window,(suitePracticeMixin): Log attempt, show warning
-  note over Child Window,(enhancer + guards): User completes P1
-  Child Window->>Parent Window: "postMessage(PRACTICE_COMPLETE)"
-  Parent Window->>Parent Window: "handleSuitePracticeComplete()"
-  Parent Window->>Parent Window: "Record result, increment index"
-  Parent Window->>Child Window: "postMessage(SUITE_NAVIGATE, {url: p2Url})"
-  note over Child Window,(enhancer + guards): Navigate to P2 in same window
-  Child Window->>Child Window: "window.location.href = p2Url"
-  note over Parent Window,(enhancer + guards): Repeat for P2 → P3
-  note over Child Window,(enhancer + guards): User completes P3
-  Child Window->>Parent Window: "postMessage(PRACTICE_COMPLETE)"
-  Parent Window->>Parent Window: "finalizeSuiteRecord()"
-  Parent Window->>Parent Window: "Aggregate scores, save suite record"
-  Parent Window->>Child Window: "postMessage(SUITE_FORCE_CLOSE)"
-  Child Window->>Child Window: "teardownSuiteGuards()"
-  Child Window->>Child Window: "Restore window.close()"
-  Child Window->>Child Window: "window.close()"
+  note over p1: startSuitePractice()
+  p1->>p1: "Generate suiteSessionId"
+  p1->>p1: "Select 3 random exams (P1,P2,P3)"
+  p1->>p2: "openExam(firstExam, {suiteSessionId})"
+  p1->>p2: "postMessage(INIT_SESSION)"
+  note over p1,p2: Standard handshake includes suiteSessionId
+  p2->>p2: "enableSuiteMode()"
+  p2->>p2: "installSuiteGuards()"
+  note over p2: Override window.close()<br/>Override window.open()
+  p2->>p1: "postMessage(SESSION_READY)"
+  p1->>p1: "Store window guard reference"
+  note over p2: User attempts window.close()
+  p2->>p2: "guardClose() - Block close"
+  p2->>p1: "postMessage(SUITE_CLOSE_ATTEMPT)"
+  note over p1: Log attempt, show warning
+  note over p2: User completes P1
+  p2->>p1: "postMessage(PRACTICE_COMPLETE)"
+  p1->>p1: "handleSuitePracticeComplete()"
+  p1->>p1: "Record result, increment index"
+  p1->>p2: "postMessage(SUITE_NAVIGATE, {url: p2Url})"
+  note over p2: Navigate to P2 in same window
+  p2->>p2: "window.location.href = p2Url"
+  note over p1,p2: Repeat for P2 → P3
+  note over p2: User completes P3
+  p2->>p1: "postMessage(PRACTICE_COMPLETE)"
+  p1->>p1: "finalizeSuiteRecord()"
+  p1->>p1: "Aggregate scores, save suite record"
+  p1->>p2: "postMessage(SUITE_FORCE_CLOSE)"
+  p2->>p2: "teardownSuiteGuards()"
+  p2->>p2: "Restore window.close()"
+  p2->>p2: "window.close()"
 ```
 
 ### Window Guard Mechanism
 
-**Guard Installation** [js/practice-page-enhancer.js L462-L517](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/practice-page-enhancer.js#L462-L517)
+**Guard Installation** [js/practice-page-enhancer.js L462-L517](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/practice-page-enhancer.js#L462-L517)
 
 :
 
@@ -275,7 +271,7 @@ window.open = (url, target, features) => {
 };
 ```
 
-**Parent-Side Guard Installation** [js/app/suitePracticeMixin.js L855-L945](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L855-L945)
+**Parent-Side Guard Installation** [js/app/suitePracticeMixin.js L855-L945](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/suitePracticeMixin.js#L855-L945)
 
 :
 
@@ -299,7 +295,7 @@ targetWindow.__IELTS_SUITE_PARENT_GUARD__ = guardInfo;
 
 ### Suite Navigation Protocol
 
-**Navigation Message** [js/app/suitePracticeMixin.js L175-L235](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L175-L235)
+**Navigation Message** [js/app/suitePracticeMixin.js L175-L235](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/suitePracticeMixin.js#L175-L235)
 
 :
 
@@ -327,11 +323,11 @@ if (reuseWindow && !reuseWindow.closed) {
 }
 ```
 
-**Sources**: [js/practice-page-enhancer.js L452-L517](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/practice-page-enhancer.js#L452-L517)
+**Sources**: [js/practice-page-enhancer.js L452-L517](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/practice-page-enhancer.js#L452-L517)
 
- [js/app/suitePracticeMixin.js L855-L945](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L855-L945)
+ [js/app/suitePracticeMixin.js L855-L945](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/suitePracticeMixin.js#L855-L945)
 
- [js/app/suitePracticeMixin.js L175-L235](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L175-L235)
+ [js/app/suitePracticeMixin.js L175-L235](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/suitePracticeMixin.js#L175-L235)
 
 ---
 
@@ -339,7 +335,7 @@ if (reuseWindow && !reuseWindow.closed) {
 
 ### Initialization Timeout
 
-**Request Retry Loop** [js/practice-page-enhancer.js L420-L449](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/practice-page-enhancer.js#L420-L449)
+**Request Retry Loop** [js/practice-page-enhancer.js L420-L449](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/practice-page-enhancer.js#L420-L449)
 
 :
 
@@ -386,7 +382,7 @@ The parent does not currently implement timeout detection for stalled handshakes
 
 ### Cross-Origin Limitations
 
-**Script Injection Failure** [js/app/examSessionMixin.js L471-L483](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L471-L483)
+**Script Injection Failure** [js/app/examSessionMixin.js L471-L483](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/examSessionMixin.js#L471-L483)
 
 :
 
@@ -412,7 +408,7 @@ If the exam HTML already includes `practice-page-enhancer.js` as a static script
 
 ### Inline Script Fallback
 
-**Backup Injection Method** [js/app/examSessionMixin.js L538-L809](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L538-L809)
+**Backup Injection Method** [js/app/examSessionMixin.js L538-L809](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/examSessionMixin.js#L538-L809)
 
 :
 
@@ -444,11 +440,11 @@ The inline script provides:
 * `postMessage` protocol implementation
 * Fallback `practiceDataCollector` object
 
-**Sources**: [js/app/examSessionMixin.js L420-L533](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L420-L533)
+**Sources**: [js/app/examSessionMixin.js L420-L533](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/examSessionMixin.js#L420-L533)
 
- [js/app/examSessionMixin.js L538-L809](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L538-L809)
+ [js/app/examSessionMixin.js L538-L809](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/examSessionMixin.js#L538-L809)
 
- [js/practice-page-enhancer.js L420-L449](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/practice-page-enhancer.js#L420-L449)
+ [js/practice-page-enhancer.js L420-L449](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/practice-page-enhancer.js#L420-L449)
 
 ---
 
@@ -456,7 +452,7 @@ The inline script provides:
 
 ### Parent Window Message Handler
 
-**Main Event Listener** [js/app/examSessionMixin.js L920-L1028](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L920-L1028)
+**Main Event Listener** [js/app/examSessionMixin.js L920-L1028](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/examSessionMixin.js#L920-L1028)
 
 :
 
@@ -487,7 +483,7 @@ setupExamWindowManagement(examWindow, examId, exam, options = {}) {
 }
 ```
 
-**Session Ready Handler** [js/app/examSessionMixin.js L928-L950](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L928-L950)
+**Session Ready Handler** [js/app/examSessionMixin.js L928-L950](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/examSessionMixin.js#L928-L950)
 
 :
 
@@ -506,7 +502,7 @@ handleSessionReady(examId, data) {
 }
 ```
 
-**Practice Complete Handler** [js/app/examSessionMixin.js L952-L1020](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L952-L1020)
+**Practice Complete Handler** [js/app/examSessionMixin.js L952-L1020](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/examSessionMixin.js#L952-L1020)
 
 :
 
@@ -532,7 +528,7 @@ async handlePracticeComplete(examId, data) {
 
 ### Child Window Message Handler
 
-**Event Listener** [js/practice-page-enhancer.js L379-L416](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/practice-page-enhancer.js#L379-L416)
+**Event Listener** [js/practice-page-enhancer.js L379-L416](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/practice-page-enhancer.js#L379-L416)
 
 :
 
@@ -570,9 +566,9 @@ window.addEventListener('message', (event) => {
 });
 ```
 
-**Sources**: [js/app/examSessionMixin.js L920-L1028](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L920-L1028)
+**Sources**: [js/app/examSessionMixin.js L920-L1028](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/examSessionMixin.js#L920-L1028)
 
- [js/practice-page-enhancer.js L379-L416](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/practice-page-enhancer.js#L379-L416)
+ [js/practice-page-enhancer.js L379-L416](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/practice-page-enhancer.js#L379-L416)
 
 ---
 
@@ -582,11 +578,11 @@ window.addEventListener('message', (event) => {
 
 ```
 
-**Sources**: [js/app/examSessionMixin.js L89-L176](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L89-L176)
+**Sources**: [js/app/examSessionMixin.js L89-L176](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/examSessionMixin.js#L89-L176)
 
- [js/practice-page-enhancer.js L309-L361](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/practice-page-enhancer.js#L309-L361)
+ [js/practice-page-enhancer.js L309-L361](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/practice-page-enhancer.js#L309-L361)
 
- [js/practice-page-enhancer.js L452-L568](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/practice-page-enhancer.js#L452-L568)
+ [js/practice-page-enhancer.js L452-L568](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/practice-page-enhancer.js#L452-L568)
 
 ---
 
@@ -627,6 +623,6 @@ window.addEventListener('message', (event) => {
 * Validate message payloads before processing
 * Log communication errors for debugging
 
-**Sources**: [js/app/examSessionMixin.js L89-L1028](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L89-L1028)
+**Sources**: [js/app/examSessionMixin.js L89-L1028](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/examSessionMixin.js#L89-L1028)
 
- [js/practice-page-enhancer.js L298-L1500](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/practice-page-enhancer.js#L298-L1500)
+ [js/practice-page-enhancer.js L298-L1500](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/practice-page-enhancer.js#L298-L1500)
