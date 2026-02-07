@@ -130,12 +130,30 @@
                 return await this.handleMultiSuitePracticeComplete(examId, data);
             }
 
-            if (!this.currentSuiteSession || !this.suiteExamMap || !this.suiteExamMap.has(examId)) {
+            const session = this.currentSuiteSession;
+            if (!session || session.status !== 'active') {
                 return false;
             }
 
-            const session = this.currentSuiteSession;
-            if (session.status !== 'active' || this.suiteExamMap.get(examId) !== session.id) {
+            const payloadSuiteSessionId = (data && typeof data.suiteSessionId === 'string')
+                ? data.suiteSessionId.trim()
+                : '';
+            if (payloadSuiteSessionId && payloadSuiteSessionId !== session.id) {
+                return false;
+            }
+
+            const mappingMissing = !this.suiteExamMap || !this.suiteExamMap.has(examId);
+            if (mappingMissing && typeof this._registerSuiteSequence === 'function') {
+                this._registerSuiteSequence(session);
+            }
+
+            const mappedSessionId = this.suiteExamMap && this.suiteExamMap.has(examId)
+                ? this.suiteExamMap.get(examId)
+                : null;
+            const inActiveSequence = Array.isArray(session.sequence)
+                ? session.sequence.some(item => item && item.examId === examId)
+                : false;
+            if ((mappedSessionId && mappedSessionId !== session.id) || (!mappedSessionId && !inActiveSequence)) {
                 return false;
             }
 
@@ -156,6 +174,10 @@
             this.updateExamStatus && this.updateExamStatus(examId, 'completed');
 
             const currentIndex = session.sequence.findIndex(item => item.examId === examId);
+            if (currentIndex < 0) {
+                await this._abortSuiteSession(session, { reason: 'missing_sequence_index' });
+                return false;
+            }
             session.currentIndex = currentIndex + 1;
 
             if (typeof this.cleanupExamSession === 'function') {

@@ -43,6 +43,68 @@ class PracticeRecorder {
         return null;
     }
 
+    isInTestEnvironment() {
+        try {
+            if (window.EnvironmentDetector && typeof window.EnvironmentDetector.isInTestEnvironment === 'function') {
+                return window.EnvironmentDetector.isInTestEnvironment();
+            }
+        } catch (error) {
+            console.warn('[PracticeRecorder] 环境探测失败，默认按生产环境处理:', error);
+        }
+        return false;
+    }
+
+    isSyntheticSessionAllowed(payload = null) {
+        const explicitAllow = Boolean(
+            payload
+            && typeof payload === 'object'
+            && (
+                payload.allowSyntheticSession === true
+                || payload.allowSynthetic === true
+                || payload?.results?.allowSyntheticSession === true
+                || payload?.results?.allowSynthetic === true
+                || payload?.metadata?.allowSyntheticSession === true
+                || payload?.metadata?.allowSynthetic === true
+                || payload?.results?.metadata?.allowSyntheticSession === true
+                || payload?.results?.metadata?.allowSynthetic === true
+            )
+        );
+        if (explicitAllow) {
+            return true;
+        }
+        return this.isInTestEnvironment();
+    }
+
+    async recordRejectedCompletionPayload(payload, context = {}) {
+        try {
+            const existing = await this.metaRepo.get('rejected_completion_payloads', []);
+            const list = Array.isArray(existing) ? existing : [];
+            const snapshot = {
+                id: `rejected_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                createdAt: new Date().toISOString(),
+                context: Object.assign({}, context),
+                payload: payload && typeof payload === 'object'
+                    ? {
+                        examId: payload.examId || null,
+                        sessionId: payload.sessionId || null,
+                        originalExamId: payload.originalExamId || null,
+                        derivedExamId: payload.derivedExamId || null,
+                        rawExamId: payload.rawExamId || null,
+                        suiteSessionId: payload.suiteSessionId || null,
+                        metadata: payload.metadata || payload.results?.metadata || null
+                    }
+                    : null
+            };
+            list.unshift(snapshot);
+            if (list.length > 50) {
+                list.splice(50);
+            }
+            await this.metaRepo.set('rejected_completion_payloads', list);
+        } catch (error) {
+            console.warn('[PracticeRecorder] 记录拒绝的完成负载失败:', error);
+        }
+    }
+
     lookupExamIndexEntry(examId) {
         if (!examId) return null;
 
@@ -914,9 +976,22 @@ class PracticeRecorder {
 
         let syntheticSession = false;
         if (!session) {
+            if (!this.isSyntheticSessionAllowed(payload)) {
+                console.error('[PracticeRecorder] 活动会话缺失，生产环境拒绝合成数据保存:', {
+                    resolvedExamId,
+                    sessionId: payload.sessionId || null,
+                    candidates: candidateExamIds
+                });
+                await this.recordRejectedCompletionPayload(payload, {
+                    reason: 'missing_active_session',
+                    resolvedExamId,
+                    candidateExamIds
+                });
+                return null;
+            }
             session = this.buildSyntheticCompletionSession(resolvedExamId, results, payload.sessionId);
             syntheticSession = true;
-            console.warn('[PracticeRecorder] 未找到匹配的活动会话，使用合成数据保存记录:', resolvedExamId);
+            console.warn('[PracticeRecorder] 未找到匹配的活动会话，测试环境启用合成数据保存:', resolvedExamId);
         }
 
         const resolvedEndTime = (() => {
@@ -1960,8 +2035,12 @@ class PracticeRecorder {
             const validatedData = this.validateRealData(realData);
 
             if (!validatedData) {
-                console.warn('[PracticeRecorder] 数据验证失败，使用模拟数据');
-                return await this.handleFallbackData(examId);
+                if (this.isSyntheticSessionAllowed(realData)) {
+                    console.warn('[PracticeRecorder] 数据验证失败，测试环境使用模拟数据');
+                    return await this.handleFallbackData(examId);
+                }
+                console.error('[PracticeRecorder] 数据验证失败，生产环境拒绝模拟数据回退:', examId);
+                return null;
             }
 
             // 获取题目信息
@@ -1996,7 +2075,10 @@ class PracticeRecorder {
 
         } catch (error) {
             console.error('[PracticeRecorder] 真实数据处理失败:', error);
-            return await this.handleFallbackData(examId);
+            if (this.isSyntheticSessionAllowed(realData)) {
+                return await this.handleFallbackData(examId);
+            }
+            return null;
         }
     }
 

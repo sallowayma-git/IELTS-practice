@@ -121,13 +121,83 @@ def _check_contains(path: Path, snippet: str) -> Tuple[bool, str]:
     return present, ("已包含片段" if present else f"缺少片段：{snippet}")
 
 
-def _check_practice_suite_preload(main_entry: Path) -> Tuple[bool, str]:
-    """Ensure main-entry triggers practice-suite preload (important for file:// runs)."""
-    ok, detail = _check_contains(
-        main_entry,
-        "ensureLazyGroup('practice-suite')"
-    )
-    return ok, detail
+def _check_main_entry_on_demand(main_entry: Path) -> Tuple[bool, str]:
+    try:
+        source = main_entry.read_text(encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return False, f"读取失败：{exc}"
+
+    required_snippets = [
+        "var STRICT_ON_DEMAND = true;",
+        "if (STRICT_ON_DEMAND)",
+        "bootstrapCoreDataInBackground()",
+    ]
+    forbidden_snippets = [
+        "AppActions.preloadPracticeSuite",
+        "ensureLazyGroup('practice-suite')",
+        "ensureLazyGroup('browse-view')",
+    ]
+
+    missing = [snippet for snippet in required_snippets if snippet not in source]
+    forbidden_hits = [snippet for snippet in forbidden_snippets if snippet in source]
+
+    if missing or forbidden_hits:
+        detail = {
+            "missing": missing,
+            "forbiddenHits": forbidden_hits,
+        }
+        return False, detail
+    return True, "严格按需配置存在，未发现旧启动预加载片段"
+
+
+def _check_app_js_non_blocking_boot(app_js: Path) -> Tuple[bool, str]:
+    try:
+        source = app_js.read_text(encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return False, f"读取失败：{exc}"
+
+    has_boot_signal = "appCoreReady" in source and "dispatchEvent(new CustomEvent('appCoreReady'))" in source
+    blocks_on_browse = "browseReady" in source or "awaitBrowse" in source
+
+    if not has_boot_signal:
+        return False, "缺少 appCoreReady 收口事件"
+    if blocks_on_browse:
+        return False, "仍检测到 browseReady/awaitBrowse 启动阻塞逻辑"
+    return True, "未检测到 browseReady 阻塞，且包含 appCoreReady 收口事件"
+
+
+def _check_lazy_loader_dedupe(loader_path: Path) -> Tuple[bool, str]:
+    try:
+        source = loader_path.read_text(encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return False, f"读取失败：{exc}"
+
+    required_snippets = [
+        "function findExistingScriptTag(url)",
+        "var existing = findExistingScriptTag(url);",
+        "scriptStatus[url] = 'loaded';",
+    ]
+    missing = [snippet for snippet in required_snippets if snippet not in source]
+    if missing:
+        return False, {"missing": missing}
+    return True, "已检测到静态脚本去重逻辑"
+
+
+def _check_practice_recorder_synthetic_guard(recorder_path: Path) -> Tuple[bool, str]:
+    try:
+        source = recorder_path.read_text(encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return False, f"读取失败：{exc}"
+
+    required_snippets = [
+        "isSyntheticSessionAllowed(payload",
+        "活动会话缺失，生产环境拒绝合成数据保存",
+        "recordRejectedCompletionPayload",
+    ]
+    missing = [snippet for snippet in required_snippets if snippet not in source]
+    if missing:
+        return False, {"missing": missing}
+    return True, "已检测到生产环境 synthetic 会话保护逻辑"
 
 
 def _collect_mixin_methods(app_dir: Path) -> List[str]:
@@ -395,6 +465,36 @@ def run_checks() -> Tuple[List[dict], bool]:
             results.append(_format_result("设置按钮覆盖", settings_passed, settings_detail))
             all_passed &= settings_passed
 
+    reading_e2e = REPO_ROOT / "developer" / "tests" / "e2e" / "reading_single_flow.py"
+    reading_exists, reading_detail = _ensure_exists(reading_e2e)
+    results.append(_format_result("Reading 单篇 E2E 脚本存在性", reading_exists, reading_detail))
+    all_passed &= reading_exists
+    if reading_exists:
+        reading_checks = {
+            "校验主链路 openExam": "window.app.openExam",
+            "禁止 fallback 路径": "fallback_hits",
+            "禁止 synthetic 路径": "synthetic_hits",
+        }
+        for label, snippet in reading_checks.items():
+            check_passed, check_detail = _check_contains(reading_e2e, snippet)
+            results.append(_format_result(f"Reading 单篇 E2E: {label}", check_passed, check_detail))
+            all_passed &= check_passed
+
+    reading_e2e_node = REPO_ROOT / "developer" / "tests" / "e2e" / "reading_single_flow.node.js"
+    reading_node_exists, reading_node_detail = _ensure_exists(reading_e2e_node)
+    results.append(_format_result("Reading 单篇 E2E Node 回退脚本", reading_node_exists, reading_node_detail))
+    all_passed &= reading_node_exists
+    if reading_node_exists:
+        node_checks = {
+            "校验主链路 openExam": "window.app.openExam",
+            "禁止 fallback 路径": "fallbackHits",
+            "禁止 synthetic 路径": "syntheticHits",
+        }
+        for label, snippet in node_checks.items():
+            check_passed, check_detail = _check_contains(reading_e2e_node, snippet)
+            results.append(_format_result(f"Reading Node 回退: {label}", check_passed, check_detail))
+            all_passed &= check_passed
+
     data_layer_files = [
         REPO_ROOT / "js" / "data" / "dataSources" / "storageDataSource.js",
     ]
@@ -425,9 +525,24 @@ def run_checks() -> Tuple[List[dict], bool]:
     results.append(_format_result("simpleStorageWrapper 适配数据仓库", wrapper_passed, wrapper_detail))
     all_passed &= wrapper_passed
 
-    preload_ok, preload_detail = _check_practice_suite_preload(main_entry)
-    results.append(_format_result("practice-suite 预加载保障 (file:// 兼容)", preload_ok, preload_detail))
-    all_passed &= preload_ok
+    on_demand_ok, on_demand_detail = _check_main_entry_on_demand(main_entry)
+    results.append(_format_result("main-entry 严格按需启动策略", on_demand_ok, on_demand_detail))
+    all_passed &= on_demand_ok
+
+    app_js_path = REPO_ROOT / "js" / "app.js"
+    app_boot_ok, app_boot_detail = _check_app_js_non_blocking_boot(app_js_path)
+    results.append(_format_result("app.js 不等待 browseReady", app_boot_ok, app_boot_detail))
+    all_passed &= app_boot_ok
+
+    lazy_loader_path = REPO_ROOT / "js" / "runtime" / "lazyLoader.js"
+    dedupe_ok, dedupe_detail = _check_lazy_loader_dedupe(lazy_loader_path)
+    results.append(_format_result("lazyLoader 静态脚本去重", dedupe_ok, dedupe_detail))
+    all_passed &= dedupe_ok
+
+    practice_recorder_path = REPO_ROOT / "js" / "core" / "practiceRecorder.js"
+    synthetic_guard_ok, synthetic_guard_detail = _check_practice_recorder_synthetic_guard(practice_recorder_path)
+    results.append(_format_result("PracticeRecorder 生产 synthetic 保护", synthetic_guard_ok, synthetic_guard_detail))
+    all_passed &= synthetic_guard_ok
 
     main_js_path = REPO_ROOT / "js" / "main.js"
     main_js_exists, main_js_detail = _ensure_exists(main_js_path)
