@@ -83,6 +83,56 @@
             }
         },
 
+        createFallbackRecorder() {
+            function normalizeRecords(records) {
+                return Array.isArray(records) ? records : [];
+            }
+
+            return {
+                startPracticeSession: (examId) => ({
+                    examId: examId || '',
+                    startTime: Date.now(),
+                    sessionId: 'fallback_' + Date.now(),
+                    status: 'started'
+                }),
+                startSession: (examId) => ({
+                    examId: examId || '',
+                    startTime: Date.now(),
+                    sessionId: 'fallback_' + Date.now(),
+                    status: 'started'
+                }),
+                handleRealPracticeData: async () => null,
+                savePracticeRecord: async (record) => {
+                    if (!window.storage || typeof window.storage.get !== 'function' || typeof window.storage.set !== 'function') {
+                        return record || null;
+                    }
+                    try {
+                        const current = await window.storage.get('practice_records', []);
+                        const list = normalizeRecords(current);
+                        if (record && typeof record === 'object') {
+                            list.unshift(record);
+                        }
+                        await window.storage.set('practice_records', list);
+                    } catch (error) {
+                        console.warn('[App] 降级记录器保存失败:', error);
+                    }
+                    return record || null;
+                },
+                getPracticeRecords: async () => {
+                    if (!window.storage || typeof window.storage.get !== 'function') {
+                        return [];
+                    }
+                    try {
+                        const records = await window.storage.get('practice_records', []);
+                        return normalizeRecords(records);
+                    } catch (error) {
+                        console.warn('[App] 降级记录器读取失败:', error);
+                        return [];
+                    }
+                }
+            };
+        },
+
         schedulePracticeRecorderUpgrade(maxAttempts = 20, interval = 500) {
             if (this._practiceRecorderUpgradeTimer || typeof window === 'undefined') {
                 return;

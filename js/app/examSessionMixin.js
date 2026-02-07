@@ -1850,12 +1850,23 @@
             }
 
             let suiteHandlerDeclined = false;
+            const payloadSuiteSessionId = (
+                data
+                && typeof data === 'object'
+                && typeof data.suiteSessionId === 'string'
+            ) ? data.suiteSessionId.trim() : '';
+            const hasMappedSuiteExam = Boolean(this.suiteExamMap && this.suiteExamMap.has(examId));
+            const hasActiveSuiteSession = Boolean(
+                this.currentSuiteSession
+                && this.currentSuiteSession.status === 'active'
+                && (!payloadSuiteSessionId || this.currentSuiteSession.id === payloadSuiteSessionId)
+            );
             const shouldDelegateToSuiteHandler = Boolean(
                 data
                 && typeof data === 'object'
                 && typeof data.suiteId === 'string'
                 && data.suiteId.trim()
-            ) || Boolean(this.suiteExamMap && this.suiteExamMap.has(examId));
+            ) || hasMappedSuiteExam || Boolean(payloadSuiteSessionId) || hasActiveSuiteSession;
 
             if (shouldDelegateToSuiteHandler && typeof this.handleSuitePracticeComplete === 'function') {
                 try {

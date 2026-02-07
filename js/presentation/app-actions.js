@@ -57,7 +57,7 @@
         }
         browsePrefetchTriggered = true;
         if (global.AppLazyLoader && typeof global.AppLazyLoader.ensureGroup === 'function') {
-            global.AppLazyLoader.ensureGroup('browse-view').catch(function swallow(error) {
+            global.AppLazyLoader.ensureGroup('browse-runtime').catch(function swallow(error) {
                 console.warn('[AppActions] 浏览模块预加载失败:', error);
             });
         }
@@ -102,13 +102,6 @@
             });
         }
 
-        if (typeof window !== 'undefined') {
-            if ('requestIdleCallback' in window) {
-                window.requestIdleCallback(triggerPrefetch, { timeout: 4500 });
-            } else {
-                setTimeout(triggerPrefetch, 3500);
-            }
-        }
     }
 
     if (document.readyState === 'complete' || document.readyState === 'interactive') {
@@ -122,25 +115,38 @@
     // ============================================================================
 
     function startSuitePractice() {
-        var appInstance = global.app;
-        if (appInstance && typeof appInstance.startSuitePractice === 'function') {
-            try {
-                return appInstance.startSuitePractice();
-            } catch (error) {
-                console.error('[AppActions] 套题模式启动失败', error);
-                if (typeof global.showMessage === 'function') {
-                    global.showMessage('套题模式启动失败，请稍后重试', 'error');
-                }
-                return;
-            }
-        }
+        var ensureSuiteReady = (global.AppEntry && typeof global.AppEntry.ensureSessionSuiteReady === 'function')
+            ? global.AppEntry.ensureSessionSuiteReady()
+            : ensurePracticeSuite();
 
-        var fallbackNotice = '套题模式尚未初始化，请完成加载后再试。';
-        if (typeof global.showMessage === 'function') {
-            global.showMessage(fallbackNotice, 'warning');
-        } else if (typeof alert === 'function') {
-            alert(fallbackNotice);
-        }
+        return Promise.resolve(ensureSuiteReady).then(function afterReady() {
+            var appInstance = global.app;
+            if (appInstance && typeof appInstance.startSuitePractice === 'function') {
+                try {
+                    return appInstance.startSuitePractice();
+                } catch (error) {
+                    console.error('[AppActions] 套题模式启动失败', error);
+                    if (typeof global.showMessage === 'function') {
+                        global.showMessage('套题模式启动失败，请稍后重试', 'error');
+                    }
+                    return undefined;
+                }
+            }
+
+            var fallbackNotice = '套题模式尚未初始化，请完成加载后再试。';
+            if (typeof global.showMessage === 'function') {
+                global.showMessage(fallbackNotice, 'warning');
+            } else if (typeof alert === 'function') {
+                alert(fallbackNotice);
+            }
+            return undefined;
+        }).catch(function handleSuiteError(error) {
+            console.error('[AppActions] 套题模块加载失败:', error);
+            if (typeof global.showMessage === 'function') {
+                global.showMessage('套题模块加载失败，请稍后重试', 'error');
+            }
+            return undefined;
+        });
     }
 
     function openExamWithFallback(exam, delay) {
