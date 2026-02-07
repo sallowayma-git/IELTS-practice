@@ -193,14 +193,20 @@
                         </div>
                     </div>
                     <div class="vocab-topbar__section vocab-topbar__section--right">
-                        <div class="vocab-topbar__list-switcher" data-vocab-role="list-switcher"></div>
                         <button class="btn btn-primary" type="button" data-action="primary-cta">开始复习</button>
                         <div class="vocab-topbar__menu">
                             <button class="btn btn-ghost btn-icon" type="button" data-action="toggle-menu" aria-haspopup="true" aria-expanded="false">⋮</button>
                             <div class="vocab-menu" data-vocab-role="menu" hidden>
-                                <button type="button" data-action="menu-import">导入词表</button>
-                                <button type="button" data-action="menu-export">导出进度</button>
-                                <button type="button" data-action="menu-settings">学习设置</button>
+                                <div class="vocab-menu__panel" data-vocab-role="menu-panel-main">
+                                    <button type="button" data-action="menu-lists">切换词表</button>
+                                    <button type="button" data-action="menu-import">导入词表</button>
+                                    <button type="button" data-action="menu-export">导出进度</button>
+                                    <button type="button" data-action="menu-settings">学习设置</button>
+                                </div>
+                                <div class="vocab-menu__panel" data-vocab-role="menu-panel-lists" hidden>
+                                    <button type="button" data-action="menu-back-lists">← 返回菜单</button>
+                                    <div class="vocab-menu__list-switcher" data-vocab-role="list-switcher"></div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -300,6 +306,8 @@
             progressStats: layout.querySelector('[data-vocab-role=\"progress-stats\"]'),
             menuButton: layout.querySelector('[data-action=\"toggle-menu\"]'),
             menu: layout.querySelector('[data-vocab-role=\"menu\"]'),
+            menuPanelMain: layout.querySelector('[data-vocab-role=\"menu-panel-main\"]'),
+            menuPanelLists: layout.querySelector('[data-vocab-role=\"menu-panel-lists\"]'),
             listSwitcher: layout.querySelector('[data-vocab-role=\"list-switcher\"]'),
             dueBanner: layout.querySelector('[data-vocab-role=\"due-banner\"]'),
             dueText: layout.querySelector('[data-vocab-role=\"due-text\"]'),
@@ -329,6 +337,7 @@
         if (!event || !event.detail) {
             return;
         }
+        closeMenu();
         resetSessionState();
         prepareSessionQueue();
         showDueBanner(state.session.duePending);
@@ -388,6 +397,7 @@
         }
         state.menuOpen = false;
         state.elements.menu.setAttribute('hidden', 'hidden');
+        switchMenuPanel('main');
         if (state.elements.menuButton) {
             state.elements.menuButton.setAttribute('aria-expanded', 'false');
         }
@@ -404,6 +414,7 @@
         event.stopPropagation();
         state.menuOpen = !state.menuOpen;
         if (state.menuOpen) {
+            switchMenuPanel('main');
             state.elements.menu.removeAttribute('hidden');
             state.elements.menuButton.setAttribute('aria-expanded', 'true');
             state.outsideClickHandler = (evt) => {
@@ -415,6 +426,21 @@
         } else {
             closeMenu();
         }
+    }
+
+    function switchMenuPanel(panelName) {
+        const mainPanel = state.elements.menuPanelMain;
+        const listPanel = state.elements.menuPanelLists;
+        if (!mainPanel || !listPanel) {
+            return;
+        }
+        if (panelName === 'lists') {
+            mainPanel.setAttribute('hidden', 'hidden');
+            listPanel.removeAttribute('hidden');
+            return;
+        }
+        listPanel.setAttribute('hidden', 'hidden');
+        mainPanel.removeAttribute('hidden');
     }
 
     function updateSidePanelMode() {
@@ -475,6 +501,14 @@
                 const trigger = event.target.closest('button[data-action]');
                 const action = trigger?.dataset?.action;
                 if (!action) {
+                    return;
+                }
+                if (action === 'menu-lists') {
+                    switchMenuPanel('lists');
+                    return;
+                }
+                if (action === 'menu-back-lists') {
+                    switchMenuPanel('main');
                     return;
                 }
                 closeMenu();

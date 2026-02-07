@@ -3,7 +3,7 @@
     const VOCAB_LISTS = Object.freeze({
         'default': {
             id: 'default',
-            name: '默认词表',
+            name: 'IELTS 核心词表',
             icon: '📚',
             source: 'builtin',
             storageKey: 'vocab_words'
@@ -54,6 +54,8 @@
     });
 
     const DEFAULT_REVIEW_QUEUE = Object.freeze([]);
+    const DEFAULT_LIST_ID = 'default';
+    const DEFAULT_LEXICON_URL = 'assets/wordlists/ielts_core.json';
 
     const state = {
         repositories: null,
@@ -69,7 +71,7 @@
         loadingPromise: null,
         registryUnsubscribe: null,
         lastLoadSource: 'init',
-        activeListId: 'default',
+        activeListId: DEFAULT_LIST_ID,
         listCache: new Map()
     };
 
@@ -261,21 +263,75 @@
         rebuildIndex();
     }
 
+    function getStorageKeyForListId(listId) {
+        const targetId = typeof listId === 'string' && VOCAB_LISTS[listId] ? listId : DEFAULT_LIST_ID;
+        return VOCAB_LISTS[targetId].storageKey;
+    }
+
+    function getActiveStorageKey() {
+        return getStorageKeyForListId(state.activeListId);
+    }
+
+    function normalizeStoredListWords(storedData) {
+        if (storedData && typeof storedData === 'object' && Array.isArray(storedData.words)) {
+            return storedData.words.map(convertSpellingErrorToWord).filter(Boolean);
+        }
+        if (Array.isArray(storedData)) {
+            return storedData.map(normalizeWordRecord).filter(Boolean);
+        }
+        return [];
+    }
+
+    function isLikelySpellingErrorSnapshot(words) {
+        if (!Array.isArray(words) || words.length === 0) {
+            return false;
+        }
+        let taggedCount = 0;
+        words.forEach((entry) => {
+            const meaning = typeof entry?.meaning === 'string' ? entry.meaning : '';
+            if (meaning.startsWith('你曾拼写为:')) {
+                taggedCount += 1;
+            }
+        });
+        return taggedCount / words.length >= 0.6;
+    }
+
+    async function loadBundledDefaultLexicon() {
+        const response = await fetch(DEFAULT_LEXICON_URL, { cache: 'no-store' });
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        const payload = await response.json();
+        const validator = window.VocabDataIO;
+        if (validator && typeof validator.validateSchema === 'function' && !validator.validateSchema(payload)) {
+            throw new Error('default_lexicon_schema_invalid');
+        }
+        const entries = validator && typeof validator.normalizeEntry === 'function'
+            ? (Array.isArray(payload) ? payload.map(validator.normalizeEntry).filter(Boolean) : [])
+            : (Array.isArray(payload) ? payload : []);
+        return entries
+            .map((entry) => normalizeWordRecord({ ...entry, box: 1, correctCount: 0, lastReviewed: null, nextReview: null }))
+            .filter(Boolean);
+    }
+
     async function loadState() {
         if (state.loadingPromise) {
             return state.loadingPromise;
         }
         state.loadingPromise = (async () => {
-            const [storedWords, storedConfig, storedQueue, storedActiveList] = await Promise.all([
-                read(STORAGE_KEYS.WORDS, []),
+            const [storedConfig, storedQueue, storedActiveList] = await Promise.all([
                 read(STORAGE_KEYS.CONFIG, { ...DEFAULT_CONFIG }),
                 read(STORAGE_KEYS.REVIEW_QUEUE, DEFAULT_REVIEW_QUEUE.slice()),
-                read(STORAGE_KEYS.ACTIVE_LIST, 'default')
+                read(STORAGE_KEYS.ACTIVE_LIST, DEFAULT_LIST_ID)
             ]);
 
-            const normalizedWords = Array.isArray(storedWords)
-                ? storedWords.map(normalizeWordRecord).filter(Boolean)
-                : [];
+            state.activeListId = typeof storedActiveList === 'string' && VOCAB_LISTS[storedActiveList]
+                ? storedActiveList
+                : DEFAULT_LIST_ID;
+
+            const activeStorageKey = getStorageKeyForListId(state.activeListId);
+            const storedWords = await read(activeStorageKey, []);
+            const normalizedWords = normalizeStoredListWords(storedWords);
             if (normalizedWords.length) {
                 setWordsInternal(normalizedWords);
                 state.lastLoadSource = state.metaRepo ? 'meta' : (state.storageManager ? 'storage' : 'localStorage');
@@ -283,9 +339,6 @@
 
             state.config = mergeConfig(storedConfig);
             state.reviewQueue = Array.isArray(storedQueue) ? storedQueue.map((id) => String(id)) : [];
-            state.activeListId = typeof storedActiveList === 'string' && VOCAB_LISTS[storedActiveList] 
-                ? storedActiveList 
-                : 'default';
         })()
             .catch((error) => {
                 console.error('[VocabStore] 初始化加载失败:', error);
@@ -297,33 +350,50 @@
     }
 
     async function ensureDefaultLexicon() {
-        if (state.words.length) {
-            return;
-        }
         try {
-            const response = await fetch('assets/wordlists/ielts_core.json', { cache: 'no-store' });
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
+            const defaultStorageKey = getStorageKeyForListId(DEFAULT_LIST_ID);
+            const storedDefault = await read(defaultStorageKey, []);
+            const normalizedStored = normalizeStoredListWords(storedDefault);
+            const pollutedBySpellingList = isLikelySpellingErrorSnapshot(normalizedStored);
+            if (normalizedStored.length && !pollutedBySpellingList) {
+                if (state.activeListId === DEFAULT_LIST_ID && !state.words.length) {
+                    setWordsInternal(normalizedStored);
+                }
+                return normalizedStored;
             }
-            const payload = await response.json();
-            const validator = window.VocabDataIO;
-            if (validator && typeof validator.validateSchema === 'function' && !validator.validateSchema(payload)) {
-                console.warn('[VocabStore] 默认词库校验失败，跳过加载');
-                return;
+            if (pollutedBySpellingList) {
+                console.warn('[VocabStore] 检测到默认词表被错词快照污染，正在恢复 IELTS 核心词表');
             }
-            const entries = validator && typeof validator.normalizeEntry === 'function'
-                ? (Array.isArray(payload) ? payload.map(validator.normalizeEntry).filter(Boolean) : [])
-                : (Array.isArray(payload) ? payload : []);
-            const normalized = entries.map((entry) => normalizeWordRecord({ ...entry, box: 1, correctCount: 0, lastReviewed: null, nextReview: null }));
+
+            const normalized = await loadBundledDefaultLexicon();
             if (!normalized.length) {
                 console.warn('[VocabStore] 默认词库为空');
-                return;
+                return [];
             }
-            setWordsInternal(normalized);
-            state.lastLoadSource = 'default';
-            await persist(STORAGE_KEYS.WORDS, normalized);
+            await persist(defaultStorageKey, normalized);
+            if (state.activeListId === DEFAULT_LIST_ID) {
+                setWordsInternal(normalized);
+                state.lastLoadSource = 'default';
+            }
+            state.listCache.set(DEFAULT_LIST_ID, {
+                data: {
+                    id: DEFAULT_LIST_ID,
+                    name: VOCAB_LISTS[DEFAULT_LIST_ID].name,
+                    icon: VOCAB_LISTS[DEFAULT_LIST_ID].icon,
+                    source: VOCAB_LISTS[DEFAULT_LIST_ID].source,
+                    words: normalized,
+                    stats: {
+                        totalWords: normalized.length,
+                        masteredWords: normalized.filter(w => (w.correctCount || 0) >= (state.config.masteryCount || 4)).length,
+                        reviewingWords: normalized.filter(w => w.lastReviewed && !w.nextReview).length
+                    }
+                },
+                timestamp: Date.now()
+            });
+            return normalized;
         } catch (error) {
             console.warn('[VocabStore] 默认词库加载失败:', error);
+            return [];
         }
     }
 
@@ -376,7 +446,7 @@
         if (!state.words.length) {
             await ensureDefaultLexicon();
         }
-        await persist(STORAGE_KEYS.WORDS, state.words);
+        await persist(getActiveStorageKey(), state.words);
         await persist(STORAGE_KEYS.CONFIG, state.config);
         await persist(STORAGE_KEYS.REVIEW_QUEUE, state.reviewQueue);
         emitReady(true);
@@ -391,7 +461,8 @@
             ? words.map((word) => normalizeWordRecord(word)).filter(Boolean)
             : [];
         setWordsInternal(normalized);
-        await persist(STORAGE_KEYS.WORDS, normalized);
+        await persist(getActiveStorageKey(), normalized);
+        state.listCache.delete(state.activeListId);
         return getWords();
     }
 
@@ -410,7 +481,8 @@
         if (index >= 0 && updated) {
             state.words.splice(index, 1, updated);
             state.wordIndex.set(id, updated);
-            await persist(STORAGE_KEYS.WORDS, state.words);
+            await persist(getActiveStorageKey(), state.words);
+            state.listCache.delete(state.activeListId);
             return { ...updated };
         }
         return null;
@@ -547,23 +619,16 @@
 
         try {
             const storageKey = listConfig.storageKey;
-            const storedData = await read(storageKey, null);
-            
-            let normalizedWords = [];
-
-            // 检查是否为拼写错误词表格式
-            if (storedData && typeof storedData === 'object' && Array.isArray(storedData.words)) {
-                // SpellingErrorCollector 格式: { id, name, source, words: [...], createdAt, updatedAt }
-                console.log(`[VocabStore] 检测到拼写错误词表格式: ${listId}`);
-                normalizedWords = storedData.words
-                    .map(convertSpellingErrorToWord)
-                    .filter(Boolean);
-            } else if (Array.isArray(storedData)) {
-                // 标准词表格式: [{ word, meaning, ... }, ...]
-                normalizedWords = storedData
-                    .map(normalizeWordRecord)
-                    .filter(Boolean);
-            } else {
+            let storedData = await read(storageKey, null);
+            if (listId === DEFAULT_LIST_ID && (!storedData || (Array.isArray(storedData) && storedData.length === 0))) {
+                const ensured = await ensureDefaultLexicon();
+                storedData = ensured;
+            }
+            let normalizedWords = normalizeStoredListWords(storedData);
+            if (!normalizedWords.length && listId === DEFAULT_LIST_ID) {
+                normalizedWords = await ensureDefaultLexicon();
+            }
+            if (!normalizedWords.length) {
                 console.log(`[VocabStore] 词表为空或格式未知: ${listId}`);
             }
 
@@ -625,6 +690,7 @@
             // 切换到新词表
             state.activeListId = listId;
             setWordsInternal(listData.words || []);
+            state.listCache.delete(listId);
             
             // 保存激活的词表 ID
             await persist(STORAGE_KEYS.ACTIVE_LIST, listId);
