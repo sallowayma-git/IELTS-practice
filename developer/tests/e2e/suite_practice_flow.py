@@ -34,11 +34,20 @@ try:
         async_playwright,
     )
 except ModuleNotFoundError:
-    node_runner = REPO_ROOT / "developer" / "tests" / "e2e" / "suite_practice_flow.node.js"
-    completed = subprocess.run([
-        "node",
-        str(node_runner),
-    ], cwd=str(REPO_ROOT))
+    venv_dir = (REPO_ROOT / ".venv").resolve()
+    venv_python = REPO_ROOT / ".venv" / "bin" / "python"
+    current_prefix = Path(sys.prefix).resolve()
+    if venv_python.exists() and current_prefix != venv_dir:
+        completed = subprocess.run([
+            str(venv_python),
+            str(Path(__file__).resolve()),
+        ], cwd=str(REPO_ROOT))
+    else:
+        node_runner = REPO_ROOT / "developer" / "tests" / "e2e" / "suite_practice_flow.node.js"
+        completed = subprocess.run([
+            "node",
+            str(node_runner),
+        ], cwd=str(REPO_ROOT))
     raise SystemExit(completed.returncode)
 
 
@@ -128,6 +137,13 @@ async def _dismiss_overlays(page: Page) -> None:
             log_step(f"关闭备份模态框失败: {e}", "WARNING")
 
 
+async def _group_loaded(page: Page, group_name: str) -> bool:
+    return await page.evaluate(
+        "(group) => !!(window.AppLazyLoader && window.AppLazyLoader.getStatus && window.AppLazyLoader.getStatus(group).loaded)",
+        group_name,
+    )
+
+
 async def _complete_passage(suite_page: Page, total_count: int, index: int) -> bool:
     """完成一篇练习并等待下一篇加载"""
     if suite_page.is_closed():
@@ -161,7 +177,7 @@ async def _complete_passage(suite_page: Page, total_count: int, index: int) -> b
                 await suite_page.wait_for_function(
                     "(initialId) => (document.body.dataset.examId || '') !== initialId",
                     arg=current_exam_id,
-                    timeout=30000,
+                    timeout=60000,
                 )
                 
                 new_exam_id = await suite_page.evaluate("() => document.body.dataset.examId || ''")
@@ -240,7 +256,26 @@ async def run() -> None:
             await _ensure_app_ready(page)
             await _dismiss_overlays(page)
 
-            log_step("切换到总览视图...")
+            log_step("校验首屏懒加载状态...")
+            initial_browse_loaded = await _group_loaded(page, "browse-runtime")
+            initial_practice_loaded = await _group_loaded(page, "practice-suite")
+            log_step(f"首屏 group 状态: browse-runtime={initial_browse_loaded}, practice-suite={initial_practice_loaded}", "DEBUG")
+            if initial_browse_loaded:
+                raise AssertionError("browse-runtime should not be loaded on initial screen")
+            if initial_practice_loaded:
+                raise AssertionError("practice-suite should not be loaded on initial screen")
+            log_step("首屏懒加载状态校验通过", "SUCCESS")
+
+            log_step("切换到浏览视图并验证按需加载...")
+            await _click_nav(page, "browse")
+            await page.wait_for_function(
+                "() => window.AppLazyLoader && window.AppLazyLoader.getStatus('browse-runtime').loaded === true",
+                timeout=20000,
+            )
+            await page.wait_for_selector("#exam-list-container", timeout=15000)
+            log_step("浏览模块首次按需加载成功", "SUCCESS")
+
+            log_step("返回总览视图，准备套题测试...")
             await _click_nav(page, "overview")
             
             log_step("查找套题练习按钮...")
@@ -254,6 +289,16 @@ async def run() -> None:
             suite_page = await popup_wait.value
             _collect_console(suite_page, console_log)
             log_step("套题练习窗口已打开", "SUCCESS")
+
+            await page.wait_for_function(
+                "() => window.AppLazyLoader && window.AppLazyLoader.getStatus('session-suite').loaded === true",
+                timeout=20000,
+            )
+            await page.wait_for_function(
+                "() => window.AppLazyLoader && window.AppLazyLoader.getStatus('practice-suite').loaded === true",
+                timeout=20000,
+            )
+            log_step("套题触发后 session-suite/practice-suite 加载成功", "SUCCESS")
 
             log_step("开始完成 3 篇练习...")
             for idx in range(3):
@@ -283,8 +328,23 @@ async def run() -> None:
             
             log_step("等待练习记录加载...")
             await page.wait_for_function(
-                "() => window.app && window.app.state && window.app.state.practice &&\n"
-                "  Array.isArray(window.app.state.practice.records) && window.app.state.practice.records.length > 0",
+                "() => {\n"
+                "  const appRecords = window.app && window.app.state && window.app.state.practice\n"
+                "    ? window.app.state.practice.records\n"
+                "    : null;\n"
+                "  if (Array.isArray(appRecords) && appRecords.length > 0) {\n"
+                "    return true;\n"
+                "  }\n"
+                "  if (typeof window.getPracticeRecordsState === 'function') {\n"
+                "    try {\n"
+                "      const records = window.getPracticeRecordsState();\n"
+                "      if (Array.isArray(records) && records.length > 0) {\n"
+                "        return true;\n"
+                "      }\n"
+                "    } catch (_) {}\n"
+                "  }\n"
+                "  return false;\n"
+                "}",
                 timeout=30000,
             )
             log_step("练习记录已加载", "SUCCESS")

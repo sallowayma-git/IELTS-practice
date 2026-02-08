@@ -55,7 +55,7 @@
         <div id="browse-view" class="view hero-panel hero-section">
             <div class="browse-title-bar hero-panel__header">
                 <button class="browse-title-trigger" id="browse-title-trigger" type="button" aria-haspopup="true"
-                    aria-expanded="false" title="列表偏好">📚</button>
+                    aria-expanded="false" title="列表偏好">📚<span class="browse-title-dot" aria-hidden="true"></span></button>
                 <h2 id="browse-title">题库浏览</h2>
                 <div class="browse-preference-panel" id="browse-preference-panel" hidden>
                     <label class="browse-preference-option">
@@ -442,6 +442,7 @@
     <script src="js/runtime/bootScreen.js" defer></script>
     <script src="js/runtime/lazyLoader.js" defer></script>
     <script src="js/presentation/app-actions.js" defer></script>
+    <script src="js/presentation/developerTeamModal.js" defer></script>
 
     <!-- 基础环境与日志 -->
     <script src="js/utils/environmentDetector.js"></script>
@@ -461,16 +462,11 @@
 
     <!-- 工具库与基础视图 -->
     <script src="js/utils/dom.js"></script>
-    <script src="js/views/legacyViewBundle.js"></script>
-    <script src="js/utils/performance.js"></script>
-    <script src="js/utils/typeChecker.js"></script>
-    <script src="js/utils/codeStandards.js"></script>
     <script src="js/services/overviewStats.js"></script>
     <script src="js/views/overviewView.js"></script>
     <script src="js/presentation/navigation-controller.js"></script>
 
     <!-- 入口与懒加载代理 -->
-    <script src="js/app/examActions.js"></script>
     <script src="js/app/main-entry.js"></script>
     <script src="js/presentation/indexInteractions.js"></script>
     <script src="js/boot-fallbacks.js"></script>
@@ -481,11 +477,8 @@
     <script src="js/app/bootstrapMixin.js"></script>
     <script src="js/app/lifecycleMixin.js"></script>
     <script src="js/app/navigationMixin.js"></script>
-    <script src="js/app/examSessionMixin.js"></script>
-    <script src="js/app/suitePracticeMixin.js"></script>
     <script src="js/app/fallbackMixin.js"></script>
     <script src="js/app.js"></script>
-    <script src="js/services/achievementManager.js"></script>
 
     <!-- 成就系统模态框 -->
     <div id="achievements-modal" class="theme-modal">
