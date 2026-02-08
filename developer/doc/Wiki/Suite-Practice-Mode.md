@@ -1,860 +1,754 @@
 # Suite Practice Mode
 
 > **Relevant source files**
-> * [AGENTS.md](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/AGENTS.md)
-> * [js/app/examSessionMixin.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js)
-> * [js/app/suitePracticeMixin.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js)
-> * [js/utils/environmentDetector.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/environmentDetector.js)
+> * [js/app/examSessionMixin.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/examSessionMixin.js)
+> * [js/app/suitePracticeMixin.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/suitePracticeMixin.js)
+> * [js/practice-page-enhancer.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/practice-page-enhancer.js)
+> * [js/services/GlobalStateService.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/services/GlobalStateService.js)
+> * [js/utils/answerComparisonUtils.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/answerComparisonUtils.js)
 
 ## Purpose and Scope
 
-Suite Practice Mode enables users to complete three reading passages (P1, P2, P3) consecutively in a single session, simulating a real IELTS reading exam. This document covers the suite mode implementation, including session management, window guards, script injection, and result aggregation.
+This document describes the suite practice mode system, which enables users to practice multiple IELTS exams in sequence or as a batch. The system supports two distinct modes:
 
-For information about individual practice sessions, see [Practice Recorder & Score Storage](/sallowayma-git/IELTS-practice/5.1-practicerecorder-and-scorestorage). For cross-window communication protocols used during practice, see [Cross-Window Communication Protocol](/sallowayma-git/IELTS-practice/5.3-cross-window-communication-protocol).
+1. **Sequential Suite Mode**: Automatically opens P1, P2, P3 reading exams one after another in the same window/tab
+2. **Multi-Suite Mode**: Handles HTML pages containing multiple test sets on a single page (e.g., "100 Listening P1" pages with 10 practice tests)
 
-**Sources:** [js/app/suitePracticeMixin.js L1-L800](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L1-L800)
-
----
-
-## System Overview
-
-Suite Practice Mode orchestrates a multi-exam session where three reading passages are completed sequentially in a single browser tab. The system automatically transitions between passages, prevents premature window closure, and aggregates results into a unified practice record.
-
-### Key Capabilities
-
-| Capability | Description |
-| --- | --- |
-| **Automatic Sequencing** | Randomly selects one passage from P1, P2, P3 categories and opens them in order |
-| **Window Guards** | Prevents `window.close()` and `window.open(..., '_self')` to maintain session continuity |
-| **Tab Reuse** | Navigates within the same browser tab to preserve context |
-| **Inline Fallback** | Injects data collection script directly when file:// protocol prevents external script loading |
-| **Result Aggregation** | Combines scores, durations, and answers from all three passages into a single record |
-| **Session Recovery** | Attempts to reopen closed tabs and continue the session |
-
-**Sources:** [js/app/suitePracticeMixin.js L1-L50](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L1-L50)
-
- [js/app/examSessionMixin.js L280-L522](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L280-L522)
+For information about single exam practice sessions, see [Practice Session Lifecycle & Management](/sallowayma-git/IELTS-practice/5.1-practice-session-lifecycle-and-management). For cross-window communication protocols, see [Cross-Window Communication Protocol](/sallowayma-git/IELTS-practice/5.3-cross-window-communication-protocol).
 
 ---
 
-## Architecture Components
+## Suite Practice Concepts
+
+### Sequential Suite Mode
+
+Sequential suite mode randomly selects one exam from each category (P1, P2, P3) and presents them in sequence within a single browser tab. After completing each exam, the window navigates to the next exam automatically.
+
+**Key characteristics:**
+
+* One window reused across all three exams
+* Sequential progression: P1 → P2 → P3
+* Automatic navigation between exams
+* Single aggregated record saved at completion
+* Window close guards prevent accidental exit
+
+### Multi-Suite Mode
+
+Multi-suite mode handles HTML pages that contain multiple complete practice tests on a single page. Each test is called a "suite" and has its own set of questions with a dedicated submit button.
+
+**Key characteristics:**
+
+* Multiple independent test sets on one HTML page
+* Each suite submits separately via `PRACTICE_COMPLETE` message
+* Results aggregated when all suites complete
+* Suite ID used to distinguish and track each test
+* Common in "100 Listening" practice pages
+
+**Sources:** [js/app/suitePracticeMixin.js L1-L1344](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/suitePracticeMixin.js#L1-L1344)
+
+---
+
+## Suite Practice Data Structures
+
+### Sequential Suite Session
 
 ```mermaid
 flowchart TD
 
-APP["ExamSystemApp"]
-SUITE_MIXIN["suitePracticeMixin"]
-SESSION_MIXIN["examSessionMixin"]
-SESSION["currentSuiteSession<br>{id, status, sequence,<br>currentIndex, results,<br>windowRef}"]
-MAP["suiteExamMap<br>Map<examId, suiteSessionId>"]
-PRACTICE_WIN["Practice Window<br>(ielts-suite-mode-tab)"]
-INLINE_SCRIPT["Inline Script<br>practiceDataCollector"]
-GUARDS["Window Guards<br>guardedClose, guardedOpen"]
-RECORDER["PracticeRecorder"]
-STORAGE["ScoreStorage"]
-REPOS["PracticeRepository"]
+SessionID["id: suite_timestamp_random"]
+Status["status: 'initializing' | 'active' | 'finalizing' | 'completed'"]
+StartTime["startTime: timestamp"]
+Sequence["sequence: [{examId, exam}, ...]"]
+CurrentIndex["currentIndex: number"]
+Results["results: [normalizedResult, ...]"]
+WindowRef["windowRef: Window"]
+WindowName["windowName: 'ielts-suite-mode-tab'"]
+ActiveExamId["activeExamId: string"]
+MapEntries["examId → suiteSessionId"]
 
-SUITE_MIXIN --> SESSION
-SUITE_MIXIN --> MAP
-SESSION_MIXIN --> PRACTICE_WIN
-INLINE_SCRIPT --> SUITE_MIXIN
-GUARDS --> SUITE_MIXIN
-SUITE_MIXIN --> RECORDER
+Sequence -.-> MapEntries
 
-subgraph subGraph3 ["Data Flow"]
-    RECORDER
-    STORAGE
-    REPOS
-    RECORDER --> STORAGE
-    STORAGE --> REPOS
+subgraph subGraph1 ["suiteExamMap (Map)"]
+    MapEntries
 end
 
-subgraph subGraph2 ["Practice Window"]
-    PRACTICE_WIN
-    INLINE_SCRIPT
-    GUARDS
-    PRACTICE_WIN --> INLINE_SCRIPT
-    PRACTICE_WIN --> GUARDS
-end
-
-subgraph subGraph1 ["Suite Session State"]
-    SESSION
-    MAP
-end
-
-subgraph subGraph0 ["Application Layer"]
-    APP
-    SUITE_MIXIN
-    SESSION_MIXIN
-    APP --> SUITE_MIXIN
-    APP --> SESSION_MIXIN
+subgraph subGraph0 ["currentSuiteSession Object"]
+    SessionID
+    Status
+    StartTime
+    Sequence
+    CurrentIndex
+    Results
+    WindowRef
+    WindowName
+    ActiveExamId
+    SessionID -.-> Status
+    Status -.->|"registers"| StartTime
+    StartTime -.-> Sequence
+    Sequence -.-> CurrentIndex
+    CurrentIndex -.-> Results
+    Results -.-> WindowRef
+    WindowRef -.-> WindowName
+    WindowName -.-> ActiveExamId
 end
 ```
 
-**Component Responsibilities:**
+**Sources:** [js/app/suitePracticeMixin.js L78-L89](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/suitePracticeMixin.js#L78-L89)
 
-| Component | File | Responsibility |
-| --- | --- | --- |
-| `suitePracticeMixin` | [js/app/suitePracticeMixin.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js) | Suite session lifecycle, sequencing, result aggregation |
-| `examSessionMixin` | [js/app/examSessionMixin.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js) | Window opening, script injection, message handling |
-| `currentSuiteSession` | [js/app/suitePracticeMixin.js L9-L10](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L9-L10) | Active suite session state object |
-| `suiteExamMap` | [js/app/suitePracticeMixin.js L10-L11](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L10-L11) | Maps examId to suiteSessionId for routing messages |
-| Inline Script | [js/app/examSessionMixin.js L281-L522](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L281-L522) | Data collection script injected into practice pages |
-| Window Guards | [js/app/examSessionMixin.js L345-L388](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L345-L388) | Prevents window closure during suite practice |
+ [js/app/suitePracticeMixin.js L789-L796](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/suitePracticeMixin.js#L789-L796)
 
-**Sources:** [js/app/suitePracticeMixin.js L1-L100](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L1-L100)
+### Multi-Suite Session
 
- [js/app/examSessionMixin.js L1-L100](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L1-L100)
+```mermaid
+flowchart TD
+
+BaseExamId["baseExamId: string (key)"]
+SessionObj["session object"]
+ID["id: generated session ID"]
+BaseExam["baseExamId: string"]
+Status2["status: 'active' | 'finalizing' | 'completed'"]
+StartTime2["startTime: timestamp"]
+SuiteResults["suiteResults: [suiteResult, ...]"]
+ExpectedCount["expectedSuiteCount: number"]
+LastUpdate["lastUpdate: timestamp"]
+Metadata["metadata: {source, ...}"]
+SuiteId["suiteId: string"]
+ExamId2["examId: string"]
+Answers["answers: {}"]
+CorrectAnswers["correctAnswers: {}"]
+AnswerComparison["answerComparison: {}"]
+ScoreInfo["scoreInfo: {correct, total, accuracy, percentage}"]
+SpellingErrors["spellingErrors: []"]
+Duration["duration: number"]
+Timestamp["timestamp: number"]
+RawData["rawData: original payload"]
+
+SessionObj -.-> ID
+SuiteResults -.-> SuiteId
+
+subgraph subGraph2 ["Each suiteResult"]
+    SuiteId
+    ExamId2
+    Answers
+    CorrectAnswers
+    AnswerComparison
+    ScoreInfo
+    SpellingErrors
+    Duration
+    Timestamp
+    RawData
+    SuiteId -.-> ExamId2
+    ExamId2 -.-> Answers
+    Answers -.-> CorrectAnswers
+    CorrectAnswers -.-> AnswerComparison
+    AnswerComparison -.-> ScoreInfo
+    ScoreInfo -.-> SpellingErrors
+    SpellingErrors -.-> Duration
+    Duration -.-> Timestamp
+    Timestamp -.-> RawData
+end
+
+subgraph subGraph1 ["Multi-Suite Session Object"]
+    ID
+    BaseExam
+    Status2
+    StartTime2
+    SuiteResults
+    ExpectedCount
+    LastUpdate
+    Metadata
+    ID -.->|"contains"| BaseExam
+    BaseExam -.-> Status2
+    Status2 -.-> StartTime2
+    StartTime2 -.-> SuiteResults
+    SuiteResults -.-> ExpectedCount
+    ExpectedCount -.-> LastUpdate
+    LastUpdate -.-> Metadata
+end
+
+subgraph subGraph0 ["multiSuiteSessionsMap Entry"]
+    BaseExamId
+    SessionObj
+    BaseExamId -.-> SessionObj
+end
+```
+
+**Sources:** [js/app/suitePracticeMixin.js L14](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/suitePracticeMixin.js#L14-L14)
+
+ [js/app/suitePracticeMixin.js L1114-L1136](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/suitePracticeMixin.js#L1114-L1136)
 
 ---
 
-## Suite Session Lifecycle
+## Sequential Suite Practice Lifecycle
 
-### Initialization Flow
+### Initialization and Startup
 
-```mermaid
-sequenceDiagram
-  participant User
-  participant ExamSystemApp
-  participant suitePracticeMixin
-  participant examSessionMixin
-  participant Practice Window
-
-  User->>ExamSystemApp: Click "开启套题模式"
-  ExamSystemApp->>suitePracticeMixin: startSuitePractice()
-  suitePracticeMixin->>suitePracticeMixin: initializeSuiteMode()
-  suitePracticeMixin->>suitePracticeMixin: _fetchSuiteExamIndex()
-  suitePracticeMixin->>suitePracticeMixin: Select P1, P2, P3 passages
-  suitePracticeMixin->>suitePracticeMixin: Create suite session object
-  note over suitePracticeMixin: {id, status: 'initializing',
-  suitePracticeMixin->>suitePracticeMixin: _registerSuiteSequence()
-  note over suitePracticeMixin: suiteExamMap.set(P1.id, sessionId)
-  suitePracticeMixin->>examSessionMixin: openExam(P1.id, {target: 'tab',
-  examSessionMixin->>Practice Window: windowName: 'ielts-suite-mode-tab',
-  examSessionMixin->>examSessionMixin: suiteSessionId})
-  examSessionMixin->>Practice Window: open() with calculated features
-  Practice Window-->>examSessionMixin: injectDataCollectionScript(window, examId)
-  suitePracticeMixin->>suitePracticeMixin: postMessage('INIT_SESSION', {suiteSessionId})
-  suitePracticeMixin->>suitePracticeMixin: postMessage('SESSION_READY')
-  suitePracticeMixin-->>User: _ensureSuiteWindowGuard(session, window)
-```
-
-**Key Functions:**
-
-| Function | Location | Purpose |
-| --- | --- | --- |
-| `startSuitePractice()` | [js/app/suitePracticeMixin.js L13-L117](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L13-L117) | Entry point for initiating suite practice |
-| `initializeSuiteMode()` | [js/app/suitePracticeMixin.js L3-L11](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L3-L11) | Initializes suite mode state structures |
-| `_fetchSuiteExamIndex()` | [js/app/suitePracticeMixin.js L317-L333](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L317-L333) | Retrieves exam index from state or storage |
-| `_registerSuiteSequence()` | [js/app/suitePracticeMixin.js L339-L347](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L339-L347) | Populates `suiteExamMap` with examId→sessionId mappings |
-| `_ensureSuiteWindowGuard()` | [js/app/suitePracticeMixin.js L576-L668](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L576-L668) | Installs window close/open interception |
-
-**Sources:** [js/app/suitePracticeMixin.js L13-L117](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L13-L117)
-
- [js/app/suitePracticeMixin.js L317-L347](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L317-L347)
-
- [js/app/suitePracticeMixin.js L576-L668](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L576-L668)
-
-### Session State Object
-
-```yaml
-// currentSuiteSession structure
-{
-  id: "suite_${timestamp}_${random}",
-  status: "initializing" | "active" | "finalizing" | "completed" | "error",
-  startTime: 1234567890,
-  sequence: [
-    { examId: "reading-p1-01", exam: {...} },
-    { examId: "reading-p2-15", exam: {...} },
-    { examId: "reading-p3-22", exam: {...} }
-  ],
-  currentIndex: 0,
-  activeExamId: "reading-p1-01",
-  results: [
-    { examId, title, duration, scoreInfo, answers, answerComparison }
-  ],
-  windowRef: Window,
-  windowName: "ielts-suite-mode-tab"
-}
-```
-
-**Sources:** [js/app/suitePracticeMixin.js L72-L82](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L72-L82)
-
-### Passage Transition Flow
+The sequential suite practice begins when `startSuitePractice()` is invoked, typically by the user clicking a "开始套题练习" button.
 
 ```mermaid
 sequenceDiagram
-  participant Practice Window
-  participant examSessionMixin
-  participant suitePracticeMixin
-  participant ScoreStorage
+  participant p1 as User
+  participant p2 as ExamSystemApp<br/>(suitePracticeMixin)
+  participant p3 as Suite Session State
+  participant p4 as examSessionMixin
+  participant p5 as Suite Window
 
-  Practice Window->>examSessionMixin: postMessage('PRACTICE_COMPLETE', data)
-  examSessionMixin->>suitePracticeMixin: handleSuitePracticeComplete(examId, data)
-  suitePracticeMixin->>suitePracticeMixin: Validate examId in suite sequence
-  suitePracticeMixin->>suitePracticeMixin: Check if already recorded
-  suitePracticeMixin->>suitePracticeMixin: _normalizeSuiteResult(exam, data)
-  suitePracticeMixin->>suitePracticeMixin: session.results.push(normalized)
-  suitePracticeMixin->>suitePracticeMixin: session.currentIndex++
-  loop [Retry successful]
-    suitePracticeMixin->>examSessionMixin: openExam(nextExamId, {
-    examSessionMixin->>Practice Window: reuseWindow: existingWindow,
-    suitePracticeMixin->>suitePracticeMixin: windowName: 'ielts-suite-mode-tab',
-    suitePracticeMixin->>suitePracticeMixin: suiteSessionId})
-    suitePracticeMixin-->>Practice Window: Navigate to next passage
-    suitePracticeMixin->>suitePracticeMixin: Update session.activeExamId
-    suitePracticeMixin->>examSessionMixin: _ensureSuiteWindowGuard()
-    examSessionMixin->>Practice Window: Show message "继续下一篇"
-    suitePracticeMixin->>suitePracticeMixin: _reacquireSuiteWindow(windowName)
-    suitePracticeMixin-->>Practice Window: Retry openExam with fallback window
-    suitePracticeMixin->>suitePracticeMixin: Navigate to next passage
-    suitePracticeMixin->>ScoreStorage: _abortSuiteSession(session)
-    suitePracticeMixin->>suitePracticeMixin: Show message "无法继续套题练习"
-    suitePracticeMixin-->>Practice Window: finalizeSuiteRecord(session)
-  end
+  p1->>p2: Click "开始套题练习"
+  p2->>p2: startSuitePractice()
+  p2->>p2: _fetchSuiteExamIndex()
+  p2->>p2: Filter reading exams by category
+  p2->>p2: Random select P1, P2, P3
+  p2->>p2: _generateSuiteSessionId()
+  p2->>p3: Create currentSuiteSession
+  note over p3: status='initializing'<br/>sequence=[P1, P2, P3]<br/>currentIndex=0
+  p2->>p2: _registerSuiteSequence(session)<br/>openExam(firstExamId, {<br/>target: 'tab',<br/>windowName: 'ielts-suite-mode-tab',<br/>suiteSessionId: sessionId,<br/>sequenceIndex: 0
+  note over p2: suiteExamMap.set(examId, sessionId)
+  p2->>p4: })
+  p4->>p5: Open exam window
+  p4->>p5: Inject practice-page-enhancer.js
+  p4->>p5: postMessage('INIT_SESSION')
+  p5->>p4: postMessage('SESSION_READY')
+  p2->>p3: session.status = 'active'
+  p2->>p3: session.activeExamId = firstExamId
+  p2->>p2: _ensureSuiteWindowGuard(session, window)
 ```
 
-**Key Functions:**
+**Sources:** [js/app/suitePracticeMixin.js L20-L125](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/suitePracticeMixin.js#L20-L125)
 
-| Function | Location | Purpose |
+ [js/app/suitePracticeMixin.js L766-L782](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/suitePracticeMixin.js#L766-L782)
+
+ [js/app/suitePracticeMixin.js L788-L796](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/suitePracticeMixin.js#L788-L796)
+
+### Suite Practice Completion and Navigation
+
+When a user completes an exam in the suite, the system receives a `PRACTICE_COMPLETE` message. The `handleSuitePracticeComplete()` function processes this and either navigates to the next exam or finalizes the suite record.
+
+```mermaid
+flowchart TD
+
+Start["PRACTICE_COMPLETE message received"]
+CheckSuite["handleSuitePracticeComplete(examId, data)"]
+HasSuiteId["data.suiteId exists?"]
+MultiSuite["handleMultiSuitePracticeComplete()"]
+ValidateSession["Session valid?"]
+ReturnFalse["return false"]
+CheckDuplicate["Already recorded?"]
+ReturnTrue["return true"]
+NormalizeResult["_normalizeSuiteResult(exam, data)"]
+AddResult["session.results.push(normalized)"]
+UpdateIndex["session.currentIndex++"]
+CleanupSession["cleanupExamSession(examId)"]
+HasNext["currentIndex < sequence.length?"]
+Finalize["finalizeSuiteRecord(session)"]
+GetNext["nextEntry = sequence[currentIndex]"]
+UpdateActive["session.activeExamId = nextEntry.examId"]
+AttemptOpen["openExam(nextEntry.examId, {<br>target: 'tab',<br>windowName: windowName,<br>reuseWindow: session.windowRef,<br>suiteSessionId: session.id,<br>sequenceIndex: currentIndex<br>})"]
+OpenSuccess["Window opened?"]
+AbortSuite["_abortSuiteSession(session)"]
+UpdateWindowRef["session.windowRef = nextWindow"]
+InstallGuards["_ensureSuiteWindowGuard(session, window)"]
+FocusWindow["_focusSuiteWindow(window)"]
+ShowMessage["showMessage('已完成 X，继续下一篇')"]
+ReturnTrue2["return true"]
+End["End"]
+
+Start -.->|"No"| CheckSuite
+CheckSuite -.->|"Valid"| HasSuiteId
+HasSuiteId -.->|"Invalid"| MultiSuite
+HasSuiteId -.->|"No"| ValidateSession
+ValidateSession -.->|"Yes"| ReturnFalse
+ValidateSession -.-> CheckDuplicate
+CheckDuplicate -.->|"Yes"| ReturnTrue
+CheckDuplicate -.-> NormalizeResult
+NormalizeResult -.-> AddResult
+AddResult -.-> UpdateIndex
+UpdateIndex -.-> CleanupSession
+CleanupSession -.-> HasNext
+HasNext -.->|"No"| Finalize
+HasNext -.->|"Yes"| GetNext
+GetNext -.-> UpdateActive
+UpdateActive -.->|"No"| AttemptOpen
+AttemptOpen -.-> OpenSuccess
+OpenSuccess -.-> AbortSuite
+OpenSuccess -.-> UpdateWindowRef
+UpdateWindowRef -.-> InstallGuards
+InstallGuards -.-> FocusWindow
+FocusWindow -.-> ShowMessage
+ShowMessage -.-> ReturnTrue2
+Finalize -.-> End
+ReturnFalse -.-> End
+ReturnTrue -.-> End
+ReturnTrue2 -.-> End
+AbortSuite -.-> End
+MultiSuite -.-> End
+```
+
+**Sources:** [js/app/suitePracticeMixin.js L127-L242](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/suitePracticeMixin.js#L127-L242)
+
+### Result Normalization
+
+The `_normalizeSuiteResult()` function standardizes result data from each exam before adding it to the suite session.
+
+| Field | Source | Fallback |
 | --- | --- | --- |
-| `handleSuitePracticeComplete()` | [js/app/suitePracticeMixin.js L119-L221](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L119-L221) | Handles passage completion and transitions |
-| `_normalizeSuiteResult()` | [js/app/suitePracticeMixin.js L512-L543](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L512-L543) | Normalizes practice data for suite context |
-| `_reacquireSuiteWindow()` | [js/app/suitePracticeMixin.js L670-L708](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L670-L708) | Attempts to recover closed suite window |
-| `_abortSuiteSession()` | [js/app/suitePracticeMixin.js L710-L754](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L710-L754) | Gracefully aborts suite session on error |
+| `correct` | `rawData.scoreInfo.correct` | 0 |
+| `total` | `rawData.scoreInfo.total` | `Object.keys(answers).length` |
+| `accuracy` | `rawData.scoreInfo.accuracy` | `correct / total` |
+| `percentage` | `rawData.scoreInfo.percentage` | `accuracy * 100` |
+| `duration` | `rawData.duration` | 0 |
+| `answers` | `rawData.answers` | `{}` |
+| `answerComparison` | `rawData.answerComparison` | `scoreInfo.details` or `{}` |
 
-**Sources:** [js/app/suitePracticeMixin.js L119-L221](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L119-L221)
-
- [js/app/suitePracticeMixin.js L512-L543](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L512-L543)
-
- [js/app/suitePracticeMixin.js L670-L754](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L670-L754)
+**Sources:** [js/app/suitePracticeMixin.js L814-L866](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/suitePracticeMixin.js#L814-L866)
 
 ---
 
-## Window Management and Guards
+## Multi-Suite Practice Flow
 
-Suite Practice Mode prevents premature window closure to maintain session continuity. This is achieved through runtime interception of `window.close()` and `window.open(..., '_self')`.
+### Detection and Session Creation
+
+Multi-suite mode is detected when `practicePageEnhancer` finds a page structure indicating multiple test sets, or when the `PRACTICE_COMPLETE` payload includes a `suiteId` field.
+
+```
+
+```
+
+**Sources:** [js/app/suitePracticeMixin.js L244-L319](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/suitePracticeMixin.js#L244-L319)
+
+ [js/app/suitePracticeMixin.js L1110-L1160](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/suitePracticeMixin.js#L1110-L1160)
+
+### Suite Count Detection
+
+The system attempts to determine how many suites are expected on a page using multiple strategies:
+
+```mermaid
+flowchart TD
+
+Start["_detectExpectedSuiteCount(examId, suiteData)"]
+CheckPayload["suiteData.totalSuites<br>is finite?"]
+UsePayload["return suiteData.totalSuites"]
+CheckMetadata["suiteData.metadata.totalSuites<br>exists?"]
+UseMetadata["return Number(metadata.totalSuites)"]
+InferFromExamId["examId contains '100'<br>and ('p1' or 'p4')?"]
+Default10["return 10"]
+Default1["return 1"]
+End["End"]
+
+Start -.->|"No"| CheckPayload
+CheckPayload -.->|"Yes"| UsePayload
+CheckPayload -.->|"No"| CheckMetadata
+CheckMetadata -.->|"Yes"| UseMetadata
+CheckMetadata -.->|"Yes"| InferFromExamId
+InferFromExamId -.->|"No"| Default10
+InferFromExamId -.-> Default1
+UsePayload -.-> End
+UseMetadata -.-> End
+Default10 -.-> End
+Default1 -.-> End
+```
+
+**Sources:** [js/app/suitePracticeMixin.js L321-L349](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/suitePracticeMixin.js#L321-L349)
+
+### Completion Detection
+
+Multi-suite completion is determined by comparing the number of submitted suites against the expected count:
+
+```mermaid
+flowchart TD
+
+Start["isMultiSuiteComplete(session)"]
+HasExpected["expectedSuiteCount exists?"]
+Compare["suiteResults.length >= expectedSuiteCount"]
+DefaultComplete["suiteResults.length >= 1"]
+Result["return boolean"]
+
+Start -.-> HasExpected
+HasExpected -.->|"Yes"| Compare
+HasExpected -.->|"No"| DefaultComplete
+Compare -.-> Result
+DefaultComplete -.-> Result
+```
+
+**Sources:** [js/app/suitePracticeMixin.js L1162-L1180](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/suitePracticeMixin.js#L1162-L1180)
+
+---
+
+## Suite Guards and Window Management
+
+Suite guards prevent users from accidentally closing the exam window during suite practice, which would interrupt the flow and lose progress.
 
 ### Guard Installation
 
+Guards are installed when a suite session becomes active:
+
 ```mermaid
 flowchart TD
 
-A["_ensureSuiteWindowGuard"]
-B["Check if already guarded"]
-C["Save native close/open references"]
-D["Replace window.close"]
-E["Replace window.open"]
-F["guardedClose:<br>notifySuiteCloseAttempt()"]
-G["guardedOpen:<br>Intercept _self target"]
-H["Send SUITE_CLOSE_ATTEMPT message"]
-I["Send SUITE_CLOSE_ATTEMPT if _self"]
+GuardCheck["installSuiteGuards() called"]
+SaveNative["Save native window.close()"]
+OverrideClose["window.close = guardedClose"]
+GuardedFn["guardedClose() sends<br>SUITE_CLOSE_ATTEMPT<br>message instead"]
+OverrideOpen["window.open() checks target"]
+BlockSelf["Block _self, _parent, _top targets"]
 
-A --> B
-B --> C
-C --> D
-C --> E
-D --> F
-E --> G
-F --> H
-G --> I
+subgraph subGraph0 ["Inline Script Suite Guards"]
+    GuardCheck
+    SaveNative
+    OverrideClose
+    GuardedFn
+    OverrideOpen
+    BlockSelf
+    GuardCheck -.-> SaveNative
+    SaveNative -.-> OverrideClose
+    OverrideClose -.-> GuardedFn
+    OverrideClose -.-> OverrideOpen
+    OverrideOpen -.-> BlockSelf
+end
 ```
 
-**Guard Implementation:**
+The inline script in `injectInlineScript()` implements suite guards for fallback scenarios:
 
-```javascript
-// From inline script (examSessionMixin.js:345-388)
-function installSuiteGuards() {
-    state.suite.nativeClose = window.close.bind(window);
-    
-    var guardedClose = function() {
-        notifySuiteCloseAttempt('script_request');
-        return undefined; // Prevent closure
-    };
-    
-    window.close = guardedClose;
-    window.self.close = guardedClose;
-    window.top.close = guardedClose;
-    
-    state.suite.nativeOpen = window.open.bind(window);
-    window.open = function(url, target, features) {
-        var normalizedTarget = typeof target === 'string' ? target.trim() : '';
-        if (!normalizedTarget || normalizedTarget === '_self' || 
-            normalizedTarget === window.name) {
-            notifySuiteCloseAttempt('self_target_open');
-            return window; // Return current window instead
-        }
-        return state.suite.nativeOpen.call(window, url, target, features);
-    };
-}
-```
+**Key functions:**
 
-**Guard Teardown:**
+* `installSuiteGuards()`: Replaces `window.close()` and intercepts `window.open()` [js/app/examSessionMixin.js L638-L701](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/examSessionMixin.js#L638-L701)
+* `teardownSuiteGuards()`: Restores native functions when suite completes [js/app/examSessionMixin.js L703-L721](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/examSessionMixin.js#L703-L721)
+* `notifySuiteCloseAttempt(reason)`: Sends `SUITE_CLOSE_ATTEMPT` message to main window [js/app/examSessionMixin.js L626-L636](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/examSessionMixin.js#L626-L636)
 
-```javascript
-// From inline script (examSessionMixin.js:370-388)
-function teardownSuiteGuards() {
-    if (state.suite.nativeClose) {
-        window.close = state.suite.nativeClose;
-        window.self.close = state.suite.nativeClose;
-        window.top.close = state.suite.nativeClose;
-    }
-    
-    if (state.suite.nativeOpen) {
-        window.open = state.suite.nativeOpen;
-    }
-}
-```
+**Guard behavior:**
 
-**Sources:** [js/app/examSessionMixin.js L335-L388](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L335-L388)
+1. `window.close()` calls send `SUITE_CLOSE_ATTEMPT` message instead of closing
+2. `window.open()` with self-targeting (`_self`, `_parent`, `_top`) is blocked
+3. Main window can force close via `SUITE_FORCE_CLOSE` message
+4. Guards are removed after suite completes or is aborted
 
- [js/app/suitePracticeMixin.js L576-L668](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L576-L668)
+**Sources:** [js/app/examSessionMixin.js L638-L721](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/examSessionMixin.js#L638-L721)
 
-### Close Attempt Tracking
+ [js/app/suitePracticeMixin.js L1234-L1280](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/suitePracticeMixin.js#L1234-L1280)
 
-When a guarded close attempt occurs, the practice window sends a `SUITE_CLOSE_ATTEMPT` message to the main application:
+### Window Reacquisition
 
-```yaml
-// Message structure
-{
-  type: 'SUITE_CLOSE_ATTEMPT',
-  data: {
-    examId: 'reading-p1-01',
-    suiteSessionId: 'suite_abc123',
-    reason: 'script_request' | 'self_target_open',
-    timestamp: 1234567890
-  }
-}
-```
-
-The main application logs these attempts but allows the suite to continue:
-
-```
-// From examSessionMixin.js:889-891
-case 'SUITE_CLOSE_ATTEMPT':
-    console.warn('[SuitePractice] 练习页尝试关闭套题窗口:', data);
-    break;
-```
-
-**Sources:** [js/app/examSessionMixin.js L323-L333](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L323-L333)
-
- [js/app/examSessionMixin.js L889-L891](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L889-L891)
-
----
-
-## Data Collection and Script Injection
-
-Suite Practice Mode uses two script injection strategies depending on the execution environment:
-
-### Strategy 1: External Script Loading
-
-```javascript
-// From examSessionMixin.js:236-243
-const enhancerScript = await fetch('./js/practice-page-enhancer.js')
-    .then(r => r.text());
-
-const enhancerScriptEl = doc.createElement('script');
-enhancerScriptEl.type = 'text/javascript';
-enhancerScriptEl.textContent = enhancerScript;
-doc.head.appendChild(enhancerScriptEl);
-```
-
-**Used when:** HTTP/HTTPS protocol allows fetch operations.
-
-**Sources:** [js/app/examSessionMixin.js L206-L255](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L206-L255)
-
-### Strategy 2: Inline Script Injection (Fallback)
-
-```typescript
-// From examSessionMixin.js:281-522
-injectInlineScript(examWindow, examId) {
-    const sessionToken = `${examId}_${Date.now()}`;
-    const inlineScript = examWindow.document.createElement('script');
-    inlineScript.type = 'text/javascript';
-    inlineScript.textContent = `
-        (function() {
-            if (window.__IELTS_INLINE_ENHANCER__) return;
-            window.__IELTS_INLINE_ENHANCER__ = true;
-            
-            var state = {
-                sessionId: ${JSON.stringify(sessionToken)},
-                examId: ${JSON.stringify(examId)},
-                startTime: Date.now(),
-                answers: {},
-                suite: {
-                    active: false,
-                    sessionId: null,
-                    guarded: false,
-                    nativeClose: null,
-                    nativeOpen: null
-                }
-            };
-            
-            // ... collector implementation
-        })();
-    `;
-    examWindow.document.head.appendChild(inlineScript);
-}
-```
-
-**Used when:** file:// protocol prevents fetch operations, or external script loading fails.
-
-**Sources:** [js/app/examSessionMixin.js L281-L522](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L281-L522)
-
-### Suite Mode Initialization in Practice Window
+If the suite window reference is lost (e.g., user manually navigates), the system attempts to reacquire it:
 
 ```mermaid
-sequenceDiagram
-  participant Main Window
-  participant Practice Window
-  participant practiceDataCollector
+flowchart TD
 
-  Main Window->>Practice Window: postMessage('INIT_SESSION', {
-  Practice Window->>Practice Window: sessionId, examId,
-  loop [suiteSessionId present]
-    Practice Window->>Practice Window: suiteSessionId})
-    Practice Window->>Practice Window: handleInitSession(message)
-    Practice Window->>Practice Window: state.suite.active = true
-    note over Practice Window: Replace window.close()
-  end
-  Practice Window->>practiceDataCollector: state.suite.sessionId = suiteSessionId
-  practiceDataCollector->>practiceDataCollector: installSuiteGuards()
-  practiceDataCollector->>practiceDataCollector: Initialize collector
-  Practice Window->>Main Window: setupBasicListeners()
+Start["Need to open next exam"]
+HasRef["session.windowRef<br>exists and not closed?"]
+ReuseWindow["attemptOpen(reuseWindow)"]
+CheckName["windowName exists?"]
+Success1["Opened successfully?"]
+Done["Use returned window"]
+Reacquire["_reacquireSuiteWindow(windowName) or<br>_openNamedSuiteWindow(windowName)"]
+Abort["_abortSuiteSession(session)"]
+AttemptFallback["attemptOpen(fallbackWindow)"]
+Success2["Opened successfully?"]
+End["End"]
+
+Start -.-> HasRef
+HasRef -.->|"Yes"| ReuseWindow
+HasRef -.->|"No"| CheckName
+ReuseWindow -.->|"No"| Success1
+Success1 -.->|"Yes"| Done
+Success1 -.->|"Yes"| CheckName
+CheckName -.->|"No"| Reacquire
+CheckName -.->|"No"| Abort
+Reacquire -.->|"Yes"| AttemptFallback
+AttemptFallback -.-> Success2
+Success2 -.-> Done
+Success2 -.-> Abort
+Done -.-> End
+Abort -.-> End
 ```
 
-**Sources:** [js/app/examSessionMixin.js L401-L421](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L401-L421)
-
- [js/app/examSessionMixin.js L527-L600](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L527-L600)
-
-### Navigation Between Passages
-
-When transitioning to the next passage, the main window sends a `SUITE_NAVIGATE` message:
-
-```javascript
-// From inline script (examSessionMixin.js:390-399)
-function handleSuiteNavigate(data) {
-    if (!data || !data.url) return;
-    try {
-        window.location.href = data.url;
-    } catch (error) {
-        console.warn('[InlineEnhancer] 套题导航失败:', error);
-    }
-}
-```
-
-**Sources:** [js/app/examSessionMixin.js L390-L399](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/examSessionMixin.js#L390-L399)
+**Sources:** [js/app/suitePracticeMixin.js L186-L238](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/suitePracticeMixin.js#L186-L238)
 
 ---
 
 ## Result Aggregation
 
-After all three passages are completed, Suite Practice Mode aggregates individual results into a unified practice record.
+### Sequential Suite Aggregation
 
-### Aggregation Process
+When all exams in a sequential suite are completed, `finalizeSuiteRecord()` aggregates the results:
 
 ```mermaid
 flowchart TD
 
-A["finalizeSuiteRecord(session)"]
-B["Extract individual results<br>from session.results[]"]
-C["Calculate total duration"]
-D["Calculate total correct answers"]
-E["Calculate total questions"]
-F["Aggregate answers by examId"]
-G["Create suite record object"]
-H["_saveSuitePracticeRecord()"]
-I["_updatePracticeRecordsState()"]
-J["refreshOverviewData()"]
+Start["finalizeSuiteRecord(session)"]
+SetStatus["session.status = 'finalizing'"]
+BuildEntries["Map session.results to suiteEntries[]"]
+CalcDuration["Calculate total duration<br>(summed or elapsed time)"]
+CalcScores["Aggregate scores:<br>totalCorrect = sum(correct)<br>totalQuestions = sum(total)"]
+CalcAccuracy["accuracy = totalCorrect / totalQuestions<br>percentage = round(accuracy * 100)"]
+AggregateAnswers["aggregatedAnswers = {}<br>Prefix each answer with examId"]
+AggregateComparison["aggregatedComparison = {}<br>Prefix each comparison with examId"]
+ResolveSequence["_resolveSuiteSequenceNumber(startTime)"]
+FormatDate["_formatSuiteDateLabel(startTime)"]
+BuildRecord["Build complete record object"]
+SaveRecord["_saveSuitePracticeRecord(record)"]
+CleanupSubRecords["_cleanupSuiteEntryRecords(record)"]
+UpdateState["_updatePracticeRecordsState()"]
+RefreshUI["refreshOverviewData()"]
+TeardownSession["_teardownSuiteSession(session)"]
+SetComplete["session.status = 'completed'"]
+End["End"]
 
-A --> B
-B --> C
-B --> D
-B --> E
-C --> F
-D --> F
-E --> F
-F --> G
-G --> H
-H --> I
-I --> J
+Start -.-> SetStatus
+SetStatus -.-> BuildEntries
+BuildEntries -.-> CalcDuration
+CalcDuration -.-> CalcScores
+CalcScores -.-> CalcAccuracy
+CalcAccuracy -.-> AggregateAnswers
+AggregateAnswers -.-> AggregateComparison
+AggregateComparison -.-> ResolveSequence
+ResolveSequence -.-> FormatDate
+FormatDate -.-> BuildRecord
+BuildRecord -.-> SaveRecord
+SaveRecord -.-> CleanupSubRecords
+CleanupSubRecords -.-> UpdateState
+UpdateState -.-> RefreshUI
+RefreshUI -.-> TeardownSession
+TeardownSession -.-> SetComplete
+SetComplete -.-> End
 ```
 
-**Aggregated Record Structure:**
+**Aggregated record structure:**
 
-```yaml
-// From suitePracticeMixin.js:262-300
-{
-  id: "suite_abc123",
-  examId: "suite-suite_abc123",
-  title: "2025-01-15 20:30 套题练习",
-  type: "reading",
-  suiteMode: true,
-  date: "2025-01-15T12:30:00.000Z",
-  startTime: "2025-01-15T12:00:00.000Z",
-  endTime: "2025-01-15T12:30:00.000Z",
-  duration: 1800, // Total seconds across all passages
-  totalQuestions: 40,
-  correctAnswers: 35,
-  accuracy: 0.875,
-  percentage: 88,
-  scoreInfo: {
-    correct: 35,
-    total: 40,
-    accuracy: 0.875,
-    percentage: 88
-  },
-  answers: {
-    "reading-p1-01": { q1: "A", q2: "B", ... },
-    "reading-p2-15": { q1: "C", q2: "D", ... },
-    "reading-p3-22": { q1: "E", q2: "F", ... }
-  },
-  answerComparison: {
-    "reading-p1-01": { q1: { correct: "A", user: "A" }, ... },
-    "reading-p2-15": { q1: { correct: "C", user: "C" }, ... },
-    "reading-p3-22": { q1: { correct: "E", user: "E" }, ... }
-  },
-  suiteEntries: [
-    { examId, title, category, duration, scoreInfo, answers, answerComparison },
-    { examId, title, category, duration, scoreInfo, answers, answerComparison },
-    { examId, title, category, duration, scoreInfo, answers, answerComparison }
-  ],
-  frequency: "suite",
-  metadata: {
-    examTitle: "2025-01-15 20:30 套题练习",
-    category: "套题练习",
-    frequency: "suite",
-    suiteSessionId: "suite_abc123",
-    suiteEntries: [...],
-    startedAt: "2025-01-15T12:00:00.000Z",
-    completedAt: "2025-01-15T12:30:00.000Z"
-  },
-  realData: {
-    isRealData: true,
-    source: "suite_mode",
-    duration: 1800,
-    correct: 35,
-    total: 40,
-    accuracy: 0.875,
-    percentage: 88,
-    suiteEntries: [...]
-  }
-}
+| Field | Content |
+| --- | --- |
+| `id` | `session.id` |
+| `examId` | `"suite-{session.id}"` |
+| `title` | `"{date}套题练习{sequence}"` (e.g., "12月25日套题练习1") |
+| `type` | `"reading"` |
+| `suiteMode` | `true` |
+| `duration` | Sum of all exam durations or elapsed time |
+| `totalQuestions` | Sum of all questions |
+| `correctAnswers` | Sum of correct answers |
+| `accuracy` | Overall accuracy (0-1) |
+| `percentage` | Overall percentage (0-100) |
+| `answers` | `{examId::questionId: answer}` format |
+| `answerComparison` | `{examId::questionId: comparison}` format |
+| `suiteEntries` | Array of individual exam results |
+
+**Sources:** [js/app/suitePracticeMixin.js L643-L764](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/suitePracticeMixin.js#L643-L764)
+
+### Multi-Suite Aggregation
+
+Multi-suite aggregation combines results from multiple test sets on a single page:
+
+```mermaid
+flowchart TD
+
+Start["finalizeMultiSuiteRecord(session)"]
+SetFinalizing["session.status = 'finalizing'"]
+AggregateScores["aggregateScores(session.suiteResults)"]
+AggregateAnswers["aggregateAnswers(session.suiteResults)"]
+AggregateComparison["aggregateAnswerComparisons(session.suiteResults)"]
+AggregateSpelling["aggregateSpellingErrors(session.suiteResults)"]
+CalcDuration["totalDuration = sum(suite.duration)"]
+FormatDate["dateLabel = _formatSuiteDateLabel(startTime)"]
+BuildTitle["title = '{date} {source} 多套题练习'"]
+BuildRecord["Build aggregated record:<br>- suiteEntries: individual suites<br>- metadata.suiteCount<br>- realData with aggregated scores"]
+SaveRecord["_saveSuitePracticeRecord(record)"]
+SaveSpelling["Save spelling errors to vocabulary"]
+UpdateState["_updatePracticeRecordsState()"]
+RefreshUI["refreshOverviewData()"]
+CleanupSession["multiSuiteSessionsMap.delete(baseExamId)"]
+SetComplete["session.status = 'completed'"]
+ShowMessage["showMessage('多套题练习已完成！')"]
+End["End"]
+
+Start -.-> SetFinalizing
+SetFinalizing -.-> AggregateScores
+AggregateScores -.-> AggregateAnswers
+AggregateAnswers -.-> AggregateComparison
+AggregateComparison -.-> AggregateSpelling
+AggregateSpelling -.-> CalcDuration
+CalcDuration -.-> FormatDate
+FormatDate -.-> BuildTitle
+BuildTitle -.-> BuildRecord
+BuildRecord -.-> SaveRecord
+SaveRecord -.-> SaveSpelling
+SaveSpelling -.-> UpdateState
+UpdateState -.-> RefreshUI
+RefreshUI -.-> CleanupSession
+CleanupSession -.-> SetComplete
+SetComplete -.-> ShowMessage
+ShowMessage -.-> End
 ```
 
-**Key Functions:**
+**Score aggregation:**
 
-| Function | Location | Purpose |
-| --- | --- | --- |
-| `finalizeSuiteRecord()` | [js/app/suitePracticeMixin.js L223-L315](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L223-L315) | Aggregates passage results into suite record |
-| `_normalizeSuiteResult()` | [js/app/suitePracticeMixin.js L512-L543](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L512-L543) | Normalizes individual passage data |
-| `_saveSuitePracticeRecord()` | [js/app/suitePracticeMixin.js L756-L799](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L756-L799) | Saves aggregated record to storage |
-| `_formatSuiteTimeLabel()` | [js/app/suitePracticeMixin.js L545-L552](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L545-L552) | Formats timestamp for suite title |
+* `correct`: Sum of all suite correct counts
+* `total`: Sum of all suite question counts
+* `accuracy`: `correct / total`
+* `percentage`: `round(accuracy * 100)`
 
-**Sources:** [js/app/suitePracticeMixin.js L223-L315](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L223-L315)
+**Answer aggregation:**
 
- [js/app/suitePracticeMixin.js L512-L552](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L512-L552)
+* Keys use format: `{suiteId}::{questionId}`
+* Handles pre-prefixed keys from child pages
+* Preserves all question-answer mappings
 
- [js/app/suitePracticeMixin.js L756-L799](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L756-L799)
+**Spelling error aggregation:**
+
+* Deduplicates by word (case-insensitive)
+* Increments `errorCount` for repeated errors
+* Preserves most recent `userInput` and `timestamp`
+
+**Sources:** [js/app/suitePracticeMixin.js L351-L489](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/suitePracticeMixin.js#L351-L489)
+
+ [js/app/suitePracticeMixin.js L491-L641](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/suitePracticeMixin.js#L491-L641)
 
 ---
 
-## Fallback Mechanisms
+## Practice Page Enhancer Support
 
-Suite Practice Mode includes several fallback mechanisms to handle failures gracefully:
+The `practicePageEnhancer` detects and supports suite modes through mixins:
 
-### Window Recovery
+### Listening Suite Mixin
 
-```mermaid
-flowchart TD
-
-A["handleSuitePracticeComplete()"]
-B["openExam(nextExamId, {reuseWindow})"]
-C["Window opened?"]
-D["Continue to next passage"]
-E["_reacquireSuiteWindow(windowName)"]
-F["window.open('about:blank', windowName)"]
-G["Blank tab created?"]
-H["openExam(nextExamId, {reuseWindow: blankTab})"]
-I["_abortSuiteSession(session)"]
-J["Reopen succeeded?"]
-K["_savePartialSuiteAsIndividual()"]
-L["Show error message"]
-
-A --> B
-B --> C
-C --> D
-C --> E
-E --> F
-F --> G
-G --> H
-G --> I
-H --> J
-J --> D
-J --> I
-I --> K
-K --> L
 ```
 
-**Window Recovery Implementation:**
-
-```javascript
-// From suitePracticeMixin.js:670-708
-_reacquireSuiteWindow(windowName, session) {
-    if (!windowName) return null;
-    
-    try {
-        // Attempt to reopen the named window with blank page
-        const blankWindow = window.open('about:blank', windowName);
-        
-        if (!blankWindow || blankWindow.closed) {
-            console.warn('[SuitePractice] 无法重建套题标签');
-            return null;
-        }
-        
-        return blankWindow;
-    } catch (error) {
-        console.error('[SuitePractice] 重建窗口失败:', error);
-        return null;
-    }
-}
 ```
 
-**Sources:** [js/app/suitePracticeMixin.js L670-L708](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L670-L708)
+**Mixin priorities:**
 
- [js/app/suitePracticeMixin.js L172-L221](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L172-L221)
+* `listening-suite-practice`: Priority 30
+* `standard-inline-practice`: Priority 5
 
-### Partial Suite Saving
+Higher priority mixins are applied first.
 
-If the suite session fails mid-way, completed passages are saved as individual practice records:
+**Sources:** [js/practice-page-enhancer.js L222-L272](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/practice-page-enhancer.js#L222-L272)
 
-```javascript
-// From suitePracticeMixin.js:801-868
-async _savePartialSuiteAsIndividual(session) {
-    if (!session || !session.results || !session.results.length) {
-        return;
-    }
-    
-    console.warn('[SuitePractice] 套题会话异常，保存已完成的篇目为独立记录');
-    
-    for (const result of session.results) {
-        try {
-            const record = {
-                id: `${result.examId}_${Date.now()}`,
-                examId: result.examId,
-                title: result.title,
-                type: 'reading',
-                category: result.category,
-                date: new Date().toISOString(),
-                duration: result.duration,
-                totalQuestions: result.scoreInfo.total,
-                correctAnswers: result.scoreInfo.correct,
-                accuracy: result.scoreInfo.accuracy,
-                percentage: result.scoreInfo.percentage,
-                scoreInfo: result.scoreInfo,
-                answers: result.answers,
-                answerComparison: result.answerComparison,
-                frequency: 'partial_suite',
-                metadata: {
-                    originalSuiteId: session.id,
-                    partialSave: true,
-                    suiteAborted: true
-                }
-            };
-            
-            await this._saveSinglePracticeRecord(record);
-        } catch (error) {
-            console.error('[SuitePractice] 保存单篇记录失败:', error);
-        }
-    }
-    
-    window.showMessage && window.showMessage(
-        '套题未完成，已保存完成的篇目', 
-        'warning'
-    );
-}
+ [js/practice-page-enhancer.js L154-L192](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/practice-page-enhancer.js#L154-L192)
+
+### Multi-Suite Detection
+
+The enhancer detects multi-suite pages during initialization:
+
 ```
 
-**Sources:** [js/app/suitePracticeMixin.js L801-L868](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L801-L868)
-
-### Session Abortion
-
-```javascript
-// From suitePracticeMixin.js:710-754
-async _abortSuiteSession(session, options = {}) {
-    if (!session) return;
-    
-    const reason = options.reason || 'unspecified';
-    console.warn('[SuitePractice] 终止套题会话:', reason);
-    
-    session.status = 'aborted';
-    session.abortReason = reason;
-    session.abortTime = Date.now();
-    
-    // Save partial results
-    if (session.results && session.results.length > 0) {
-        await this._savePartialSuiteAsIndividual(session);
-    }
-    
-    // Cleanup
-    await this._teardownSuiteSession(session);
-    
-    window.showMessage && window.showMessage(
-        '套题练习已终止', 
-        'warning'
-    );
-}
 ```
 
-**Sources:** [js/app/suitePracticeMixin.js L710-L754](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L710-L754)
+**Sources:** [js/practice-page-enhancer.js L1007-L1108](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/practice-page-enhancer.js#L1007-L1108)
 
 ---
 
-## Testing
+## Suite Record Cleanup
 
-Suite Practice Mode is tested through two comprehensive Node.js test files:
-
-### Suite Mode Flow Test
+After saving a suite record, the system removes individual exam records to avoid duplication:
 
 ```mermaid
 flowchart TD
 
-A["suiteModeFlow.test.js"]
-B["Load mixins in VM context"]
-C["Create mock app instance"]
-D["Start suite practice"]
-E["Verify first window opens"]
-F["Test window guards"]
-G["Simulate first passage completion"]
-H["Verify window recovery"]
-I["Verify second passage opens<br>with reused/fallback window"]
-J["Assert success"]
+Start["_cleanupSuiteEntryRecords(record)"]
+ExtractIds["Extract from suiteEntries:<br>- examIds<br>- sessionIds<br>- timestamps"]
+CalcReference["Calculate reference time<br>(average of entry timestamps)"]
+DefineWindow["Define time window:<br>±10 minutes from reference"]
+FilterRecords["Filter practice_records:<br>Keep if NOT matching entry"]
+Criteria["Match criteria:<br>1. sessionId matches entry<br>2. examId + time within window"]
+KeepSuite["Always keep suite record itself<br>(by sessionId)"]
+RemoveMatches["Remove matched entry records"]
+SaveFiltered["Save filtered practice_records"]
+LogCount["Log cleanup count"]
+End["End"]
 
-A --> B
-B --> C
-C --> D
-D --> E
-E --> F
-F --> G
-G --> H
-H --> I
-I --> J
+Start -.-> ExtractIds
+ExtractIds -.-> CalcReference
+CalcReference -.-> DefineWindow
+DefineWindow -.-> FilterRecords
+FilterRecords -.-> Criteria
+Criteria -.-> KeepSuite
+KeepSuite -.-> RemoveMatches
+RemoveMatches -.-> SaveFiltered
+SaveFiltered -.-> LogCount
+LogCount -.-> End
 ```
 
-**Test Coverage:**
+This prevents the UI from showing both the aggregated suite record and the individual exam records.
 
-| Test Case | Location | Validates |
-| --- | --- | --- |
-| Suite initialization | [developer/tests/js/suiteModeFlow.test.js L277-L278](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/developer/tests/js/suiteModeFlow.test.js#L277-L278) | Session object creation |
-| First exam opens | [developer/tests/js/suiteModeFlow.test.js L287-L290](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/developer/tests/js/suiteModeFlow.test.js#L287-L290) | Initial window opening |
-| Window guards active | [developer/tests/js/suiteModeFlow.test.js L293-L297](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/developer/tests/js/suiteModeFlow.test.js#L293-L297) | Close interception works |
-| Self-target open blocked | [developer/tests/js/suiteModeFlow.test.js L299-L303](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/developer/tests/js/suiteModeFlow.test.js#L299-L303) | Self-navigation blocked |
-| New tab open allowed | [developer/tests/js/suiteModeFlow.test.js L305-L309](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/developer/tests/js/suiteModeFlow.test.js#L305-L309) | Regular popups still work |
-| Passage transition | [developer/tests/js/suiteModeFlow.test.js L320-L325](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/developer/tests/js/suiteModeFlow.test.js#L320-L325) | Continues to next passage |
-| Window recovery | [developer/tests/js/suiteModeFlow.test.js L332-L340](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/developer/tests/js/suiteModeFlow.test.js#L332-L340) | Reopens closed window |
-
-**Sources:** [developer/tests/js/suiteModeFlow.test.js L1-L352](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/developer/tests/js/suiteModeFlow.test.js#L1-L352)
-
-### Inline Fallback Test
-
-```mermaid
-flowchart TD
-
-A["suiteInlineFallback.test.js"]
-B["Create mock practice window"]
-C["Inject inline script"]
-D["Verify INIT_SESSION message"]
-E["Verify SESSION_READY response"]
-F["Test close interception"]
-G["Test SUITE_NAVIGATE message"]
-H["Test SUITE_FORCE_CLOSE message"]
-I["Assert success"]
-
-A --> B
-B --> C
-C --> D
-D --> E
-E --> F
-F --> G
-G --> H
-H --> I
-```
-
-**Test Coverage:**
-
-| Test Case | Location | Validates |
-| --- | --- | --- |
-| Inline script injection | [developer/tests/js/suiteInlineFallback.test.js L191-L192](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/developer/tests/js/suiteInlineFallback.test.js#L191-L192) | Script successfully injected |
-| Session handshake | [developer/tests/js/suiteInlineFallback.test.js L193-L198](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/developer/tests/js/suiteInlineFallback.test.js#L193-L198) | INIT_SESSION/SESSION_READY exchange |
-| Data collector presence | [developer/tests/js/suiteInlineFallback.test.js L200](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/developer/tests/js/suiteInlineFallback.test.js#L200-L200) | `practiceDataCollector` object created |
-| Close attempt blocked | [developer/tests/js/suiteInlineFallback.test.js L202-L207](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/developer/tests/js/suiteInlineFallback.test.js#L202-L207) | Window remains open after close() |
-| Navigation works | [developer/tests/js/suiteInlineFallback.test.js L209-L211](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/developer/tests/js/suiteInlineFallback.test.js#L209-L211) | SUITE_NAVIGATE changes location |
-| Force close works | [developer/tests/js/suiteInlineFallback.test.js L213-L216](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/developer/tests/js/suiteInlineFallback.test.js#L213-L216) | SUITE_FORCE_CLOSE calls native close |
-
-**Sources:** [developer/tests/js/suiteInlineFallback.test.js L1-L226](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/developer/tests/js/suiteInlineFallback.test.js#L1-L226)
-
-### CI Integration
-
-Both tests are executed by the static CI suite:
-
-```css
-# From run_static_suite.py:472-496
-suite_flow_test = REPO_ROOT / "developer" / "tests" / "js" / "suiteModeFlow.test.js"
-if suite_flow_test.exists():
-    try:
-        completed = subprocess.run(
-            ["node", str(suite_flow_test)],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-    except subprocess.CalledProcessError as exc:
-        output_text = exc.stdout or exc.stderr or str(exc)
-        result_detail = f"执行失败: {output_text.strip()}"
-        suite_passed = False
-    else:
-        raw_output = completed.stdout.strip() or completed.stderr.strip()
-        try:
-            payload = json.loads(raw_output or "{}")
-        except json.JSONDecodeError as parse_error:
-            suite_passed = False
-            result_detail = f"输出解析失败: {parse_error}"
-        else:
-            suite_passed = payload.get("status") == "pass"
-            result_detail = payload.get("detail", payload)
-```
-
-**Sources:** [developer/tests/ci/run_static_suite.py L472-L496](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/developer/tests/ci/run_static_suite.py#L472-L496)
+**Sources:** [js/app/suitePracticeMixin.js L905-L996](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/suitePracticeMixin.js#L905-L996)
 
 ---
 
-## State Transitions
+## Error Handling and Abort
+
+### Abort Scenarios
+
+Suite sessions can be aborted in several scenarios:
+
+| Scenario | Trigger | Action |
+| --- | --- | --- |
+| Startup failure | `startSuitePractice()` throws | Abort via `_abortSuiteSession()` |
+| Window unavailable | Cannot open next exam window | Abort with reason `'open_next_failed'` |
+| Missing sequence | Exam not found in sequence | Abort with reason `'missing_sequence'` |
+| System error | `openExam` function missing | Abort with reason `'missing_open_exam'` |
+
+### Abort Flow
 
 ```mermaid
-stateDiagram-v2
-    [*] --> Initializing : "startSuitePractice()"
-    Initializing --> Active : "First exam opens successfully"
-    Initializing --> [*] : "All passages completed"
-    Active --> Finalizing : "All passages completed"
-    Active --> Aborted : "Window open failed,recovery failed"
-    Finalizing --> Completed : "Record saved successfully"
-    Finalizing --> Error : "Save failed"
-    Completed --> [*] : "_teardownSuiteSession()"
-    Error --> [*] : "_savePartialSuiteAsIndividual()"
-    Aborted --> [*] : "_savePartialSuiteAsIndividual()"
+sequenceDiagram
+  participant p1 as Trigger
+  participant p2 as ExamSystemApp
+  participant p3 as Suite Session
+  participant p4 as Suite Window
+  participant p5 as Storage
+
+  p1->>p2: Error detected
+  p2->>p2: _abortSuiteSession(session, {reason})
+  p2->>p3: Set status = 'aborted'
+  p2->>p3: Clear suiteExamMap entries
+  opt skipExamId not provided
+    p2->>p5: Load practice_records
+    p2->>p5: Remove incomplete entry records
+    p2->>p5: Save cleaned records
+  end
+  p2->>p4: Check if window still open
+  alt Window is open
+    p2->>p4: postMessage('SUITE_FORCE_CLOSE')
+  end
+  p2->>p2: _teardownSuiteSession(session)
+  p2->>p3: currentSuiteSession = null
+  p2->>p2: showMessage('套题已中止')
 ```
 
-**State Definitions:**
+**Sources:** [js/app/suitePracticeMixin.js L1282-L1344](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/suitePracticeMixin.js#L1282-L1344)
 
-| State | Condition | Next States |
-| --- | --- | --- |
-| `initializing` | Suite started, selecting passages | `active`, aborted |
-| `active` | At least one passage opened | `active`, `finalizing`, `aborted` |
-| `finalizing` | All passages completed, aggregating results | `completed`, `error` |
-| `completed` | Record saved successfully | terminal |
-| `error` | Record save failed | terminal (with partial save) |
-| `aborted` | Session terminated early | terminal (with partial save) |
+---
 
-**Sources:** [js/app/suitePracticeMixin.js L13-L315](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L13-L315)
+## Integration with PracticeRecorder
 
- [js/app/suitePracticeMixin.js L710-L754](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/suitePracticeMixin.js#L710-L754)
+Suite records are saved through the `PracticeRecorder` service when available:
+
+```mermaid
+flowchart TD
+
+Start["_saveSuitePracticeRecord(record)"]
+CheckRecorder["PracticeRecorder<br>available?"]
+UsePR["practiceRecorder.savePracticeRecord(record)"]
+UseFallback["_saveSuitePracticeRecordFallback(record)"]
+SaveSuccess["Success?"]
+Cleanup["_cleanupSuiteEntryRecords(record)"]
+Fallback["Try fallback storage"]
+DirectStorage["Load practice_records from storage"]
+Prepend["Prepend new record"]
+TrimList["Trim to MAX_LEGACY_PRACTICE_RECORDS<br>(1000 records)"]
+SaveStorage["Save to storage"]
+End["End"]
+
+Start -.->|"Yes"| CheckRecorder
+CheckRecorder -.->|"No"| UsePR
+CheckRecorder -.->|"No"| UseFallback
+UsePR -.-> SaveSuccess
+SaveSuccess -.->|"Yes"| Cleanup
+SaveSuccess -.-> Fallback
+Fallback -.-> UseFallback
+UseFallback -.-> DirectStorage
+DirectStorage -.-> Prepend
+DirectStorage -.-> TrimList
+TrimList -.-> SaveStorage
+SaveStorage -.-> Cleanup
+Cleanup -.-> End
+```
+
+**Sources:** [js/app/suitePracticeMixin.js L868-L903](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/suitePracticeMixin.js#L868-L903)

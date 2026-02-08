@@ -290,7 +290,6 @@
         window.practicePageEnhancerConfig || {}
     );
 
-    const ANSWER_TAG_PATTERN = /\(Q(\d+)\s*:\s*([^)]+?)\)/gi;
     let cachedPracticePageContext = null;
 
     const cleanTitleCandidate = (raw) => {
@@ -432,27 +431,6 @@
         return null;
     }
 
-    function extractAnswersFromTextContent(text) {
-        const results = {};
-        if (!text) {
-            return results;
-        }
-        let match;
-        while ((match = ANSWER_TAG_PATTERN.exec(text)) !== null) {
-            const questionNumber = match[1];
-            const rawAnswer = match[2] ? match[2].trim() : '';
-            if (!questionNumber || !rawAnswer) {
-                continue;
-            }
-            const cleanedAnswer = rawAnswer.replace(/[\s.)]+$/g, '').trim();
-            if (!cleanedAnswer) {
-                continue;
-            }
-            results['q' + questionNumber] = cleanedAnswer;
-        }
-        return results;
-    }
-
     const normalizeQuestionKey = (value) => {
         if (value === undefined || value === null) return null;
         const raw = String(value).trim();
@@ -495,97 +473,6 @@
         }
         return cleaned;
     };
-
-    const extractQuestionNumbersFromText = (text) => {
-        const numbers = [];
-        if (!text) {
-            return numbers;
-        }
-        const pattern = /\(Q\s*([^)]+)\)/gi;
-        let match;
-        while ((match = pattern.exec(text)) !== null) {
-            const group = match[1] || '';
-            group.split(/[^0-9]+/).forEach((segment) => {
-                if (!segment) return;
-                numbers.push(segment);
-            });
-        }
-        return numbers;
-    };
-
-    const cleanupAnswerText = (text) => {
-        if (!text) {
-            return '';
-        }
-        let cleaned = String(text).replace(/\(Q[^\)]+\)/gi, '');
-        cleaned = cleaned.replace(/\s+/g, ' ').trim();
-        cleaned = cleaned.replace(/[.,;:!?]+$/g, '').trim();
-        return cleaned;
-    };
-
-    const buildQuestionQueue = (orderCandidates, fallbackText) => {
-        const queue = [];
-        const seen = new Set();
-        const addId = (candidate) => {
-            const normalized = normalizeQuestionKey(candidate);
-            if (!normalized || seen.has(normalized)) {
-                return;
-            }
-            seen.add(normalized);
-            queue.push(normalized);
-        };
-        if (Array.isArray(orderCandidates) && orderCandidates.length) {
-            orderCandidates.forEach(addId);
-        }
-        if (!queue.length) {
-            extractQuestionNumbersFromText(fallbackText).forEach((num) => addId(`q${num}`));
-        }
-        return queue;
-    };
-
-    function extractAnswersFromTranscriptElement(transcriptEl, questionOrder = []) {
-        const results = {};
-        if (!transcriptEl || typeof transcriptEl !== 'object') {
-            return results;
-        }
-        const allHighlights = Array.from(transcriptEl.querySelectorAll('.answer-highlight'));
-        if (!allHighlights.length) {
-            return results;
-        }
-        const pendingQueue = buildQuestionQueue(questionOrder, transcriptEl.textContent || '');
-        const assignAnswer = (questionId, value) => {
-            const normalized = normalizeQuestionKey(questionId);
-            if (!normalized || results[normalized]) {
-                return;
-            }
-            results[normalized] = value;
-            const idx = pendingQueue.indexOf(normalized);
-            if (idx !== -1) {
-                pendingQueue.splice(idx, 1);
-            }
-        };
-
-        allHighlights.forEach((element) => {
-            const rawText = element.textContent || '';
-            const cleanedValue = cleanupAnswerText(rawText);
-            if (!cleanedValue) {
-                return;
-            }
-            const explicitNumbers = extractQuestionNumbersFromText(rawText);
-            if (explicitNumbers.length) {
-                explicitNumbers.forEach((num) => assignAnswer(`q${num}`, cleanedValue));
-                return;
-            }
-            while (pendingQueue.length && results[pendingQueue[0]]) {
-                pendingQueue.shift();
-            }
-            const fallbackId = pendingQueue.shift();
-            if (fallbackId) {
-                results[fallbackId] = cleanedValue;
-            }
-        });
-        return results;
-    }
 
     // 内嵌CorrectAnswerExtractor功能，确保在练习页面中可用
     if (!window.CorrectAnswerExtractor) {
@@ -730,16 +617,6 @@
                         const answer = this.extractAnswerFromElement(el);
                         if (answer) {
                             answers[questionId] = answer;
-                        }
-                    });
-                }
-
-                const transcript = document.getElementById('transcript-content');
-                if (transcript) {
-                    const transcriptAnswers = extractAnswersFromTextContent(transcript.textContent || '');
-                    Object.keys(transcriptAnswers).forEach((key) => {
-                        if (transcriptAnswers[key]) {
-                            answers[key] = transcriptAnswers[key];
                         }
                     });
                 }
@@ -2128,8 +2005,7 @@
             // 方法3: 从套题的结果表格提取（如果已经显示结果）
             this.extractSuiteAnswersFromResultsTable(suiteId, suiteContainer);
 
-            // 方法4: 从套题的听力原文提取（针对听力题）
-            this.extractSuiteAnswersFromTranscript(suiteId, suiteContainer);
+            // 方法4: 保留结果表/答案对象兜底，已移除听力原文抽取路径
         },
 
         /**
@@ -2268,38 +2144,6 @@
             });
         },
 
-        /**
-         * 从套题的听力原文中提取正确答案
-         * @param {string} suiteId - 套题ID
-         * @param {HTMLElement} suiteContainer - 套题容器
-         */
-        extractSuiteAnswersFromTranscript: function (suiteId, suiteContainer) {
-            // 查找听力原文容器
-            let transcriptContainer = suiteContainer.querySelector('#transcript-content');
-
-            // 如果在套题容器内没找到，尝试在对应的transcript-page中查找
-            if (!transcriptContainer) {
-                const transcriptPageId = `transcript-${suiteContainer.id}`;
-                const transcriptPage = document.getElementById(transcriptPageId);
-                if (transcriptPage) {
-                    transcriptContainer = transcriptPage;
-                }
-            }
-
-            if (!transcriptContainer) {
-                return;
-            }
-
-            // 使用ANSWER_TAG_PATTERN提取答案
-            const text = transcriptContainer.textContent || '';
-            const parsed = extractAnswersFromTextContent(text);
-
-            for (const [key, value] of Object.entries(parsed)) {
-                const prefixedKey = `${suiteId}::${key}`;
-                this.addCorrectAnswer(prefixedKey, value);
-            }
-        },
-
         extractCorrectAnswersBackup: function () {
             // 多种备用提取方法
             const sources = ['answers', 'correctAnswers', 'answerKey', 'solutions'];
@@ -2356,32 +2200,6 @@
                 }
             }
 
-            this.extractFromTranscript();
-        },
-
-        extractFromTranscript: function () {
-            const transcript = document.getElementById('transcript-content');
-            if (!transcript) {
-                return;
-            }
-            const beforeCount = Object.keys(this.correctAnswers).length;
-            const questionOrder = Array.isArray(this.allQuestionIds) && this.allQuestionIds.length
-                ? this.allQuestionIds.slice()
-                : this.captureQuestionSet().slice();
-            const highlightAnswers = extractAnswersFromTranscriptElement(transcript, questionOrder);
-            Object.keys(highlightAnswers).forEach((key) => {
-                this.addCorrectAnswer(key, highlightAnswers[key]);
-            });
-            const textAnswers = extractAnswersFromTextContent(transcript.textContent || '');
-            Object.keys(textAnswers).forEach((key) => {
-                if (!this.correctAnswers[key]) {
-                    this.addCorrectAnswer(key, textAnswers[key]);
-                }
-            });
-            const afterCount = Object.keys(this.correctAnswers).length;
-            if (afterCount > beforeCount) {
-                console.log('[PracticeEnhancer] 已从听力原文提取正确答案:', this.correctAnswers);
-            }
         },
 
         extractFromResultsTable: function () {
@@ -3656,7 +3474,6 @@
             this.examId = this.examId || derivedExamId;
 
             this.collectAllAnswers();
-            this.extractFromTranscript();
 
             const preliminary = this.buildResultsPayload({
                 includeComparison: true,
@@ -3668,7 +3485,6 @@
             const self = this;
             const finalizeSubmission = function () {
                 self.extractFromResultsTable();
-                self.extractFromTranscript();
                 if (Object.keys(self.correctAnswers).length === 0) {
                     self.extractCorrectAnswersBackup();
                 }

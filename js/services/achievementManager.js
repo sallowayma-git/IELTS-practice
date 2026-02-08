@@ -251,6 +251,159 @@
             return count;
         }
 
+        _normalizePracticeType(rawType) {
+            if (!rawType) {
+                return null;
+            }
+
+            const normalized = String(rawType).toLowerCase();
+            if (normalized.includes('listen') || normalized.includes('audio') || normalized.includes('hearing')) {
+                return 'listening';
+            }
+            if (normalized.includes('read')) {
+                return 'reading';
+            }
+            return null;
+        }
+
+        _inferRecordPracticeType(record) {
+            if (!record || typeof record !== 'object') {
+                return null;
+            }
+
+            const metadata = record.metadata && typeof record.metadata === 'object'
+                ? record.metadata
+                : {};
+            const candidates = [
+                record.type,
+                record.practiceType,
+                metadata.type,
+                metadata.examType,
+                metadata.practiceType
+            ];
+
+            for (const candidate of candidates) {
+                const normalized = this._normalizePracticeType(candidate);
+                if (normalized) {
+                    return normalized;
+                }
+            }
+
+            const contextHints = [
+                record.examId,
+                record.url,
+                record.title,
+                metadata.url,
+                metadata.examId,
+                metadata.examTitle,
+                metadata.title
+            ]
+                .filter(Boolean)
+                .map((item) => String(item).toLowerCase())
+                .join(' ');
+
+            if (/listeningpractice|\/listening\/|listen|audio/.test(contextHints)) {
+                return 'listening';
+            }
+            if (/reading|睡着过项目组/.test(contextHints)) {
+                return 'reading';
+            }
+
+            return null;
+        }
+
+        _normalizeAccuracy(record) {
+            if (!record || typeof record !== 'object') {
+                return 0;
+            }
+
+            const scoreInfo = record.scoreInfo && typeof record.scoreInfo === 'object'
+                ? record.scoreInfo
+                : (record.realData && record.realData.scoreInfo && typeof record.realData.scoreInfo === 'object'
+                    ? record.realData.scoreInfo
+                    : {});
+
+            const candidates = [
+                record.accuracy,
+                scoreInfo.accuracy
+            ];
+
+            for (const candidate of candidates) {
+                const value = Number(candidate);
+                if (!Number.isFinite(value)) {
+                    continue;
+                }
+                if (value > 1 && value <= 100) {
+                    return value / 100;
+                }
+                return Math.max(0, Math.min(1, value));
+            }
+
+            return 0;
+        }
+
+        _getRecordDuration(record) {
+            if (!record || typeof record !== 'object') {
+                return 0;
+            }
+
+            const scoreInfo = record.scoreInfo && typeof record.scoreInfo === 'object'
+                ? record.scoreInfo
+                : (record.realData && record.realData.scoreInfo && typeof record.realData.scoreInfo === 'object'
+                    ? record.realData.scoreInfo
+                    : {});
+
+            const candidates = [
+                record.duration,
+                record.realData && record.realData.duration,
+                scoreInfo.duration,
+                scoreInfo.timeSpent
+            ];
+
+            for (const candidate of candidates) {
+                const value = Number(candidate);
+                if (Number.isFinite(value) && value >= 0) {
+                    return value;
+                }
+            }
+
+            return 0;
+        }
+
+        _applyRecordsToDerivedStats(derived, records) {
+            if (!derived || !Array.isArray(records) || records.length === 0) {
+                return;
+            }
+
+            let listeningFromRecords = 0;
+            let readingFromRecords = 0;
+            let totalFromRecords = 0;
+
+            records.forEach((record) => {
+                if (!record || typeof record !== 'object') {
+                    return;
+                }
+
+                totalFromRecords += 1;
+
+                const practiceType = this._inferRecordPracticeType(record);
+                if (practiceType === 'listening') {
+                    listeningFromRecords += 1;
+                } else if (practiceType === 'reading') {
+                    readingFromRecords += 1;
+                }
+
+                this._applyRecordToDerivedStats(derived, {
+                    accuracy: this._normalizeAccuracy(record),
+                    duration: this._getRecordDuration(record)
+                });
+            });
+
+            derived.totalPracticed = Math.max(Number(derived.totalPracticed) || 0, totalFromRecords);
+            derived.listeningCount = Math.max(Number(derived.listeningCount) || 0, listeningFromRecords);
+            derived.readingCount = Math.max(Number(derived.readingCount) || 0, readingFromRecords);
+        }
+
         _buildDerivedStats(rawStats) {
             const stats = rawStats && typeof rawStats === 'object' ? rawStats : {};
             return {
@@ -289,12 +442,10 @@
             const rawStats = await this._getUserStatsFromScoreStorage();
             const derivedStats = this._buildDerivedStats(rawStats);
 
-            if (includeRecords) {
-                const records = await this._getPracticeRecordsFromScoreStorage();
-                if (Array.isArray(records)) {
-                    records.forEach(record => this._applyRecordToDerivedStats(derivedStats, record));
-                }
-            } else {
+            const records = await this._getPracticeRecordsFromScoreStorage();
+            this._applyRecordsToDerivedStats(derivedStats, records);
+
+            if (!includeRecords) {
                 this._applyRecordToDerivedStats(derivedStats, latestRecord);
             }
 
@@ -336,7 +487,7 @@
          */
         async check(latestRecord) {
             if (!this.initialized) await this.init();
-            return this.syncFromScoreStorage({ latestRecord, notify: true });
+            return this.syncFromScoreStorage({ includeRecords: true, latestRecord, notify: true });
         }
 
         /**
