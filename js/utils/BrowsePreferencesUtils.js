@@ -539,6 +539,7 @@
         const isEnabled = !!enabled;
         trigger.classList.toggle('active', isEnabled);
         trigger.setAttribute('aria-pressed', isEnabled ? 'true' : 'false');
+        trigger.setAttribute('title', isEnabled ? '列表位置记录：已开启' : '列表位置记录：已关闭');
     }
 
     function setBrowseTitle(text) {
@@ -586,25 +587,35 @@
         browsePreferenceUiInitialized = true;
 
         const closePanel = () => {
-            panel.hidden = true;
+            if (panel) {
+                panel.hidden = true;
+            }
             trigger.setAttribute('aria-expanded', 'false');
         };
 
-        const togglePanel = () => {
-            const willOpen = panel.hidden;
-            panel.hidden = !willOpen;
-            trigger.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+        const applyAutoScrollPreference = (enabled, showMessage = false) => {
+            const next = saveBrowseViewPreferences({ autoScrollEnabled: !!enabled });
+            checkbox.checked = !!next.autoScrollEnabled;
+            updateBrowsePreferenceIndicator(next.autoScrollEnabled);
+            if (showMessage && typeof global.showMessage === 'function') {
+                const message = next.autoScrollEnabled
+                    ? '已开启列表位置记录，将自动恢复到上次答题的位置'
+                    : '已关闭列表位置记录';
+                global.showMessage(message, 'info');
+            }
+            closePanel();
         };
 
+        // 兼容原始交互：📚 按钮直接作为开关入口
         trigger.addEventListener('click', (event) => {
             event.preventDefault();
-            togglePanel();
+            applyAutoScrollPreference(!checkbox.checked, true);
         });
 
         trigger.addEventListener('keydown', (event) => {
             if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault();
-                togglePanel();
+                applyAutoScrollPreference(!checkbox.checked, true);
             }
         });
 
@@ -622,15 +633,7 @@
         });
 
         checkbox.addEventListener('change', (event) => {
-            const enabled = !!event.target.checked;
-            const next = saveBrowseViewPreferences({ autoScrollEnabled: enabled });
-            updateBrowsePreferenceIndicator(next.autoScrollEnabled);
-            if (typeof global.showMessage === 'function') {
-                const message = enabled ? '已开启列表位置记录，将自动恢复到上次答题的位置' : '已关闭列表位置记录';
-                global.showMessage(message, 'info');
-            }
-            panel.hidden = true;
-            trigger.setAttribute('aria-expanded', 'false');
+            applyAutoScrollPreference(!!event.target.checked, true);
         });
     }
 
