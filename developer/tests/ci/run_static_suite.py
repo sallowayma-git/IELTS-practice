@@ -480,6 +480,21 @@ def run_checks() -> Tuple[List[dict], bool]:
             results.append(_format_result(f"Reading 单篇 E2E: {label}", check_passed, check_detail))
             all_passed &= check_passed
 
+    browse_toggle_e2e = REPO_ROOT / "developer" / "tests" / "e2e" / "browse_preference_toggle_flow.py"
+    browse_toggle_exists, browse_toggle_detail = _ensure_exists(browse_toggle_e2e)
+    results.append(_format_result("Browse 偏好切换 E2E 脚本存在性", browse_toggle_exists, browse_toggle_detail))
+    all_passed &= browse_toggle_exists
+    if browse_toggle_exists:
+        browse_toggle_checks = {
+            "校验触发按钮": "browse-title-trigger",
+            "校验红点显隐": "browse-title-dot",
+            "校验偏好写回": "browse_view_preferences_v2",
+        }
+        for label, snippet in browse_toggle_checks.items():
+            check_passed, check_detail = _check_contains(browse_toggle_e2e, snippet)
+            results.append(_format_result(f"Browse 偏好切换 E2E: {label}", check_passed, check_detail))
+            all_passed &= check_passed
+
     reading_e2e_node = REPO_ROOT / "developer" / "tests" / "e2e" / "reading_single_flow.node.js"
     reading_node_exists, reading_node_detail = _ensure_exists(reading_e2e_node)
     results.append(_format_result("Reading 单篇 E2E Node 回退脚本", reading_node_exists, reading_node_detail))
@@ -493,6 +508,22 @@ def run_checks() -> Tuple[List[dict], bool]:
         for label, snippet in node_checks.items():
             check_passed, check_detail = _check_contains(reading_e2e_node, snippet)
             results.append(_format_result(f"Reading Node 回退: {label}", check_passed, check_detail))
+            all_passed &= check_passed
+
+    unified_e2e_runner = REPO_ROOT / "developer" / "tests" / "e2e" / "e2e_runner.py"
+    unified_exists, unified_detail = _ensure_exists(unified_e2e_runner)
+    results.append(_format_result("Unified E2E Runner 存在性", unified_exists, unified_detail))
+    all_passed &= unified_exists
+    if unified_exists:
+        unified_checks = {
+            "包含 browse_preference_toggle_flow": "browse_preference_toggle_flow.py",
+            "包含 reading_single_flow": "reading_single_flow.py",
+            "包含 suite_practice_flow": "suite_practice_flow.py",
+            "输出统一报告": "e2e-unified-report.json",
+        }
+        for label, snippet in unified_checks.items():
+            check_passed, check_detail = _check_contains(unified_e2e_runner, snippet)
+            results.append(_format_result(f"Unified E2E Runner: {label}", check_passed, check_detail))
             all_passed &= check_passed
 
     data_layer_files = [

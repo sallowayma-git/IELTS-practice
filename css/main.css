@@ -2137,18 +2137,25 @@ body.no-scroll {
 }
 
 .browse-title-trigger::after {
-    content: '';
+    content: none;
+}
+
+.browse-title-dot {
     position: absolute;
-    top: 8px;
-    right: 10px;
-    width: 6px;
-    height: 6px;
+    top: 7px;
+    right: 7px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
-    background: #f87171;
+    background: #ef4444;
+    border: 1px solid rgba(255, 255, 255, 0.92);
+    box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.28), 0 0 6px rgba(239, 68, 68, 0.8);
     opacity: 0;
-    transform: translate(50%, -50%);
-    transition: opacity var(--transition-fast);
+    transform: scale(0.7);
+    transform-origin: center;
+    transition: opacity var(--transition-fast), transform var(--transition-fast);
     pointer-events: none;
+    z-index: 1;
 }
 
 #browse-title {
@@ -2241,7 +2248,12 @@ body.no-scroll {
 }
 
 .browse-title-trigger.active::after {
+    content: none;
+}
+
+.browse-title-trigger.active .browse-title-dot {
     opacity: 1;
+    transform: scale(1);
 }
 
 .browse-title-trigger.active:hover,
