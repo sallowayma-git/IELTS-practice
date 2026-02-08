@@ -416,8 +416,14 @@
          * 清除待处理的自动滚动
          */
         clearPendingBrowseAutoScroll() {
-            if (global.browseStateManager) {
-                global.browseStateManager.clearPendingScroll();
+            if (typeof global.clearPendingBrowseAutoScroll === 'function'
+                && global.clearPendingBrowseAutoScroll !== this.clearPendingBrowseAutoScroll) {
+                try {
+                    global.clearPendingBrowseAutoScroll();
+                    return;
+                } catch (error) {
+                    console.warn('[BrowseController] 清理自动滚动请求失败:', error);
+                }
             }
         }
 

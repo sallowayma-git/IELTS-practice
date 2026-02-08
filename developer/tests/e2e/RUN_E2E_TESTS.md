@@ -15,6 +15,9 @@ py -m playwright install chromium
 ### 2. 运行测试
 
 ```bash
+# 统一入口（推荐）：串行执行 browse偏好 + reading + suite
+py developer/tests/e2e/e2e_runner.py
+
 # 运行听力练习E2E测试（任务13）
 py developer/tests/e2e/listening_practice_flow.py
 
@@ -134,7 +137,7 @@ py -m playwright install chromium
 py developer/tests/ci/run_static_suite.py
 
 # 2. 运行E2E测试
-py developer/tests/e2e/suite_practice_flow.py
+py developer/tests/e2e/e2e_runner.py
 py developer/tests/e2e/listening_practice_flow.py
 ```
 
