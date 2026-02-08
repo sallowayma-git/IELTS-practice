@@ -954,7 +954,7 @@ body.no-scroll {
     box-shadow: 0 10px 20px rgba(78, 60, 38, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
->>>>>>>improved-version .vocab-view-shell .btn:disabled {
+.vocab-view-shell .btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
     transform: none;
@@ -1054,7 +1054,7 @@ body.no-scroll {
     display: none;
 }
 
-<<<<<<< HEAD .vocab-menu button {
+.vocab-menu button {
     appearance: none;
     background: none;
     border: none;
@@ -1157,8 +1157,8 @@ body.no-scroll {
     padding: var(--sp-8, 32px) var(--sp-6, 24px) var(--sp-9, 40px);
 }
 
-<<<<<<< HEAD .vocab-body__container {
-    width: min(1280px, 100%);
+.vocab-body__container {
+    width: min(1400px, 100%);
     margin: 0 auto;
 }
 
@@ -1183,7 +1183,7 @@ body.no-scroll {
 
 .vocab-session-card>.vocab-card {
     width: 100%;
-    min-height: clamp(320px, 45vh, 520px);
+    min-height: clamp(380px, 54vh, 640px);
     animation: vocabSceneIn 0.55s ease both;
 }
 
