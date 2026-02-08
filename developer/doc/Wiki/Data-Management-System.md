@@ -1,12 +1,13 @@
 # Data Management System
 
 > **Relevant source files**
-> * [js/components/dataManagementPanel.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/components/dataManagementPanel.js)
-> * [js/core/practiceRecorder.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/practiceRecorder.js)
-> * [js/core/scoreStorage.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/scoreStorage.js)
-> * [js/utils/dataBackupManager.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/dataBackupManager.js)
-> * [js/utils/helpers.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/helpers.js)
-> * [js/utils/logger.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/logger.js)
+> * [js/app/lifecycleMixin.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/lifecycleMixin.js)
+> * [js/components/DataIntegrityManager.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/components/DataIntegrityManager.js)
+> * [js/core/practiceRecorder.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/practiceRecorder.js)
+> * [js/core/scoreStorage.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/scoreStorage.js)
+> * [js/script.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/script.js)
+> * [js/utils/dataBackupManager.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/dataBackupManager.js)
+> * [js/utils/storage.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/storage.js)
 
 The data management system provides a comprehensive architecture for capturing, persisting, validating, and backing up practice session data. The system consists of three primary layers: (1) **data collection and normalization** through `PracticeRecorder` and `ScoreStorage`, (2) **storage abstraction** through repository interfaces, and (3) **backup and import/export** through `DataBackupManager`. Data flows from practice sessions through multi-stage validation pipelines before being persisted to browser storage.
 
@@ -35,12 +36,12 @@ DataBackupManager["DataBackupManager<br>- exportPracticeRecords()<br>- importPra
 DataManagementPanel["DataManagementPanel<br>(UI)"]
 BrowserStorage["Browser Storage<br>localStorage/IndexedDB"]
 
-PracticeRecorder --> SessionNormalization
-ValidationLayer --> StorageAdapter
-PracticeRepo --> BrowserStorage
-MetaRepo --> BrowserStorage
-BackupRepo --> BrowserStorage
-DataBackupManager --> StorageAdapter
+PracticeRecorder -.->|"handleSessionCompleted()"| SessionNormalization
+ValidationLayer -.-> StorageAdapter
+PracticeRepo -.-> BrowserStorage
+MetaRepo -.-> BrowserStorage
+BackupRepo -.-> BrowserStorage
+DataBackupManager -.-> StorageAdapter
 
 subgraph subGraph4 ["Storage Backend"]
     BrowserStorage
@@ -49,7 +50,7 @@ end
 subgraph subGraph3 ["Backup & Management"]
     DataBackupManager
     DataManagementPanel
-    DataManagementPanel --> DataBackupManager
+    DataManagementPanel -.-> DataBackupManager
 end
 
 subgraph subGraph2 ["Storage Abstraction"]
@@ -57,9 +58,9 @@ subgraph subGraph2 ["Storage Abstraction"]
     PracticeRepo
     MetaRepo
     BackupRepo
-    StorageAdapter --> PracticeRepo
-    StorageAdapter --> MetaRepo
-    StorageAdapter --> BackupRepo
+    StorageAdapter -.-> PracticeRepo
+    StorageAdapter -.-> MetaRepo
+    StorageAdapter -.-> BackupRepo
 end
 
 subgraph subGraph1 ["Normalization & Validation"]
@@ -67,23 +68,23 @@ subgraph subGraph1 ["Normalization & Validation"]
     ScoreStorage
     StandardizeRecord
     ValidationLayer
-    SessionNormalization --> ScoreStorage
-    ScoreStorage --> StandardizeRecord
-    StandardizeRecord --> ValidationLayer
+    SessionNormalization -.->|"savePracticeRecord()"| ScoreStorage
+    ScoreStorage -.-> StandardizeRecord
+    StandardizeRecord -.->|"read/write"| ValidationLayer
 end
 
 subgraph subGraph0 ["Data Collection Layer"]
     ExamWindow
     PracticeRecorder
-    ExamWindow --> PracticeRecorder
+    ExamWindow -.->|"postMessage(PRACTICE_COMPLETE)"| PracticeRecorder
 end
 ```
 
-**Sources:** [js/core/practiceRecorder.js L9-L31](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/practiceRecorder.js#L9-L31)
+**Sources:** [js/core/practiceRecorder.js L9-L31](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/practiceRecorder.js#L9-L31)
 
- [js/core/scoreStorage.js L5-L24](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/scoreStorage.js#L5-L24)
+ [js/core/scoreStorage.js L5-L24](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/scoreStorage.js#L5-L24)
 
- [js/utils/dataBackupManager.js L5-L19](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/dataBackupManager.js#L5-L19)
+ [js/utils/dataBackupManager.js L5-L19](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/dataBackupManager.js#L5-L19)
 
 ### Core Data Types and Storage
 
@@ -96,11 +97,11 @@ The system manages practice data through specialized storage layers with defined
 | `active_sessions` | `PracticeRecorder` | N/A | In-progress sessions | `sessionId`, `examId`, `status` |
 | `manual_backups` | `DataBackupManager` | 20 | User-initiated backups | `timestamp`, `data`, `version` |
 
-**Sources:** [js/core/practiceRecorder.js L10-L23](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/practiceRecorder.js#L10-L23)
+**Sources:** [js/core/practiceRecorder.js L10-L23](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/practiceRecorder.js#L10-L23)
 
- [js/core/scoreStorage.js L6-L23](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/scoreStorage.js#L6-L23)
+ [js/core/scoreStorage.js L6-L23](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/scoreStorage.js#L6-L23)
 
- [js/utils/dataBackupManager.js L8-L16](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/dataBackupManager.js#L8-L16)
+ [js/utils/dataBackupManager.js L8-L16](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/dataBackupManager.js#L8-L16)
 
 ## Data Collection and Recording
 
@@ -110,29 +111,30 @@ The `PracticeRecorder` class manages the complete lifecycle of practice sessions
 
 ```mermaid
 sequenceDiagram
-  participant ExamSystemApp
-  participant PracticeRecorder
-  participant window.dataRepositories
-  participant ScoreStorage
+  participant p1 as ExamSystemApp
+  participant p2 as PracticeRecorder
+  participant p3 as window.dataRepositories
+  participant p4 as ScoreStorage
 
-  ExamSystemApp->>PracticeRecorder: new PracticeRecorder()
-  PracticeRecorder->>window.dataRepositories: Check window.dataRepositories
-  loop [Repositories available]
-    PracticeRecorder->>window.dataRepositories: Get practice, meta repos
-    PracticeRecorder->>ScoreStorage: new ScoreStorage()
-    ScoreStorage->>window.dataRepositories: createStorageAdapter()
-    PracticeRecorder->>PracticeRecorder: restoreActiveSessions()
-    PracticeRecorder->>PracticeRecorder: recoverTemporaryRecords()
-    PracticeRecorder->>PracticeRecorder: setupMessageListeners()
-    PracticeRecorder->>PracticeRecorder: startAutoSave() (30s interval)
-    PracticeRecorder-->>ExamSystemApp: Ready
-    PracticeRecorder-->>ExamSystemApp: Error: "数据仓库未初始化"
+  p1->>p2: new PracticeRecorder()
+  p2->>p3: Check window.dataRepositories
+  alt Repositories available
+    p2->>p3: Get practice, meta repos
+    p2->>p4: new ScoreStorage()
+    p4->>p3: createStorageAdapter()
+    p2->>p2: restoreActiveSessions()
+    p2->>p2: recoverTemporaryRecords()
+    p2->>p2: setupMessageListeners()
+    p2->>p2: startAutoSave() (30s interval)
+    p2-->>p1: Ready
+  else Repositories not available
+    p2-->>p1: Error: "数据仓库未初始化"
   end
 ```
 
-**Sources:** [js/core/practiceRecorder.js L9-L31](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/practiceRecorder.js#L9-L31)
+**Sources:** [js/core/practiceRecorder.js L9-L31](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/practiceRecorder.js#L9-L31)
 
- [js/core/scoreStorage.js L5-L24](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/scoreStorage.js#L5-L24)
+ [js/core/scoreStorage.js L5-L24](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/scoreStorage.js#L5-L24)
 
 ### Session Completion and Data Normalization
 
@@ -153,55 +155,55 @@ buildRecordMetadata["buildRecordMetadata()<br>- examTitle, category, frequency<b
 buildSyntheticSession["buildSyntheticCompletionSession()<br>(if no active session)<br>- Infer startTime, endTime<br>- Build synthetic metadata"]
 PracticeRecord["Complete Practice Record<br>- id, examId, sessionId<br>- answers, correctAnswerMap<br>- answerDetails, scoreInfo<br>- metadata, realData"]
 
-ensureCompletionPayloadShape --> normalizeAnswerMap
-ensureCompletionPayloadShape --> normalizeAnswerComparison
-ensureCompletionPayloadShape --> resolvePracticeType
-ensureCompletionPayloadShape --> resolveRecordDate
-mergeAnswerSources --> buildSyntheticSession
-buildRecordMetadata --> buildSyntheticSession
+ensureCompletionPayloadShape -.-> normalizeAnswerMap
+ensureCompletionPayloadShape -.-> normalizeAnswerComparison
+ensureCompletionPayloadShape -.-> resolvePracticeType
+ensureCompletionPayloadShape -.-> resolveRecordDate
+mergeAnswerSources -.-> buildSyntheticSession
+buildRecordMetadata -.-> buildSyntheticSession
 
 subgraph subGraph3 ["Record Assembly"]
     buildSyntheticSession
     PracticeRecord
-    buildSyntheticSession --> PracticeRecord
+    buildSyntheticSession -.-> PracticeRecord
 end
 
 subgraph subGraph2 ["Metadata Resolution"]
     resolvePracticeType
     resolveRecordDate
     buildRecordMetadata
-    resolvePracticeType --> buildRecordMetadata
-    resolveRecordDate --> buildRecordMetadata
+    resolvePracticeType -.-> buildRecordMetadata
+    resolveRecordDate -.-> buildRecordMetadata
 end
 
 subgraph subGraph1 ["Answer Normalization"]
     normalizeAnswerMap
     normalizeAnswerComparison
     mergeAnswerSources
-    normalizeAnswerMap --> mergeAnswerSources
-    normalizeAnswerComparison --> mergeAnswerSources
+    normalizeAnswerMap -.-> mergeAnswerSources
+    normalizeAnswerComparison -.-> mergeAnswerSources
 end
 
 subgraph subGraph0 ["Input Processing"]
     RawData
     normalizeIncomingMessage
     ensureCompletionPayloadShape
-    RawData --> normalizeIncomingMessage
-    normalizeIncomingMessage --> ensureCompletionPayloadShape
+    RawData -.-> normalizeIncomingMessage
+    normalizeIncomingMessage -.-> ensureCompletionPayloadShape
 end
 ```
 
-**Sources:** [js/core/practiceRecorder.js L262-L296](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/practiceRecorder.js#L262-L296)
+**Sources:** [js/core/practiceRecorder.js L262-L296](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/practiceRecorder.js#L262-L296)
 
- [js/core/practiceRecorder.js L298-L350](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/practiceRecorder.js#L298-L350)
+ [js/core/practiceRecorder.js L298-L350](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/practiceRecorder.js#L298-L350)
 
- [js/core/practiceRecorder.js L529-L554](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/practiceRecorder.js#L529-L554)
+ [js/core/practiceRecorder.js L529-L554](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/practiceRecorder.js#L529-L554)
 
- [js/core/practiceRecorder.js L71-L94](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/practiceRecorder.js#L71-L94)
+ [js/core/practiceRecorder.js L71-L94](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/practiceRecorder.js#L71-L94)
 
- [js/core/practiceRecorder.js L96-L105](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/practiceRecorder.js#L96-L105)
+ [js/core/practiceRecorder.js L96-L105](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/practiceRecorder.js#L96-L105)
 
- [js/core/practiceRecorder.js L184-L199](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/practiceRecorder.js#L184-L199)
+ [js/core/practiceRecorder.js L184-L199](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/practiceRecorder.js#L184-L199)
 
 ### Answer Value Normalization
 
@@ -229,9 +231,9 @@ const noisePatterns = [/playback/i, /volume/i, /slider/i, /audio/i];
 // Question numbers must be 1-200
 ```
 
-**Sources:** [js/core/practiceRecorder.js L478-L527](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/practiceRecorder.js#L478-L527)
+**Sources:** [js/core/practiceRecorder.js L478-L527](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/practiceRecorder.js#L478-L527)
 
- [js/core/practiceRecorder.js L556-L598](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/practiceRecorder.js#L556-L598)
+ [js/core/practiceRecorder.js L556-L598](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/practiceRecorder.js#L556-L598)
 
 </old_str>
 <new_str>
@@ -244,30 +246,31 @@ The `ScoreStorage` class provides the final validation and persistence layer for
 
 ```mermaid
 sequenceDiagram
-  participant PracticeRecorder
-  participant ScoreStorage
-  participant window.dataRepositories
-  participant Storage Adapter
+  participant p1 as PracticeRecorder
+  participant p2 as ScoreStorage
+  participant p3 as window.dataRepositories
+  participant p4 as Storage Adapter
 
-  PracticeRecorder->>ScoreStorage: new ScoreStorage()
-  ScoreStorage->>window.dataRepositories: Check window.dataRepositories
-  loop [Repositories available]
-    ScoreStorage->>ScoreStorage: Define storage keys
-    ScoreStorage->>Storage Adapter: (practice_records, user_stats, etc)
-    Storage Adapter->>window.dataRepositories: createStorageAdapter()
-    ScoreStorage->>ScoreStorage: Map keys to repos
-    ScoreStorage->>ScoreStorage: (practiceRepo, metaRepo, backupRepo)
-    ScoreStorage->>ScoreStorage: initialize()
-    ScoreStorage-->>PracticeRecorder: checkStorageVersion()
-    ScoreStorage-->>PracticeRecorder: initializeDataStructures()
+  p1->>p2: new ScoreStorage()
+  p2->>p3: Check window.dataRepositories
+  alt Repositories available
+    p2->>p2: Define storage keys<br/>(practice_records, user_stats, etc)
+    p2->>p4: createStorageAdapter()
+    p4->>p3: Map keys to repos<br/>(practiceRepo, metaRepo, backupRepo)
+    p2->>p2: initialize()
+    p2->>p2: checkStorageVersion()
+    p2->>p2: initializeDataStructures()
+    p2-->>p1: Ready
+  else Repositories not available
+    p2-->>p1: Error: "数据仓库未初始化"
   end
 ```
 
-**Sources:** [js/core/scoreStorage.js L5-L24](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/scoreStorage.js#L5-L24)
+**Sources:** [js/core/scoreStorage.js L5-L24](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/scoreStorage.js#L5-L24)
 
- [js/core/scoreStorage.js L220-L287](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/scoreStorage.js#L220-L287)
+ [js/core/scoreStorage.js L220-L287](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/scoreStorage.js#L220-L287)
 
- [js/core/scoreStorage.js L289-L303](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/scoreStorage.js#L289-L303)
+ [js/core/scoreStorage.js L289-L303](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/scoreStorage.js#L289-L303)
 
 ### Storage Adapter Architecture
 
@@ -287,15 +290,12 @@ PracticeRepo["practiceRepo<br>- list()<br>- overwrite()"]
 MetaRepo["metaRepo<br>- get(key)<br>- set(key, value)"]
 BackupRepo["backupRepo<br>- list()<br>- saveAll()"]
 
-PR_Key --> Get
-US_Key --> Get
-BU_Key --> Get
-Get --> PracticeRepo
-Get --> MetaRepo
-Get --> BackupRepo
-Set --> PracticeRepo
-Set --> MetaRepo
-Set --> BackupRepo
+Get -.->|"practice_records"| PracticeRepo
+Get -.->|"user_stats"| MetaRepo
+Get -.->|"user_stats"| BackupRepo
+Set -.->|"practice_records"| PracticeRepo
+Set -.->|"manual_backups"| MetaRepo
+Set -.->|"manual_backups"| BackupRepo
 
 subgraph subGraph2 ["Repository Layer"]
     PracticeRepo
@@ -317,7 +317,7 @@ subgraph subGraph0 ["Storage Keys"]
 end
 ```
 
-**Sources:** [js/core/scoreStorage.js L220-L287](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/scoreStorage.js#L220-L287)
+**Sources:** [js/core/scoreStorage.js L220-L287](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/scoreStorage.js#L220-L287)
 
 ### Record Standardization Pipeline
 
@@ -338,15 +338,15 @@ deriveCorrectAnswerCount["deriveCorrectAnswerCount()<br>- Check correctAnswers, 
 calculateAccuracy["Calculate Accuracy<br>- accuracy = correct / total<br>- Ensure valid number"]
 StandardizedRecord["Standardized Record<br>- All required fields<br>- Normalized formats<br>- Consistent types<br>- version: '1.0.0'"]
 
-RecordData --> inferPracticeType
-RecordData --> resolveRecordDate
-RecordData --> standardizeAnswers
-RecordData --> deriveCorrectMap
-RecordData --> deriveTotalQuestionCount
-RecordData --> deriveCorrectAnswerCount
-buildMetadata --> StandardizedRecord
-buildAnswerDetailsFromMaps --> StandardizedRecord
-calculateAccuracy --> StandardizedRecord
+RecordData -.-> inferPracticeType
+RecordData -.-> resolveRecordDate
+RecordData -.-> standardizeAnswers
+RecordData -.-> deriveCorrectMap
+RecordData -.-> deriveTotalQuestionCount
+RecordData -.-> deriveCorrectAnswerCount
+buildMetadata -.-> StandardizedRecord
+buildAnswerDetailsFromMaps -.-> StandardizedRecord
+calculateAccuracy -.-> StandardizedRecord
 
 subgraph subGraph4 ["Record Assembly"]
     StandardizedRecord
@@ -356,24 +356,24 @@ subgraph subGraph3 ["Score Derivation"]
     deriveTotalQuestionCount
     deriveCorrectAnswerCount
     calculateAccuracy
-    deriveTotalQuestionCount --> calculateAccuracy
-    deriveCorrectAnswerCount --> calculateAccuracy
+    deriveTotalQuestionCount -.-> calculateAccuracy
+    deriveCorrectAnswerCount -.-> calculateAccuracy
 end
 
 subgraph subGraph2 ["Answer Processing"]
     standardizeAnswers
     deriveCorrectMap
     buildAnswerDetailsFromMaps
-    standardizeAnswers --> buildAnswerDetailsFromMaps
-    deriveCorrectMap --> buildAnswerDetailsFromMaps
+    standardizeAnswers -.-> buildAnswerDetailsFromMaps
+    deriveCorrectMap -.-> buildAnswerDetailsFromMaps
 end
 
 subgraph subGraph1 ["Type & Date Resolution"]
     inferPracticeType
     resolveRecordDate
     buildMetadata
-    inferPracticeType --> buildMetadata
-    resolveRecordDate --> buildMetadata
+    inferPracticeType -.-> buildMetadata
+    resolveRecordDate -.-> buildMetadata
 end
 
 subgraph Input ["Input"]
@@ -381,55 +381,60 @@ subgraph Input ["Input"]
 end
 ```
 
-**Sources:** [js/core/scoreStorage.js L589-L707](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/scoreStorage.js#L589-L707)
+**Sources:** [js/core/scoreStorage.js L589-L707](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/scoreStorage.js#L589-L707)
 
- [js/core/scoreStorage.js L26-L43](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/scoreStorage.js#L26-L43)
+ [js/core/scoreStorage.js L26-L43](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/scoreStorage.js#L26-L43)
 
- [js/core/scoreStorage.js L45-L63](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/scoreStorage.js#L45-L63)
+ [js/core/scoreStorage.js L45-L63](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/scoreStorage.js#L45-L63)
 
- [js/core/scoreStorage.js L65-L79](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/scoreStorage.js#L65-L79)
+ [js/core/scoreStorage.js L65-L79](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/scoreStorage.js#L65-L79)
 
- [js/core/scoreStorage.js L86-L120](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/scoreStorage.js#L86-L120)
+ [js/core/scoreStorage.js L86-L120](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/scoreStorage.js#L86-L120)
 
- [js/core/scoreStorage.js L122-L187](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/scoreStorage.js#L122-L187)
+ [js/core/scoreStorage.js L122-L187](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/scoreStorage.js#L122-L187)
 
- [js/core/scoreStorage.js L711-L732](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/scoreStorage.js#L711-L732)
+ [js/core/scoreStorage.js L711-L732](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/scoreStorage.js#L711-L732)
 
 ### Record Validation and Persistence
 
 ```mermaid
 sequenceDiagram
-  participant PracticeRecorder
-  participant ScoreStorage
-  participant validateRecord()
-  participant Storage Adapter
-  participant updateUserStats()
+  participant p1 as PracticeRecorder
+  participant p2 as ScoreStorage
+  participant p3 as validateRecord()
+  participant p4 as Storage Adapter
+  participant p5 as updateUserStats()
 
-  PracticeRecorder->>ScoreStorage: savePracticeRecord(recordData)
-  ScoreStorage->>ScoreStorage: standardizeRecord(recordData)
-  ScoreStorage->>validateRecord(): validateRecord(standardized)
-  loop [ID exists]
-    validateRecord()-->>ScoreStorage: Valid record
-    ScoreStorage->>Storage Adapter: get('practice_records', [])
-    Storage Adapter-->>ScoreStorage: existing records
-    ScoreStorage->>ScoreStorage: Check for duplicate ID
-    ScoreStorage->>ScoreStorage: Update existing record
-    ScoreStorage->>ScoreStorage: records.unshift(standardized)
-    ScoreStorage->>ScoreStorage: Enforce max 1000 records
-    ScoreStorage->>Storage Adapter: set('practice_records', records)
-    ScoreStorage->>updateUserStats(): updateUserStats(standardized)
-    updateUserStats()->>updateUserStats(): Update totalPractices, totalTimeSpent
-    updateUserStats()->>updateUserStats(): updateStreakDays(stats, record)
-    updateUserStats()->>Storage Adapter: set('user_stats', updatedStats)
-    ScoreStorage-->>PracticeRecorder: Success
-    validateRecord()-->>ScoreStorage: ValidationError
-    ScoreStorage-->>PracticeRecorder: Error (with validationErrors)
+  p1->>p2: savePracticeRecord(recordData)
+  p2->>p2: standardizeRecord(recordData)
+  p2->>p3: validateRecord(standardized)
+  alt Validation passes
+    p3-->>p2: Valid record
+    p2->>p4: get('practice_records', [])
+    p4-->>p2: existing records
+    p2->>p2: Check for duplicate ID
+  alt ID exists
+    p2->>p2: Update existing record
+  else New record
+  else New record
+    p2->>p2: records.unshift(standardized)
+  end
+    p2->>p2: Enforce max 1000 records
+    p2->>p4: set('practice_records', records)
+    p2->>p5: updateUserStats(standardized)
+    p5->>p5: Update totalPractices, totalTimeSpent
+    p5->>p5: updateStreakDays(stats, record)
+    p5->>p4: set('user_stats', updatedStats)
+    p2-->>p1: Success
+  else Validation fails
+    p3-->>p2: ValidationError
+    p2-->>p1: Error (with validationErrors)
   end
 ```
 
-**Sources:** [js/core/scoreStorage.js L421-L487](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/scoreStorage.js#L421-L487)
+**Sources:** [js/core/scoreStorage.js L421-L487](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/scoreStorage.js#L421-L487)
 
- [js/core/scoreStorage.js L826-L900](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/scoreStorage.js#L826-L900)
+ [js/core/scoreStorage.js L826-L900](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/scoreStorage.js#L826-L900)
 
 ## Data Backup and Export System
 
@@ -447,38 +452,39 @@ The system supports flexible export options with filtering and format selection:
 | `dateRange` | `{startDate, endDate}` | Filter by date range | `null` |
 | `categories` | `string[]` | Filter by exam categories | `null` |
 
-**Sources:** [js/utils/dataBackupManager.js L49-L115](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/dataBackupManager.js#L49-L115)
+**Sources:** [js/utils/dataBackupManager.js L49-L115](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/dataBackupManager.js#L49-L115)
 
 ### Export Process Flow
 
 ```mermaid
 sequenceDiagram
-  participant User
-  participant DataManagementPanel
-  participant DataBackupManager
-  participant StorageManager
+  participant p1 as User
+  participant p2 as DataManagementPanel
+  participant p3 as DataBackupManager
+  participant p4 as StorageManager
 
-  User->>DataManagementPanel: Click export button
-  DataManagementPanel->>DataManagementPanel: Collect export options (format, filters)
-  DataManagementPanel->>DataBackupManager: exportPracticeRecords(options)
-  DataBackupManager->>StorageManager: get('practice_records', [])
-  StorageManager-->>DataBackupManager: practice records
-  DataBackupManager->>DataBackupManager: filterByDateRange(records, dateRange)
-  DataBackupManager->>DataBackupManager: filter by categories
-  loop [Format: JSON]
-    DataBackupManager->>DataBackupManager: exportAsJSON(payload)
-    DataBackupManager->>DataBackupManager: JSON.stringify(data, null, 2)
-    DataBackupManager->>DataBackupManager: exportAsCSV(payload)
-    DataBackupManager->>DataBackupManager: Convert to CSV rows
+  p1->>p2: Click export button
+  p2->>p2: Collect export options (format, filters)
+  p2->>p3: exportPracticeRecords(options)
+  p3->>p4: get('practice_records', [])
+  p4-->>p3: practice records
+  p3->>p3: filterByDateRange(records, dateRange)
+  p3->>p3: filter by categories
+  alt Format: JSON
+    p3->>p3: exportAsJSON(payload)
+    p3->>p3: JSON.stringify(data, null, 2)
+  else Format: CSV
+    p3->>p3: exportAsCSV(payload)
+    p3->>p3: Convert to CSV rows
   end
-  DataBackupManager->>DataBackupManager: recordExportHistory(exportInfo)
-  DataBackupManager-->>DataManagementPanel: {data, filename, mimeType, size}
-  DataManagementPanel->>User: Browser download
+  p3->>p3: recordExportHistory(exportInfo)
+  p3-->>p2: {data, filename, mimeType, size}
+  p2->>p1: Browser download
 ```
 
-**Sources:** [js/utils/dataBackupManager.js L49-L175](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/dataBackupManager.js#L49-L175)
+**Sources:** [js/utils/dataBackupManager.js L49-L175](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/dataBackupManager.js#L49-L175)
 
- [js/components/dataManagementPanel.js L439-L473](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/components/dataManagementPanel.js#L439-L473)
+ [js/components/dataManagementPanel.js L439-L473](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/components/dataManagementPanel.js#L439-L473)
 
 ### Import and Data Merging
 
@@ -492,7 +498,7 @@ The `parseImportSource` method accepts multiple input types:
 | --- | --- | --- |
 | `File` | Read as text, parse JSON | Via FileReader API |
 | `Blob` | Read as text, parse JSON | Converted to text first |
-| `string` (JSON) | Direct JSON.parse | Detected by `startsWith('{')` or `'<FileRef file-url="https://github.com/sallowayma-git/IELTS-practice/blob/68771116/'` |
+| `string` (JSON) | Direct JSON.parse | Detected by `startsWith('{')` or `'<FileRef file-url="https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/'` |
 
 #### Import Normalization Pipeline
 
@@ -512,9 +518,9 @@ normalizeRecord["normalizeRecord(record)<br>- Map id fields: id, recordId, pract
 DeduplicateRecords["deduplicateRecords()<br>- Group by ID<br>- Keep latest by timestamp"]
 validateNormalizedRecords["validateNormalizedRecords()<br>- Fix missing id → generate<br>- Fix missing examId → 'imported_ielts'<br>- Validate/fix dates<br>- Validate/fix numeric fields<br>- Skip invalid records"]
 
-ParsedPayload --> normalizeImportPayload
-CollectRecords --> normalizeRecord
-DeduplicateRecords --> validateNormalizedRecords
+ParsedPayload -.-> normalizeImportPayload
+CollectRecords -.-> normalizeRecord
+DeduplicateRecords -.-> validateNormalizedRecords
 
 subgraph subGraph3 ["Phase 4: Validate"]
     validateNormalizedRecords
@@ -523,7 +529,7 @@ end
 subgraph subGraph2 ["Phase 3: Normalize Records"]
     normalizeRecord
     DeduplicateRecords
-    normalizeRecord --> DeduplicateRecords
+    normalizeRecord -.-> DeduplicateRecords
 end
 
 subgraph subGraph1 ["Phase 2: Extract Records"]
@@ -531,32 +537,32 @@ subgraph subGraph1 ["Phase 2: Extract Records"]
     FastPath
     GenericPath
     CollectRecords
-    normalizeImportPayload --> FastPath
-    normalizeImportPayload --> GenericPath
-    FastPath --> CollectRecords
-    GenericPath --> CollectRecords
+    normalizeImportPayload -.-> FastPath
+    normalizeImportPayload -.-> GenericPath
+    FastPath -.-> CollectRecords
+    GenericPath -.-> CollectRecords
 end
 
 subgraph subGraph0 ["Phase 1: Parse"]
     InputSource
     parseImportSource
     ParsedPayload
-    InputSource --> parseImportSource
-    parseImportSource --> ParsedPayload
+    InputSource -.-> parseImportSource
+    parseImportSource -.-> ParsedPayload
 end
 ```
 
-**Sources:** [js/utils/dataBackupManager.js L271-L314](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/dataBackupManager.js#L271-L314)
+**Sources:** [js/utils/dataBackupManager.js L271-L314](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/dataBackupManager.js#L271-L314)
 
- [js/utils/dataBackupManager.js L316-L433](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/dataBackupManager.js#L316-L433)
+ [js/utils/dataBackupManager.js L316-L433](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/dataBackupManager.js#L316-L433)
 
- [js/utils/dataBackupManager.js L729-L767](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/dataBackupManager.js#L729-L767)
+ [js/utils/dataBackupManager.js L729-L767](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/dataBackupManager.js#L729-L767)
 
- [js/utils/dataBackupManager.js L789-L893](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/dataBackupManager.js#L789-L893)
+ [js/utils/dataBackupManager.js L789-L893](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/dataBackupManager.js#L789-L893)
 
- [js/utils/dataBackupManager.js L450-L506](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/dataBackupManager.js#L450-L506)
+ [js/utils/dataBackupManager.js L450-L506](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/dataBackupManager.js#L450-L506)
 
- [js/utils/dataBackupManager.js L666-L686](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/dataBackupManager.js#L666-L686)
+ [js/utils/dataBackupManager.js L666-L686](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/dataBackupManager.js#L666-L686)
 
 ### Record Field Mapping and Duration Extraction
 
@@ -589,9 +595,9 @@ candidates = [
 // First positive number wins; if none, first finite number
 ```
 
-**Sources:** [js/utils/dataBackupManager.js L789-L893](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/dataBackupManager.js#L789-L893)
+**Sources:** [js/utils/dataBackupManager.js L789-L893](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/dataBackupManager.js#L789-L893)
 
- [js/utils/dataBackupManager.js L825-L842](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/dataBackupManager.js#L825-L842)
+ [js/utils/dataBackupManager.js L825-L842](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/dataBackupManager.js#L825-L842)
 
 #### Merge Strategies
 
@@ -599,36 +605,55 @@ The import system supports three merge modes when handling duplicate records:
 
 ```mermaid
 sequenceDiagram
-  participant Import Process
-  participant mergePracticeRecords()
-  participant StorageManager
+  participant p1 as Import Process
+  participant p2 as mergePracticeRecords()
+  participant p3 as StorageManager
 
-  Import Process->>mergePracticeRecords(): mergePracticeRecords(newRecords, mergeMode)
-  mergePracticeRecords()->>StorageManager: get('practice_records', [])
-  StorageManager-->>mergePracticeRecords(): existing records
-  mergePracticeRecords()->>mergePracticeRecords(): Build indexMap by record ID
-  loop [incoming timestamp >= existing]
-    mergePracticeRecords()->>StorageManager: set('practice_records', newRecords)
-    mergePracticeRecords()->>mergePracticeRecords(): Check if ID exists in indexMap
-    mergePracticeRecords()->>mergePracticeRecords(): Compare timestamps
-    mergePracticeRecords()->>mergePracticeRecords(): mergeRecordDetails() and update
-    note over mergePracticeRecords(): updatedCount++
-    note over mergePracticeRecords(): skippedCount++
-    mergePracticeRecords()->>mergePracticeRecords(): Add to mergedRecords
-    note over mergePracticeRecords(): importedCount++
-    mergePracticeRecords()->>mergePracticeRecords(): Sort by timestamp
-    mergePracticeRecords()->>StorageManager: set('practice_records', mergedRecords)
-    note over mergePracticeRecords(): skippedCount++
-    mergePracticeRecords()->>mergePracticeRecords(): Add to mergedRecords
-    note over mergePracticeRecords(): importedCount++
-    mergePracticeRecords()->>StorageManager: set('practice_records', mergedRecords)
+  p1->>p2: mergePracticeRecords(newRecords, mergeMode)
+  p2->>p3: get('practice_records', [])
+  p3-->>p2: existing records
+  p2->>p2: Build indexMap by record ID
+  alt mergeMode: 'replace'
+    p2->>p3: set('practice_records', newRecords)
+  else mergeMode: 'merge'
+  loop For each new record
+    p2->>p2: Check if ID exists in indexMap
+  alt ID exists
+    p2->>p2: Compare timestamps
+  alt incoming timestamp >= existing
+    p2->>p2: mergeRecordDetails() and update
+    note over p2: updatedCount++
+  else
+  else
+  else
+    note over p2: skippedCount++
   end
-  mergePracticeRecords()-->>Import Process: {importedCount, updatedCount, skippedCount, finalCount}
+  else ID not exists
+  else ID not exists
+    p2->>p2: Add to mergedRecords
+    note over p2: importedCount++
+  end
+  end
+    p2->>p2: Sort by timestamp
+    p2->>p3: set('practice_records', mergedRecords)
+  else mergeMode: 'skip'
+  loop For each new record
+  alt ID exists in indexMap
+    note over p2: skippedCount++
+  else
+  else
+    p2->>p2: Add to mergedRecords
+    note over p2: importedCount++
+  end
+  end
+    p2->>p3: set('practice_records', mergedRecords)
+  end
+  p2-->>p1: {importedCount, updatedCount, skippedCount, finalCount}
 ```
 
-**Sources:** [js/utils/dataBackupManager.js L508-L578](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/dataBackupManager.js#L508-L578)
+**Sources:** [js/utils/dataBackupManager.js L508-L578](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/dataBackupManager.js#L508-L578)
 
- [js/utils/dataBackupManager.js L619-L664](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/dataBackupManager.js#L619-L664)
+ [js/utils/dataBackupManager.js L619-L664](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/dataBackupManager.js#L619-L664)
 
 ### User Statistics Management
 
@@ -647,7 +672,7 @@ SortDays["Sort days by timestamp<br>getLocalDayStart(day)"]
 ComputeStreak["Compute Current Streak<br>- Iterate from end<br>- Check if consecutive days (diff=1)<br>- Reset if gap > 1"]
 UpdateStats["Update stats<br>- streakDays<br>- lastPracticeDate"]
 
-updateStreakDays --> ExtractDate
+updateStreakDays -.-> ExtractDate
 
 subgraph subGraph1 ["Streak Calculation"]
     ExtractDate
@@ -655,10 +680,10 @@ subgraph subGraph1 ["Streak Calculation"]
     SortDays
     ComputeStreak
     UpdateStats
-    ExtractDate --> UpdatePracticeDays
-    UpdatePracticeDays --> SortDays
-    SortDays --> ComputeStreak
-    ComputeStreak --> UpdateStats
+    ExtractDate -.-> UpdatePracticeDays
+    UpdatePracticeDays -.-> SortDays
+    SortDays -.-> ComputeStreak
+    ComputeStreak -.-> UpdateStats
 end
 
 subgraph subGraph0 ["Statistics Update Flow"]
@@ -666,17 +691,17 @@ subgraph subGraph0 ["Statistics Update Flow"]
     updateUserStats
     UpdateAggregates
     updateStreakDays
-    NewRecord --> updateUserStats
-    updateUserStats --> UpdateAggregates
-    updateUserStats --> updateStreakDays
+    NewRecord -.-> updateUserStats
+    updateUserStats -.-> UpdateAggregates
+    updateUserStats -.-> updateStreakDays
 end
 ```
 
-**Sources:** [js/core/scoreStorage.js L826-L900](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/scoreStorage.js#L826-L900)
+**Sources:** [js/core/scoreStorage.js L826-L900](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/scoreStorage.js#L826-L900)
 
- [js/core/practiceRecorder.js L138-L182](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/practiceRecorder.js#L138-L182)
+ [js/core/practiceRecorder.js L138-L182](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/practiceRecorder.js#L138-L182)
 
- [js/core/scoreStorage.js L189-L218](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/scoreStorage.js#L189-L218)
+ [js/core/scoreStorage.js L189-L218](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/scoreStorage.js#L189-L218)
 
 ### Legacy Record Sanitization
 
@@ -698,9 +723,9 @@ When loading existing records, `ScoreStorage` automatically repairs legacy data 
 // - Rebuilds scoreInfo.details and realData if missing
 ```
 
-**Sources:** [js/core/scoreStorage.js L489-L570](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/scoreStorage.js#L489-L570)
+**Sources:** [js/core/scoreStorage.js L489-L570](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/scoreStorage.js#L489-L570)
 
- [js/core/scoreStorage.js L572-L586](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/core/scoreStorage.js#L572-L586)
+ [js/core/scoreStorage.js L572-L586](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/core/scoreStorage.js#L572-L586)
 
 ## Data Integrity Management
 
@@ -710,29 +735,29 @@ The `DataIntegrityManager` class provides automatic backup creation, consistency
 
 ```mermaid
 sequenceDiagram
-  participant DataIntegrityManager
-  participant constructor
-  participant StorageProviderRegistry
-  participant Repository Layer
-  participant initializeWithRepositories()
+  participant p1 as DataIntegrityManager<br/>constructor
+  participant p2 as StorageProviderRegistry
+  participant p3 as Repository Layer
+  participant p4 as initializeWithRepositories()
 
-  DataIntegrityManager->>DataIntegrityManager: registerDefaultValidationRules()
-  DataIntegrityManager->>StorageProviderRegistry: onProvidersReady(callback)
-  loop [Repositories already ready]
-    StorageProviderRegistry->>DataIntegrityManager: Invoke callback immediately
-    DataIntegrityManager->>initializeWithRepositories(): attachRepositories(repositories)
-    note over StorageProviderRegistry: Wait for repositories
-    StorageProviderRegistry->>DataIntegrityManager: Invoke callback when ready
-    DataIntegrityManager->>initializeWithRepositories(): attachRepositories(repositories)
+  p1->>p1: registerDefaultValidationRules()
+  p1->>p2: onProvidersReady(callback)
+  alt Repositories already ready
+    p2->>p1: Invoke callback immediately
+    p1->>p4: attachRepositories(repositories)
+  else Repositories not ready
+    note over p2: Wait for repositories
+    p2->>p1: Invoke callback when ready
+    p1->>p4: attachRepositories(repositories)
   end
-  initializeWithRepositories()->>Repository Layer: runConsistencyChecks()
-  Repository Layer-->>initializeWithRepositories(): consistencyReport
-  initializeWithRepositories()->>initializeWithRepositories(): startAutoBackup() (every 10min)
-  initializeWithRepositories()->>initializeWithRepositories(): cleanupOldBackups()
-  note over initializeWithRepositories(): isInitialized = true
+  p4->>p3: runConsistencyChecks()
+  p3-->>p4: consistencyReport
+  p4->>p4: startAutoBackup() (every 10min)
+  p4->>p4: cleanupOldBackups()
+  note over p4: isInitialized = true
 ```
 
-**Sources:** [js/components/DataIntegrityManager.js L6-L87](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/components/DataIntegrityManager.js#L6-L87)
+**Sources:** [js/components/DataIntegrityManager.js L6-L87](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/components/DataIntegrityManager.js#L6-L87)
 
 ### Automatic Backup System
 
@@ -758,25 +783,25 @@ BackupObject["{ id, timestamp, data, version, type, size }"]
 BackupRepo["repositories.backups.add(backup)"]
 CleanupOld["cleanupOldBackups()<br>(prune to maxBackups)"]
 
-getCriticalData --> PracticeRecords
-getCriticalData --> SystemSettings
-CriticalDataObj --> createBackup
-createBackup --> BackupObject
+getCriticalData -.-> PracticeRecords
+getCriticalData -.-> SystemSettings
+CriticalDataObj -.-> createBackup
+createBackup -.-> BackupObject
 
 subgraph subGraph2 ["Backup Storage"]
     BackupObject
     BackupRepo
     CleanupOld
-    BackupObject --> BackupRepo
-    BackupRepo --> CleanupOld
+    BackupObject -.-> BackupRepo
+    BackupRepo -.-> CleanupOld
 end
 
 subgraph subGraph1 ["Critical Data Collection"]
     PracticeRecords
     SystemSettings
     CriticalDataObj
-    PracticeRecords --> CriticalDataObj
-    SystemSettings --> CriticalDataObj
+    PracticeRecords -.-> CriticalDataObj
+    SystemSettings -.-> CriticalDataObj
 end
 
 subgraph subGraph0 ["Auto-Backup Cycle"]
@@ -784,16 +809,16 @@ subgraph subGraph0 ["Auto-Backup Cycle"]
     performAutoBackup
     getCriticalData
     createBackup
-    Timer --> performAutoBackup
-    performAutoBackup --> getCriticalData
+    Timer -.-> performAutoBackup
+    performAutoBackup -.-> getCriticalData
 end
 ```
 
-**Sources:** [js/components/DataIntegrityManager.js L194-L224](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/components/DataIntegrityManager.js#L194-L224)
+**Sources:** [js/components/DataIntegrityManager.js L194-L224](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/components/DataIntegrityManager.js#L194-L224)
 
- [js/components/DataIntegrityManager.js L107-L137](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/components/DataIntegrityManager.js#L107-L137)
+ [js/components/DataIntegrityManager.js L107-L137](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/components/DataIntegrityManager.js#L107-L137)
 
- [js/components/DataIntegrityManager.js L290-L324](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/components/DataIntegrityManager.js#L290-L324)
+ [js/components/DataIntegrityManager.js L290-L324](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/components/DataIntegrityManager.js#L290-L324)
 
 ### Quota Exceeded Handling
 
@@ -801,23 +826,23 @@ When storage quota is exceeded during backup creation, the system automatically 
 
 ```mermaid
 sequenceDiagram
-  participant createBackup()
-  participant BackupRepository
-  participant exportDataAsFallback()
-  participant Browser Download
+  participant p1 as createBackup()
+  participant p2 as BackupRepository
+  participant p3 as exportDataAsFallback()
+  participant p4 as Browser Download
 
-  createBackup()->>BackupRepository: backups.add(backupObj)
-  BackupRepository-->>createBackup(): QuotaExceededError
-  createBackup()->>exportDataAsFallback(): exportDataAsFallback(data)
-  exportDataAsFallback()->>exportDataAsFallback(): Create export object with metadata
-  exportDataAsFallback()->>exportDataAsFallback(): new Blob([JSON.stringify(exportObj)])
-  exportDataAsFallback()->>exportDataAsFallback(): URL.createObjectURL(blob)
-  exportDataAsFallback()->>Browser Download: <a>.click() download
-  note over Browser Download: File: ielts-data-backup-quota-YYYY-MM-DD.json
-  exportDataAsFallback()->>exportDataAsFallback(): URL.revokeObjectURL(url)
+  p1->>p2: backups.add(backupObj)
+  p2-->>p1: QuotaExceededError
+  p1->>p3: exportDataAsFallback(data)
+  p3->>p3: Create export object with metadata
+  p3->>p3: new Blob([JSON.stringify(exportObj)])
+  p3->>p3: URL.createObjectURL(blob)
+  p3->>p4: <a>.click() download
+  note over p4: File: ielts-data-backup-quota-YYYY-MM-DD.json
+  p3->>p3: URL.revokeObjectURL(url)
 ```
 
-**Sources:** [js/components/DataIntegrityManager.js L107-L160](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/components/DataIntegrityManager.js#L107-L160)
+**Sources:** [js/components/DataIntegrityManager.js L107-L160](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/components/DataIntegrityManager.js#L107-L160)
 
 ### Validation Rules
 
@@ -851,7 +876,7 @@ this.validationRules.set('system_settings', {
 });
 ```
 
-**Sources:** [js/components/DataIntegrityManager.js L162-L192](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/components/DataIntegrityManager.js#L162-L192)
+**Sources:** [js/components/DataIntegrityManager.js L162-L192](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/components/DataIntegrityManager.js#L162-L192)
 
 ## Legacy Compatibility Layer
 
@@ -874,19 +899,19 @@ LegacyStateBridge["LegacyStateBridge<br>(Pre-initialization)"]
 CachedChanges["Cached state changes"]
 ReplayChanges["Replay to AppStateService"]
 
-AppStateService --> LegacyStateAdapter
-SyncToGlobals --> examIndex
-SyncToGlobals --> practiceRecords
-SyncToGlobals --> currentView
-SyncToGlobals --> browseFilter
-ReplayChanges --> AppStateService
+AppStateService -.-> LegacyStateAdapter
+SyncToGlobals -.-> examIndex
+SyncToGlobals -.-> practiceRecords
+SyncToGlobals -.-> currentView
+SyncToGlobals -.-> browseFilter
+ReplayChanges -.-> AppStateService
 
 subgraph subGraph3 ["Legacy State Bridge"]
     LegacyStateBridge
     CachedChanges
     ReplayChanges
-    LegacyStateBridge --> CachedChanges
-    CachedChanges --> ReplayChanges
+    LegacyStateBridge -.-> CachedChanges
+    CachedChanges -.-> ReplayChanges
 end
 
 subgraph subGraph2 ["Legacy Global Variables"]
@@ -899,7 +924,7 @@ end
 subgraph subGraph1 ["Legacy Adapter"]
     LegacyStateAdapter
     SyncToGlobals
-    LegacyStateAdapter --> SyncToGlobals
+    LegacyStateAdapter -.-> SyncToGlobals
 end
 
 subgraph subGraph0 ["Modern State API"]
@@ -916,30 +941,35 @@ The `LegacyFallback` system (in `js/script.js`) provides degraded-mode rendering
 
 ```mermaid
 sequenceDiagram
-  participant Browser
-  participant bootstrapFallbackRuntime()
-  participant AppStateService
-  participant Legacy Rendering
-  participant DOM
+  participant p1 as Browser
+  participant p2 as bootstrapFallbackRuntime()
+  participant p3 as AppStateService
+  participant p4 as Legacy Rendering
+  participant p5 as DOM
 
-  Browser->>bootstrapFallbackRuntime(): DOMContentLoaded
-  bootstrapFallbackRuntime()->>AppStateService: getStateService()
-  loop [Modern functions exist]
-    AppStateService-->>bootstrapFallbackRuntime(): Service instance
-    bootstrapFallbackRuntime()->>bootstrapFallbackRuntime(): Check for loadExamList, updatePracticeView
-    note over bootstrapFallbackRuntime(): runSmokeCheck('primary-runtime')
-    bootstrapFallbackRuntime()-->>Browser: Use modern runtime
-    note over bootstrapFallbackRuntime(): runSmokeCheck('fallback-runtime')
-    bootstrapFallbackRuntime()->>Legacy Rendering: showViewFallback('overview')
-    bootstrapFallbackRuntime()->>Legacy Rendering: renderExamListFallback(exams)
-    bootstrapFallbackRuntime()->>Legacy Rendering: renderPracticeOverviewFallback(records)
-    Legacy Rendering->>DOM: Render degraded UI
-    note over bootstrapFallbackRuntime(): runSmokeCheck('no-service')
-    bootstrapFallbackRuntime()-->>Browser: Exit early
+  p1->>p2: DOMContentLoaded
+  p2->>p3: getStateService()
+  alt Modern runtime available
+    p3-->>p2: Service instance
+    p2->>p2: Check for loadExamList, updatePracticeView
+  alt Modern functions exist
+    note over p2: runSmokeCheck('primary-runtime')
+    p2-->>p1: Use modern runtime
+  else Modern functions missing
+  else Modern functions missing
+    note over p2: runSmokeCheck('fallback-runtime')
+    p2->>p4: showViewFallback('overview')
+    p2->>p4: renderExamListFallback(exams)
+    p2->>p4: renderPracticeOverviewFallback(records)
+    p4->>p5: Render degraded UI
+  end
+  else No state service
+    note over p2: runSmokeCheck('no-service')
+    p2-->>p1: Exit early
   end
 ```
 
-**Sources:** [js/script.js L107-L148](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/script.js#L107-L148)
+**Sources:** [js/script.js L107-L148](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/script.js#L107-L148)
 
 ### Simple Storage Wrapper
 
@@ -972,7 +1002,7 @@ class SimpleStorageWrapper {
 
 The wrapper automatically connects to repositories when they become available via the `StorageProviderRegistry`.
 
-**Sources:** [js/utils/simpleStorageWrapper.js L2-L64](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/utils/simpleStorageWrapper.js#L2-L64)
+**Sources:** [js/utils/simpleStorageWrapper.js L2-L64](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/utils/simpleStorageWrapper.js#L2-L64)
 
 ## Error Handling and Recovery
 
@@ -996,14 +1026,14 @@ RetryOperation["Retry Operation"]
 FallbackMode["Fallback Mode"]
 CriticalAlert["Critical Alert"]
 
-QuotaError --> Detection
-NetworkError --> Detection
-ParseError --> Detection
-SecurityError --> Detection
-Recovery --> CleanupOld
-Recovery --> RetryOperation
-Recovery --> FallbackMode
-Recovery --> CriticalAlert
+QuotaError -.-> Detection
+NetworkError -.-> Detection
+ParseError -.-> Detection
+SecurityError -.-> Detection
+Recovery -.-> CleanupOld
+Recovery -.-> RetryOperation
+Recovery -.-> FallbackMode
+Recovery -.-> CriticalAlert
 
 subgraph subGraph2 ["Recovery Actions"]
     CleanupOld
@@ -1017,9 +1047,9 @@ subgraph subGraph1 ["Error Handling Strategy"]
     Classification
     Recovery
     UserNotification
-    Detection --> Classification
-    Classification --> Recovery
-    Recovery --> UserNotification
+    Detection -.-> Classification
+    Classification -.-> Recovery
+    Recovery -.-> UserNotification
 end
 
 subgraph subGraph0 ["Error Types"]
@@ -1030,9 +1060,9 @@ subgraph subGraph0 ["Error Types"]
 end
 ```
 
-**Sources:** [improved-working-system.html L982-L998](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/improved-working-system.html#L982-L998)
+**Sources:** [improved-working-system.html L982-L998](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/improved-working-system.html#L982-L998)
 
- [improved-working-system.html L1000-L1016](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/improved-working-system.html#L1000-L1016)
+ [improved-working-system.html L1000-L1016](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/improved-working-system.html#L1000-L1016)
 
 ### Quota Management
 
@@ -1051,35 +1081,35 @@ RetryWrite["Retry Original Operation"]
 SuccessCheck["Verify Success"]
 UserAlert["Alert User if Failed"]
 
-SpaceAnalysis --> OldRecords
-CacheCleanup --> RetryWrite
+SpaceAnalysis -.-> OldRecords
+CacheCleanup -.-> RetryWrite
 
 subgraph subGraph2 ["Recovery Process"]
     RetryWrite
     SuccessCheck
     UserAlert
-    RetryWrite --> SuccessCheck
-    SuccessCheck --> UserAlert
+    RetryWrite -.-> SuccessCheck
+    SuccessCheck -.-> UserAlert
 end
 
 subgraph subGraph1 ["Cleanup Strategy"]
     OldRecords
     TempData
     CacheCleanup
-    OldRecords --> TempData
-    TempData --> CacheCleanup
+    OldRecords -.-> TempData
+    TempData -.-> CacheCleanup
 end
 
 subgraph subGraph0 ["Quota Detection"]
     TestWrite
     QuotaCheck
     SpaceAnalysis
-    TestWrite --> QuotaCheck
-    QuotaCheck --> SpaceAnalysis
+    TestWrite -.-> QuotaCheck
+    QuotaCheck -.-> SpaceAnalysis
 end
 ```
 
-**Sources:** [improved-working-system.html L1002-L1012](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/improved-working-system.html#L1002-L1012)
+**Sources:** [improved-working-system.html L1002-L1012](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/improved-working-system.html#L1002-L1012)
 
 ## Performance Optimization
 
@@ -1100,25 +1130,25 @@ LoadTime["Load Time Tracking"]
 RenderTime["Render Time Tracking"]
 CacheStats["Cache Statistics"]
 
-ExamCache --> CacheKey
-SearchCache --> CacheKey
-RenderCache --> CacheKey
-HitRateTracking --> LoadTime
+ExamCache -.-> CacheKey
+SearchCache -.-> CacheKey
+RenderCache -.-> CacheKey
+HitRateTracking -.-> LoadTime
 
 subgraph subGraph2 ["Performance Metrics"]
     LoadTime
     RenderTime
     CacheStats
-    LoadTime --> RenderTime
-    RenderTime --> CacheStats
+    LoadTime -.-> RenderTime
+    RenderTime -.-> CacheStats
 end
 
 subgraph subGraph1 ["Cache Management"]
     CacheKey
     TTLManager
     HitRateTracking
-    CacheKey --> TTLManager
-    TTLManager --> HitRateTracking
+    CacheKey -.-> TTLManager
+    TTLManager -.-> HitRateTracking
 end
 
 subgraph subGraph0 ["Cache Types"]
@@ -1128,41 +1158,42 @@ subgraph subGraph0 ["Cache Types"]
 end
 ```
 
-**Sources:** [improved-working-system.html L1162-L1172](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/improved-working-system.html#L1162-L1172)
+**Sources:** [improved-working-system.html L1162-L1172](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/improved-working-system.html#L1162-L1172)
 
- [improved-working-system.html L1432-L1441](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/improved-working-system.html#L1432-L1441)
+ [improved-working-system.html L1432-L1441](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/improved-working-system.html#L1432-L1441)
 
 ### Data Loading Optimization
 
 ```mermaid
 sequenceDiagram
-  participant App["Application"]
-  participant Cache["Performance Cache"]
-  participant Storage["localStorage"]
-  participant Index["Exam Index"]
-  participant App
-  participant Cache
-  participant Storage
-  participant Index
+  participant p1 as "App[Application]"
+  participant p2 as "Cache[Performance Cache]"
+  participant p3 as "Storage[localStorage]"
+  participant p4 as "Index[Exam Index]"
+  participant p5 as App
+  participant p6 as Cache
+  participant p7 as Storage
+  participant p8 as Index
 
-  App->>Cache: Check cached exam data
-  loop [Cache Hit]
-    Cache-->>App: Return cached data
-    App->>App: finishLibraryLoading()
-    App->>Storage: Load from localStorage
-    Storage-->>App: Return stored data
-    App->>Index: Process exam data
-    Index-->>App: Return processed data
-    App->>Cache: Store in cache with TTL
-    App->>App: finishLibraryLoading()
+  p5->>p6: Check cached exam data
+  alt Cache Hit
+    p6-->>p5: Return cached data
+    p5->>p5: finishLibraryLoading()
+  else Cache Miss
+    p5->>p7: Load from localStorage
+    p7-->>p5: Return stored data
+    p5->>p8: Process exam data
+    p8-->>p5: Return processed data
+    p5->>p6: Store in cache with TTL
+    p5->>p5: finishLibraryLoading()
   end
-  App->>Storage: Save processed data
-  App->>App: updateSystemInfo()
+  p5->>p7: Save processed data
+  p5->>p5: updateSystemInfo()
 ```
 
-**Sources:** [improved-working-system.html L1159-L1232](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/improved-working-system.html#L1159-L1232)
+**Sources:** [improved-working-system.html L1159-L1232](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/improved-working-system.html#L1159-L1232)
 
- [improved-working-system.html L1236-L1276](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/improved-working-system.html#L1236-L1276)
+ [improved-working-system.html L1236-L1276](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/improved-working-system.html#L1236-L1276)
 
 ## Data Import and Export
 
@@ -1184,13 +1215,13 @@ Statistics["Practice Statistics"]
 Records["Practice Records"]
 SystemState["System State"]
 
-PracticeExport --> DataCollection
-SystemExport --> DataCollection
-BackupExport --> DataCollection
-FileGeneration --> Metadata
-FileGeneration --> Statistics
-FileGeneration --> Records
-FileGeneration --> SystemState
+PracticeExport -.-> DataCollection
+SystemExport -.-> DataCollection
+BackupExport -.-> DataCollection
+FileGeneration -.-> Metadata
+FileGeneration -.-> Statistics
+FileGeneration -.-> Records
+FileGeneration -.-> SystemState
 
 subgraph subGraph2 ["Export Format"]
     Metadata
@@ -1203,8 +1234,8 @@ subgraph subGraph1 ["Export Process"]
     DataCollection
     Serialization
     FileGeneration
-    DataCollection --> Serialization
-    Serialization --> FileGeneration
+    DataCollection -.-> Serialization
+    Serialization -.-> FileGeneration
 end
 
 subgraph subGraph0 ["Export Types"]
@@ -1214,38 +1245,39 @@ subgraph subGraph0 ["Export Types"]
 end
 ```
 
-**Sources:** [improved-working-system.html L2489-L2513](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/improved-working-system.html#L2489-L2513)
+**Sources:** [improved-working-system.html L2489-L2513](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/improved-working-system.html#L2489-L2513)
 
- [improved-working-system.html L2027-L2041](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/improved-working-system.html#L2027-L2041)
+ [improved-working-system.html L2027-L2041](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/improved-working-system.html#L2027-L2041)
 
 ### Import and Validation
 
 ```mermaid
 sequenceDiagram
-  participant User
-  participant FileInput["File Input"]
-  participant Validator["Data Validator"]
-  participant Storage["Storage System"]
-  participant UI["User Interface"]
-  participant FileInput
-  participant Validator
-  participant Storage
-  participant UI
+  participant p1 as User
+  participant p2 as "FileInput[File Input]"
+  participant p3 as "Validator[Data Validator]"
+  participant p4 as "Storage[Storage System]"
+  participant p5 as "UI[User Interface]"
+  participant p6 as FileInput
+  participant p7 as Validator
+  participant p8 as Storage
+  participant p9 as UI
 
-  User->>FileInput: Select import file
-  FileInput->>Validator: Validate file format
-  Validator->>Validator: Check data structure
-  Validator->>Validator: Verify compatibility
-  loop [Valid Data]
-    Validator->>Storage: Import data
-    Storage->>Storage: Backup existing data
-    Storage->>Storage: Apply new data
-    Storage-->>UI: Success response
-    UI-->>User: Show success message
-    UI->>UI: location.reload()
-    Validator-->>UI: Error response
-    UI-->>User: Show error message
+  p1->>p6: Select import file
+  p6->>p7: Validate file format
+  p7->>p7: Check data structure
+  p7->>p7: Verify compatibility
+  alt Valid Data
+    p7->>p8: Import data
+    p8->>p8: Backup existing data
+    p8->>p8: Apply new data
+    p8-->>p9: Success response
+    p9-->>p1: Show success message
+    p9->>p9: location.reload()
+  else Invalid Data
+    p7-->>p9: Error response
+    p9-->>p1: Show error message
   end
 ```
 
-**Sources:** [improved-working-system.html L2044-L2077](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/improved-working-system.html#L2044-L2077)
+**Sources:** [improved-working-system.html L2044-L2077](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/improved-working-system.html#L2044-L2077)

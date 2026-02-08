@@ -1,418 +1,612 @@
 # Core Application Architecture
 
 > **Relevant source files**
-> * [css/main.css](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/css/main.css)
-> * [index.html](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/index.html)
-> * [js/app.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app.js)
-> * [js/app/lifecycleMixin.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/lifecycleMixin.js)
-> * [js/main.js](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js)
+> * [css/heroui-bridge.css](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/css/heroui-bridge.css)
+> * [css/main.css](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/css/main.css)
+> * [index.html](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/index.html)
+> * [js/app.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app.js)
+> * [js/app/lifecycleMixin.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/lifecycleMixin.js)
+> * [js/boot-fallbacks.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/boot-fallbacks.js)
+> * [js/components/DataIntegrityManager.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/components/DataIntegrityManager.js)
+> * [js/main.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/main.js)
+> * [js/script.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/script.js)
 
-This document describes the central application orchestration layer, which serves as the backbone of the IELTS practice system. This layer is responsible for initializing the application, managing global state, coordinating between subsystems, and handling navigation between different views.
+## Purpose and Scope
 
-For detailed information about specific aspects of this architecture:
+This document describes the core application architecture of the IELTS practice system, focusing on the main application instance, initialization flow, state management approach, and the mixin-based composition pattern used throughout the codebase. It covers the bootstrap sequence from page load to fully initialized application state.
 
-* State management implementation details: see [ExamSystemApp & State Management](/sallowayma-git/IELTS-practice/3.1-examsystemapp-and-state-management)
-* Bootstrap sequence and lifecycle hooks: see [Application Initialization & Lifecycle](/sallowayma-git/IELTS-practice/3.2-application-initialization-and-lifecycle)
-* View routing and navigation controller: see [View Management & Navigation](/sallowayma-git/IELTS-practice/3.3-view-management-and-navigation)
-* Mixin composition patterns: see [Mixins & Component Architecture](/sallowayma-git/IELTS-practice/3.4-mixins-and-component-architecture)
-
----
-
-## Overview
-
-The core application architecture consists of two primary components that work together:
-
-1. **`ExamSystemApp` class** - The main application orchestrator defined in [js/app.js L6-L62](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app.js#L6-L62)
-2. **`main.js` module** - Legacy bootstrap code and global state accessors defined in [js/main.js L1-L2393](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L1-L2393)
-
-These components implement a hybrid architecture that maintains backward compatibility with legacy global variables while providing a modern class-based structure with state management. The system uses a mixin pattern to compose functionality from separate modules, enabling modular development and testing.
-
-Sources: [js/app.js L1-L121](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app.js#L1-L121)
-
- [js/main.js L1-L100](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L1-L100)
-
- [index.html L1-L503](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/index.html#L1-L503)
+For information about theme-specific entry points and theme adapters, see [Theme System & UI Architecture](/sallowayma-git/IELTS-practice/7-theme-system-and-ui-architecture). For details on data persistence and repositories, see [Data Management System](/sallowayma-git/IELTS-practice/4-data-management-system). For the practice session lifecycle and window management, see [Practice Session System](/sallowayma-git/IELTS-practice/5-practice-session-system).
 
 ---
 
-## Application Class Structure
+## Core Application Components
 
-The `ExamSystemApp` class serves as the central point of coordination for the entire system. It maintains unified state, manages component lifecycles, and orchestrates interactions between subsystems.
+The application architecture consists of several key components that work together to provide a robust, extensible system:
 
-### Class Definition and State Model
+| Component | Primary Class/File | Responsibility |
+| --- | --- | --- |
+| Main Application Instance | `ExamSystemApp` | Orchestrates all subsystems, manages lifecycle |
+| Bootstrap Coordinator | `main-entry.js` | Coordinates lazy loading and initialization |
+| Resilience Layer | `boot-fallbacks.js` | Provides fallback implementations |
+| State Management | `AppStateService` | Centralized state management service |
+| Legacy Compatibility | `LegacyStateAdapter` | Bridges global variables to services |
+| Navigation Controller | `NavigationController` | Manages view switching and routing |
+| Component Registry | `app.components` | Holds references to initialized components |
 
-The core state structure is defined in the constructor:
+**Sources:** [js/app.js L1-L132](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app.js#L1-L132)
+
+ [js/main.js L1-L120](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/main.js#L1-L120)
+
+ [js/boot-fallbacks.js L1-L100](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/boot-fallbacks.js#L1-L100)
+
+---
+
+## ExamSystemApp Class Structure
+
+The `ExamSystemApp` class serves as the main application instance, using a mixin-based architecture for modularity.
+
+### Core State Structure
+
+The application maintains a centralized state object with the following structure:
+
+```yaml
+this.state = {
+    exam: {
+        index: [],
+        currentCategory: 'all',
+        currentExamType: 'all',
+        filteredExams: [],
+        configurations: {},
+        activeConfigKey: 'exam_index'
+    },
+    practice: {
+        records: [],
+        selectedRecords: new Set(),
+        bulkDeleteMode: false,
+        dataCollector: null
+    },
+    ui: {
+        browseFilter: { category: 'all', type: 'all' },
+        pendingBrowseFilter: null,
+        legacyBrowseType: 'all',
+        currentVirtualScroller: null,
+        loading: false,
+        loadingMessage: ''
+    },
+    components: {
+        dataIntegrityManager: null,
+        pdfHandler: null,
+        browseStateManager: null,
+        practiceListScroller: null
+    },
+    system: {
+        processedSessions: new Set(),
+        fallbackExamSessions: new Map(),
+        failedScripts: new Set()
+    }
+};
+```
+
+**Sources:** [js/app.js L6-L62](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app.js#L6-L62)
+
+### Mixin Application
+
+The application applies multiple mixins to the `ExamSystemApp.prototype` during bootstrap:
 
 ```
-ExamSystemApp
-├── state
-│   ├── exam (category, type, index, filtered, configs)
-│   ├── practice (records, selectedRecords, bulkDeleteMode)
-│   ├── ui (browseFilter, loading, virtualScroller)
-│   ├── components (managers, handlers, instances)
-│   └── system (processedSessions, fallbackSessions)
-├── currentView
-├── components
-└── isInitialized
+Object.assign(ExamSystemApp.prototype,
+    mixins.state || {},
+    mixins.bootstrap || {},
+    mixins.lifecycle || {},
+    mixins.navigation || {},
+    mixins.examSession || {},
+    mixins.suitePractice || {},
+    mixins.fallback || {}
+);
 ```
 
-The `state` object consolidates all application-level data, replacing scattered global variables with a structured model. This design facilitates state synchronization, debugging, and testing.
-
-Sources: [js/app.js L6-L60](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app.js#L6-L60)
-
-### Mixin Composition Pattern
-
-The application uses a mixin pattern to compose functionality from separate modules. Mixins are applied dynamically at runtime:
+**Diagram: ExamSystemApp Composition**
 
 ```mermaid
 flowchart TD
 
-AppClass["ExamSystemApp<br>(base class)"]
-MixinRegistry["ExamSystemAppMixins<br>(global.ExamSystemAppMixins)"]
-StateMixin["stateMixin.js<br>State Management Methods"]
-BootstrapMixin["bootstrapMixin.js<br>Component Initialization"]
-LifecycleMixin["lifecycleMixin.js<br>Lifecycle Hooks"]
-NavigationMixin["navigationMixin.js<br>View Navigation"]
-ExamSessionMixin["examSessionMixin.js<br>Exam Window Management"]
-SuiteMixin["suitePracticeMixin.js<br>Suite Orchestration"]
-FallbackMixin["fallbackMixin.js<br>Error Recovery"]
-FinalApp["ExamSystemApp.prototype<br>(composed methods)"]
+App["ExamSystemApp<br>Main Instance"]
+StateMixin["stateMixin<br>State get/set methods"]
+BootstrapMixin["bootstrapMixin<br>checkDependencies()"]
+LifecycleMixin["lifecycleMixin<br>initialize(), destroy()"]
+NavigationMixin["navigationMixin<br>navigateToView()"]
+SessionMixin["examSessionMixin<br>openExam(), sessionTracking"]
+SuiteMixin["suitePracticeMixin<br>Suite session management"]
+FallbackMixin["fallbackMixin<br>Fallback handling"]
+ExamState["state.exam<br>index, filters"]
+PracticeState["state.practice<br>records, selections"]
+UIState["state.ui<br>loading, filters"]
+SystemState["state.system<br>sessions, errors"]
+DataIntegrity["dataIntegrityManager"]
+PracticeRecorder["practiceRecorder"]
+ScoreStorage["scoreStorage"]
+BrowseController["browseController"]
 
-AppClass --> MixinRegistry
-MixinRegistry --> StateMixin
-MixinRegistry --> BootstrapMixin
-MixinRegistry --> LifecycleMixin
-MixinRegistry --> NavigationMixin
-MixinRegistry --> ExamSessionMixin
-MixinRegistry --> SuiteMixin
-MixinRegistry --> FallbackMixin
-MixinRegistry --> FinalApp
+App -.-> StateMixin
+App -.-> BootstrapMixin
+App -.-> LifecycleMixin
+App -.-> NavigationMixin
+App -.-> SessionMixin
+App -.-> SuiteMixin
+App -.-> FallbackMixin
+App -.-> ExamState
+App -.-> PracticeState
+App -.-> UIState
+App -.-> SystemState
+App -.-> DataIntegrity
+App -.-> PracticeRecorder
+App -.-> ScoreStorage
+App -.-> BrowseController
+
+subgraph subGraph2 ["Component Registry"]
+    DataIntegrity
+    PracticeRecorder
+    ScoreStorage
+    BrowseController
+end
+
+subgraph subGraph1 ["Core State"]
+    ExamState
+    PracticeState
+    UIState
+    SystemState
+end
+
+subgraph subGraph0 ["Mixin Layer"]
+    StateMixin
+    BootstrapMixin
+    LifecycleMixin
+    NavigationMixin
+    SessionMixin
+    SuiteMixin
+    FallbackMixin
+end
 ```
 
-Each mixin file registers itself by adding methods to `window.ExamSystemAppMixins[mixinName]`. The `applyMixins()` function in [js/app.js L65-L75](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app.js#L65-L75)
+**Sources:** [js/app.js L64-L81](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app.js#L64-L81)
 
- merges all registered mixins into the `ExamSystemApp.prototype`. This pattern allows each concern to be developed independently while maintaining a cohesive API surface.
+ [js/app/lifecycleMixin.js L1-L607](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/lifecycleMixin.js#L1-L607)
 
-Sources: [js/app.js L64-L81](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app.js#L64-L81)
+---
 
- [js/app/lifecycleMixin.js L1-L606](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/lifecycleMixin.js#L1-L606)
+## Application Bootstrap Sequence
+
+The application follows a multi-stage bootstrap process designed for resilience and progressive enhancement:
+
+### Stage 1: Immediate Resilience (boot-fallbacks.js)
+
+Executes before `DOMContentLoaded` to provide baseline functionality:
+
+```javascript
+// Fallback navigation
+if (typeof window.showView !== 'function') {
+    window.showView = function (viewName, resetCategory) {
+        // Basic view switching without dependencies
+    };
+}
+
+// Fallback message system
+if (typeof window.showMessage !== 'function') {
+    window.showMessage = function (message, type, duration) {
+        // Basic toast notifications
+    };
+}
+```
+
+**Sources:** [js/boot-fallbacks.js L4-L59](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/boot-fallbacks.js#L4-L59)
+
+ [js/boot-fallbacks.js L248-L283](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/boot-fallbacks.js#L248-L283)
+
+### Stage 2: Core Initialization (main-entry.js)
+
+The `main-entry.js` file coordinates lazy loading and creates the application instance:
+
+1. Set storage namespace
+2. Pre-load critical script groups
+3. Instantiate `ExamSystemApp`
+4. Trigger `initialize()` method
+
+**Sources:** [js/app/main-entry.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/main-entry.js)
+
+ (referenced but not fully provided)
+
+### Stage 3: Application Initialization (app.js)
+
+The `ExamSystemApp.initialize()` method executes the full initialization sequence:
+
+**Diagram: Initialization Sequence**
+
+```mermaid
+sequenceDiagram
+  participant p1 as Browser
+  participant p2 as boot-fallbacks.js
+  participant p3 as main-entry.js
+  participant p4 as ExamSystemApp
+  participant p5 as lifecycleMixin
+  participant p6 as storage
+  participant p7 as Component Registry
+
+  p1->>p2: Execute immediately
+  p2->>p2: Register showView() fallback
+  p2->>p2: Register showMessage() fallback
+  p1->>p1: DOMContentLoaded
+  p1->>p3: Initialize
+  p3->>p6: setNamespace('exam_system')
+  p3->>p3: Pre-load critical groups
+  p3->>p4: new ExamSystemApp()
+  p4->>p4: Apply mixins
+  p4->>p4: Initialize state structure
+  p3->>p4: initialize()
+  p4->>p5: checkDependencies()
+  p4->>p5: initializeGlobalCompatibility()
+  p4->>p5: loadPersistedState()
+  p4->>p6: get('exam_index')
+  p6-->>p4: exam index data
+  p4->>p6: get('practice_records')
+  p6-->>p4: practice records
+  p4->>p5: initializeComponents()
+  p4->>p7: Initialize DataIntegrityManager
+  p4->>p7: Initialize PracticeRecorder
+  p4->>p7: Initialize ScoreStorage
+  p4->>p5: setupEventListeners()
+  p4->>p5: setupGlobalErrorHandling()
+  p4->>p5: loadInitialData()
+  p4->>p5: setupInitialView()
+  p4->>p1: Hide loading overlay
+  p4->>p1: Display UI
+```
+
+**Sources:** [js/app.js L86-L124](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app.js#L86-L124)
+
+ [js/app/lifecycleMixin.js L6-L70](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/lifecycleMixin.js#L6-L70)
 
 ---
 
 ## State Management Architecture
 
-The system implements a dual-path state management strategy to support both modern application code and legacy compatibility.
+The application uses a dual-layer state management approach to maintain backward compatibility while migrating to a service-based architecture.
 
-### Dual State Architecture
+### AppStateService Layer
+
+The `AppStateService` provides centralized state management:
+
+```python
+class AppStateService {
+    constructor() {
+        this._state = {
+            fallbackExamSessions: new Map(),
+            processedSessions: new Set(),
+            // ... other state
+        };
+    }
+    
+    getFallbackExamSessions() { return this._state.fallbackExamSessions; }
+    setFallbackExamSessions(value) { this._state.fallbackExamSessions = value; }
+    // ... other accessors
+}
+```
+
+**Sources:** [js/services/appStateService.js](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/services/appStateService.js)
+
+ (referenced in main.js)
+
+### Legacy Compatibility Shims
+
+The `main.js` file provides property shims for backward compatibility with global variables:
+
+```javascript
+Object.defineProperty(window, 'fallbackExamSessions', {
+    get: function () {
+        if (window.appStateService) {
+            return window.appStateService.getFallbackExamSessions();
+        }
+        // Fallback to temporary Map
+        if (!window.__legacyFallbackExamSessions) {
+            window.__legacyFallbackExamSessions = new Map();
+        }
+        return window.__legacyFallbackExamSessions;
+    },
+    set: function (value) {
+        if (window.appStateService && value instanceof Map) {
+            window.appStateService.setFallbackExamSessions(value);
+        } else {
+            window.__legacyFallbackExamSessions = value;
+        }
+    },
+    configurable: true
+});
+```
+
+**Sources:** [js/main.js L12-L31](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/main.js#L12-L31)
+
+ [js/main.js L34-L46](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/main.js#L34-L46)
+
+### Function Shims
+
+Function calls are shimmed to delegate to the appropriate controllers:
+
+```javascript
+// Shim for browse filter state
+if (typeof window.setBrowseFilterState !== 'function') {
+    window.setBrowseFilterState = function (category, type) {
+        if (window.browseController && typeof window.browseController.setBrowseFilterState === 'function') {
+            window.browseController.setBrowseFilterState(category, type);
+        }
+    };
+}
+```
+
+**Sources:** [js/main.js L146-L153](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/main.js#L146-L153)
+
+**Diagram: State Management Flow**
 
 ```mermaid
 flowchart TD
 
-AppState["app.state<br>(ExamSystemApp instance)"]
-StateService["appStateService<br>(window.appStateService)"]
-AppStateClass["AppStateService<br>(singleton)"]
-GlobalVars["window.examIndex<br>window.practiceRecords<br>window.__browseFilter"]
-LegacyAdapter["LegacyStateAdapter<br>(window.LegacyStateAdapter)"]
-LegacyBridge["LegacyStateBridge<br>(bridging layer)"]
-GetExamIndex["getExamIndexState()"]
-SetExamIndex["setExamIndexState()"]
-GetPractice["getPracticeRecordsState()"]
-SetPractice["setPracticeRecordsState()"]
-GetBrowse["getBrowseFilterState()"]
-SetBrowse["setBrowseFilterState()"]
-IndexedDB["IndexedDB<br>(primary)"]
-LocalStorage["localStorage<br>(fallback)"]
+GlobalVars["Global Variables<br>window.fallbackExamSessions<br>window.examListViewInstance"]
+GlobalFuncs["Global Functions<br>setBrowseFilterState()<br>getCurrentCategory()"]
+PropertyShims["Property Getters/Setters<br>Object.defineProperty()"]
+FunctionShims["Function Shims<br>Delegation wrappers"]
+AppStateService["AppStateService<br>getInstance()"]
+BrowseController["browseController<br>Filter management"]
+NavigationCtrl["NavigationController<br>View management"]
+SessionState["Session State<br>fallbackExamSessions Map<br>processedSessions Set"]
+ExamState["Exam State<br>index, filters"]
+UIState["UI State<br>loading, currentView"]
 
-AppState --> GlobalVars
-AppStateClass --> LegacyBridge
-GetExamIndex --> StateService
-GetExamIndex --> GlobalVars
-SetExamIndex --> StateService
-SetExamIndex --> GlobalVars
-GetPractice --> StateService
-SetPractice --> StateService
-GetBrowse --> StateService
-SetBrowse --> StateService
-StateService --> IndexedDB
-StateService --> LocalStorage
-GlobalVars --> LocalStorage
+GlobalVars -.-> PropertyShims
+GlobalFuncs -.-> FunctionShims
+PropertyShims -.-> AppStateService
+PropertyShims -.-> BrowseController
+FunctionShims -.-> BrowseController
+FunctionShims -.-> NavigationCtrl
+AppStateService -.-> SessionState
+BrowseController -.-> ExamState
+NavigationCtrl -.-> UIState
 
-subgraph subGraph3 ["Storage Layer"]
-    IndexedDB
-    LocalStorage
+subgraph subGraph3 ["Application State"]
+    SessionState
+    ExamState
+    UIState
 end
 
-subgraph subGraph2 ["State Accessor Functions"]
-    GetExamIndex
-    SetExamIndex
-    GetPractice
-    SetPractice
-    GetBrowse
-    SetBrowse
+subgraph subGraph2 ["Service Layer"]
+    AppStateService
+    BrowseController
+    NavigationCtrl
 end
 
-subgraph subGraph1 ["Legacy Compatibility Path"]
+subgraph subGraph1 ["Compatibility Shims"]
+    PropertyShims
+    FunctionShims
+end
+
+subgraph subGraph0 ["Legacy Access Layer"]
     GlobalVars
-    LegacyAdapter
-    LegacyBridge
-    LegacyBridge --> LegacyAdapter
-    LegacyAdapter --> GlobalVars
-end
-
-subgraph subGraph0 ["Modern State Path"]
-    AppState
-    StateService
-    AppStateClass
-    AppState --> StateService
-    StateService --> AppStateClass
+    GlobalFuncs
 end
 ```
 
-This architecture allows the application to:
+**Sources:** [js/main.js L5-L83](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/main.js#L5-L83)
 
-* Use modern state management where available
-* Fall back gracefully to global variables when `appStateService` is unavailable
-* Maintain backward compatibility with code that expects global variables
-* Synchronize between modern and legacy state representations
+ [js/main.js L142-L200](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/main.js#L142-L200)
 
-Sources: [js/main.js L48-L59](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L48-L59)
+---
 
- [js/main.js L65-L236](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L65-L236)
+## Mixin Composition Pattern
 
- [js/app.js L12-L56](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app.js#L12-L56)
+The application uses mixins to separate concerns and enable modular feature composition. Each mixin is defined in its own file and applied to `ExamSystemApp.prototype`.
 
-### State Accessor Functions
+### Available Mixins
 
-The system provides a consistent API for state access through accessor functions in `main.js`:
-
-| Function | Purpose | Lines |
+| Mixin File | Key Methods | Responsibility |
 | --- | --- | --- |
-| `getExamIndexState()` | Retrieve exam list | [js/main.js L65-L70](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L65-L70) |
-| `setExamIndexState(list)` | Update exam list with sequence numbers | [js/main.js L72-L80](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L72-L80) |
-| `getPracticeRecordsState()` | Retrieve practice records | [js/main.js L82-L87](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L82-L87) |
-| `setPracticeRecordsState(records)` | Update records with enrichment | [js/main.js L104-L116](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L104-L116) |
-| `getBrowseFilterState()` | Retrieve browse filter | [js/main.js L211-L218](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L211-L218) |
-| `setBrowseFilterState(category, type)` | Update filter and persist | [js/main.js L220-L236](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L220-L236) |
+| `stateMixin.js` | `getState()`, `setState()`, `persistState()` | State access and persistence |
+| `bootstrapMixin.js` | `checkDependencies()`, `ensureStorage()` | Dependency validation |
+| `lifecycleMixin.js` | `initialize()`, `destroy()`, `setupEventListeners()` | Application lifecycle |
+| `navigationMixin.js` | `navigateToView()`, `onViewActivated()` | View management |
+| `examSessionMixin.js` | `openExam()`, `trackSession()` | Exam window management |
+| `suitePracticeMixin.js` | `startSuiteSession()`, `aggregateResults()` | Suite practice mode |
+| `fallbackMixin.js` | `handleMissingDependency()` | Error recovery |
 
-These functions implement a try-first-fallback pattern: they attempt to use `stateService` if available, then fall back to direct global variable access. This ensures the application continues to function even if state management services fail to initialize.
+**Sources:** [js/app.js L64-L81](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app.js#L64-L81)
 
-Sources: [js/main.js L65-L298](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L65-L298)
+### Lifecycle Mixin Methods
+
+The `lifecycleMixin` provides the core initialization and teardown logic:
+
+```
+async initialize() {
+    try {
+        this.showLoading(true);
+        this.updateLoadingMessage('正在检查系统依赖...');
+        this.checkDependencies();
+        
+        this.updateLoadingMessage('正在初始化状态管理...');
+        this.initializeGlobalCompatibility();
+        
+        this.updateLoadingMessage('正在加载持久化状态...');
+        await this.loadPersistedState();
+        
+        this.updateLoadingMessage('正在初始化响应式功能...');
+        this.initializeResponsiveFeatures();
+        
+        this.updateLoadingMessage('正在加载系统组件...');
+        await this.initializeComponents();
+        
+        this.updateLoadingMessage('正在设置事件监听器...');
+        this.setupEventListeners();
+        
+        if (typeof window.initializeLegacyComponents === 'function') {
+            await window.initializeLegacyComponents();
+        }
+        
+        await this.loadInitialData();
+        this.setupInitialView();
+        this.startSessionMonitoring();
+        this.setupGlobalErrorHandling();
+        
+        this.isInitialized = true;
+        this.showLoading(false);
+        this.showUserMessage('系统初始化完成', 'success');
+    } catch (error) {
+        this.handleInitializationError(error);
+    }
+}
+```
+
+**Sources:** [js/app/lifecycleMixin.js L6-L70](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/lifecycleMixin.js#L6-L70)
 
 ---
 
-## Initialization and Bootstrap Sequence
+## Component Initialization and Registry
 
-The application initialization follows a carefully orchestrated sequence to ensure all dependencies are available before use.
+The application maintains a registry of initialized components in `app.components`:
 
-### Bootstrap Flow
+### Component Initialization Flow
 
-```mermaid
-sequenceDiagram
-  participant Browser
-  participant DOMContentLoaded
-  participant js/app.js
-  participant ExamSystemApp
-  participant lifecycleMixin
-  participant bootstrapMixin
-  participant main.js
-  participant storage service
-
-  Browser->>DOMContentLoaded: Page loaded
-  DOMContentLoaded->>js/app.js: Event fires
-  js/app.js->>js/app.js: applyMixins()
-  js/app.js->>ExamSystemApp: new ExamSystemApp()
-  ExamSystemApp->>ExamSystemApp: constructor()
-  note over ExamSystemApp: Initialize state object
-  js/app.js->>ExamSystemApp: initialize()
-  ExamSystemApp->>lifecycleMixin: showLoading(true)
-  ExamSystemApp->>lifecycleMixin: checkDependencies()
-  ExamSystemApp->>lifecycleMixin: initializeGlobalCompatibility()
-  ExamSystemApp->>lifecycleMixin: loadPersistedState()
-  lifecycleMixin->>storage service: Restore from storage
-  ExamSystemApp->>lifecycleMixin: initializeResponsiveFeatures()
-  note over lifecycleMixin: ResponsiveManager
-  ExamSystemApp->>bootstrapMixin: initializeComponents()
-  bootstrapMixin->>bootstrapMixin: Create PracticeRecorder
-  bootstrapMixin->>bootstrapMixin: Create ScoreStorage
-  bootstrapMixin->>bootstrapMixin: Create managers
-  ExamSystemApp->>lifecycleMixin: setupEventListeners()
-  note over lifecycleMixin: Navigation clicks
-  ExamSystemApp->>main.js: initializeLegacyComponents()
-  main.js->>main.js: ensureLegacyNavigation()
-  main.js->>main.js: setupBrowsePreferenceUI()
-  main.js->>main.js: Initialize PDFHandler
-  ExamSystemApp->>lifecycleMixin: loadInitialData()
-  lifecycleMixin->>storage service: Load exam index
-  lifecycleMixin->>storage service: Load practice records
-  lifecycleMixin->>ExamSystemApp: Update state
-  ExamSystemApp->>lifecycleMixin: setupInitialView()
-  ExamSystemApp->>lifecycleMixin: startSessionMonitoring()
-  ExamSystemApp->>lifecycleMixin: setupGlobalErrorHandling()
-  lifecycleMixin->>ExamSystemApp: isInitialized = true
-  ExamSystemApp->>lifecycleMixin: showLoading(false)
-  ExamSystemApp->>lifecycleMixin: showUserMessage('success')
+```
+async initializeComponents() {
+    // Data Integrity Manager
+    if (window.DataIntegrityManager) {
+        this.components.dataIntegrityManager = new DataIntegrityManager();
+    }
+    
+    // Practice Recorder
+    if (window.PracticeRecorder) {
+        this.components.practiceRecorder = new PracticeRecorder();
+    }
+    
+    // Score Storage
+    if (window.ScoreStorage) {
+        this.components.scoreStorage = new ScoreStorage();
+    }
+    
+    // Browse Controller
+    if (window.BrowseController) {
+        this.components.browseController = new BrowseController();
+    }
+}
 ```
 
-This sequence ensures that:
+**Sources:** [js/main.js L281-L320](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/main.js#L281-L320)
 
-1. Dependencies are checked before use
-2. State is restored from persistent storage
-3. Components are initialized in dependency order
-4. Event listeners are attached after components exist
-5. Initial data is loaded and rendered
+### Legacy Component Initialization
 
-Sources: [js/app.js L86-L112](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app.js#L86-L112)
-
- [js/app/lifecycleMixin.js L6-L70](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/lifecycleMixin.js#L6-L70)
-
- [js/main.js L1084-L1150](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L1084-L1150)
-
-### Dependency Resolution
-
-The `stateService` is resolved at module initialization time using a fallback pattern:
+The `initializeLegacyComponents()` function in `main.js` initializes components that aren't yet fully migrated:
 
 ```javascript
-// From js/main.js:48-59
-const stateService = (function resolveStateService() {
-    if (window.appStateService && typeof window.appStateService.getExamIndex === 'function') {
-        return window.appStateService;
+async function initializeLegacyComponents() {
+    try { showMessage('系统准备就绪', 'success'); } catch (_) { }
+    
+    try {
+        ensureLegacyNavigation({ initialView: 'overview' });
+    } catch (error) {
+        console.warn('[Navigation] 初始化导航控制器失败:', error);
     }
-    if (window.AppStateService && typeof window.AppStateService.getInstance === 'function') {
-        return window.AppStateService.getInstance({
-            legacyAdapter: legacyStateAdapter,
-            onBrowseFilterChange: syncGlobalBrowseState
-        });
+    
+    setupBrowsePreferenceUI();
+    
+    // Setup UI Listeners
+    const folderPicker = document.getElementById('folder-picker');
+    if (folderPicker) {
+        folderPicker.addEventListener('change', handleFolderSelection);
     }
-    return null;
-})();
+    
+    // Initialize components
+    if (window.PDFHandler) {
+        pdfHandler = new PDFHandler();
+    }
+    if (window.BrowseStateManager) {
+        browseStateManager = new BrowseStateManager();
+    }
+    if (window.DataIntegrityManager) {
+        window.dataIntegrityManager = new DataIntegrityManager();
+    }
+    if (window.PerformanceOptimizer) {
+        window.performanceOptimizer = new PerformanceOptimizer();
+    }
+}
 ```
 
-This IIFE (Immediately Invoked Function Expression) attempts to find an existing `appStateService` instance or creates one if the constructor is available. If neither exists, it returns `null`, causing all state accessors to fall back to global variables.
-
-Sources: [js/main.js L48-L59](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L48-L59)
+**Sources:** [js/main.js L281-L347](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/main.js#L281-L347)
 
 ---
 
-## Component Lifecycle Management
+## Global Error Handling
 
-The application manages component lifecycles through the lifecycle mixin, which provides standardized hooks for initialization, activation, and cleanup.
+The application implements comprehensive error handling at multiple levels:
 
-### Component Registration and Initialization
-
-Components are initialized in [js/app/lifecycleMixin.js L22-L27](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/lifecycleMixin.js#L22-L27)
-
- via the `initializeComponents()` method (defined in the bootstrap mixin). The system creates instances and stores them in `this.components`:
-
-```
-Component Initialization Order:
-1. Core services (storage, state management)
-2. Data managers (PracticeRecorder, ScoreStorage)
-3. UI managers (ResponsiveManager, ThemeManager)
-4. View components (OverviewView, BrowseView, etc.)
-5. Utility components (PDFHandler, DataIntegrityManager)
-```
-
-Each component is expected to be self-initializing - its constructor should perform all necessary setup. The application stores component instances for later reference and cleanup.
-
-Sources: [js/app/lifecycleMixin.js L3-L70](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/lifecycleMixin.js#L3-L70)
-
- [js/main.js L1084-L1150](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L1084-L1150)
-
-### Error Handling and Recovery
-
-The lifecycle mixin implements comprehensive error handling:
-
-```mermaid
-flowchart TD
-
-InitError["Initialization Error"]
-Analyze["handleInitializationError()<br>Analyze error type"]
-TimeoutError["Timeout?"]
-DependencyError["Dependency?"]
-NetworkError["Network?"]
-UnknownError["Unknown?"]
-ShowRecover["Show recovery message<br>canRecover = true"]
-ShowFatal["Show fatal message<br>canRecover = false"]
-DisplayUI["showFallbackUI(true)<br>Show reload button"]
-DisplayUI2["showFallbackUI(false)<br>Show support contact"]
-Log["Log to console<br>handleError()"]
-
-InitError --> Analyze
-Analyze --> TimeoutError
-Analyze --> DependencyError
-Analyze --> NetworkError
-Analyze --> UnknownError
-TimeoutError --> ShowRecover
-DependencyError --> ShowFatal
-NetworkError --> ShowRecover
-UnknownError --> ShowFatal
-ShowRecover --> DisplayUI
-ShowFatal --> DisplayUI2
-DisplayUI --> Log
-DisplayUI2 --> Log
-```
-
-The error handling logic in [js/app/lifecycleMixin.js L75-L104](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/lifecycleMixin.js#L75-L104)
-
- analyzes errors to determine if recovery is possible. For recoverable errors (timeouts, network issues), it provides a retry mechanism. For fatal errors (missing dependencies, unknown errors), it directs users to support.
-
-Sources: [js/app/lifecycleMixin.js L75-L167](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/lifecycleMixin.js#L75-L167)
-
-### Global Error Capture
-
-The application installs global error handlers to catch unhandled exceptions:
+### Unhandled Promise Rejections
 
 ```javascript
-// Unhandled promise rejections
 window.addEventListener('unhandledrejection', (event) => {
+    console.error('[App] 未处理的Promise拒绝:', event.reason);
     this.handleGlobalError(event.reason, 'Promise拒绝');
     event.preventDefault();
 });
+```
 
-// JavaScript errors
+### JavaScript Errors
+
+```javascript
 window.addEventListener('error', (event) => {
+    console.error('[App] JavaScript错误:', event.error);
     this.handleGlobalError(event.error, 'JavaScript错误');
 });
 ```
 
-The `handleGlobalError()` method in [js/app/lifecycleMixin.js L128-L167](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/lifecycleMixin.js#L128-L167)
+### Error Aggregation and Rate Limiting
 
- maintains an error log and provides user feedback when error frequency exceeds thresholds. This prevents error storms from overwhelming users while still alerting them to persistent issues.
+```javascript
+handleGlobalError(error, context) {
+    try {
+        if (!this.globalErrors) {
+            this.globalErrors = [];
+        }
+        
+        this.globalErrors.push({
+            error: normalizedError.message || String(error),
+            context: context,
+            timestamp: Date.now(),
+            stack: normalizedError.stack
+        });
+        
+        // Limit error records
+        if (this.globalErrors.length > 100) {
+            this.globalErrors = this.globalErrors.slice(-50);
+        }
+        
+        // Rate limiting: check recent errors
+        const recentErrors = this.globalErrors.filter(
+            e => Date.now() - e.timestamp < 60000
+        );
+        
+        if (recentErrors.length > 5) {
+            this.showUserMessage('系统遇到多个错误，建议刷新页面', 'warning');
+        }
+    } catch (handlingError) {
+        console.error('[App] 错误处理失败:', handlingError);
+    }
+}
+```
 
-Sources: [js/app/lifecycleMixin.js L109-L167](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/lifecycleMixin.js#L109-L167)
+**Sources:** [js/app/lifecycleMixin.js L109-L167](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/lifecycleMixin.js#L109-L167)
 
 ---
 
-## View Management System
+## Event System
 
-The application implements a single-page application (SPA) architecture with multiple views that are shown/hidden dynamically.
+The application uses a combination of event delegation and direct event listeners:
 
-### View Activation Pattern
-
-```
-
-```
-
-Each view corresponds to a `<div class="view">` element in [index.html L30-L199](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/index.html#L30-L199)
-
- The `navigateToView()` method (defined in the navigation mixin) handles:
-
-1. Hiding the current view by removing the `active` class
-2. Showing the target view by adding the `active` class
-3. Updating navigation button states
-4. Calling the `onViewActivated()` lifecycle hook
-5. Persisting the current view to session storage
-
-Sources: [index.html L30-L199](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/index.html#L30-L199)
-
- [js/app/lifecycleMixin.js L302-L357](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/lifecycleMixin.js#L302-L357)
-
-### Navigation Event Handling
-
-The application uses event delegation to handle navigation button clicks:
+### Navigation Event Delegation
 
 ```javascript
-// From js/app/lifecycleMixin.js:302-325
 document.addEventListener('click', (e) => {
     const navBtn = e.target.closest('.nav-btn');
     if (navBtn) {
@@ -421,384 +615,197 @@ document.addEventListener('click', (e) => {
             this.navigateToView(view);
         }
     }
-    // ... other handlers
+    
+    const backBtn = e.target.closest('.btn-back');
+    if (backBtn) {
+        this.navigateToView('overview');
+    }
+    
+    const actionBtn = e.target.closest('[data-action]');
+    if (actionBtn) {
+        const action = actionBtn.dataset.action;
+        const category = actionBtn.dataset.category;
+        this.handleCategoryAction(action, category);
+    }
 });
 ```
 
-This pattern centralizes navigation logic and eliminates the need for inline `onclick` handlers. The navigation mixin (detailed in [View Management & Navigation](/sallowayma-git/IELTS-practice/3.3-view-management-and-navigation)) provides the actual `navigateToView()` implementation.
+**Sources:** [js/app/lifecycleMixin.js L301-L326](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/lifecycleMixin.js#L301-L326)
 
-Sources: [js/app/lifecycleMixin.js L301-L357](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/lifecycleMixin.js#L301-L357)
+### Visibility Change Handling
 
----
-
-## Integration with Legacy Code
-
-The core application maintains extensive compatibility with legacy code patterns that predate the class-based architecture.
-
-### Global Function Bridge
-
-Many functions in `main.js` are exposed as global functions to support legacy code:
-
-```python
-// Examples from main.js
-window.normalizeRecordId = normalizeRecordId;
-window.formatExamMetaText = formatExamMetaText;
-window.setBrowseTitle = setBrowseTitle;
-window.handlePostExamListRender = handlePostExamListRender;
-window.requestBrowseAutoScroll = requestBrowseAutoScroll;
-window.setupBrowsePreferenceUI = setupBrowsePreferenceUI;
+```javascript
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && this.isInitialized) {
+        this.refreshData();
+    }
+});
 ```
 
-These global assignments in [js/main.js L13-L15](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L13-L15)
-
- [js/main.js L148-L152](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L148-L152)
-
- [js/main.js L554-L556](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L554-L556)
-
- and [js/main.js L1014-L1018](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L1014-L1018)
-
- allow legacy code to call these functions without refactoring.
-
-Sources: [js/main.js L13-L15](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L13-L15)
-
- [js/main.js L148-L152](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L148-L152)
-
- [js/main.js L554-L556](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L554-L556)
-
- [js/main.js L1014-L1018](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L1014-L1018)
-
-### Legacy Component Initialization
-
-The `initializeLegacyComponents()` function in [js/main.js L1084-L1150](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L1084-L1150)
-
- is called during application initialization to set up components that expect a procedural, non-class-based API:
-
-| Component | Purpose | Factory Function |
-| --- | --- | --- |
-| `LegacyExamListView` | Render exam list | `ensureExamListView()` |
-| `PracticeDashboardView` | Display practice stats | `ensurePracticeDashboardView()` |
-| `NavigationController` | Legacy navigation | `ensureLegacyNavigation()` |
-| `PDFHandler` | PDF resource handling | Direct instantiation |
-| `BrowseStateManager` | Browse filter state | Direct instantiation |
-| `DataIntegrityManager` | Data validation | Direct instantiation |
-| `PerformanceOptimizer` | Performance fixes | Direct instantiation |
-
-Each factory function checks if an instance already exists before creating a new one, preventing duplicate initialization.
-
-Sources: [js/main.js L1030-L1150](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L1030-L1150)
+**Sources:** [js/app/lifecycleMixin.js L329-L334](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/lifecycleMixin.js#L329-L334)
 
 ---
 
-## Responsive Features and UI Management
+## Cleanup and Destruction
 
-The application includes responsive design management through the lifecycle mixin's `initializeResponsiveFeatures()` method.
+The `destroy()` method ensures proper cleanup when the application is closed:
+
+```javascript
+destroy() {
+    // Persist current state
+    this.persistMultipleState({
+        'exam.index': 'exam_index',
+        'practice.records': 'practice_records',
+        'ui.browseFilter': 'browse_filter',
+        'exam.currentCategory': 'current_category',
+        'exam.currentExamType': 'current_exam_type'
+    });
+    
+    // Clean up event listeners
+    window.removeEventListener('resize', this.handleResize);
+    
+    // Clear intervals
+    if (this.sessionMonitorInterval) {
+        clearInterval(this.sessionMonitorInterval);
+    }
+    
+    // Close exam windows
+    if (this.examWindows) {
+        this.examWindows.forEach((windowData, examId) => {
+            if (windowData.window && !windowData.window.closed) {
+                windowData.window.close();
+            }
+            this.cleanupExamSession(examId);
+        });
+    }
+    
+    // Clear collections
+    if (this.state.practice.selectedRecords) {
+        this.state.practice.selectedRecords.clear();
+    }
+    if (this.state.system.processedSessions) {
+        this.state.system.processedSessions.clear();
+    }
+    if (this.state.system.fallbackExamSessions) {
+        this.state.system.fallbackExamSessions.clear();
+    }
+    
+    // Destroy components
+    Object.values(this.components).forEach(component => {
+        if (component && typeof component.destroy === 'function') {
+            component.destroy();
+        }
+    });
+    
+    this.isInitialized = false;
+}
+```
+
+**Sources:** [js/app/lifecycleMixin.js L549-L601](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/lifecycleMixin.js#L549-L601)
+
+---
+
+## Dependency Injection and Service Locator
+
+The application uses a combination of dependency injection and service locator patterns:
+
+### Storage Service Access
+
+```javascript
+// Direct access to global storage instance
+const examIndex = await storage.get('exam_index', []);
+
+// Service locator pattern for optional dependencies
+function getLibraryManager() {
+    if (window.LibraryManager && typeof window.LibraryManager.getInstance === 'function') {
+        return window.LibraryManager.getInstance();
+    }
+    return null;
+}
+```
+
+**Sources:** [js/main.js L121-L140](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/main.js#L121-L140)
+
+ [js/app/lifecycleMixin.js L366-L368](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/lifecycleMixin.js#L366-L368)
+
+### Component Registry Pattern
+
+```javascript
+// Register component in app.components
+this.components.dataIntegrityManager = new DataIntegrityManager();
+
+// Access component through registry
+const manager = this.components.dataIntegrityManager;
+if (manager && typeof manager.createBackup === 'function') {
+    await manager.createBackup();
+}
+```
+
+**Sources:** [js/app.js L43-L48](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app.js#L43-L48)
+
+ [js/main.js L308-L310](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/main.js#L308-L310)
+
+---
+
+## Responsive and Adaptive Features
+
+The application includes responsive handling for different device sizes and orientations:
 
 ### Responsive Manager Initialization
 
 ```
-
-```
-
-This initialization in [js/app/lifecycleMixin.js L193-L228](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/lifecycleMixin.js#L193-L228)
-
- conditionally creates managers based on availability, allowing the application to function even if some responsive features are unavailable.
-
-Sources: [js/app/lifecycleMixin.js L193-L296](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/lifecycleMixin.js#L193-L296)
-
-### Orientation Handling
-
-The `adjustForOrientation()` method in [js/app/lifecycleMixin.js L262-L296](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/lifecycleMixin.js#L262-L296)
-
- detects landscape orientation on mobile devices and adjusts the layout:
-
-* Adds `mobile-landscape` class to body
-* Reduces header padding
-* Changes stats grid to 4 columns
-* Reduces margins for compact display
-
-This ensures the application remains usable in all device orientations.
-
-Sources: [js/app/lifecycleMixin.js L262-L296](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/lifecycleMixin.js#L262-L296)
-
----
-
-## Data Persistence and State Synchronization
-
-The application persists state across page reloads using the storage layer and synchronizes state between tabs.
-
-### State Persistence Strategy
-
-```
-
-```
-
-The `persistMultipleState()` method (defined in the state mixin, see [ExamSystemApp & State Management](/sallowayma-git/IELTS-practice/3.1-examsystemapp-and-state-management)) accepts a mapping of state paths to storage keys and persists multiple values atomically.
-
-The `destroy()` method in [js/app/lifecycleMixin.js L549-L601](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/lifecycleMixin.js#L549-L601)
-
- persists critical state before cleanup:
-
-```
-this.persistMultipleState({
-    'exam.index': 'exam_index',
-    'practice.records': 'practice_records',
-    'ui.browseFilter': 'browse_filter',
-    'exam.currentCategory': 'current_category',
-    'exam.currentExamType': 'current_exam_type'
-});
-```
-
-This ensures user state is preserved even if the application crashes or the user force-closes the tab.
-
-Sources: [js/app/lifecycleMixin.js L549-L601](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/lifecycleMixin.js#L549-L601)
-
-### Storage Event Synchronization
-
-The application listens for storage events to synchronize state across tabs:
-
-```javascript
-// From main.js - setupStorageSyncListener()
-window.addEventListener('storage', (event) => {
-    if (event.key === 'practice_records') {
-        syncPracticeRecords();
-    } else if (event.key === 'exam_index') {
-        loadLibrary();
+initializeResponsiveFeatures() {
+    if (window.ResponsiveManager) {
+        this.responsiveManager = new ResponsiveManager();
     }
-});
-```
-
-This mechanism ensures that when a user practices an exam in one tab, the practice history in other open tabs updates automatically.
-
-Sources: [js/main.js L1148-L1149](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L1148-L1149)
-
----
-
-## Session Monitoring and Active Window Tracking
-
-The application tracks open exam windows and monitors their status through periodic polling.
-
-### Session Monitoring Architecture
-
-```
-
-```
-
-The `startSessionMonitoring()` method (defined in the exam session mixin, see [Exam Window Management & Resource Resolution](/sallowayma-git/IELTS-practice/5.5-exam-window-management-and-resource-resolution)) starts a periodic check that:
-
-1. Iterates through `this.examWindows` Map
-2. Tests if each window is still open
-3. Removes closed windows and cleans up their sessions
-4. Updates the UI badge showing active session count
-
-This monitoring runs continuously after initialization with a 2-second interval.
-
-Sources: [js/app/lifecycleMixin.js L56](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/lifecycleMixin.js#L56-L56)
-
----
-
-## HTML Entry Point Structure
-
-The main HTML file defines the view structure and loads dependencies in a specific order.
-
-### Script Loading Order
-
-```
-
-```
-
-This loading order ensures:
-
-* Environment detection runs first for logging configuration
-* Data structures are available before code that uses them
-* Core services are initialized before dependent components
-* Mixins are registered before `ExamSystemApp` is instantiated
-* Patches are applied before application logic runs
-
-Sources: [index.html L385-L500](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/index.html#L385-L500)
-
-### View Container Structure
-
-The HTML defines five main views as sibling `<div>` elements:
-
-| View ID | Purpose | Initial State |
-| --- | --- | --- |
-| `overview-view` | Category overview, stats | `class="view active"` |
-| `browse-view` | Exam list, filters | `class="view"` |
-| `practice-view` | Practice history, records | `class="view"` |
-| `settings-view` | System settings, theme | `class="view"` |
-| `more-view` | Additional tools (clock, vocab) | `class="view"` |
-
-Only one view has the `active` class at a time. The navigation system toggles this class to show/hide views without page reloads.
-
-Sources: [index.html L30-L199](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/index.html#L30-L199)
-
----
-
-## Key Design Patterns
-
-### Pattern: Mixin Composition
-
-**Intent**: Allow functionality to be developed in separate modules and composed into the main application class.
-
-**Implementation**: Each mixin file creates an object with methods and assigns it to `window.ExamSystemAppMixins[name]`. The `applyMixins()` function uses `Object.assign()` to copy all methods onto `ExamSystemApp.prototype`.
-
-**Benefits**:
-
-* Separation of concerns (each mixin handles one aspect)
-* Testability (mixins can be tested in isolation)
-* Maintainability (changes to one concern don't affect others)
-* Reusability (mixins could theoretically be applied to other classes)
-
-Sources: [js/app.js L64-L81](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app.js#L64-L81)
-
-### Pattern: Try-First-Fallback
-
-**Intent**: Provide resilience by attempting modern code paths first, then falling back to legacy implementations.
-
-**Implementation**: Functions check if modern services exist and use them, otherwise fall back to global variables or legacy functions.
-
-**Example**:
-
-```javascript
-function getExamIndexState() {
-    if (stateService) {
-        return stateService.getExamIndex();
+    
+    if (window.TouchHandler) {
+        this.touchHandler = new TouchHandler();
     }
-    return Array.isArray(window.examIndex) ? window.examIndex : [];
+    
+    if (window.ThemeManager) {
+        this.themeManager = new ThemeManager();
+    }
+    
+    this.setupResponsiveEvents();
 }
 ```
 
-**Benefits**:
-
-* Graceful degradation when services fail to initialize
-* Backward compatibility with legacy code
-* Progressive enhancement as more services become available
-
-Sources: [js/main.js L65-L236](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L65-L236)
-
-### Pattern: Global Function Bridge
-
-**Intent**: Expose internal functions to global scope for legacy code compatibility.
-
-**Implementation**: Functions defined in module scope are assigned to `window` properties.
-
-**Trade-offs**:
-
-* Enables legacy code to continue functioning
-* Pollutes global namespace
-* Makes it harder to track where functions are called
-* Prevents tree-shaking and optimization
-
-Sources: [js/main.js L13-L15](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L13-L15)
-
- [js/main.js L554-L556](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L554-L556)
-
- [js/main.js L1014-L1018](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L1014-L1018)
-
-### Pattern: Event Delegation
-
-**Intent**: Handle events from multiple elements with a single listener.
-
-**Implementation**: Attach listeners to parent elements and use `closest()` to find the actual target.
-
-**Example**:
+### Window Resize Handling
 
 ```javascript
-document.addEventListener('click', (e) => {
-    const navBtn = e.target.closest('.nav-btn');
-    if (navBtn) {
-        // Handle navigation
-    }
-});
-```
-
-**Benefits**:
-
-* Fewer event listeners (better performance)
-* Works with dynamically added elements
-* Centralized event handling logic
-
-Sources: [js/app/lifecycleMixin.js L302-L325](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/app/lifecycleMixin.js#L302-L325)
-
----
-
-## Performance Considerations
-
-### Lazy Initialization
-
-Components are initialized only when needed. The factory functions in [js/main.js L1030-L1081](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L1030-L1081)
-
- check for existing instances before creating new ones:
-
-```javascript
-function ensureExamListView() {
-    if (!examListViewInstance && window.LegacyExamListView) {
-        examListViewInstance = new window.LegacyExamListView({
-            domAdapter: window.DOMAdapter,
-            containerId: 'exam-list-container'
-        });
-    }
-    return examListViewInstance;
+setupResponsiveEvents() {
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            if (this.responsiveManager) {
+                this.responsiveManager.recalculateLayout();
+            }
+            this.handleResize();
+        }, 250);
+    });
 }
 ```
 
-This pattern defers initialization costs until components are actually used.
-
-### Debounced Event Handlers
-
-Frequent events like `resize` and `scroll` are debounced to prevent excessive processing:
-
-```javascript
-// From main.js:576-587
-function debounce(fn, wait) {
-    let timer = null;
-    return function debounced(...args) {
-        if (timer) {
-            clearTimeout(timer);
-        }
-        timer = setTimeout(() => {
-            timer = null;
-            fn.apply(this, args);
-        }, wait);
-    };
-}
-```
-
-This ensures handlers only execute after the event stream settles, reducing CPU usage.
-
-Sources: [js/main.js L576-L642](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L576-L642)
-
-### State Caching
-
-The browse preferences system caches the loaded state in memory:
-
-```javascript
-let browsePreferencesCache = null;
-
-function getBrowseViewPreferences() {
-    if (!browsePreferencesCache) {
-        browsePreferencesCache = loadBrowsePreferencesFromStorage();
-    }
-    return browsePreferencesCache;
-}
-```
-
-This reduces repeated localStorage reads, which can be slow. The cache is updated when preferences are saved.
-
-Sources: [js/main.js L304-L408](https://github.com/sallowayma-git/IELTS-practice/blob/68771116/js/main.js#L304-L408)
+**Sources:** [js/app/lifecycleMixin.js L193-L257](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/js/app/lifecycleMixin.js#L193-L257)
 
 ---
 
 ## Summary
 
-The core application architecture provides:
+The core application architecture is built on these key principles:
 
-1. **Unified orchestration** through the `ExamSystemApp` class
-2. **Modular composition** via the mixin pattern
-3. **Dual-path state management** supporting modern and legacy code
-4. **Comprehensive lifecycle management** with initialization, activation, and cleanup hooks
-5. **Resilient error handling** with recovery strategies
-6. **Cross-tab synchronization** through storage events
-7. **Performance optimizations** including lazy initialization and debouncing
+1. **Mixin-based Composition**: Separation of concerns through modular mixins
+2. **Multi-stage Bootstrap**: Resilience through fallbacks and progressive enhancement
+3. **Dual-layer State Management**: Service-based with legacy compatibility
+4. **Component Registry**: Centralized component lifecycle management
+5. **Event Delegation**: Efficient event handling with minimal listeners
+6. **Comprehensive Error Handling**: Multiple layers of error recovery
+7. **Responsive Design**: Adaptive UI based on device capabilities
 
-This architecture enables the system to maintain backward compatibility while gradually migrating to modern patterns, ensuring stability during the transition period.
+The architecture provides a solid foundation for the practice session system (see [#5](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/#5)
+
+) and data management layer (see [#4](https://github.com/sallowayma-git/IELTS-practice/blob/92f64eb8/#4)
+
+), while maintaining backward compatibility with legacy code through shims and adapters.
