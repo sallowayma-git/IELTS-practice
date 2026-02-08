@@ -33,6 +33,13 @@
         if (!browseGroupPromise) {
             browseGroupPromise = ensureLazyGroup(BROWSE_GROUP).then(function onBrowseLoaded() {
                 reapplyAppMixins();
+                if (typeof global.setupBrowsePreferenceUI === 'function') {
+                    try {
+                        global.setupBrowsePreferenceUI();
+                    } catch (error) {
+                        console.warn('[MainEntry] 初始化题库偏好 UI 失败:', error);
+                    }
+                }
                 return true;
             }).catch(function onBrowseLoadError(error) {
                 browseGroupPromise = null;

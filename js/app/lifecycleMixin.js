@@ -497,6 +497,13 @@
                 container,
                 actions: {
                     onBrowseCategory(category, type, filterMode, path) {
+                        // 统一入口：先记录自动滚动请求，避免后续分支绕过导致丢失
+                        try {
+                            if (typeof window.requestBrowseAutoScroll === 'function') {
+                                window.requestBrowseAutoScroll(category, type);
+                            }
+                        } catch (_) { }
+
                         if (typeof window.browseCategory === 'function') {
                             window.browseCategory(category, type, filterMode, path);
                             return;
