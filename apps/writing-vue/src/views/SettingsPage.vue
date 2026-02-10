@@ -17,6 +17,112 @@
         </button>
       </div>
 
+      <!-- API 配置 -->
+      <div v-if="activeTab === 'api'" class="tab-content">
+        <div class="section">
+          <h3>API 配置列表</h3>
+          <div v-if="apiLoading" class="hint">加载中...</div>
+          <table v-else class="config-table">
+            <thead>
+              <tr>
+                <th>名称</th>
+                <th>供应商</th>
+                <th>模型</th>
+                <th>优先级</th>
+                <th>状态</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in apiConfigs" :key="item.id">
+                <td>{{ item.config_name }} <span v-if="item.is_default">（默认）</span></td>
+                <td>{{ item.provider }}</td>
+                <td>{{ item.default_model }}</td>
+                <td>{{ item.priority || 100 }}</td>
+                <td>{{ item.is_enabled ? '启用' : '禁用' }}</td>
+                <td class="table-actions">
+                  <button class="btn-text" @click="editConfig(item)">编辑</button>
+                  <button class="btn-text" @click="testConfig(item.id)" :disabled="testingConfigId === item.id">
+                    {{ testingConfigId === item.id ? '测试中' : '测试' }}
+                  </button>
+                  <button class="btn-text" @click="setDefaultConfig(item.id)">设默认</button>
+                  <button class="btn-text" @click="toggleConfig(item.id)">
+                    {{ item.is_enabled ? '禁用' : '启用' }}
+                  </button>
+                  <button class="btn-text danger" @click="removeConfig(item.id)">删除</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="section">
+          <h3>{{ apiForm.id ? '编辑配置' : '新建配置' }}</h3>
+          <div class="form-grid">
+            <input v-model="apiForm.config_name" placeholder="配置名称" />
+            <select v-model="apiForm.provider">
+              <option value="openai">openai</option>
+              <option value="openrouter">openrouter</option>
+              <option value="deepseek">deepseek</option>
+            </select>
+            <input v-model="apiForm.base_url" placeholder="Base URL" />
+            <input v-model="apiForm.default_model" placeholder="默认模型" />
+            <input v-model.number="apiForm.priority" type="number" min="1" placeholder="优先级" />
+            <input v-model.number="apiForm.max_retries" type="number" min="0" max="5" placeholder="重试次数" />
+            <input v-model="apiForm.api_key" placeholder="API Key（编辑时留空=不变）" />
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-primary" @click="saveApiConfig">保存配置</button>
+            <button class="btn btn-secondary" @click="resetApiForm">重置</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 提示词管理 -->
+      <div v-if="activeTab === 'prompts'" class="tab-content">
+        <div class="section">
+          <h3>提示词版本</h3>
+          <div v-if="promptLoading" class="hint">加载中...</div>
+          <table v-else class="config-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Task</th>
+                <th>版本</th>
+                <th>激活</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in promptEntries" :key="item.id">
+                <td>{{ item.id }}</td>
+                <td>{{ item.task_type }}</td>
+                <td>{{ item.version }}</td>
+                <td>{{ item.is_active ? '是' : '否' }}</td>
+                <td class="table-actions">
+                  <button class="btn-text" @click="activatePrompt(item.id)">激活</button>
+                  <button class="btn-text danger" @click="deletePrompt(item.id)">删除</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="section">
+          <h3>导入/导出</h3>
+          <textarea
+            v-model="importPromptJson"
+            class="json-editor"
+            rows="10"
+            placeholder='粘贴 JSON（支持 {version,task1,task2} 或 [{task_type,...}]）'
+          ></textarea>
+          <div class="form-actions">
+            <button class="btn btn-primary" @click="importPromptConfig">导入提示词</button>
+            <button class="btn btn-secondary" @click="exportPromptConfig">导出当前激活</button>
+          </div>
+        </div>
+      </div>
+
       <!-- 模型参数 -->
       <div v-if="activeTab === 'model'" class="tab-content">
         <div class="section">
@@ -180,9 +286,11 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { settings, essays } from '@/api/client.js'
+import { settings, essays, configs, prompts } from '@/api/client.js'
 
 const tabs = [
+  { key: 'api', label: 'API配置' },
+  { key: 'prompts', label: '提示词管理' },
   { key: 'model', label: '模型参数' },
   { key: 'data', label: '数据管理' },
   { key: 'about', label: '关于' }
@@ -190,6 +298,8 @@ const tabs = [
 
 const activeTab = ref('model')
 const saving = ref(false)
+const apiLoading = ref(false)
+const promptLoading = ref(false)
 
 // 温度模式配置
 const temperatureModes = [
@@ -225,6 +335,22 @@ const dataSettings = ref({
   history_limit: 100
 })
 
+const apiConfigs = ref([])
+const testingConfigId = ref(null)
+const apiForm = ref({
+  id: null,
+  config_name: '',
+  provider: 'openai',
+  base_url: 'https://api.openai.com/v1',
+  api_key: '',
+  default_model: 'gpt-4o-mini',
+  priority: 100,
+  max_retries: 2
+})
+
+const promptEntries = ref([])
+const importPromptJson = ref('')
+
 // 清空历史确认
 const showClearConfirm = ref(false)
 const clearConfirmInput = ref('')
@@ -251,6 +377,182 @@ async function getUserDataPath() {
     }
   } else {
     userDataPath.value = '仅在 Electron 中可用'
+  }
+}
+
+async function loadApiConfigs() {
+  apiLoading.value = true
+  try {
+    apiConfigs.value = await configs.list()
+  } catch (error) {
+    console.error('加载 API 配置失败:', error)
+    alert('加载 API 配置失败: ' + error.message)
+  } finally {
+    apiLoading.value = false
+  }
+}
+
+function resetApiForm() {
+  apiForm.value = {
+    id: null,
+    config_name: '',
+    provider: 'openai',
+    base_url: 'https://api.openai.com/v1',
+    api_key: '',
+    default_model: 'gpt-4o-mini',
+    priority: 100,
+    max_retries: 2
+  }
+}
+
+function editConfig(item) {
+  apiForm.value = {
+    id: item.id,
+    config_name: item.config_name,
+    provider: item.provider,
+    base_url: item.base_url,
+    api_key: '',
+    default_model: item.default_model,
+    priority: item.priority || 100,
+    max_retries: item.max_retries ?? 2
+  }
+}
+
+async function saveApiConfig() {
+  try {
+    if (!apiForm.value.config_name || !apiForm.value.base_url || !apiForm.value.default_model) {
+      alert('请填写完整配置字段')
+      return
+    }
+
+    const payload = {
+      config_name: apiForm.value.config_name,
+      provider: apiForm.value.provider,
+      base_url: apiForm.value.base_url,
+      default_model: apiForm.value.default_model,
+      priority: apiForm.value.priority,
+      max_retries: apiForm.value.max_retries
+    }
+    if (apiForm.value.api_key) {
+      payload.api_key = apiForm.value.api_key
+    }
+
+    if (apiForm.value.id) {
+      await configs.update(apiForm.value.id, payload)
+    } else {
+      if (!payload.api_key) {
+        alert('新建配置必须填写 API Key')
+        return
+      }
+      await configs.create(payload)
+    }
+
+    resetApiForm()
+    await loadApiConfigs()
+  } catch (error) {
+    console.error('保存 API 配置失败:', error)
+    alert('保存 API 配置失败: ' + error.message)
+  }
+}
+
+async function removeConfig(id) {
+  if (!confirm('确定删除该配置？')) return
+  try {
+    await configs.delete(id)
+    await loadApiConfigs()
+  } catch (error) {
+    console.error('删除 API 配置失败:', error)
+    alert('删除 API 配置失败: ' + error.message)
+  }
+}
+
+async function setDefaultConfig(id) {
+  try {
+    await configs.setDefault(id)
+    await loadApiConfigs()
+  } catch (error) {
+    console.error('设为默认失败:', error)
+    alert('设为默认失败: ' + error.message)
+  }
+}
+
+async function toggleConfig(id) {
+  try {
+    await configs.toggleEnabled(id)
+    await loadApiConfigs()
+  } catch (error) {
+    console.error('切换启用状态失败:', error)
+    alert('切换状态失败: ' + error.message)
+  }
+}
+
+async function testConfig(id) {
+  testingConfigId.value = id
+  try {
+    const result = await configs.test(id)
+    alert(`连接成功，延迟 ${result.latency}ms`)
+  } catch (error) {
+    alert('连接失败: ' + error.message)
+  } finally {
+    testingConfigId.value = null
+  }
+}
+
+async function loadPromptList() {
+  promptLoading.value = true
+  try {
+    promptEntries.value = await prompts.listAll()
+  } catch (error) {
+    console.error('加载提示词失败:', error)
+    alert('加载提示词失败: ' + error.message)
+  } finally {
+    promptLoading.value = false
+  }
+}
+
+async function activatePrompt(id) {
+  try {
+    await prompts.activate(id)
+    await loadPromptList()
+  } catch (error) {
+    alert('激活失败: ' + error.message)
+  }
+}
+
+async function deletePrompt(id) {
+  if (!confirm('确定删除该提示词版本？')) return
+  try {
+    await prompts.delete(id)
+    await loadPromptList()
+  } catch (error) {
+    alert('删除失败: ' + error.message)
+  }
+}
+
+async function exportPromptConfig() {
+  try {
+    const data = await prompts.exportActive()
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'ielts-prompts-export.json'
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (error) {
+    alert('导出失败: ' + error.message)
+  }
+}
+
+async function importPromptConfig() {
+  try {
+    const parsed = JSON.parse(importPromptJson.value)
+    await prompts.import(parsed)
+    importPromptJson.value = ''
+    await loadPromptList()
+    alert('提示词导入成功')
+  } catch (error) {
+    alert('导入失败: ' + error.message)
   }
 }
 
@@ -341,6 +643,8 @@ async function executeClearHistory() {
 onMounted(() => {
   loadSettings()
   getUserDataPath()
+  loadApiConfigs()
+  loadPromptList()
 })
 </script>
 
@@ -397,6 +701,57 @@ onMounted(() => {
 
 .tab-content {
   padding: 24px;
+}
+
+.config-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+
+.config-table th,
+.config-table td {
+  border-bottom: 1px solid var(--border-color);
+  padding: 10px 8px;
+  text-align: left;
+  font-size: 13px;
+}
+
+.table-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-text.danger {
+  color: #c62828;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.form-grid input,
+.form-grid select,
+.json-editor {
+  width: 100%;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.json-editor {
+  font-family: ui-monospace, Menlo, Monaco, monospace;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
 }
 
 /* 通用区块 */

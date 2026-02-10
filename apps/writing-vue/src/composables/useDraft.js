@@ -1,15 +1,19 @@
-import { ref, computed, watch, onBeforeUnmount } from 'vue'
+import { ref, computed, onBeforeUnmount } from 'vue'
 
 /**
  * Draft Auto-Save Composable
  * 草稿自动保存功能
  * 
  * 使用 localStorage 存储草稿
- * 注意: file:// 协议下 localStorage 可能有限制，如遇问题需要考虑改用 SQLite
+ * 兼容两种调用方式:
+ * 1) useDraft('compose-essay', contentRef)
+ * 2) useDraft('task1') / useDraft('task2')
  */
-export function useDraft(taskType) {
+export function useDraft(draftId, contentRef = null) {
+    const keySuffix = draftId || 'compose'
+
     // 草稿存储 key
-    const draftKey = computed(() => `ielts_writing_draft_${taskType}`)
+    const draftKey = computed(() => `ielts_writing_draft_${keySuffix}`)
 
     // 草稿数据
     const content = ref('')
@@ -26,12 +30,25 @@ export function useDraft(taskType) {
     /**
      * 保存草稿到 localStorage
      */
-    const saveDraft = () => {
+    const saveDraft = (payload = null) => {
         try {
+            const nextContent = payload && typeof payload.content === 'string'
+                ? payload.content
+                : (contentRef?.value ?? content.value);
+            const nextTaskType = payload && payload.taskType
+                ? payload.taskType
+                : (payload?.task_type || keySuffix);
+
+            if (contentRef) {
+                contentRef.value = nextContent;
+            } else {
+                content.value = nextContent;
+            }
+
             const draftData = {
-                task_type: taskType,
+                task_type: nextTaskType,
                 topic_id: topicId.value,
-                content: content.value,
+                content: nextContent,
                 word_count: wordCount.value,
                 last_saved: new Date().toISOString()
             }
@@ -106,8 +123,12 @@ export function useDraft(taskType) {
     /**
      * 设置内容并触发自动保存（防抖）
      */
-    const setContent = (newContent, newWordCount = 0) => {
-        content.value = newContent
+    const setContent = (newContent, newWordCount = 0, taskType = null) => {
+        if (contentRef) {
+            contentRef.value = newContent
+        } else {
+            content.value = newContent
+        }
         wordCount.value = newWordCount
         hasUnsavedChanges.value = true
 
@@ -117,9 +138,7 @@ export function useDraft(taskType) {
         }
 
         // 10秒后自动保存（防抖）
-        saveTimeout = setTimeout(() => {
-            saveDraft()
-        }, 10000)
+        saveTimeout = setTimeout(() => saveDraft(taskType ? { taskType } : null), 10000)
     }
 
     /**
@@ -139,6 +158,16 @@ export function useDraft(taskType) {
             saveTimeout = null
         }
         saveDraft()
+    }
+
+    /**
+     * 停止自动保存定时器（用于提交后清理）
+     */
+    const stopAutoSave = () => {
+        if (saveTimeout) {
+            clearTimeout(saveTimeout)
+            saveTimeout = null
+        }
     }
 
     // 组件卸载前保存
@@ -188,6 +217,7 @@ export function useDraft(taskType) {
         hasDraft,
         setContent,
         setTopicId,
-        saveNow
+        saveNow,
+        stopAutoSave
     }
 }

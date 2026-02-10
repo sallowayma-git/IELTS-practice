@@ -52,8 +52,19 @@ class Logger {
         try {
             // app.getPath 只能在 app ready 后调用
             // 如果 app 未 ready，延迟初始化
-            if (!app.isReady()) {
+            // 注意：app.isReady 是方法调用，需确保 app 模块已加载
+            if (typeof app !== 'undefined' && app.isReady && !app.isReady()) {
                 app.once('ready', () => this._initializeLogsDirectory());
+                return;
+            }
+
+            // 如果 app 不可用（非 Electron 环境），使用临时目录
+            if (typeof app === 'undefined' || !app.isReady || !app.isReady()) {
+                this.logsDir = path.join(process.cwd(), 'logs');
+                if (!fs.existsSync(this.logsDir)) {
+                    fs.mkdirSync(this.logsDir, { recursive: true });
+                }
+                this._updateLogFile();
                 return;
             }
 

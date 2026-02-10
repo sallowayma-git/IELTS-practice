@@ -829,6 +829,37 @@ def run_checks() -> Tuple[List[dict], bool]:
             results.append(_format_result(test_name, False, "测试脚本缺失"))
             all_passed = False
 
+    # Phase 05 E2E Tests (真实 HTTP API 调用)
+    phase05_eval_e2e = REPO_ROOT / "developer" / "tests" / "e2e" / "phase05_eval_flow_e2e.py"
+    phase05_eval_exists, phase05_eval_detail = _ensure_exists(phase05_eval_e2e)
+    results.append(_format_result("Phase 05 评分流程 E2E 脚本存在性", phase05_eval_exists, phase05_eval_detail))
+    all_passed &= phase05_eval_exists
+    if phase05_eval_exists:
+        phase05_eval_checks = {
+            "包含 transport 字段": "transport",
+            "调用真实 HTTP API": "/api/evaluate",
+            "验证真实 DB 状态": "get_session_from_db",
+        }
+        for label, snippet in phase05_eval_checks.items():
+            check_passed, check_detail = _check_contains(phase05_eval_e2e, snippet)
+            results.append(_format_result(f"Phase 05 评分 E2E: {label}", check_passed, check_detail))
+            all_passed &= check_passed
+
+    phase05_upload_e2e = REPO_ROOT / "developer" / "tests" / "e2e" / "phase05_upload_flow_e2e.py"
+    phase05_upload_exists, phase05_upload_detail = _ensure_exists(phase05_upload_e2e)
+    results.append(_format_result("Phase 05 上传流程 E2E 脚本存在性", phase05_upload_exists, phase05_upload_detail))
+    all_passed &= phase05_upload_exists
+    if phase05_upload_exists:
+        phase05_upload_checks = {
+            "包含 transport 字段": "transport",
+            "调用真实 HTTP API": "/api/upload/image",
+            "验证真实文件系统": "check_file_exists",
+        }
+        for label, snippet in phase05_upload_checks.items():
+            check_passed, check_detail = _check_contains(phase05_upload_e2e, snippet)
+            results.append(_format_result(f"Phase 05 上传 E2E: {label}", check_passed, check_detail))
+            all_passed &= check_passed
+
     return results, all_passed
 
 

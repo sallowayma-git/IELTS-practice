@@ -16,10 +16,11 @@ class ConfigsDAO {
             const configs = this.db.prepare(`
         SELECT 
           id, config_name, provider, base_url, 
-          default_model, is_enabled, is_default, 
+          default_model, priority, max_retries, cooldown_until, failure_count,
+          is_enabled, is_default, 
           last_used_at, created_at, updated_at
         FROM api_configs
-        ORDER BY is_default DESC, created_at DESC
+        ORDER BY is_default DESC, priority ASC, created_at DESC
       `).all();
 
             return configs;
@@ -64,13 +65,13 @@ class ConfigsDAO {
     /**
      * 创建新配置
      */
-    create({ config_name, provider, base_url, api_key_encrypted, default_model }) {
+    create({ config_name, provider, base_url, api_key_encrypted, default_model, priority = 100, max_retries = 2 }) {
         try {
             const result = this.db.prepare(`
         INSERT INTO api_configs 
-          (config_name, provider, base_url, api_key_encrypted, default_model)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(config_name, provider, base_url, api_key_encrypted, default_model);
+          (config_name, provider, base_url, api_key_encrypted, default_model, priority, max_retries)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(config_name, provider, base_url, api_key_encrypted, default_model, priority, max_retries);
 
             logger.info(`Created API config: ${config_name} (id: ${result.lastInsertRowid})`);
             return result.lastInsertRowid;
@@ -90,7 +91,8 @@ class ConfigsDAO {
         try {
             const allowedFields = [
                 'config_name', 'provider', 'base_url',
-                'api_key_encrypted', 'default_model', 'is_enabled'
+                'api_key_encrypted', 'default_model', 'is_enabled',
+                'priority', 'max_retries', 'cooldown_until', 'failure_count'
             ];
 
             const setClauses = [];
@@ -217,6 +219,56 @@ class ConfigsDAO {
         } catch (error) {
             logger.error(`Failed to update last_used_at for config id: ${id}`, error);
             // 不抛出错误，这是非关键操作
+        }
+    }
+
+    /**
+     * 获取启用配置（按默认 + 优先级排序）
+     */
+    listEnabledOrdered() {
+        try {
+            return this.db.prepare(`
+                SELECT * FROM api_configs
+                WHERE is_enabled = 1
+                ORDER BY is_default DESC, priority ASC, id ASC
+            `).all();
+        } catch (error) {
+            logger.error('Failed to list enabled configs', error);
+            throw error;
+        }
+    }
+
+    /**
+     * 记录配置成功调用，清空失败计数与冷却
+     */
+    markSuccess(id) {
+        try {
+            this.db.prepare(`
+                UPDATE api_configs
+                SET failure_count = 0,
+                    cooldown_until = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            `).run(id);
+        } catch (error) {
+            logger.error(`Failed to mark config success id: ${id}`, error);
+        }
+    }
+
+    /**
+     * 记录配置失败并可选进入冷却
+     */
+    markFailure(id, cooldownUntil = null) {
+        try {
+            this.db.prepare(`
+                UPDATE api_configs
+                SET failure_count = COALESCE(failure_count, 0) + 1,
+                    cooldown_until = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            `).run(cooldownUntil, id);
+        } catch (error) {
+            logger.error(`Failed to mark config failure id: ${id}`, error);
         }
     }
 }

@@ -1,0 +1,31 @@
+{
+  "version": "2.0.0",
+  "task1": {
+    "system_prompt": "You are an IELTS Writing Task 1 examiner.",
+    "scoring_criteria": "Use IELTS Task 1 criteria strictly.",
+    "output_format_example": "{\"total_score\":6.5,\"task_achievement\":6.0,\"coherence_cohesion\":6.5,\"lexical_resource\":6.5,\"grammatical_range\":6.5,\"sentences\":[],\"overall_feedback\":\"...\"}",
+    "overrides": {
+      "language": {
+        "zh-CN": "请使用简体中文输出。",
+        "en": "Please respond in English."
+      },
+      "provider": {
+        "openrouter": "When using OpenRouter, keep the JSON compact."
+      }
+    }
+  },
+  "task2": {
+    "system_prompt": "You are an IELTS Writing Task 2 examiner.",
+    "scoring_criteria": "Use IELTS Task 2 criteria strictly.",
+    "output_format_example": "{\"total_score\":6.5,\"task_achievement\":6.0,\"coherence_cohesion\":6.5,\"lexical_resource\":6.5,\"grammatical_range\":6.5,\"sentences\":[],\"overall_feedback\":\"...\"}",
+    "overrides": {
+      "language": {
+        "zh-CN": "请使用简体中文输出。",
+        "en": "Please respond in English."
+      },
+      "model": {
+        "gpt-4": "Provide concise but specific feedback."
+      }
+    }
+  }
+}

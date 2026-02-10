@@ -7,6 +7,7 @@
 1. **Phase 0 基线测试** - 验证当前系统基线行为
 2. **CI 静态测试** - 验证代码结构和静态分析
 3. **E2E 测试** - 验证套题练习完整流程
+4. **写作后端契约测试** - 验证 Phase 05-09 核心后端契约是否落地
 
 ---
 
@@ -71,6 +72,9 @@ python developer/tests/ci/run_static_suite.py
 
 # E2E 套题练习流程测试
 python developer/tests/e2e/suite_practice_flow.py
+
+# 写作后端契约静态验证
+python3 developer/tests/ci/writing_backend_contract.py
 ```
 
 ---
@@ -89,7 +93,8 @@ developer/tests/
 │   ├── suite-practice-flow-report.json
 │   ├── suite-practice-record-list.png
 │   ├── suite-practice-record-detail.png
-│   └── static-ci-report.json
+│   ├── static-ci-report.json
+│   └── writing-backend-contract-report.json
 └── reports/                   # 综合测试报告
     └── test-summary-*.json
 ```

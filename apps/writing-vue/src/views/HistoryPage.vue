@@ -80,10 +80,9 @@
         <input 
           type="text"
           v-model="filters.search"
-          placeholder="🔍 搜索功能待后端支持..."
+          placeholder="🔍 搜索题目标题或作文内容"
           class="search-input"
-          disabled
-          title="搜索功能需要后端 LIKE 查询支持，当前暂不可用"
+          title="按关键词搜索题目标题和作文正文"
         />
       </div>
     </div>
@@ -501,7 +500,9 @@ async function loadEssays() {
     if (filters.value.max_score !== null && filters.value.max_score !== '') {
       apiFilters.max_score = filters.value.max_score
     }
-    // search 暂不传递（后端 DAO 未实现 LIKE 查询）
+    if (filters.value.search && filters.value.search.trim()) {
+      apiFilters.search = filters.value.search.trim()
+    }
     
     const result = await essaysApi.list(apiFilters, pagination.value)
     essaysList.value = result.data
@@ -616,6 +617,9 @@ async function exportCSV() {
     }
     if (filters.value.max_score !== null && filters.value.max_score !== '') {
       apiFilters.max_score = filters.value.max_score
+    }
+    if (filters.value.search && filters.value.search.trim()) {
+      apiFilters.search = filters.value.search.trim()
     }
     
     const csvContent = await essaysApi.exportCSV(apiFilters)
