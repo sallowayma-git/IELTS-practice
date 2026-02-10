@@ -1,7 +1,10 @@
 const { v4: uuidv4 } = require('uuid');
+const { EventEmitter } = require('events');
 const ConfigService = require('./config.service');
 const PromptService = require('./prompt.service');
-const LLMProvider = require('./llm-provider');
+const EssayService = require('./essay.service');
+const SettingsService = require('./settings.service');
+const ProviderOrchestratorService = require('./provider-orchestrator.service');
 const logger = require('../utils/logger');
 
 /**
@@ -19,6 +22,10 @@ class EvaluateService {
         this.webContents = webContents;
         this.configService = new ConfigService(db);
         this.promptService = new PromptService(db);
+        this.essayService = new EssayService(db);
+        this.settingsService = new SettingsService(db);
+        this.providerOrchestrator = new ProviderOrchestratorService(this.configService);
+        this.eventBus = new EventEmitter();
 
         // 会话管理: sessionId -> { controller, timeout }
         this.sessions = new Map();
@@ -41,13 +48,10 @@ class EvaluateService {
                 config_id
             });
 
-            // 1. 获取 API 配置
-            const config = config_id
-                ? await this.configService.getConfigByIdDecrypted(config_id)
-                : await this.configService.getDefaultConfigDecrypted();
-
-            // 2. 获取提示词
+            // 1. 获取提示词并按语言编译
             const prompt = await this.promptService.getActive(task_type);
+            const language = await this.settingsService.get('language').catch(() => 'zh-CN');
+            const compiledPrompt = this.promptService.compilePrompt(prompt, { language });
 
             // 3. 创建 AbortController
             const controller = new AbortController();
@@ -63,13 +67,19 @@ class EvaluateService {
                 timeoutId,
                 startTime: Date.now(),
                 task_type,
-                config
+                config_id: config_id || null,
+                prompt_version: prompt_version || prompt.version,
+                language,
+                topic_id: topic_id || null,
+                content,
+                word_count
             });
+            this._recordSessionStart(sessionId, task_type, topic_id || null);
 
             // 6. 异步执行评测 (不阻塞返回)
             this._executeEvaluation(sessionId, {
-                config,
                 prompt,
+                compiledPrompt,
                 content,
                 word_count,
                 controller
@@ -103,6 +113,10 @@ class EvaluateService {
 
             // 触发 AbortController
             session.controller.abort();
+            this._recordSessionFinish(sessionId, {
+                status: 'cancelled',
+                durationMs: Date.now() - (session.startTime || Date.now())
+            });
 
             // 清理资源
             this._cleanupSession(sessionId);
@@ -118,30 +132,24 @@ class EvaluateService {
     /**
      * 执行评测 (异步)
      */
-    async _executeEvaluation(sessionId, { config, prompt, content, word_count, controller }) {
+    async _executeEvaluation(sessionId, { prompt, compiledPrompt, content, word_count, controller }) {
         try {
             // 0. 发送进度: 开始
             this._emitProgress(sessionId, 'starting', 0, '正在准备评测...');
 
             // 1. 构建 messages
-            const messages = this._buildMessages(prompt, content, word_count);
+            const messages = this._buildMessages(compiledPrompt || prompt, content, word_count);
 
             // 2. 发送进度: 调用 LLM
             this._emitProgress(sessionId, 'calling_llm', 10, '正在连接 LLM...');
 
-            // 3. 创建 LLM Provider
-            const provider = new LLMProvider({
-                provider: config.provider,
-                base_url: config.base_url,
-                api_key: config.api_key,
-                model: config.default_model
-            });
-
-            // 4. 流式调用
+            // 3. 供应商编排（主备切换+重试）
             let accumulatedContent = '';
-            const temperature = this._getTemperature(prompt.task_type);
+            const temperature = await this._getTemperature(prompt.task_type);
+            const session = this.sessions.get(sessionId);
 
-            await provider.streamCompletion({
+            const { usedConfig, providerPath } = await this.providerOrchestrator.streamCompletion({
+                preferredConfigId: session?.config_id || null,
                 messages,
                 temperature,
                 max_tokens: 4096,
@@ -182,8 +190,25 @@ class EvaluateService {
                 this._emitFeedback(sessionId, evaluation.overall_feedback);
             }
 
-            // 8. 完成
-            this._emitComplete(sessionId);
+            // 8. 持久化结果
+            const essayId = await this._persistEvaluation(sessionId, {
+                config: usedConfig,
+                task_type: prompt.task_type,
+                content,
+                word_count,
+                evaluation
+            });
+
+            // 9. 完成
+            this._emitComplete(sessionId, {
+                essay_id: essayId,
+                provider_path: providerPath
+            });
+            this._recordSessionFinish(sessionId, {
+                status: 'completed',
+                providerPath,
+                durationMs: Date.now() - (session?.startTime || Date.now())
+            });
 
             logger.info(`Evaluation completed successfully`, sessionId, {
                 duration: Date.now() - this.sessions.get(sessionId)?.startTime
@@ -201,6 +226,13 @@ class EvaluateService {
 
                 const errorCode = this._getErrorCode(error);
                 this._emitError(sessionId, errorCode, error.message);
+                const session = this.sessions.get(sessionId);
+                this._recordSessionFinish(sessionId, {
+                    status: 'failed',
+                    errorCode,
+                    errorMessage: error.message,
+                    durationMs: Date.now() - (session?.startTime || Date.now())
+                });
             }
 
             // 清理会话
@@ -343,17 +375,33 @@ class EvaluateService {
     /**
      * 获取 temperature 参数
      */
-    _getTemperature(task_type) {
-        // Task 1 更低 (描述性),Task 2 稍高 (论述性)
-        return task_type === 'task1' ? 0.3 : 0.5;
+    async _getTemperature(task_type) {
+        try {
+            return await this.settingsService.getTemperature(task_type);
+        } catch (error) {
+            logger.warn('Failed to get temperature from settings, using fallback', null, {
+                task_type,
+                error: error.message
+            });
+            return task_type === 'task1' ? 0.3 : 0.5;
+        }
     }
 
     /**
      * 获取错误码
      */
     _getErrorCode(error) {
+        if (error.code === 'parse_error' || error.code === 'validation_error') {
+            return 'invalid_response_format';
+        }
         if (error.message.includes('API Key') || error.message.includes('Unauthorized')) {
             return 'invalid_api_key';
+        }
+        if (error.message.includes('quota') || error.message.includes('Quota')) {
+            return 'insufficient_quota';
+        }
+        if (error.message.includes('Not Found') || error.message.includes('模型不存在')) {
+            return 'model_not_found';
         }
         if (error.message.includes('timeout')) {
             return 'timeout';
@@ -362,7 +410,10 @@ class EvaluateService {
             return 'network_error';
         }
         if (error.message.includes('rate limit')) {
-            return 'rate_limited';
+            return 'rate_limit_exceeded';
+        }
+        if (error.message.includes('Server Error') || error.message.includes('5xx')) {
+            return 'server_error';
         }
         return 'unknown_error';
     }
@@ -377,6 +428,12 @@ class EvaluateService {
         if (session) {
             session.controller.abort();
             this._emitError(sessionId, 'timeout', '评测超时 (120s),请重试');
+            this._recordSessionFinish(sessionId, {
+                status: 'failed',
+                errorCode: 'timeout',
+                errorMessage: '评测超时 (120s),请重试',
+                durationMs: Date.now() - (session.startTime || Date.now())
+            });
             this._cleanupSession(sessionId);
         }
     }
@@ -436,9 +493,10 @@ class EvaluateService {
     /**
      * 发送完成事件
      */
-    _emitComplete(sessionId) {
+    _emitComplete(sessionId, data = {}) {
         this._emitEvent(sessionId, {
-            type: 'complete'
+            type: 'complete',
+            data
         });
     }
 
@@ -453,18 +511,98 @@ class EvaluateService {
     }
 
     /**
+     * 保存评分结果到 essays 表
+     */
+    async _persistEvaluation(sessionId, { config, task_type, content, word_count, evaluation }) {
+        const session = this.sessions.get(sessionId);
+        const topicId = session?.topic_id || null;
+
+        const essayId = await this.essayService.create({
+            topic_id: topicId,
+            task_type,
+            content,
+            word_count,
+            llm_provider: config.provider,
+            model_name: config.default_model,
+            total_score: evaluation.total_score,
+            task_achievement: evaluation.task_achievement,
+            coherence_cohesion: evaluation.coherence_cohesion,
+            lexical_resource: evaluation.lexical_resource,
+            grammatical_range: evaluation.grammatical_range,
+            evaluation_json: JSON.stringify(evaluation)
+        });
+
+        logger.info('Evaluation persisted', sessionId, { essayId });
+        return essayId;
+    }
+
+    _recordSessionStart(sessionId, taskType, topicId) {
+        try {
+            this.db.prepare(`
+                INSERT INTO evaluation_sessions (session_id, task_type, topic_id, status)
+                VALUES (?, ?, ?, 'running')
+            `).run(sessionId, taskType, topicId);
+        } catch (error) {
+            logger.warn('Failed to record evaluation session start', sessionId, { error: error.message });
+        }
+    }
+
+    _recordSessionFinish(sessionId, {
+        status,
+        providerPath = null,
+        errorCode = null,
+        errorMessage = null,
+        durationMs = null
+    }) {
+        try {
+            this.db.prepare(`
+                UPDATE evaluation_sessions
+                SET status = ?,
+                    provider_path_json = ?,
+                    error_code = ?,
+                    error_message = ?,
+                    duration_ms = ?,
+                    completed_at = CURRENT_TIMESTAMP
+                WHERE session_id = ?
+            `).run(
+                status,
+                providerPath ? JSON.stringify(providerPath) : null,
+                errorCode,
+                errorMessage,
+                durationMs,
+                sessionId
+            );
+        } catch (error) {
+            logger.warn('Failed to record evaluation session finish', sessionId, { error: error.message });
+        }
+    }
+
+    /**
+     * 订阅指定会话事件（用于 HTTP SSE）
+     */
+    subscribeSession(sessionId, handler) {
+        const eventName = `session:${sessionId}`;
+        this.eventBus.on(eventName, handler);
+        return () => this.eventBus.off(eventName, handler);
+    }
+
+    /**
      * 发送事件到渲染进程
      */
     _emitEvent(sessionId, eventData) {
+        const payload = {
+            sessionId,
+            ...eventData
+        };
+
+        this.eventBus.emit(`session:${sessionId}`, payload);
+
         if (!this.webContents) {
             logger.warn('webContents not available, cannot emit event');
             return;
         }
 
-        this.webContents.send('evaluate:event', {
-            sessionId,
-            ...eventData
-        });
+        this.webContents.send('evaluate:event', payload);
     }
 }
 

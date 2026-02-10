@@ -52,6 +52,13 @@
         <h4>已分析 {{ sentences.length }} 个句子</h4>
       </div>
 
+      <div v-if="providerPath.length > 0" class="sentences-preview">
+        <h4>供应商路径</h4>
+        <p class="provider-path">
+          {{ providerPath.map(item => `${item.provider}/${item.model}(${item.status})`).join(' -> ') }}
+        </p>
+      </div>
+
       <!-- 操作按钮 -->
       <div class="actions">
         <button class="btn btn-danger" @click="handleCancel">
@@ -77,7 +84,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { evaluate, getErrorMessage } from '@/api/client.js'
 
 const props = defineProps({
@@ -88,7 +95,6 @@ const props = defineProps({
 })
 
 const router = useRouter()
-const route = useRoute()
 
 const progress = ref(0)
 const statusMessage = ref('正在准备评测...')
@@ -96,13 +102,16 @@ const scoreData = ref(null)
 const sentences = ref([])
 const feedback = ref('')
 const error = ref(null)
+const providerPath = ref([])
 
 // 存储完整结果用于传递到结果页
 const fullResult = ref({
   sessionId: props.sessionId,
   score: null,
   sentences: [],
-  feedback: ''
+  feedback: '',
+  essayId: null,
+  providerPath: []
 })
 
 onMounted(() => {
@@ -143,8 +152,10 @@ function handleEvent(event) {
     case 'complete':
       progress.value = 100
       statusMessage.value = '评分完成！'
-      // 【临时方案】存储结果到 sessionStorage 供结果页使用
-      // Phase 4+ 应改为 DB 持久层存储（同步 evaluation_records 表）
+      fullResult.value.essayId = event.data?.essay_id || null
+      fullResult.value.providerPath = event.data?.provider_path || []
+      providerPath.value = fullResult.value.providerPath
+      // 保留兜底缓存，优先使用 DB 记录
       sessionStorage.setItem(
         `evaluation_${props.sessionId}`,
         JSON.stringify(fullResult.value)
@@ -153,7 +164,8 @@ function handleEvent(event) {
       setTimeout(() => {
         router.push({
           name: 'Result',
-          params: { sessionId: props.sessionId }
+          params: { sessionId: props.sessionId },
+          query: fullResult.value.essayId ? { essayId: String(fullResult.value.essayId) } : {}
         })
       }, 500)
       break
@@ -306,6 +318,13 @@ function handleBack() {
   margin: 0;
   font-size: 14px;
   color: var(--text-secondary);
+}
+
+.provider-path {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  word-break: break-all;
 }
 
 .actions {

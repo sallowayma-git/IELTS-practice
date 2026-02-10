@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const PromptsDAO = require('../db/dao/prompts.dao');
 const logger = require('../utils/logger');
 
@@ -94,17 +95,60 @@ class PromptService {
     }
 
     /**
+     * 运行时编译提示词（按 language/provider/model 注入覆盖）
+     */
+    compilePrompt(prompt, context = {}) {
+        const language = context.language || 'zh-CN';
+        const provider = context.provider || null;
+        const model = context.model || null;
+        const overrides = prompt.overrides || {};
+
+        const injectedParts = [];
+        if (overrides.language && overrides.language[language]) {
+            injectedParts.push(overrides.language[language]);
+        }
+        if (provider && overrides.provider && overrides.provider[provider]) {
+            injectedParts.push(overrides.provider[provider]);
+        }
+        if (model && overrides.model && overrides.model[model]) {
+            injectedParts.push(overrides.model[model]);
+        }
+
+        return {
+            ...prompt,
+            system_prompt: injectedParts.length > 0
+                ? `${injectedParts.join('\n')}\n\n${prompt.system_prompt}`
+                : prompt.system_prompt
+        };
+    }
+
+    /**
      * 导入提示词
      */
     async import(jsonData) {
         try {
-            // 验证格式
-            this._validateImportData(jsonData);
-
-            const prompts = Array.isArray(jsonData) ? jsonData : [jsonData];
+            // 兼容双格式并标准化
+            const { prompts, metadata } = this._normalizeImportData(jsonData);
+            this._validateImportData(prompts);
 
             // 批量导入
             this.dao.importBatch(prompts);
+
+            // 聚合模板默认激活该版本
+            if (metadata?.source === 'aggregate' && metadata.version) {
+                for (const prompt of prompts) {
+                    const imported = this.dao.getByVersion(prompt.version, prompt.task_type);
+                    if (imported) {
+                        this.dao.activate(imported.id);
+                    }
+                }
+            }
+
+            // 审计日志
+            this._audit('import', null, null, metadata?.version || null, this._checksum(prompts), {
+                source: metadata?.source || 'flat',
+                count: prompts.length
+            });
 
             logger.info(`Imported ${prompts.length} prompts`);
 
@@ -165,6 +209,15 @@ class PromptService {
     async activate(id) {
         try {
             this.dao.activate(id);
+            const activated = this.dao.listAll().find((item) => item.id === id);
+            this._audit(
+                'activate',
+                id,
+                activated?.task_type || null,
+                activated?.version || null,
+                activated ? this._checksum(activated) : null,
+                null
+            );
 
             logger.info(`Activated prompt: ${id}`);
 
@@ -180,7 +233,16 @@ class PromptService {
      */
     async delete(id) {
         try {
+            const deleting = this.dao.listAll().find((item) => item.id === id);
             this.dao.delete(id);
+            this._audit(
+                'delete',
+                id,
+                deleting?.task_type || null,
+                deleting?.version || null,
+                deleting ? this._checksum(deleting) : null,
+                null
+            );
 
             logger.info(`Deleted prompt: ${id}`);
 
@@ -194,9 +256,7 @@ class PromptService {
     /**
      * 验证导入数据
      */
-    _validateImportData(data) {
-        const prompts = Array.isArray(data) ? data : [data];
-
+    _validateImportData(prompts) {
         if (prompts.length === 0) {
             throw new Error('导入数据不能为空');
         }
@@ -237,8 +297,82 @@ class PromptService {
             task_type: prompt.task_type,
             system_prompt: prompt.system_prompt,
             scoring_criteria: prompt.scoring_criteria,
-            output_format_example: prompt.output_format_example
+            output_format_example: prompt.output_format_example,
+            overrides: prompt.overrides || null
         };
+    }
+
+    /**
+     * 标准化导入格式:
+     * 1) 平铺格式: [{ task_type, ... }, ...] / { task_type, ... }
+     * 2) 聚合格式: { version, task1: {...}, task2: {...} }
+     */
+    _normalizeImportData(data) {
+        if (!data) {
+            throw new Error('导入数据不能为空');
+        }
+
+        // 聚合格式
+        if (!Array.isArray(data) && data.version && data.task1 && data.task2) {
+            const prompts = ['task1', 'task2'].map((taskType) => {
+                const item = data[taskType];
+                return {
+                    version: data.version,
+                    task_type: taskType,
+                    system_prompt: item.system_prompt,
+                    scoring_criteria: item.scoring_criteria,
+                    output_format_example: item.output_format_example,
+                    overrides: item.overrides || {}
+                };
+            });
+            return {
+                prompts,
+                metadata: {
+                    source: 'aggregate',
+                    version: data.version
+                }
+            };
+        }
+
+        // 平铺格式
+        const prompts = (Array.isArray(data) ? data : [data]).map((item) => ({
+            version: item.version,
+            task_type: item.task_type,
+            system_prompt: item.system_prompt,
+            scoring_criteria: item.scoring_criteria,
+            output_format_example: item.output_format_example,
+            overrides: item.overrides || {}
+        }));
+        return {
+            prompts,
+            metadata: {
+                source: 'flat',
+                version: prompts[0]?.version || null
+            }
+        };
+    }
+
+    _checksum(value) {
+        return crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
+    }
+
+    _audit(action, promptId, taskType, version, checksum, detailObj) {
+        try {
+            this.dao.db.prepare(`
+                INSERT INTO prompt_audit_logs
+                    (action, prompt_id, task_type, version, checksum, detail_json)
+                VALUES (?, ?, ?, ?, ?, ?)
+            `).run(
+                action,
+                promptId,
+                taskType,
+                version,
+                checksum,
+                detailObj ? JSON.stringify(detailObj) : null
+            );
+        } catch (error) {
+            logger.warn('Prompt audit write failed', null, { action, error: error.message });
+        }
     }
 
     /**

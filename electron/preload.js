@@ -39,7 +39,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     /**
      * 获取用户数据路径
      */
-    getUserDataPath: () => ipcRenderer.invoke('app:getUserDataPath')
+    getUserDataPath: () => ipcRenderer.invoke('app:getUserDataPath'),
+
+    /**
+     * 获取本地 API 服务地址
+     */
+    getLocalApiInfo: () => ipcRenderer.invoke('app:getLocalApiInfo')
 });
 
 // 写作模块 API
@@ -129,4 +134,3 @@ contextBridge.exposeInMainWorld('writingAPI', {
         getImagePath: (filename) => ipcRenderer.invoke('upload:getImagePath', filename)
     }
 });
-

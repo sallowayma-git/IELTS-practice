@@ -1,9 +1,13 @@
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
-const IPCHandlers = require('./ipc-handlers');
+
+// 延迟导入，避免循环依赖导致 electron API 未初始化
+let IPCHandlers = null;
+let LocalApiServer = null;
 
 let mainWindow = null;
 let ipcHandlers = null;
+let localApiServer = null;
 
 // 安全配置：允许导航的文件白名单（防止恶意页面冒充导航）
 const ALLOWED_NAVIGATION_SOURCES = [
@@ -56,10 +60,19 @@ async function createMainWindow() {
         show: false // 等待ready-to-show事件再显示
     });
 
+    // 延迟导入模块，避免循环依赖
+    IPCHandlers = require('./ipc-handlers');
+    LocalApiServer = require('./local-api-server');
+
     // 初始化 IPC handlers
     ipcHandlers = new IPCHandlers(mainWindow);
     await ipcHandlers.initialize();
     ipcHandlers.register();
+
+    // 启动本地 HTTP/SSE API（127.0.0.1）
+    localApiServer = new LocalApiServer(ipcHandlers.getServiceBundle());
+    const apiInfo = await localApiServer.start();
+    ipcHandlers.setLocalApiInfo(apiInfo);
 
     // 默认加载 Legacy 页面
     loadLegacyPage();
@@ -119,6 +132,12 @@ async function createMainWindow() {
             ipcHandlers.cleanup();
             ipcHandlers = null;
         }
+        if (localApiServer) {
+            localApiServer.stop().catch((error) => {
+                console.error('[LocalApi] stop failed on window close:', error);
+            });
+            localApiServer = null;
+        }
     });
 }
 
@@ -150,7 +169,7 @@ function loadWritingPage() {
     } else {
         // 构建产物缺失：弹窗提示用户并回退到 Legacy
         console.error('[Navigation] Writing module build missing at:', vueBuildPath);
-        
+
         dialog.showMessageBox(mainWindow, {
             type: 'warning',
             title: '写作模块未构建',
@@ -167,23 +186,34 @@ function loadWritingPage() {
     }
 }
 
-// 【安全加固】IPC 事件处理：导航切换（含来源校验）
-ipcMain.on('navigate-to-legacy', (event) => {
-    if (!isValidNavigationSource(event)) {
-        return; // 拒绝非法来源
-    }
-    loadLegacyPage();
-});
+/**
+ * 注册导航 IPC 事件处理器
+ * 必须在 app ready 后调用，确保 ipcMain 已完全初始化
+ */
+function registerNavigationHandlers() {
+    // 【安全加固】IPC 事件处理：导航切换（含来源校验）
+    ipcMain.on('navigate-to-legacy', (event) => {
+        if (!isValidNavigationSource(event)) {
+            return; // 拒绝非法来源
+        }
+        loadLegacyPage();
+    });
 
-ipcMain.on('navigate-to-writing', (event) => {
-    if (!isValidNavigationSource(event)) {
-        return; // 拒绝非法来源
-    }
-    loadWritingPage();
-});
+    ipcMain.on('navigate-to-writing', (event) => {
+        if (!isValidNavigationSource(event)) {
+            return; // 拒绝非法来源
+        }
+        loadWritingPage();
+    });
+
+    console.log('[Navigation] IPC handlers registered');
+}
 
 // Electron 应用生命周期
 app.whenReady().then(() => {
+    // 注册导航处理器（必须在 app ready 后）
+    registerNavigationHandlers();
+
     createMainWindow();
 
     app.on('activate', () => {
@@ -199,9 +229,14 @@ app.on('window-all-closed', () => {
     if (ipcHandlers) {
         ipcHandlers.cleanup();
     }
+    if (localApiServer) {
+        localApiServer.stop().catch((error) => {
+            console.error('[LocalApi] stop failed on app close:', error);
+        });
+        localApiServer = null;
+    }
 
     // macOS: 通常不在关闭所有窗口时退出应用
     if (process.platform !== 'darwin') {
     }
 });
-
