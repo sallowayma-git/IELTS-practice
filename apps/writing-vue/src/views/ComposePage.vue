@@ -97,7 +97,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { evaluate, getErrorMessage } from '@/api/client.js'
 import { useDraft } from '@/composables/useDraft.js'
@@ -134,6 +134,10 @@ watch([content, taskType], () => {
     taskType: taskType.value,
     content: content.value
   })
+})
+
+onBeforeUnmount(() => {
+  stopAutoSave()
 })
 
 // Handle draft recovery

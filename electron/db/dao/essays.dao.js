@@ -11,7 +11,7 @@ class EssaysDAO {
 
     /**
      * 获取作文列表（支持筛选和分页）
-     * @param {Object} filters - { task_type, start_date, end_date, min_score, max_score, topic_id }
+     * @param {Object} filters - { task_type, start_date, end_date, min_score, max_score, topic_id, search }
      * @param {Object} pagination - { page, limit }
      * @returns {Object} - { data, total, page, limit }
      */
@@ -45,6 +45,11 @@ class EssaysDAO {
                 conditions.push('e.topic_id = ?');
                 params.push(filters.topic_id);
             }
+            if (filters.search && String(filters.search).trim().length > 0) {
+                const keyword = `%${String(filters.search).trim()}%`;
+                conditions.push('(t.title_json LIKE ? OR e.content LIKE ?)');
+                params.push(keyword, keyword);
+            }
 
             const whereClause = conditions.length > 0
                 ? `WHERE ${conditions.join(' AND ')}`
@@ -54,6 +59,7 @@ class EssaysDAO {
             const countSql = `
                 SELECT COUNT(*) as total 
                 FROM essays e
+                LEFT JOIN topics t ON e.topic_id = t.id
                 ${whereClause}
             `;
             const { total } = this.db.prepare(countSql).get(...params);
@@ -312,6 +318,11 @@ class EssaysDAO {
             if (filters.end_date) {
                 conditions.push('e.submitted_at <= ?');
                 params.push(filters.end_date);
+            }
+            if (filters.search && String(filters.search).trim().length > 0) {
+                const keyword = `%${String(filters.search).trim()}%`;
+                conditions.push('(t.title_json LIKE ? OR e.content LIKE ?)');
+                params.push(keyword, keyword);
             }
 
             const whereClause = conditions.length > 0

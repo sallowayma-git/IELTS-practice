@@ -55,6 +55,42 @@ export const configs = {
     async getDefault() {
         const list = await this.list()
         return list.find(c => c.is_default) || list[0]
+    },
+
+    async create(data) {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.configs.create(data)
+        return handleResponse(response)
+    },
+
+    async update(id, updates) {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.configs.update(id, updates)
+        return handleResponse(response)
+    },
+
+    async delete(id) {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.configs.delete(id)
+        return handleResponse(response)
+    },
+
+    async setDefault(id) {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.configs.setDefault(id)
+        return handleResponse(response)
+    },
+
+    async toggleEnabled(id) {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.configs.toggleEnabled(id)
+        return handleResponse(response)
+    },
+
+    async test(id) {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.configs.test(id)
+        return handleResponse(response)
     }
 }
 
@@ -63,6 +99,36 @@ export const prompts = {
     async getActive(taskType) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
         const response = await window.writingAPI.prompts.getActive(taskType)
+        return handleResponse(response)
+    },
+
+    async import(jsonData) {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.prompts.import(jsonData)
+        return handleResponse(response)
+    },
+
+    async exportActive() {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.prompts.exportActive()
+        return handleResponse(response)
+    },
+
+    async listAll(taskType = null) {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.prompts.listAll(taskType)
+        return handleResponse(response)
+    },
+
+    async activate(id) {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.prompts.activate(id)
+        return handleResponse(response)
+    },
+
+    async delete(id) {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.prompts.delete(id)
         return handleResponse(response)
     }
 }

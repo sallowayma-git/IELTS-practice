@@ -16,6 +16,10 @@ CREATE TABLE IF NOT EXISTS api_configs (
   base_url TEXT NOT NULL,
   api_key_encrypted BLOB NOT NULL,
   default_model TEXT NOT NULL,
+  priority INTEGER DEFAULT 100,
+  max_retries INTEGER DEFAULT 2,
+  cooldown_until DATETIME,
+  failure_count INTEGER DEFAULT 0,
   is_enabled INTEGER DEFAULT 1 CHECK(is_enabled IN (0, 1)),
   is_default INTEGER DEFAULT 0 CHECK(is_default IN (0, 1)),
   last_used_at DATETIME,
@@ -86,6 +90,48 @@ CREATE INDEX IF NOT EXISTS idx_essays_submitted_at ON essays(submitted_at DESC);
 CREATE INDEX IF NOT EXISTS idx_essays_task_type ON essays(task_type);
 CREATE INDEX IF NOT EXISTS idx_essays_topic_id ON essays(topic_id);
 CREATE INDEX IF NOT EXISTS idx_essays_total_score ON essays(total_score);
+
+-- 评测会话追踪
+CREATE TABLE IF NOT EXISTS evaluation_sessions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id TEXT NOT NULL UNIQUE,
+  task_type TEXT NOT NULL,
+  topic_id INTEGER,
+  status TEXT NOT NULL CHECK(status IN ('running', 'completed', 'cancelled', 'failed')),
+  provider_path_json TEXT,
+  error_code TEXT,
+  error_message TEXT,
+  duration_ms INTEGER,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  completed_at DATETIME,
+  FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_eval_sessions_status ON evaluation_sessions(status);
+CREATE INDEX IF NOT EXISTS idx_eval_sessions_created_at ON evaluation_sessions(created_at DESC);
+
+-- 供应商健康状态（可选增强，与 api_configs.failure_count 协同）
+CREATE TABLE IF NOT EXISTS provider_health (
+  config_id INTEGER PRIMARY KEY,
+  consecutive_failures INTEGER DEFAULT 0,
+  last_error_code TEXT,
+  last_error_message TEXT,
+  last_failure_at DATETIME,
+  cooldown_until DATETIME,
+  FOREIGN KEY (config_id) REFERENCES api_configs(id) ON DELETE CASCADE
+);
+
+-- 提示词审计日志
+CREATE TABLE IF NOT EXISTS prompt_audit_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  action TEXT NOT NULL,
+  prompt_id INTEGER,
+  task_type TEXT,
+  version TEXT,
+  checksum TEXT,
+  detail_json TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (prompt_id) REFERENCES prompts(id) ON DELETE SET NULL
+);
 
 -- 预置默认设置
 INSERT OR IGNORE INTO app_settings (key, value) VALUES

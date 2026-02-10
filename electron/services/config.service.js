@@ -37,10 +37,10 @@ class ConfigService {
     /**
      * 创建配置
      */
-    async create({ config_name, provider, base_url, api_key, default_model }) {
+    async create({ config_name, provider, base_url, api_key, default_model, priority = 100, max_retries = 2 }) {
         try {
             // 验证参数
-            this._validateConfig({ config_name, provider, base_url, api_key, default_model });
+            this._validateConfig({ config_name, provider, base_url, api_key, default_model, priority, max_retries });
 
             // 加密 API Key
             if (!safeStorage.isEncryptionAvailable()) {
@@ -55,7 +55,9 @@ class ConfigService {
                 provider,
                 base_url,
                 api_key_encrypted,
-                default_model
+                default_model,
+                priority,
+                max_retries
             });
 
             logger.info(`Config created: ${config_name}`, null, { id, provider });
@@ -262,9 +264,44 @@ class ConfigService {
     }
 
     /**
+     * 获取全部可用配置（解密后，按默认 + 优先级排序）
+     */
+    async getDecryptedEnabledConfigs() {
+        try {
+            const configs = this.dao.listEnabledOrdered();
+            return configs
+                .map((config) => {
+                    try {
+                        return {
+                            ...config,
+                            api_key: safeStorage.decryptString(config.api_key_encrypted)
+                        };
+                    } catch (error) {
+                        logger.warn(`Skip config due to decrypt failure: ${config.id}`, null, {
+                            error: error.message
+                        });
+                        return null;
+                    }
+                })
+                .filter(Boolean);
+        } catch (error) {
+            logger.error('Failed to list decrypted configs', error);
+            throw this._normalizeError(error);
+        }
+    }
+
+    markSuccess(id) {
+        this.dao.markSuccess(id);
+    }
+
+    markFailure(id, cooldownUntil = null) {
+        this.dao.markFailure(id, cooldownUntil);
+    }
+
+    /**
      * 验证配置参数
      */
-    _validateConfig({ config_name, provider, base_url, api_key, default_model }) {
+    _validateConfig({ config_name, provider, base_url, api_key, default_model, priority, max_retries }) {
         const errors = [];
 
         if (!config_name || config_name.trim().length === 0) {
@@ -285,6 +322,14 @@ class ConfigService {
 
         if (!default_model || default_model.trim().length === 0) {
             errors.push('默认模型不能为空');
+        }
+
+        if (priority !== undefined && (Number.isNaN(Number(priority)) || Number(priority) < 1)) {
+            errors.push('priority 必须是大于 0 的整数');
+        }
+
+        if (max_retries !== undefined && (Number.isNaN(Number(max_retries)) || Number(max_retries) < 0 || Number(max_retries) > 5)) {
+            errors.push('max_retries 必须在 0-5 之间');
         }
 
         if (errors.length > 0) {

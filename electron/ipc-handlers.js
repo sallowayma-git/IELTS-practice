@@ -32,10 +32,12 @@ class IPCHandlers {
         this.essayService = null;
         this.settingsService = null;
         this.uploadService = null;
+        this.localApiInfo = null;
 
         // 允许调用 writing API 的页面白名单
         this.ALLOWED_WRITING_SOURCES = [
             'writing.html',
+            'dist/writing/index.html',
             'test-ipc.html' // 测试页面,生产环境可移除
         ];
     }
@@ -125,6 +127,10 @@ class IPCHandlers {
     _registerAppHandlers() {
         ipcMain.handle('app:getUserDataPath', async () => {
             return { success: true, data: app.getPath('userData') };
+        });
+
+        ipcMain.handle('app:getLocalApiInfo', async () => {
+            return { success: true, data: this.localApiInfo };
         });
     }
 
@@ -369,6 +375,22 @@ class IPCHandlers {
             this.db.close();
             logger.info('Database connection closed');
         }
+    }
+
+    setLocalApiInfo(info) {
+        this.localApiInfo = info;
+    }
+
+    getServiceBundle() {
+        return {
+            configService: this.configService,
+            promptService: this.promptService,
+            evaluateService: this.evaluateService,
+            topicService: this.topicService,
+            essayService: this.essayService,
+            settingsService: this.settingsService,
+            uploadService: this.uploadService
+        };
     }
 }
 

@@ -254,6 +254,9 @@ window.writingAPI.essays.getStatistics('all', null).then(console.log)
 - [ ] 历史搜索功能未实现（后端需 LIKE 查询）
 - [ ] 草稿存储使用 localStorage（大内容可能需 SQLite）
 - [ ] 应用版本号硬编码（需构建时注入）
+- [ ] 评分结果页面依赖 sessionStorage，缺少稳定落库链路
+- [ ] 设置页缺少 API 配置/提示词完整管理面板
+- [ ] 供应商调用缺少主备编排、重试与冷却机制
 
 ---
 

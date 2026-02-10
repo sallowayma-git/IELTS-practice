@@ -148,7 +148,8 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
+import { essays as essaysApi } from '@/api/client.js'
 
 const props = defineProps({
   sessionId: {
@@ -158,6 +159,7 @@ const props = defineProps({
 })
 
 const router = useRouter()
+const route = useRoute()
 
 const viewMode = ref('annotated')
 const expandedSentences = ref(new Set([0, 1, 2])) // 默认展开前3个
@@ -176,8 +178,34 @@ const ERROR_TYPE_LABELS = {
 }
 
 onMounted(() => {
-  // 【临时方案】从 sessionStorage 读取评测结果
-  // Phase 4+ 应改为 DB 持久层存储
+  loadResult()
+})
+
+async function loadResult() {
+  const essayId = route.query.essayId ? Number(route.query.essayId) : null
+
+  if (essayId) {
+    try {
+      const detail = await essaysApi.getById(essayId)
+      const parsedEvaluation = typeof detail.evaluation_json === 'string'
+        ? JSON.parse(detail.evaluation_json)
+        : (detail.evaluation_json || {})
+
+      scoreData.value = {
+        total_score: detail.total_score,
+        task_achievement: detail.task_achievement,
+        coherence_cohesion: detail.coherence_cohesion,
+        lexical_resource: detail.lexical_resource,
+        grammatical_range: detail.grammatical_range
+      }
+      sentences.value = parsedEvaluation.sentences || []
+      feedback.value = parsedEvaluation.overall_feedback || ''
+      return
+    } catch (error) {
+      console.warn('从数据库加载结果失败，降级读取 sessionStorage', error)
+    }
+  }
+
   const stored = sessionStorage.getItem(`evaluation_${props.sessionId}`)
   if (stored) {
     const data = JSON.parse(stored)
@@ -185,7 +213,7 @@ onMounted(() => {
     sentences.value = data.sentences || []
     feedback.value = data.feedback || ''
   }
-})
+}
 
 function getErrorTypeLabel(type) {
   return ERROR_TYPE_LABELS[type] || type

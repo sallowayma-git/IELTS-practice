@@ -418,7 +418,7 @@ function openEditor(topic = null) {
       difficulty: topic.difficulty,
       title: extractTextFromTiptap(topic.title_json),
       imageFile: null,
-      imagePreview: topic.image_path ? getImageUrl(topic.image_path) : null
+      imagePreview: topic.image_url || null
     }
   } else {
     editorForm.value = {
