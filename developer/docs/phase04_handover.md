@@ -1,8 +1,9 @@
 # Phase 04 交接文档
 
-> **文档生成时间**: 2026-01-30 19:30  
-> **Phase 状态**: ⚠️ 具备基础可用性，但存在后端闭环缺口与文档漂移  
-> **下一步**: 执行完整烟雾测试 → Phase 05
+> **文档生成时间**: 2026-01-30 19:30
+> **最后更新**: 2026-02-10 19:25
+> **Phase 状态**: ⚠️ 具备基础可用性，但 Phase 05A/05B 测试验收需返工
+> **下一步**: 修复 E2E 测试 → 重新提交评审
 
 ---
 
@@ -741,6 +742,58 @@ python3 developer/tests/e2e/suite_practice_flow.py
 
 ---
 
-**交接完成时间**: 2026-01-30 19:30  
-**下一责任人**: 待指定  
+## ⚠️ Phase 05A/05B 评审状态 (2026-02-10)
+
+> **评审结论**: ❌ **需返工后重提**
+> **评审时间**: 2026-02-09 22:15
+> **评审来源**: 评审 AI (Codex + Antigravity)
+
+### 评审发现的问题清单
+
+#### P0 - 致命问题
+
+| 问题 | 证据位置 | 说明 |
+|------|----------|------|
+| Mock 测试冒充 E2E | `phase05_eval_flow.py:54,136` | 使用 `MockDatabase/MockEvaluateService`，未调用真实 `evaluate.service.js` |
+| Mock 测试冒充 E2E | `phase05_upload_flow.py:53` | 使用 `MockUploadService`，未走 IPC/HTTP |
+| 路径安全测试吞错 | `phase05_upload_flow.py:276,282,293,297` | `except (ValueError, Exception)` 吃掉 `AssertionError`，可能假阳性通过 |
+
+#### P1 - 重要问题
+
+| 问题 | 证据位置 | 说明 |
+|------|----------|------|
+| 测试未接入 CI | `run_static_suite.py:676,832` | Phase05 脚本未加入强制执行清单 |
+| 报告耗时异常 | `phase05-eval-flow-report.json:3` | 总耗时 0.008s，不可能覆盖真实评分链路 |
+
+### 评审 AI 要求的硬证据清单
+
+返工后必须提供以下真实证据：
+
+1. **真实 session_id** - 从 `evaluation_sessions` 表获取的实际 ID
+2. **真实 essay_id** - 从 `essays` 表获取的实际 ID
+3. **真实文件路径删除前后断言** - 文件系统级别的验证
+4. **真实 DB 状态验证** - 直接查询 SQLite 数据库
+5. **真实 IPC/HTTP 调用链路** - 必须调用实际接口（IPC 或 `127.0.0.1` 本地 HTTP/SSE）
+
+### 当前测试状态
+
+| 测试项 | 状态 | 备注 |
+|--------|------|------|
+| `phase05_eval_flow.py` | ❌ 需返工 | Mock 测试，不通过验收 |
+| `phase05_upload_flow.py` | ❌ 需返工 | Mock 测试 + 吞错风险 |
+| `phase05-eval-flow-report.json` | ❌ 无效 | 基于 Mock 数据，结论失真 |
+| `phase05-upload-flow-report.json` | ❌ 无效 | 基于 Mock 数据，结论失真 |
+
+### 返工要求
+
+1. **删除"伪 E2E"定位** - 改成真实链路测试
+2. **修复路径安全测试** - 只捕获预期异常类型，禁止 `except Exception` 吞断言
+3. **接入强制 CI 链路** - 至少 `run_static_suite.py` 增加执行与失败中断
+4. **产出真实报告** - 附 3 条证据：真实 session_id、真实 essay_id、真实文件路径删除前后断言
+
+---
+
+**交接完成时间**: 2026-01-30 19:30
+**最后更新**: 2026-02-10 19:25
+**下一责任人**: 待指定
 **紧急联系**: 参考本文档"关键文件索引"章节

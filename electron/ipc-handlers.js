@@ -91,7 +91,7 @@ class IPCHandlers {
             this.topicService = new TopicService(this.db);
             this.essayService = new EssayService(this.db);
             this.settingsService = new SettingsService(this.db);
-            this.uploadService = new UploadService();
+            this.uploadService = new UploadService(app);
 
             logger.info('Services initialized successfully');
 

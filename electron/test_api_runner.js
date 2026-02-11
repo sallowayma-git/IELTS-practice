@@ -5,7 +5,7 @@ const os = require('os');
 const mockUserDataPath = path.join(os.homedir(), 'Library/Application Support/ielts-practice');
 const Module = require('module');
 const originalRequire = Module.prototype.require;
-Module.prototype.require = function(id) {
+Module.prototype.require = function (id) {
     if (id === 'electron') {
         return {
             app: {
@@ -44,12 +44,12 @@ const mockWebContents = {
 
 async function run() {
     const dbPath = path.join(mockUserDataPath, 'ielts-writing.db');
-    
+
     // Ensure DB is migrated
     const migrator = new Migrator(dbPath);
     migrator.migrate();
     const db = migrator.getDatabase();
-    
+
     const services = {
         configService: new ConfigService(db),
         promptService: new PromptService(db),
@@ -57,7 +57,7 @@ async function run() {
         topicService: new TopicService(db),
         essayService: new EssayService(db),
         settingsService: new SettingsService(db),
-        uploadService: new UploadService()
+        uploadService: new UploadService(mockUserDataPath)
     };
 
     const server = new LocalApiServer(services);
