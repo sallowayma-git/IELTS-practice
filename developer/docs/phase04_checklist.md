@@ -302,6 +302,54 @@ window.writingAPI.essays.getStatistics('all', null).then(console.log)
 
 ---
 
-**检查清单版本**: v1.0  
-**最后更新**: 2026-01-30 19:30  
-**状态**: ✅ Phase 04 核心功能完成，待全面验收
+---
+
+## ⚠️ Phase 05A/05B 验收状态 (2026-02-10)
+
+> **评审结论**: ❌ **未通过 - 需返工后重提**
+> **评审时间**: 2026-02-09 22:15
+> **评审来源**: 评审 AI (Codex + Antigravity)
+
+### Phase 05 验收项状态
+
+| 验收项 | 状态 | 备注 |
+|--------|------|------|
+| 05A 评分流程 E2E 测试 | ❌ 未通过 | Mock 测试，非真实链路 |
+| 05A 失败分支落库验证 | ❌ 未通过 | 无真实 DB 验证 |
+| 05A 取消分支无脏数据 | ❌ 未通过 | 无真实 DB 验证 |
+| 05B 上传流程 E2E 测试 | ❌ 未通过 | Mock 测试，非真实链路 |
+| 05B 删除清理验证 | ❌ 未通过 | 存在吞错风险 |
+| 05B 路径安全测试 | ❌ 未通过 | `except Exception` 吞断言 |
+| 测试接入 CI 链路 | ❌ 未完成 | 未加入强制执行清单 |
+
+### 评审 AI 要求的硬证据清单
+
+返工后必须提供以下证据（手工验收不计入通过条件）：
+
+- [ ] **真实 session_id** - 从 `evaluation_sessions` 表获取的实际 ID
+- [ ] **真实 essay_id** - 从 `essays` 表获取的实际 ID
+- [ ] **真实文件路径删除前后断言** - 文件系统级别的验证（删除前存在，删除后不存在）
+- [ ] **真实 DB 状态验证** - 直接查询 SQLite 数据库，验证字段值
+- [ ] **真实 IPC/HTTP 调用链路** - 必须调用实际接口（IPC 或 `127.0.0.1` 本地 HTTP/SSE）
+
+### 返工检查清单
+
+- [ ] 删除 Mock 测试，改为真实链路测试
+- [ ] 修复路径安全测试的异常捕获（禁止 `except Exception` 吞断言）
+- [ ] 将 Phase05 脚本接入 `run_static_suite.py` 强制执行
+- [ ] 产出真实测试报告，包含上述 5 项硬证据
+- [ ] 重新提交评审
+
+### 相关文件
+
+- 测试脚本: `developer/tests/e2e/phase05_eval_flow.py` (需返工)
+- 测试脚本: `developer/tests/e2e/phase05_upload_flow.py` (需返工)
+- 测试报告: `developer/tests/e2e/reports/phase05-eval-flow-report.json` (无效)
+- 测试报告: `developer/tests/e2e/reports/phase05-upload-flow-report.json` (无效)
+- 评审记录: `developer/docs/chat.md` (2026-02-09 22:15)
+
+---
+
+**检查清单版本**: v1.1
+**最后更新**: 2026-02-10 19:25
+**状态**: ⚠️ Phase 04 核心功能完成，Phase 05A/05B 需返工

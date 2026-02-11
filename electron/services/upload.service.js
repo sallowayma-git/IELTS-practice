@@ -9,9 +9,20 @@ const logger = require('../utils/logger');
  * 图片上传处理服务
  */
 class UploadService {
-    constructor() {
+    constructor(appOrUserDataPath) {
         // 图片存储目录
-        this.imagesDir = path.join(app.getPath('userData'), 'images');
+        // 支持两种模式:
+        // 1. Electron 模式: 传入 app 对象
+        // 2. 独立模式: 传入 userDataPath 字符串 (用于测试)
+        const userDataPath = typeof appOrUserDataPath === 'string'
+            ? appOrUserDataPath
+            : appOrUserDataPath?.getPath?.('userData');
+
+        if (!userDataPath) {
+            throw new Error('UploadService requires either app object or userDataPath string');
+        }
+
+        this.imagesDir = path.join(userDataPath, 'images');
         this.originalsDir = path.join(this.imagesDir, 'originals');
         this.thumbnailsDir = path.join(this.imagesDir, 'thumbnails');
         this._ensureImagesDir();
