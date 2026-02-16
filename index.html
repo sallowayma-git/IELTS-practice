@@ -71,7 +71,7 @@
             </div>
 
             <div class="search-box hero-surface">
-                <input type="text" class="search-input" placeholder="搜索题目..." onkeyup="searchExams(this.value)">
+                <input type="text" class="search-input" placeholder="搜索题目..." aria-label="搜索题目" onkeyup="searchExams(this.value)">
             </div>
 
             <div id="exam-list-container"></div>
@@ -376,7 +376,7 @@
         <div class="theme-modal-content">
             <div class="theme-modal-header">
                 <h3>🎨 主题切换</h3>
-                <button class="theme-modal-close" onclick="hideThemeSwitcherModal()">×</button>
+                <button class="theme-modal-close" onclick="hideThemeSwitcherModal()" aria-label="关闭">×</button>
             </div>
             <div class="theme-modal-body">
                 <div class="theme-options-viewport" role="presentation">
@@ -386,7 +386,7 @@
                                 <div class="theme-name">📚 Academic</div>
                                 <div class="theme-desc">专业 高效 可靠</div>
                             </div>
-                            <button class="btn btn-sm"
+                            <button class="btn btn-sm" aria-label="切换到 Academic 主题"
                                 onclick="navigateToThemePortal('.superdesign/design_iterations/ielts_academic_functional_2.html', { label: 'Academic' })">切换</button>
                         </div>
                         <div class="theme-option">
@@ -394,14 +394,14 @@
                                 <div class="theme-name">🍂 Bloom</div>
                                 <div class="theme-desc">秋日 暖阳</div>
                             </div>
-                            <button id="bloom-theme-btn" class="btn btn-sm" onclick="toggleBloomDarkMode()">切换</button>
+                            <button id="bloom-theme-btn" class="btn btn-sm" aria-label="切换到 Bloom 主题" onclick="toggleBloomDarkMode()">切换</button>
                         </div>
                         <div class="theme-option">
                             <div class="theme-info">
                                 <div class="theme-name" style="color: #0554F2;">🔵 Blue</div>
                                 <div class="theme-desc" style="color: #0788D9;">冷静 清爽 专注</div>
                             </div>
-                            <button id="blue-theme-btn" class="btn btn-sm"
+                            <button id="blue-theme-btn" class="btn btn-sm" aria-label="切换到 Blue 主题"
                                 style="background: #0554F2; border-color: #1154D9;"
                                 onclick="applyTheme('blue')">切换</button>
                         </div>
@@ -410,7 +410,7 @@
                                 <div class="theme-name" style="color: #ec4899;">🎀 Melody</div>
                                 <div class="theme-desc" style="color: #ec4899;">美乐蒂</div>
                             </div>
-                            <button class="btn btn-sm" style="background: #ec4899; border-color: #ec4899;"
+                            <button class="btn btn-sm" style="background: #ec4899; border-color: #ec4899;" aria-label="切换到 Melody 主题"
                                 onclick="navigateToThemePortal('.superdesign/design_iterations/my_melody_ielts_1.html', { label: 'MyMelody', theme: 'mymelody' })">切换</button>
                         </div>
                         <div class="theme-option">
@@ -427,7 +427,7 @@
                                 <div class="theme-name" style="color: #ffc83d;">🐷 小呆呆</div>
                                 <div class="theme-desc" style="color: #f59e0b;">小呆呆控制台</div>
                             </div>
-                            <button class="btn btn-sm"
+                            <button class="btn btn-sm" aria-label="切换到 小呆呆 主题"
                                 style="background: linear-gradient(120deg, #ffe08a, #ffc83d); border-color: #fbbf24; color: #3b2400;"
                                 onclick="navigateToThemePortal('.superdesign/design_iterations/xiaodaidai_dashboard_1.html', { label: 'XiaoDaiDai', theme: 'xiaodaidai' })">切换</button>
                         </div>
@@ -485,7 +485,7 @@
         <div class="theme-modal-content" style="max-width: 600px;">
             <div class="theme-modal-header">
                 <h3>🏆 我的成就</h3>
-                <button class="theme-modal-close" onclick="hideAchievements()">×</button>
+                <button class="theme-modal-close" onclick="hideAchievements()" aria-label="关闭">×</button>
             </div>
             <div class="theme-modal-body">
                 <div class="achievements-grid" id="achievements-list">
