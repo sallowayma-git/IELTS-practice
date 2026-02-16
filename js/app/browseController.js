@@ -162,6 +162,9 @@
                     button.setAttribute('aria-pressed', 'false');
                 }
 
+                // Palette: Add aria-pressed for accessibility
+                button.setAttribute('aria-pressed', filter.id === this.activeFilter);
+
                 // 绑定点击事件
                 button.addEventListener('click', () => {
                     this.handleFilterClick(filter.id);
@@ -196,13 +199,18 @@
             const buttons = this.buttonContainer.querySelectorAll('.btn');
             buttons.forEach(button => {
                 const filterId = button.dataset.filterId;
-                if (filterId === this.activeFilter) {
+                const isActive = filterId === this.activeFilter;
+
+                if (isActive) {
                     button.classList.add('active');
                     button.setAttribute('aria-pressed', 'true');
                 } else {
                     button.classList.remove('active');
                     button.setAttribute('aria-pressed', 'false');
                 }
+
+                // Palette: Update aria-pressed
+                button.setAttribute('aria-pressed', isActive);
             });
         }
 

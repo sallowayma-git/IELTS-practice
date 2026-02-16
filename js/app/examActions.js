@@ -301,6 +301,8 @@
         startBtn.className = 'btn exam-item-action-btn';
         startBtn.type = 'button';
         startBtn.dataset.action = 'start';
+        // Palette: Add aria-label for context
+        startBtn.setAttribute('aria-label', '开始练习 ' + (exam.title || ''));
         if (exam.id) {
             startBtn.dataset.examId = exam.id;
         }
@@ -312,6 +314,8 @@
         pdfBtn.className = 'btn btn-outline exam-item-action-btn';
         pdfBtn.type = 'button';
         pdfBtn.dataset.action = 'pdf';
+        // Palette: Add aria-label for context
+        pdfBtn.setAttribute('aria-label', '查看PDF ' + (exam.title || ''));
         if (exam.id) {
             pdfBtn.dataset.examId = exam.id;
         }
