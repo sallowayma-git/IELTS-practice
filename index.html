@@ -64,9 +64,9 @@
                     </label>
                 </div>
                 <div id="type-filter-buttons" class="hero-panel__actions shui-filter-group">
-                    <button class="btn btn-sm shui-filter-btn" onclick="filterByType('all')">全部</button>
-                    <button class="btn btn-sm shui-filter-btn" onclick="filterByType('reading')">阅读</button>
-                    <button class="btn btn-sm shui-filter-btn" onclick="filterByType('listening')">听力</button>
+                    <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="true" data-filter-type="all" onclick="filterByType('all')">全部</button>
+                    <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false" data-filter-type="reading" onclick="filterByType('reading')">阅读</button>
+                    <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false" data-filter-type="listening" onclick="filterByType('listening')">听力</button>
                 </div>
             </div>
 
@@ -112,10 +112,9 @@
                 <div class="hero-panel__header">
                     <h3 class="hero-panel__title">📈 练习历史 <span class="hero-tag">SHUI Timeline</span></h3>
                     <div id="record-type-filter-buttons" class="hero-panel__actions shui-filter-group">
-                        <button class="btn btn-sm shui-filter-btn" onclick="filterRecordsByType('all')">全部</button>
-                        <button class="btn btn-sm shui-filter-btn" onclick="filterRecordsByType('reading')">阅读</button>
-                        <button class="btn btn-sm shui-filter-btn"
-                            onclick="filterRecordsByType('listening')">听力</button>
+                        <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="true" data-filter-type="all" onclick="filterRecordsByType('all')">全部</button>
+                        <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false" data-filter-type="reading" onclick="filterRecordsByType('reading')">阅读</button>
+                        <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false" data-filter-type="listening" onclick="filterRecordsByType('listening')">听力</button>
                     </div>
                     <div class="hero-panel__actions">
                         <button class="btn btn-secondary hero-btn hero-btn--ghost"
