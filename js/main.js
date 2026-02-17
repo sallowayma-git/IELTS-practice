@@ -1759,6 +1759,22 @@ function filterByType(type) {
     setBrowseFilterState('all', type);
     setBrowseTitle(formatBrowseTitle('all', type));
 
+    // 更新按钮状态 (UI Feedback)
+    const container = document.getElementById('type-filter-buttons');
+    if (container) {
+        const buttons = container.querySelectorAll('.btn');
+        buttons.forEach(btn => {
+            const isMatch = btn.getAttribute('data-filter-type') === type;
+            if (isMatch) {
+                btn.classList.add('active');
+                btn.setAttribute('aria-pressed', 'true');
+            } else {
+                btn.classList.remove('active');
+                btn.setAttribute('aria-pressed', 'false');
+            }
+        });
+    }
+
     // 重置浏览模式和路径（清除频率模式残留）
     window.__browseFilterMode = 'default';
     window.__browsePath = null;
@@ -1905,6 +1921,23 @@ if (typeof window.browseCategory !== 'function') {
 
 function filterRecordsByType(type) {
     setBrowseFilterState(getCurrentCategory(), type);
+
+    // 更新按钮状态 (UI Feedback)
+    const container = document.getElementById('record-type-filter-buttons');
+    if (container) {
+        const buttons = container.querySelectorAll('.btn');
+        buttons.forEach(btn => {
+            const isMatch = btn.getAttribute('data-filter-type') === type;
+            if (isMatch) {
+                btn.classList.add('active');
+                btn.setAttribute('aria-pressed', 'true');
+            } else {
+                btn.classList.remove('active');
+                btn.setAttribute('aria-pressed', 'false');
+            }
+        });
+    }
+
     updatePracticeView();
 }
 
