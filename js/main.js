@@ -1755,6 +1755,29 @@ function browseCategory(category, type = 'reading', filterMode = null, path = nu
 }
 
 function filterByType(type) {
+    // UI update for filter buttons (Fallback/Immediate feedback)
+    const container = document.getElementById('type-filter-buttons');
+    if (container) {
+        const buttons = container.querySelectorAll('button');
+        buttons.forEach(btn => {
+            let isActive = false;
+            // Support both BrowseController generated buttons and static HTML buttons
+            if (btn.dataset.filterId) {
+                isActive = btn.dataset.filterId === type;
+            } else {
+                const onclickVal = btn.getAttribute('onclick');
+                isActive = onclickVal && onclickVal.includes(`'${type}'`);
+            }
+
+            if (isActive) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+            btn.setAttribute('aria-pressed', isActive);
+        });
+    }
+
     // 重置筛选器状态
     setBrowseFilterState('all', type);
     setBrowseTitle(formatBrowseTitle('all', type));
@@ -1904,6 +1927,20 @@ if (typeof window.browseCategory !== 'function') {
 }
 
 function filterRecordsByType(type) {
+    const container = document.getElementById('record-type-filter-buttons');
+    if (container) {
+        const buttons = container.querySelectorAll('button');
+        buttons.forEach(btn => {
+            const onclickVal = btn.getAttribute('onclick');
+            const isActive = onclickVal && onclickVal.includes(`'${type}'`);
+            if (isActive) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+            btn.setAttribute('aria-pressed', isActive);
+        });
+    }
     setBrowseFilterState(getCurrentCategory(), type);
     updatePracticeView();
 }
