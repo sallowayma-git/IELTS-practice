@@ -18,6 +18,15 @@
      */
     function loadExamList() {
         console.log('[ExamActions] loadExamList 被调用');
+
+        // 确保 BrowseController 已初始化（用于管理筛选按钮状态）
+        if (global.browseController && !global.browseController.buttonContainer) {
+            try {
+                global.browseController.initialize('type-filter-buttons');
+            } catch (error) {
+                console.warn('[Browse] BrowseController 自动初始化失败:', error);
+            }
+        }
         
         // 1. 频率模式委托给 BrowseController
         if (global.__browseFilterMode && global.__browseFilterMode !== 'default' && global.browseController) {
