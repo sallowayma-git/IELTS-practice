@@ -2753,11 +2753,13 @@ body.no-scroll {
 
 .search-box {
     margin-bottom: var(--space-xl);
+    position: relative;
 }
 
 .search-input {
     width: 100%;
     padding: var(--space-md) var(--space-lg);
+    padding-right: 40px;
     border: 1px solid var(--color-gray-300);
     border-radius: var(--border-radius-lg);
     background: var(--color-white);
@@ -2766,6 +2768,32 @@ body.no-scroll {
     font-family: var(--font-family-primary);
     transition: all var(--transition-normal);
     outline: none;
+}
+
+.search-clear-btn {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--color-gray-400);
+    padding: 4px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s, background-color 0.2s;
+}
+
+.search-clear-btn:hover {
+    color: var(--color-gray-600);
+    background-color: var(--color-gray-100);
+}
+
+.search-clear-btn[hidden] {
+    display: none;
 }
 
 .search-input:focus {
