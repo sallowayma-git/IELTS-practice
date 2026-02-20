@@ -162,8 +162,14 @@
                 const isActive = filter.id === this.activeFilter;
                 if (isActive) {
                     button.classList.add('active');
+                    button.setAttribute('aria-pressed', 'true');
+                } else {
+                    button.setAttribute('aria-pressed', 'false');
                 }
                 button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+
+                // Palette: Add aria-pressed for accessibility
+                button.setAttribute('aria-pressed', filter.id === this.activeFilter);
 
                 // 绑定点击事件
                 button.addEventListener('click', () => {
@@ -200,8 +206,22 @@
             buttons.forEach(button => {
                 const filterId = button.dataset.filterId;
                 const isActive = filterId === this.activeFilter;
+<<<<<<< palette-a11y-filter-buttons-11327431714844324793
                 button.classList.toggle('active', isActive);
                 button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+=======
+
+                if (isActive) {
+                    button.classList.add('active');
+                    button.setAttribute('aria-pressed', 'true');
+                } else {
+                    button.classList.remove('active');
+                    button.setAttribute('aria-pressed', 'false');
+                }
+
+                // Palette: Update aria-pressed
+                button.setAttribute('aria-pressed', isActive);
+>>>>>>> IELTS-WRITING-FEAT
             });
         }
 
