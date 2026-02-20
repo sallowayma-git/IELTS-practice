@@ -151,16 +151,22 @@
             config.filters.forEach(filter => {
                 const button = document.createElement('button');
                 button.className = 'btn btn-sm';
+                button.type = 'button';
                 button.textContent = filter.label;
                 button.dataset.filterId = filter.id;
+                if (config.filterLogic === 'type-based') {
+                    button.dataset.filterType = filter.id;
+                }
 
                 // 设置激活状态
-                if (filter.id === this.activeFilter) {
+                const isActive = filter.id === this.activeFilter;
+                if (isActive) {
                     button.classList.add('active');
                     button.setAttribute('aria-pressed', 'true');
                 } else {
                     button.setAttribute('aria-pressed', 'false');
                 }
+                button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
 
                 // Palette: Add aria-pressed for accessibility
                 button.setAttribute('aria-pressed', filter.id === this.activeFilter);
@@ -200,6 +206,10 @@
             buttons.forEach(button => {
                 const filterId = button.dataset.filterId;
                 const isActive = filterId === this.activeFilter;
+<<<<<<< palette-a11y-filter-buttons-11327431714844324793
+                button.classList.toggle('active', isActive);
+                button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+=======
 
                 if (isActive) {
                     button.classList.add('active');
@@ -211,6 +221,7 @@
 
                 // Palette: Update aria-pressed
                 button.setAttribute('aria-pressed', isActive);
+>>>>>>> IELTS-WRITING-FEAT
             });
         }
 
