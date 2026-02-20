@@ -200,11 +200,7 @@
             buttons.forEach(button => {
                 const filterId = button.dataset.filterId;
                 const isActive = filterId === this.activeFilter;
-                if (isActive) {
-                    button.classList.add('active');
-                } else {
-                    button.classList.remove('active');
-                }
+                button.classList.toggle('active', isActive);
                 button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
             });
         }
