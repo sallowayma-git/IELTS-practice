@@ -154,6 +154,9 @@
                 button.type = 'button';
                 button.textContent = filter.label;
                 button.dataset.filterId = filter.id;
+                if (config.filterLogic === 'type-based') {
+                    button.dataset.filterType = filter.id;
+                }
 
                 // 设置激活状态
                 const isActive = filter.id === this.activeFilter;
