@@ -1517,6 +1517,7 @@ function updatePracticeView() {
         : records.slice().sort((a, b) => new Date(b.date) - new Date(a.date));
 
     const examType = getCurrentExamType();
+    syncFilterButtonState('record-type-filter-buttons', examType);
     if (examType !== 'all') {
         if (stats && typeof stats.filterByExamType === 'function') {
             recordsToShow = stats.filterByExamType(recordsToShow, getExamIndexState(), examType);
@@ -1764,7 +1765,8 @@ function filterByType(type) {
     if (container) {
         const buttons = container.querySelectorAll('.btn');
         buttons.forEach(btn => {
-            const isMatch = btn.getAttribute('data-filter-type') === type;
+            const filterValue = btn.getAttribute('data-filter-id') || btn.getAttribute('data-filter-type');
+            const isMatch = filterValue === type;
             if (isMatch) {
                 btn.classList.add('active');
                 btn.setAttribute('aria-pressed', 'true');
@@ -1923,22 +1925,24 @@ function filterRecordsByType(type) {
     setBrowseFilterState(getCurrentCategory(), type);
 
     // 更新按钮状态 (UI Feedback)
-    const container = document.getElementById('record-type-filter-buttons');
-    if (container) {
-        const buttons = container.querySelectorAll('.btn');
-        buttons.forEach(btn => {
-            const isMatch = btn.getAttribute('data-filter-type') === type;
-            if (isMatch) {
-                btn.classList.add('active');
-                btn.setAttribute('aria-pressed', 'true');
-            } else {
-                btn.classList.remove('active');
-                btn.setAttribute('aria-pressed', 'false');
-            }
-        });
-    }
+    syncFilterButtonState('record-type-filter-buttons', type);
 
     updatePracticeView();
+}
+
+function syncFilterButtonState(containerId, activeFilter) {
+    const container = document.getElementById(containerId);
+    if (!container) {
+        return;
+    }
+
+    const buttons = container.querySelectorAll('.btn');
+    buttons.forEach(btn => {
+        const filterValue = btn.getAttribute('data-filter-id') || btn.getAttribute('data-filter-type');
+        const isMatch = filterValue === activeFilter;
+        btn.classList.toggle('active', isMatch);
+        btn.setAttribute('aria-pressed', isMatch ? 'true' : 'false');
+    });
 }
 
 
