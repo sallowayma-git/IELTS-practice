@@ -2665,6 +2665,16 @@ function handleFolderSelection(event) { /* legacy stub - replaced by modal-speci
 
 
 function searchExams(query) {
+    // Toggle clear button visibility
+    const clearBtn = document.getElementById('search-clear-btn');
+    if (clearBtn) {
+        if (query && query.length > 0) {
+            clearBtn.removeAttribute('hidden');
+        } else {
+            clearBtn.setAttribute('hidden', '');
+        }
+    }
+
     if (window.performanceOptimizer && typeof window.performanceOptimizer.debounce === 'function') {
         const debouncedSearch = window.performanceOptimizer.debounce(performSearch, 300, 'exam_search');
         debouncedSearch(query);
@@ -2672,6 +2682,19 @@ function searchExams(query) {
         // Fallback: direct call if optimizer not available
         performSearch(query);
     }
+}
+
+function clearSearch() {
+    const input = document.getElementById('exam-search-input');
+    if (input) {
+        input.value = '';
+        input.focus();
+        searchExams('');
+    }
+}
+
+if (typeof window !== 'undefined') {
+    window.clearSearch = clearSearch;
 }
 
 function performSearch(query) {
