@@ -365,6 +365,14 @@ class BrowseStateManager {
         if (searchInput) {
             searchInput.value = '';
         }
+        if (typeof window.syncSearchClearButtonState === 'function') {
+            window.syncSearchClearButtonState('');
+        } else {
+            const clearBtn = document.getElementById('search-clear-btn');
+            if (clearBtn) {
+                clearBtn.setAttribute('hidden', '');
+            }
+        }
     }
 
     /**
