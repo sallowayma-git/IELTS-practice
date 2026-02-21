@@ -1922,6 +1922,20 @@ if (typeof window.browseCategory !== 'function') {
 }
 
 function filterRecordsByType(type) {
+    const container = document.getElementById('record-type-filter-buttons');
+    if (container) {
+        const buttons = container.querySelectorAll('button');
+        buttons.forEach(btn => {
+            const onclickVal = btn.getAttribute('onclick');
+            const isActive = onclickVal && onclickVal.includes(`'${type}'`);
+            if (isActive) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+            btn.setAttribute('aria-pressed', isActive);
+        });
+    }
     setBrowseFilterState(getCurrentCategory(), type);
 
     // 更新按钮状态 (UI Feedback)
