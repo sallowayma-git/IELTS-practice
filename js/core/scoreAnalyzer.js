@@ -652,23 +652,89 @@ class ScoreAnalyzer {
         const cached = this.getCachedAnalysis(cacheKey);
         if (cached) return cached;
 
-        const categoryPerformance = this.analyzeCategoryPerformance(records);
-        const questionTypePerformance = this.analyzeQuestionTypePerformance(records);
-        const basicStats = this.calculateBasicStats(records);
+        // Optimized single-pass calculation
+        let basicTotalTimeSpent = 0;
+        let basicTotalScore = 0;
+        let basicTotalQuestions = 0;
+        let basicTotalCorrectAnswers = 0;
+        let basicCompletedPractices = 0;
+        const basicScores = [];
+
+        const categoryStats = new Map();
+        const questionTypeStats = new Map();
+
+        for (const record of records) {
+            if (record.status !== 'completed') continue;
+
+            // --- Basic Stats ---
+            basicCompletedPractices++;
+            basicTotalTimeSpent += record.duration || 0;
+            basicTotalScore += record.accuracy || 0;
+            basicScores.push(record.accuracy || 0);
+            basicTotalQuestions += record.totalQuestions || 0;
+            basicTotalCorrectAnswers += record.correctAnswers || 0;
+
+            // --- Category Stats ---
+            const category = record.metadata?.category;
+            if (category) {
+                let catStat = categoryStats.get(category);
+                if (!catStat) {
+                    catStat = { totalScore: 0, practices: 0 };
+                    categoryStats.set(category, catStat);
+                }
+                catStat.practices++;
+                catStat.totalScore += record.accuracy || 0;
+            }
+
+            // --- Question Type Stats ---
+            if (record.questionTypePerformance) {
+                for (const [type, performance] of Object.entries(record.questionTypePerformance)) {
+                    let typeStat = questionTypeStats.get(type);
+                    if (!typeStat) {
+                        typeStat = { totalCorrect: 0, totalQuestions: 0 };
+                        questionTypeStats.set(type, typeStat);
+                    }
+                    typeStat.totalQuestions += performance.total || 0;
+                    typeStat.totalCorrect += performance.correct || 0;
+                }
+            }
+        }
+
+        // --- Calculate Derived Metrics ---
+        let averageAccuracy = 0;
+        let scoreVariance = 0;
+        let averageTimePerQuestion = 0;
+        let improvementTrend = 0;
+
+        if (basicCompletedPractices > 0) {
+            const averageScore = basicTotalScore / basicCompletedPractices;
+            averageAccuracy = basicTotalQuestions > 0 ? basicTotalCorrectAnswers / basicTotalQuestions : 0;
+
+            if (basicTotalQuestions > 0) {
+                averageTimePerQuestion = basicTotalTimeSpent / basicTotalQuestions;
+            }
+
+            if (basicScores.length > 1) {
+                const variance = basicScores.reduce((sum, score) => sum + Math.pow(score - averageScore, 2), 0) / basicScores.length;
+                scoreVariance = Math.sqrt(variance);
+            }
+
+            improvementTrend = this.calculateImprovementTrend(basicScores);
+        }
 
         const radarData = {
             // 分类能力
-            categories: Object.entries(categoryPerformance).map(([category, stats]) => ({
+            categories: Array.from(categoryStats.entries()).map(([category, stats]) => ({
                 label: category,
-                value: Math.round(stats.averageScore * 100),
+                value: Math.round((stats.totalScore / stats.practices) * 100),
                 maxValue: 100,
                 color: this.getCategoryColor(category)
             })),
             
             // 题型能力
-            questionTypes: Object.entries(questionTypePerformance).map(([type, stats]) => ({
+            questionTypes: Array.from(questionTypeStats.entries()).map(([type, stats]) => ({
                 label: this.getQuestionTypeLabel(type),
-                value: Math.round(stats.overallAccuracy * 100),
+                value: Math.round((stats.totalQuestions > 0 ? stats.totalCorrect / stats.totalQuestions : 0) * 100),
                 maxValue: 100,
                 color: this.getQuestionTypeColor(type)
             })),
@@ -677,25 +743,25 @@ class ScoreAnalyzer {
             overallMetrics: [
                 {
                     label: '准确率',
-                    value: Math.round(basicStats.averageAccuracy * 100),
+                    value: Math.round(averageAccuracy * 100),
                     maxValue: 100,
                     color: '#4CAF50'
                 },
                 {
                     label: '稳定性',
-                    value: Math.round((1 - basicStats.scoreVariance) * 100),
+                    value: Math.round((1 - scoreVariance) * 100),
                     maxValue: 100,
                     color: '#2196F3'
                 },
                 {
                     label: '效率',
-                    value: Math.round(Math.max(0, (60 - basicStats.averageTimePerQuestion)) / 60 * 100),
+                    value: Math.round(Math.max(0, (60 - averageTimePerQuestion)) / 60 * 100),
                     maxValue: 100,
                     color: '#FF9800'
                 },
                 {
                     label: '进步趋势',
-                    value: Math.round(Math.max(0, (basicStats.improvementTrend + 0.1) / 0.2 * 100)),
+                    value: Math.round(Math.max(0, (improvementTrend + 0.1) / 0.2 * 100)),
                     maxValue: 100,
                     color: '#9C27B0'
                 }
