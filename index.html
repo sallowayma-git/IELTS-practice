@@ -54,7 +54,7 @@
         <!-- 题库浏览页面 -->
         <div id="browse-view" class="view hero-panel hero-section">
             <div class="browse-title-bar hero-panel__header">
-                <button class="browse-title-trigger" id="browse-title-trigger" type="button" aria-haspopup="true"
+                <button class="browse-title-trigger" id="browse-title-trigger" type="button" aria-label="列表偏好" aria-haspopup="true"
                     aria-expanded="false" title="列表偏好">📚</button>
                 <h2 id="browse-title">题库浏览</h2>
                 <div class="browse-preference-panel" id="browse-preference-panel" hidden>
@@ -64,14 +64,14 @@
                     </label>
                 </div>
                 <div id="type-filter-buttons" class="hero-panel__actions shui-filter-group">
-                    <button class="btn btn-sm shui-filter-btn" onclick="filterByType('all')">全部</button>
-                    <button class="btn btn-sm shui-filter-btn" onclick="filterByType('reading')">阅读</button>
-                    <button class="btn btn-sm shui-filter-btn" onclick="filterByType('listening')">听力</button>
+                    <button class="btn btn-sm shui-filter-btn" aria-pressed="true" onclick="filterByType('all')">全部</button>
+                    <button class="btn btn-sm shui-filter-btn" aria-pressed="false" onclick="filterByType('reading')">阅读</button>
+                    <button class="btn btn-sm shui-filter-btn" aria-pressed="false" onclick="filterByType('listening')">听力</button>
                 </div>
             </div>
 
             <div class="search-box hero-surface">
-                <input type="text" class="search-input" placeholder="搜索题目..." onkeyup="searchExams(this.value)">
+                <input type="text" class="search-input" aria-label="搜索题目" placeholder="搜索题目..." onkeyup="searchExams(this.value)">
             </div>
 
             <div id="exam-list-container"></div>
