@@ -158,6 +158,7 @@
                 if (filter.id === this.activeFilter) {
                     button.classList.add('active');
                 }
+                button.setAttribute('aria-pressed', filter.id === this.activeFilter ? 'true' : 'false');
 
                 // 绑定点击事件
                 button.addEventListener('click', () => {
@@ -195,8 +196,10 @@
                 const filterId = button.dataset.filterId;
                 if (filterId === this.activeFilter) {
                     button.classList.add('active');
+                    button.setAttribute('aria-pressed', 'true');
                 } else {
                     button.classList.remove('active');
+                    button.setAttribute('aria-pressed', 'false');
                 }
             });
         }
