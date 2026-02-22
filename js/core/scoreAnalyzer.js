@@ -14,8 +14,6 @@ class ScoreAnalyzer {
      * 初始化分析引擎
      */
     initialize() {
-        console.log('ScoreAnalyzer initialized');
-        
         // 清理过期缓存
         this.setupCacheCleanup();
     }
