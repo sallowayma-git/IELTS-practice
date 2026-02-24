@@ -531,11 +531,11 @@
         replaceContent(container, createNode('div', { className: 'practice-history-empty' }, [
             createNode('div', { className: 'practice-history-empty-icon', ariaHidden: 'true' }, '📂'),
             createNode('p', { className: 'practice-history-empty-text' }, '暂无任何练习记录'),
+            createNode('p', { style: { fontSize: '0.9em' } }, '开始练习后，记录将自动保存在这里'),
             createNode('button', {
                 className: 'btn btn-primary',
                 type: 'button',
                 onclick: "if(window.browseCategory) window.browseCategory('all')",
-                style: { marginTop: '15px' },
                 ariaLabel: '前往题库开始练习'
             }, '去题库练习')
         ]));
