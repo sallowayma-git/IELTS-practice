@@ -269,6 +269,35 @@
         empty.appendChild(icon);
         empty.appendChild(text);
         empty.appendChild(hint);
+
+        // Palette Improvement: Add Clear Search Button if search is active
+        const searchInput = document.getElementById('exam-search-input');
+        if (searchInput && searchInput.value.trim().length > 0) {
+            const actions = document.createElement('div');
+            actions.className = 'exam-list-empty-actions';
+
+            const clearBtn = document.createElement('button');
+            clearBtn.className = 'btn btn-secondary exam-list-empty-action';
+            clearBtn.textContent = '清除搜索';
+            clearBtn.onclick = function() {
+                if (typeof global.clearSearch === 'function') {
+                    global.clearSearch();
+                    return;
+                }
+                var input = document.getElementById('exam-search-input');
+                if (input) {
+                    input.value = '';
+                    input.focus();
+                    if (typeof global.searchExams === 'function') {
+                        global.searchExams('');
+                    }
+                }
+            };
+
+            actions.appendChild(clearBtn);
+            empty.appendChild(actions);
+        }
+
         container.appendChild(empty);
     }
 
