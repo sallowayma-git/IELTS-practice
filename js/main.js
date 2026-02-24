@@ -2025,7 +2025,14 @@ function loadExamListFallback() {
         }
 
         if (filtered.length === 0) {
-            container.innerHTML = '<div class="exam-list-empty"><p>未找到匹配的题目</p></div>';
+            let emptyHtml = '<div class="exam-list-empty"><p>未找到匹配的题目</p>';
+            const searchInput = document.getElementById('exam-search-input');
+            if (searchInput && searchInput.value.trim().length > 0) {
+                emptyHtml += '<div class="exam-list-empty-actions"><button class="btn btn-secondary exam-list-empty-action" onclick="if(typeof clearSearch===\'function\'){clearSearch()}else if(window.clearSearch){window.clearSearch()}else{var i=document.getElementById(\'exam-search-input\');if(i){i.value=\'\';i.focus();if(typeof searchExams===\'function\'){searchExams(\'\')}}}">清除搜索</button></div>';
+                emptyHtml += '<div class="exam-list-empty-actions"><button class="btn btn-secondary exam-list-empty-action" onclick="if(typeof clearSearch===\'function\'){clearSearch()}else if(window.clearSearch){window.clearSearch()}else{var i=document.getElementById(\'exam-search-input\');if(i){i.value=\'\';i.focus();if(typeof searchExams===\'function\'){searchExams(\'\')}}}">清除搜索</button></div>';
+            }
+            emptyHtml += '</div>';
+            container.innerHTML = emptyHtml;
             return;
         }
         
@@ -2097,7 +2104,13 @@ function displayExams(exams) {
         
         const normalizedExams = Array.isArray(exams) ? exams : [];
         if (normalizedExams.length === 0) {
-            container.innerHTML = '<div class="exam-list-empty"><p>未找到匹配的题目</p></div>';
+            let emptyHtml = '<div class="exam-list-empty"><p>未找到匹配的题目</p>';
+            const searchInput = document.getElementById('exam-search-input');
+            if (searchInput && searchInput.value.trim().length > 0) {
+                emptyHtml += '<div class="exam-list-empty-actions"><button class="btn btn-secondary" onclick="if(typeof clearSearch===\'function\'){clearSearch()}else if(window.clearSearch){window.clearSearch()}else{var i=document.getElementById(\'exam-search-input\');if(i){i.value=\'\';i.focus();if(typeof searchExams===\'function\'){searchExams(\'\')}}}">清除搜索</button></div>';
+            }
+            emptyHtml += '</div>';
+            container.innerHTML = emptyHtml;
             return;
         }
         

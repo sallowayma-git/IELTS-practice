@@ -993,6 +993,17 @@
         var description = safeConfig.description || '请调整筛选条件或搜索词后再试';
         var actions = Array.isArray(safeConfig.actions) ? safeConfig.actions.slice() : [];
 
+        // Palette Improvement: Check search input for Clear Search action
+        var searchInput = typeof document !== 'undefined' ? document.getElementById('exam-search-input') : null;
+        if (searchInput && searchInput.value && searchInput.value.trim().length > 0) {
+            actions.push({
+                action: 'clear-search',
+                label: '清除搜索',
+                variant: 'secondary',
+                ariaLabel: '清除当前搜索'
+            });
+        }
+
         if (!actions.length && safeConfig.disableDefaultActions !== true) {
             actions.push({
                 action: 'load-library',
@@ -1048,6 +1059,28 @@
                                 try { global.loadLibrary(false); } catch (_) { }
                             } else if (typeof global.showLibraryLoaderModal === 'function') {
                                 global.showLibraryLoaderModal();
+                            }
+                        });
+                    } catch (_) { }
+                }
+
+                if (button && action.action === 'clear-search') {
+                    try {
+                        button.addEventListener('click', function handleClearSearchClick(event) {
+                            if (event && typeof event.preventDefault === 'function') {
+                                event.preventDefault();
+                            }
+                            if (typeof global.clearSearch === 'function') {
+                                global.clearSearch();
+                                return;
+                            }
+                            var input = typeof document !== 'undefined' ? document.getElementById('exam-search-input') : null;
+                            if (input) {
+                                input.value = '';
+                                input.focus();
+                                if (typeof global.searchExams === 'function') {
+                                    global.searchExams('');
+                                }
                             }
                         });
                     } catch (_) { }
