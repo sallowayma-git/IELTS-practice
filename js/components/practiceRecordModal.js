@@ -10,6 +10,9 @@ class PracticeRecordModal {
     }
 
     show(record) {
+        // 暂存当前焦点，稍后在 hide() 之后重新赋值给 this.previousActiveElement
+        const currentFocus = document.activeElement;
+
         try {
             let processedRecord = record;
 
@@ -24,11 +27,21 @@ class PracticeRecordModal {
             const modalHtml = this.createModalHtml(processedRecord);
 
             this.hide();
+
+            // 确保记录了触发本次弹窗的元素
+            this.previousActiveElement = currentFocus;
+
             document.body.insertAdjacentHTML('beforeend', modalHtml);
 
             this.modalElement = document.getElementById(this.modalId);
             this.setupEventListeners(this.modalElement);
             this.isVisible = true;
+
+            // 将焦点移动到关闭按钮，提升无障碍体验
+            const closeButton = this.modalElement.querySelector('.modal-close');
+            if (closeButton) {
+                closeButton.focus();
+            }
 
             setTimeout(() => {
                 if (this.modalElement) {
@@ -52,6 +65,12 @@ class PracticeRecordModal {
 
         this.modalElement = null;
         this.isVisible = false;
+
+        // 恢复之前的焦点
+        if (this.previousActiveElement && typeof this.previousActiveElement.focus === 'function') {
+            this.previousActiveElement.focus();
+            this.previousActiveElement = null;
+        }
     }
 
     teardownEventListeners() {
@@ -126,10 +145,10 @@ class PracticeRecordModal {
         const answerSection = this.generateAnswerTable(record);
 
         return `
-            <div id="${this.modalId}" class="modal-overlay">
+            <div id="${this.modalId}" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="${this.modalId}-title">
                 <div class="modal-container">
                     <div class="modal-header">
-                        <h3 class="modal-title">\u7ec3\u4e60\u8bb0\u5f55\u8be6\u60c5</h3>
+                        <h3 id="${this.modalId}-title" class="modal-title">\u7ec3\u4e60\u8bb0\u5f55\u8be6\u60c5</h3>
                         <button class="modal-close" aria-label="\u5173\u95ed\u5f39\u7a97">
                             <i class="fas fa-times"></i>
                         </button>
