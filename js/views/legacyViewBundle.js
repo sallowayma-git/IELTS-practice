@@ -513,6 +513,7 @@
                     type: 'button',
                     className: 'delete-record-btn',
                     title: '删除此记录',
+                    'aria-label': '删除练习记录: ' + (record && record.title ? record.title : '无标题'),
                     dataset: { recordAction: 'delete', recordId: recordId }
                 }, '🗑️')
             ]);
