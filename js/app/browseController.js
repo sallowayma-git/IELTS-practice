@@ -150,7 +150,7 @@
             // 生成新按钮
             config.filters.forEach(filter => {
                 const button = document.createElement('button');
-                button.className = 'btn btn-sm';
+                button.className = 'btn btn-sm shui-filter-btn';
                 button.textContent = filter.label;
                 button.dataset.filterId = filter.id;
 
