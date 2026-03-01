@@ -150,7 +150,7 @@
             // 生成新按钮
             config.filters.forEach(filter => {
                 const button = document.createElement('button');
-                button.className = 'btn btn-sm';
+                button.className = 'btn btn-sm shui-filter-btn';
                 button.textContent = filter.label;
                 button.dataset.filterId = filter.id;
 
@@ -158,6 +158,7 @@
                 if (filter.id === this.activeFilter) {
                     button.classList.add('active');
                 }
+                button.setAttribute('aria-pressed', filter.id === this.activeFilter ? 'true' : 'false');
 
                 // 绑定点击事件
                 button.addEventListener('click', () => {
@@ -195,8 +196,10 @@
                 const filterId = button.dataset.filterId;
                 if (filterId === this.activeFilter) {
                     button.classList.add('active');
+                    button.setAttribute('aria-pressed', 'true');
                 } else {
                     button.classList.remove('active');
+                    button.setAttribute('aria-pressed', 'false');
                 }
             });
         }
