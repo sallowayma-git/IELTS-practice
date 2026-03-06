@@ -994,7 +994,7 @@
 
       var body = create('div', { className: 'modal-body library-loader-body' }, [
         create('div', { className: 'library-loader-grid' }, [
-          createLoaderCard('reading', '📖 阅读题库加载', '支持全量重载与增量更新。请上传包含题目HTML/PDF的根文件夹。', '💡 建议路径：.../3. 所有文章(9.4)[134篇]/...'),
+          createLoaderCard('reading', '📖 阅读题库加载', '支持全量重载与增量更新。请上传包含题目HTML/PDF的根文件夹。', '💡 推荐结构：任意根目录/分类目录/题目目录/HTML 或 PDF'),
           createLoaderCard('listening', '🎧 听力题库加载', '支持全量重载与增量更新。请上传包含题目HTML/PDF/音频的根文件夹。', '💡 建议路径：ListeningPractice/P3 或 ListeningPractice/P4')
         ]),
         create('div', { className: 'library-loader-instructions' }, [
@@ -1228,17 +1228,34 @@
     }
 
     function _fallbackDetectFolderPlacement(files, type) {
-      var paths = files.map(function (f) { return f.webkitRelativePath || f.name; });
-      if (type === 'reading') {
-        return paths.some(function (p) { return /睡着过项目组\(9\.4\)\[134篇\]\/3\. 所有文章\(9\.4\)\[134篇\]\//.test(p); });
+      var paths = files
+        .map(function (f) { return (f && (f.webkitRelativePath || f.name) || '').replace(/\\/g, '/'); })
+        .filter(Boolean);
+      if (!paths.length) {
+        return false;
       }
-      return paths.some(function (p) { return /^ListeningPractice\/(P3|P4)\//.test(p); });
+
+      var hasQuestionFile = files.some(function (file) {
+        var name = file && file.name ? String(file.name).toLowerCase() : '';
+        return /\.html?$/.test(name) || /\.pdf$/.test(name);
+      });
+      if (!hasQuestionFile) {
+        return false;
+      }
+
+      if (type === 'reading') {
+        // Reading 目录命名不应被硬编码限制，只要包含可识别题目文件即视为有效。
+        return true;
+      }
+
+      // Listening 推荐包含 P3/P4，但不再强依赖固定父目录名（例如 ListeningPractice）。
+      return paths.some(function (p) { return /(^|\/)(P3|P4)(\/|$)/i.test(p); }) || hasQuestionFile;
     }
 
     async function _fallbackBuildIndexFromFiles(files, type, label) {
       var byDir = new Map();
       files.forEach(function (f) {
-        var rel = f.webkitRelativePath || f.name;
+        var rel = (f.webkitRelativePath || f.name || '').replace(/\\/g, '/');
         var parts = rel.split('/');
         if (parts.length < 2) return;
         var dir = parts.slice(0, parts.length - 1).join('/');
@@ -1317,7 +1334,7 @@
         }
         if (!_fallbackDetectFolderPlacement(files, type)) {
           var proceed = typeof confirm === 'function'
-            ? confirm('检测到文件夹不在推荐的结构中。\n阅读: .../3. 所有文章(9.4)[134篇]/...\n听力: ListeningPractice/P3 或 P4\n是否继续?')
+            ? confirm('检测到文件夹结构与推荐示例不一致。\n阅读: 任意根目录/分类目录/题目目录\n听力: 任意根目录下包含 P3 或 P4 子目录\n是否继续?')
             : true;
           if (!proceed) return;
         }

@@ -147,13 +147,13 @@
         });
 
         const readingRoot = computeCommonRoot(pathsByType.reading);
-        if (pathsByType.reading.length && readingRoot) {
-            result.reading.root = normalizePathRoot(readingRoot);
+        if (pathsByType.reading.length) {
+            result.reading.root = readingRoot ? normalizePathRoot(readingRoot) : '';
         }
 
         const listeningRoot = computeCommonRoot(pathsByType.listening);
-        if (pathsByType.listening.length && listeningRoot) {
-            result.listening.root = normalizePathRoot(listeningRoot);
+        if (pathsByType.listening.length) {
+            result.listening.root = listeningRoot ? normalizePathRoot(listeningRoot) : '';
         }
 
         return result;
