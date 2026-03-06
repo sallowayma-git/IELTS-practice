@@ -1,0 +1,1242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>A New Look for Talbot Park - Reading Passage</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+    /* 字体大小变量 - 基础regular，逐级放大 */
+    --font-size-regular: 16px;
+    --font-size-moderate: 18px; /* 比regular大1号 */
+    --font-size-large: 20px;    /* 比moderate大1号 */
+  }
+  /* 字体大小类 - 所有元素继承 */
+  .font-regular {
+    font-size: var(--font-size-regular) !important;
+  }
+  .font-moderate {
+    font-size: var(--font-size-moderate) !important;
+  }
+  .font-large {
+    font-size: var(--font-size-large) !important;
+  }
+  * { 
+    box-sizing: border-box; 
+    font-size: inherit; /* 所有元素继承父级字体大小 */
+  }
+  html,body { 
+    height:100%; 
+    font-size: var(--font-size-regular); /* 默认regular */
+  }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+  }
+  #timer-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #timer { 
+    position: static; 
+    display: inline-block; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:2px 8px; 
+    vertical-align: middle; 
+  }
+  #settingsBtn {
+    padding:2px 8px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:#fff;
+    cursor:pointer;
+  }
+  #settingsModal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:16px;
+    box-shadow:var(--shadow);
+    z-index: 1000;
+    display: none;
+  }
+  #settingsModal h4 {
+    margin-top:0;
+    font-weight: 600;
+  }
+  #settingsModal .font-option {
+    margin:8px 0;
+    cursor:pointer;
+    padding:4px 8px;
+    border-radius:6px;
+  }
+  #settingsModal .font-option:hover {
+    background:#f1f5f9;
+  }
+  #settingsModal .close-modal {
+    margin-top:12px;
+    padding:6px 12px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--accent);
+    color:#fff;
+    cursor:pointer;
+  }
+  .shell { 
+    display:flex; 
+    height:100vh; 
+    width:100%; 
+  }
+  .pane { 
+    background:var(--panel); 
+    overflow:auto; 
+    padding:20px; 
+  }
+  #left { 
+    flex: 0 0 50%; 
+    min-width: 280px; 
+  }
+  #right { 
+    flex: 1 1 auto; 
+    min-width: 320px; 
+    background:#fbfbff; 
+    border-left:1px solid var(--line); 
+  }
+  #divider { 
+    flex: 0 0 8px; 
+    background: linear-gradient(90deg,#e5e7eb,#d1d5db); 
+    cursor: ew-resize; 
+    position:relative; 
+    z-index: 5; 
+    user-select:none; 
+  }
+  h2,h3,h4 { 
+    margin:0 0 10px; 
+    font-weight: 600; 
+  }
+  #left p { 
+    margin: 0 0 12px; 
+    line-height: 1.6; 
+    word-break: normal; 
+    overflow-wrap: normal; 
+    hyphens: none; 
+  }
+  .paragraph-label {
+    font-weight: 600;
+    color: var(--accent);
+    margin-right: 8px;
+  }
+  .group { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-bottom:14px; 
+  }
+  table { 
+    border-collapse: collapse; 
+    width:100%; 
+    margin: 10px 0;
+  }
+  th, td { 
+    border:1px solid var(--line); 
+    padding:6px; 
+    text-align:left; 
+  }
+  th {
+    background-color: #f1f5f9;
+    font-weight: 600;
+  }
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    background:#fff; 
+    cursor:pointer; 
+  }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:#3b82f6; 
+  }
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:10px; 
+    margin-bottom:14px;
+  }
+  .hl { 
+    background:#fff3a3; 
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); 
+    cursor: pointer; 
+  }
+  .hl:hover { 
+    filter: brightness(0.98); 
+  }
+  #selbar { 
+    position: absolute; 
+    display:none; 
+    z-index: 6000; 
+    background:#111; 
+    color:#fff; 
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow: var(--shadow); 
+    font-size: 13px; 
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; 
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+  }
+  #selbar button:hover { 
+    border-color:#fff; 
+  }
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 12px; 
+    width: 320px; 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow: var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    line-height:1.5; 
+  }
+  #toast { 
+    position: fixed; 
+    left:50%; 
+    transform: translateX(-50%); 
+    bottom: 24px; 
+    background:#111; 
+    color:#fff; 
+    padding:8px 12px; 
+    border-radius: 8px; 
+    display:none; 
+    z-index:2500; 
+  }
+  .answer-option {
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    margin:4px 0 8px;
+  }
+  .answer-option label {
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:4px;
+  }
+  .heading-match-option {
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin:6px 0;
+  }
+  .heading-match-option label {
+    cursor:pointer;
+    padding:4px 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    transition: all 0.2s;
+  }
+  .heading-match-option label:hover {
+    background:#f1f5f9;
+    border-color:var(--accent);
+  }
+  .person-idea-option {
+    display:flex;
+    flex-direction: column;
+    gap:6px;
+    margin:6px 0;
+  }
+  .person-idea-option label {
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  input.blank {
+    width: 100px; /* 适配单字填空长度 */
+    padding: 8px;
+    margin: 0 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+  }
+  .question-number {
+    font-weight: 600;
+  }
+  body { 
+    padding-bottom: 82px; 
+  }
+  .practice-nav { 
+    background:#fff; 
+    border-bottom:2px solid var(--line); 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:20px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    border-top:2px solid var(--line); 
+    border-bottom:0; 
+    z-index:4000; 
+  }
+  .practice-nav .title { 
+    font-weight:600; 
+    color:var(--muted); 
+  }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:var(--accent); 
+  }
+  details.answerbox summary { 
+    cursor: pointer; 
+    user-select:none; 
+    list-style: none; 
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  details.answerbox summary::before {
+    content: "▼";
+    font-size: 12px;
+    transition: transform 0.2s;
+  }
+  details.answerbox[open] summary::before {
+    transform: rotate(180deg);
+  }
+  details.answerbox { 
+    border:1px dashed var(--line); 
+    border-radius:10px; 
+    padding:8px 10px; 
+    background:#fff; 
+    margin-bottom:14px;
+  }
+  .badge { 
+    display:inline-block; 
+    background:#eef2ff; 
+    color:#4338ca; 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+    margin-left:6px; 
+  }
+  .explanation-text {
+    margin-bottom: 4px;
+  }
+  .explanation-original {
+    font-style: italic;
+    color: #555;
+    font-size: 0.9em;
+    margin-top: 0;
+  }
+  /* 列表样式：移除默认黑点，替换为短横线 */
+  ul {
+    list-style-type: none;
+    padding-left: 20px;
+    margin: 8px 0;
+  }
+  ul li::before {
+    content: "- ";
+    color: inherit;
+    font-weight: 500;
+  }
+  .heading-list {
+    /* 移除分栏样式，改为单行排列 */
+    margin: 10px 0;
+  }
+  .heading-list li {
+    margin-bottom: 8px; /* 增加行间距 */
+  }
+</style>
+</head>
+<body class="font-regular">
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q14-nav" onclick="scrollToElement('q14-anchor')">14</div>
+    <div class="q-item" id="q15-nav" onclick="scrollToElement('q15-anchor')">15</div>
+    <div class="q-item" id="q16-nav" onclick="scrollToElement('q16-anchor')">16</div>
+    <div class="q-item" id="q17-nav" onclick="scrollToElement('q17-anchor')">17</div>
+    <div class="q-item" id="q18-nav" onclick="scrollToElement('q18-anchor')">18</div>
+    <div class="q-item" id="q19-nav" onclick="scrollToElement('q19-anchor')">19</div>
+    <div class="q-item" id="q20-nav" onclick="scrollToElement('q20-anchor')">20</div>
+    <div class="q-item" id="q21-nav" onclick="scrollToElement('q21-anchor')">21</div>
+    <div class="q-item" id="q22-nav" onclick="scrollToElement('q22-anchor')">22</div>
+    <div class="q-item" id="q23-nav" onclick="scrollToElement('q23-anchor')">23</div>
+    <div class="q-item" id="q24-nav" onclick="scrollToElement('q24-anchor')">24</div>
+    <div class="q-item" id="q25-nav" onclick="scrollToElement('q25-anchor')">25</div>
+    <div class="q-item" id="q26-nav" onclick="scrollToElement('q26-anchor')">26</div>
+  </div>
+</div>
+<!-- 字体设置模态框 -->
+<div id="settingsModal">
+  <h4>Font Size Settings</h4>
+  <div class="font-option" data-size="regular">Regular (Default - 16px)</div>
+  <div class="font-option" data-size="moderate">Moderate (Larger - 18px)</div>
+  <div class="font-option" data-size="large">Large (Largest - 20px)</div>
+  <button class="close-modal" onclick="closeSettingsModal()">Close</button>
+</div>
+<div class="shell">
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 2 
+      <div id="timer-container">
+        <span id="timer">00:00</span>
+        <button id="settingsBtn" onclick="openSettingsModal()">Settings</button>
+      </div>
+    </h2>
+    <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>
+    
+    <h3>A New Look for Talbot Park</h3>
+    <p>Talbot Park, a housing project in Auckland, New Zealand, was once described as a ghetto, troubled by high rates of crime and vandalism. However, it has just been rebuilt at a cost of $48 m and the project reflects some new thinking about urban design.</p>
+    
+    <p><span class="paragraph-label">A</span> The new Talbot Park is immediately eye-catching because the buildings look quite different to other state-housing projects in Auckland. ‘There is no reason why state housing should look cheap in my view,’ says architect Neil Cotton, one of the design team. ‘In fact, I was anticipating a backlash by those who objected to the quality of what is provided with government money.’ The tidy brick and wood apartments and townhouses would not look out of place in some of the city’s most affluent suburbs, and this is a central theme of the Talbot Park philosophy.</p>
+    
+    <p><span class="paragraph-label">B</span> Talbot Park is a triangle of government-owned land, which in the early 1960s was developed for state housing built around a linear garden that ran through the middle. Initially, there was a strong sense of neighbourliness. Former residents recall how the garden played a big part in their childhoods - a place where kids came together to play softball, cricket and bullrush. ‘We had respect for our neighbours and addressed them by title - Mr and Mrs so-and-so,’ recalls Georgie Thompson, who grew up there in the 1960s.</p>
+    
+    <p><span class="paragraph-label">C</span> Exactly what went wrong with Talbot Park is unclear. The community began to change in the late 1970s as more immigrants moved in. The new arrivals didn’t always integrate with the community and a ‘them and us’ mentality developed. In the process, standards dropped and the neighbourhood began to look shabbier. The buildings themselves were also deteriorating and becoming run-down, petty crime was on the rise and the garden was considered unsafe. In 2002, Housing New Zealand decided the properties needed upgrading. The question was, how to avoid repeating the mistakes of the past?</p>
+    
+    <p><span class="paragraph-label">D</span> One controversial aspect of the upgrade is that the new development has actually made the density of housing in Talbot Park greater, putting 52 more homes on the same site. Doing this required a fresh approach that can be summed up as ‘mix and match’. The first priority was to mix up the housing by employing a variety of plans by different architects: some of the accommodation is free-standing houses, some semi-detached, some low-level, multi-apartment blocks. By doing this, the development avoids the uniform appearance of so many state-housing projects, which residents complain denies them any sense of individual identity. The next goal was to prevent overspending by using efficient designs to maximise the sense of space from minimum room sizes. There was also a no-frills, industrial approach to kitchens, bathrooms and flooring, to optimise durability and ensure the project did not go over budget. Architecturally, the buildings are relatively conservative: fairly plain houses standing in a small garden. There’s a slight reflection of the traditional Pacific beach house (a fale) but it’s not over-played. ‘It seems to us that low-cost housing is about getting as much amenity as you can for the money,’ says architect Michael Thompson. Another key aspect of the ‘mix and match’ approach is openness: one that not only lets residents see what is going on but also lets them know they are seen. The plan ensures there are no cul-de-sacs or properties hidden from view, that the gardens are not enclosed by trees and that most boundary fences are see-through - a community contained but without walls.</p>
+    
+    <p><span class="paragraph-label">E</span> The population today is cosmopolitan: 50% Pacific Islanders, 20% Māori, 15% Asian, 10% New Zealand European and the rest composed of immigrants from Russia, Ukraine and Iran. ‘It was important that the buildings were sufficiently flexible to cater for the needs of people from a wide variety of cultural backgrounds,’ explains designer James Lundy.</p>
+    
+    <p><span class="paragraph-label">F</span> Despite the quality of the buildings, however, there should be no doubt that Talbot Park and its surrounding suburb of Tāmaki are low socio-economic areas. Of the 5,000 houses there, 55% are state houses, 28% privately owned (compared to about 65% nationally) and 17% private rental. The area has a high density of households with incomes in the $5,000 to $15,000 range and very few with an income over $70,000. That’s in sharp contrast to the more affluent suburbs in Auckland.</p>
+    
+    <p><span class="paragraph-label">G</span> Another important part of the new development is what Housing New Zealand calls ‘intensive tenancy management’. Opponents of the project call it social control. ‘The focus is on frequent inspections and setting clear guidelines and boundaries regarding the sort of behaviour we expect from tenants,’ says Graham Bodman, Housing New Zealand’s regional manager. The result is a code of sometimes strict rules: no loud parties after 10 pm; no washing hung over balcony rails; and a requirement to mow lawns and keep the property tidy. The Tenancy Manager walks the site every day, knows everyone by name and deals with problems quickly. ‘It’s all based on the intensification,’ says project manager Stuart Bracey. ‘We acknowledge that if you are going to ask people to live in these quite tightly-packed communities, you have to actually help them to get to know each other by organising morning teas and street barbecues.’ So far it seems to be working and many involved in the project believe Talbot Park represents the way forward for state housing.</p>
+    
+    <!-- 多加空白行防止加载不完全 -->
+    <p>&nbsp;</p>
+    <p>&nbsp;</p>
+    <p>&nbsp;</p>
+  </section>
+  <div id="divider" title="Drag to resize"></div>
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <!-- Questions 14-20: Paragraph Headings Matching -->
+    <div class="group">
+      <h4>Questions 14–20</h4>
+      <p>Reading Passage 2 has seven paragraphs, A–G.</p>
+      <p>Choose the correct heading for each paragraph from the list of headings below.</p>
+      <p>Write the correct number, i–x, in boxes 14–20 on your answer sheet.</p>
+      
+      <h5>List of Headings</h5>
+      <ul class="heading-list">
+        <li>i Some of the problems that developed at Talbot Park</li>
+        <li>ii Where the residents lived while the work was being completed</li>
+        <li>iii The ethnic makeup of the new Talbot Park</li>
+        <li>iv The unexpectedly high standard of the housing</li>
+        <li>v Financial hardship in Talbot Park and a neighbouring community</li>
+        <li>vi The experiences of one family living at Talbot Park today</li>
+        <li>vii How to co-ordinate and assist the people who live at Talbot Park</li>
+        <li>viii Raising the money to pay for the makeover</li>
+        <li>ix A close community in the original Talbot Park development</li>
+        <li>x Details of the style of buildings used in the makeover</li>
+      </ul>
+      
+      <a id="q14-anchor"></a>
+      <div id="q14-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">14.</span> Paragraph A</p>
+        <div class="heading-match-option">
+          <label><input name="q14" type="radio" value="i"> i</label>
+          <label><input name="q14" type="radio" value="ii"> ii</label>
+          <label><input name="q14" type="radio" value="iii"> iii</label>
+          <label><input name="q14" type="radio" value="iv"> iv</label>
+          <label><input name="q14" type="radio" value="v"> v</label>
+          <label><input name="q14" type="radio" value="vi"> vi</label>
+          <label><input name="q14" type="radio" value="vii"> vii</label>
+          <label><input name="q14" type="radio" value="viii"> viii</label>
+          <label><input name="q14" type="radio" value="ix"> ix</label>
+          <label><input name="q14" type="radio" value="x"> x</label>
+        </div>
+      </div>
+      
+      <a id="q15-anchor"></a>
+      <div id="q15-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">15.</span> Paragraph B</p>
+        <div class="heading-match-option">
+          <label><input name="q15" type="radio" value="i"> i</label>
+          <label><input name="q15" type="radio" value="ii"> ii</label>
+          <label><input name="q15" type="radio" value="iii"> iii</label>
+          <label><input name="q15" type="radio" value="iv"> iv</label>
+          <label><input name="q15" type="radio" value="v"> v</label>
+          <label><input name="q15" type="radio" value="vi"> vi</label>
+          <label><input name="q15" type="radio" value="vii"> vii</label>
+          <label><input name="q15" type="radio" value="viii"> viii</label>
+          <label><input name="q15" type="radio" value="ix"> ix</label>
+          <label><input name="q15" type="radio" value="x"> x</label>
+        </div>
+      </div>
+      
+      <a id="q16-anchor"></a>
+      <div id="q16-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">16.</span> Paragraph C</p>
+        <div class="heading-match-option">
+          <label><input name="q16" type="radio" value="i"> i</label>
+          <label><input name="q16" type="radio" value="ii"> ii</label>
+          <label><input name="q16" type="radio" value="iii"> iii</label>
+          <label><input name="q16" type="radio" value="iv"> iv</label>
+          <label><input name="q16" type="radio" value="v"> v</label>
+          <label><input name="q16" type="radio" value="vi"> vi</label>
+          <label><input name="q16" type="radio" value="vii"> vii</label>
+          <label><input name="q16" type="radio" value="viii"> viii</label>
+          <label><input name="q16" type="radio" value="ix"> ix</label>
+          <label><input name="q16" type="radio" value="x"> x</label>
+        </div>
+      </div>
+      
+      <a id="q17-anchor"></a>
+      <div id="q17-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">17.</span> Paragraph D</p>
+        <div class="heading-match-option">
+          <label><input name="q17" type="radio" value="i"> i</label>
+          <label><input name="q17" type="radio" value="ii"> ii</label>
+          <label><input name="q17" type="radio" value="iii"> iii</label>
+          <label><input name="q17" type="radio" value="iv"> iv</label>
+          <label><input name="q17" type="radio" value="v"> v</label>
+          <label><input name="q17" type="radio" value="vi"> vi</label>
+          <label><input name="q17" type="radio" value="vii"> vii</label>
+          <label><input name="q17" type="radio" value="viii"> viii</label>
+          <label><input name="q17" type="radio" value="ix"> ix</label>
+          <label><input name="q17" type="radio" value="x"> x</label>
+        </div>
+      </div>
+      
+      <a id="q18-anchor"></a>
+      <div id="q18-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">18.</span> Paragraph E</p>
+        <div class="heading-match-option">
+          <label><input name="q18" type="radio" value="i"> i</label>
+          <label><input name="q18" type="radio" value="ii"> ii</label>
+          <label><input name="q18" type="radio" value="iii"> iii</label>
+          <label><input name="q18" type="radio" value="iv"> iv</label>
+          <label><input name="q18" type="radio" value="v"> v</label>
+          <label><input name="q18" type="radio" value="vi"> vi</label>
+          <label><input name="q18" type="radio" value="vii"> vii</label>
+          <label><input name="q18" type="radio" value="viii"> viii</label>
+          <label><input name="q18" type="radio" value="ix"> ix</label>
+          <label><input name="q18" type="radio" value="x"> x</label>
+        </div>
+      </div>
+      
+      <a id="q19-anchor"></a>
+      <div id="q19-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">19.</span> Paragraph F</p>
+        <div class="heading-match-option">
+          <label><input name="q19" type="radio" value="i"> i</label>
+          <label><input name="q19" type="radio" value="ii"> ii</label>
+          <label><input name="q19" type="radio" value="iii"> iii</label>
+          <label><input name="q19" type="radio" value="iv"> iv</label>
+          <label><input name="q19" type="radio" value="v"> v</label>
+          <label><input name="q19" type="radio" value="vi"> vi</label>
+          <label><input name="q19" type="radio" value="vii"> vii</label>
+          <label><input name="q19" type="radio" value="viii"> viii</label>
+          <label><input name="q19" type="radio" value="ix"> ix</label>
+          <label><input name="q19" type="radio" value="x"> x</label>
+        </div>
+      </div>
+      
+      <a id="q20-anchor"></a>
+      <div id="q20-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">20.</span> Paragraph G</p>
+        <div class="heading-match-option">
+          <label><input name="q20" type="radio" value="i"> i</label>
+          <label><input name="q20" type="radio" value="ii"> ii</label>
+          <label><input name="q20" type="radio" value="iii"> iii</label>
+          <label><input name="q20" type="radio" value="iv"> iv</label>
+          <label><input name="q20" type="radio" value="v"> v</label>
+          <label><input name="q20" type="radio" value="vi"> vi</label>
+          <label><input name="q20" type="radio" value="vii"> vii</label>
+          <label><input name="q20" type="radio" value="viii"> viii</label>
+          <label><input name="q20" type="radio" value="ix"> ix</label>
+          <label><input name="q20" type="radio" value="x"> x</label>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Questions 21-23: People & Ideas Matching -->
+    <div class="group">
+      <h4>Questions 21–23</h4>
+      <p>Look at the following people (Questions 21–23) and the list of ideas below.</p>
+      <p>Match each person with the correct idea, A–F.</p>
+      <p>Write the correct letter, A–F, in boxes 21–23 on your answer sheet.</p>
+      
+      <h5>List of Ideas</h5>
+      <ul>
+        <li>A Good tenant management involves supervision and regulation.</li>
+        <li>B State housing must be built at minimum expense to the public.</li>
+        <li>C Organising social events helps tenants to live close together.</li>
+        <li>D Mixed-race communities require adaptable and responsive designs.</li>
+        <li>E Complaints were expected about the high standard of the development.</li>
+        <li>F Too many rules and regulations will cause resentment from tenants.</li>
+      </ul>
+      
+      <a id="q21-anchor"></a>
+      <div id="q21-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">21.</span> James Lundy</p>
+        <div class="person-idea-option">
+          <label><input name="q21" type="radio" value="A"> A</label>
+          <label><input name="q21" type="radio" value="B"> B</label>
+          <label><input name="q21" type="radio" value="C"> C</label>
+          <label><input name="q21" type="radio" value="D"> D</label>
+          <label><input name="q21" type="radio" value="E"> E</label>
+          <label><input name="q21" type="radio" value="F"> F</label>
+        </div>
+      </div>
+      
+      <a id="q22-anchor"></a>
+      <div id="q22-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">22.</span> Graham Bodman</p>
+        <div class="person-idea-option">
+          <label><input name="q22" type="radio" value="A"> A</label>
+          <label><input name="q22" type="radio" value="B"> B</label>
+          <label><input name="q22" type="radio" value="C"> C</label>
+          <label><input name="q22" type="radio" value="D"> D</label>
+          <label><input name="q22" type="radio" value="E"> E</label>
+          <label><input name="q22" type="radio" value="F"> F</label>
+        </div>
+      </div>
+      
+      <a id="q23-anchor"></a>
+      <div id="q23-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">23.</span> Stuart Bracey</p>
+        <div class="person-idea-option">
+          <label><input name="q23" type="radio" value="A"> A</label>
+          <label><input name="q23" type="radio" value="B"> B</label>
+          <label><input name="q23" type="radio" value="C"> C</label>
+          <label><input name="q23" type="radio" value="D"> D</label>
+          <label><input name="q23" type="radio" value="E"> E</label>
+          <label><input name="q23" type="radio" value="F"> F</label>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Questions 24-26: Summary Completion -->
+    <div class="group">
+      <h4>Questions 24–26</h4>
+      <p>Complete the summary below.</p>
+      <p>Choose ONE WORD ONLY from the passage for each answer.</p>
+      <p>Write your answers in boxes 24–26 on your answer sheet.</p>
+      
+      <h5>The ‘mix and match’ strategy</h5>
+      <p class="summary-text">
+        One aspect of the Talbot Park project that some critics are concerned about is that the higher <span class="question-number"><a id="q24-anchor"></a>24.</span> <input type="text" class="blank" id="q24"> of accommodation would lead to the old social problems returning. To prevent this, a team of various <span class="question-number"><a id="q25-anchor"></a>25.</span> <input type="text" class="blank" id="q25"> worked on the project to ensure the buildings were not uniform. Further, they created pleasant, functional interiors that could still be built within their <span class="question-number"><a id="q26-anchor"></a>26.</span> <input type="text" class="blank" id="q26">. Finally, the absence of walls means Talbot Park is characterised by openness, making it easier to regulate behaviour within the community.
+      </p>
+    </div>
+    
+    <!-- Submit & Reset Buttons -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    
+    <!-- Results & Answer Key -->
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show Answers (Click to Toggle) <span class="badge">Hidden</span></summary>
+      <div id="answerContent">
+        <h4>正确答案及解析</h4>
+        <table>
+          <tr>
+            <th>题号</th>
+            <th>答案</th>
+            <th>解析与原文依据</th>
+          </tr>
+          <tr>
+            <td>14</td>
+            <td>iv</td>
+            <td>
+              <p class="explanation-text">题干要求匹配Paragraph A的标题，A段核心为“新塔尔博特公园的建筑外观远超其他公屋项目，设计师认为公屋不应廉价，甚至达到富人区水准”，对应“意外的高标准住房”（iv）。</p>
+              <p class="explanation-original">原文：There is no reason why state housing should look cheap... The tidy brick and wood apartments... would not look out of place in some of the city’s most affluent suburbs. (Paragraph A)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>15</td>
+            <td>ix</td>
+            <td>
+              <p class="explanation-text">题干要求匹配Paragraph B的标题，B段回忆“1960年代初社区邻里关系紧密，孩子一起玩耍，居民互相尊重”，对应“最初塔尔博特公园的紧密社区”（ix）。</p>
+              <p class="explanation-original">原文：Initially, there was a strong sense of neighbourliness... kids came together to play... We had respect for our neighbours. (Paragraph B)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>16</td>
+            <td>i</td>
+            <td>
+              <p class="explanation-text">题干要求匹配Paragraph C的标题，C段讲述“1970年代后移民融入问题、社区标准下降、建筑破败、犯罪上升”，对应“塔尔博特公园出现的若干问题”（i）。</p>
+              <p class="explanation-original">原文：The new arrivals didn’t always integrate... standards dropped... buildings... run-down, petty crime was on the rise. (Paragraph C)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>17</td>
+            <td>x</td>
+            <td>
+              <p class="explanation-text">题干要求匹配Paragraph D的标题，D段详细说明“改造的‘混搭’建筑风格：独立屋、联排、低层公寓、无围墙、工业风内饰”，对应“改造中使用的建筑风格细节”（x）。</p>
+              <p class="explanation-original">原文：mix up the housing by employing a variety of plans... free-standing houses, some semi-detached, some low-level, multi-apartment blocks... no-frills, industrial approach to kitchens... (Paragraph D)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>18</td>
+            <td>iii</td>
+            <td>
+              <p class="explanation-text">题干要求匹配Paragraph E的标题，E段明确列出“当前人口构成：50%太平洋岛民、20%毛利人、15%亚裔等”，对应“新塔尔博特公园的族群构成”（iii）。</p>
+              <p class="explanation-original">原文：The population today is cosmopolitan: 50% Pacific Islanders, 20% Māori, 15% Asian, 10% New Zealand European... (Paragraph E)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>19</td>
+            <td>v</td>
+            <td>
+              <p class="explanation-text">题干要求匹配Paragraph F的标题，F段指出“塔尔博特公园及周边是低社会经济区域，公屋占比高、低收入家庭多”，对应“塔尔博特公园及邻区的经济困境”（v）。</p>
+              <p class="explanation-original">原文：Talbot Park and its surrounding suburb of Tāmaki are low socio-economic areas... high density of households with incomes in the $5,000 to $15,000 range. (Paragraph F)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>20</td>
+            <td>vii</td>
+            <td>
+              <p class="explanation-text">题干要求匹配Paragraph G的标题，G段描述“密集租赁管理：频繁检查、行为准则、组织早茶和烧烤促进邻里关系”，对应“如何协调并协助塔尔博特公园居民”（vii）。</p>
+              <p class="explanation-original">原文：intensive tenancy management... frequent inspections and setting clear guidelines... help them to get to know each other by organising morning teas and street barbecues. (Paragraph G)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>21</td>
+            <td>D</td>
+            <td>
+              <p class="explanation-text">题干要求匹配James Lundy的观点，E段他指出“建筑需足够灵活以满足不同文化背景居民的需求”，对应“多元种族社区需要适应性强的设计”（D）。</p>
+              <p class="explanation-original">原文：It was important that the buildings were sufficiently flexible to cater for the needs of people from a wide variety of cultural backgrounds. (Paragraph E)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>22</td>
+            <td>A</td>
+            <td>
+              <p class="explanation-text">题干要求匹配Graham Bodman的观点，G段他强调“租赁管理重点在频繁检查和明确行为准则”，对应“良好的租赁管理包含监督和规范”（A）。</p>
+              <p class="explanation-original">原文：The focus is on frequent inspections and setting clear guidelines and boundaries regarding the sort of behaviour we expect from tenants. (Paragraph G)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>23</td>
+            <td>C</td>
+            <td>
+              <p class="explanation-text">题干要求匹配Stuart Bracey的观点，G段他提到“需组织早茶和烧烤帮助居民在密集社区中相处”，对应“组织社交活动帮助租户紧密居住”（C）。</p>
+              <p class="explanation-original">原文：help them to get to know each other by organising morning teas and street barbecues. (Paragraph G)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>24</td>
+            <td>density</td>
+            <td>
+              <p class="explanation-text">题干要求填“批评者担忧的住宿特征”，D段首句“改造的争议点是住房密度增加”，对应“density”（密度）。</p>
+              <p class="explanation-original">原文：One controversial aspect of the upgrade is that the new development has actually made the density of housing in Talbot Park greater. (Paragraph D)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>25</td>
+            <td>architects</td>
+            <td>
+              <p class="explanation-text">题干要求填“参与项目确保建筑多样化的团队成员”，D段提到“雇佣不同建筑师的多样设计方案”，对应“architects”（建筑师）。</p>
+              <p class="explanation-original">原文：by employing a variety of plans by different architects. (Paragraph D)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>26</td>
+            <td>budget</td>
+            <td>
+              <p class="explanation-text">题干要求填“内饰建造需在什么范围内”，D段指出“工业风内饰旨在优化耐用性并确保项目不超预算”，对应“budget”（预算）。</p>
+              <p class="explanation-original">原文：to optimise durability and ensure the project did not go over budget. (Paragraph D)</p>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </details>
+  </section>
+</div>
+<!-- 文本选择工具栏 -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove Highlight</button>
+  <button id="btnNote">Add to Notes</button>
+</div>
+<!-- 笔记面板 -->
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<!-- 提示框 -->
+<div id="toast"></div>
+<script>
+// 计时器核心功能
+let _t = 0; 
+const _timerEl = document.getElementById('timer');
+let timerInterval; // 计时器间隔ID，用于后续停止
+// 启动计时器
+function startTimer() {
+  timerInterval = setInterval(() => { 
+    _t++; 
+    const m = String(Math.floor(_t/60)).padStart(2, '0'); 
+    const s = String(_t%60).padStart(2, '0'); 
+    _timerEl.textContent = `${m}:${s}`; 
+  }, 1000);
+}
+// 页面加载时启动计时器
+window.onload = startTimer;
+// 拖拽分隔线调整左右面板宽度
+const divider = document.getElementById('divider');
+const leftPane = document.getElementById('left');
+const rightPane = document.getElementById('right');
+let isDragging = false;
+divider.addEventListener('mousedown', (e) => {
+  isDragging = true;
+  document.body.style.cursor = 'ew-resize';
+  e.preventDefault();
+});
+window.addEventListener('mousemove', (e) => {
+  if (!isDragging) return;
+  const containerRect = document.querySelector('.shell').getBoundingClientRect();
+  let x = e.clientX - containerRect.left;
+  // 限制最小宽度，防止面板过窄
+  x = Math.max(280, Math.min(containerRect.width - 320, x));
+  leftPane.style.flex = `0 0 ${x}px`;
+  rightPane.style.flex = '1 1 auto';
+});
+window.addEventListener('mouseup', () => {
+  if (isDragging) {
+    isDragging = false;
+    document.body.style.cursor = '';
+  }
+});
+// 触摸设备支持
+divider.addEventListener('touchstart', (e) => {
+  isDragging = true;
+  e.preventDefault();
+}, { passive: false });
+window.addEventListener('touchmove', (e) => {
+  if (!isDragging) return;
+  const containerRect = document.querySelector('.shell').getBoundingClientRect();
+  let x = e.touches[0].clientX - containerRect.left;
+  x = Math.max(280, Math.min(containerRect.width - 320, x));
+  leftPane.style.flex = `0 0 ${x}px`;
+  rightPane.style.flex = '1 1 auto';
+}, { passive: false });
+window.addEventListener('touchend', () => {
+  isDragging = false;
+});
+// 文本高亮功能
+const selbar = document.getElementById('selbar');
+const btnHL = document.getElementById('btnHL');
+const btnUH = document.getElementById('btnUH');
+const btnNote = document.getElementById('btnNote');
+let lastRange = null;
+let currentHlNode = null;
+let keepToolbar = false;
+// 定位选择工具栏
+function positionSelbar(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(() => {
+    const top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    const leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    // 确保工具栏不超出视口
+    selbar.style.top = (top > 0 ? top : window.scrollY + rect.bottom + 8) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+// 更新工具栏状态
+function updateSelbar() {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
+  }
+  const range = selection.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode = null;
+  positionSelbar(range.getBoundingClientRect());
+}
+// 监听文本选择事件
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', () => {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) selbar.style.display = 'none';
+  }
+});
+// 滚动时重新定位工具栏
+document.addEventListener('scroll', () => {
+  if (selbar.style.display === 'flex') updateSelbar();
+});
+// 点击高亮文本时显示工具栏
+document.addEventListener('mousedown', (e) => {
+  keepToolbar = e.target.classList?.contains('hl') || false;
+}, true);
+document.addEventListener('click', (e) => {
+  if (e.target.classList?.contains('hl')) {
+    currentHlNode = e.target;
+    lastRange = null;
+    positionSelbar(e.target.getBoundingClientRect());
+    const selection = window.getSelection();
+    if (selection) selection.removeAllRanges();
+    setTimeout(() => keepToolbar = false, 0);
+  }
+}, true);
+// 执行高亮
+function doHighlight() {
+  if (currentHlNode || !lastRange || lastRange.collapsed) return;
+  const highlightSpan = document.createElement('span');
+  highlightSpan.className = 'hl';
+  try {
+    lastRange.surroundContents(highlightSpan);
+  } catch (e) {
+    // 处理跨元素选择的情况
+    const wrapSpan = document.createElement('span');
+    wrapSpan.className = 'hl';
+    wrapSpan.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrapSpan);
+  }
+  selbar.style.display = 'none';
+  showToast('Text highlighted');
+}
+// 移除高亮
+function removeHighlight() {
+  if (currentHlNode) {
+    // 移除单个高亮元素
+    const parent = currentHlNode.parentNode;
+    while (currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize(); // 合并相邻文本节点
+    currentHlNode = null;
+    selbar.style.display = 'none';
+    showToast('Highlight removed');
+    return;
+  }
+  if (!lastRange) return;
+  // 移除选择范围内的所有高亮
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node.classList?.contains('hl')) {
+      const nodeRect = node.getBoundingClientRect();
+      // 判断节点是否在选择范围内
+      if (!(nodeRect.right < selRect.left || nodeRect.left > selRect.right || 
+            nodeRect.bottom < selRect.top || nodeRect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
+    }
+  }
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  selbar.style.display = 'none';
+  showToast('Highlights removed');
+}
+// 绑定高亮按钮事件
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+// 笔记功能
+const notesPanel = document.getElementById('notes');
+const noteArea = document.getElementById('noteArea');
+const btnCopy = document.getElementById('btnCopy');
+const btnCloseNotes = document.getElementById('btnClose');
+// 切换笔记面板显示
+function toggleNotes() {
+  notesPanel.style.display = notesPanel.style.display === 'flex' ? 'none' : 'flex';
+}
+// 关闭笔记面板
+btnCloseNotes.addEventListener('click', toggleNotes);
+// 复制笔记
+btnCopy.addEventListener('click', async () => {
+  await navigator.clipboard.writeText(noteArea.value || '');
+  showToast('Notes copied to clipboard');
+});
+// 选中文本添加到笔记
+btnNote.addEventListener('click', () => {
+  let selectedText = '';
+  if (currentHlNode) {
+    selectedText = currentHlNode.textContent.trim();
+  } else if (lastRange) {
+    const frag = lastRange.cloneContents();
+    selectedText = frag.textContent.trim();
+  }
+  toggleNotes();
+  if (selectedText) {
+    noteArea.value = noteArea.value ? `${noteArea.value}\n> ${selectedText}\n` : `> ${selectedText}\n`;
+    // 滚动到笔记底部
+    noteArea.scrollTop = noteArea.scrollHeight;
+  }
+  selbar.style.display = 'none';
+});
+// 提示框功能
+const toastEl = document.getElementById('toast');
+function showToast(message) {
+  toastEl.textContent = message;
+  toastEl.style.display = 'block';
+  setTimeout(() => toastEl.style.display = 'none', 1500);
+}
+// 字体设置功能
+const settingsModal = document.getElementById('settingsModal');
+const body = document.body;
+// 打开字体设置模态框
+function openSettingsModal() {
+  settingsModal.style.display = 'block';
+}
+// 关闭字体设置模态框
+function closeSettingsModal() {
+  settingsModal.style.display = 'none';
+}
+// 点击模态框外部关闭
+window.addEventListener('click', (e) => {
+  if (e.target === settingsModal) closeSettingsModal();
+});
+// 切换字体大小（影响所有元素）
+document.querySelectorAll('.font-option').forEach(option => {
+  option.addEventListener('click', () => {
+    const size = option.dataset.size;
+    // 移除所有字体类，添加选中的类
+    body.classList.remove('font-regular', 'font-moderate', 'font-large');
+    body.classList.add(`font-${size}`);
+    // 显示提示
+    const sizeName = size === 'regular' ? 'Regular (16px)' : 
+                     size === 'moderate' ? 'Moderate (18px)' : 'Large (20px)';
+    showToast(`Font size set to ${sizeName}`);
+    closeSettingsModal();
+  });
+});
+// 答案与评分功能（Submit后停止计时器）
+const answers = {
+  q14: 'iv',
+  q15: 'ix',
+  q16: 'i',
+  q17: 'x',
+  q18: 'iii',
+  q19: 'v',
+  q20: 'vii',
+  q21: 'D',
+  q22: 'A',
+  q23: 'C',
+  q24: 'density',
+  q25: 'architects',
+  q26: 'budget'
+};
+// 评分函数（Submit后执行，包含停止计时器）
+function grade() {
+  // 1. 停止计时器
+  clearInterval(timerInterval);
+  
+  // 2. 计算得分
+  let total = 13;
+  let correct = 0;
+  const resultLines = [];
+  
+  // 检查14-26题（所有题型）
+  for (let i = 14; i <= 26; i++) {
+    const qName = `q${i}`;
+    let selected, userAns, isCorrect;
+    
+    // 处理单选类型题目（14-23）
+    if (i <= 23) {
+      selected = document.querySelector(`input[name="${qName}"]:checked`);
+      userAns = selected ? selected.value : 'No answer';
+      const correctAns = answers[qName];
+      isCorrect = userAns === correctAns;
+      if (isCorrect) correct++;
+      resultLines.push(`${qName.toUpperCase()}: ${userAns} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${correctAns})`}`);
+    } 
+    // 处理填空类型题目（24-26）
+    else {
+      const input = document.getElementById(qName);
+      userAns = input ? input.value.trim().toLowerCase() : 'No answer';
+      const correctAns = answers[qName].toLowerCase();
+      isCorrect = userAns === correctAns;
+      if (isCorrect) correct++;
+      resultLines.push(`${qName.toUpperCase()}: ${userAns || 'No answer'} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${answers[qName]})`}`);
+    }
+  }
+  
+  // 3. 显示结果
+  const accuracy = Math.round((correct / total) * 100);
+  const resultsHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} (Accuracy: ${accuracy}%)</p>
+    <pre>${resultLines.join('\n')}</pre>
+  `;
+  document.getElementById('results').innerHTML = resultsHTML;
+  
+  // 4. 展开答案面板
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = true;
+  document.querySelector('#answerBox .badge').textContent = 'Visible';
+  
+  // 5. 标记所有题目为已回答
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.add('answered');
+  });
+}
+// 重置功能（重置计时器、选项、高亮等）
+function resetForm() {
+  // 1. 重置计时器
+  clearInterval(timerInterval);
+  _t = 0;
+  _timerEl.textContent = '00:00';
+  startTimer();
+  
+  // 2. 重置所有单选按钮
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // 3. 重置填空输入框
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = '';
+  });
+  
+  // 4. 重置结果和答案面板
+  document.getElementById('results').innerHTML = '';
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = false;
+  document.querySelector('#answerBox .badge').textContent = 'Hidden';
+  
+  // 5. 重置导航栏已回答状态
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+  
+  // 6. 重置笔记
+  noteArea.value = '';
+  notesPanel.style.display = 'none';
+  
+  // 7. 移除所有高亮
+  document.querySelectorAll('.hl').forEach(hl => {
+    const parent = hl.parentNode;
+    while (hl.firstChild) parent.insertBefore(hl.firstChild, hl);
+    parent.removeChild(hl);
+    parent.normalize();
+  });
+}
+// 滚动到指定题目
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  // 高亮导航项
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('active');
+  });
+  const navItem = document.getElementById(id.replace('-anchor', '-nav'));
+  if (navItem) {
+    navItem.classList.add('active');
+    setTimeout(() => navItem.classList.remove('active'), 800);
+  }
+}
+// 监听输入，标记题目为已回答
+(function() {
+  // 监听单选按钮（14-23）
+  for (let i = 14; i <= 23; i++) {
+    document.querySelectorAll(`input[name="q${i}"]`).forEach(radio => {
+      radio.addEventListener('change', () => {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      });
+    });
+  }
+  
+  // 监听填空题（24-26）
+  for (let i = 24; i <= 26; i++) {
+    const input = document.getElementById(`q${i}`);
+    input.addEventListener('input', () => {
+      if (input.value.trim()) {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      } else {
+        document.getElementById(`q${i}-nav`).classList.remove('answered');
+      }
+    });
+  }
+})();
+</script>
+</body>
+</html>
+    

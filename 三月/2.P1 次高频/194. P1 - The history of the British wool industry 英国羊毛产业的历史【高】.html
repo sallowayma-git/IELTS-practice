@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>P1 – The history of the British wool industry</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root { 
+    --line: #e5e7eb; --bg: #f6f7fb; --panel: #fff; --accent: #3b82f6; 
+    --muted: #6b7280; --shadow: 0 6px 20px rgba(0,0,0,.12); 
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { 
+    margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background: var(--bg); padding-bottom: 70px; color: #111827;
+  }
+  .shell { display: flex; height: 100vh; width: 100%; }
+  .pane { background: var(--panel); overflow: auto; padding: 20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background: #fbfbff; border-left: 1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg, #e5e7eb, #d1d5db); cursor: ew-resize; position: relative; z-index: 5; user-select: none; }
+  h2, h3, h4 { margin: 0 0 10px; }
+  #left p, #right p, #right li { margin: 0 0 12px; line-height: 1.6; }
+  .group { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 14px; }
+  .q-block { margin-bottom: 16px; }
+  .options { display: flex; gap: 16px; margin-top: 8px; }
+  .options label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .blank { border:none; border-bottom:1px solid #9ca3af; padding:4px 2px; font-size:1em; background:transparent; width: 120px; }
+  .blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+  button { padding: 8px 12px; border: 1px solid var(--line); background: #fff; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 14px; }
+  button:hover { background: #f8fafc; border-color: #cbd5e1; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.primary:hover { background: #2563eb; }
+  .practice-nav { background: #fff; padding: 12px 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 -2px 5px rgba(0,0,0,.05); flex-wrap: wrap; position: fixed; left: 0; right: 0; bottom: 0; border-top: 1px solid var(--line); z-index: 4000; }
+  .practice-nav .title { font-weight: 600; color: var(--muted); }
+  .practice-nav .questions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .practice-nav .q-item { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; font-size: 14px; transition: all 0.2s; min-width: 36px; text-align: center; }
+  .practice-nav .q-item:hover { background: #f1f5f9; border-color: var(--accent); }
+  .practice-nav .q-item.answered { background: #e0e7ff; border-color: var(--accent); color: var(--accent); font-weight: 500; }
+  .practice-nav .controls { display: flex; gap: 12px; margin-left: auto; align-items: center; }
+  #timer { background: #fff; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; font-family: 'Courier New', monospace; transition: all 0.2s; min-width: 70px; text-align: center; font-size: 14px; font-weight: bold; }
+  #timer:hover { background: #f1f5f9; border-color: var(--accent); }
+  #timer.paused { color: #ef4444; border-color: #fecaca; background: #fef2f2; }
+  .theme-toggle { background: #fff; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; width: 32px; height: 32px; font-size: 16px; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; }
+  #selbar { position: absolute; display: none; z-index: 2000; background: #111; color: #fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap: 6px; align-items: center; }
+  #selbar button { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+  #notes { position: fixed; right: 12px; bottom: 85px; width: 320px; height: 42vh; background: #fff; border: 1px solid var(--line); border-radius: 12px; display: none; flex-direction: column; z-index: 1500; box-shadow: var(--shadow); }
+  #notes header { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  #notes textarea { flex: 1; border: 0; padding: 10px; resize: none; font-size: 14px; line-height: 1.5; background-color: inherit; color: inherit; }
+  #toast { position: fixed; bottom: 85px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 8px 16px; border-radius: 4px; display: none; z-index: 3000; font-size: 14px; }
+  #results { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 16px 0; }
+  #results p { margin: 0 0 8px; }
+  #results pre { font-family: monospace; white-space: pre-wrap; margin: 0; }
+  .badge { background: #eef2ff; color: #4338ca; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: 500; }
+  details.answerbox { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-top: 10px; }
+  details.answerbox summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; align-items: center; justify-content: space-between; }
+  details.answerbox summary::-webkit-details-marker { display: none; }
+  #answerContent { margin-top: 10px; }
+  #answerContent ol { margin: 0; padding-left: 20px; }
+  .hl { background: #fff3a3; }
+  body.dark { --bg: #0f172a; --panel: #1e293b; --line: #334155; --muted: #94a3b8; color: #e2e8f0; }
+  body.dark .pane, body.dark #right { background: var(--panel); }
+  body.dark #right { background: #131c2d; }
+  body.dark button, body.dark .theme-toggle { background: #334155; color: #e2e8f0; border-color: #475569; }
+  body.dark .group, body.dark #results, body.dark details.answerbox, body.dark #notes { background: #1e293b; border-color: #334155; }
+  body.dark .practice-nav { background: #1e293b; border-top-color: #334155; }
+  body.dark .q-item { background: #334155; color: #e2e8f0; border-color: #475569; }
+  body.dark .q-item.answered { background: #1e40af; border-color: var(--accent); color: #93c5fd; }
+  body.dark #timer.paused { background: #402323; color: #f87171; border-color: #7f1d1d; }
+  body.dark .blank { color: #e2e8f0; border-bottom-color: #64748b; }
+  body.dark .hl { background: #b45309; }
+  body.dark .badge { background: #312e81; color: #a5b4fc; }
+  @media (max-width: 768px) {
+    .shell { flex-direction: column; height: auto; }
+    #left, #right { min-height: 50vh; }
+    #divider { display: none; }
+    #notes { width: calc(100vw - 24px); right: 12px; left: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 1. Bottom Navigation Bar -->
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q1-nav" onclick="scrollToElement('q1-anchor')">1</div>
+    <div class="q-item" id="q2-nav" onclick="scrollToElement('q1-anchor')">2</div>
+    <div class="q-item" id="q3-nav" onclick="scrollToElement('q1-anchor')">3</div>
+    <div class="q-item" id="q4-nav" onclick="scrollToElement('q1-anchor')">4</div>
+    <div class="q-item" id="q5-nav" onclick="scrollToElement('q1-anchor')">5</div>
+    <div class="q-item" id="q6-nav" onclick="scrollToElement('q6-anchor')">6</div>
+    <div class="q-item" id="q7-nav" onclick="scrollToElement('q6-anchor')">7</div>
+    <div class="q-item" id="q8-nav" onclick="scrollToElement('q6-anchor')">8</div>
+    <div class="q-item" id="q9-nav" onclick="scrollToElement('q6-anchor')">9</div>
+    <div class="q-item" id="q10-nav" onclick="scrollToElement('q6-anchor')">10</div>
+    <div class="q-item" id="q11-nav" onclick="scrollToElement('q6-anchor')">11</div>
+    <div class="q-item" id="q12-nav" onclick="scrollToElement('q6-anchor')">12</div>
+    <div class="q-item" id="q13-nav" onclick="scrollToElement('q6-anchor')">13</div>
+  </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleDarkMode()" title="Toggle dark/light mode">☀️</button>
+  </div>
+</div>
+
+<!-- 2. Main Content Shell -->
+<div class="shell">
+  <!-- Left Pane: Reading Passage -->
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 1</h2>
+    <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>
+    
+    <h3>The history of the British wool industry</h3>
+  
+    <p>Wool is part of Britain's history and heritage, more so than any other commodity ever produced in that country. It was made into cloth there in the Bronze Age, which began about 1900 BC. By the time the Romans invaded in 55 BC the Britons had developed a wool industry, and this was encouraged by their new masters. Roman emperors appreciated the fineness of British woollen cloth. Although Saxon invasions in the fifth century nearly destroyed the industry, it is known that in the eighth century Britain was exporting woollen fabrics to continental Europe, and after the arrival of the Norman conquerors in 1066 the industry expanded. By the twelfth century, wool was becoming England's greatest national asset. Cloth making was widespread, particularly in the large towns of southern and eastern England, nearest to France. But the greatest wealth came from exports of raw wool.</p>
+    <p>Kings and their ministers welcomed the revenue that resulted from exports and export taxes – and also the power it gave to the king, who could grant or withdraw permits for the wool towns and for the industry. Trade associations, known as 'guilds', were founded to guarantee good work by experienced weavers (people who produce cloth from woollen threads), and were powerful for hundreds of years. The peak of cloth production was reached in the thirteenth century. Then the wool trade declined for a long period because of political conflict.</p>
+    <p>In 1331, King Edward III encouraged master weavers from Flanders (an area of present-day Belgium) to settle in England. These Flemish weavers and their descendants were to play a part in the final development of English cloth. The export trade in raw wool recovered and the first half of the fourteenth century was a time of prosperity for English wool farmers. But it was overshadowed by a long war with France (export taxes on wool were one of the principal means of financing the war) and by bubonic plague (the Black Death), which in 1349 caused devastation: in many villages as much as three-quarters of the population died. This led to an increase of the sheep flocks, for there were not enough people left to cultivate the land for arable crops.</p>
+    <p>Despite setbacks, raw wool exporting expanded, and so also did manufacturing of wool fabrics. This was becoming both specialised and localised. The area of England known as the West Country had three advantages – extensive sheep pastures, a supply of soft water for washing, scouring and dyeing wool, and water-power to drive machinery. Similarly, the hills of Yorkshire and Lancashire in the north of England had soft water and fast running streams. Water from the latter could be used to drive mills for 'fulling', a shrinking process which makes the fabric firmer and its surface more compact.</p>
+    <p>In East Anglia there was soft water, but no hills or fast-running streams to provide power for fulling mills. Instead, East Anglia used the long, fine wool from its native sheep breeds to produce a cloth which did not require the fulling process. This was the type of cloth which is now called 'worsted', after the village of Worstead. For four hundred years East Anglia dominated the worsted trade, with skills inherited from the Flemish settlers of 1331.</p>
+    <p>English cloth quickly achieved an international reputation. From being primarily a raw wool exporter, the country became in the fourteenth and fifteenth centuries a manufacturer and exporter of cloth. At the end of the fifteenth century, it was said that England was largely a nation of sheep farmers and cloth manufacturers. The next two centuries saw continued expansion of the industry despite conflicts at home and abroad. In the sixteenth century, French weavers, persecuted for their Protestant religion, sought refuge in England and took their skills with them. England began to surpass Flanders in woollen manufacture; by the end of the seventeenth century it comprised two-thirds of the value of its exports. Radical changes lay ahead, in the geographical location of the industry, in labour use and in manufacturing processes. By 1770, output of worsted from Yorkshire equalled that of East Anglia, and its cloth manufacturing district began to take shape with the expansion of major towns: Leeds, Bradford, Halifax, Huddersfield, and Wakefield.</p>
+    <p>The Industrial Revolution of 1750–1850 also brought change. It led the way for new inventions stemming from the Lancashire cotton industry, to mechanize and speed dramatically the processes of spinning and weaving. Manufacturing methods, unchanged since the revival of the trade in the fourteenth century, were now superseded. Mechanization had been opposed in the past and it was again. The widespread unrest of 1812 led to the destruction of equipment by bands of rioters, who feared they would lose employment. But machinery won the day.</p>
+    <p>Over the course of the nineteenth century, the older industries in areas such as East Anglia, where opposition had been most bitter, permanently declined. They were overtaken by Yorkshire, where machinery was more readily accepted. The younger industry jumped ahead and never lost its lead, supported by abundant supplies of inexpensive coal to generate steam and, later, electrical power. Other specialised types of manufacturing developed in Scotland, famed for its tweeds (a range of coloured woollen cloth with characteristic designs), and in the West Country, which focused on the production of high-quality, woven carpets.</p>
+    
+    <p>&nbsp;</p> <!-- Final padding -->
+  </section>
+
+  <!-- Draggable Divider -->
+  <div id="divider" title="Drag to resize"></div>
+
+  <!-- Right Pane: Questions and Controls -->
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <a id="q1-anchor"></a>
+      <h4>Questions 1–5</h4>
+      <p>Do the following statements agree with the information in Reading Passage 1?</p>
+      <div class="q-block"><p><strong>1</strong> The process of making cloth from wool was introduced to Britain by the Romans.</p><div class="options"><label><input type="radio" name="q1" value="true"> TRUE</label><label><input type="radio" name="q1" value="false"> FALSE</label><label><input type="radio" name="q1" value="not given"> NOT GIVEN</label></div></div>
+      <div class="q-block"><p><strong>2</strong> In the twelfth century, exporting woollen cloth was less profitable than exporting raw wool.</p><div class="options"><label><input type="radio" name="q2" value="true"> TRUE</label><label><input type="radio" name="q2" value="false"> FALSE</label><label><input type="radio" name="q2" value="not given"> NOT GIVEN</label></div></div>
+      <div class="q-block"><p><strong>3</strong> Rulers had a financial interest in the success of the wool industry.</p><div class="options"><label><input type="radio" name="q3" value="true"> TRUE</label><label><input type="radio" name="q3" value="false"> FALSE</label><label><input type="radio" name="q3" value="not given"> NOT GIVEN</label></div></div>
+      <div class="q-block"><p><strong>4</strong> An outbreak of bubonic plague led to a sharp fall in sheep numbers.</p><div class="options"><label><input type="radio" name="q4" value="true"> TRUE</label><label><input type="radio" name="q4" value="false"> FALSE</label><label><input type="radio" name="q4" value="not given"> NOT GIVEN</label></div></div>
+      <div class="q-block"><p><strong>5</strong> Worsted cloth was cheaper to produce than other types of woollen fabric.</p><div class="options"><label><input type="radio" name="q5" value="true"> TRUE</label><label><input type="radio" name="q5" value="false"> FALSE</label><label><input type="radio" name="q5" value="not given"> NOT GIVEN</label></div></div>
+    </div>
+    
+    <div class="group">
+      <a id="q6-anchor"></a>
+      <h4>Questions 6–13</h4>
+      <p>Complete the notes below. Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>
+      <h5>Woollen cloth manufacture</h5>
+      <p><strong>Growing importance of the cloth industry:</strong></p>
+      <ul>
+        <li>16th century: skilled <strong>6</strong> <input class="blank" name="q6"> emigrated to England</li>
+        <li>end 17th century: majority of English <strong>7</strong> <input class="blank" name="q7"> were wool products</li>
+        <li>18th century: production of worsted cloth increased in Yorkshire – growth of five key manufacturing <strong>8</strong> <input class="blank" name="q8"></li>
+        <li>1750–1850: new machinery was developed – initially for the production of <strong>9</strong> <input class="blank" name="q9"></li>
+        <li>1812: protests resulted in the <strong>10</strong> <input class="blank" name="q10"> of machinery</li>
+        <li>19th century: in Yorkshire mechanisation increased, aided by the availability of cheap <strong>11</strong> <input class="blank" name="q11"></li>
+      </ul>
+      <p><strong>Growth of specialisation:</strong></p>
+      <ul>
+        <li>Scotland – specialised in <strong>12</strong> <input class="blank" name="q12"></li>
+        <li>West Country – specialised in <strong>13</strong> <input class="blank" name="q13"></li>
+      </ul>
+    </div>
+
+    <!-- Controls and Results -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
+</div>
+
+<!-- 3. UI Helper Elements -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header><strong>Notes</strong><div><button id="btnCopy">Copy</button><button id="btnClose">Close</button></div></header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+
+<script>
+// --- MASTER JAVASCRIPT TEMPLATE ---
+
+// 1. STATE & ANSWERS
+const answers = {
+    q1: "false", q2: "true", q3: "true", q4: "false", q5: "not given",
+    q6: "weavers", q7: "exports", q8: "towns", q9: "cotton", q10: "destruction",
+    q11: "coal", q12: "tweeds", q13: "carpets"
+};
+
+// 2. UI & INTERACTIVITY
+let timerSeconds = 0, isTimerPaused = false;
+const timerEl = document.getElementById('timer');
+
+function toggleTimer() { isTimerPaused = !isTimerPaused; timerEl.classList.toggle('paused', isTimerPaused); showToast(isTimerPaused ? 'Timer paused' : 'Timer resumed'); }
+setInterval(() => { if (!isTimerPaused) { timerSeconds++; const m = String(Math.floor(timerSeconds / 60)).padStart(2, '0'); const s = String(timerSeconds % 60).padStart(2, '0'); timerEl.textContent = `${m}:${s}`; } }, 1000);
+function toggleDarkMode() { document.body.classList.toggle('dark'); const isDark = document.body.classList.contains('dark'); localStorage.setItem('darkMode', isDark ? 'enabled' : 'disabled'); document.querySelector('.theme-toggle').textContent = isDark ? '🌙' : '☀️'; }
+function scrollToElement(id) { document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+function showToast(msg) { const toastEl = document.getElementById('toast'); toastEl.textContent = msg; toastEl.style.display = 'block'; setTimeout(() => { toastEl.style.display = 'none'; }, 1500); }
+
+// 3. HIGHLIGHT AND NOTES FUNCTIONALITY
+const selbar = document.getElementById('selbar');
+let lastRange = null;
+function handleTextSelection() { setTimeout(() => { const sel = window.getSelection(); if (sel.toString().trim().length > 0) { lastRange = sel.getRangeAt(0).cloneRange(); const rect = lastRange.getBoundingClientRect(); selbar.style.top = `${window.scrollY + rect.top - selbar.offsetHeight - 5}px`; selbar.style.left = `${window.scrollX + rect.left + rect.width / 2 - selbar.offsetWidth / 2}px`; selbar.style.display = 'flex'; } else { selbar.style.display = 'none'; } }, 10); }
+['left', 'right'].forEach(id => document.getElementById(id).addEventListener('mouseup', handleTextSelection));
+document.addEventListener('mousedown', (e) => { if (!selbar.contains(e.target)) selbar.style.display = 'none'; });
+document.getElementById('btnHL').addEventListener('click', () => { if (lastRange) { const span = document.createElement('span'); span.className = 'hl'; try { lastRange.surroundContents(span); } catch(e) { console.error(e); } selbar.style.display = 'none'; window.getSelection().removeAllRanges(); } });
+document.getElementById('btnUH').addEventListener('click', () => { if (lastRange) { let container = lastRange.commonAncestorContainer; if (container.nodeType !== 1) container = container.parentElement; const highlights = container.querySelectorAll('.hl'); highlights.forEach(hl => { if (window.getSelection().containsNode(hl, true)) { const parent = hl.parentNode; while (hl.firstChild) parent.insertBefore(hl.firstChild, hl); parent.removeChild(hl); parent.normalize(); } }); selbar.style.display = 'none'; window.getSelection().removeAllRanges(); } });
+document.getElementById('btnNote').addEventListener('click', () => { const text = window.getSelection().toString().trim(); if (text) { const noteArea = document.getElementById('noteArea'); noteArea.value += (noteArea.value ? '\n\n' : '') + `> ${text}`; toggleNotes(); noteArea.scrollTop = noteArea.scrollHeight; } selbar.style.display = 'none'; });
+function toggleNotes() { const notePad = document.getElementById('notes'); notePad.style.display = notePad.style.display === 'flex' ? 'none' : 'flex'; }
+document.getElementById('btnClose').addEventListener('click', toggleNotes);
+document.getElementById('btnCopy').addEventListener('click', () => { navigator.clipboard.writeText(document.getElementById('noteArea').value); showToast('Notes copied'); });
+
+// 4. GRADING & STATE MANAGEMENT
+function grade() {
+    let total = 0, correct = 0, lines = [];
+    const push = (q, ok, user, correctAns) => { total++; if(ok) correct++; const displayAns = String(correctAns).charAt(0).toUpperCase() + String(correctAns).slice(1); lines.push(`${q.toUpperCase().replace('Q','')}: ${user || 'None'} ${ok ? '✅' : `❌ (Ans: ${displayAns})`}`); };
+    Object.keys(answers).forEach(qKey => {
+        const correctAns = answers[qKey];
+        let userAnswer = null;
+        const radio = document.querySelector(`input[name="${qKey}"]:checked`);
+        const textInput = document.querySelector(`input[name="${qKey}"]`);
+        if (radio) userAnswer = radio.value;
+        else if (textInput) userAnswer = textInput.value.trim() || null;
+        const isCorrect = userAnswer !== null && userAnswer.toLowerCase() === String(correctAns).toLowerCase();
+        push(qKey, isCorrect, userAnswer, correctAns);
+    });
+    const acc = total ? Math.round(100 * correct / total) : 0;
+    document.getElementById('results').innerHTML = `<p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p><pre>${lines.join('\n')}</pre>`;
+    document.getElementById('answerContent').innerHTML = `<ol start="1">${Object.entries(answers).map(([key, val]) => `<li><strong>${key.replace('q','')}:</strong> ${String(val).charAt(0).toUpperCase() + String(val).slice(1)}</li>`).join('')}</ol>`;
+    document.querySelector('#answerBox .badge').textContent = 'tap to view';
+    document.getElementById('answerBox').open = true;
+}
+
+function resetForm() {
+    document.querySelectorAll('input[type="radio"], input[type="text"]').forEach(el => {
+        if (el.type === 'radio') el.checked = false;
+        else el.value = '';
+    });
+    document.getElementById('results').innerHTML = '';
+    document.getElementById('answerContent').innerHTML = '';
+    document.querySelector('#answerBox .badge').textContent = 'hidden';
+    document.getElementById('answerBox').open = false;
+    updateAnswerStatus();
+    showToast('Form has been reset');
+}
+
+function updateAnswerStatus() {
+    document.querySelectorAll('.q-item').forEach(item => {
+        const qNum = item.id.replace('-nav', '');
+        let answered = false;
+        const radio = document.querySelector(`input[name="${qNum}"]:checked`);
+        const textInput = document.querySelector(`input[name="${qNum}"]`);
+        if (radio) answered = true;
+        else if (textInput) answered = textInput.value.trim() !== '';
+        item.classList.toggle('answered', answered);
+    });
+}
+
+// 5. INITIALIZATION
+document.addEventListener('DOMContentLoaded', () => {
+    if (localStorage.getItem('darkMode') === 'enabled') {
+        toggleDarkMode();
+        document.querySelector('.theme-toggle').textContent = '🌙';
+    }
+    document.querySelectorAll('input[type="radio"], input[type="text"]').forEach(el => {
+        el.addEventListener('input', updateAnswerStatus);
+        el.addEventListener('change', updateAnswerStatus);
+    });
+});
+</script>
+
+<!-- Practice page enhancer integration -->
+<script>
+  if (!window.practicePageEnhancer) {
+    const script = document.createElement('script');
+    script.src = '../../js/practice-page-enhancer.js';
+    script.onload = () => console.log('Enhancer loaded.');
+    script.onerror = () => { console.error('Enhancer failed to load'); loadInlineEnhancer(); };
+    document.head.appendChild(script);
+  }
+  function loadInlineEnhancer() { if (window.practicePageEnhancer) return; window.practicePageEnhancer = { initialize: function () { this.setupCommunication(); this.setupAnswerListeners(); this.interceptSubmit(); }, setupCommunication: function () { this.parentWindow = window.opener || window.parent; window.addEventListener('message', (e) => { if (e.data?.type === 'INIT_SESSION') { this.sessionId = e.data.data.sessionId; this.sendMessage('SESSION_READY', { pageType: this.detectPageType(), url: window.location.href }); } }); }, detectPageType: () => { const t = document.title || ''; if (t.includes('P1')) return 'P1'; if (t.includes('P2')) return 'P2'; if (t.includes('P3')) return 'P3'; return 'unknown'; }, setupAnswerListeners: function () { this.answers = {}; this.startTime = Date.now(); document.addEventListener('input', (e) => { if (e.target.name) this.answers[e.target.name] = e.target.value; }); document.addEventListener('change', (e) => { if (e.target.name) this.answers[e.target.name] = e.target.value; }); }, interceptSubmit: function () { if (typeof window.grade === 'function') { const originalGrade = window.grade; window.grade = () => { originalGrade(); setTimeout(() => this.handleSubmit(), 200); }; } }, handleSubmit: function () { const results = { sessionId: this.sessionId, startTime: this.startTime, endTime: Date.now(), duration: Math.round((Date.now() - this.startTime) / 1000), answers: this.answers, scoreInfo: this.extractScore(), pageType: this.detectPageType(), url: window.location.href }; this.sendMessage('PRACTICE_COMPLETE', results); }, extractScore: () => { const el = document.getElementById('results'); if (!el) return null; const text = el.textContent || ''; const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i); if (scoreMatch) { const correct = parseInt(scoreMatch[1]), total = parseInt(scoreMatch[2]); return { correct, total, accuracy: total > 0 ? correct / total : 0, percentage: Math.round((correct / total) * 100), source: 'inline_extraction' }; } return null; }, sendMessage: function (type, data) { if (this.parentWindow) this.parentWindow.postMessage({ type, data, source: 'practice_page' }, '*'); } }; if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => window.practicePageEnhancer.initialize()); else window.practicePageEnhancer.initialize(); }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>The Power of Smell - Reading Passage</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+    --font-size-regular: 16px;
+    --font-size-moderate: 18px;
+    --font-size-large: 20px;
+  }
+  .font-regular {
+    font-size: var(--font-size-regular) !important;
+  }
+  .font-moderate {
+    font-size: var(--font-size-moderate) !important;
+  }
+  .font-large {
+    font-size: var(--font-size-large) !important;
+  }
+  * { 
+    box-sizing: border-box; 
+    font-size: inherit;
+  }
+  html,body { 
+    height:100%; 
+    font-size: var(--font-size-regular);
+  }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+  }
+  #timer-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #timer { 
+    position: static; 
+    display: inline-block; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:2px 8px; 
+    vertical-align: middle; 
+  }
+  #settingsBtn {
+    padding:2px 8px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:#fff;
+    cursor:pointer;
+  }
+  #settingsModal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:16px;
+    box-shadow:var(--shadow);
+    z-index: 1000;
+    display: none;
+  }
+  #settingsModal h4 {
+    margin-top:0;
+    font-weight: 600;
+  }
+  #settingsModal .font-option {
+    margin:8px 0;
+    cursor:pointer;
+    padding:4px 8px;
+    border-radius:6px;
+  }
+  #settingsModal .font-option:hover {
+    background:#f1f5f9;
+  }
+  #settingsModal .close-modal {
+    margin-top:12px;
+    padding:6px 12px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--accent);
+    color:#fff;
+    cursor:pointer;
+  }
+  .shell { 
+    display:flex; 
+    height:100vh; 
+    width:100%; 
+  }
+  .pane { 
+    background:var(--panel); 
+    overflow:auto; 
+    padding:20px; 
+  }
+  #left { 
+    flex: 0 0 50%; 
+    min-width: 280px; 
+  }
+  #right { 
+    flex: 1 1 auto; 
+    min-width: 320px; 
+    background:#fbfbff; 
+    border-left:1px solid var(--line); 
+  }
+  #divider { 
+    flex: 0 0 8px; 
+    background: linear-gradient(90deg,#e5e7eb,#d1d5db); 
+    cursor: ew-resize; 
+    position:relative; 
+    z-index: 5; 
+    user-select:none; 
+  }
+  h2,h3,h4 { 
+    margin:0 0 10px; 
+    font-weight: 600; 
+  }
+  #left p { 
+    margin: 0 0 12px; 
+    line-height: 1.6; 
+    word-break: normal; 
+    overflow-wrap: normal; 
+    hyphens: none; 
+  }
+  .paragraph-label {
+    font-weight: 600;
+    color: var(--accent);
+    margin-right: 8px;
+  }
+  .group { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-bottom:14px; 
+  }
+  table { 
+    border-collapse: collapse; 
+    width:100%; 
+    margin: 10px 0;
+  }
+  th, td { 
+    border:1px solid var(--line); 
+    padding:6px; 
+    text-align:left; 
+  }
+  th {
+    background-color: #f1f5f9;
+    font-weight: 600;
+  }
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    background:#fff; 
+    cursor:pointer; 
+  }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:#3b82f6; 
+  }
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:10px; 
+    margin-bottom:14px;
+  }
+  .hl { 
+    background:#fff3a3; 
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); 
+    cursor: pointer; 
+  }
+  .hl:hover { 
+    filter: brightness(0.98); 
+  }
+  #selbar { 
+    position: absolute; 
+    display:none; 
+    z-index: 6000; 
+    background:#111; 
+    color:#fff; 
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow: var(--shadow); 
+    font-size: 13px; 
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; 
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+  }
+  #selbar button:hover { 
+    border-color:#fff; 
+  }
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 12px; 
+    width: 320px; 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow: var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    line-height:1.5; 
+  }
+  #toast { 
+    position: fixed; 
+    left:50%; 
+    transform: translateX(-50%); 
+    bottom: 24px; 
+    background:#111; 
+    color:#fff; 
+    padding:8px 12px; 
+    border-radius: 8px; 
+    display:none; 
+    z-index:2500; 
+  }
+  .answer-option {
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    margin:4px 0 8px;
+  }
+  .answer-option label {
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:4px;
+  }
+  .para-match-option {
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin:6px 0;
+  }
+  .para-match-option label {
+    cursor:pointer;
+    padding:4px 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    transition: all 0.2s;
+  }
+  .para-match-option label:hover {
+    background:#f1f5f9;
+    border-color:var(--accent);
+  }
+  input.blank {
+    width: 180px;
+    padding: 8px;
+    margin: 0 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+  }
+  .question-number {
+    font-weight: 600;
+  }
+  body { 
+    padding-bottom: 82px; 
+  }
+  .practice-nav { 
+    background:#fff; 
+    border-bottom:2px solid var(--line); 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:20px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    border-top:2px solid var(--line); 
+    border-bottom:0; 
+    z-index:4000; 
+  }
+  .practice-nav .title { 
+    font-weight:600; 
+    color:var(--muted); 
+  }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:var(--accent); 
+  }
+  details.answerbox summary { 
+    cursor: pointer; 
+    user-select:none; 
+    list-style: none; 
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  details.answerbox summary::before {
+    content: "▼";
+    font-size: 12px;
+    transition: transform 0.2s;
+  }
+  details.answerbox[open] summary::before {
+    transform: rotate(180deg);
+  }
+  details.answerbox { 
+    border:1px dashed var(--line); 
+    border-radius:10px; 
+    padding:8px 10px; 
+    background:#fff; 
+    margin-bottom:14px;
+  }
+  .badge { 
+    display:inline-block; 
+    background:#eef2ff; 
+    color:#4338ca; 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+    margin-left:6px; 
+  }
+  .explanation-text {
+    margin-bottom: 4px;
+  }
+  .explanation-original {
+    font-style: italic;
+    color: #555;
+    font-size: 0.9em;
+    margin-top: 0;
+  }
+  ul {
+    list-style-type: none;
+    padding-left: 20px;
+    margin: 8px 0;
+  }
+  ul li::before {
+    content: "- ";
+    color: inherit;
+    font-weight: 500;
+  }
+  .summary-text {
+    line-height: 1.6;
+    margin: 8px 0;
+  }
+  .person-match-option {
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    margin:8px 0;
+  }
+  .person-match-option label {
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:6px 10px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    transition: all 0.2s;
+  }
+  .person-match-option label:hover {
+    background:#f1f5f9;
+    border-color:var(--accent);
+  }
+</style>
+</head>
+<body class="font-regular">
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q14-nav" onclick="scrollToElement('q14-anchor')">14</div>
+    <div class="q-item" id="q15-nav" onclick="scrollToElement('q15-anchor')">15</div>
+    <div class="q-item" id="q16-nav" onclick="scrollToElement('q16-anchor')">16</div>
+    <div class="q-item" id="q17-nav" onclick="scrollToElement('q17-anchor')">17</div>
+    <div class="q-item" id="q18-nav" onclick="scrollToElement('q18-anchor')">18</div>
+    <div class="q-item" id="q19-nav" onclick="scrollToElement('q19-anchor')">19</div>
+    <div class="q-item" id="q20-nav" onclick="scrollToElement('q20-anchor')">20</div>
+    <div class="q-item" id="q21-nav" onclick="scrollToElement('q21-anchor')">21</div>
+    <div class="q-item" id="q22-nav" onclick="scrollToElement('q22-anchor')">22</div>
+    <div class="q-item" id="q23-nav" onclick="scrollToElement('q23-anchor')">23</div>
+    <div class="q-item" id="q24-nav" onclick="scrollToElement('q24-anchor')">24</div>
+    <div class="q-item" id="q25-nav" onclick="scrollToElement('q25-anchor')">25</div>
+    <div class="q-item" id="q26-nav" onclick="scrollToElement('q26-anchor')">26</div>
+  </div>
+</div>
+
+<div id="settingsModal">
+  <h4>Font Size Settings</h4>
+  <div class="font-option" data-size="regular">Regular (Default - 16px)</div>
+  <div class="font-option" data-size="moderate">Moderate (Larger - 18px)</div>
+  <div class="font-option" data-size="large">Large (Largest - 20px)</div>
+  <button class="close-modal" onclick="closeSettingsModal()">Close</button>
+</div>
+
+<div class="shell">
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 2 
+      <div id="timer-container">
+        <span id="timer">00:00</span>
+        <button id="settingsBtn" onclick="openSettingsModal()">Settings</button>
+      </div>
+    </h2>
+    <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>
+    
+    <h3>The Power of Smell</h3>
+    <p style="font-style: italic; color: var(--muted);">Research shows that our olfactory sense is more influential than we realise</p>
+    
+    <p><span class="paragraph-label">A</span> Dogs' noses are renowned for sensitivity to smells, while human noses are thought to be poor by comparison, yet that might be a misconception. According to recent studies, our noses are in fact acutely sensitive instruments that guide our everyday lives to a surprising extent. Subtle smells can change your mood, behaviour and the choices you make, often without you realising it. Our own odours, meanwhile, indicate emotional states such as fear or sadness to those around us. The big mystery is why we aren't more aware of our nasal activity. Noses have certainly never been at the forefront of sensory research, and were pushed aside until recently in favour of the seemingly more vital senses of vision and hearing. 'There has been a lot of prejudice that people are not that influenced by olfactory stimuli, especially compared to other mammals,' says Lilianne Mujica- Parodi, who studies the neurobiology of human stress at Stony Brook University in New York, in the United States.</p>
+    
+    <p><span class="paragraph-label">B</span> One of the first people to assert the relative unimportance of human smelling was Pierre Paul Broca, an influential 19th-century anatomist. After comparing the proportion of the brain devoted to smell in different animals, he suggested that mammals can be classed into two broad groups: macrosmatic mammals, such as dogs, have a finely tuned sense of smell which they rely on to perceive the world, while we, along with other primates and the marine mammals, are microsomatic - we have small olfactory organs that we only rely on to a small extent. That idea seemed to fit with more recent studies which found that the majority of mammals have genes coding for about 1000 different types of smell receptor. Most of these genes aren't expressed in humans, giving our noses just 400 different types of receptor.</p>
+    
+    <p><span class="paragraph-label">C</span> Yet these findings may have been misleading. Brain scans now show that more of the brain is devoted to smell processing than Broca's anatomical studies suggested. And although we may have fewer types of receptor than other mammals, Charles Greer at Yale University in the United States has shown that the human nose and brain are unusually well connected, with each group of receptors linking to many more neural regions than is the case in other animals. That should give us a good ability to process incoming scents. Once researchers began looking, they found the nose to be far more sensitive than its reputation suggested. One study, for example, found that we can detect certain chemicals diluted in water to less than one part per billion. That means that a person can detect just a few drops of a strong smell like ethyl mercaptan in an Olympic-sized pool.</p>
+    
+    <p><span class="paragraph-label">D</span> We are also exceptionally gifted at telling smells apart, even in the case of two molecules whose only difference is that their structures are mirror images of one another. That is fantastic sensitivity,' says George Dodd, a perfumer and researcher at the olfaction group of the University of Warwick, in the United Kingdom. What's more, it's becoming clear that the brain's olfactory centres are intimately linked to its limbic system, which is involved in emotion, fear and memory. That suggests a link between smell and the way we think.</p>
+    
+    <p><span class="paragraph-label">E</span> The power of smell will be no news to estate agents, who often advocate the smell of baking bread or brewing coffee to promote the sale of a house. But there are more subtle and surprising effects too. When Hendrik Schifferstein and colleagues, from Delft University of Technology in the Netherlands, pumped the smell of orange, seawater or peppermint into a nightclub, the revellers danced more, rated their night as more enjoyable, and even thought the music was better than when there was no added scent. Meanwhile, Rob Holland, of the University of Utrecht in the Netherlands, found that the hint of aroma wafting out of a hidden bucket of citrus-scented cleaner was enough to persuade students in a hostel to clean up after themselves.</p>
+    
+    <p><span class="paragraph-label">F</span> Other work has found that scent can influence our cognitive skills. A study by William Overman and colleagues at the University of North Carolina in the United States found that when men were subjected to a novel smell - either good or bad - during a task used to test decision-making skills, they performed significantly worse than normal. The researchers conclude the scent stimulated brain areas connected with emotion, making their decisions emotional rather than rational.</p>
+    
+    <p><span class="paragraph-label">G</span> Smells are especially good memory evokers, but it is actually a myth that odours trigger more detailed memories than other stimuli. 'The memory is not more accurate and you don't remember more details,' says Yaara Yeshurun at the Weizmann Institute of Science in Rehovot, Israel, 'but it is unique in that it is more emotional.' This isn't surprising when you consider that there are certain brain areas dedicated to both emotion and olfaction, such as the amygdala, and there is a strong link between emotion and memory. In 2009, Yeshurun found that the link between a memory and a smell is stronger if the smell is unpleasant rather than pleasant. She also discovered that the very first time we attach a smell to an object, it evokes a much greater response in our brains than for any subsequent encounter with the smell or object, laying down stronger foundations for the memory. That doesn't happen with any other sense. Since those first encounters with a smell would have happened at a young age, this explains why smells often transport us back to our childhood.</p>
+    
+    <p>&nbsp;</p>
+    <p>&nbsp;</p>
+    <p>&nbsp;</p>
+  </section>
+  
+  <div id="divider" title="Drag to resize"></div>
+  
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <!-- Questions 14-19: Paragraph Matching -->
+    <div class="group">
+      <h4>Questions 14–19</h4>
+      <p>Which paragraph contains the following information?</p>
+      <p>Write the correct letter A–G in boxes 14–19 on your answer sheet.</p>
+      
+      <a id="q14-anchor"></a>
+      <div id="q14-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">14.</span> a finding that humans can distinguish between two extremely similar substances</p>
+        <div class="para-match-option">
+          <label><input name="q14" type="radio" value="A"> A</label>
+          <label><input name="q14" type="radio" value="B"> B</label>
+          <label><input name="q14" type="radio" value="C"> C</label>
+          <label><input name="q14" type="radio" value="D"> D</label>
+          <label><input name="q14" type="radio" value="E"> E</label>
+          <label><input name="q14" type="radio" value="F"> F</label>
+          <label><input name="q14" type="radio" value="G"> G</label>
+        </div>
+      </div>
+      
+      <a id="q15-anchor"></a>
+      <div id="q15-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">15.</span> a categorisation of species according to their sensitivity to smell</p>
+        <div class="para-match-option">
+          <label><input name="q15" type="radio" value="A"> A</label>
+          <label><input name="q15" type="radio" value="B"> B</label>
+          <label><input name="q15" type="radio" value="C"> C</label>
+          <label><input name="q15" type="radio" value="D"> D</label>
+          <label><input name="q15" type="radio" value="E"> E</label>
+          <label><input name="q15" type="radio" value="F"> F</label>
+          <label><input name="q15" type="radio" value="G"> G</label>
+        </div>
+      </div>
+      
+      <a id="q16-anchor"></a>
+      <div id="q16-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">16.</span> an instance where smell negatively affected people's ability to make choices</p>
+        <div class="para-match-option">
+          <label><input name="q16" type="radio" value="A"> A</label>
+          <label><input name="q16" type="radio" value="B"> B</label>
+          <label><input name="q16" type="radio" value="C"> C</label>
+          <label><input name="q16" type="radio" value="D"> D</label>
+          <label><input name="q16" type="radio" value="E"> E</label>
+          <label><input name="q16" type="radio" value="F"> F</label>
+          <label><input name="q16" type="radio" value="G"> G</label>
+        </div>
+      </div>
+      
+      <a id="q17-anchor"></a>
+      <div id="q17-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">17.</span> a study that proved humans could perceive a tiny quantity of a substance</p>
+        <div class="para-match-option">
+          <label><input name="q17" type="radio" value="A"> A</label>
+          <label><input name="q17" type="radio" value="B"> B</label>
+          <label><input name="q17" type="radio" value="C"> C</label>
+          <label><input name="q17" type="radio" value="D"> D</label>
+          <label><input name="q17" type="radio" value="E"> E</label>
+          <label><input name="q17" type="radio" value="F"> F</label>
+          <label><input name="q17" type="radio" value="G"> G</label>
+        </div>
+      </div>
+      
+      <a id="q18-anchor"></a>
+      <div id="q18-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">18.</span> an observation that studies of the sense of smell have been undervalued</p>
+        <div class="para-match-option">
+          <label><input name="q18" type="radio" value="A"> A</label>
+          <label><input name="q18" type="radio" value="B"> B</label>
+          <label><input name="q18" type="radio" value="C"> C</label>
+          <label><input name="q18" type="radio" value="D"> D</label>
+          <label><input name="q18" type="radio" value="E"> E</label>
+          <label><input name="q18" type="radio" value="F"> F</label>
+          <label><input name="q18" type="radio" value="G"> G</label>
+        </div>
+      </div>
+      
+      <a id="q19-anchor"></a>
+      <div id="q19-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">19.</span> an example of using smell to prompt people to buy something</p>
+        <div class="para-match-option">
+          <label><input name="q19" type="radio" value="A"> A</label>
+          <label><input name="q19" type="radio" value="B"> B</label>
+          <label><input name="q19" type="radio" value="C"> C</label>
+          <label><input name="q19" type="radio" value="D"> D</label>
+          <label><input name="q19" type="radio" value="E"> E</label>
+          <label><input name="q19" type="radio" value="F"> F</label>
+          <label><input name="q19" type="radio" value="G"> G</label>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Questions 20-23: Person Matching -->
+    <div class="group">
+      <h4>Questions 20–23</h4>
+      <p>Look at the following statements and the list of people below.</p>
+      <p>Match each statement with the correct person, A–F.</p>
+      <p>Write the correct letter, A–F, in boxes 20–23 on your answer sheet.</p>
+      
+      <div style="margin-bottom: 12px; padding: 8px; background: #f8f9fa; border-radius: 6px;">
+        <p style="margin: 0; font-weight: 500;">List of People</p>
+        <p style="margin: 4px 0;">A. Lilianne Mujica-Parodi</p>
+        <p style="margin: 4px 0;">B. Pierre Paul Broca</p>
+        <p style="margin: 4px 0;">C. Charles Greer</p>
+        <p style="margin: 4px 0;">D. Hendrik Schifferstein and colleagues</p>
+        <p style="margin: 4px 0;">E. Rob Holland</p>
+        <p style="margin: 4px 0;">F. William Overman and colleagues</p>
+      </div>
+      
+      <a id="q20-anchor"></a>
+      <div id="q20-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">20.</span> A faint smell could motivate people to do household chores</p>
+        <div class="person-match-option">
+          <label><input name="q20" type="radio" value="A"> A. Lilianne Mujica-Parodi</label>
+          <label><input name="q20" type="radio" value="B"> B. Pierre Paul Broca</label>
+          <label><input name="q20" type="radio" value="C"> C. Charles Greer</label>
+          <label><input name="q20" type="radio" value="D"> D. Hendrik Schifferstein and colleagues</label>
+          <label><input name="q20" type="radio" value="E"> E. Rob Holland</label>
+          <label><input name="q20" type="radio" value="F"> F. William Overman and colleagues</label>
+        </div>
+      </div>
+      
+      <a id="q21-anchor"></a>
+      <div id="q21-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">21.</span> Humans are better equipped to interpret smell than other species are</p>
+        <div class="person-match-option">
+          <label><input name="q21" type="radio" value="A"> A. Lilianne Mujica-Parodi</label>
+          <label><input name="q21" type="radio" value="B"> B. Pierre Paul Broca</label>
+          <label><input name="q21" type="radio" value="C"> C. Charles Greer</label>
+          <label><input name="q21" type="radio" value="D"> D. Hendrik Schifferstein and colleagues</label>
+          <label><input name="q21" type="radio" value="E"> E. Rob Holland</label>
+          <label><input name="q21" type="radio" value="F"> F. William Overman and colleagues</label>
+        </div>
+      </div>
+      
+      <a id="q22-anchor"></a>
+      <div id="q22-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">22.</span> Smell is associated with feelings, rather than the logical part of the brain</p>
+        <div class="person-match-option">
+          <label><input name="q22" type="radio" value="A"> A. Lilianne Mujica-Parodi</label>
+          <label><input name="q22" type="radio" value="B"> B. Pierre Paul Broca</label>
+          <label><input name="q22" type="radio" value="C"> C. Charles Greer</label>
+          <label><input name="q22" type="radio" value="D"> D. Hendrik Schifferstein and colleagues</label>
+          <label><input name="q22" type="radio" value="E"> E. Rob Holland</label>
+          <label><input name="q22" type="radio" value="F"> F. William Overman and colleagues</label>
+        </div>
+      </div>
+      
+      <a id="q23-anchor"></a>
+      <div id="q23-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">23.</span> Humans do not require a sophisticated ability to smell</p>
+        <div class="person-match-option">
+          <label><input name="q23" type="radio" value="A"> A. Lilianne Mujica-Parodi</label>
+          <label><input name="q23" type="radio" value="B"> B. Pierre Paul Broca</label>
+          <label><input name="q23" type="radio" value="C"> C. Charles Greer</label>
+          <label><input name="q23" type="radio" value="D"> D. Hendrik Schifferstein and colleagues</label>
+          <label><input name="q23" type="radio" value="E"> E. Rob Holland</label>
+          <label><input name="q23" type="radio" value="F"> F. William Overman and colleagues</label>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Questions 24-26: Sentence Completion -->
+    <div class="group">
+      <h4>Questions 24–26</h4>
+      <p>Complete the sentences below.</p>
+      <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>
+      <p>Write your answers in boxes 24–26 on your answer sheet.</p>
+      
+      <div class="summary-text">
+        <p><span class="question-number"><a id="q24-anchor"></a>24.</span> The <input type="text" class="blank" id="q24"> is a part of the brain that deals with feelings and smell.</p>
+        <p><span class="question-number"><a id="q25-anchor"></a>25.</span> <input type="text" class="blank" id="q25"> smells create especially powerful associations with memories.</p>
+        <p><span class="question-number"><a id="q26-anchor"></a>26.</span> Of all the senses, smell has the capacity to prompt memories of <input type="text" class="blank" id="q26">.</p>
+      </div>
+    </div>
+    
+    <!-- Submit & Reset Buttons -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    
+    <!-- Results & Answer Key -->
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show Answers (Click to Toggle) <span class="badge">Hidden</span></summary>
+      <div id="answerContent">
+        <h4>正确答案及解析</h4>
+        <table>
+          <tr>
+            <th>题号</th>
+            <th>答案</th>
+            <th>解析与原文依据</th>
+          </tr>
+          <tr>
+            <td>14</td>
+            <td>D</td>
+            <td>
+              <p class="explanation-text">题干要求找"人类能区分两种极其相似物质的发现"，D段提到"telling smells apart, even in the case of two molecules whose only difference is that their structures are mirror images of one another"（区分镜像分子）。</p>
+              <p class="explanation-original">原文：We are also exceptionally gifted at telling smells apart, even in the case of two molecules whose only difference is that their structures are mirror images of one another. (Paragraph D)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>15</td>
+            <td>B</td>
+            <td>
+              <p class="explanation-text">题干要求找"根据嗅觉敏感性对物种的分类"，B段描述Broca将哺乳动物分为macrosmatic（嗅觉发达）和microsomatic（嗅觉不发达）两类。</p>
+              <p class="explanation-original">原文：he suggested that mammals can be classed into two broad groups: macrosmatic mammals... and microsomatic. (Paragraph B)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>16</td>
+            <td>F</td>
+            <td>
+              <p class="explanation-text">题干要求找"气味负面影响人们决策能力的例子"，F段描述William Overman的研究发现气味使男性在决策任务中表现更差。</p>
+              <p class="explanation-original">原文：when men were subjected to a novel smell... during a task used to test decision-making skills, they performed significantly worse than normal. (Paragraph F)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>17</td>
+            <td>C</td>
+            <td>
+              <p class="explanation-text">题干要求找"证明人类能感知极少量物质的研究"，C段提到人类能检测到"less than one part per billion"（十亿分之一浓度）的化学物质。</p>
+              <p class="explanation-original">原文：we can detect certain chemicals diluted in water to less than one part per billion. (Paragraph C)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>18</td>
+            <td>A</td>
+            <td>
+              <p class="explanation-text">题干要求找"嗅觉研究被低估的观察"，A段指出嗅觉研究被忽视，存在偏见，优先考虑视觉和听觉。</p>
+              <p class="explanation-original">原文：Noses have certainly never been at the forefront of sensory research, and were pushed aside until recently... 'There has been a lot of prejudice...' (Paragraph A)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>19</td>
+            <td>E</td>
+            <td>
+              <p class="explanation-text">题干要求找"使用气味促使人们购买东西的例子"，E段开头提到房地产商用烘焙面包或煮咖啡的气味促进房屋销售。</p>
+              <p class="explanation-original">原文：The power of smell will be no news to estate agents, who often advocate the smell of baking bread or brewing coffee to promote the sale of a house. (Paragraph E)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>20</td>
+            <td>E</td>
+            <td>
+              <p class="explanation-text">题干描述"微弱气味能激励人们做家务"，E段提到Rob Holland的研究发现柑橘味清洁剂的气味能说服学生自己打扫。</p>
+              <p class="explanation-original">原文：Rob Holland... found that the hint of aroma wafting out of a hidden bucket of citrus-scented cleaner was enough to persuade students in a hostel to clean up after themselves. (Paragraph E)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>21</td>
+            <td>C</td>
+            <td>
+              <p class="explanation-text">题干描述"人类比其他物种更善于解释气味"，C段提到Charles Greer的研究显示人类鼻子和大脑连接更好，处理气味能力更强。</p>
+              <p class="explanation-original">原文：Charles Greer... has shown that the human nose and brain are unusually well connected... That should give us a good ability to process incoming scents. (Paragraph C)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>22</td>
+            <td>F</td>
+            <td>
+              <p class="explanation-text">题干描述"气味与情感而非逻辑脑区相关"，F段提到William Overman的研究结论是气味刺激情感相关脑区，使决策更情绪化而非理性。</p>
+              <p class="explanation-original">原文：The researchers conclude the scent stimulated brain areas connected with emotion, making their decisions emotional rather than rational. (Paragraph F)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>23</td>
+            <td>B</td>
+            <td>
+              <p class="explanation-text">题干描述"人类不需要复杂的嗅觉能力"，B段提到Pierre Paul Broca认为人类嗅觉相对不重要，是microsomatic（嗅觉不发达）。</p>
+              <p class="explanation-original">原文：One of the first people to assert the relative unimportance of human smelling was Pierre Paul Broca... we are microsomatic - we have small olfactory organs that we only rely on to a small extent. (Paragraph B)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>24</td>
+            <td>amygdala</td>
+            <td>
+              <p class="explanation-text">题干要求填"大脑中处理情感和气味的部位"，G段提到"brain areas dedicated to both emotion and olfaction, such as the amygdala"。</p>
+              <p class="explanation-original">原文：there are certain brain areas dedicated to both emotion and olfaction, such as the amygdala. (Paragraph G)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>25</td>
+            <td>unpleasant</td>
+            <td>
+              <p class="explanation-text">题干要求填"什么气味能创造特别强烈的记忆关联"，G段提到"the link between a memory and a smell is stronger if the smell is unpleasant rather than pleasant"。</p>
+              <p class="explanation-original">原文：the link between a memory and a smell is stronger if the smell is unpleasant rather than pleasant. (Paragraph G)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>26</td>
+            <td>childhood</td>
+            <td>
+              <p class="explanation-text">题干要求填"嗅觉有能力唤起什么记忆"，G段最后提到"smells often transport us back to our childhood"。</p>
+              <p class="explanation-original">原文：this explains why smells often transport us back to our childhood. (Paragraph G)</p>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </details>
+  </section>
+</div>
+
+<!-- 文本选择工具栏 -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove Highlight</button>
+  <button id="btnNote">Add to Notes</button>
+</div>
+
+<!-- 笔记面板 -->
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+
+<!-- 提示框 -->
+<div id="toast"></div>
+
+<script>
+// 计时器核心功能
+let _t = 0; 
+const _timerEl = document.getElementById('timer');
+let timerInterval;
+function startTimer() {
+  timerInterval = setInterval(() => { 
+    _t++; 
+    const m = String(Math.floor(_t/60)).padStart(2, '0'); 
+    const s = String(_t%60).padStart(2, '0'); 
+    _timerEl.textContent = `${m}:${s}`; 
+  }, 1000);
+}
+window.onload = startTimer;
+
+// 拖拽分隔线调整左右面板宽度
+const divider = document.getElementById('divider');
+const leftPane = document.getElementById('left');
+const rightPane = document.getElementById('right');
+let isDragging = false;
+divider.addEventListener('mousedown', (e) => {
+  isDragging = true;
+  document.body.style.cursor = 'ew-resize';
+  e.preventDefault();
+});
+window.addEventListener('mousemove', (e) => {
+  if (!isDragging) return;
+  const containerRect = document.querySelector('.shell').getBoundingClientRect();
+  let x = e.clientX - containerRect.left;
+  x = Math.max(280, Math.min(containerRect.width - 320, x));
+  leftPane.style.flex = `0 0 ${x}px`;
+  rightPane.style.flex = '1 1 auto';
+});
+window.addEventListener('mouseup', () => {
+  if (isDragging) {
+    isDragging = false;
+    document.body.style.cursor = '';
+  }
+});
+// 触摸设备支持
+divider.addEventListener('touchstart', (e) => {
+  isDragging = true;
+  e.preventDefault();
+}, { passive: false });
+window.addEventListener('touchmove', (e) => {
+  if (!isDragging) return;
+  const containerRect = document.querySelector('.shell').getBoundingClientRect();
+  let x = e.touches[0].clientX - containerRect.left;
+  x = Math.max(280, Math.min(containerRect.width - 320, x));
+  leftPane.style.flex = `0 0 ${x}px`;
+  rightPane.style.flex = '1 1 auto';
+}, { passive: false });
+window.addEventListener('touchend', () => {
+  isDragging = false;
+});
+
+// 文本高亮功能
+const selbar = document.getElementById('selbar');
+const btnHL = document.getElementById('btnHL');
+const btnUH = document.getElementById('btnUH');
+const btnNote = document.getElementById('btnNote');
+let lastRange = null;
+let currentHlNode = null;
+let keepToolbar = false;
+function positionSelbar(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(() => {
+    const top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    const leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = (top > 0 ? top : window.scrollY + rect.bottom + 8) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+function updateSelbar() {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
+  }
+  const range = selection.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode = null;
+  positionSelbar(range.getBoundingClientRect());
+}
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', () => {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) selbar.style.display = 'none';
+  }
+});
+document.addEventListener('scroll', () => {
+  if (selbar.style.display === 'flex') updateSelbar();
+});
+document.addEventListener('mousedown', (e) => {
+  keepToolbar = e.target.classList?.contains('hl') || false;
+}, true);
+document.addEventListener('click', (e) => {
+  if (e.target.classList?.contains('hl')) {
+    currentHlNode = e.target;
+    lastRange = null;
+    positionSelbar(e.target.getBoundingClientRect());
+    const selection = window.getSelection();
+    if (selection) selection.removeAllRanges();
+    setTimeout(() => keepToolbar = false, 0);
+  }
+}, true);
+function doHighlight() {
+  if (currentHlNode || !lastRange || lastRange.collapsed) return;
+  const highlightSpan = document.createElement('span');
+  highlightSpan.className = 'hl';
+  try {
+    lastRange.surroundContents(highlightSpan);
+  } catch (e) {
+    const wrapSpan = document.createElement('span');
+    wrapSpan.className = 'hl';
+    wrapSpan.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrapSpan);
+  }
+  selbar.style.display = 'none';
+  showToast('Text highlighted');
+}
+function removeHighlight() {
+  if (currentHlNode) {
+    const parent = currentHlNode.parentNode;
+    while (currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize();
+    currentHlNode = null;
+    selbar.style.display = 'none';
+    showToast('Highlight removed');
+    return;
+  }
+  if (!lastRange) return;
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node.classList?.contains('hl')) {
+      const nodeRect = node.getBoundingClientRect();
+      if (!(nodeRect.right < selRect.left || nodeRect.left > selRect.right || 
+            nodeRect.bottom < selRect.top || nodeRect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
+    }
+  }
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  selbar.style.display = 'none';
+  showToast('Highlights removed');
+}
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+
+// 笔记功能
+const notesPanel = document.getElementById('notes');
+const noteArea = document.getElementById('noteArea');
+const btnCopy = document.getElementById('btnCopy');
+const btnCloseNotes = document.getElementById('btnClose');
+function toggleNotes() {
+  notesPanel.style.display = notesPanel.style.display === 'flex' ? 'none' : 'flex';
+}
+btnCloseNotes.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async () => {
+  await navigator.clipboard.writeText(noteArea.value || '');
+  showToast('Notes copied to clipboard');
+});
+btnNote.addEventListener('click', () => {
+  let selectedText = '';
+  if (currentHlNode) {
+    selectedText = currentHlNode.textContent.trim();
+  } else if (lastRange) {
+    const frag = lastRange.cloneContents();
+    selectedText = frag.textContent.trim();
+  }
+  toggleNotes();
+  if (selectedText) {
+    noteArea.value = noteArea.value ? `${noteArea.value}\n> ${selectedText}\n` : `> ${selectedText}\n`;
+    noteArea.scrollTop = noteArea.scrollHeight;
+  }
+  selbar.style.display = 'none';
+});
+
+// 提示框功能
+const toastEl = document.getElementById('toast');
+function showToast(message) {
+  toastEl.textContent = message;
+  toastEl.style.display = 'block';
+  setTimeout(() => toastEl.style.display = 'none', 1500);
+}
+
+// 字体设置功能
+const settingsModal = document.getElementById('settingsModal');
+const body = document.body;
+function openSettingsModal() {
+  settingsModal.style.display = 'block';
+}
+function closeSettingsModal() {
+  settingsModal.style.display = 'none';
+}
+window.addEventListener('click', (e) => {
+  if (e.target === settingsModal) closeSettingsModal();
+});
+document.querySelectorAll('.font-option').forEach(option => {
+  option.addEventListener('click', () => {
+    const size = option.dataset.size;
+    body.classList.remove('font-regular', 'font-moderate', 'font-large');
+    body.classList.add(`font-${size}`);
+    const sizeName = size === 'regular' ? 'Regular (16px)' : 
+                     size === 'moderate' ? 'Moderate (18px)' : 'Large (20px)';
+    showToast(`Font size set to ${sizeName}`);
+    closeSettingsModal();
+  });
+});
+
+// 答案与评分功能
+const answers = {
+  q14: 'D',
+  q15: 'B',
+  q16: 'F',
+  q17: 'C',
+  q18: 'A',
+  q19: 'E',
+  q20: 'E',
+  q21: 'C',
+  q22: 'F',
+  q23: 'B',
+  q24: 'amygdala',
+  q25: 'unpleasant',
+  q26: 'childhood'
+};
+function grade() {
+  // 1. 停止计时器
+  clearInterval(timerInterval);
+  
+  // 2. 计算得分
+  let total = 13;
+  let correct = 0;
+  const resultLines = [];
+  
+  // 检查14-19题（段落匹配）
+  for (let i = 14; i <= 19; i++) {
+    const qName = `q${i}`;
+    const selected = document.querySelector(`input[name="${qName}"]:checked`);
+    const userAns = selected ? selected.value : 'No answer';
+    const correctAns = answers[qName];
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${correctAns})`}`);
+  }
+  
+  // 检查20-23题（人物匹配）
+  for (let i = 20; i <= 23; i++) {
+    const qName = `q${i}`;
+    const selected = document.querySelector(`input[name="${qName}"]:checked`);
+    const userAns = selected ? selected.value : 'No answer';
+    const correctAns = answers[qName];
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${correctAns})`}`);
+  }
+  
+  // 检查24-26题（填空题，一个词）
+  for (let i = 24; i <= 26; i++) {
+    const qName = `q${i}`;
+    const input = document.getElementById(qName);
+    const userAns = input ? input.value.trim().toLowerCase() : 'No answer';
+    const correctAns = answers[qName].toLowerCase();
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns || 'No answer'} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${answers[qName]})`}`);
+  }
+  
+  // 3. 显示结果
+  const accuracy = Math.round((correct / total) * 100);
+  const resultsHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} (Accuracy: ${accuracy}%)</p>
+    <pre>${resultLines.join('\n')}</pre>
+  `;
+  document.getElementById('results').innerHTML = resultsHTML;
+  
+  // 4. 展开答案面板
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = true;
+  document.querySelector('#answerBox .badge').textContent = 'Visible';
+  
+  // 5. 标记所有题目为已回答
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.add('answered');
+  });
+}
+
+// 重置功能
+function resetForm() {
+  // 1. 重置计时器
+  clearInterval(timerInterval);
+  _t = 0;
+  _timerEl.textContent = '00:00';
+  startTimer();
+  
+  // 2. 重置14-19题单选按钮
+  for (let i = 14; i <= 19; i++) {
+    document.querySelectorAll(`input[name="q${i}"]`).forEach(radio => {
+      radio.checked = false;
+    });
+  }
+  
+  // 3. 重置20-23题单选按钮
+  for (let i = 20; i <= 23; i++) {
+    document.querySelectorAll(`input[name="q${i}"]`).forEach(radio => {
+      radio.checked = false;
+    });
+  }
+  
+  // 4. 重置24-26题填空题
+  for (let i = 24; i <= 26; i++) {
+    const input = document.getElementById(`q${i}`);
+    if (input) input.value = '';
+  }
+  
+  // 5. 重置结果和答案面板
+  document.getElementById('results').innerHTML = '';
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = false;
+  document.querySelector('#answerBox .badge').textContent = 'Hidden';
+  
+  // 6. 重置导航栏已回答状态
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+  
+  // 7. 重置笔记
+  noteArea.value = '';
+  notesPanel.style.display = 'none';
+  
+  // 8. 移除所有高亮
+  document.querySelectorAll('.hl').forEach(hl => {
+    const parent = hl.parentNode;
+    while (hl.firstChild) parent.insertBefore(hl.firstChild, hl);
+    parent.removeChild(hl);
+    parent.normalize();
+  });
+}
+
+// 滚动到指定题目
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('active');
+  });
+  const navItem = document.getElementById(id.replace('-anchor', '-nav'));
+  if (navItem) {
+    navItem.classList.add('active');
+    setTimeout(() => navItem.classList.remove('active'), 800);
+  }
+}
+
+// 监听输入，标记题目为已回答
+(function() {
+  // 监听14-19题单选按钮
+  for (let i = 14; i <= 19; i++) {
+    document.querySelectorAll(`input[name="q${i}"]`).forEach(radio => {
+      radio.addEventListener('change', () => {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      });
+    });
+  }
+  
+  // 监听20-23题单选按钮
+  for (let i = 20; i <= 23; i++) {
+    document.querySelectorAll(`input[name="q${i}"]`).forEach(radio => {
+      radio.addEventListener('change', () => {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      });
+    });
+  }
+  
+  // 监听24-26题填空题
+  for (let i = 24; i <= 26; i++) {
+    const input = document.getElementById(`q${i}`);
+    if (input) {
+      input.addEventListener('input', () => {
+        if (input.value.trim()) {
+          document.getElementById(`q${i}-nav`).classList.add('answered');
+        } else {
+          document.getElementById(`q${i}-nav`).classList.remove('answered');
+        }
+      });
+    }
+  }
+})();
+</script>
+</body>
+</html>

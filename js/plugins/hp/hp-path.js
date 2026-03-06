@@ -37,7 +37,7 @@
         }
       }
     } catch (error) {
-      try { console.warn('[hp-path] detectDefaultPrefix failed', error); } catch (_) {}
+      try { console.warn('[hp-path] detectDefaultPrefix failed', error); } catch (_) { }
     }
     return FALLBACK_PREFIX.replace(/\/+$/g, '');
   }
@@ -46,7 +46,7 @@
   const STORAGE_KEY = 'hp.basePrefix';
   const DEFAULT_MAP = {
     reading: {
-      root: '睡着过项目组/2. 所有文章(11.20)[192篇]/',
+      root: '',
       exceptions: { 'special-cases': [] }
     },
     listening: {
@@ -165,7 +165,7 @@
       } else {
         localStorage.removeItem(STORAGE_KEY);
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 
   function applyBase(value) {
@@ -193,7 +193,7 @@
     if (!exam) return '';
     const explicit = (exam.type || '').toLowerCase();
     if (explicit) return explicit;
-    const folder = String(exam.path || '').toLowerCase();
+    const folder = String(exam.folder || exam.path || '').toLowerCase();
     if (folder.includes('listeningpractice')) return 'listening';
     if (folder) return 'reading';
     return '';
@@ -237,7 +237,7 @@
     }
 
     const root = getRootForExam(exam);
-    const folder = stripRootPrefix(exam.path || '', root);
+    const folder = stripRootPrefix(exam.folder || exam.path || '', root);
     const relativePath = joinPaths(state.base || '.', root, folder, targetFile);
     return encodePath(relativePath);
   }
@@ -338,12 +338,12 @@
     }
     state.mapPromise = null;
     state.map = null;
-    loadPathMap(true).catch(() => {});
+    loadPathMap(true).catch(() => { });
     return state.base;
   }
 
   ensureBase();
-  loadPathMap().catch(() => {});
+  loadPathMap().catch(() => { });
 
   window.hpPath = window.hpPath || {};
   window.hpPath.getBasePrefix = function () {

@@ -1,0 +1,1243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Pearls - Reading Passage</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+   .custom-br {
+    display: block;
+    margin-bottom: 1300px;
+    content: "";
+  }
+  * {
+    line-height: 30px;
+  }
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+    --font-size-regular: 16px;
+    --font-size-moderate: 18px;
+    --font-size-large: 20px;
+  }
+  .font-regular {
+    font-size: var(--font-size-regular) !important;
+  }
+  .font-moderate {
+    font-size: var(--font-size-moderate) !important;
+  }
+  .font-large {
+    font-size: var(--font-size-large) !important;
+  }
+  * { 
+    box-sizing: border-box; 
+    font-size: inherit;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+  }
+  html,body { 
+    height:100%; 
+    font-size: var(--font-size-regular);
+  }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+    color: #111827;
+    padding-bottom: 82px; 
+  }
+  .top-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  #timer-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #timer { 
+    position: absolute; 
+    left:50%;
+    top: 10px;
+    display: inline-block; 
+    background:var(--panel); 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:2px 8px; 
+    vertical-align: middle; 
+  }
+  #settingsBtn {
+    padding:2px 8px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:var(--panel);
+    cursor:pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+	position: absolute;
+	right: 10px;
+	top: 10px;
+  }
+  #settingsModal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:16px;
+    box-shadow:var(--shadow);
+    z-index: 1000;
+    display: none;
+    min-width: 280px;
+  }
+  #settingsModal h4 {
+    margin-top:0;
+    font-weight: 600;
+    font-size: inherit;
+  }
+  #settingsModal .font-option {
+    margin:8px 0;
+    cursor:pointer;
+    padding:4px 8px;
+    border-radius:6px;
+  }
+  #settingsModal .font-option:hover {
+    background:#f1f5f9;
+  }
+  #settingsModal .close-modal {
+    margin-top:12px;
+    padding:6px 12px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--accent);
+    color:#fff;
+    cursor:pointer;
+  }
+  .shell { 
+    display:flex; 
+    height:calc(100vh - 82px);
+    width:100%; 
+    overflow: hidden;
+  }
+  .pane { 
+    background:var(--panel); 
+    overflow:auto; 
+    padding:20px; 
+    -webkit-overflow-scrolling: touch;
+  }
+  #left { 
+    flex: 0 0 50%; 
+    min-width: 280px; 
+  }
+  #right { 
+    flex: 1 1 auto; 
+    min-width: 320px; 
+    background:#fbfbff; 
+    border-left:1px solid var(--line); 
+  }
+  #divider { 
+    flex: 0 0 8px; 
+    background: linear-gradient(90deg,#e5e7eb,#d1d5db); 
+    cursor: ew-resize; 
+    position:relative; 
+    z-index: 5; 
+    user-select:none; 
+  }
+  h2,h3,h4,h5 { 
+    margin:0 0 10px; 
+    font-weight: 600; 
+    font-size: inherit;
+  }
+  #left p { 
+    margin: 0 0 12px; 
+    line-height: 1.6; 
+    word-break: normal; 
+    overflow-wrap: break-word; 
+    hyphens: auto; 
+  }
+  .paragraph-label {
+    font-weight: 600;
+    color: var(--accent);
+    margin-right: 8px;
+  }
+  .group { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-bottom:14px; 
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  }
+  table { 
+    border-collapse: collapse; 
+    width:100%; 
+    margin: 10px 0;
+  }
+  th, td { 
+    border:1px solid var(--line); 
+    padding:6px; 
+    text-align:left; 
+    font-size: inherit;
+  }
+  th {
+    background-color: #f1f5f9;
+    font-weight: 600;
+  }
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    background:#fff; 
+    cursor:pointer; 
+    transition: all 0.2s ease;
+    font-size: inherit;
+  }
+  button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:#3b82f6; 
+  }
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:10px; 
+    margin-bottom:14px;
+  }
+  .hl { 
+    background:#fff3a3; 
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); 
+    cursor: pointer; 
+    transition: filter 0.2s ease;
+  }
+  .hl:hover { 
+    filter: brightness(0.98); 
+  }
+  #selbar { 
+    position: absolute; 
+    display:none; 
+    z-index: 6000; 
+    background:#111; 
+    color:#fff; 
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow:var(--shadow); 
+    font-size: 13px; 
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; 
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+  }
+  #selbar button:hover { 
+    border-color:#fff; 
+    transform: none;
+    box-shadow: none;
+  }
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 94px; 
+    width: 320px; 
+    max-width: calc(100% - 24px); 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow:var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    line-height:1.5; 
+    background: transparent;
+    font-size: inherit;
+  }
+  #notes textarea:focus {
+    outline: none;
+  }
+  #toast { 
+    position: fixed; 
+    left:50%; 
+    transform: translateX(-50%); 
+    bottom: 94px; 
+    background:#111; 
+    color:#fff; 
+    padding:8px 12px; 
+    border-radius: 8px; 
+    display:none; 
+    z-index:2500; 
+    animation: fadeIn 0.3s, fadeOut 0.3s 1.2s;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translate(-50%, 20px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
+  }
+  @keyframes fadeOut {
+    from { opacity: 1; transform: translate(-50%, 0); }
+    to { opacity: 0; transform: translate(-50%, 20px); }
+  }
+  .heading-options, .company-option, .category-option {
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin:6px 0;
+  }
+  .heading-options .heading-option, .company-option label, .category-option label {
+    cursor:pointer;
+    padding:4px 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    transition: all 0.2s;
+    font-size: inherit;
+  }
+  .heading-options .heading-option:hover, .company-option label:hover, .category-option label:hover {
+    background:#f1f5f9;
+    border-color:var(--accent);
+    color:var(--accent);
+  }
+  input.blank {
+    width: 140px;
+    padding: 8px;
+    margin: 0 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    font-size: inherit;
+  }
+  input.blank:focus {
+    outline: none;
+    border-color:var(--accent);
+    box-shadow: 0 0 0 2px rgba(59,130,246,0.2);
+  }
+  .question-number {
+    font-weight: 600;
+  }
+  .word-limit {
+    color: var(--muted);
+    font-size: 0.9em;
+    margin: 4px 0 8px;
+  }
+  .practice-nav { 
+    background:#fff; 
+    border-top:2px solid var(--line); 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:20px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    z-index:4000; 
+  }
+  .practice-nav .title { 
+    font-weight:600; 
+    color:var(--muted); 
+  }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+    overflow-x: auto;
+    padding-bottom: 4px;
+    max-width: calc(100% - 80px);
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+    flex-shrink:0;
+    font-size: inherit;
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:var(--accent); 
+  }
+  details.answerbox summary { 
+    cursor: pointer; 
+    user-select:none; 
+    list-style: none; 
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: inherit;
+  }
+  details.answerbox summary::before {
+    content: "▼";
+    font-size: 12px;
+    transition: transform 0.2s;
+  }
+  details.answerbox[open] summary::before {
+    transform: rotate(180deg);
+  }
+  details.answerbox { 
+    border:1px dashed var(--line); 
+    border-radius:10px; 
+    padding:8px 10px; 
+    background:#fff; 
+    margin-bottom:14px;
+  }
+  .badge { 
+    display:inline-block; 
+    background:#eef2ff; 
+    color:#4338ca; 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+    margin-left:6px; 
+  }
+  .explanation-text {
+    margin-bottom: 4px;
+    font-size: inherit;
+  }
+  .explanation-original {
+    font-style: italic;
+    color: #555;
+    font-size: 0.9em;
+    margin-top: 0;
+  }
+  ul {
+    list-style-type: none;
+    padding-left: 20px;
+    margin: 8px 0;
+    font-size: inherit;
+  }
+  ul li::before {
+    content: "- ";
+    color: inherit;
+    font-weight: 500;
+  }
+  @media (max-width: 768px) {
+    .shell {
+      flex-direction: column;
+      height: auto;
+      min-height: calc(100vh - 82px);
+    }
+    #left, #right {
+      flex: none;
+      width: 100%;
+      min-width: auto;
+      max-height: 50vh;
+    }
+    #divider {
+      flex: none;
+      height: 8px;
+      width: 100%;
+      cursor: ns-resize;
+      background: linear-gradient(0deg,var(--line),#d1d5db);
+    }
+    .practice-nav .questions {
+      max-width: calc(100% - 60px);
+    }
+    .top-controls {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    #timer-container {
+      align-self: flex-end;
+      margin-top: -28px;
+    }
+    input.blank {
+      width: 100px;
+    }
+  }
+</style>
+</head>
+<body class="font-regular">
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q1-nav" onclick="scrollToElement('q1-anchor')">1</div>
+    <div class="q-item" id="q2-nav" onclick="scrollToElement('q2-anchor')">2</div>
+    <div class="q-item" id="q3-nav" onclick="scrollToElement('q3-anchor')">3</div>
+    <div class="q-item" id="q4-nav" onclick="scrollToElement('q4-anchor')">4</div>
+    <div class="q-item" id="q5-nav" onclick="scrollToElement('q5-anchor')">5</div>
+    <div class="q-item" id="q6-nav" onclick="scrollToElement('q6-anchor')">6</div>
+    <div class="q-item" id="q7-nav" onclick="scrollToElement('q7-anchor')">7</div>
+    <div class="q-item" id="q8-nav" onclick="scrollToElement('q8-anchor')">8</div>
+    <div class="q-item" id="q9-nav" onclick="scrollToElement('q9-anchor')">9</div>
+    <div class="q-item" id="q10-nav" onclick="scrollToElement('q10-anchor')">10</div>
+    <div class="q-item" id="q11-nav" onclick="scrollToElement('q11-anchor')">11</div>
+    <div class="q-item" id="q12-nav" onclick="scrollToElement('q12-anchor')">12</div>
+    <div class="q-item" id="q13-nav" onclick="scrollToElement('q13-anchor')">13</div>
+  </div>
+</div>
+<div id="settingsModal">
+  <h4>Font Size Settings</h4>
+  <div class="font-option" data-size="regular">Regular (16px - Default)</div>
+  <div class="font-option" data-size="moderate">Moderate (18px - Larger)</div>
+  <div class="font-option" data-size="large">Large (20px - Largest)</div>
+  <button class="close-modal" onclick="closeSettingsModal()">Close</button>
+</div>
+	<div id="top" class="top" style="background-color: #bb5252; width: 100%; height: 60px;">
+        <h3 style="font-size: 23px;line-height: 55px;margin-left: 10px;">Pearls</h3>
+		 <div id="timer-container" >
+        <div id="timer" style="margin: 0px auto;">00:00</div>
+        <button id="settingsBtn" onclick="openSettingsModal()">
+          Settings
+        </button>
+      </div>
+	</div>
+<div class="shell">
+  <section class="pane" id="left">
+    You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</br><p></p><p></p>
+    <h3 >Pearls</h3>
+   
+    <span class="paragraph-label">A</span> Long known as the “Queen of Gems”, pearls possess a history and allure far beyond what today’s wearer may recognize. Throughout much of recorded history, a natural pearl necklace comprised of matched spheres was a treasure of almost incomparable value, in fact, the most expensive jewelry in the world. Before the creation of cultured pearls in the early 1900s, natural pearls were so rare and expensive that they were reserved almost exclusively for the noble and very rich. The ancient Egyptians were particularly fond of their pearls. Many Egyptian leaders treasured pearls so much that they were often buried along with their cherished pearl collection. In the Orient and Persian Empire, pearls were ground into costly powders to cure anything from heart disease to epilepsy, with possible aphrodisiac uses as well. China’s long recorded history also provides ample evidence of the importance of pearls.</br><p></p>
+    
+    <span class="paragraph-label">B</span> Pearls usually fall into three categories-natural pearls, cultured pearls and simulated pearls. A natural pearl forms when an irritant, such as a piece of sand, works its way into a particular species of oyster, mussel, or clam. As a defense mechanism, the mollusk secretes a fluid to coat the irritant. Layer upon layer of this coating is deposited on the irritant until a lustrous pearl is formed. A cultured pearl undergoes the same process. The only difference between natural pearls and cultured pearls is that the irritant is a surgically implanted bead or piece of shell called Mother of Pearl. Often, these shells are ground oyster shells that are worth significant amounts of money in their own right as irritant-catalysts for quality pearls. The resulting core is much larger than in a natural pearl. Imitation pearls are a different story altogether. In most cases, a glass bead is dipped into a solution made from fish scales. This coating is thin and may eventually wear off. One can usually tell an imitation by biting on it. The island of Mallorca in Spain is known for its imitation pearl industry.</br><p></p>
+    
+    <span class="paragraph-label">C</span> Regardless of the method used to acquire a pearl, the process usually takes several years. Mussels must reach a mature age, which can take up to 3 years, and then be implanted or naturally receive an irritant. Once the irritant is in place, it can take up to another 3 years for the pearl to reach its full size. Often, the irritant may be rejected, the pearl will be terrifically misshapen, or the oyster may simply die from disease or countless other complications. By the end of a 5 to 10 year cycle, only 50% of the oysters will have survived. And of the pearls produced, only approximately 5% are of a quality substantial enough for top jewelry makers.</br><p></p>
+    
+    <span class="paragraph-label">D</span> How can untrained eyes determine a pearl’s worth? Luster and size are generally considered the two main factors to look for. Luster, for instance, depends on the fineness and evenness of the layers. The deeper the glow, the more perfect the shape and surface, the more valuable they are. Size, on the other hand, has to do with the age of the oyster that created the pearl (the more mature oysters produce larger pearls) and the location in which the pearl was cultured. The South Sea waters of Australia tend to produce the larger pearls; probably because the water along the coastline is supplied with rich nutrients from the ocean floor. Also, the type of mussel being common to the area seems to possess a predilection for producing comparatively large pearls.</br><p></p>
+    
+    <span class="paragraph-label">E</span> In general, cultured pearls are less valuable than natural pearls, whereas imitation pearls have almost no value. One way that jewelers can determine whether a pearl is cultured or natural is to have a gem lab perform an X-ray of the pearl. If the X-ray reveals a nucleus, the pearl is likely a bead nucleated saltwater pearl. If no nucleus is present, but irregular and small dark inner spots indicating a cavity are visible, combined with concentric rings of organic substance, the pearl is likely a cultured freshwater pearl. Among cultured pearls, Akoya pearls from Japan are some of the most lustrous. Although imitation pearls look the part, they do not have the same weight or smoothness as real pearls, and their luster will also dim greatly.</br><p></p>
+    
+    <span class="paragraph-label">F</span> Historically, the world’s best pearls came from the Persian Gulf, especially around what is now Bahrain. The pearls of the Persian Gulf were naturally created and collected by breath-hold divers. Unfortunately, the natural pearl industry of the Persian Gulf ended abruptly in the early 1930s with the discovery of large deposits of oil. The water pollution resulting from spilled oil and indiscriminate overfishing of oysters essentially ruined the pristine waters of the Gulf that once produced pearls. Still, Bahrain remains one of the foremost trading centers for high quality pearls. In fact, cultured pearls are banned from the Bahrain pearl market, in an effort to preserve the location’s heritage. Nowadays, the largest stock of natural pearls probably resides in India. Ironically, much of India’s stock of natural pearls came originally from Bahrain. Unlike Bahrain, which has essentially lost its pearl resource, traditional pearl fishing is still practiced on a small scale in India.</br><p></p>
+    
+    <span class="paragraph-label">G</span> Pearls also come in many colours. The most popular colours are white, cream, and pink. Silver, black, and gold are also gaining interest. In fact, a deep lustrous black pearl is one of the rarest finds in the pearling industry, usually only being found in the South Sea near Australia. Thus, they can be one of the more costly items. Nowadays, pearls predominantly come from Japan, Australia, Indonesia, Myanmar, China, India, the Philippines, and Tahiti. Japan, however, controls roughly 80% of the world pearl market, with Australia and China coming in second and third, respectively.</br><p></p>
+    
+    &nbsp;</br><p></p>
+    &nbsp;</br><p></p>
+    &nbsp;</br><p></p>
+  </section>
+  
+  <div id="divider" title="Drag to resize"></div>
+  
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <h4>Questions 1–4</h4>
+      Reading Passage 1 has seven paragraphs, A–G.</br><p></p>
+      Which paragraph contains the following information?</br><p></p>
+      Write the correct letter, A–G, in boxes 1–4 on your answer sheet.</br><p></p>
+      
+      <a id="q1-anchor"></a>
+      <div id="q1-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">1.</span> difficulties in the cultivation process</br><p></p>
+        <div class="category-option">
+          <label><input name="q1" type="radio" value="A"> A</label>
+          <label><input name="q1" type="radio" value="B"> B</label>
+          <label><input name="q1" type="radio" value="C"> C</label>
+          <label><input name="q1" type="radio" value="D"> D</label>
+          <label><input name="q1" type="radio" value="E"> E</label>
+          <label><input name="q1" type="radio" value="F"> F</label>
+          <label><input name="q1" type="radio" value="G"> G</label>
+        </div>
+      </div>
+      
+      <a id="q2-anchor"></a>
+      <div id="q2-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">2.</span> causes affecting the size of natural pearls</br><p></p>
+        <div class="category-option">
+          <label><input name="q2" type="radio" value="A"> A</label>
+          <label><input name="q2" type="radio" value="B"> B</label>
+          <label><input name="q2" type="radio" value="C"> C</label>
+          <label><input name="q2" type="radio" value="D"> D</label>
+          <label><input name="q2" type="radio" value="E"> E</label>
+          <label><input name="q2" type="radio" value="F"> F</label>
+          <label><input name="q2" type="radio" value="G"> G</label>
+        </div>
+      </div>
+      
+      <a id="q3-anchor"></a>
+      <div id="q3-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">3.</span> ancient customs around pearls</br><p></p>
+        <div class="category-option">
+          <label><input name="q3" type="radio" value="A"> A</label>
+          <label><input name="q3" type="radio" value="B"> B</label>
+          <label><input name="q3" type="radio" value="C"> C</label>
+          <label><input name="q3" type="radio" value="D"> D</label>
+          <label><input name="q3" type="radio" value="E"> E</label>
+          <label><input name="q3" type="radio" value="F"> F</label>
+          <label><input name="q3" type="radio" value="G"> G</label>
+        </div>
+      </div>
+      
+      <a id="q4-anchor"></a>
+      <div id="q4-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">4.</span> distinctions between cultured pearls and natural ones</br><p></p>
+        <div class="category-option">
+          <label><input name="q4" type="radio" value="A"> A</label>
+          <label><input name="q4" type="radio" value="B"> B</label>
+          <label><input name="q4" type="radio" value="C"> C</label>
+          <label><input name="q4" type="radio" value="D"> D</label>
+          <label><input name="q4" type="radio" value="E"> E</label>
+          <label><input name="q4" type="radio" value="F"> F</label>
+          <label><input name="q4" type="radio" value="G"> G</label>
+        </div>
+      </div>
+    </div>
+    
+    <div class="group">
+      <h4>Questions 5–10</h4>
+      Complete the summary using the list of words, A–K, below.</br><p></p>
+      Write the correct letter, A–K, in boxes 5–10 on your answer sheet.</br><p></p>
+      <span class="word-limit">List of Words</br><p></p>
+      <ul>
+        A America B Philippines C Australia D Bahrain E China F Japan G India H Egypt I Myanmar J Persia K Mallorca</br><p></p>
+      </ul>
+      
+      <h5>Summary</h5>
+      <span class="summary-text">
+        Throughout history, people in <span class="question-number"><a id="q5-anchor"></a>5.</span> <input type="text" class="blank" id="q5" name="q5"> used pearls for medicine and philtres. There are essentially three types of pearls: natural, cultured and imitation. Natural and cultured pearls share a similar growing process, while imitation pearls are different. And <span class="question-number"><a id="q6-anchor"></a>6.</span> <input type="text" class="blank" id="q6" name="q6"> owns the reputation for its imitation pearl industry. The country <span class="question-number"><a id="q7-anchor"></a>7.</span> <input type="text" class="blank" id="q7" name="q7"> usually produces the larger pearls due to the favourable environment along the coastline, while the nation of <span class="question-number"><a id="q8-anchor"></a>8.</span> <input type="text" class="blank" id="q8" name="q8"> manufactures some of the most glistening cultured pearls. In the past, the country <span class="question-number"><a id="q9-anchor"></a>9.</span> <input type="text" class="blank" id="q9" name="q9"> in the Persian Gulf produced the world’s best pearls. At present, the major remaining suppliers of natural pearls are in <span class="question-number"><a id="q10-anchor"></a>10.</span> <input type="text" class="blank" id="q10" name="q10">
+      </br><p></p>
+    </div>
+    
+    <div class="group">
+      <h4>Questions 11–13</h4>
+      Do the following statements agree with the information given in Reading Passage 1?</br><p></p>
+      In boxes 11–13 on your answer sheet, write</br><p></p>
+      <ul>
+        TRUE if the statement agrees with the information</br><p></p>
+        FALSE if the statement contradicts the information</br><p></p>
+        NOT GIVEN if there is no information on this</br><p></p>
+      </ul>
+      
+      <a id="q11-anchor"></a>
+      <div id="q11-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">11.</span> A cultured pearl’s centre is often significantly larger than that in a natural pearl.</br><p></p>
+        <div class="category-option">
+          <label><input name="q11" type="radio" value="TRUE"> TRUE</label>
+          <label><input name="q11" type="radio" value="FALSE"> FALSE</label>
+          <label><input name="q11" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q12-anchor"></a>
+      <div id="q12-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">12.</span> Imitation pearls are usually the same price as natural ones.</br><p></p>
+        <div class="category-option">
+          <label><input name="q12" type="radio" value="TRUE"> TRUE</label>
+          <label><input name="q12" type="radio" value="FALSE"> FALSE</label>
+          <label><input name="q12" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q13-anchor"></a>
+      <div id="q13-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">13.</span> Akoya pearls from Japan glow more deeply than South Sea pearls from Australia.</br><p></p>
+        <div class="category-option">
+          <label><input name="q13" type="radio" value="TRUE"> TRUE</label>
+          <label><input name="q13" type="radio" value="FALSE"> FALSE</label>
+          <label><input name="q13" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+    </div>
+    
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    
+    <div id="results"></div>
+    
+    <details class="answerbox" id="answerBox">
+      <summary>Show Answers (Click to Toggle) <span class="badge">Hidden</span></summary>
+      <div id="answerContent">
+        <h4>正确答案及解析</h4>
+        <table>
+          <tr>
+            <th>题号</th>
+            <th>答案</th>
+            <th>解析与原文依据</th>
+          </tr>
+          <tr>
+            <td>1</td>
+            <td>C</td>
+            <td>
+              <span class="explanation-text">题干“培育过程中的困难”对应C段，该段提到刺激物可能被排斥、珍珠变形、牡蛎死亡等问题，直接体现培育难度。</br><p></p>
+              <span class="explanation-original">原文：Often, the irritant may be rejected, the pearl will be terrifically misshapen, or the oyster may simply die from disease or countless other complications. (Paragraph C)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>D</td>
+            <td>
+              <span class="explanation-text">题干“影响天然珍珠大小的因素”对应D段，该段明确指出珍珠大小与牡蛎年龄、培育地点、海域营养及贝类种类相关。</br><p></p>
+              <span class="explanation-original">原文：Size... has to do with the age of the oyster... and the location... the water along the coastline is supplied with rich nutrients... the type of mussel... has a predilection for producing comparatively large pearls. (Paragraph D)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>A</td>
+            <td>
+              <span class="explanation-text">题干“与珍珠相关的古代习俗”对应A段，该段提及古埃及人将珍珠随葬、波斯帝国将珍珠磨成粉末入药等古代习俗。</br><p></p>
+              <span class="explanation-original">原文：Many Egyptian leaders... were often buried along with their cherished pearl collection. In the Orient and Persian Empire, pearls were ground into costly powders to cure... (Paragraph A)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>B</td>
+            <td>
+              <span class="explanation-text">题干“养殖珍珠与天然珍珠的区别”对应B段，该段明确两者唯一区别是刺激物是否为人工植入的珠核或贝壳。</br><p></p>
+              <span class="explanation-original">原文：The only difference between natural pearls and cultured pearls is that the irritant is a surgically implanted bead or piece of shell called Mother of Pearl. (Paragraph B)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>J (Persia)</td>
+            <td>
+              <span class="explanation-text">题干“历史上用珍珠入药和制作春药的地区”对应A段，波斯帝国（Persia）将珍珠磨成粉末治疗疾病，且可能用作春药。</br><p></p>
+              <span class="explanation-original">原文：In the Orient and Persian Empire, pearls were ground into costly powders to cure anything from heart disease to epilepsy, with possible aphrodisiac uses as well. (Paragraph A)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td>K (Mallorca)</td>
+            <td>
+              <span class="explanation-text">题干“以仿珍珠产业闻名的地区”对应B段，西班牙的马略卡岛（Mallorca）以仿珍珠产业著称。</br><p></p>
+              <span class="explanation-original">原文：The island of Mallorca in Spain is known for its imitation pearl industry. (Paragraph B)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>7</td>
+            <td>C (Australia)</td>
+            <td>
+              <span class="explanation-text">题干“因海岸线环境优越而产出较大珍珠的国家”对应D段，澳大利亚南海海域因营养丰富产出较大珍珠。</br><p></p>
+              <span class="explanation-original">原文：The South Sea waters of Australia tend to produce the larger pearls; probably because the water along the coastline is supplied with rich nutrients from the ocean floor. (Paragraph D)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>8</td>
+            <td>F (Japan)</td>
+            <td>
+              <span class="explanation-text">题干“生产最具光泽养殖珍珠的国家”对应E段，日本的Akoya珍珠是最具光泽的养殖珍珠之一。</br><p></p>
+              <span class="explanation-original">原文：Among cultured pearls, Akoya pearls from Japan are some of the most lustrous. (Paragraph E)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>9</td>
+            <td>D (Bahrain)</td>
+            <td>
+              <span class="explanation-text">题干“历史上波斯湾地区产出世界最佳珍珠的国家”对应F段，巴林（Bahrain）附近海域曾产出世界上最好的珍珠。</br><p></p>
+              <span class="explanation-original">原文：Historically, the world’s best pearls came from the Persian Gulf, especially around what is now Bahrain. (Paragraph F)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>10</td>
+            <td>G (India)</td>
+            <td>
+              <span class="explanation-text">题干“目前天然珍珠主要剩余供应国”对应F段，印度（India）拥有目前最大的天然珍珠库存。</br><p></p>
+              <span class="explanation-original">原文：Nowadays, the largest stock of natural pearls probably resides in India. (Paragraph F)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>11</td>
+            <td>TRUE</td>
+            <td>
+              <span class="explanation-text">题干“养殖珍珠的中心通常比天然珍珠大得多”与B段内容一致，养殖珍珠因人工植入珠核，核心更大。</br><p></p>
+              <span class="explanation-original">原文：The resulting core is much larger than in a natural pearl. (Paragraph B)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>12</td>
+            <td>FALSE</td>
+            <td>
+              <span class="explanation-text">题干“仿珍珠与天然珍珠价格通常相同”与E段内容矛盾，文中明确仿珍珠几乎没有价值，而天然珍珠价值高昂。</br><p></p>
+              <span class="explanation-original">原文：In general, cultured pearls are less valuable than natural pearls, whereas imitation pearls have almost no value. (Paragraph E)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>13</td>
+            <td>NOT GIVEN</td>
+            <td>
+              <span class="explanation-text">文中仅提及日本Akoya珍珠光泽好、澳大利亚南海珍珠个头大，但未比较两者光泽深度，无相关信息。</br><p></p>
+              <span class="explanation-original">原文：Among cultured pearls, Akoya pearls from Japan are some of the most lustrous. (Paragraph E); The South Sea waters of Australia tend to produce the larger pearls. (Paragraph D)</br><p></p>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </details>
+  </section>
+</div>
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove Highlight</button>
+  <button id="btnNote">Add to Notes</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+<script>
+let _t = 0; 
+const _timerEl = document.getElementById('timer');
+let timerInterval; 
+function startTimer() {
+  timerInterval = setInterval(() => { 
+    _t++; 
+    const m = String(Math.floor(_t/60)).padStart(2, '0'); 
+    const s = String(_t%60).padStart(2, '0'); 
+    _timerEl.textContent = `${m}:${s}`; 
+  }, 1000);
+}
+window.onload = startTimer;
+
+const settingsModal = document.getElementById('settingsModal');
+const body = document.body;
+
+function openSettingsModal() {
+  settingsModal.style.display = 'block';
+}
+
+function closeSettingsModal() {
+  settingsModal.style.display = 'none';
+}
+
+window.addEventListener('click', (e) => {
+  if (e.target === settingsModal) closeSettingsModal();
+});
+
+document.querySelectorAll('.font-option').forEach(option => {
+  option.addEventListener('click', () => {
+    const size = option.dataset.size;
+    body.classList.remove('font-regular', 'font-moderate', 'font-large');
+    body.classList.add(`font-${size}`);
+    const sizeName = size === 'regular' ? 'Regular (16px)' : 
+                     size === 'moderate' ? 'Moderate (18px)' : 'Large (20px)';
+    showToast(`Font size set to ${sizeName}`);
+    closeSettingsModal();
+    localStorage.setItem('fontSize', size);
+  });
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+  const savedFontSize = localStorage.getItem('fontSize');
+  if (savedFontSize) {
+    body.classList.remove('font-regular', 'font-moderate', 'font-large');
+    body.classList.add(`font-${savedFontSize}`);
+  }
+});
+
+const selbar = document.getElementById('selbar');
+const btnHL = document.getElementById('btnHL');
+const btnUH = document.getElementById('btnUH');
+const btnNote = document.getElementById('btnNote');
+let lastRange = null;
+let currentHlNode = null;
+let keepToolbar = false;
+
+function positionSelbar(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(() => {
+    const top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    const leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = (top > 0 ? top : window.scrollY + rect.bottom + 8) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+
+function updateSelbar() {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
+  }
+  const range = selection.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode = null;
+  positionSelbar(range.getBoundingClientRect());
+}
+
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', () => {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) selbar.style.display = 'none';
+  }
+});
+
+document.addEventListener('scroll', () => {
+  if (selbar.style.display === 'flex') updateSelbar();
+});
+
+document.addEventListener('mousedown', (e) => {
+  keepToolbar = e.target.classList?.contains('hl') || false;
+}, true);
+document.addEventListener('click', (e) => {
+  if (e.target.classList?.contains('hl')) {
+    currentHlNode = e.target;
+    lastRange = null;
+    positionSelbar(e.target.getBoundingClientRect());
+    const selection = window.getSelection();
+    if (selection) selection.removeAllRanges();
+    setTimeout(() => keepToolbar = false, 0);
+  }
+}, true);
+
+function doHighlight() {
+  if (currentHlNode || !lastRange || lastRange.collapsed) return;
+  const highlightSpan = document.createElement('span');
+  highlightSpan.className = 'hl';
+  try {
+    lastRange.surroundContents(highlightSpan);
+  } catch (e) {
+    const wrapSpan = document.createElement('span');
+    wrapSpan.className = 'hl';
+    wrapSpan.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrapSpan);
+  }
+  selbar.style.display = 'none';
+  showToast('Text highlighted');
+}
+
+function removeHighlight() {
+  if (currentHlNode) {
+    const parent = currentHlNode.parentNode;
+    while (currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize();
+    currentHlNode = null;
+    selbar.style.display = 'none';
+    showToast('Highlight removed');
+    return;
+  }
+  if (!lastRange) return;
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node.classList?.contains('hl')) {
+      const nodeRect = node.getBoundingClientRect();
+      if (!(nodeRect.right < selRect.left || nodeRect.left > selRect.right || 
+            nodeRect.bottom < selRect.top || nodeRect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
+    }
+  }
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  selbar.style.display = 'none';
+  showToast('Highlights removed');
+}
+
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+
+const notesPanel = document.getElementById('notes');
+const noteArea = document.getElementById('noteArea');
+const btnCopy = document.getElementById('btnCopy');
+const btnCloseNotes = document.getElementById('btnClose');
+
+function toggleNotes() {
+  notesPanel.style.display = notesPanel.style.display === 'flex' ? 'none' : 'flex';
+  if (notesPanel.style.display === 'flex') {
+    noteArea.focus();
+  }
+}
+
+btnCloseNotes.addEventListener('click', toggleNotes);
+
+btnCopy.addEventListener('click', async () => {
+  await navigator.clipboard.writeText(noteArea.value || '');
+  showToast('Notes copied to clipboard');
+});
+
+btnNote.addEventListener('click', () => {
+  let selectedText = '';
+  if (currentHlNode) {
+    selectedText = currentHlNode.textContent.trim();
+  } else if (lastRange) {
+    const frag = lastRange.cloneContents();
+    selectedText = frag.textContent.trim();
+  }
+  toggleNotes();
+  if (selectedText) {
+    noteArea.value = noteArea.value ? `${noteArea.value}\n> ${selectedText}\n` : `> ${selectedText}\n`;
+    noteArea.scrollTop = noteArea.scrollHeight;
+  }
+  selbar.style.display = 'none';
+});
+
+const toastEl = document.getElementById('toast');
+function showToast(message) {
+  toastEl.textContent = message;
+  toastEl.style.display = 'block';
+  setTimeout(() => toastEl.style.display = 'none', 1500);
+}
+
+const answers = {
+  q1: 'C',
+  q2: 'D',
+  q3: 'A',
+  q4: 'B',
+  q5: 'J',
+  q6: 'K',
+  q7: 'C',
+  q8: 'F',
+  q9: 'D',
+  q10: 'G',
+  q11: 'TRUE',
+  q12: 'FALSE',
+  q13: 'NOT GIVEN'
+};
+
+function grade() {
+  clearInterval(timerInterval);
+  
+  let total = 13;
+  let correct = 0;
+  const resultLines = [];
+  
+  for (let i = 1; i <= 4; i++) {
+    const qName = `q${i}`;
+    const selected = document.querySelector(`input[name="${qName}"]:checked`);
+    const userAns = selected ? selected.value : 'No answer';
+    const correctAns = answers[qName];
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${correctAns})`}`);
+  }
+  
+  for (let i = 5; i <= 10; i++) {
+    const qName = `q${i}`;
+    const input = document.getElementById(qName);
+    const userAns = input ? input.value.trim().toUpperCase() : 'No answer';
+    const correctAns = answers[qName].toUpperCase();
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns || 'No answer'} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${answers[qName]})`}`);
+  }
+  
+  for (let i = 11; i <= 13; i++) {
+    const qName = `q${i}`;
+    const selected = document.querySelector(`input[name="${qName}"]:checked`);
+    const userAns = selected ? selected.value : 'No answer';
+    const correctAns = answers[qName];
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${correctAns})`}`);
+  }
+  
+  const accuracy = Math.round((correct / total) * 100);
+  const resultsHTML = `
+    <strong>Score:</strong> ${correct}/${total} (Accuracy: ${accuracy}%)</br><p></p>
+    <pre>${resultLines.join('\n')}</pre>
+  `;
+  document.getElementById('results').innerHTML = resultsHTML;
+  
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = true;
+  document.querySelector('#answerBox .badge').textContent = 'Visible';
+  
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.add('answered');
+  });
+}
+
+function resetForm() {
+  clearInterval(timerInterval);
+  _t = 0;
+  _timerEl.textContent = '00:00';
+  startTimer();
+  
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = '';
+  });
+  
+  document.getElementById('results').innerHTML = '';
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = false;
+  document.querySelector('#answerBox .badge').textContent = 'Hidden';
+  
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+  
+  noteArea.value = '';
+  notesPanel.style.display = 'none';
+  
+  document.querySelectorAll('.hl').forEach(hl => {
+    const parent = hl.parentNode;
+    while (hl.firstChild) parent.insertBefore(hl.firstChild, hl);
+    parent.removeChild(hl);
+    parent.normalize();
+  });
+  
+  showToast('Practice reset');
+}
+
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('active');
+  });
+  const navItem = document.getElementById(id.replace('-anchor', '-nav'));
+  if (navItem) {
+    navItem.classList.add('active');
+    setTimeout(() => navItem.classList.remove('active'), 800);
+  }
+}
+
+(function() {
+  for (let i = 1; i <= 4; i++) {
+    document.querySelectorAll(`input[name="q${i}"]`).forEach(radio => {
+      radio.addEventListener('change', () => {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      });
+    });
+  }
+  for (let i = 5; i <= 10; i++) {
+    const input = document.getElementById(`q${i}`);
+    input.addEventListener('input', () => {
+      if (input.value.trim()) {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      } else {
+        document.getElementById(`q${i}-nav`).classList.remove('answered');
+      }
+    });
+  }
+  for (let i = 11; i <= 13; i++) {
+    document.querySelectorAll(`input[name="q${i}"]`).forEach(radio => {
+      radio.addEventListener('change', () => {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      });
+    });
+  }
+})();
+
+const divider = document.getElementById('divider');
+const leftPane = document.getElementById('left');
+const rightPane = document.getElementById('right');
+let isResizing = false;
+
+divider.addEventListener('mousedown', (e) => {
+  isResizing = true;
+  document.body.style.cursor = 'ew-resize';
+  e.preventDefault();
+  e.stopPropagation();
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!isResizing) return;
+  
+  const containerWidth = leftPane.parentElement.offsetWidth;
+  const mousePosition = e.clientX - leftPane.parentElement.getBoundingClientRect().left;
+  const leftWidthPercent = (mousePosition / containerWidth) * 100;
+  
+  const minWidth = 280;
+  const minWidthPercent = (minWidth / containerWidth) * 100;
+  
+  if (leftWidthPercent >= minWidthPercent && leftWidthPercent <= 100 - minWidthPercent) {
+    leftPane.style.flex = `0 0 ${leftWidthPercent}%`;
+    rightPane.style.flex = `1 1 ${100 - leftWidthPercent}%`;
+  }
+});
+
+document.addEventListener('mouseup', () => {
+  if (isResizing) {
+    isResizing = false;
+    document.body.style.cursor = '';
+  }
+});
+
+divider.addEventListener('touchstart', (e) => {
+  isResizing = true;
+  e.preventDefault();
+  e.stopPropagation();
+});
+document.addEventListener('touchmove', (e) => {
+  if (!isResizing) return;
+  
+  const containerWidth = leftPane.parentElement.offsetWidth;
+  const touch = e.touches[0];
+  const touchPosition = touch.clientX - leftPane.parentElement.getBoundingClientRect().left;
+  const leftWidthPercent = (touchPosition / containerWidth) * 100;
+  
+  const minWidth = 280;
+  const minWidthPercent = (minWidth / containerWidth) * 100;
+  
+  if (leftWidthPercent >= minWidthPercent && leftWidthPercent <= 100 - minWidthPercent) {
+    leftPane.style.flex = `0 0 ${leftWidthPercent}%`;
+    rightPane.style.flex = `1 1 ${100 - leftWidthPercent}%`;
+  }
+  
+  e.preventDefault();
+  e.stopPropagation();
+});
+document.addEventListener('touchend', () => {
+  if (isResizing) {
+    isResizing = false;
+  }
+});
+</script>
+</body>
+</html>
