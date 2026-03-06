@@ -326,8 +326,8 @@
 
     const detectFrequencyLabel = (text) => {
         if (!text) return '未知频率';
-        if (/高频/.test(text)) return '高频';
         if (/次高频/.test(text)) return '次高频';
+        if (/高频/.test(text)) return '高频';
         if (/低频/.test(text)) return '低频';
         return '未知频率';
     };
@@ -348,7 +348,7 @@
         const categoryLabel = part
             ? (isListening ? `Part ${part}` : `P${part}`)
             : 'unknown';
-        const titleCandidates = [headerTitle, folderName, filename, docTitle];
+        const titleCandidates = [headerTitle, filename, docTitle];
         const cleanedTitles = [];
         titleCandidates.forEach(candidate => {
             const cleaned = cleanTitleCandidate(candidate);

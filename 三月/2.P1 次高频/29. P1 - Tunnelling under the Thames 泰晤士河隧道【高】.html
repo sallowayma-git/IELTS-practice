@@ -1148,5 +1148,18 @@ function scrollToElement(id) {
   }
 })();
 </script>
+
+<!-- Practice page enhancer integration -->
+<script>
+  (function () {
+    if (window.practicePageEnhancer) return;
+    var s = document.createElement('script');
+    s.src = '../../js/practice-page-enhancer.js';
+    s.onerror = function () {
+      console.error('[Enhancer] Failed to load from: ' + s.src);
+    };
+    (document.head || document.body || document.documentElement).appendChild(s);
+  })();
+</script>
 </body>
 </html>
