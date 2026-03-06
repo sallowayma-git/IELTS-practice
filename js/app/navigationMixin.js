@@ -72,8 +72,16 @@
                     }
                     break;
                 case 'practice':
-                    // 练习视图已由其他组件处理
-                    console.log('[App] 练习视图已激活');
+                    // Ensure records are synced when practice view is activated.
+                    console.log('[App] Practice view activated');
+                    if (typeof window.startPracticeRecordsSyncInBackground === 'function') {
+                        window.startPracticeRecordsSyncInBackground('practice-view');
+                    }
+                    if (typeof window.ensurePracticeRecordsSync === 'function') {
+                        window.ensurePracticeRecordsSync('practice-view').catch(function () { });
+                    } else if (typeof window.updatePracticeView === 'function') {
+                        window.updatePracticeView();
+                    }
                     break;
             }
         },
