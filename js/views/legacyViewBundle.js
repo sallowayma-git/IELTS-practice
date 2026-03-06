@@ -444,7 +444,18 @@
             ? record.percentage
             : Math.round((record.accuracy || 0) * 100);
 
-        var recordId = record && record.id != null ? String(record.id) : '';
+        var recordId = '';
+        if (record && record.id != null) {
+            recordId = String(record.id);
+        } else if (record && record.sessionId != null) {
+            recordId = String(record.sessionId);
+        } else if (record && record.realData && record.realData.sessionId != null) {
+            recordId = String(record.realData.sessionId);
+        } else if (record && record.timestamp != null) {
+            recordId = String(record.timestamp);
+        } else if (record && record.realData && record.realData.timestamp != null) {
+            recordId = String(record.realData.timestamp);
+        }
 
         var item = createNode('div', {
             className: 'history-item history-record-item',

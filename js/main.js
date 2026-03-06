@@ -58,6 +58,28 @@ function normalizeRecordId(id) {
     return String(id);
 }
 
+function getRecordComparableIds(record) {
+    if (!record || typeof record !== 'object') {
+        return [];
+    }
+    const ids = [
+        record.id,
+        record.sessionId,
+        record.realData && record.realData.sessionId,
+        record.timestamp,
+        record.realData && record.realData.timestamp
+    ].map((value) => normalizeRecordId(value)).filter(Boolean);
+    return Array.from(new Set(ids));
+}
+
+function recordMatchesIdentifier(record, recordId) {
+    const targetId = normalizeRecordId(recordId);
+    if (!targetId) {
+        return false;
+    }
+    return getRecordComparableIds(record).includes(targetId);
+}
+
 if (typeof window !== 'undefined') {
     window.normalizeRecordId = normalizeRecordId;
 }
@@ -2484,12 +2506,12 @@ function viewPDF(examId) {
 // Bridge for record details to existing enhancer/modal if present
 function showRecordDetails(recordId) {
     ensurePracticeSuiteReady().then(() => {
-        if (window.practiceHistoryEnhancer && typeof window.practiceHistoryEnhancer.showRecordDetails === 'function') {
-            window.practiceHistoryEnhancer.showRecordDetails(recordId);
-            return;
-        }
         if (window.practiceRecordModal && typeof window.practiceRecordModal.showById === 'function') {
             window.practiceRecordModal.showById(recordId);
+            return;
+        }
+        if (window.practiceHistoryEnhancer && typeof window.practiceHistoryEnhancer.showRecordDetails === 'function') {
+            window.practiceHistoryEnhancer.showRecordDetails(recordId);
             return;
         }
         alert('无法显示记录详情：组件未加载');
@@ -2700,7 +2722,13 @@ async function bulkDeleteRecords(selectedSnapshot = getSelectedRecordsState()) {
 
     const records = await store.get('practice_records', []);
     const baseList = Array.isArray(records) ? records : [];
-    const recordsToKeep = baseList.filter(record => !normalizedIds.includes(normalizeRecordId(record && record.id)));
+    const recordsToKeep = baseList.filter((record) => {
+        const ids = getRecordComparableIds(record);
+        if (ids.length === 0) {
+            return true;
+        }
+        return !ids.some((id) => normalizedIds.includes(id));
+    });
 
     const deletedCount = baseList.length - recordsToKeep.length;
 
@@ -2740,7 +2768,7 @@ async function deleteRecord(recordId) {
     }
 
     const records = await storage.get('practice_records', []);
-    const recordIndex = records.findIndex(record => String(record.id) === String(recordId));
+    const recordIndex = records.findIndex((record) => recordMatchesIdentifier(record, recordId));
 
     if (recordIndex === -1) {
         showMessage('未找到记录', 'error');
@@ -2751,7 +2779,10 @@ async function deleteRecord(recordId) {
     const confirmMessage = `确定要删除这条练习记录吗？\n\n题目: ${record.title}\n时间: ${new Date(record.date).toLocaleString()}\n\n此操作不可恢复。`;
 
     if (confirm(confirmMessage)) {
-        const historyItem = document.querySelector(`[data-record-id="${recordId}"]`);
+        const escapedRecordId = (typeof CSS !== 'undefined' && CSS && typeof CSS.escape === 'function')
+            ? CSS.escape(String(recordId))
+            : String(recordId).replace(/"/g, '\\"');
+        const historyItem = document.querySelector(`[data-record-id="${escapedRecordId}"]`);
         if (historyItem) {
             historyItem.classList.add('deleting');
             setTimeout(async () => {
