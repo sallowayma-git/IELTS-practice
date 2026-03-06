@@ -8,8 +8,7 @@
 
     function registerDefaultManifest() {
         manifest['exam-data'] = [
-            'assets/scripts/complete-exam-data.js',
-            'assets/scripts/listening-exam-data.js'
+            'assets/scripts/complete-exam-data.js'
         ];
 
         manifest['state-core'] = [
